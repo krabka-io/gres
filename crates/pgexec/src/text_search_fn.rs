@@ -2075,7 +2075,11 @@ fn headline_bad_endpoint(
     options: &HeadlineOptions,
 ) -> bool {
     !headline_interesting(word, query)
-        && (word.word.is_empty() || word.word.chars().count() <= options.short_word)
+        && (word.word.is_empty()
+            || word.word.chars().count() <= options.short_word
+            || word.word.chars().all(|character| {
+                character.is_ascii_digit() || matches!(character, '+' | '-' | '.' | 'e' | 'E')
+            }))
 }
 
 fn render_headline_fragment(
@@ -2743,6 +2747,18 @@ mod tests {
             render_headline_fragment(&words, fragments[0], &query, &options, false),
             "bravo charlie <b>delta</b> echo foxtrot"
         );
+    }
+
+    #[test]
+    fn headline_does_not_end_on_a_numeric_token() {
+        let words = headline_words("simple", "Coleridge (1772-1834)", None).unwrap();
+        let query = "coleridge".parse::<TsQuery>().unwrap();
+        assert_eq!(words.last().unwrap().word, "1772-1834");
+        assert!(headline_bad_endpoint(
+            words.last().unwrap(),
+            &query,
+            &HeadlineOptions::default(),
+        ));
     }
 
     #[test]
