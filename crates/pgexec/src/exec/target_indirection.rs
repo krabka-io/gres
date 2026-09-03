@@ -10,6 +10,41 @@ fn array_assignment_element(ty: ColumnType) -> Option<crabka_pgtypes::ElemType> 
     }
 }
 
+fn assign_point_subscript(
+    base: &Datum,
+    args: &[crate::array_fn::SubscriptArg],
+    value: &Datum,
+    ctx: &crate::clock::EvalCtx,
+) -> Result<Datum, ExecError> {
+    let [crate::array_fn::SubscriptArg::Index(index)] = args else {
+        return Err(ExecError::Unsupported(
+            "slices of fixed-length arrays not implemented".into(),
+        ));
+    };
+    let Some(index) = crate::array_fn::subscript_int(index)? else {
+        return Ok(base.clone());
+    };
+    let &Datum::Point(mut point) = base else {
+        return Ok(Datum::Null);
+    };
+    if value.is_null() {
+        return Ok(base.clone());
+    }
+    let Datum::Float8(value) = coerce(value.clone(), ColumnType::Float8, ctx)? else {
+        unreachable!("float8 coercion changes the datum variant")
+    };
+    match index {
+        0 => point.x = value,
+        1 => point.y = value,
+        _ => {
+            return Err(ExecError::Type(crabka_pgtypes::TypeError::array_subscript(
+                "array subscript out of range",
+            )));
+        }
+    }
+    Ok(Datum::Point(point))
+}
+
 /// The type at the end of an INSERT/UPDATE target's indirection path.
 pub(super) fn target_indirection_type(
     ty: ColumnType,
@@ -180,6 +215,15 @@ pub(super) fn assign_target_indirections(
                 crate::array_fn::array_assign(base, &args, &replacement, elem, ctx)
             } else {
                 if count != indirections.len() {
+                    return Err(ExecError::TypeMismatch(format!(
+                        "cannot subscript type {} because it does not support subscripting",
+                        ty.name()
+                    )));
+                }
+                if ty.storage_type() == ColumnType::Point {
+                    return assign_point_subscript(base, &args, value, ctx);
+                }
+                if ty.storage_type() != ColumnType::Jsonb {
                     return Err(ExecError::TypeMismatch(format!(
                         "cannot subscript type {} because it does not support subscripting",
                         ty.name()

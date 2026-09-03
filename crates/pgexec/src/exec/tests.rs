@@ -4907,6 +4907,41 @@ async fn local_gin_indexes_array_elements_as_distinct_postings() {
 }
 
 #[tokio::test]
+async fn point_subscript_assignments_use_geometric_storage() {
+    use assert2::assert;
+
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    run_s(&mut session, "CREATE TABLE t (p point)").await;
+    run_s(&mut session, "INSERT INTO t VALUES (NULL), ('(10,10)')").await;
+    assert!(
+        text_rows_of(
+            &mut session,
+            "UPDATE t SET p[0] = 10 WHERE p IS NULL RETURNING p"
+        )
+        .await
+            == vec![vec![None]]
+    );
+    assert!(
+        text_rows_of(
+            &mut session,
+            "UPDATE t SET p[0] = NULL WHERE p::text = '(10,10)' RETURNING p",
+        )
+        .await
+            == vec![text_row(&["(10,10)"])]
+    );
+    assert!(
+        text_rows_of(
+            &mut session,
+            "UPDATE t SET p[0] = -10, p[1] = -10 WHERE p::text = '(10,10)' RETURNING p",
+        )
+        .await
+            == vec![text_row(&["(-10,-10)"])]
+    );
+    assert!(sqlstate_of(&mut session, "UPDATE t SET p[3] = 10").await == "2202E");
+}
+
+#[tokio::test]
 async fn drop_index_removes_catalog_metadata_and_local_entries_in_one_ddl_batch() {
     let engine = SqlEngine::new();
     let mut session = engine.connect();
