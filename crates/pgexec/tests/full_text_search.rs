@@ -359,6 +359,15 @@ async fn functions_and_operators_match_postgres_shapes() {
     assert_eq!(
         scalar(
             &client,
+            "SELECT ts_headline('simple', '<u>foo bar</u>', 'foo', 'HighlightAll=true')",
+        )
+        .await
+        .as_deref(),
+        Some("<u><b>foo</b> bar</u>")
+    );
+    assert_eq!(
+        scalar(
+            &client,
             "SELECT ts_headline('english', 'foo bar', to_tsquery('english', ''))",
         )
         .await

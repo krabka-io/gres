@@ -1707,11 +1707,18 @@ fn headline_words<'a>(
     source: &'a str,
     catalog: Catalog<'_>,
 ) -> Result<Vec<HeadlineWord<'a>>, ExecError> {
-    source
-        .split_inclusive(char::is_whitespace)
-        .enumerate()
-        .map(|(index, text)| {
-            let word = text.trim_matches(|character: char| !character.is_alphanumeric());
+    let mut position = 0_u16;
+    headline_pieces(source)
+        .into_iter()
+        .map(|text| {
+            let word = if xml_tag_length(text).is_some() {
+                ""
+            } else {
+                text.trim_matches(|character: char| !character.is_alphanumeric())
+            };
+            if !word.is_empty() {
+                position = position.saturating_add(1).min(MAX_POSITION);
+            }
             let terms = normalized_terms(config, word, catalog)?
                 .into_iter()
                 .map(|(term, _)| term)
@@ -1720,10 +1727,35 @@ fn headline_words<'a>(
                 text,
                 word,
                 terms,
-                position: u16::try_from(index + 1).unwrap_or(MAX_POSITION),
+                position,
             })
         })
         .collect()
+}
+
+fn headline_pieces(source: &str) -> Vec<&str> {
+    let mut pieces = Vec::new();
+    let mut offset = 0;
+    while offset < source.len() {
+        let rest = &source[offset..];
+        let end = if let Some(length) = xml_tag_length(rest) {
+            length
+        } else if rest.chars().next().is_some_and(char::is_whitespace) {
+            rest.char_indices()
+                .find_map(|(index, character)| (!character.is_whitespace()).then_some(index))
+                .unwrap_or(rest.len())
+        } else {
+            rest.char_indices()
+                .skip(1)
+                .find_map(|(index, character)| {
+                    (character.is_whitespace() || character == '<').then_some(index)
+                })
+                .unwrap_or(rest.len())
+        };
+        pieces.push(&rest[..end]);
+        offset += end;
+    }
+    pieces
 }
 
 fn headline_fragments(
@@ -2617,7 +2649,7 @@ mod tests {
         let query = "1 <-> 3".parse::<TsQuery>().unwrap();
         let options = headline_options(Some("MaxWords=2, MinWords=1")).unwrap();
         let fragments = headline_fragments(&words, &query, &options);
-        assert_eq!(fragments, vec![(3, 4)]);
+        assert_eq!(fragments, vec![(6, 8)]);
         assert_eq!(
             render_headline_fragment(&words, fragments[0], &query, &options, false),
             "<b>1</b> <b>3</b>"
@@ -2629,7 +2661,7 @@ mod tests {
         let words = headline_words("simple", "foo bar", None).unwrap();
         assert_eq!(
             headline_fallback(&words, &HeadlineOptions::default()),
-            (0, 1)
+            (0, 2)
         );
     }
 
@@ -2644,11 +2676,22 @@ mod tests {
         let query = "delta".parse::<TsQuery>().unwrap();
         let options = headline_options(Some("MaxFragments=1, MaxWords=5, MinWords=1")).unwrap();
         let fragments = headline_fragments(&words, &query, &options);
-        assert_eq!(fragments, vec![(1, 5)]);
+        assert_eq!(fragments, vec![(2, 10)]);
         assert_eq!(
             render_headline_fragment(&words, fragments[0], &query, &options, false),
             "bravo charlie <b>delta</b> echo foxtrot"
         );
+    }
+
+    #[test]
+    fn headline_keeps_xml_tags_out_of_words() {
+        assert_eq!(
+            headline_pieces("<u>foo bar</u>"),
+            vec!["<u>", "foo", " ", "bar", "</u>"]
+        );
+        let words = headline_words("simple", "<u>foo bar</u>", None).unwrap();
+        assert_eq!(words[1].position, 1);
+        assert_eq!(words[3].position, 2);
     }
 
     #[test]
