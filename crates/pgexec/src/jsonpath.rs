@@ -1367,17 +1367,6 @@ impl Parser {
                         {
                             MethodArgs::TemporalPrecision(self.temporal_precision_argument()?)
                         }
-                        Tok::Minus
-                            if matches!(
-                                method,
-                                Method::Time
-                                    | Method::TimeTz
-                                    | Method::Timestamp
-                                    | Method::TimestampTz
-                            ) =>
-                        {
-                            MethodArgs::TemporalPrecision(self.temporal_precision_argument()?)
-                        }
                         Tok::RParen => MethodArgs::None,
                         _ => return Err(self.error_here()),
                     };
@@ -1430,14 +1419,11 @@ impl Parser {
     }
 
     fn temporal_precision_argument(&mut self) -> Result<BigDecimal, ExecError> {
-        let negative = self.eat(&Tok::Minus);
-        match self.bump() {
+        match self.peek() {
             Tok::Num(value) if value.fractional_digit_count() == 0 => {
-                if negative {
-                    Ok(-value)
-                } else {
-                    Ok(value)
-                }
+                let value = value.clone();
+                self.bump();
+                Ok(value)
             }
             _ => Err(self.error_here()),
         }
@@ -2893,19 +2879,6 @@ fn temporal_precision(m: Method, precision: &BigDecimal) -> PathResult<i32> {
             ),
         )
     })?;
-    if precision < 0 {
-        let type_name = match m {
-            Method::Time => "TIME",
-            Method::TimeTz => "TIME WITH TIME ZONE",
-            Method::Timestamp => "TIMESTAMP",
-            Method::TimestampTz => "TIMESTAMP WITH TIME ZONE",
-            _ => unreachable!("only explicit temporal methods accept a precision"),
-        };
-        return Err(PathError::new(
-            "22023",
-            format!("{type_name}({precision}) precision must not be negative"),
-        ));
-    }
     Ok(precision)
 }
 

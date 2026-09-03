@@ -500,7 +500,8 @@ fn temporal_item_methods_accept_and_apply_precision() {
         query(r#""2023-01-02 10:11:12.345678+05""#, "$.timestamp_tz(2)")
             == Ok(r#"["2023-01-02T10:11:12.35+05:00"]"#.into())
     );
-    assert!(query(r#""10:11:12""#, "$.time(-1)") == Err("22023".into()));
+    assert!(query(r#""10:11:12""#, "$.time(-1)") == Err("42601".into()));
+    assert!(query(r#""10:11:12""#, "$.time(2.0)") == Err("42601".into()));
     assert!(query(r#""10:11:12""#, "$.time(12345678901)") == Err("22031".into()));
     assert!(
         query(r#""10:11:12""#, "$.time(999999999999999999999999999999)") == Err("22031".into())
