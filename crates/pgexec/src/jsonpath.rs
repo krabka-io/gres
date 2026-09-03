@@ -3485,7 +3485,17 @@ fn compile_regex(pattern: &str, flags: &str) -> PathResult<regex::Regex> {
     let body = if literal {
         regex::escape(pattern)
     } else {
-        pattern.to_string()
+        let mut body = String::with_capacity(pattern.len());
+        let mut chars = pattern.chars();
+        while let Some(c) = chars.next() {
+            if c == '\\' && chars.as_str().starts_with('b') {
+                chars.next();
+                body.push('\u{8}');
+            } else {
+                body.push(c);
+            }
+        }
+        body
     };
     let source = if builder.is_empty() {
         body
@@ -3751,9 +3761,11 @@ fn write_pred(pred: &Pred, out: &mut String) {
             flags,
         } => {
             write_node_prec(value, 0, out);
-            let _ = write!(out, " like_regex \"{pattern}\"");
+            out.push_str(" like_regex ");
+            out.push_str(&JsonbValue::String(pattern.clone()).to_text());
             if !flags.is_empty() {
-                let _ = write!(out, " flag \"{flags}\"");
+                out.push_str(" flag ");
+                out.push_str(&JsonbValue::String(flags.clone()).to_text());
             }
         }
     }

@@ -351,6 +351,11 @@ fn filters_and_predicates_follow_three_valued_logic() {
             r#"$.a ? (@ like_regex "X" flag "i")"#,
             r#"["x"]"#,
         ),
+        (
+            r#"["a\b","a\\b","^a\\b$"]"#,
+            r#"lax $[*] ? (@ like_regex "a\\b" flag "q")"#,
+            r#"["a\\b", "^a\\b$"]"#,
+        ),
         (r#"{"a":1}"#, "$.a ? (@ == 1) ? (@ > 0)", "[1]"),
         // A string never compares equal to a number, so the mixed array keeps
         // only the numeric element.
@@ -368,6 +373,20 @@ fn filters_and_predicates_follow_three_valued_logic() {
     for (target, path, want) in cases {
         assert!(query(target, path) == Ok((*want).to_string()), "{path}");
     }
+}
+
+#[test]
+fn canonical_jsonpath_retains_quoted_regex_backslashes() {
+    let source = r#"lax $[*] ? (@ like_regex "a\\b" flag "q")"#;
+    let Datum::JsonPath(canonical) = super::canonical_datum(source).expect("canonical path") else {
+        panic!("jsonpath datum");
+    };
+    assert!(query(r#"["a\b","a\\b","^a\\b$"]"#, &canonical) == Ok(r#"["a\\b", "^a\\b$"]"#.into()));
+    let source = r#"lax $[*] ? (@ like_regex "a\\b" flag "")"#;
+    let Datum::JsonPath(canonical) = super::canonical_datum(source).expect("canonical path") else {
+        panic!("jsonpath datum");
+    };
+    assert!(query(r#"["a\b","a\\b","^a\\b$"]"#, &canonical) == Ok(r#"["a\b"]"#.into()));
 }
 
 #[test]
