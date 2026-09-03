@@ -1,6 +1,6 @@
 //! PostgreSQL full-text-search scalar functions.
 
-use std::collections::BTreeMap;
+use std::{borrow::Cow, collections::BTreeMap};
 
 use crabka_pgparser::ast::{Expr, FuncArgs, FuncCall};
 use crabka_pgtypes::{
@@ -1318,7 +1318,15 @@ fn web_query(config: &str, source: &str, catalog: Catalog<'_>) -> Result<TsQuery
             let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
             (&rest[..end], &rest[end..], false)
         };
-        let mut query = plain_query(config, piece, phrase, catalog)?;
+        let connected_words = piece
+            .chars()
+            .any(|character| matches!(character, '*' | '-' | '_'));
+        let piece = if piece.contains('_') {
+            Cow::Owned(piece.replace('_', " "))
+        } else {
+            Cow::Borrowed(piece)
+        };
+        let mut query = plain_query(config, &piece, phrase || connected_words, catalog)?;
         if negative && query != TsQuery::Empty {
             query = TsQuery::Not(Box::new(query));
         }
@@ -2797,6 +2805,20 @@ mod tests {
         let query = web_query("simple", "fat OR rat dog", None).unwrap();
         assert_eq!(query.to_string(), "'fat' | 'rat' & 'dog'");
         assert!(to_tsvector("simple", "fat", None).unwrap().matches(&query));
+    }
+
+    #[test]
+    fn web_query_keeps_punctuation_connected_words_adjacent() {
+        for (source, expected) in [
+            ("fat*rat", "'fat' <-> 'rat'"),
+            ("fat-rat", "'fat-rat' <-> 'fat' <-> 'rat'"),
+            ("fat_rat", "'fat' <-> 'rat'"),
+        ] {
+            assert_eq!(
+                web_query("simple", source, None).unwrap().to_string(),
+                expected
+            );
+        }
     }
 
     fn lexize_call() -> FuncCall {
