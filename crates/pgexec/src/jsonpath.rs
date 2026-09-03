@@ -3308,6 +3308,15 @@ fn datetime_method(
         Method::TimestampTz => ColumnType::Timestamptz,
         _ => source_type,
     };
+    if matches!(m, Method::TimeTz)
+        && source_type == ColumnType::Timestamp
+        && !allow_zone_conversions
+    {
+        return Err(PathError::new(
+            "22007",
+            format!("{format_name} format is not recognized: \"{text}\""),
+        ));
+    }
     let source_is_zoned = matches!(source_type, ColumnType::Timetz | ColumnType::Timestamptz);
     let target_is_zoned = matches!(target, ColumnType::Timetz | ColumnType::Timestamptz);
     let can_convert_zone = match target {

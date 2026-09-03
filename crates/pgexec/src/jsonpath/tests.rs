@@ -544,6 +544,16 @@ fn item_methods_match_postgresql() {
         .expect_err("invalid date")
         .into_pg();
     assert_eq!(error.message, "date format is not recognized: \"bogus\"");
+    let target = jsonb::parse(r#""2023-08-15 12:34:56""#).expect("target");
+    let error = JsonPath::parse("$.time_tz()")
+        .expect("path")
+        .query(&target, None, false)
+        .expect_err("timestamp is not a time_tz")
+        .into_pg();
+    assert_eq!(
+        error.message,
+        "time_tz format is not recognized: \"2023-08-15 12:34:56\""
+    );
 }
 
 #[test]
