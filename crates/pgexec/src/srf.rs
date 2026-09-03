@@ -2016,19 +2016,34 @@ pub(crate) fn reject_misplaced_calls(s: &SelectStmt) -> Result<(), ExecError> {
 
 /// Reject update assignments that would need a `ProjectSet` below a write.
 pub(crate) fn reject_write_calls(stmt: &Statement) -> Result<(), ExecError> {
-    let Statement::Update { assignments, .. } = stmt else {
-        return Ok(());
-    };
-    if assignments
-        .iter()
-        .any(|assignment| match &assignment.value {
-            AssignmentValue::Expr(expr) => expr_contains_srf(expr),
-            AssignmentValue::Row(exprs) => exprs.iter().any(expr_contains_srf),
-            AssignmentValue::Subquery(_) => false,
-        })
+    if let Statement::Update { assignments, .. } = stmt
+        && assignments
+            .iter()
+            .any(|assignment| match &assignment.value {
+                AssignmentValue::Expr(expr) => expr_contains_srf(expr),
+                AssignmentValue::Row(exprs) => exprs.iter().any(expr_contains_srf),
+                AssignmentValue::Subquery(_) => false,
+            })
     {
         return Err(ExecError::Unsupported(
             "set-returning functions are not allowed in UPDATE".into(),
+        ));
+    }
+    let returning = match stmt {
+        Statement::Insert { returning, .. }
+        | Statement::Update { returning, .. }
+        | Statement::Delete { returning, .. }
+        | Statement::Merge { returning, .. } => returning.as_ref(),
+        _ => None,
+    };
+    if returning.is_some_and(|returning| {
+        returning
+            .items
+            .iter()
+            .any(|item| matches!(item, SelectItem::Expr { expr, .. } if expr_contains_srf(expr)))
+    }) {
+        return Err(ExecError::Unsupported(
+            "set-returning functions are not allowed in RETURNING".into(),
         ));
     }
     Ok(())
@@ -5315,7 +5330,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn set_returning_functions_are_rejected_in_from_arguments_and_updates() {
+    async fn set_returning_functions_are_rejected_in_from_arguments_and_writes() {
         let engine = SqlEngine::new();
         let mut s = engine.connect();
 
@@ -5328,6 +5343,11 @@ mod tests {
                 "CREATE TABLE srf_update (a int4); INSERT INTO srf_update VALUES (1); \
                  UPDATE srf_update SET a = generate_series(1, 2)",
                 "set-returning functions are not allowed in UPDATE",
+            ),
+            (
+                "CREATE TABLE srf_returning (a int4); INSERT INTO srf_returning VALUES (1) \
+                 RETURNING generate_series(1, 2)",
+                "set-returning functions are not allowed in RETURNING",
             ),
         ] {
             let error = s.simple_query(sql).await.expect_err("misplaced SRF");
