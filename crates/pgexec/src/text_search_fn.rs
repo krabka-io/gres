@@ -1344,7 +1344,12 @@ fn web_query(config: &str, source: &str, catalog: Catalog<'_>) -> Result<TsQuery
         } else {
             Cow::Borrowed(piece)
         };
-        let mut query = plain_query(config, &piece, phrase || connected_words, catalog)?;
+        let mut query = plain_query(
+            config,
+            &piece,
+            phrase || connected_words || piece.contains('\''),
+            catalog,
+        )?;
         for _ in 0..negations {
             if query != TsQuery::Empty {
                 query = TsQuery::Not(Box::new(query));
@@ -2867,6 +2872,7 @@ mod tests {
             ("fat*rat", "'fat' <-> 'rat'"),
             ("fat-rat", "'fat-rat' <-> 'fat' <-> 'rat'"),
             ("fat_rat", "'fat' <-> 'rat'"),
+            ("'abc''def'", "'abc' <-> 'def'"),
             ("fat:*ABCD", "'fat' & 'abcd'"),
             ("orange:**AABBCCDD", "'orange' & 'aabbccdd'"),
         ] {
