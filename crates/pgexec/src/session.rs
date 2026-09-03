@@ -3490,12 +3490,13 @@ impl Drop for WorkerFinished {
 pub(crate) struct PlPgSqlCallDepthGuard(Arc<AtomicUsize>);
 
 const MAX_NESTED_PLPGSQL_CALLS: usize = 3;
+const MAX_NESTED_PLPGSQL_TABLE_CALLS: usize = 4;
 
 impl PlPgSqlCallDepthGuard {
-    fn enter(depth: Arc<AtomicUsize>) -> Result<Self, ExecError> {
+    fn enter(depth: Arc<AtomicUsize>, limit: usize) -> Result<Self, ExecError> {
         depth
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
-                (current < MAX_NESTED_PLPGSQL_CALLS).then_some(current + 1)
+                (current < limit).then_some(current + 1)
             })
             .map_err(|_| ExecError::StackDepthExceeded)?;
         Ok(Self(depth))
@@ -4102,7 +4103,10 @@ impl SqlSession {
     }
 
     pub(crate) fn plpgsql_enter_call(&self) -> Result<PlPgSqlCallDepthGuard, ExecError> {
-        PlPgSqlCallDepthGuard::enter(Arc::clone(&self.plpgsql_call_depth))
+        PlPgSqlCallDepthGuard::enter(
+            Arc::clone(&self.plpgsql_call_depth),
+            MAX_NESTED_PLPGSQL_CALLS,
+        )
     }
 
     pub(crate) fn plpgsql_eval(&self, expr: &Expr) -> Result<(Datum, ColumnType), ExecError> {
@@ -10427,9 +10431,18 @@ impl SqlSession {
                     let (result, mutations) = match frame {
                         Err(error) => (Err(error), Vec::new()),
                         Ok(frame) => {
-                    let result = match PlPgSqlCallDepthGuard::enter(Arc::clone(
-                        &self.plpgsql_call_depth,
-                    )) {
+                    let max_calls = if matches!(
+                        &request.kind,
+                        crate::routine::FunctionRequestKind::Table(_)
+                    ) {
+                        MAX_NESTED_PLPGSQL_TABLE_CALLS
+                    } else {
+                        MAX_NESTED_PLPGSQL_CALLS
+                    };
+                    let result = match PlPgSqlCallDepthGuard::enter(
+                        Arc::clone(&self.plpgsql_call_depth),
+                        max_calls,
+                    ) {
                         Err(error) => Err(error),
                         Ok(_guard) => match request.kind {
                             crate::routine::FunctionRequestKind::Scalar if trigger_only => Err(
