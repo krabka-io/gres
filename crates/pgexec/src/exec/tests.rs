@@ -1885,11 +1885,13 @@ async fn composite_type_fields_are_commentable() {
 
     let engine = SqlEngine::new();
     let mut session = engine.connect();
+    run_s(&mut session, "CREATE SCHEMA comment_schema").await;
     run_s(
         &mut session,
-        "CREATE TYPE commented_pair AS (id int, note text)",
+        "CREATE TYPE comment_schema.commented_pair AS (id int, note text)",
     )
     .await;
+    run_s(&mut session, "SET search_path TO comment_schema").await;
     run_s(
         &mut session,
         "COMMENT ON COLUMN commented_pair.note IS 'the note field'",
@@ -1911,7 +1913,8 @@ async fn composite_type_fields_are_commentable() {
         .await
             == (
                 "42703".into(),
-                "column \"missing\" of relation \"commented_pair\" does not exist".into()
+                "column \"missing\" of relation \"comment_schema.commented_pair\" does not exist"
+                    .into()
             )
     );
 }

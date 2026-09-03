@@ -348,6 +348,8 @@ pub fn resolve_relation(
         // `PostgreSQL` does.
         if crate::exec::is_virtual_relation(&candidate)
             || crabka_pgcatalog::relation_exists(kv, &candidate)?
+            || crabka_pgcatalog::get_user_type(kv, &candidate)?
+                .is_some_and(|ty| ty.fields().is_some())
         {
             return Ok(candidate);
         }
