@@ -50,8 +50,8 @@ pub(crate) use super::{
     prune::{ChainPrune, ChainPruneRequest, prune_rowid_chain_ops},
     read::{execute_read, execute_read_locking, reject_nested_relation_locking},
     result_order::{
-        DistinctOnPlan, SelectOrderKey, distinct_on_plan, project_rows,
-        project_rows_ordered_with_memory, resolve_select_order_keys, rows_result,
+        DistinctOnPlan, SelectOrderKey, distinct_on_plan, distinct_on_source_rows_with_memory,
+        project_rows, project_rows_ordered_with_memory, resolve_select_order_keys, rows_result,
         rows_result_with_tag,
     },
     result_types::*,

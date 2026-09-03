@@ -2424,7 +2424,29 @@ pub(crate) fn project_rows_ordered_with_memory(
         out_exprs,
         matches!(s.distinct, crabka_pgparser::ast::DistinctClause::Distinct),
     )?;
-    let distinct_on = crate::exec::distinct_on_plan(s, scope, fields, out_exprs, &order_keys)?;
+    let mut kept = kept;
+    let mut distinct_on = crate::exec::distinct_on_plan(s, scope, fields, out_exprs, &order_keys)?;
+    // An explicit DISTINCT ON sort that does not reference an SRF runs below
+    // ProjectSet. Without an explicit sort, PostgreSQL's implicit ordering sees
+    // all output columns, including the set result.
+    if let Some(plan) = &distinct_on
+        && !s.order_by.is_empty()
+        && !exprs_contain_srf(&plan.group)
+        && !plan
+            .sort
+            .iter()
+            .any(|item| exprs_contain_srf(std::slice::from_ref(&item.expr)))
+    {
+        kept = crate::exec::distinct_on_source_rows_with_memory(
+            plan,
+            scope,
+            out_exprs,
+            kept,
+            ctx,
+            statement_memory,
+        )?;
+        distinct_on = None;
+    }
     // An ORDER BY expression may call an SRF of its own. PostgreSQL adds such an
     // expression to the target list as a junk column, so it expands in lockstep
     // with the select list's calls and multiplies the output rows exactly as a
@@ -5198,6 +5220,36 @@ mod tests {
                 == vec![
                     vec![Some("1".into()), Some("2".into())],
                     vec![Some("2".into()), Some("2".into())],
+                ]
+        );
+    }
+
+    #[tokio::test]
+    async fn distinct_on_expands_after_deduplicating_source_rows() {
+        let engine = SqlEngine::new();
+        let mut s = engine.connect();
+        query(&mut s, "CREATE TABLE srf_distinct_source (a int4, b int4)").await;
+        query(
+            &mut s,
+            "INSERT INTO srf_distinct_source VALUES (1, 1), (1, 4), (2, 2), (2, 3)",
+        )
+        .await;
+
+        let result = query(
+            &mut s,
+            "SELECT DISTINCT ON (a) a, b, generate_series(1, 3) AS g \
+             FROM srf_distinct_source ORDER BY a, b DESC",
+        )
+        .await;
+        assert!(
+            shape(&result).2
+                == vec![
+                    vec![Some("1".into()), Some("4".into()), Some("1".into())],
+                    vec![Some("1".into()), Some("4".into()), Some("2".into())],
+                    vec![Some("1".into()), Some("4".into()), Some("3".into())],
+                    vec![Some("2".into()), Some("3".into()), Some("1".into())],
+                    vec![Some("2".into()), Some("3".into()), Some("2".into())],
+                    vec![Some("2".into()), Some("3".into()), Some("3".into())],
                 ]
         );
     }

@@ -270,6 +270,32 @@ pub(crate) fn distinct_on_plan(
     Ok(Some(DistinctOnPlan { group, sort }))
 }
 
+/// Deduplicate source rows for a `DISTINCT ON` node below `ProjectSet`.
+pub(crate) fn distinct_on_source_rows_with_memory(
+    plan: &DistinctOnPlan,
+    scope: &Scope,
+    out_exprs: &[Expr],
+    rows: Vec<Vec<Datum>>,
+    ctx: &crate::clock::EvalCtx,
+    statement_memory: &crate::scanner::StatementMemory,
+) -> Result<Vec<Vec<Datum>>, ExecError> {
+    let keys = plan
+        .sort
+        .iter()
+        .map(|item| SelectOrderKey::SourceExpr(item.expr.clone()))
+        .collect::<Vec<_>>();
+    let mut keyed = key_source_rows(&keys, out_exprs, scope, rows, ctx, statement_memory)?;
+    if !keys.is_empty() {
+        keyed.sort_by(|a, b| order_cmp(&a.0, &b.0, &plan.sort));
+    }
+    Ok(
+        keep_first_per_distinct_on_group(keyed, &plan.group, scope, ctx)?
+            .into_iter()
+            .map(|(_, row)| row)
+            .collect(),
+    )
+}
+
 /// The clause name `DISTINCT ON` position errors carry.
 const SQL92_DISTINCT_ON: crate::sql92::Sql92Clause = crate::sql92::Sql92Clause::DistinctOn;
 
