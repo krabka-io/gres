@@ -4861,6 +4861,16 @@ fn format_type_extended(oid: i64, typmod: i64, given: bool) -> String {
     let Ok(oid) = u32::try_from(oid) else {
         return "-".to_string();
     };
+    if let Some(user_type) = crabka_pgtypes::usertype::lookup_oid(oid)
+        && let crabka_pgtypes::usertype::UserTypeBody::Base(base) = &user_type.body
+    {
+        let modifier = if typmod < 0 || !given {
+            String::new()
+        } else {
+            user_type_modifier(base.typmod_out.as_deref(), typmod)
+        };
+        return format!("{}{}", user_type.name, modifier);
+    }
     let Some((base, kind)) = builtin_format_type(oid) else {
         return "-".to_string();
     };
@@ -4897,6 +4907,20 @@ fn format_type_extended(oid: i64, typmod: i64, given: bool) -> String {
             format!("{head}{modifier} {tail}{suffix}")
         }
         _ => format!("{element}{modifier}{suffix}"),
+    }
+}
+
+fn user_type_modifier(typmod_out: Option<&str>, typmod: i64) -> String {
+    match typmod_out {
+        Some("varchartypmodout") => type_modifier(TypmodKind::Length, typmod),
+        Some("bpchartypmodout") => type_modifier(TypmodKind::Length, typmod),
+        Some("numerictypmodout") => type_modifier(TypmodKind::PrecisionScale, typmod),
+        Some("timetypmodout") | Some("timestamptypmodout") => {
+            type_modifier(TypmodKind::Seconds, typmod)
+        }
+        Some("intervaltypmodout") => type_modifier(TypmodKind::Interval, typmod),
+        Some("bittypmodout") | Some("varbittypmodout") => type_modifier(TypmodKind::Bits, typmod),
+        Some(_) | None => type_modifier(TypmodKind::Verbatim, typmod),
     }
 }
 

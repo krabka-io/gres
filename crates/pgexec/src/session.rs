@@ -11222,6 +11222,7 @@ impl SqlSession {
                         .cloned()
                         .unwrap_or_else(|| f.name.clone()),
                     ty: crate::exec::column_type_from_oid(f.type_oid)?,
+                    typmod: None,
                     serial: None,
                     // `CREATE TABLE AS` derives its columns from the query's
                     // RowDescription, which carries a name and a type oid and

@@ -3295,6 +3295,26 @@ async fn regression_c_base_types_keep_their_declared_layouts() {
         .await
             == vec![text_row(&["numerictypmodin", "numerictypmodout"])]
     );
+    let error = session
+        .simple_query("CREATE TEMP TABLE bad_widget_typmod (value widget(42,13,7))")
+        .await
+        .expect_err("three-part numeric typmod is invalid");
+    assert!(error.code == "22023");
+    assert!(error.message == "invalid NUMERIC type modifier");
+    run_s(
+        &mut session,
+        "CREATE TEMP TABLE widget_typmod (value widget(42,13))",
+    )
+    .await;
+    assert!(
+        text_rows_of(
+            &mut session,
+            "SELECT format_type(atttypid, atttypmod) FROM pg_attribute \
+             WHERE attrelid = 'widget_typmod'::regclass AND attnum = 1",
+        )
+        .await
+            == vec![text_row(&["widget(42,13)"])]
+    );
     run_s(&mut session, "CREATE TABLE widget_values (value widget)").await;
     run_s(
         &mut session,

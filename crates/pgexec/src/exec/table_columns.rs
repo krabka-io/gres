@@ -15,6 +15,14 @@ pub(super) fn column_from_ast(
     primary_key_columns: &HashSet<&str>,
 ) -> Result<Column, ExecError> {
     let mut catalog_column = Column::new(column.name.clone(), column.ty);
+    if let Some(typmod) = &column.typmod {
+        let catalog = ctx.catalog().ok_or_else(|| {
+            ExecError::Unsupported("user-defined type modifiers require a catalog".into())
+        })?;
+        catalog_column.typmod = Some(crate::usertype::pack_base_typmod(
+            catalog, column.ty, typmod,
+        )?);
+    }
     if let Some(collation) = &column.collation {
         crate::eval::require_collatable(column.ty)?;
         catalog_column.collation = Some(collation.clone());

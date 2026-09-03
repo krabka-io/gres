@@ -174,6 +174,8 @@ pub struct GeneratedColumn {
 pub struct Column {
     pub name: String,
     pub ty: ColumnType,
+    /// A user-defined base type's packed `typmodin` result, when explicitly set.
+    pub typmod: Option<i32>,
     pub not_null: bool,
     pub default: Option<ColumnDefault>,
     /// The column's `GENERATED ALWAYS AS (<expr>)` clause, stored or virtual.
@@ -203,6 +205,7 @@ impl Column {
         Self {
             name: name.into(),
             ty,
+            typmod: None,
             not_null: false,
             default: None,
             generated: None,
@@ -9198,6 +9201,7 @@ mod tests {
             Column {
                 name: "id".into(),
                 ty: ColumnType::Int4,
+                typmod: None,
                 not_null: true,
                 default: Some(ColumnDefault::NextVal("t_id_seq".into())),
                 generated: None,
@@ -9210,6 +9214,7 @@ mod tests {
             Column {
                 name: "doubled".into(),
                 ty: ColumnType::Int4,
+                typmod: None,
                 not_null: false,
                 default: None,
                 generated: Some(GeneratedColumn {

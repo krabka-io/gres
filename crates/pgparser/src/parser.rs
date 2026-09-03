@@ -4592,7 +4592,7 @@ impl Parser {
             let if_not_exists = self.eat_if_not_exists();
             let _ = explicit_column;
             let name = self.expect_col_id()?;
-            let (ty, serial) = self.parse_column_type(&name)?;
+            let (ty, typmod, serial) = self.parse_column_type(&name)?;
             let (qualifiers, options) = if foreign_table {
                 self.foreign_column_qualifiers()?
             } else {
@@ -4603,6 +4603,7 @@ impl Parser {
                 column: ColumnDef {
                     name,
                     ty,
+                    typmod,
                     serial,
                     collation: qualifiers.collation,
                     constraints: qualifiers.constraints,
@@ -8311,11 +8312,12 @@ impl Parser {
                         constraints.push(self.table_constraint()?);
                     } else {
                         let col_name = self.expect_col_id()?;
-                        let (ty, serial) = self.parse_column_type(&col_name)?;
+                        let (ty, typmod, serial) = self.parse_column_type(&col_name)?;
                         let qualifiers = self.column_qualifiers()?;
                         columns.push(ColumnDef {
                             name: col_name,
                             ty,
+                            typmod,
                             serial,
                             collation: qualifiers.collation,
                             constraints: qualifiers.constraints,
@@ -9276,7 +9278,14 @@ impl Parser {
     fn parse_column_type(
         &mut self,
         column_name: &str,
-    ) -> Result<(crabka_pgtypes::ColumnType, Option<crate::ast::SerialKind>), ParseError> {
+    ) -> Result<
+        (
+            crabka_pgtypes::ColumnType,
+            Option<Vec<String>>,
+            Option<crate::ast::SerialKind>,
+        ),
+        ParseError,
+    > {
         let type_pos = self.peek_pos();
         let type_name = self.expect_ident()?;
         if type_name.eq_ignore_ascii_case("unknown") {
@@ -9289,31 +9298,70 @@ impl Parser {
         match type_name.as_str() {
             "serial" | "serial4" => Ok((
                 crabka_pgtypes::ColumnType::Int4,
+                None,
                 Some(crate::ast::SerialKind::Serial),
             )),
             "bigserial" | "serial8" => Ok((
                 crabka_pgtypes::ColumnType::Int8,
+                None,
                 Some(crate::ast::SerialKind::BigSerial),
             )),
             _ => {
                 self.pos -= 1;
-                let ty = self
-                    .parse_type_name()
-                    .map(|ty| (ty, None))
-                    .map_err(|mut err| {
-                        err.position = type_pos;
-                        err
-                    })?;
-                if matches!(ty.0, crabka_pgtypes::ColumnType::Record(None)) {
+                let ty = self.parse_type_name().map_err(|mut err| {
+                    err.position = type_pos;
+                    err
+                })?;
+                if matches!(ty, crabka_pgtypes::ColumnType::Record(None)) {
                     return Err(ParseError::new_sqlstate(
                         "42P16",
                         format!("column \"{column_name}\" has pseudo-type record"),
                         type_pos,
                     ));
                 }
-                Ok(ty)
+                let typmod = (matches!(ty, crabka_pgtypes::ColumnType::Base(_))
+                    && *self.peek() == Token::LParen)
+                    .then(|| self.parse_user_type_typmod())
+                    .transpose()?;
+                Ok((ty, typmod, None))
             }
         }
+    }
+
+    /// Parse the simple constants/identifiers a user type's `typmodin` receives.
+    fn parse_user_type_typmod(&mut self) -> Result<Vec<String>, ParseError> {
+        self.expect(&Token::LParen)?;
+        let mut values = Vec::new();
+        loop {
+            let position = self.peek_pos();
+            let negative = matches!(self.peek(), Token::Minus);
+            if negative {
+                self.bump();
+            }
+            let value = match self.bump() {
+                Token::IntLit(value) => {
+                    if negative {
+                        format!("-{value}")
+                    } else {
+                        value
+                    }
+                }
+                Token::Ident(value) if !negative => value,
+                _ => {
+                    return Err(ParseError::new_sqlstate(
+                        "42601",
+                        "type modifiers must be simple constants or identifiers",
+                        position,
+                    ));
+                }
+            };
+            values.push(value);
+            if !self.eat_comma() {
+                break;
+            }
+        }
+        self.expect(&Token::RParen)?;
+        Ok(values)
     }
 
     /// The qualifier list that follows a column's type: its constraints plus the
@@ -15824,7 +15872,7 @@ impl Parser {
                         constraints.push(self.table_constraint()?);
                     } else {
                         let col_name = self.expect_col_id()?;
-                        let (ty, serial) = self.parse_column_type(&col_name)?;
+                        let (ty, typmod, serial) = self.parse_column_type(&col_name)?;
                         let (qualifiers, options) = self.foreign_column_qualifiers()?;
                         if !options.is_empty() {
                             column_options.push((col_name.clone(), options));
@@ -15832,6 +15880,7 @@ impl Parser {
                         columns.push(ColumnDef {
                             name: col_name,
                             ty,
+                            typmod,
                             serial,
                             collation: qualifiers.collation,
                             constraints: qualifiers.constraints,
@@ -20060,6 +20109,7 @@ mod tests {
         ColumnDef {
             name: name.into(),
             ty,
+            typmod: None,
             serial: None,
             constraints: Vec::new(),
             collation: None,
@@ -23262,6 +23312,7 @@ mod tests {
             ColumnDef {
                 name: name.into(),
                 ty: ColumnType::Text,
+                typmod: None,
                 serial: None,
                 collation: collation.map(Into::into),
                 constraints,

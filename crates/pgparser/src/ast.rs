@@ -3105,6 +3105,9 @@ impl IsolationLevel {
 pub struct ColumnDef {
     pub name: String,
     pub ty: ColumnType,
+    /// The raw `typmodin` arguments of a user-defined base type, when written.
+    /// The executor resolves the configured support routine against its catalog.
+    pub typmod: Option<Vec<String>>,
     pub serial: Option<SerialKind>,
     /// `COLLATE "name"`, when written. `PostgreSQL`'s grammar admits the clause
     /// anywhere in the qualifier list, so `b text NOT NULL COLLATE "C"` parses

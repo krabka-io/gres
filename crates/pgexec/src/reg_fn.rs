@@ -1212,6 +1212,48 @@ fn type_modifier_not_constant() -> ExecError {
     }
 }
 
+/// Run an internal `typmodin` support routine used by a user-defined base type.
+pub(crate) fn pack_typmod_in(
+    kv: &dyn Kv,
+    routine_name: &str,
+    parts: &[String],
+    type_name: &str,
+) -> Result<i32, ExecError> {
+    use crabka_pgtypes::oids;
+
+    let source = crabka_pgcatalog::routine::routines_named(kv, routine_name)?
+        .into_iter()
+        .find(|routine| routine.name == routine_name && routine.language == "internal")
+        .map_or_else(|| routine_name.to_owned(), |routine| routine.body);
+    let (family, oid) = match source.as_str() {
+        "varchartypmodin" => (TypmodFamily::Length, oids::VARCHAR),
+        "bpchartypmodin" => (TypmodFamily::Length, oids::BPCHAR),
+        "numerictypmodin" => (TypmodFamily::PrecisionScale, oids::NUMERIC),
+        "timetypmodin" => (TypmodFamily::Seconds, oids::TIME),
+        "timestamptypmodin" => (TypmodFamily::Seconds, oids::TIMESTAMP),
+        "intervaltypmodin" => (TypmodFamily::Interval, oids::INTERVAL),
+        "bittypmodin" => (TypmodFamily::Bit, oids::BIT),
+        "varbittypmodin" => (TypmodFamily::Bit, oids::VARBIT),
+        _ => {
+            return Err(ExecError::Unsupported(format!(
+                "type modifier input function \"{routine_name}\" is not supported"
+            )));
+        }
+    };
+    let parts = parts
+        .iter()
+        .map(|part| {
+            part.parse::<i32>()
+                .map_err(|_| type_modifier_not_constant())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    family.pack(
+        i32::try_from(oid).expect("built-in oid fits i32"),
+        &parts,
+        type_name,
+    )
+}
+
 /// 22023 `invalid_parameter_value`, which every `typmodin` raises and none of
 /// them softens — so a bad modifier escapes `to_regtype` rather than turning
 /// into NULL.

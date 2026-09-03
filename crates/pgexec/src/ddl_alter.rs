@@ -313,6 +313,7 @@ pub(crate) fn execute_ddl(
                                     .map(|field| crabka_pgparser::ast::ColumnDef {
                                         name: field.name.clone(),
                                         ty: field.ty,
+                                        typmod: None,
                                         serial: None,
                                         collation: None,
                                         constraints: Vec::new(),

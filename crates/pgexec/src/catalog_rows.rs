@@ -1605,7 +1605,7 @@ pub(crate) fn attribute_rows_for_table(
                 int(oid_i32(column.ty.oid())?),
                 Datum::Int2(typlen),
                 Datum::Int2(attnum),
-                int(catalog_typmod(column.ty)),
+                int(column.typmod.unwrap_or_else(|| catalog_typmod(column.ty))),
                 Datum::Int2(i16::from(matches!(column.ty, ColumnType::Array(_)))),
                 Datum::Bool(typbyval),
                 Datum::InternalChar(typalign),

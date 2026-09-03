@@ -49,6 +49,40 @@ pub fn hydrate(kv: &dyn Kv) -> Result<(), ExecError> {
     Ok(())
 }
 
+/// Pack a user base type's parsed `typmodin` arguments for one table column.
+pub(crate) fn pack_base_typmod(
+    kv: &dyn Kv,
+    ty: ColumnType,
+    parts: &[String],
+) -> Result<i32, ExecError> {
+    let type_name = ty.name();
+    let ColumnType::Base(reference) = ty else {
+        return Err(ExecError::FunctionError {
+            sqlstate: "42601",
+            message: format!("type modifier is not allowed for type \"{type_name}\""),
+        });
+    };
+    let Some(user_type) = usertype::lookup_oid(reference.oid) else {
+        return Err(ExecError::FunctionError {
+            sqlstate: "42601",
+            message: format!("type modifier is not allowed for type \"{type_name}\""),
+        });
+    };
+    let UserTypeBody::Base(base) = &user_type.body else {
+        return Err(ExecError::FunctionError {
+            sqlstate: "42601",
+            message: format!("type modifier is not allowed for type \"{type_name}\""),
+        });
+    };
+    let Some(routine) = base.typmod_in.as_deref() else {
+        return Err(ExecError::FunctionError {
+            sqlstate: "42601",
+            message: format!("type modifier is not allowed for type \"{type_name}\""),
+        });
+    };
+    crate::reg_fn::pack_typmod_in(kv, routine, parts, &type_name)
+}
+
 /// `CREATE TYPE name AS { (…) | ENUM (…) | RANGE (…) }`.
 ///
 /// # Errors

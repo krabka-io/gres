@@ -47,7 +47,7 @@ pub type DecodedSchema = (
 /// foreign, or materialized view — is written with this version byte; a flag
 /// byte after the owner distinguishes ordinary (`0`) from foreign (`1`), and a
 /// `CHECK` constraint list and a materialized-view flag byte close the record.
-pub const SCHEMA_VERSION: u8 = 34;
+pub const SCHEMA_VERSION: u8 = 35;
 
 /// The `interval` type payload normally is one precision byte. This marker
 /// introduces the packed field-range typmod that follows it.
@@ -1211,6 +1211,7 @@ pub fn serialize_schema(
     for c in columns {
         write_str(&mut out, &c.name);
         write_type(&mut out, c.ty);
+        out.extend_from_slice(&c.typmod.unwrap_or(-1).to_be_bytes());
         out.push(u8::from(c.not_null));
         write_default(&mut out, c.default.as_ref());
         write_generated(&mut out, c.generated.as_ref());
@@ -2189,6 +2190,7 @@ pub fn deserialize_schema(bytes: &[u8]) -> Result<DecodedSchema, KvError> {
     for _ in 0..ncols {
         let name = read_string(&mut cur)?;
         let ty = read_type(&mut cur)?;
+        let typmod = i32::from_be_bytes(take_n(&mut cur, 4)?.try_into().expect("4"));
         let not_null = match take_u8(&mut cur)? {
             0 => false,
             1 => true,
@@ -2212,6 +2214,7 @@ pub fn deserialize_schema(bytes: &[u8]) -> Result<DecodedSchema, KvError> {
         columns.push(Column {
             name,
             ty,
+            typmod: (typmod >= 0).then_some(typmod),
             not_null,
             default,
             generated,
@@ -2887,6 +2890,7 @@ pub fn deserialize_view(bytes: &[u8]) -> Result<View, KvError> {
         columns.push(Column {
             name: read_string(&mut cur)?,
             ty: read_type(&mut cur)?,
+            typmod: None,
             not_null: false,
             default: None,
             generated: None,
@@ -2969,6 +2973,7 @@ mod tests {
                     precision: 10,
                     scale: 2,
                 })),
+                typmod: None,
                 not_null: false,
                 default: None,
                 generated: None,
@@ -2981,6 +2986,7 @@ mod tests {
             Column {
                 name: "ratio".into(),
                 ty: ColumnType::Numeric(None),
+                typmod: Some(2_752_529),
                 not_null: false,
                 default: None,
                 generated: None,
@@ -2999,6 +3005,7 @@ mod tests {
             Column {
                 name: "sorted".into(),
                 ty: ColumnType::Text,
+                typmod: None,
                 not_null: false,
                 default: None,
                 generated: None,
@@ -3031,6 +3038,7 @@ mod tests {
         let columns = vec![Column {
             name: "name".into(),
             ty: ColumnType::Text,
+            typmod: None,
             not_null: true,
             default: Some(ColumnDefault::Value(Datum::Text("anon".into()))),
             generated: None,
@@ -3077,6 +3085,7 @@ mod tests {
             let columns = vec![Column {
                 name: "derived".into(),
                 ty: ColumnType::Int4,
+                typmod: None,
                 not_null: false,
                 default: None,
                 generated,
@@ -3117,6 +3126,7 @@ mod tests {
                 &[Column {
                     name: "x".into(),
                     ty: ColumnType::Int4,
+                    typmod: None,
                     not_null: false,
                     default: None,
                     generated,
@@ -3163,6 +3173,7 @@ mod tests {
             Column {
                 name: "doc".into(),
                 ty: ColumnType::Jsonb,
+                typmod: None,
                 not_null: false,
                 default: Some(ColumnDefault::Value(Datum::Jsonb(doc.clone()))),
                 generated: None,
@@ -3175,6 +3186,7 @@ mod tests {
             Column {
                 name: "holes".into(),
                 ty: ColumnType::Array(ElemType::Int4),
+                typmod: None,
                 not_null: false,
                 default: Some(ColumnDefault::Value(Datum::Array(ArrayValue::new(
                     ElemType::Int4,
@@ -3190,6 +3202,7 @@ mod tests {
             Column {
                 name: "empty".into(),
                 ty: ColumnType::Array(ElemType::Text),
+                typmod: None,
                 not_null: false,
                 default: Some(ColumnDefault::Value(Datum::Array(ArrayValue::new(
                     ElemType::Text,
@@ -3205,6 +3218,7 @@ mod tests {
             Column {
                 name: "docs".into(),
                 ty: ColumnType::Array(ElemType::Jsonb),
+                typmod: None,
                 not_null: false,
                 default: Some(ColumnDefault::Value(Datum::Array(ArrayValue::new(
                     ElemType::Jsonb,
@@ -3220,6 +3234,7 @@ mod tests {
             Column {
                 name: "path".into(),
                 ty: ColumnType::JsonPath,
+                typmod: None,
                 not_null: false,
                 default: Some(ColumnDefault::Value(Datum::JsonPath("$.\"a\"".into()))),
                 generated: None,
@@ -3232,6 +3247,7 @@ mod tests {
             Column {
                 name: "paths".into(),
                 ty: ColumnType::Array(ElemType::JsonPath),
+                typmod: None,
                 not_null: false,
                 default: Some(ColumnDefault::Value(Datum::Array(ArrayValue::new(
                     ElemType::JsonPath,
