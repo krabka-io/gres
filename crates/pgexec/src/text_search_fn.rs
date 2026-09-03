@@ -113,6 +113,15 @@ pub(crate) fn default_parser_tokens(source: &str) -> Vec<DefaultParserToken> {
             offset += length;
             continue;
         }
+        if rest.chars().next().is_some_and(char::is_whitespace) {
+            let end = rest
+                .char_indices()
+                .find_map(|(index, character)| (!character.is_whitespace()).then_some(index))
+                .unwrap_or(rest.len());
+            push_token(&mut tokens, 12, &rest[..end]);
+            offset += end;
+            continue;
+        }
         let end = if token_starts(rest) {
             rest.char_indices()
                 .skip(1)
@@ -436,6 +445,7 @@ fn is_word(value: &str) -> bool {
 fn push_token(tokens: &mut Vec<DefaultParserToken>, id: i32, text: &str) {
     if !text.is_empty() {
         if id == 12
+            && !text.starts_with('<')
             && let Some(DefaultParserToken {
                 id: previous_id,
                 text: previous_text,
@@ -3038,6 +3048,51 @@ mod tests {
                         text: "</myns:foo-bar_baz.blurfl>".into(),
                     },
                 ]
+        );
+    }
+
+    #[test]
+    fn default_parser_keeps_whitespace_separate_from_markup() {
+        assert_eq!(
+            default_parser_tokens("\n<i  < jqw <> qwerty"),
+            vec![
+                DefaultParserToken {
+                    id: 12,
+                    text: "\n".into(),
+                },
+                DefaultParserToken {
+                    id: 12,
+                    text: "<".into(),
+                },
+                DefaultParserToken {
+                    id: 1,
+                    text: "i".into(),
+                },
+                DefaultParserToken {
+                    id: 12,
+                    text: "  ".into(),
+                },
+                DefaultParserToken {
+                    id: 12,
+                    text: "< ".into(),
+                },
+                DefaultParserToken {
+                    id: 1,
+                    text: "jqw".into(),
+                },
+                DefaultParserToken {
+                    id: 12,
+                    text: " ".into(),
+                },
+                DefaultParserToken {
+                    id: 12,
+                    text: "<> ".into(),
+                },
+                DefaultParserToken {
+                    id: 1,
+                    text: "qwerty".into(),
+                },
+            ]
         );
     }
 
