@@ -1318,9 +1318,14 @@ fn web_query(config: &str, source: &str, catalog: Catalog<'_>) -> Result<TsQuery
             let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
             (&rest[..end], &rest[end..], false)
         };
-        let connected_words = piece
+        let wildcard_connects_words = piece
             .chars()
-            .any(|character| matches!(character, '*' | '-' | '_'));
+            .zip(piece.chars().skip(1))
+            .zip(piece.chars().skip(2))
+            .any(|((left, wildcard), right)| {
+                wildcard == '*' && left.is_alphanumeric() && right.is_alphanumeric()
+            });
+        let connected_words = wildcard_connects_words || piece.contains(['-', '_']);
         let piece = if piece.contains('_') {
             Cow::Owned(piece.replace('_', " "))
         } else {
@@ -2813,6 +2818,8 @@ mod tests {
             ("fat*rat", "'fat' <-> 'rat'"),
             ("fat-rat", "'fat-rat' <-> 'fat' <-> 'rat'"),
             ("fat_rat", "'fat' <-> 'rat'"),
+            ("fat:*ABCD", "'fat' & 'abcd'"),
+            ("orange:**AABBCCDD", "'orange' & 'aabbccdd'"),
         ] {
             assert_eq!(
                 web_query("simple", source, None).unwrap().to_string(),
