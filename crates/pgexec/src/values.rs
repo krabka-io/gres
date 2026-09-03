@@ -171,6 +171,11 @@ fn analyze_values(v: &ValuesStmt) -> Result<ValuesSchema, ExecError> {
             return Err(ExecError::ValuesColumnCount);
         }
         for (idx, expr) in row.iter().enumerate() {
+            if crate::srf::exprs_contain_srf(std::slice::from_ref(expr)) {
+                return Err(ExecError::Unsupported(
+                    "set-returning functions are not allowed in VALUES".into(),
+                ));
+            }
             let ty = infer_values_expr_type(expr)?;
             let unknown = is_unknown_literal(expr);
             cols[idx] = unify_values_col(cols[idx].0, cols[idx].1, ty, unknown)?;
@@ -215,6 +220,7 @@ fn unify_values_col(
 
 #[cfg(test)]
 mod tests {
+    use crabka_pgparser::ast::{FuncArgs, FuncCall};
     use crabka_pgtypes::Datum;
 
     use super::*;
@@ -243,6 +249,27 @@ mod tests {
             rows: vec![vec![int("1")], vec![int("2"), int("3")]],
         };
         assert_eq!(describe_values(&v), Err(ExecError::ValuesColumnCount));
+    }
+
+    #[test]
+    fn set_returning_expressions_are_rejected_in_values() {
+        let v = ValuesStmt {
+            rows: vec![vec![Expr::Func(FuncCall {
+                sql_syntax: false,
+                name: "generate_series".into(),
+                distinct: false,
+                args: FuncArgs::Exprs(vec![int("1"), int("2")]),
+                order_by: Vec::new(),
+                within_group: false,
+                filter: None,
+            })]],
+        };
+        assert_eq!(
+            describe_values(&v),
+            Err(ExecError::Unsupported(
+                "set-returning functions are not allowed in VALUES".into()
+            ))
+        );
     }
 
     #[test]
