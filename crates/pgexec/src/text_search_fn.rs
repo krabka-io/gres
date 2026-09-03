@@ -969,7 +969,14 @@ fn normalize_query(
     query: TsQuery,
     catalog: Catalog<'_>,
 ) -> Result<TsQuery, ExecError> {
-    let dictionaries = crate::text_search_catalog::config_dictionaries(catalog, config)?;
+    let dictionaries = dictionaries_for_token(
+        config,
+        &DefaultParserToken {
+            id: 1,
+            text: String::new(),
+        },
+        catalog,
+    )?;
     if dictionaries != ["simple"] && dictionaries != ["english_stem"] {
         return mapped_query(query, &dictionaries, catalog);
     }
@@ -2626,6 +2633,9 @@ fn is_stopword(word: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use crabka_pgkv::{Kv, MemKv};
+    use crabka_pgparser::ast::{TextSearchDdl, TextSearchObjectKind};
+
     use super::*;
     use crate::{clock::EvalCtx, scope::Scope};
 
@@ -2853,6 +2863,44 @@ mod tests {
                 .unwrap()
                 .to_string(),
             "'cat'"
+        );
+    }
+
+    #[test]
+    fn query_normalization_uses_specific_token_mappings() {
+        let kv = MemKv::new();
+        for ddl in [
+            TextSearchDdl::Create {
+                kind: TextSearchObjectKind::Dictionary,
+                name: "synonym_test".into(),
+                base: "synonym".into(),
+                options: vec![("synonyms".into(), "synonym_sample".into())],
+            },
+            TextSearchDdl::Create {
+                kind: TextSearchObjectKind::Configuration,
+                name: "synonym_test".into(),
+                base: "english".into(),
+                options: Vec::new(),
+            },
+            TextSearchDdl::Alter {
+                kind: TextSearchObjectKind::Configuration,
+                name: "synonym_test".into(),
+                rename_to: None,
+                options: vec![(
+                    "__mapping_asciiword".into(),
+                    "synonym_test\u{1f}english_stem".into(),
+                )],
+            },
+        ] {
+            let (_, writes) = crate::text_search_catalog::execute(&kv, &ddl).unwrap();
+            kv.write_batch(&writes).unwrap();
+        }
+
+        assert_eq!(
+            to_tsquery("synonym_test", "Index & indices", Some(&kv))
+                .unwrap()
+                .to_string(),
+            "'index' & 'index':*"
         );
     }
 
