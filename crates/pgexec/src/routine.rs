@@ -2243,6 +2243,11 @@ fn resolve_candidates(
     for routine in arity_matched {
         let params: Vec<&RoutineParam> = routine.input_params().collect();
         let variadic_index = variadic_input_index(&params);
+        if given.is_empty()
+            && variadic_index.is_some_and(|index| is_polymorphic_type(&params[index].ty.name))
+        {
+            continue;
+        }
         let expand_variadic = variadic_index
             .is_some_and(|index| variadic_arguments_are_expanded(&params, given, index));
         let mut is_exact = true;
@@ -8300,6 +8305,9 @@ mod tests {
             .expect("resolution")
             .expect("polymorphic variadic routine");
         assert!(matches!(bound.args.as_slice(), [Expr::ArrayLiteral(values)] if values.len() == 2));
+        let error = resolve_call(&kv, "polymorphic_variadic_len", &[])
+            .expect_err("polymorphic variadic routine needs an element type");
+        assert!(sqlstate(&error) == "42883");
     }
 
     #[test]
