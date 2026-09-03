@@ -2204,13 +2204,22 @@ pub(crate) fn resolve_call(
     name: &str,
     given: &[ArgType],
 ) -> Result<Option<Routine>, ExecError> {
+    resolve_call_with_variadic(kv, name, given, false)
+}
+
+fn resolve_call_with_variadic(
+    kv: &dyn Kv,
+    name: &str,
+    given: &[ArgType],
+    explicit_variadic: bool,
+) -> Result<Option<Routine>, ExecError> {
     // An aggregate is never the answer to a scalar call; `agg` resolves those.
     let candidates: Vec<Routine> = routines_named(kv, name)?
         .into_iter()
         .map(hydrate_user_type_signature)
         .filter(|routine| !routine.is_aggregate())
         .collect();
-    resolve_candidates(name, candidates, given)
+    resolve_candidates(name, candidates, given, explicit_variadic)
 }
 
 /// Apply ordinary overload resolution to a caller-selected candidate set.
@@ -2218,6 +2227,7 @@ fn resolve_candidates(
     name: &str,
     candidates: Vec<Routine>,
     given: &[ArgType],
+    explicit_variadic: bool,
 ) -> Result<Option<Routine>, ExecError> {
     if candidates.is_empty() {
         return Ok(None);
@@ -2248,8 +2258,9 @@ fn resolve_candidates(
         {
             continue;
         }
-        let expand_variadic = variadic_index
-            .is_some_and(|index| variadic_arguments_are_expanded(&params, given, index));
+        let expand_variadic = variadic_index.is_some_and(|index| {
+            variadic_arguments_are_expanded(&params, given, index, explicit_variadic)
+        });
         let mut is_exact = true;
         let mut is_coercible = true;
         for (index, arg) in given.iter().enumerate() {
@@ -2295,7 +2306,7 @@ fn resolve_candidates(
                 ArgType::Unknown | ArgType::Opaque => is_exact = false,
             }
         }
-        is_coercible &= polymorphic_arguments_are_consistent(&params, given);
+        is_coercible &= polymorphic_arguments_are_consistent(&params, given, explicit_variadic);
         is_exact &= polymorphic_arguments_are_exact(&params, given);
         if is_exact {
             exact.push(routine.clone());
@@ -2303,8 +2314,8 @@ fn resolve_candidates(
             coercible.push(routine.clone());
         }
     }
-    discard_expanded_variadic_candidates(&mut exact, given);
-    discard_expanded_variadic_candidates(&mut coercible, given);
+    discard_expanded_variadic_candidates(&mut exact, given, explicit_variadic);
+    discard_expanded_variadic_candidates(&mut coercible, given, explicit_variadic);
     if exact.len() == 1 {
         return resolved_candidate(exact.remove(0), given);
     }
@@ -2406,12 +2417,16 @@ fn variadic_arguments_are_expanded(
     params: &[&RoutineParam],
     args: &[ArgType],
     index: usize,
+    explicit_variadic: bool,
 ) -> bool {
+    if explicit_variadic {
+        return false;
+    }
     let Some(param) = params.get(index) else {
         return false;
     };
     if param.ty.name == "anyarray" && args.len() == params.len() {
-        return !matches!(args.get(index), Some(ArgType::Known(ColumnType::Array(_))));
+        return true;
     }
     args.len() != params.len()
         || !matches!((args.get(index), param.ty.column),
@@ -2420,7 +2435,11 @@ fn variadic_arguments_are_expanded(
 
 /// PostgreSQL removes an expanded variadic form when a scalar overload has
 /// the same effective argument types.
-fn discard_expanded_variadic_candidates(candidates: &mut Vec<Routine>, given: &[ArgType]) {
+fn discard_expanded_variadic_candidates(
+    candidates: &mut Vec<Routine>,
+    given: &[ArgType],
+    explicit_variadic: bool,
+) {
     let scalar_signatures: Vec<Vec<String>> = candidates
         .iter()
         .filter_map(|routine| {
@@ -2438,7 +2457,7 @@ fn discard_expanded_variadic_candidates(candidates: &mut Vec<Routine>, given: &[
         let Some(index) = variadic_input_index(&params) else {
             return true;
         };
-        !variadic_arguments_are_expanded(&params, given, index)
+        !variadic_arguments_are_expanded(&params, given, index, explicit_variadic)
             || !scalar_signatures.iter().any(|signature| {
                 signature
                     .iter()
@@ -2550,10 +2569,15 @@ fn polymorphic_range_type(name: &str, arg: ArgType) -> Option<crabka_pgtypes::us
     }
 }
 
-fn polymorphic_arguments_are_consistent(params: &[&RoutineParam], given: &[ArgType]) -> bool {
+fn polymorphic_arguments_are_consistent(
+    params: &[&RoutineParam],
+    given: &[ArgType],
+    explicit_variadic: bool,
+) -> bool {
     let variadic_index = variadic_input_index(params);
-    let expand_variadic =
-        variadic_index.is_some_and(|index| variadic_arguments_are_expanded(params, given, index));
+    let expand_variadic = variadic_index.is_some_and(|index| {
+        variadic_arguments_are_expanded(params, given, index, explicit_variadic)
+    });
     let mut exact = None;
     let mut exact_range = None;
     let mut compatible = None;
@@ -2661,10 +2685,20 @@ pub(crate) fn bind_call(
     args: &[Expr],
     given: &[ArgType],
 ) -> Result<Option<BoundRoutineCall>, ExecError> {
-    let Some(routine) = resolve_call(kv, name, given)? else {
+    bind_call_with_variadic(kv, name, args, given, false)
+}
+
+fn bind_call_with_variadic(
+    kv: &dyn Kv,
+    name: &str,
+    args: &[Expr],
+    given: &[ArgType],
+    explicit_variadic: bool,
+) -> Result<Option<BoundRoutineCall>, ExecError> {
+    let Some(routine) = resolve_call_with_variadic(kv, name, given, explicit_variadic)? else {
         return Ok(None);
     };
-    let args = bound_args(&routine, args)?;
+    let args = bound_args(&routine, args, explicit_variadic)?;
     Ok(Some(BoundRoutineCall { routine, args }))
 }
 
@@ -2705,7 +2739,7 @@ pub(crate) fn normalize_named_call(
             .iter()
             .map(|(routine, _)| routine.clone())
             .collect();
-        let Some(selected) = resolve_candidates(&call.name, candidates, &given)? else {
+        let Some(selected) = resolve_candidates(&call.name, candidates, &given, false)? else {
             continue;
         };
         if let Some((_, args)) = routines
@@ -2749,15 +2783,7 @@ pub(crate) fn normalize_variadic_call(
     let mut args = positional.clone();
     args.push((**array).clone());
     let given = best_effort_arg_types(&args);
-    match resolve_call(kv, &call.name, &given) {
-        Ok(Some(_)) => {
-            let mut normalized = call.clone();
-            normalized.args = FuncArgs::Exprs(args);
-            Ok(Some(normalized))
-        }
-        Ok(None) | Err(ExecError::UndefinedFunction(_)) => Ok(None),
-        Err(error) => Err(error),
-    }
+    resolve_call_with_variadic(kv, &call.name, &given, true).map(|_| None)
 }
 
 /// Resolve the delayed argument forms of a FROM-position function call.
@@ -3500,6 +3526,18 @@ fn best_effort_arg_types(args: &[Expr]) -> Vec<ArgType> {
         .collect()
 }
 
+fn routine_call_args(args: &FuncArgs) -> Option<(Vec<Expr>, bool)> {
+    match args {
+        FuncArgs::Exprs(args) => Some((args.clone(), false)),
+        FuncArgs::Variadic { positional, array } => {
+            let mut args = positional.clone();
+            args.push((**array).clone());
+            Some((args, true))
+        }
+        FuncArgs::Star | FuncArgs::Named { .. } => None,
+    }
+}
+
 /// Inline a call of a user-defined SQL function, if `call` names one.
 ///
 /// This is the single seam through which a routine call becomes ordinary SQL.
@@ -3560,14 +3598,14 @@ pub(crate) fn plpgsql_declared_call_type(
     kv: &dyn Kv,
     call: &FuncCall,
 ) -> Result<Option<ColumnType>, ExecError> {
-    let FuncArgs::Exprs(args) = &call.args else {
+    let Some((args, explicit_variadic)) = routine_call_args(&call.args) else {
         return Ok(None);
     };
     if !is_user_routine(kv, &call.name) {
         return Ok(None);
     }
-    let given = best_effort_arg_types(args);
-    let routine = match resolve_call(kv, &call.name, &given) {
+    let given = best_effort_arg_types(&args);
+    let routine = match resolve_call_with_variadic(kv, &call.name, &given, explicit_variadic) {
         Ok(Some(routine))
             if matches!(routine.language.as_str(), "plpgsql" | "sql")
                 || regression_c_adapter(&routine).is_some() =>
@@ -3581,7 +3619,7 @@ pub(crate) fn plpgsql_declared_call_type(
     if routine.language == "plpgsql" {
         validate_plpgsql_scalar(&routine)?;
     }
-    called_scalar_result_type_with_catalog(kv, &routine, &given)?
+    called_scalar_result_type_with_catalog(kv, &routine, &given, explicit_variadic)?
         .ok_or_else(|| {
             ExecError::Unsupported(format!(
                 "function {} has no scalar result type",
@@ -3598,7 +3636,7 @@ pub(crate) fn plpgsql_scalar_result_type(
     call: &FuncCall,
     scope: &crate::scope::Scope,
 ) -> Option<Result<ColumnType, ExecError>> {
-    let FuncArgs::Exprs(args) = &call.args else {
+    let Some((args, explicit_variadic)) = routine_call_args(&call.args) else {
         return None;
     };
     SCALAR_RUNTIME.with(|runtime| {
@@ -3610,14 +3648,20 @@ pub(crate) fn plpgsql_scalar_result_type(
         if shadowing_user_aggregate(runtime.catalog.as_ref(), &call.name, args.len()) {
             return None;
         }
-        let given = crate::eval::static_arg_types(args, scope);
+        let given = crate::eval::static_arg_types(&args, scope);
         if given.as_ref().is_ok_and(|given| {
             falls_back_to_regression_binary_coercible(runtime.catalog.as_ref(), &call.name, given)
         }) {
             return None;
         }
         let result = given.and_then(|given| {
-            let Some(routine) = resolve_call(runtime.catalog.as_ref(), &call.name, &given)? else {
+            let Some(routine) = resolve_call_with_variadic(
+                runtime.catalog.as_ref(),
+                &call.name,
+                &given,
+                explicit_variadic,
+            )?
+            else {
                 return Err(undefined_routine(format!(
                     "function {} does not exist",
                     call.name
@@ -3633,13 +3677,18 @@ pub(crate) fn plpgsql_scalar_result_type(
             if matches!(routine.language.as_str(), "plpgsql" | "sql") {
                 validate_plpgsql_scalar(&routine)?;
             }
-            called_scalar_result_type_with_catalog(runtime.catalog.as_ref(), &routine, &given)?
-                .ok_or_else(|| {
-                    ExecError::Unsupported(format!(
-                        "function {} has no scalar result type",
-                        routine.identity()
-                    ))
-                })
+            called_scalar_result_type_with_catalog(
+                runtime.catalog.as_ref(),
+                &routine,
+                &given,
+                explicit_variadic,
+            )?
+            .ok_or_else(|| {
+                ExecError::Unsupported(format!(
+                    "function {} has no scalar result type",
+                    routine.identity()
+                ))
+            })
         });
         Some(result)
     })
@@ -3652,7 +3701,7 @@ pub(crate) fn plpgsql_set_result_type(
     call: &FuncCall,
     scope: &crate::scope::Scope,
 ) -> Option<Result<ColumnType, ExecError>> {
-    let FuncArgs::Exprs(args) = &call.args else {
+    let Some((args, explicit_variadic)) = routine_call_args(&call.args) else {
         return None;
     };
     SCALAR_RUNTIME.with(|runtime| {
@@ -3662,11 +3711,14 @@ pub(crate) fn plpgsql_set_result_type(
             return None;
         }
         let result = (|| {
-            let given = crate::eval::static_arg_types(args, scope)?;
-            let routine =
-                resolve_call(runtime.catalog.as_ref(), &call.name, &given)?.ok_or_else(|| {
-                    undefined_routine(format!("function {} does not exist", call.name))
-                })?;
+            let given = crate::eval::static_arg_types(&args, scope)?;
+            let routine = resolve_call_with_variadic(
+                runtime.catalog.as_ref(),
+                &call.name,
+                &given,
+                explicit_variadic,
+            )?
+            .ok_or_else(|| undefined_routine(format!("function {} does not exist", call.name)))?;
             if !matches!(routine.language.as_str(), "plpgsql" | "sql")
                 || !declared_returns_set(&routine)
             {
@@ -3696,7 +3748,7 @@ pub(crate) fn plpgsql_set_result_type(
 /// PL/pgSQL function. This cheap predicate selects ProjectSet; the typed
 /// resolver above returns the user-facing error.
 pub(crate) fn is_plpgsql_set_runtime(call: &FuncCall) -> bool {
-    let FuncArgs::Exprs(args) = &call.args else {
+    let Some((args, explicit_variadic)) = routine_call_args(&call.args) else {
         return false;
     };
     SCALAR_RUNTIME.with(|runtime| {
@@ -3704,8 +3756,14 @@ pub(crate) fn is_plpgsql_set_runtime(call: &FuncCall) -> bool {
         let Some(runtime) = runtime.as_ref() else {
             return false;
         };
-        let given = best_effort_arg_types(args);
-        resolve_call(runtime.catalog.as_ref(), &call.name, &given).is_ok_and(|routine| {
+        let given = best_effort_arg_types(&args);
+        resolve_call_with_variadic(
+            runtime.catalog.as_ref(),
+            &call.name,
+            &given,
+            explicit_variadic,
+        )
+        .is_ok_and(|routine| {
             routine.is_some_and(|routine| {
                 matches!(routine.language.as_str(), "plpgsql" | "sql")
                     && declared_returns_set(&routine)
@@ -3715,7 +3773,7 @@ pub(crate) fn is_plpgsql_set_runtime(call: &FuncCall) -> bool {
 }
 
 pub(crate) fn is_plpgsql_scalar_runtime(call: &FuncCall, scope: &crate::scope::Scope) -> bool {
-    let FuncArgs::Exprs(args) = &call.args else {
+    let Some((args, explicit_variadic)) = routine_call_args(&call.args) else {
         return false;
     };
     SCALAR_RUNTIME.with(|runtime| {
@@ -3723,10 +3781,16 @@ pub(crate) fn is_plpgsql_scalar_runtime(call: &FuncCall, scope: &crate::scope::S
         let Some(runtime) = runtime.as_ref() else {
             return false;
         };
-        let Ok(given) = crate::eval::static_arg_types(args, scope) else {
+        let Ok(given) = crate::eval::static_arg_types(&args, scope) else {
             return false;
         };
-        resolve_call(runtime.catalog.as_ref(), &call.name, &given).is_ok_and(|routine| {
+        resolve_call_with_variadic(
+            runtime.catalog.as_ref(),
+            &call.name,
+            &given,
+            explicit_variadic,
+        )
+        .is_ok_and(|routine| {
             routine.is_some_and(|routine| {
                 matches!(routine.language.as_str(), "plpgsql" | "sql")
                     || regression_c_adapter(&routine).is_some()
@@ -3753,7 +3817,7 @@ pub(crate) fn eval_plpgsql_scalar_with(
     ctx: &crate::clock::EvalCtx,
     mut eval_arg: impl FnMut(&Expr) -> Result<Datum, ExecError>,
 ) -> Option<Result<Datum, ExecError>> {
-    let FuncArgs::Exprs(args) = &call.args else {
+    let Some((args, explicit_variadic)) = routine_call_args(&call.args) else {
         return None;
     };
     SCALAR_RUNTIME.with(|runtime| {
@@ -3776,7 +3840,7 @@ pub(crate) fn eval_plpgsql_scalar_with(
                 .iter()
                 .map(&mut eval_arg)
                 .collect::<Result<Vec<_>, _>>()?;
-            let given = crate::eval::value_arg_types(args, &values);
+            let given = crate::eval::value_arg_types(&args, &values);
             if falls_back_to_regression_binary_coercible(
                 runtime.catalog.as_ref(),
                 &call.name,
@@ -3792,7 +3856,13 @@ pub(crate) fn eval_plpgsql_scalar_with(
             let Some(BoundRoutineCall {
                 routine,
                 args: bound_args,
-            }) = bind_call(runtime.catalog.as_ref(), &call.name, args, &given)?
+            }) = bind_call_with_variadic(
+                runtime.catalog.as_ref(),
+                &call.name,
+                &args,
+                &given,
+                explicit_variadic,
+            )?
             else {
                 return Err(undefined_routine(format!(
                     "function {} does not exist",
@@ -3812,7 +3882,7 @@ pub(crate) fn eval_plpgsql_scalar_with(
             for default in bound_args.iter().skip(values.len()) {
                 values.push(eval_arg(default)?);
             }
-            pack_variadic_values(&routine, args, &mut values, ctx)?;
+            pack_variadic_values(&routine, &args, &mut values, ctx, explicit_variadic)?;
             let params = routine
                 .input_params()
                 .map(|param| param.ty.column)
@@ -3867,7 +3937,7 @@ pub(crate) fn eval_plpgsql_scalar_with(
             } else {
                 crate::plpgsql::eval_scalar_function(&routine, &values, ctx)?
             };
-            match called_scalar_result_type(&routine, &given) {
+            match called_scalar_result_type(&routine, &given, explicit_variadic) {
                 Some(ty) => crate::plpgsql::cast_value(&value, ty, ctx),
                 None => Ok(value),
             }
@@ -3934,7 +4004,7 @@ pub(crate) fn eval_plpgsql_set_function(
             for default in bound_args.iter().skip(values.len()) {
                 values.push(crate::eval::eval(default, scope, row, ctx)?);
             }
-            pack_variadic_values(&routine, args, &mut values, ctx)?;
+            pack_variadic_values(&routine, args, &mut values, ctx, false)?;
             let params = routine
                 .input_params()
                 .map(|param| param.ty.column)
@@ -4262,7 +4332,7 @@ pub(crate) fn sql_empty_body_error(routine: &Routine, values: &[Datum]) -> ExecE
                 .unwrap_or(crate::eval::ArgType::Opaque)
         })
         .collect::<Vec<_>>();
-    let expected = resolved_scalar_result_type(routine, &given)
+    let expected = resolved_scalar_result_type(routine, &given, false)
         .map(|ty| ty.name().to_string())
         .or_else(|| match &routine.result {
             RoutineResult::Type { ty, .. } => Some(ty.name.clone()),
@@ -4865,7 +4935,11 @@ impl Binding<'_> {
 
 /// Fill in the defaults of the input parameters the call omitted, and coerce
 /// the untyped literals `PostgreSQL` would have resolved to the parameter type.
-fn bound_args(routine: &Routine, args: &[Expr]) -> Result<Vec<Expr>, ExecError> {
+fn bound_args(
+    routine: &Routine,
+    args: &[Expr],
+    explicit_variadic: bool,
+) -> Result<Vec<Expr>, ExecError> {
     let params: Vec<&RoutineParam> = routine.input_params().collect();
     let variadic_index = variadic_input_index(&params);
     let fixed = variadic_index.unwrap_or(params.len());
@@ -4887,7 +4961,7 @@ fn bound_args(routine: &Routine, args: &[Expr]) -> Result<Vec<Expr>, ExecError> 
     }
     if let Some(index) = variadic_index {
         let param = params[index];
-        if variadic_expr_arguments_are_expanded(&params, args, index) {
+        if variadic_expr_arguments_are_expanded(&params, args, index, explicit_variadic) {
             let element = variadic_element_type(param);
             out.push(Expr::ArrayLiteral(
                 args[index..]
@@ -4923,18 +4997,16 @@ fn variadic_expr_arguments_are_expanded(
     params: &[&RoutineParam],
     args: &[Expr],
     index: usize,
+    explicit_variadic: bool,
 ) -> bool {
+    if explicit_variadic {
+        return false;
+    }
     let Some(param) = params.get(index) else {
         return false;
     };
     if param.ty.name == "anyarray" && args.len() == params.len() {
-        return !matches!(
-            crate::eval::infer_type(
-                args.get(index).expect("variadic parameter"),
-                &crate::scope::Scope::empty()
-            ),
-            Ok(ColumnType::Array(_))
-        );
+        return true;
     }
     args.len() != params.len()
         || !matches!(
@@ -4949,19 +5021,13 @@ fn pack_variadic_values(
     args: &[Expr],
     values: &mut Vec<Datum>,
     ctx: &crate::clock::EvalCtx,
+    explicit_variadic: bool,
 ) -> Result<(), ExecError> {
     let params: Vec<&RoutineParam> = routine.input_params().collect();
     let Some(index) = variadic_input_index(&params) else {
         return Ok(());
     };
-    if !variadic_expr_arguments_are_expanded(&params, args, index)
-        || (params[index].ty.name == "anyarray"
-            && args.len() == params.len()
-            && values
-                .get(index)
-                .and_then(Datum::column_type)
-                .is_some_and(|ty| matches!(ty, ColumnType::Array(_))))
-    {
+    if !variadic_expr_arguments_are_expanded(&params, args, index, explicit_variadic) {
         return Ok(());
     }
     let mut elements = values.split_off(index);
@@ -5335,7 +5401,7 @@ pub(crate) fn inline_scalar_call(
         None => Expr::ScalarSubquery(Box::new(substitute_in_query(&binding, &query)?)),
     };
     binding.reject_repeated_volatile_args()?;
-    let inlined = match resolved_scalar_result_type(&routine, given) {
+    let inlined = match resolved_scalar_result_type(&routine, given, false) {
         Some(ty) => Expr::Cast {
             expr: Box::new(inlined),
             ty,
@@ -5420,22 +5486,27 @@ pub(crate) fn void_result_value() -> Datum {
 /// [`resolved_scalar_result_type`] answers what the routine's declaration
 /// models, and `void` is modelled by nothing; this answers what the column the
 /// caller reads is made of.
-fn called_scalar_result_type(routine: &Routine, given: &[ArgType]) -> Option<ColumnType> {
+fn called_scalar_result_type(
+    routine: &Routine,
+    given: &[ArgType],
+    explicit_variadic: bool,
+) -> Option<ColumnType> {
     if declared_returns_void(routine) {
         return Some(VOID_RESULT_TYPE);
     }
     if declared_output_parameter_count(routine) > 1 {
         return Some(ColumnType::Record(None));
     }
-    resolved_scalar_result_type(routine, given)
+    resolved_scalar_result_type(routine, given, explicit_variadic)
 }
 
 fn called_scalar_result_type_with_catalog(
     kv: &dyn Kv,
     routine: &Routine,
     given: &[ArgType],
+    explicit_variadic: bool,
 ) -> Result<Option<ColumnType>, ExecError> {
-    Ok(called_scalar_result_type(routine, given)
+    Ok(called_scalar_result_type(routine, given, explicit_variadic)
         .or(declared_relation_rowtype(kv, routine)?
             .map(|rowtype| ColumnType::Record(Some(rowtype)))))
 }
@@ -5488,7 +5559,11 @@ pub(crate) fn declared_set_result_type(routine: &Routine) -> Option<ColumnType> 
     }
 }
 
-fn resolved_scalar_result_type(routine: &Routine, given: &[ArgType]) -> Option<ColumnType> {
+fn resolved_scalar_result_type(
+    routine: &Routine,
+    given: &[ArgType],
+    explicit_variadic: bool,
+) -> Option<ColumnType> {
     declared_scalar_result_type(routine).or_else(|| {
         let name = match &routine.result {
             RoutineResult::Type { ty, setof: false } => &ty.name,
@@ -5497,7 +5572,7 @@ fn resolved_scalar_result_type(routine: &Routine, given: &[ArgType]) -> Option<C
             }
             _ => return None,
         };
-        resolved_polymorphic_type(routine, given, name)
+        resolved_polymorphic_type_with_variadic(routine, given, name, explicit_variadic)
     })
 }
 
@@ -5535,10 +5610,20 @@ pub(crate) fn resolved_polymorphic_type(
     given: &[ArgType],
     result_name: &str,
 ) -> Option<ColumnType> {
+    resolved_polymorphic_type_with_variadic(routine, given, result_name, false)
+}
+
+fn resolved_polymorphic_type_with_variadic(
+    routine: &Routine,
+    given: &[ArgType],
+    result_name: &str,
+    explicit_variadic: bool,
+) -> Option<ColumnType> {
     let params: Vec<&RoutineParam> = routine.input_params().collect();
     let variadic_index = variadic_input_index(&params);
-    let expand_variadic =
-        variadic_index.is_some_and(|index| variadic_arguments_are_expanded(&params, given, index));
+    let expand_variadic = variadic_index.is_some_and(|index| {
+        variadic_arguments_are_expanded(&params, given, index, explicit_variadic)
+    });
     let mut traditional_base = None;
     let mut traditional_range = None;
     let mut traditional_multirange = None;
@@ -6010,7 +6095,7 @@ pub(crate) fn eval_plpgsql_table_function(
                 ctx,
             )?);
         }
-        pack_variadic_values(&routine, &call.args, &mut values, ctx)?;
+        pack_variadic_values(&routine, &call.args, &mut values, ctx, false)?;
         let params = routine
             .input_params()
             .map(|param| param.ty.column)
@@ -7374,6 +7459,8 @@ mod tests {
                  LANGUAGE sql AS 'SELECT array_length(values, 1)'; \
                  CREATE FUNCTION polymorphic_variadic_first(VARIADIC values anyarray) \
                  RETURNS anyelement LANGUAGE sql AS 'SELECT values[1]'; \
+                 CREATE FUNCTION formarray(first anyelement, VARIADIC rest anyarray) \
+                 RETURNS anyarray LANGUAGE sql AS 'SELECT array_prepend(first, rest)'; \
                  CREATE FUNCTION table_default(a int, b int DEFAULT 2) \
                  RETURNS TABLE (first int, second int) LANGUAGE sql AS 'SELECT a, b'",
             )
@@ -7389,6 +7476,7 @@ mod tests {
                  polymorphic_variadic_len(VARIADIC ARRAY[5, 6]), \
                  polymorphic_variadic_first(1, 2, 3), \
                  polymorphic_variadic_first(VARIADIC ARRAY[5, 6]), \
+                 formarray(1.1, VARIADIC ARRAY[1.2, 55.5]), \
                  make_interval(days => 2)",
             )
             .await
@@ -7406,7 +7494,31 @@ mod tests {
                     .expect("utf8 result")
             })
             .collect();
-        assert!(values == ["7", "6", "3", "2", "1", "3", "2", "1", "5", "2 days"]);
+        assert!(
+            values
+                == [
+                    "7",
+                    "6",
+                    "3",
+                    "2",
+                    "1",
+                    "3",
+                    "2",
+                    "1",
+                    "5",
+                    "{1.1,1.2,55.5}",
+                    "2 days"
+                ]
+        );
+
+        let error = session
+            .simple_query("SELECT formarray(1.1, ARRAY[1.2, 55.5])")
+            .await
+            .expect_err("an ordinary array argument is a variadic element");
+        assert!(
+            error.message == "function formarray(numeric, numeric[]) does not exist",
+            "{error:?}"
+        );
 
         let result = session
             .simple_query("SELECT * FROM table_default(b => 9, a => 8)")
