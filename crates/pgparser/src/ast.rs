@@ -4857,6 +4857,18 @@ pub enum BinaryOp {
     NotMatch,
     /// `!~*`: the negation of [`BinaryOp::MatchCi`].
     NotMatchCi,
+    /// `LIKE`, used by a quantified pattern comparison (`x LIKE ANY (patterns)`).
+    Like,
+    /// `ILIKE`, used by a quantified pattern comparison.
+    ILike,
+    /// `NOT LIKE`, used by a quantified pattern comparison.
+    NotLike,
+    /// `NOT ILIKE`, used by a quantified pattern comparison.
+    NotILike,
+    /// `SIMILAR TO`, used by a quantified pattern comparison.
+    Similar,
+    /// `NOT SIMILAR TO`, used by a quantified pattern comparison.
+    NotSimilar,
     /// `&`: bitwise AND on two integers of the same width.
     BitAnd,
     /// `|`: bitwise OR on two integers of the same width.

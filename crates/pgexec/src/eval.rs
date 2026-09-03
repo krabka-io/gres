@@ -1679,8 +1679,23 @@ pub(crate) fn apply_comparison_of(
     (re, r): (&Expr, &Datum),
     ctx: &EvalCtx,
 ) -> Result<Datum, ExecError> {
+    if let Some((kind, negated)) = quantified_match_kind(op) {
+        return eval_like(l, r, negated, kind, None);
+    }
     let (lc, rc) = coerce_untyped_literal_operands(op, le, re, l, r, ctx)?;
     apply_binary(op, lc.as_ref().unwrap_or(l), rc.as_ref().unwrap_or(r), ctx)
+}
+
+fn quantified_match_kind(op: BinaryOp) -> Option<(MatchKind, bool)> {
+    match op {
+        BinaryOp::Like => Some((MatchKind::Like, false)),
+        BinaryOp::ILike => Some((MatchKind::ILike, false)),
+        BinaryOp::NotLike => Some((MatchKind::Like, true)),
+        BinaryOp::NotILike => Some((MatchKind::ILike, true)),
+        BinaryOp::Similar => Some((MatchKind::Similar, false)),
+        BinaryOp::NotSimilar => Some((MatchKind::Similar, true)),
+        _ => None,
+    }
 }
 
 /// Convert an `unknown` string-literal operand's *value* to the type the
@@ -2140,6 +2155,9 @@ pub(crate) fn apply_binary(
     r: &Datum,
     ctx: &EvalCtx,
 ) -> Result<Datum, ExecError> {
+    if let Some((kind, negated)) = quantified_match_kind(op) {
+        return eval_like(l, r, negated, kind, None);
+    }
     // PostgreSQL resolves a date/time `+ - * /` to a `pg_operator` row and then
     // coerces both operands to that row's declared parameter types. The row is
     // `crate::temporal_arith`'s answer and this is the coercion; without it a
@@ -2216,6 +2234,14 @@ pub(crate) fn apply_binary(
         return Err(error);
     }
     match op {
+        // These are handled before overload resolution so quantified pattern
+        // comparisons share the same evaluator as ordinary `LIKE`.
+        BinaryOp::Like
+        | BinaryOp::ILike
+        | BinaryOp::NotLike
+        | BinaryOp::NotILike
+        | BinaryOp::Similar
+        | BinaryOp::NotSimilar => unreachable!("quantified pattern operator handled above"),
         // `<<=` / `>>=` exist only for the network family, so anything that
         // reaches here is a type error rather than another overload.
         BinaryOp::ContainedByOrEq | BinaryOp::ContainsOrEq => {
@@ -3938,6 +3964,12 @@ pub(crate) fn op_spelling(op: BinaryOp) -> &'static str {
         BinaryOp::MatchCi => "~*",
         BinaryOp::NotMatch => "!~",
         BinaryOp::NotMatchCi => "!~*",
+        BinaryOp::Like => "LIKE",
+        BinaryOp::ILike => "ILIKE",
+        BinaryOp::NotLike => "NOT LIKE",
+        BinaryOp::NotILike => "NOT ILIKE",
+        BinaryOp::Similar => "SIMILAR TO",
+        BinaryOp::NotSimilar => "NOT SIMILAR TO",
         BinaryOp::BitAnd => "&",
         BinaryOp::BitOr => "|",
         BinaryOp::BitXor => "#",
@@ -7737,6 +7769,11 @@ mod tests {
             // The array may be a column, and the operator any comparison.
             ("i = ANY(ia)", Datum::Bool(true)),
             ("s = ANY(ta)", Datum::Bool(true)),
+            ("'foo' LIKE ANY(ARRAY['x%', 'f%'])", Datum::Bool(true)),
+            // This is an elementwise `NOT LIKE`, not `NOT (LIKE ANY (...))`.
+            ("'foo' NOT LIKE ANY(ARRAY['f%', 'x%'])", Datum::Bool(true)),
+            ("'foo' LIKE ALL(ARRAY['f%', '%o'])", Datum::Bool(true)),
+            ("'FOO' ILIKE ANY(ARRAY['f%'])", Datum::Bool(true)),
         ];
         for (sql, want) in cases {
             assert2::assert!(eval_jt(sql).expect("eval") == *want, "for {sql}");

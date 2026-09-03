@@ -1025,11 +1025,15 @@ impl Parser {
                         lhs = self.parse_between(lhs, false)?;
                         continue;
                     }
-                    Token::Keyword(Keyword::Like) if self.peek_n_starts_expr(1) => {
+                    Token::Keyword(Keyword::Like)
+                        if self.peek_n_starts_expr(1) || self.peek_is_quantifier(1) =>
+                    {
                         lhs = self.parse_like(lhs, false, MatchKind::Like)?;
                         continue;
                     }
-                    Token::Keyword(Keyword::Ilike) if self.peek_n_starts_expr(1) => {
+                    Token::Keyword(Keyword::Ilike)
+                        if self.peek_n_starts_expr(1) || self.peek_is_quantifier(1) =>
+                    {
                         lhs = self.parse_like(lhs, false, MatchKind::ILike)?;
                         continue;
                     }
@@ -1102,47 +1106,8 @@ impl Parser {
             // SP34: `op ANY|SOME|ALL ( SELECT … )` — any representable
             // operator is syntactically valid here. Type analysis is responsible
             // for requiring a boolean result, just as PostgreSQL does.
-            if matches!(
-                self.peek(),
-                Token::Keyword(Keyword::Any | Keyword::Some | Keyword::All)
-            ) {
-                let all = matches!(self.peek(), Token::Keyword(Keyword::All));
-                self.bump(); // ANY / SOME / ALL
-                self.expect(&Token::LParen)?;
-                // Two shapes share this syntax. `SELECT`/`VALUES`/`WITH`/`(`
-                // after the paren is the subquery form; anything else is the
-                // ARRAY form (`= ANY($1)`, `= ANY(ARRAY[…])`, `= ANY(tags)`),
-                // which every driver emits when it binds an IN-list as one
-                // parameter.
-                // A `(` here is the subquery form only when a query keyword
-                // follows it; otherwise it is an ordinary parenthesised array
-                // expression, as in `= ANY((a)[2:4])`.
-                lhs = if matches!(
-                    self.peek(),
-                    Token::Keyword(Keyword::Select | Keyword::Values | Keyword::With)
-                ) || (*self.peek() == Token::LParen
-                    && matches!(
-                        self.peek2(),
-                        Token::Keyword(Keyword::Select | Keyword::Values | Keyword::With)
-                    )) {
-                    Expr::Quantified {
-                        expr: Box::new(lhs),
-                        op,
-                        all,
-                        subquery: Box::new(
-                            self.in_nested_query(Self::query_expr_after_open_paren)?,
-                        ),
-                    }
-                } else {
-                    let array = Box::new(self.expr(0)?);
-                    self.expect(&Token::RParen)?;
-                    Expr::QuantifiedArray {
-                        expr: Box::new(lhs),
-                        op,
-                        all,
-                        array,
-                    }
-                };
+            if self.peek_is_quantifier(0) {
+                lhs = self.parse_quantified(lhs, op)?;
                 continue;
             }
             let rhs = self.expr(r_bp)?;
@@ -3763,6 +3728,17 @@ impl Parser {
         if kind == crate::ast::MatchKind::Similar {
             self.expect(&Token::Keyword(Keyword::To))?;
         }
+        if self.peek_is_quantifier(0) {
+            let op = match (kind, negated) {
+                (crate::ast::MatchKind::Like, false) => BinaryOp::Like,
+                (crate::ast::MatchKind::ILike, false) => BinaryOp::ILike,
+                (crate::ast::MatchKind::Similar, false) => BinaryOp::Similar,
+                (crate::ast::MatchKind::Like, true) => BinaryOp::NotLike,
+                (crate::ast::MatchKind::ILike, true) => BinaryOp::NotILike,
+                (crate::ast::MatchKind::Similar, true) => BinaryOp::NotSimilar,
+            };
+            return self.parse_quantified(lhs, op);
+        }
         let pattern = self.expr(6)?;
         let escape = if self.eat_ident_eq("escape") {
             Some(Box::new(self.expr(6)?))
@@ -3776,6 +3752,47 @@ impl Parser {
             kind,
             escape,
         })
+    }
+
+    fn peek_is_quantifier(&self, offset: usize) -> bool {
+        matches!(
+            self.peek_n(offset),
+            Token::Keyword(Keyword::Any | Keyword::Some | Keyword::All)
+        )
+    }
+
+    /// `expr op ANY|SOME|ALL (SELECT …)` and the corresponding array form.
+    /// Both ordinary operators and the pattern operators (`LIKE ANY`) share the
+    /// same three-valued quantifier evaluation.
+    fn parse_quantified(&mut self, lhs: Expr, op: BinaryOp) -> Result<Expr, ParseError> {
+        let all = matches!(self.peek(), Token::Keyword(Keyword::All));
+        self.bump(); // ANY / SOME / ALL
+        self.expect(&Token::LParen)?;
+        if matches!(
+            self.peek(),
+            Token::Keyword(Keyword::Select | Keyword::Values | Keyword::With)
+        ) || (*self.peek() == Token::LParen
+            && matches!(
+                self.peek2(),
+                Token::Keyword(Keyword::Select | Keyword::Values | Keyword::With)
+            ))
+        {
+            Ok(Expr::Quantified {
+                expr: Box::new(lhs),
+                op,
+                all,
+                subquery: Box::new(self.in_nested_query(Self::query_expr_after_open_paren)?),
+            })
+        } else {
+            let array = Box::new(self.expr(0)?);
+            self.expect(&Token::RParen)?;
+            Ok(Expr::QuantifiedArray {
+                expr: Box::new(lhs),
+                op,
+                all,
+                array,
+            })
+        }
     }
 
     /// Is the token `offset` positions ahead the start of a `SIMILAR TO`
@@ -26578,6 +26595,26 @@ mod json_array_conflict_notify_tests {
             Expr::QuantifiedArray {
                 op: BinaryOp::Add,
                 all: false,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn pattern_predicates_accept_quantified_arrays_and_subqueries() {
+        assert!(matches!(
+            projected("SELECT value LIKE ANY(ARRAY['x%', 'y%'])"),
+            Expr::QuantifiedArray {
+                op: BinaryOp::Like,
+                all: false,
+                ..
+            }
+        ));
+        assert!(matches!(
+            projected("SELECT value NOT ILIKE ALL(SELECT pattern FROM patterns)"),
+            Expr::Quantified {
+                op: BinaryOp::NotILike,
+                all: true,
                 ..
             }
         ));

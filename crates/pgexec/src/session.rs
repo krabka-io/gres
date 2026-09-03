@@ -15496,6 +15496,14 @@ fn binary_param_type(
             Some(ty @ (ColumnType::Jsonb | ColumnType::Array(_))) => Some(ty),
             _ => Some(ColumnType::Text),
         },
+        // Quantified pattern comparisons are internal binary forms of the
+        // corresponding text predicates, so either parameter is text.
+        BinaryOp::Like
+        | BinaryOp::ILike
+        | BinaryOp::NotLike
+        | BinaryOp::NotILike
+        | BinaryOp::Similar
+        | BinaryOp::NotSimilar => Some(ColumnType::Text),
         // Containment and overlap are same-type operators (jsonb @> jsonb,
         // int[] && int[]), so a parameter adopts its sibling's type.
         BinaryOp::Contains
