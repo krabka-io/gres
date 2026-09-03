@@ -624,6 +624,14 @@ fn tz_and_silent_entry_points_preserve_their_distinct_results() {
 
     let first_target = jsonb::parse(r#"[{"a":1},{"a":2},{}]"#).expect("target");
     let first_path = JsonPath::parse("strict $[*].a").expect("parse");
+    assert!(
+        first_path
+            .query_first_with_session_time_zone(&first_target, None, false, &time_zone)
+            .expect_err("strict query_first checks every path item")
+            .into_pg()
+            .code
+            == "2203A"
+    );
     assert_eq!(
         first_path.query_first_with_session_time_zone(&first_target, None, true, &time_zone),
         Ok(Some(jsonb::parse("1").expect("first item")))

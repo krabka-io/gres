@@ -1647,7 +1647,10 @@ impl JsonPath {
     ) -> Result<Option<JsonbValue>, ExecError> {
         let exec = Exec {
             strict: self.strict,
-            stop_after_one: true,
+            // Strict, non-silent calls must inspect the whole path: a later
+            // structural error still wins over an earlier result.  Lax and
+            // silent calls can stop once their first item is known.
+            stop_after_one: !self.strict || silent,
             vars,
             root: target,
             last: None,
