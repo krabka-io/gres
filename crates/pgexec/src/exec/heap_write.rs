@@ -462,12 +462,46 @@ pub(super) fn index_entries(
     ) {
         return Ok(Vec::new());
     }
+    if index.method == crabka_pgcatalog::IndexMethod::Gin {
+        let mut entries = Vec::new();
+        let multiple_columns = index.columns.len() > 1;
+        for (attribute, name) in index.columns.iter().enumerate() {
+            let column = table
+                .column_index(name)
+                .ok_or_else(|| ExecError::UndefinedColumn(name.clone()))?;
+            let attribute = i32::try_from(attribute)
+                .map_err(|_| ExecError::Unsupported("GIN index has too many columns".into()))?;
+            let mut add_entry = |value| {
+                let mut values = Vec::with_capacity(1 + usize::from(multiple_columns));
+                if multiple_columns {
+                    values.push(Datum::Int4(attribute));
+                }
+                values.push(value);
+                if !entries.contains(&values) {
+                    entries.push(values);
+                }
+            };
+            match &row[column] {
+                Datum::Null => {}
+                Datum::TsVector(vector) => {
+                    for lexeme in &vector.0 {
+                        add_entry(Datum::Text(lexeme.text.clone()));
+                    }
+                }
+                Datum::Array(array) => {
+                    for value in array.elems.iter().filter(|value| !value.is_null()) {
+                        add_entry(value.clone());
+                    }
+                }
+                got => return Err(crate::func::type_error("tsvector or array", got)),
+            }
+        }
+        return Ok(entries);
+    }
     let column = table
         .column_index(&index.columns[0])
         .ok_or_else(|| ExecError::UndefinedColumn(index.columns[0].clone()))?;
-    if index.method == crabka_pgcatalog::IndexMethod::Gist
-        && table.columns[column].ty != ColumnType::TsVector
-    {
+    if table.columns[column].ty != ColumnType::TsVector {
         return Ok(Vec::new());
     }
     match &row[column] {

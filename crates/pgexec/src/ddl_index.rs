@@ -362,8 +362,6 @@ pub(crate) fn validate_index_method(
         }
         return Ok(());
     }
-    // ponytail: one stored tsvector column keeps maintenance on the existing
-    // row path; add expression/multicolumn GIN only when queries require it.
     if unique {
         return Err(ExecError::Unsupported(
             "access method gin does not support unique indexes".into(),
@@ -374,18 +372,18 @@ pub(crate) fn validate_index_method(
             "global GIN indexes are not supported".into(),
         ));
     }
-    let [column] = columns else {
-        return Err(ExecError::Unsupported(
-            "GIN indexes currently require exactly one tsvector column".into(),
-        ));
-    };
-    let column = table
-        .column_index(column)
-        .ok_or_else(|| ExecError::UndefinedColumn(column.clone()))?;
-    if table.columns[column].ty != ColumnType::TsVector {
-        return Err(ExecError::Unsupported(
-            "GIN indexes currently support only tsvector columns".into(),
-        ));
+    for name in columns {
+        let column = table
+            .column_index(name)
+            .ok_or_else(|| ExecError::UndefinedColumn(name.clone()))?;
+        if !matches!(
+            table.columns[column].ty.storage_type(),
+            ColumnType::TsVector | ColumnType::Array(_)
+        ) {
+            return Err(ExecError::Unsupported(
+                "GIN indexes currently support only tsvector or array columns".into(),
+            ));
+        }
     }
     Ok(())
 }

@@ -4852,6 +4852,61 @@ async fn local_gist_tsvector_index_probes_matching_lexemes() {
 }
 
 #[tokio::test]
+async fn local_gin_indexes_array_elements_as_distinct_postings() {
+    use assert2::assert;
+    use crabka_pgtypes::Datum;
+
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    run_s(&mut session, "CREATE TABLE t (a int4[], b text[])").await;
+    run_s(
+        &mut session,
+        "INSERT INTO t VALUES (ARRAY[1, 1, NULL, 2], ARRAY['one', 'one', NULL])",
+    )
+    .await;
+    run_s(&mut session, "CREATE INDEX t_a_gin ON t USING gin (a)").await;
+    run_s(&mut session, "CREATE INDEX t_ab_gin ON t USING gin (a, b)").await;
+    run_s(
+        &mut session,
+        "INSERT INTO t VALUES (ARRAY[3, 3], ARRAY['three'])",
+    )
+    .await;
+
+    let table = crabka_pgcatalog::get_table(engine.catalog_kv.as_ref(), &RelationName::public("t"))
+        .expect("table");
+    let postings = |index: &str, values: &[Datum]| {
+        let index =
+            crabka_pgcatalog::get_index(engine.catalog_kv.as_ref(), &RelationName::public(index))
+                .expect("index");
+        engine
+            .kv
+            .scan_prefix(&crabka_pgkv::key::secondary_index_entry_prefix(
+                table.id, index.id, values,
+            ))
+            .expect("postings")
+            .len()
+    };
+
+    assert!(postings("t_a_gin", &[Datum::Int4(1)]) == 1);
+    assert!(postings("t_a_gin", &[Datum::Int4(2)]) == 1);
+    assert!(postings("t_a_gin", &[Datum::Int4(3)]) == 1);
+    assert!(postings("t_a_gin", &[Datum::Null]) == 0);
+    assert!(postings("t_ab_gin", &[Datum::Int4(0), Datum::Int4(1)]) == 1);
+    assert!(postings("t_ab_gin", &[Datum::Int4(1), Datum::Text("one".into())]) == 1);
+    assert!(postings("t_ab_gin", &[Datum::Int4(0), Datum::Text("one".into())]) == 0);
+
+    run_s(&mut session, "CREATE TABLE no_gin (a int4)").await;
+    assert!(
+        sqlstate_of(
+            &mut session,
+            "CREATE INDEX no_gin_a ON no_gin USING gin (a)"
+        )
+        .await
+            == "0A000"
+    );
+}
+
+#[tokio::test]
 async fn drop_index_removes_catalog_metadata_and_local_entries_in_one_ddl_batch() {
     let engine = SqlEngine::new();
     let mut session = engine.connect();
