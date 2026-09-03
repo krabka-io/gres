@@ -549,7 +549,8 @@ pub(crate) fn execute_with_memory(
     ctx: &EvalCtx,
     statement_memory: &crate::scanner::StatementMemory,
 ) -> Result<WindowOutput, ExecError> {
-    let (expanded, scope, rows) = expand_window_project_set(s, scope, rows, ctx, statement_memory)?;
+    let (expanded, scope, rows, project_set_rewrites) =
+        expand_window_project_set(s, scope, rows, ctx, statement_memory)?;
     let s = &expanded;
     let windows = resolve_window_clause(&s.windows)?;
     let mut calls = Vec::with_capacity(s.window_calls.len());
@@ -567,7 +568,16 @@ pub(crate) fn execute_with_memory(
     // A grouped query's window functions run over the GROUPED rows, so the whole
     // select list — and the window specs themselves — are re-expressed against
     // the aggregate output first.
-    let lowered = lower_over_grouping(s, &scope, &fields, &out_exprs, rows, ctx, statement_memory)?;
+    let lowered = lower_over_grouping(
+        s,
+        &scope,
+        &fields,
+        &out_exprs,
+        rows,
+        &project_set_rewrites,
+        ctx,
+        statement_memory,
+    )?;
     let calls = match &lowered.calls {
         Some(lowered_calls) => {
             let windows = resolve_window_clause(&s.windows)?;
@@ -634,7 +644,7 @@ fn expand_window_project_set(
     rows: Vec<Vec<Datum>>,
     ctx: &EvalCtx,
     statement_memory: &crate::scanner::StatementMemory,
-) -> Result<(SelectStmt, Scope, Vec<Vec<Datum>>), ExecError> {
+) -> Result<(SelectStmt, Scope, Vec<Vec<Datum>>, Vec<(Expr, Expr)>), ExecError> {
     let mut select = s.clone();
     let mut exprs = Vec::new();
     for window in &select.windows {
@@ -646,20 +656,39 @@ fn expand_window_project_set(
         }
     }
     if !crate::srf::exprs_contain_srf(&exprs) {
-        return Ok((select, scope.clone(), rows));
+        return Ok((select, scope.clone(), rows, Vec::new()));
     }
-    let (scope, rewritten, rows) =
-        crate::srf::expand_expressions_with_memory(scope, rows, &exprs, ctx, statement_memory)?;
-    let mut rewritten = rewritten.into_iter();
+    let mut project_set_exprs = Vec::new();
+    for expr in &exprs {
+        if !project_set_exprs.contains(expr) {
+            project_set_exprs.push(expr.clone());
+        }
+    }
+    let (scope, rewritten, rows) = crate::srf::expand_expressions_with_memory(
+        scope,
+        rows,
+        &project_set_exprs,
+        ctx,
+        statement_memory,
+    )?;
+    let project_set_rewrites: Vec<_> = project_set_exprs
+        .into_iter()
+        .zip(rewritten.iter().cloned())
+        .collect();
+    for item in &mut select.projection {
+        if let SelectItem::Expr { expr, .. } = item {
+            *expr = rewrite_project_set_ref(expr, &project_set_rewrites)?;
+        }
+    }
     for window in &mut select.windows {
-        rewrite_window_spec(&mut window.spec, &mut rewritten);
+        rewrite_window_spec(&mut window.spec, &project_set_rewrites)?;
     }
     for call in &mut select.window_calls {
         if let WindowRef::Spec(spec) = &mut call.over {
-            rewrite_window_spec(spec, &mut rewritten);
+            rewrite_window_spec(spec, &project_set_rewrites)?;
         }
     }
-    Ok((select, scope, rows))
+    Ok((select, scope, rows, project_set_rewrites))
 }
 
 fn window_spec_exprs(spec: &WindowSpec, exprs: &mut Vec<Expr>) {
@@ -667,13 +696,17 @@ fn window_spec_exprs(spec: &WindowSpec, exprs: &mut Vec<Expr>) {
     exprs.extend(spec.order_by.iter().map(|item| item.expr.clone()));
 }
 
-fn rewrite_window_spec(spec: &mut WindowSpec, exprs: &mut impl Iterator<Item = Expr>) {
+fn rewrite_window_spec(
+    spec: &mut WindowSpec,
+    project_set_rewrites: &[(Expr, Expr)],
+) -> Result<(), ExecError> {
     for expr in &mut spec.partition_by {
-        *expr = exprs.next().expect("rewritten window partition expression");
+        *expr = rewrite_project_set_ref(expr, project_set_rewrites)?;
     }
     for item in &mut spec.order_by {
-        item.expr = exprs.next().expect("rewritten window ordering expression");
+        item.expr = rewrite_project_set_ref(&item.expr, project_set_rewrites)?;
     }
+    Ok(())
 }
 
 /// For each window call, the index of the FIRST call equal to it. Two spellings
@@ -779,6 +812,7 @@ fn lower_over_grouping(
     fields: &[FieldDescription],
     out_exprs: &[Expr],
     rows: Vec<Vec<Datum>>,
+    project_set_rewrites: &[(Expr, Expr)],
     ctx: &EvalCtx,
     statement_memory: &crate::scanner::StatementMemory,
 ) -> Result<WindowInput, ExecError> {
@@ -830,7 +864,8 @@ fn lower_over_grouping(
         window_calls.push(split_call(call, &windows, &mut leaves)?);
     }
 
-    let inner = grouped_leaf_select(s, scope, fields, out_exprs, &leaves)?;
+    let leaves = rewrite_project_set_refs(&leaves, project_set_rewrites)?;
+    let inner = grouped_leaf_select(s, scope, fields, out_exprs, &leaves, project_set_rewrites)?;
     // Through `crate::grouping`, not `crate::agg`: a grouping-set clause survives
     // into the leaf select, and it is that pass which expands it. Skipping it
     // would silently drop the clause and fold the input to one group per key.
@@ -883,10 +918,12 @@ fn grouped_leaf_select(
     fields: &[FieldDescription],
     out_exprs: &[Expr],
     leaves: &[Expr],
+    project_set_rewrites: &[(Expr, Expr)],
 ) -> Result<SelectStmt, ExecError> {
     let mut inner = s.clone();
     inner.group_by =
         crate::grouping::substitute_group_references(&s.group_by, scope, fields, out_exprs)?;
+    inner.group_by = rewrite_project_set_refs(&inner.group_by, project_set_rewrites)?;
     // A resolved output reference may itself be a window call, which is a window
     // function in GROUP BY however it was spelled.
     for group in &inner.group_by {
@@ -908,6 +945,31 @@ fn grouped_leaf_select(
     inner.with_ties = false;
     inner.locking = None;
     Ok(inner)
+}
+
+fn rewrite_project_set_refs(
+    exprs: &[Expr],
+    project_set_rewrites: &[(Expr, Expr)],
+) -> Result<Vec<Expr>, ExecError> {
+    exprs
+        .iter()
+        .map(|expr| rewrite_project_set_ref(expr, project_set_rewrites))
+        .collect()
+}
+
+fn rewrite_project_set_ref(
+    expr: &Expr,
+    project_set_rewrites: &[(Expr, Expr)],
+) -> Result<Expr, ExecError> {
+    crate::grouping::rewrite(
+        expr,
+        &mut |node| {
+            Ok(project_set_rewrites
+                .iter()
+                .find_map(|(before, after)| (node == before).then(|| after.clone())))
+        },
+        true,
+    )
 }
 
 fn is_output_label(s: &SelectStmt, expr: &Expr) -> bool {

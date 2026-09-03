@@ -5084,6 +5084,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn grouped_window_srf_reuses_the_window_project_set() {
+        let engine = SqlEngine::new();
+        let mut s = engine.connect();
+        query(
+            &mut s,
+            "CREATE TABLE srf_window_grouped (id int4, dataa text, datab text)",
+        )
+        .await;
+        query(
+            &mut s,
+            "INSERT INTO srf_window_grouped VALUES (1, 'a', 'foo'), (2, 'a', 'bar'), (3, 'b', 'bar')",
+        )
+        .await;
+
+        let result = query(
+            &mut s,
+            "SELECT SUM(count(*)) OVER (PARTITION BY generate_series(1, 3) \
+             ORDER BY generate_series(1, 3)), generate_series(1, 3) g \
+             FROM srf_window_grouped GROUP BY g",
+        )
+        .await;
+        assert_eq!(
+            shape(&result).2,
+            vec![
+                vec![Some("3".into()), Some("1".into())],
+                vec![Some("3".into()), Some("2".into())],
+                vec![Some("3".into()), Some("3".into())],
+            ]
+        );
+    }
+
+    #[tokio::test]
     async fn distinct_on_deduplicates_expanded_srf_rows() {
         let engine = SqlEngine::new();
         let mut s = engine.connect();
