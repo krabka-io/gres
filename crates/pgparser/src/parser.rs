@@ -21895,6 +21895,18 @@ mod tests {
     }
 
     #[test]
+    fn plpgsql_if_accepts_is_distinct_from_whole_rows() {
+        use assert2::assert;
+
+        assert!(
+            crate::plpgsql::parse_plpgsql(
+                "BEGIN IF OLD.* IS DISTINCT FROM NEW.* THEN NULL; END IF; END",
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
     fn plpgsql_compiler_directives_still_parse() {
         use assert2::assert;
 

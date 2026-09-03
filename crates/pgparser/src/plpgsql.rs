@@ -1487,6 +1487,11 @@ impl PlParser<'_> {
         {
             return parse_expression(source);
         }
+        // `FROM` can belong to an expression (`IS DISTINCT FROM`), not only to
+        // a scalar subquery. Preserve the subquery fallback for actual SELECTs.
+        if let Ok(expr) = parse_expression(source) {
+            return Ok(expr);
+        }
         match parse(&format!("SELECT {source}"))?.into_iter().next() {
             Some(Statement::Query(query)) => Ok(Expr::ScalarSubquery(Box::new(query))),
             _ => unreachable!("SELECT parses as a query statement"),
