@@ -3309,6 +3309,18 @@ async fn regression_c_base_types_keep_their_declared_layouts() {
                 text_row(&["(1,2,3)"]),
             ]
     );
+    assert!(
+        text_rows_of(
+            &mut session,
+            "SELECT pg_input_is_valid('(1,2,3)', 'widget')",
+        )
+        .await
+            == vec![text_row(&["t"])]
+    );
+    let (code, message) =
+        error_of(&mut session, "SELECT pg_input_is_valid('(1,2)', 'widget')").await;
+    assert!(code == "22P02");
+    assert!(message == "invalid input syntax for type widget: \"(1,2)\"");
     run_s(&mut session, "CREATE TYPE widget_row AS (value widget)").await;
     run_s(
         &mut session,

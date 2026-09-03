@@ -4516,12 +4516,20 @@ pub(crate) fn input_error(
         );
     }
     let value = Datum::Text(input.to_string());
+    if user_base_input_type(ty) {
+        crate::eval::cast_value(&value, ty, time_zone)?;
+        return Ok(None);
+    }
     let result = if matches!(ty, ColumnType::Varchar(Some(_)) | ColumnType::Char(Some(_))) {
         crabka_pgtypes::cast::cast_assign(&value, ty, time_zone).map_err(ExecError::from)
     } else {
         crate::eval::cast_value(&value, ty, time_zone)
     };
     Ok(result.err().map(ExecError::into_pg))
+}
+
+fn user_base_input_type(ty: ColumnType) -> bool {
+    matches!(ty, ColumnType::Base(_))
 }
 
 /// Resolve the typmod spelling accepted by `regtype` arguments to PostgreSQL's
