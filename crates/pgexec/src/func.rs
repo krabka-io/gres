@@ -52,6 +52,7 @@ enum ScalarFunc {
     Mod,
     TypedAdd(ColumnType),
     TypedSub(ColumnType),
+    TypedMul(ColumnType),
     Int8Inc,
     Int4Sum,
     Int4Larger,
@@ -355,6 +356,7 @@ fn scalar_func(name: &str) -> Option<ScalarFunc> {
         "float4pl" => ScalarFunc::TypedAdd(ColumnType::Float4),
         "float8pl" => ScalarFunc::TypedAdd(ColumnType::Float8),
         "float8mi" => ScalarFunc::TypedSub(ColumnType::Float8),
+        "int4mul" => ScalarFunc::TypedMul(ColumnType::Int4),
         "int8inc" => ScalarFunc::Int8Inc,
         "int4_sum" => ScalarFunc::Int4Sum,
         "int4larger" => ScalarFunc::Int4Larger,
@@ -1208,16 +1210,7 @@ fn builtin_scalar_result_type(fc: &FuncCall, scope: &Scope) -> Result<ColumnType
                 Ok(promote(lt, rt))
             }
         }
-        ScalarFunc::TypedAdd(ty) => {
-            require_arity(fc, n == 2)?;
-            for arg in args {
-                if crate::eval::infer_type(arg, scope)? != ty {
-                    return Err(undefined_function_spelled(&fc.name, args, scope));
-                }
-            }
-            Ok(ty)
-        }
-        ScalarFunc::TypedSub(ty) => {
+        ScalarFunc::TypedAdd(ty) | ScalarFunc::TypedSub(ty) | ScalarFunc::TypedMul(ty) => {
             require_arity(fc, n == 2)?;
             for arg in args {
                 if crate::eval::infer_type(arg, scope)? != ty {
@@ -2949,6 +2942,10 @@ fn eval_eager(
         ScalarFunc::TypedSub(_) => {
             require_arity(fc, vals.len() == 2)?;
             Ok(ops::sub(&vals[0], &vals[1])?)
+        }
+        ScalarFunc::TypedMul(_) => {
+            require_arity(fc, vals.len() == 2)?;
+            Ok(ops::mul(&vals[0], &vals[1])?)
         }
         ScalarFunc::Int8Inc => {
             require_arity(fc, vals.len() == 1)?;

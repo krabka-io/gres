@@ -5007,6 +5007,15 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_scalar_function_evaluates_each_nested_srf_row() {
+        let engine = SqlEngine::new();
+        let mut s = engine.connect();
+
+        let result = query(&mut s, "SELECT int4mul(generate_series(1, 2), 10)").await;
+        assert!(column_of(&result) == vec![Some("10".into()), Some("20".into())]);
+    }
+
+    #[tokio::test]
     async fn select_list_srfs_expand_after_aggregation() {
         let engine = SqlEngine::new();
         let mut s = engine.connect();
