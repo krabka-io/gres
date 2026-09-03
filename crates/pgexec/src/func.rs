@@ -4530,6 +4530,9 @@ pub(crate) fn input_error(
 
 fn user_base_input_type(ty: ColumnType) -> bool {
     matches!(ty, ColumnType::Base(_))
+        || matches!(ty, ColumnType::Array(ElemType::User(reference))
+            if crabka_pgtypes::usertype::lookup_oid(reference.oid)
+                .is_some_and(|ty| matches!(ty.body, crabka_pgtypes::usertype::UserTypeBody::Base(_))))
 }
 
 /// Resolve the typmod spelling accepted by `regtype` arguments to PostgreSQL's

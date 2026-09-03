@@ -293,6 +293,29 @@ pub(crate) fn cast_value_in_at(
         let value = cast_value_in_at(value, *base.representation, style, now)?;
         return crate::usertype::normalize_base_input(base, value);
     }
+    if let ColumnType::Array(ElemType::User(reference)) = target
+        && crabka_pgtypes::usertype::lookup_oid(reference.oid)
+            .is_some_and(|ty| matches!(ty.body, crabka_pgtypes::usertype::UserTypeBody::Base(_)))
+        && let Datum::Text(text) = value
+    {
+        let raw = crabka_pgtypes::array::parse_literal(text)?;
+        let element = ElemType::User(reference).column_type();
+        let elems = raw
+            .elements
+            .into_iter()
+            .map(|element_text| match element_text {
+                Some(element_text) => {
+                    cast_value_in_at(&Datum::Text(element_text), element, style, now)
+                }
+                None => Ok(Datum::Null),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(Datum::Array(ArrayValue::with_dims(
+            ElemType::User(reference),
+            elems,
+            raw.dims,
+        )));
+    }
     let base = target.temporal_base().map_or(target, |(base, _)| base);
     if let Datum::Text(text) = value {
         let parsed = match base {
