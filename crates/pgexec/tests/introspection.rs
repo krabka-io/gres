@@ -294,6 +294,7 @@ async fn information_schema_exposes_schemata_and_tables() {
         vec![
             Some("information_schema".into()),
             Some("pg_catalog".into()),
+            Some("pg_toast".into()),
             Some("public".into()),
         ]
     );

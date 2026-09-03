@@ -116,18 +116,19 @@ async fn engine_with(setup: &[&str]) -> (SqlEngine, SqlSession) {
 // What a database starts with
 // ---------------------------------------------------------------------------
 
-/// A database that has never run a `CREATE SCHEMA` still has three schemas.
+/// A database that has never run a `CREATE SCHEMA` still has four schemas.
 ///
 /// `pg_database_owner` owns `public`, not the bootstrap superuser. This is the
 /// one place where `PostgreSQL`'s ownership differs across them.
 #[tokio::test]
-async fn a_fresh_database_has_the_three_bootstrap_schemas() {
+async fn a_fresh_database_has_the_four_bootstrap_schemas() {
     let (_engine, mut s) = engine_with(&[]).await;
     assert!(
         schemas(&mut s).await
             == vec![
                 text_row(&["information_schema", "postgres"]),
                 text_row(&["pg_catalog", "postgres"]),
+                text_row(&["pg_toast", "postgres"]),
                 text_row(&["public", "pg_database_owner"]),
             ]
     );
@@ -252,6 +253,7 @@ async fn create_schema_accepts_ordinary_names() {
                 text_row(&["app", "postgres"]),
                 text_row(&["information_schema", "postgres"]),
                 text_row(&["pg_catalog", "postgres"]),
+                text_row(&["pg_toast", "postgres"]),
                 text_row(&["pgfoo", "postgres"]),
                 text_row(&["public", "pg_database_owner"]),
             ]
@@ -269,6 +271,7 @@ async fn create_schema_if_not_exists_accepts_a_schema_that_is_already_there() {
             == vec![
                 text_row(&["information_schema", "postgres"]),
                 text_row(&["pg_catalog", "postgres"]),
+                text_row(&["pg_toast", "postgres"]),
                 text_row(&["public", "pg_database_owner"]),
             ]
     );
@@ -356,6 +359,7 @@ async fn public_is_droppable_and_stays_dropped() {
             == vec![
                 text_row(&["information_schema", "postgres"]),
                 text_row(&["pg_catalog", "postgres"]),
+                text_row(&["pg_toast", "postgres"]),
             ]
     );
     assert!(
@@ -377,6 +381,7 @@ async fn public_can_be_created_again_after_being_dropped() {
             == vec![
                 text_row(&["information_schema", "postgres"]),
                 text_row(&["pg_catalog", "postgres"]),
+                text_row(&["pg_toast", "postgres"]),
                 text_row(&["public", "postgres"]),
             ]
     );
@@ -429,6 +434,7 @@ async fn re_owning_a_bootstrap_schema_replaces_its_row() {
             == vec![
                 text_row(&["information_schema", "postgres"]),
                 text_row(&["pg_catalog", "postgres"]),
+                text_row(&["pg_toast", "postgres"]),
                 text_row(&["public", "postgres"]),
             ]
     );
@@ -729,6 +735,7 @@ async fn information_schema_schemata_tracks_pg_namespace() {
             == vec![
                 text_row(&["information_schema", "postgres"]),
                 text_row(&["pg_catalog", "postgres"]),
+                text_row(&["pg_toast", "postgres"]),
                 text_row(&["public", "pg_database_owner"]),
             ]
     );
@@ -741,6 +748,7 @@ async fn information_schema_schemata_tracks_pg_namespace() {
                 text_row(&["app", "postgres"]),
                 text_row(&["information_schema", "postgres"]),
                 text_row(&["pg_catalog", "postgres"]),
+                text_row(&["pg_toast", "postgres"]),
             ]
     );
     assert!(standard_schemas(&mut s).await == schemas(&mut s).await);
