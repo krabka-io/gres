@@ -2054,7 +2054,8 @@ fn render_headline_fragment(
 ) -> String {
     let mut out = String::new();
     for (index, word) in words[start..=end].iter().enumerate() {
-        let terminal = index == end - start && !preserve_whitespace;
+        let terminal =
+            index == end - start && (start == 0 || end + 1 < words.len()) && !preserve_whitespace;
         let text_end = word
             .text
             .find(word.word)
@@ -2653,6 +2654,34 @@ mod tests {
         assert_eq!(
             render_headline_fragment(&words, fragments[0], &query, &options, false),
             "<b>1</b> <b>3</b>"
+        );
+    }
+
+    #[test]
+    fn headline_keeps_terminal_punctuation_only_after_a_leading_cut() {
+        let words = headline_words("simple", "foo.", None).unwrap();
+        let query = "foo".parse::<TsQuery>().unwrap();
+        assert_eq!(
+            render_headline_fragment(
+                &words,
+                (0, words.len() - 1),
+                &query,
+                &HeadlineOptions::default(),
+                false,
+            ),
+            "<b>foo</b>"
+        );
+
+        let words = headline_words("simple", "before foo.", None).unwrap();
+        assert_eq!(
+            render_headline_fragment(
+                &words,
+                (2, words.len() - 1),
+                &query,
+                &HeadlineOptions::default(),
+                false,
+            ),
+            "<b>foo</b>."
         );
     }
 
