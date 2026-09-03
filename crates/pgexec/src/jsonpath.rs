@@ -2462,16 +2462,21 @@ impl Exec<'_> {
                     return Ok(Tri::Unknown);
                 };
                 let mut saw_unknown = false;
+                let mut saw_true = false;
                 for l in &ls {
                     for r in &rs {
                         match self.compare(*op, l, r)? {
-                            Tri::True => return Ok(Tri::True),
+                            Tri::True if !self.strict => return Ok(Tri::True),
+                            Tri::True => saw_true = true,
+                            Tri::Unknown if self.strict => return Ok(Tri::Unknown),
                             Tri::Unknown => saw_unknown = true,
                             Tri::False => {}
                         }
                     }
                 }
-                if saw_unknown {
+                if saw_true {
+                    Tri::True
+                } else if saw_unknown {
                     Tri::Unknown
                 } else {
                     Tri::False
