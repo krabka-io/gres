@@ -4316,7 +4316,7 @@ impl SqlSession {
             .map_err(|error| ExecError::Syntax(format!("invalid UTF-8 query result: {error}")))?;
         if matches!(
             ty,
-            ColumnType::JsonPath | ColumnType::Array(ElemType::JsonPath)
+            ColumnType::Base(_) | ColumnType::JsonPath | ColumnType::Array(ElemType::JsonPath)
         ) {
             return crate::eval::cast_value(
                 &Datum::Text(text.to_string()),

@@ -3309,6 +3309,21 @@ async fn regression_c_base_types_keep_their_declared_layouts() {
                 text_row(&["(1,2,3)"]),
             ]
     );
+    run_s(&mut session, "CREATE TYPE widget_row AS (value widget)").await;
+    run_s(
+        &mut session,
+        "CREATE FUNCTION widget_rows() RETURNS SETOF widget_row LANGUAGE SQL AS \
+         $$ SELECT * FROM widget_values $$",
+    )
+    .await;
+    assert!(
+        text_rows_of(&mut session, "SELECT * FROM widget_rows()").await
+            == vec![
+                text_row(&["(1,2,3)"]),
+                text_row(&["(-44,5.5,12)"]),
+                text_row(&["(1,2,3)"]),
+            ]
+    );
     assert!(
         text_rows_of(
             &mut session,
