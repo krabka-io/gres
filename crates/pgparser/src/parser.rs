@@ -9481,6 +9481,9 @@ impl Parser {
         let concurrently = self.eat_ident_eq("concurrently");
         let if_not_exists = self.eat_if_not_exists();
         // `CREATE INDEX ON t (…)` lets PostgreSQL choose the index name.
+        if if_not_exists && matches!(self.peek(), Token::Keyword(Keyword::On)) {
+            return Err(self.syntax_error_at_current());
+        }
         let name = if matches!(self.peek(), Token::Keyword(Keyword::On)) {
             None
         } else {
@@ -20373,6 +20376,14 @@ mod tests {
                 tablespace: None,
             }
         );
+    }
+
+    #[test]
+    fn create_index_if_not_exists_requires_a_name() {
+        let sql = "CREATE INDEX IF NOT EXISTS ON t (id)";
+        let error = parse(sql).expect_err("unnamed IF NOT EXISTS index");
+        assert_eq!(error.to_string(), "syntax error at or near \"ON\"");
+        assert!(error.reported_position(sql).is_some());
     }
 
     #[test]
