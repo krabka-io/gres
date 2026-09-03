@@ -2125,6 +2125,12 @@ fn render_headline_fragment(
     }
     if preserve_whitespace {
         out
+    } else if start == 0
+        && !words[start..=end]
+            .iter()
+            .any(|word| headline_interesting(word, query))
+    {
+        out.trim_end().into()
     } else {
         out.trim().into()
     }
@@ -2769,6 +2775,17 @@ mod tests {
             &query,
             &HeadlineOptions::default(),
         ));
+    }
+
+    #[test]
+    fn headline_fallback_keeps_initial_whitespace_without_matches() {
+        let words = headline_words("simple", "\nalpha bravo charlie", None).unwrap();
+        let query = "missing".parse::<TsQuery>().unwrap();
+        let options = headline_options(Some("MaxFragments=1")).unwrap();
+        let fragment = headline_fragments(&words, &query, &options)[0];
+        assert!(
+            render_headline_fragment(&words, fragment, &query, &options, false).starts_with('\n')
+        );
     }
 
     #[test]
