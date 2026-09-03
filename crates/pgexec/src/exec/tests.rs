@@ -1880,6 +1880,43 @@ async fn cast_and_access_method_comments_are_visible_in_pg_description() {
 }
 
 #[tokio::test]
+async fn composite_type_fields_are_commentable() {
+    use assert2::assert;
+
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    run_s(
+        &mut session,
+        "CREATE TYPE commented_pair AS (id int, note text)",
+    )
+    .await;
+    run_s(
+        &mut session,
+        "COMMENT ON COLUMN commented_pair.note IS 'the note field'",
+    )
+    .await;
+    assert!(
+        text_rows_of(
+            &mut session,
+            "SELECT col_description('commented_pair'::regclass, 2)",
+        )
+        .await
+            == vec![text_row(&["the note field"])]
+    );
+    assert!(
+        error_of(
+            &mut session,
+            "COMMENT ON COLUMN commented_pair.missing IS 'missing'",
+        )
+        .await
+            == (
+                "42703".into(),
+                "column \"missing\" of relation \"commented_pair\" does not exist".into()
+            )
+    );
+}
+
+#[tokio::test]
 async fn a_table_of_a_composite_type_copies_its_fields() {
     use assert2::assert;
     let engine = SqlEngine::new();

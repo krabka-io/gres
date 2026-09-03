@@ -8937,13 +8937,21 @@ pub(crate) fn comment_ops(
             let column = column.expect("a column comment always splits off a column");
             // A synthesised catalog relation has a column list without having a
             // record under the table key, and `PostgreSQL` comments on its
-            // columns like any other's. Consulted only once `get_table` has
-            // missed, so an ordinary relation pays nothing for it.
-            let table = match crabka_pgcatalog::get_table(kv, &relation) {
-                Ok(table) => table,
-                Err(error) => virtual_relation_table(&relation).ok_or(error)?,
+            // columns like any other's. A composite type likewise owns a
+            // catalog relation for its fields.
+            let column_exists = match crabka_pgcatalog::get_table(kv, &relation) {
+                Ok(table) => table.column_index(column).is_some(),
+                Err(error) => match crabka_pgcatalog::get_user_type(kv, &relation)? {
+                    Some(ty) if ty.fields().is_some() => ty
+                        .fields()
+                        .is_some_and(|fields| fields.iter().any(|field| field.name == column)),
+                    _ => virtual_relation_table(&relation)
+                        .ok_or(error)?
+                        .column_index(column)
+                        .is_some(),
+                },
             };
-            if table.column_index(column).is_none() {
+            if !column_exists {
                 return Err(ExecError::UndefinedTableColumn {
                     column: column.to_string(),
                     table: relation.to_string(),

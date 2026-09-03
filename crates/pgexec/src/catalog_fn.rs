@@ -2897,8 +2897,8 @@ fn relation_name_operand(value: &Datum) -> Option<&str> {
 /// The `pg_class` oid of the relation stored under exactly this catalog name,
 /// or `None` when no relation of any kind answers to it.
 ///
-/// The relation may be a virtual catalog relation, a table, a view, a sequence
-/// or an index.
+/// The relation may be a virtual catalog relation, a table, a view, a sequence,
+/// an index, or a composite type's row relation.
 ///
 /// [`crate::relname::resolve_relation`] resolves the three kinds the catalog
 /// keys by name. `regclass` also accepts an index and a virtual catalog
@@ -2911,6 +2911,13 @@ pub(crate) fn relation_oid(kv: &dyn Kv, name: &RelationName) -> Result<Option<i3
         // kinds are this module's to check.
         Err(ExecError::Catalog(crabka_pgcatalog::CatalogError::UndefinedTable(_))) => {}
         Err(other) => return Err(other),
+    }
+    if let Some(ty) = crabka_pgcatalog::get_user_type(kv, name)? {
+        if ty.fields().is_some() {
+            return i32::try_from(crabka_pgtypes::usertype::composite_relation_oid(ty.oid))
+                .map(Some)
+                .map_err(|_| ExecError::Unsupported("composite relation OID exceeds int4".into()));
+        }
     }
     if let Some(table) = crate::exec::catalog_rows::toast_relation_for_name(kv, name)? {
         return crate::exec::catalog_rows::toast_relation_oid(table.id).map(Some);
@@ -3150,6 +3157,21 @@ fn description(
         if view_oid == oid && subid == 0 {
             return comment_datum(kv, "view", CommentObject::Relation(&name));
         }
+    }
+    for ty in crabka_pgcatalog::list_user_types(kv)? {
+        let name = RelationName::new(ty.schema.clone(), ty.name.clone());
+        let Some(fields) = ty.fields() else {
+            continue;
+        };
+        if i32::try_from(crabka_pgtypes::usertype::composite_relation_oid(ty.oid)).ok() != Some(oid)
+        {
+            continue;
+        }
+        let index = usize::try_from(subid.saturating_sub(1)).unwrap_or(usize::MAX);
+        let Some(field) = fields.get(index) else {
+            return Ok(Datum::Null);
+        };
+        return comment_datum(kv, "column", CommentObject::Column(&name, &field.name));
     }
     Ok(Datum::Null)
 }
