@@ -520,9 +520,10 @@ fn create_base_type(
     ))
 }
 
-/// The routine a `INPUT =` / `OUTPUT =` option names must already exist.
+/// The routine a base-type option names must already exist in either the
+/// database or `pg_catalog`.
 fn require_routine(kv: &dyn Kv, name: &str) -> Result<(), ExecError> {
-    if crate::routine::is_user_routine(kv, name) {
+    if crate::routine::is_user_routine(kv, name) || crate::routine::is_builtin_routine(name)? {
         return Ok(());
     }
     Err(ExecError::UndefinedFunction(format!(

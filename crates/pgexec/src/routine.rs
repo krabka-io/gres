@@ -2176,6 +2176,14 @@ pub(crate) fn is_user_routine(kv: &dyn Kv, name: &str) -> bool {
     routines_named(kv, name).is_ok_and(|found| found.iter().any(|routine| !routine.is_aggregate()))
 }
 
+/// Whether `name` is a routine exposed by the immutable `pg_catalog.pg_proc`
+/// fixture.
+pub(crate) fn is_builtin_routine(name: &str) -> Result<bool, ExecError> {
+    Ok(builtin_pg_proc_rows()?
+        .iter()
+        .any(|row| matches!(row.get(1), Some(Datum::Text(found)) if found == name)))
+}
+
 /// Shell-type routines are created before their type has a `ColumnType`.
 /// Once the shell is completed, make their stored named signature concrete at
 /// every call boundary.

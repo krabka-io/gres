@@ -3215,7 +3215,8 @@ async fn regression_c_base_types_keep_their_declared_layouts() {
         "CREATE FUNCTION pt_in_widget(point, widget) RETURNS bool AS 'regress' LANGUAGE C STRICT",
         "CREATE FUNCTION int44in(cstring) RETURNS city_budget AS 'regress' LANGUAGE C STRICT",
         "CREATE FUNCTION int44out(city_budget) RETURNS cstring AS 'regress' LANGUAGE C STRICT",
-        "CREATE TYPE widget (internallength = 24, input = widget_in, output = widget_out, alignment = double)",
+        "CREATE TYPE widget (internallength = 24, input = widget_in, output = widget_out, \
+         typmod_in = numerictypmodin, typmod_out = numerictypmodout, alignment = double)",
         "CREATE TYPE city_budget (internallength = 16, input = int44in, output = int44out)",
     ] {
         run_s(&mut session, sql).await;
@@ -3245,6 +3246,14 @@ async fn regression_c_base_types_keep_their_declared_layouts() {
                 text_row(&["int4", "i"]),
                 text_row(&["int8", "d"]),
             ]
+    );
+    assert!(
+        text_rows_of(
+            &mut session,
+            "SELECT typmodin, typmodout FROM pg_type WHERE typname = 'widget'",
+        )
+        .await
+            == vec![text_row(&["numerictypmodin", "numerictypmodout"])]
     );
     run_s(&mut session, "CREATE TABLE widget_values (value widget)").await;
     run_s(
