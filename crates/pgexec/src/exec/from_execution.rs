@@ -591,7 +591,13 @@ pub(super) fn try_scan_with_local_index(
         .map(Some);
     }
     if let Some(predicate) = &plan.text_search
-        && let Some(index) = choose_local_gin_index(read_ctx.catalog_kv, table, predicate.column)?
+        && let Some(path) = choose_local_text_search_path(
+            read_ctx.catalog_kv,
+            table,
+            predicate.column,
+            crate::session::guc_enabled_runtime("enable_indexscan"),
+            crate::session::guc_enabled_runtime("enable_bitmapscan"),
+        )?
         && let Some(rows) = lookup_local_gin(
             &MvccReadContext {
                 kv: read_ctx.kv,
@@ -602,7 +608,7 @@ pub(super) fn try_scan_with_local_index(
                 command_id: read_ctx.command_id,
             },
             table,
-            &index,
+            &path.index,
             &predicate.query,
         )?
     {
@@ -660,25 +666,64 @@ fn choose_local_ordered_index(
     )
 }
 
-fn choose_local_gin_index(
+/// The physical local-index path used for a constant full-text predicate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LocalTextSearchAccess {
+    Index,
+    Bitmap,
+}
+
+/// A supported local full-text access path selected from the catalog.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LocalTextSearchPath {
+    pub(crate) index: crabka_pgcatalog::Index,
+    pub(crate) access: LocalTextSearchAccess,
+}
+
+/// Select the local full-text path both execution and `EXPLAIN` use.
+///
+/// A GiST tsvector index supports the direct path; either GiST or GIN supports
+/// the bitmap path. The common candidate/recheck implementation is exact for
+/// both choices, while the access enum preserves the planner-visible shape.
+pub(crate) fn choose_local_text_search_path(
     catalog_kv: &dyn Kv,
     table: &Table,
     column: usize,
-) -> Result<Option<crabka_pgcatalog::Index>, ExecError> {
-    Ok(
-        crabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)?
-            .into_iter()
-            .find(|index| {
-                index.placement == crabka_pgcatalog::IndexPlacement::Local
-                    && matches!(
-                        index.method,
-                        crabka_pgcatalog::IndexMethod::Gin | crabka_pgcatalog::IndexMethod::Gist
-                    )
-                    && index.predicate.is_none()
-                    && index.columns.len() == 1
-                    && table.column_index(&index.columns[0]) == Some(column)
-            }),
-    )
+    enable_indexscan: bool,
+    enable_bitmapscan: bool,
+) -> Result<Option<LocalTextSearchPath>, ExecError> {
+    let indexes = crabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)?;
+    let supports = |index: &crabka_pgcatalog::Index| {
+        index.placement == crabka_pgcatalog::IndexPlacement::Local
+            && index.predicate.is_none()
+            && index.columns.len() == 1
+            && table.column_index(&index.columns[0]) == Some(column)
+    };
+    if enable_indexscan
+        && let Some(index) = indexes
+            .iter()
+            .find(|index| supports(index) && index.method == crabka_pgcatalog::IndexMethod::Gist)
+    {
+        return Ok(Some(LocalTextSearchPath {
+            index: index.clone(),
+            access: LocalTextSearchAccess::Index,
+        }));
+    }
+    if enable_bitmapscan
+        && let Some(index) = indexes.iter().find(|index| {
+            supports(index)
+                && matches!(
+                    index.method,
+                    crabka_pgcatalog::IndexMethod::Gin | crabka_pgcatalog::IndexMethod::Gist
+                )
+        })
+    {
+        return Ok(Some(LocalTextSearchPath {
+            index: index.clone(),
+            access: LocalTextSearchAccess::Bitmap,
+        }));
+    }
+    Ok(None)
 }
 
 pub(super) fn choose_local_index_equality(

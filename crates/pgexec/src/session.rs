@@ -2357,6 +2357,16 @@ pub(crate) fn current_setting_runtime(
     })
 }
 
+/// Whether a planner switch is enabled for the current blocking read worker.
+/// Direct unit calls have no installed session runtime, where PostgreSQL's
+/// boot value is the safe default: enabled.
+pub(crate) fn guc_enabled_runtime(name: &str) -> bool {
+    current_setting_runtime(name, false)
+        .ok()
+        .flatten()
+        .is_none_or(|value| value == "on")
+}
+
 pub(crate) fn set_config_runtime(
     name: &str,
     value: &str,
@@ -6284,6 +6294,14 @@ impl SqlSession {
                 statement,
             )
         })?;
+        crate::explain::apply_local_text_search_path(
+            &*self.catalog_kv,
+            &self.resolution_scope(),
+            statement,
+            self.guc.effective("enable_indexscan").as_deref() == Ok("on"),
+            self.guc.effective("enable_bitmapscan").as_deref() == Ok("on"),
+            &mut plan,
+        )?;
         crate::explain::apply_catalog_estimate(
             &*self.catalog_kv,
             &self.resolution_scope(),
@@ -23952,6 +23970,81 @@ mod tests {
         );
         assert!(sqlstate(&mut s, "EXPLAIN (NO_SUCH_OPTION) SELECT 1").await == "42601");
         assert!(sqlstate(&mut s, "EXPLAIN (FORMAT NONSENSE) SELECT 1").await == "22023");
+    }
+
+    #[tokio::test]
+    async fn explain_and_execution_share_the_local_text_search_path() {
+        use assert2::assert;
+
+        let engine = SqlEngine::new();
+        let mut s = engine.connect();
+        s.simple_query(
+            "CREATE TABLE text_search_path (a tsvector); \
+             CREATE INDEX text_search_path_gist ON text_search_path USING gist (a); \
+             INSERT INTO text_search_path VALUES (to_tsvector('simple', 'alpha beta'))",
+        )
+        .await
+        .expect("seed local GiST index");
+
+        assert!(
+            rows_or_sqlstate(
+                &mut s,
+                "EXPLAIN (COSTS OFF) SELECT * FROM text_search_path WHERE a @@ 'alpha'",
+            )
+            .await
+                == Ok(vec![
+                    vec!["Index Scan using text_search_path_gist on text_search_path".into()],
+                    vec!["  Index Cond: (a @@ '''alpha'''::tsquery)".into()],
+                ])
+        );
+        assert!(
+            rows_or_sqlstate(
+                &mut s,
+                "SELECT count(*) FROM text_search_path WHERE a @@ 'alpha'"
+            )
+            .await
+                == Ok(vec![vec!["1".into()]])
+        );
+
+        s.simple_query("SET enable_indexscan = off; SET enable_bitmapscan = on")
+            .await
+            .expect("select bitmap path");
+        assert!(
+            rows_or_sqlstate(
+                &mut s,
+                "EXPLAIN (COSTS OFF) SELECT * FROM text_search_path WHERE a @@ 'alpha'",
+            )
+            .await
+                == Ok(vec![
+                    vec!["Bitmap Heap Scan on text_search_path".into()],
+                    vec!["  Recheck Cond: (a @@ '''alpha'''::tsquery)".into()],
+                    vec!["  ->  Bitmap Index Scan on text_search_path_gist".into()],
+                    vec!["        Index Cond: (a @@ '''alpha'''::tsquery)".into()],
+                ])
+        );
+
+        s.simple_query("SET enable_bitmapscan = off")
+            .await
+            .expect("disable local text-search paths");
+        assert!(
+            rows_or_sqlstate(
+                &mut s,
+                "EXPLAIN (COSTS OFF) SELECT * FROM text_search_path WHERE a @@ 'alpha'",
+            )
+            .await
+                == Ok(vec![
+                    vec!["Seq Scan on text_search_path".into()],
+                    vec!["  Filter: (a @@ 'alpha'::text)".into()],
+                ])
+        );
+        assert!(
+            rows_or_sqlstate(
+                &mut s,
+                "SELECT count(*) FROM text_search_path WHERE a @@ 'alpha'"
+            )
+            .await
+                == Ok(vec![vec!["1".into()]])
+        );
     }
 
     #[tokio::test]

@@ -200,6 +200,128 @@ pub(crate) fn apply_catalog_estimate(
     set_estimated_rows(plan, output_rows, input_rows);
 }
 
+/// Replace a supported full-text scan with the local index path the executor
+/// selected for this statement. This only handles predicates whose complete
+/// condition can be typed and rechecked by the physical scan; every other
+/// query keeps the ordinary sequential plan.
+pub(crate) fn apply_local_text_search_path(
+    catalog_kv: &dyn crabka_pgkv::Kv,
+    resolution: &crate::relname::ResolutionScope,
+    statement: &Statement,
+    enable_indexscan: bool,
+    enable_bitmapscan: bool,
+    plan: &mut PlanNode,
+) -> Result<(), crate::error::ExecError> {
+    let Statement::Query(query) = statement else {
+        return Ok(());
+    };
+    let SetExpr::Query(QueryBody::Select(select)) = &query.body else {
+        return Ok(());
+    };
+    let [TableExpr::Table { name, .. }] = select.from.as_slice() else {
+        return Ok(());
+    };
+    let relation = crate::relname::resolve_relation(
+        catalog_kv,
+        resolution,
+        name,
+        crate::relname::SchemaDisposition::Reference,
+    )?;
+    let table = crabka_pgcatalog::get_table(catalog_kv, &relation)?;
+    let scan = crate::plan_dist::plan_scan(&table, select.filter.as_ref(), &select.projection);
+    let Some(predicate) = scan.text_search else {
+        return Ok(());
+    };
+    let Some(condition) = select
+        .filter
+        .as_ref()
+        .and_then(|filter| typed_text_search_condition(filter, false))
+    else {
+        return Ok(());
+    };
+    let Some(path) = crate::exec::choose_local_text_search_path(
+        catalog_kv,
+        &table,
+        predicate.column,
+        enable_indexscan,
+        enable_bitmapscan,
+    )?
+    else {
+        return Ok(());
+    };
+    install_text_search_path(plan, &name.name, path, condition);
+    Ok(())
+}
+
+fn install_text_search_path(
+    node: &mut PlanNode,
+    relation: &str,
+    path: crate::exec::LocalTextSearchPath,
+    condition: String,
+) -> bool {
+    if node.node_type == "Seq Scan" && node.relation.as_deref() == Some(relation) {
+        match path.access {
+            crate::exec::LocalTextSearchAccess::Index => {
+                node.node_type = format!("Index Scan using {}", path.index.name);
+                node.details = vec![("Index Cond".into(), condition)];
+            }
+            crate::exec::LocalTextSearchAccess::Bitmap => {
+                let mut index =
+                    PlanNode::new("Bitmap Index Scan").detail("Index Cond", condition.clone());
+                index.relation = Some(path.index.name);
+                let mut heap = PlanNode::new("Bitmap Heap Scan")
+                    .detail("Recheck Cond", condition)
+                    .with_child(index);
+                heap.relation = Some(relation.to_string());
+                *node = heap;
+            }
+        }
+        return true;
+    }
+    node.children
+        .iter_mut()
+        .any(|child| install_text_search_path(child, relation, path.clone(), condition.clone()))
+}
+
+fn typed_text_search_condition(expr: &Expr, qualify: bool) -> Option<String> {
+    match expr {
+        Expr::Binary {
+            op: BinaryOp::And,
+            left,
+            right,
+        } => Some(format!(
+            "({} AND {})",
+            typed_text_search_condition(left, qualify)?,
+            typed_text_search_condition(right, qualify)?
+        )),
+        Expr::Binary {
+            op: BinaryOp::JsonPathMatch,
+            left,
+            right,
+        } => typed_text_search_pair(left, right, qualify)
+            .or_else(|| typed_text_search_pair(right, left, qualify)),
+        _ => None,
+    }
+}
+
+fn typed_text_search_pair(vector: &Expr, query: &Expr, qualify: bool) -> Option<String> {
+    if !matches!(vector, Expr::Column { .. }) {
+        return None;
+    }
+    let query = crate::text_search_fn::constant_query(query)
+        .ok()
+        .flatten()?;
+    Some(format!(
+        "({} @@ {})",
+        deparse_with(vector, qualify),
+        typed_tsquery_literal(&query)
+    ))
+}
+
+fn typed_tsquery_literal(query: &crabka_pgtypes::TsQuery) -> String {
+    format!("'{}'::tsquery", query.to_string().replace('\'', "''"))
+}
+
 fn relation_rows(
     catalog_kv: &dyn crabka_pgkv::Kv,
     relation: &crabka_pgcatalog::RelationName,

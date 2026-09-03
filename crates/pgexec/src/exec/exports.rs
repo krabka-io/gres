@@ -31,7 +31,10 @@ pub(crate) use super::{
     foreign_scan::is_single_foreign_table,
     from_build::{append_from_item, build_from, security_free_from_item},
     from_columns::{live_from_columns, prune_relation_columns},
-    from_execution::apply_tablesample,
+    from_execution::{
+        LocalTextSearchAccess, LocalTextSearchPath, apply_tablesample,
+        choose_local_text_search_path,
+    },
     from_lateral::{expr_references_scope, is_lateral_item, lateral_join},
     from_predicates::*,
     from_resolution::{OuterReference, explain_outer_reference, item_is_lateral},
