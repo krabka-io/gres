@@ -4528,39 +4528,48 @@ pub(crate) fn input_error(
 /// modifiers; this text argument reaches the type layer directly.
 fn input_type(type_name: &str) -> Option<ColumnType> {
     let normalized = type_name.trim().to_ascii_lowercase();
-    let Some(body) = normalized.strip_suffix(')') else {
+    let base = normalized.trim_end_matches("[]");
+    let array = base.len() != normalized.len();
+    let ty = if let Some(body) = base.strip_suffix(')') {
+        let (base, modifier) = body.split_once('(')?;
+        let parts = modifier.split(',').map(str::trim).collect::<Vec<_>>();
+        match (base.trim(), parts.as_slice()) {
+            ("varchar" | "character varying", [limit]) => {
+                Some(ColumnType::Varchar(Some(limit.parse().ok()?)))
+            }
+            ("char" | "character" | "bpchar", [limit]) => {
+                Some(ColumnType::Char(Some(limit.parse().ok()?)))
+            }
+            ("bit", [len]) => Some(ColumnType::Bit(Some(len.parse().ok()?))),
+            ("varbit" | "bit varying", [len]) => Some(ColumnType::VarBit(Some(len.parse().ok()?))),
+            ("numeric" | "decimal", [precision]) => {
+                Some(ColumnType::Numeric(Some(crabka_pgtypes::numeric::Typmod {
+                    precision: precision.parse().ok()?,
+                    scale: 0,
+                })))
+            }
+            ("numeric" | "decimal", [precision, scale]) => {
+                Some(ColumnType::Numeric(Some(crabka_pgtypes::numeric::Typmod {
+                    precision: precision.parse().ok()?,
+                    scale: scale.parse().ok()?,
+                })))
+            }
+            _ => None,
+        }
+    } else {
         // The grammar's `bit` production defaults to `bit(1)`, while a bare
         // `bit varying` stays unconstrained — the same asymmetry the
         // expression parser applies.
-        if normalized == "bit" {
-            return Some(ColumnType::Bit(Some(1)));
+        if base == "bit" {
+            Some(ColumnType::Bit(Some(1)))
+        } else {
+            ColumnType::from_sql_name(base)
         }
-        return ColumnType::from_sql_name(&normalized);
-    };
-    let (base, modifier) = body.split_once('(')?;
-    let parts = modifier.split(',').map(str::trim).collect::<Vec<_>>();
-    match (base.trim(), parts.as_slice()) {
-        ("varchar" | "character varying", [limit]) => {
-            Some(ColumnType::Varchar(Some(limit.parse().ok()?)))
-        }
-        ("char" | "character" | "bpchar", [limit]) => {
-            Some(ColumnType::Char(Some(limit.parse().ok()?)))
-        }
-        ("bit", [len]) => Some(ColumnType::Bit(Some(len.parse().ok()?))),
-        ("varbit" | "bit varying", [len]) => Some(ColumnType::VarBit(Some(len.parse().ok()?))),
-        ("numeric" | "decimal", [precision]) => {
-            Some(ColumnType::Numeric(Some(crabka_pgtypes::numeric::Typmod {
-                precision: precision.parse().ok()?,
-                scale: 0,
-            })))
-        }
-        ("numeric" | "decimal", [precision, scale]) => {
-            Some(ColumnType::Numeric(Some(crabka_pgtypes::numeric::Typmod {
-                precision: precision.parse().ok()?,
-                scale: scale.parse().ok()?,
-            })))
-        }
-        _ => None,
+    }?;
+    if array {
+        ElemType::from_column_type(ty).map(ColumnType::Array)
+    } else {
+        Some(ty)
     }
 }
 
@@ -5823,6 +5832,16 @@ mod tests {
             crate::eval::infer_type(&pexpr("num_nulls()").expect("parse"), &Scope::empty()),
             Err(ExecError::UndefinedFunction(_))
         ));
+    }
+
+    #[test]
+    fn input_helpers_accept_builtin_array_type_names() {
+        let ctx = crate::clock::EvalCtx::test_default();
+        assert!(input_error("{1,2,3}", "integer[]", &ctx) == Ok(None));
+        let error = input_error("{1,zed}", "integer[]", &ctx)
+            .expect("array type resolves")
+            .expect("invalid array element");
+        assert!(error.code == "22P02");
     }
 
     /// `log(base, num)` is declared over `numeric` alone, and its result scale
