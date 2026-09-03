@@ -2512,19 +2512,25 @@ impl Exec<'_> {
                     return Ok(Tri::Unknown);
                 };
                 let mut saw_unknown = false;
+                let mut saw_true = false;
                 for v in &vs {
                     for p in &ps {
                         match (&v.json, &p.json) {
                             (JsonbValue::String(v), JsonbValue::String(p)) => {
-                                if v.starts_with(p.as_str()) {
+                                if v.starts_with(p.as_str()) && !self.strict {
                                     return Ok(Tri::True);
+                                } else if v.starts_with(p.as_str()) {
+                                    saw_true = true;
                                 }
                             }
+                            _ if self.strict => return Ok(Tri::Unknown),
                             _ => saw_unknown = true,
                         }
                     }
                 }
-                if saw_unknown {
+                if saw_true {
+                    Tri::True
+                } else if saw_unknown {
                     Tri::Unknown
                 } else {
                     Tri::False

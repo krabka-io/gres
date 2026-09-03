@@ -396,6 +396,16 @@ fn lax_unwraps_and_wraps_where_strict_raises() {
             "strict $ ? (@.a[*] >= @.b[*])",
             Ok("[]"),
         ),
+        (
+            r#"["abc", "abcabc", null, 1]"#,
+            r#"strict $ ? (@[*] starts with "abc")"#,
+            Ok("[]"),
+        ),
+        (
+            r#"["abc", "abcabc", null, 1]"#,
+            r#"strict $ ? ((@[*] starts with "abc") is unknown)"#,
+            Ok(r#"[["abc", "abcabc", null, 1]]"#),
+        ),
         ("1", "lax $.size()", Ok("[1]")),
         ("1", "strict $.size()", Err("22039")),
         (r#"[{"a":1}]"#, "strict $.keyvalue()", Err("2203C")),
