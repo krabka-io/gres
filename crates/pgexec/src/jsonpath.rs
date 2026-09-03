@@ -3351,12 +3351,18 @@ fn datetime_method(
                 ),
             ));
         }
-        let parsed = crabka_pgtypes::cast::cast(&source, source_type, tz).map_err(|_| {
-            PathError::new(
-                "22007",
-                format!("{format_name} format is not recognized: \"{text}\""),
-            )
-        })?;
+        let parsed = match crabka_pgtypes::cast::cast(&source, source_type, tz) {
+            Ok(parsed) => parsed,
+            Err(_) if source_type == ColumnType::Date && date_exceeds_civil_range(text) => {
+                Datum::Date(crabka_pgtypes::datetime::DATE_INFINITY)
+            }
+            Err(_) => {
+                return Err(PathError::new(
+                    "22007",
+                    format!("{format_name} format is not recognized: \"{text}\""),
+                ));
+            }
+        };
         crabka_pgtypes::cast::cast(&parsed, target, tz).map_err(|_| {
             PathError::new(
                 "22007",
@@ -3364,12 +3370,18 @@ fn datetime_method(
             )
         })?
     } else {
-        crabka_pgtypes::cast::cast(&source, target, tz).map_err(|_| {
-            PathError::new(
-                "22007",
-                format!("{format_name} format is not recognized: \"{text}\""),
-            )
-        })?
+        match crabka_pgtypes::cast::cast(&source, target, tz) {
+            Ok(parsed) => parsed,
+            Err(_) if target == ColumnType::Date && date_exceeds_civil_range(text) => {
+                Datum::Date(crabka_pgtypes::datetime::DATE_INFINITY)
+            }
+            Err(_) => {
+                return Err(PathError::new(
+                    "22007",
+                    format!("{format_name} format is not recognized: \"{text}\""),
+                ));
+            }
+        }
     };
     let parsed = match precision {
         Some(precision) => {
@@ -3424,6 +3436,12 @@ fn datetime_method(
         rendered.push_str(":00");
     }
     Ok(Item::temporal(parsed, JsonbValue::String(rendered)))
+}
+
+fn date_exceeds_civil_range(text: &str) -> bool {
+    text.split_once('-')
+        .and_then(|(year, _)| year.parse::<i32>().ok())
+        .is_some_and(|year| year > 9_999)
 }
 
 fn ceiling(n: &BigDecimal) -> BigDecimal {

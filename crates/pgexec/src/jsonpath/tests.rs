@@ -94,6 +94,13 @@ fn temporal_comparisons_need_the_tz_variant_for_implicit_conversion() {
         ),
         Err("0A000".into())
     );
+    assert_eq!(
+        query(
+            r#""1000000-01-01""#,
+            r#"$.datetime() > "2020-01-01 12:00:00".datetime()"#,
+        ),
+        Ok("[true]".into())
+    );
 }
 
 #[test]
