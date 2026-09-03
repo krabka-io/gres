@@ -2551,19 +2551,36 @@ fn polymorphic_range_type(name: &str, arg: ArgType) -> Option<crabka_pgtypes::us
 }
 
 fn polymorphic_arguments_are_consistent(params: &[&RoutineParam], given: &[ArgType]) -> bool {
+    let variadic_index = variadic_input_index(params);
+    let expand_variadic =
+        variadic_index.is_some_and(|index| variadic_arguments_are_expanded(params, given, index));
     let mut exact = None;
     let mut exact_range = None;
     let mut compatible = None;
     let mut compatible_range = None;
     let mut compatible_range_identity = None;
     let mut compatible_inputs = Vec::new();
-    for (param, arg) in params.iter().zip(given) {
-        let Some(base) = polymorphic_base_type(&param.ty.name, *arg) else {
+    for (index, arg) in given.iter().enumerate() {
+        let expanded_variadic_param =
+            variadic_index.is_some_and(|variadic_index| expand_variadic && index >= variadic_index);
+        let Some(param) = variadic_index
+            .filter(|variadic_index| expand_variadic && index >= *variadic_index)
+            .map(|variadic_index| params[variadic_index])
+            .or_else(|| params.get(index).copied())
+        else {
+            return false;
+        };
+        let name = if expanded_variadic_param && param.ty.name == "anyarray" {
+            "anyelement"
+        } else {
+            &param.ty.name
+        };
+        let Some(base) = polymorphic_base_type(name, *arg) else {
             continue;
         };
-        if param.ty.name.starts_with("anycompatible") {
+        if name.starts_with("anycompatible") {
             compatible_inputs.push(base);
-            if let Some(range) = polymorphic_range_type(&param.ty.name, *arg) {
+            if let Some(range) = polymorphic_range_type(name, *arg) {
                 match compatible_range_identity {
                     None => compatible_range_identity = Some(range),
                     Some(current) if current == range => {}
@@ -2581,8 +2598,8 @@ fn polymorphic_arguments_are_consistent(params: &[&RoutineParam], given: &[ArgTy
                 Some(current) if implicitly_coercible(current, base) => Some(base),
                 Some(_) => return false,
             };
-        } else if param.ty.name.starts_with("any") {
-            if let Some(range) = polymorphic_range_type(&param.ty.name, *arg) {
+        } else if name.starts_with("any") {
+            if let Some(range) = polymorphic_range_type(name, *arg) {
                 match exact_range {
                     None => exact_range = Some(range),
                     Some(current) if current == range => {}
@@ -8307,6 +8324,16 @@ mod tests {
         assert!(matches!(bound.args.as_slice(), [Expr::ArrayLiteral(values)] if values.len() == 2));
         let error = resolve_call(&kv, "polymorphic_variadic_len", &[])
             .expect_err("polymorphic variadic routine needs an element type");
+        assert!(sqlstate(&error) == "42883");
+        let error = resolve_call(
+            &kv,
+            "polymorphic_variadic_len",
+            &[
+                ArgType::Known(ColumnType::Int4),
+                ArgType::Known(ColumnType::Text),
+            ],
+        )
+        .expect_err("expanded polymorphic arguments must share an element type");
         assert!(sqlstate(&error) == "42883");
     }
 
