@@ -28,7 +28,7 @@ use bigdecimal::{BigDecimal, One, RoundingMode, ToPrimitive, Zero};
 use crabka_pgtypes::{ArrayValue, Datum, ElemType, JsonbValue, TypeError};
 use jiff::ToSpan;
 
-use crate::error::ExecError;
+use crate::error::{ExecError, SqlJsonError};
 
 /// The maximum accessor-chain nesting the parser accepts, so an adversarial
 /// path cannot overflow the recursive-descent parser's stack.
@@ -309,6 +309,8 @@ impl Tri {
 struct PathError {
     sqlstate: &'static str,
     message: String,
+    detail: Option<String>,
+    hint: Option<String>,
 }
 
 impl PathError {
@@ -316,14 +318,37 @@ impl PathError {
         PathError {
             sqlstate,
             message: message.into(),
+            detail: None,
+            hint: None,
         }
     }
 
+    fn with_diagnostics(
+        sqlstate: &'static str,
+        message: impl Into<String>,
+        detail: Option<String>,
+        hint: Option<String>,
+    ) -> Self {
+        PathError {
+            sqlstate,
+            message: message.into(),
+            detail,
+            hint,
+        }
+    }
+
+    fn with_hint(mut self, hint: impl Into<String>) -> Self {
+        self.hint = Some(hint.into());
+        self
+    }
+
     fn into_exec(self) -> ExecError {
-        ExecError::FunctionError {
+        ExecError::SqlJson(Box::new(SqlJsonError {
             sqlstate: self.sqlstate,
             message: self.message,
-        }
+            detail: self.detail,
+            hint: self.hint,
+        }))
     }
 }
 
@@ -3142,6 +3167,18 @@ fn invalid_for(name: &'static str, text: &str, target: &str) -> PathError {
     )
 }
 
+fn temporal_format_error(m: Method, format_name: &str, text: &str) -> PathError {
+    let error = PathError::new(
+        "22007",
+        format!("{format_name} format is not recognized: \"{text}\""),
+    );
+    if matches!(m, Method::Datetime) {
+        error.with_hint("Use a datetime template argument to specify the input data format.")
+    } else {
+        error
+    }
+}
+
 fn jsonpath_nonfinite(text: &str) -> bool {
     matches!(text.to_ascii_lowercase().as_str(), "nan" | "inf" | "-inf")
 }
@@ -3223,6 +3260,14 @@ fn datetime_method(
                     "22009" => "22009",
                     _ => "22007",
                 };
+                let detail = error
+                    .diagnostics
+                    .as_deref()
+                    .and_then(|fields| fields.detail.clone());
+                let hint = error
+                    .diagnostics
+                    .as_deref()
+                    .and_then(|fields| fields.hint.clone());
                 let message = if template.contains('"') {
                     error.message
                 } else {
@@ -3232,7 +3277,7 @@ fn datetime_method(
                         1,
                     )
                 };
-                PathError::new(sqlstate, message)
+                PathError::with_diagnostics(sqlstate, message, detail, hint)
             })?;
         let date = jiff::civil::Date::new(
             i16::try_from(parsed.year).map_err(|_| invalid_for(name, text, "datetime"))?,
@@ -3321,10 +3366,7 @@ fn datetime_method(
         && source_type == ColumnType::Timestamp
         && !allow_zone_conversions
     {
-        return Err(PathError::new(
-            "22007",
-            format!("{format_name} format is not recognized: \"{text}\""),
-        ));
+        return Err(temporal_format_error(m, format_name, text));
     }
     let source_is_zoned = matches!(source_type, ColumnType::Timetz | ColumnType::Timestamptz);
     let target_is_zoned = matches!(target, ColumnType::Timetz | ColumnType::Timestamptz);
@@ -3374,31 +3416,17 @@ fn datetime_method(
             Err(_) if source_type == ColumnType::Date && date_exceeds_civil_range(text) => {
                 Datum::Date(crabka_pgtypes::datetime::DATE_INFINITY)
             }
-            Err(_) => {
-                return Err(PathError::new(
-                    "22007",
-                    format!("{format_name} format is not recognized: \"{text}\""),
-                ));
-            }
+            Err(_) => return Err(temporal_format_error(m, format_name, text)),
         };
-        crabka_pgtypes::cast::cast(&parsed, target, tz).map_err(|_| {
-            PathError::new(
-                "22007",
-                format!("{format_name} format is not recognized: \"{text}\""),
-            )
-        })?
+        crabka_pgtypes::cast::cast(&parsed, target, tz)
+            .map_err(|_| temporal_format_error(m, format_name, text))?
     } else {
         match crabka_pgtypes::cast::cast(&source, target, tz) {
             Ok(parsed) => parsed,
             Err(_) if target == ColumnType::Date && date_exceeds_civil_range(text) => {
                 Datum::Date(crabka_pgtypes::datetime::DATE_INFINITY)
             }
-            Err(_) => {
-                return Err(PathError::new(
-                    "22007",
-                    format!("{format_name} format is not recognized: \"{text}\""),
-                ));
-            }
+            Err(_) => return Err(temporal_format_error(m, format_name, text)),
         }
     };
     let parsed = match precision {
@@ -3423,12 +3451,7 @@ fn datetime_method(
         && matches!(target, ColumnType::Timestamptz)
     {
         let Datum::Timetz(value) = crabka_pgtypes::cast::cast(&source, ColumnType::Timetz, tz)
-            .map_err(|_| {
-                PathError::new(
-                    "22007",
-                    format!("{format_name} format is not recognized: \"{text}\""),
-                )
-            })?
+            .map_err(|_| temporal_format_error(m, format_name, text))?
         else {
             unreachable!("a timestamp with time zone has a time with time zone projection")
         };

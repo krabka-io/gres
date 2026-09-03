@@ -574,6 +574,45 @@ fn item_methods_match_postgresql() {
             .into_pg();
         assert_eq!(error.message, expected, "{path}");
     }
+    let target = jsonb::parse(r#""bogus""#).expect("target");
+    let error = JsonPath::parse("$.datetime()")
+        .expect("path")
+        .query(&target, None, false)
+        .expect_err("invalid datetime")
+        .into_pg();
+    assert_eq!(
+        error
+            .diagnostics
+            .as_deref()
+            .and_then(|fields| fields.hint.as_deref()),
+        Some("Use a datetime template argument to specify the input data format.")
+    );
+    let target = jsonb::parse(r#""2017-03-10t12:34:56+3:10""#).expect("target");
+    let error = JsonPath::parse("$.datetime()")
+        .expect("path")
+        .query(&target, None, false)
+        .expect_err("invalid datetime offset")
+        .into_pg();
+    assert_eq!(
+        error
+            .diagnostics
+            .as_deref()
+            .and_then(|fields| fields.hint.as_deref()),
+        Some("Use a datetime template argument to specify the input data format.")
+    );
+    let target = jsonb::parse(r#""aaaa""#).expect("target");
+    let error = JsonPath::parse(r#"$.datetime("HH24")"#)
+        .expect("path")
+        .query(&target, None, false)
+        .expect_err("non-numeric datetime field")
+        .into_pg();
+    assert_eq!(
+        error
+            .diagnostics
+            .as_deref()
+            .and_then(|fields| fields.detail.as_deref()),
+        Some("Value must be an integer.")
+    );
 }
 
 #[test]
