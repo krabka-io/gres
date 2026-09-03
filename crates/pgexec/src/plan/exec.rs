@@ -59,6 +59,10 @@ pub(crate) fn try_execute_seq_scan_with_state(
     read_ctx: &crate::subquery::SubCtx<'_>,
     select: &SelectStmt,
 ) -> Result<Option<(Relation, PlanState)>, ExecError> {
+    // Group-key SRFs need the shared path's ProjectSet rewrite below Aggregate.
+    if crate::srf::exprs_contain_srf(&select.group_by) {
+        return Ok(None);
+    }
     if select.from.len() >= 2 || matches!(select.from.as_slice(), [TableExpr::Join { .. }]) {
         return try_execute_nested_loop_with_state(read_ctx, select);
     }

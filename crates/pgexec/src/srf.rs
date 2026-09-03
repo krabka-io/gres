@@ -5061,6 +5061,26 @@ mod tests {
                     vec![Some("2".into()), Some("2".into())],
                 ]
         );
+
+        query(&mut s, "CREATE TABLE srf_group_unnest (a text)").await;
+        query(
+            &mut s,
+            "INSERT INTO srf_group_unnest VALUES ('a'), ('a'), ('b')",
+        )
+        .await;
+        let result = query(
+            &mut s,
+            "SELECT a, count(*) FROM srf_group_unnest \
+             WHERE a = 'a' GROUP BY a, unnest('{1,1,3}'::int[]) ORDER BY 2",
+        )
+        .await;
+        assert!(
+            shape(&result).2
+                == vec![
+                    vec![Some("a".into()), Some("2".into())],
+                    vec![Some("a".into()), Some("4".into())],
+                ]
+        );
     }
 
     #[tokio::test]
