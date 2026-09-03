@@ -554,6 +554,8 @@ async fn system_catalog_oid_indexes_keep_pg18_catalog_identity_and_links() {
                 some(&["pg_trigger", "2702", "pg_trigger_oid_index"]),
                 some(&["pg_ts_config", "3712", "pg_ts_config_oid_index"]),
                 some(&["pg_ts_dict", "3605", "pg_ts_dict_oid_index"]),
+                some(&["pg_ts_parser", "3607", "pg_ts_parser_oid_index"]),
+                some(&["pg_ts_template", "3767", "pg_ts_template_oid_index"]),
                 some(&["pg_type", "2703", "pg_type_oid_index"]),
                 some(&["pg_user_mapping", "174", "pg_user_mapping_oid_index"]),
             ]

@@ -256,9 +256,9 @@ async fn import_foreign_schema_routes_created_tables_through_committer() {
     // `IMPORT FOREIGN SCHEMA` allocates from the counter under the counter's own
     // lock rather than claiming a block, so it adds no batch of its own.
     assert!(batches.len() == 4);
-    // The imported table's schema, its rowid sequence, its id-index entry, and
-    // the one counter bump the batch owes.
-    assert!(import_batch.len() == 4);
+    // The imported table's schema, its rowid sequence, id and creation-order
+    // entries, and their two counter bumps.
+    assert!(import_batch.len() == 6);
 
     let rows = session
         .simple_query("SELECT value FROM imported_one")

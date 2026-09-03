@@ -6,8 +6,8 @@
 //! a column of unbounded width always does. Otherwise the widest tuple the
 //! bounded columns can build decides it, against a quarter of a block.
 //!
-//! crabka stores wide values inline, so no relation this oid names exists. The
-//! column still has to answer what `PostgreSQL` answers, because
+//! crabka stores wide values inline, but exposes the matching virtual TOAST
+//! relations in `pg_class`. The column still has to answer what `PostgreSQL` answers, because
 //! `reltoastrelid <> 0` is how the regression suite asks whether a column can
 //! be stored out of line at all.
 //!
@@ -183,10 +183,10 @@ async fn adding_an_unbounded_column_gives_the_relation_a_store() {
 }
 
 /// Distinct relations get distinct oids, and the oid does not move when
-/// something unrelated changes. A join back to `pg_class` finds nothing,
-/// because crabka builds no relation for it.
+/// something unrelated changes. A join back to `pg_class` finds the matching
+/// virtual TOAST relation for each table.
 #[tokio::test]
-async fn the_oid_is_stable_per_relation_and_names_no_relation() {
+async fn the_oid_is_stable_per_relation_and_names_its_virtual_relation() {
     let engine = SqlEngine::new();
     let mut s = engine.connect();
     for ddl in ["create table t_one (c text)", "create table t_two (c text)"] {
@@ -201,7 +201,7 @@ async fn the_oid_is_stable_per_relation_and_names_no_relation() {
     run(&mut s, "create table t_three (c text)").await;
     assert!(toast_oids(&mut s).await == before);
 
-    // Nothing in `pg_class` carries one of these oids.
+    // Every text table's TOAST oid identifies its virtual `pg_class` relation.
     let result = s
         .simple_query(
             "SELECT count(*)::text FROM pg_class c \
@@ -216,5 +216,5 @@ async fn the_oid_is_stable_per_relation_and_names_no_relation() {
     };
     let count = String::from_utf8(rows[0][0].as_ref().expect("not null").text.to_vec())
         .expect("utf-8 cell");
-    assert!(count == "0");
+    assert!(count == "3");
 }
