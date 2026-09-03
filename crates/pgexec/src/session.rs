@@ -12943,6 +12943,17 @@ impl SqlSession {
         let cursors = self.cursor_rows();
         let command_row_claims = self.command_row_claims.clone().unwrap_or_default();
         let trigger_write = self.trigger_depth > 0;
+        if self.trigger_depth > 1 {
+            return Err(ExecError::Remote(
+                PgError::error(
+                    "27000",
+                    "tuple to be updated was already modified by an operation triggered by the current command",
+                )
+                .with_hint(
+                    "Consider using an AFTER trigger instead of a BEFORE trigger to propagate changes to other rows.",
+                ),
+            ));
+        }
         let (request_tx, request_rx) = mpsc::channel(1);
         let (worker_id, mut cancel, finished) = self.register_worker();
         // Re-enter the `pg.write` span on the pool thread — see the note at the

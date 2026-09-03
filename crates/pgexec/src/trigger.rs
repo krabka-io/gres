@@ -35,7 +35,6 @@ pub(crate) struct TriggerInvocation {
 }
 
 thread_local! {
-    static TRIGGER_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
     /// Triggers fired on this thread since it started, so a write can report
     /// how many its own statement fired as a difference. See [`fired_count`].
     static TRIGGERS_FIRED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
@@ -121,14 +120,6 @@ pub(crate) fn with_after_trigger_queue<T>(f: impl FnOnce() -> T) -> (T, Vec<Pend
     })
 }
 
-struct TriggerDepthGuard;
-
-impl Drop for TriggerDepthGuard {
-    fn drop(&mut self) {
-        TRIGGER_DEPTH.with(|depth| depth.set(depth.get().saturating_sub(1)));
-    }
-}
-
 pub(crate) fn invoke(
     routine: Routine,
     invocation: TriggerInvocation,
@@ -136,8 +127,6 @@ pub(crate) fn invoke(
     let runtime = crate::routine::scalar_runtime_request_sender().ok_or_else(|| {
         ExecError::Unsupported("trigger function requires a session executor".into())
     })?;
-    TRIGGER_DEPTH.with(|depth| depth.set(depth.get() + 1));
-    let _guard = TriggerDepthGuard;
     let (reply, response) = std::sync::mpsc::channel();
     runtime
         .try_send(crate::routine::ScalarFunctionRequest {
