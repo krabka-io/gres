@@ -3489,7 +3489,7 @@ impl Drop for WorkerFinished {
 
 pub(crate) struct PlPgSqlCallDepthGuard(Arc<AtomicUsize>);
 
-const MAX_NESTED_PLPGSQL_CALLS: usize = 4;
+const MAX_NESTED_PLPGSQL_CALLS: usize = 3;
 
 impl PlPgSqlCallDepthGuard {
     fn enter(depth: Arc<AtomicUsize>) -> Result<Self, ExecError> {
