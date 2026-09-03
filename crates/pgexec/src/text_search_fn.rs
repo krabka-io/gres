@@ -1317,9 +1317,10 @@ fn web_query(config: &str, source: &str, catalog: Catalog<'_>) -> Result<TsQuery
             rest = rest[2..].trim_start();
             continue;
         }
-        let negative = rest.starts_with('-');
-        if negative {
-            rest = rest[1..].trim_start();
+        let mut negations = 0;
+        while let Some(after_negation) = rest.strip_prefix('-') {
+            negations += 1;
+            rest = after_negation.trim_start();
         }
         let (piece, tail, phrase) = if let Some(quoted) = rest.strip_prefix('"') {
             match quoted.find('"') {
@@ -1344,8 +1345,10 @@ fn web_query(config: &str, source: &str, catalog: Catalog<'_>) -> Result<TsQuery
             Cow::Borrowed(piece)
         };
         let mut query = plain_query(config, &piece, phrase || connected_words, catalog)?;
-        if negative && query != TsQuery::Empty {
-            query = TsQuery::Not(Box::new(query));
+        for _ in 0..negations {
+            if query != TsQuery::Empty {
+                query = TsQuery::Not(Box::new(query));
+            }
         }
         if query != TsQuery::Empty {
             parts.push((next_or, query));
@@ -2848,6 +2851,14 @@ mod tests {
                 expected
             );
         }
+    }
+
+    #[test]
+    fn web_query_stacks_leading_negations() {
+        assert_eq!(
+            web_query("simple", "----fine", None).unwrap().to_string(),
+            "!!!!'fine'"
+        );
     }
 
     #[test]
