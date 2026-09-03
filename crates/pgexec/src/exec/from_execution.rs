@@ -670,7 +670,10 @@ fn choose_local_gin_index(
             .into_iter()
             .find(|index| {
                 index.placement == crabka_pgcatalog::IndexPlacement::Local
-                    && index.method == crabka_pgcatalog::IndexMethod::Gin
+                    && matches!(
+                        index.method,
+                        crabka_pgcatalog::IndexMethod::Gin | crabka_pgcatalog::IndexMethod::Gist
+                    )
                     && index.predicate.is_none()
                     && index.columns.len() == 1
                     && table.column_index(&index.columns[0]) == Some(column)

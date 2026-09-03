@@ -4802,6 +4802,56 @@ async fn local_secondary_index_lookup_tracks_insert_update_delete() {
 }
 
 #[tokio::test]
+async fn local_gist_tsvector_index_probes_matching_lexemes() {
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    session
+        .simple_query("CREATE TABLE t (a tsvector)")
+        .await
+        .expect("create table");
+    session
+        .simple_query("CREATE INDEX t_a_gist ON t USING gist (a)")
+        .await
+        .expect("create GiST index");
+    session
+        .simple_query(
+            "INSERT INTO t VALUES (to_tsvector('simple', 'alpha beta')), \
+             (to_tsvector('simple', 'gamma'))",
+        )
+        .await
+        .expect("insert vectors");
+
+    let table = crabka_pgcatalog::get_table(engine.catalog_kv.as_ref(), &RelationName::public("t"))
+        .expect("table");
+    let index = crabka_pgcatalog::list_table_indexes(
+        engine.catalog_kv.as_ref(),
+        &RelationName::public("t"),
+    )
+    .expect("indexes")
+    .pop()
+    .expect("GiST index");
+    let snapshot = engine.procarray.snapshot();
+    let gsnap = settled_snapshot();
+    let query = "'alpha'".parse().expect("tsquery");
+    let rows = super::lookup_local_gin(
+        &super::MvccReadContext {
+            kv: engine.kv.as_ref(),
+            global: engine.kv.as_ref(),
+            global_snapshot: &gsnap,
+            snapshot: &snapshot,
+            own: None,
+            command_id: None,
+        },
+        &table,
+        &index,
+        &query,
+    )
+    .expect("GiST probe")
+    .expect("exact candidate probe");
+    assert_eq!(rows.len(), 1);
+}
+
+#[tokio::test]
 async fn drop_index_removes_catalog_metadata_and_local_entries_in_one_ddl_batch() {
     let engine = SqlEngine::new();
     let mut session = engine.connect();

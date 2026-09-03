@@ -456,12 +456,20 @@ pub(super) fn index_entries(
     ) {
         return indexed_values(table, index, row).map(|values| vec![values]);
     }
-    if index.method != crabka_pgcatalog::IndexMethod::Gin {
+    if !matches!(
+        index.method,
+        crabka_pgcatalog::IndexMethod::Gin | crabka_pgcatalog::IndexMethod::Gist
+    ) {
         return Ok(Vec::new());
     }
     let column = table
         .column_index(&index.columns[0])
         .ok_or_else(|| ExecError::UndefinedColumn(index.columns[0].clone()))?;
+    if index.method == crabka_pgcatalog::IndexMethod::Gist
+        && table.columns[column].ty != ColumnType::TsVector
+    {
+        return Ok(Vec::new());
+    }
     match &row[column] {
         Datum::Null => Ok(Vec::new()),
         Datum::TsVector(vector) => Ok(vector
