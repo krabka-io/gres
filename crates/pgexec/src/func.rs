@@ -684,7 +684,8 @@ fn scalar_func(name: &str) -> Option<ScalarFunc> {
 /// one dispatch point, so `eval`, `infer_type` and `agg::is_wrapping_scalar_func`
 /// each need only ask this question once.
 pub(crate) fn is_scalar(name: &str) -> bool {
-    scalar_func(name).is_some()
+    name.eq_ignore_ascii_case("merge_action")
+        || scalar_func(name).is_some()
         || crate::math_fn::is_math_func(name)
         || crate::string_fn::is_string_func(name)
         || crate::regexp_fn::is_regexp_func(name)
