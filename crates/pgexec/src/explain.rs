@@ -148,18 +148,6 @@ pub(crate) fn apply_catalog_estimate(
         crate::inheritance::has_children(catalog_kv, &relation).unwrap_or(false);
     let inherited = !only && (inheritance_children || partitioned);
     if !*only && inheritance_children && !partitioned {
-        let rows = relation_rows(catalog_kv, &relation);
-        if let Some(filter) = &select.filter {
-            if let Some(selectivity) =
-                extended_mcv_selectivity(catalog_kv, &table, rows, true, ctx, filter)
-            {
-                let input_rows = rows * selectivity;
-                let output_rows = estimate_group_rows(catalog_kv, &table, input_rows, true, select)
-                    .unwrap_or(input_rows);
-                set_estimated_rows(plan, output_rows, input_rows);
-                return;
-            }
-        }
         let mut members = vec![table.clone()];
         for descendant in crate::inheritance::descendants(catalog_kv, &relation).unwrap_or_default()
         {
