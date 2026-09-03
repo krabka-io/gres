@@ -3223,7 +3223,16 @@ fn datetime_method(
                     "22009" => "22009",
                     _ => "22007",
                 };
-                PathError::new(sqlstate, error.message)
+                let message = if template.contains('"') {
+                    error.message
+                } else {
+                    error.message.replacen(
+                        "unmatched format character",
+                        "invalid datetime format separator:",
+                        1,
+                    )
+                };
+                PathError::new(sqlstate, message)
             })?;
         let date = jiff::civil::Date::new(
             i16::try_from(parsed.year).map_err(|_| invalid_for(name, text, "datetime"))?,

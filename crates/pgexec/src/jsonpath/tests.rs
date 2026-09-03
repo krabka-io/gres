@@ -554,6 +554,26 @@ fn item_methods_match_postgresql() {
         error.message,
         "time_tz format is not recognized: \"2023-08-15 12:34:56\""
     );
+    for (target, path, expected) in [
+        (
+            r#""12:34""#,
+            r#"$.datetime("aaa")"#,
+            "invalid datetime format separator: \"a\"",
+        ),
+        (
+            r#""10-03-2017t12:34:56""#,
+            r#"$.datetime("dd-mm-yyyy\"T\"HH24:MI:SS")"#,
+            "unmatched format character \"T\"",
+        ),
+    ] {
+        let target = jsonb::parse(target).expect("target");
+        let error = JsonPath::parse(path)
+            .expect("path")
+            .query(&target, None, false)
+            .expect_err("invalid datetime separator")
+            .into_pg();
+        assert_eq!(error.message, expected, "{path}");
+    }
 }
 
 #[test]
