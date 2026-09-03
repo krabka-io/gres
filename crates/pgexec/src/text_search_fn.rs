@@ -608,7 +608,13 @@ pub(crate) fn eval_text_search(
         }
         TextSearchFunc::ToTsQuery => {
             let (config, text) = config_and_text(fc, &values, catalog)?;
-            Ok(Datum::TsQuery(to_tsquery(config, text, catalog)?))
+            let query = to_tsquery(config, text, catalog)?;
+            if query == TsQuery::Empty && text.trim().is_empty() {
+                ctx.notice(format!(
+                    "text-search query doesn't contain lexemes: \"{text}\""
+                ))?;
+            }
+            Ok(Datum::TsQuery(query))
         }
         TextSearchFunc::PlainToTsQuery => {
             let (config, text) = config_and_text(fc, &values, catalog)?;
@@ -620,7 +626,14 @@ pub(crate) fn eval_text_search(
         }
         TextSearchFunc::WebsearchToTsQuery => {
             let (config, text) = config_and_text(fc, &values, catalog)?;
-            Ok(Datum::TsQuery(web_query(config, text, catalog)?))
+            let query = web_query(config, text, catalog)?;
+            if query == TsQuery::Empty {
+                ctx.notice(
+                    "text-search query contains only stop words or doesn't contain lexemes, ignored"
+                        .into(),
+                )?;
+            }
+            Ok(Datum::TsQuery(query))
         }
         TextSearchFunc::Strip => match values.as_slice() {
             [Datum::TsVector(vector)] => Ok(Datum::TsVector(vector.strip())),
@@ -2614,6 +2627,30 @@ fn is_stopword(word: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{clock::EvalCtx, scope::Scope};
+
+    #[test]
+    fn empty_runtime_queries_emit_postgres_notices() {
+        let (notice_tx, mut notices) = tokio::sync::mpsc::channel(2);
+        let ctx = EvalCtx {
+            notice_tx: Some(notice_tx),
+            ..EvalCtx::test_default()
+        };
+        for (sql, expected) in [
+            (
+                "to_tsquery('english', '')",
+                "text-search query doesn't contain lexemes: \"\"",
+            ),
+            (
+                "websearch_to_tsquery('english', 'the')",
+                "text-search query contains only stop words or doesn't contain lexemes, ignored",
+            ),
+        ] {
+            let expression = crabka_pgparser::parser::parse_expr_for_test(sql).unwrap();
+            crate::eval::eval(&expression, &Scope::empty(), &[], &ctx).unwrap();
+            assert_eq!(notices.try_recv().unwrap().message, expected);
+        }
+    }
 
     #[test]
     fn english_vector_stems_and_preserves_positions() {

@@ -2103,6 +2103,7 @@ impl SqlEngine {
             // dropping the notification.
             notify: None,
             warning_tx: None,
+            notice_tx: None,
             transition_relations: None,
             event_trigger: None,
             // A scattered write carries no transaction of its own to export,

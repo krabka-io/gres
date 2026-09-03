@@ -137,6 +137,8 @@ pub struct EvalCtx {
     /// The session installs this only when `client_min_messages` permits
     /// warnings, so expression evaluators do not need to know about GUCs.
     pub(crate) warning_tx: Option<tokio::sync::mpsc::Sender<crabka_pgwire::error::PgError>>,
+    /// Like [`Self::warning_tx`], but for PostgreSQL `NOTICE` diagnostics.
+    pub(crate) notice_tx: Option<tokio::sync::mpsc::Sender<crabka_pgwire::error::PgError>>,
     pub(crate) transition_relations: Option<Arc<Mutex<HashMap<String, TransitionRelation>>>>,
     pub(crate) event_trigger: Option<Arc<EventTriggerContext>>,
     /// The session's transaction identity, for the functions that export it.
@@ -333,6 +335,18 @@ impl EvalCtx {
                 ))
             })
     }
+
+    pub(crate) fn notice(&self, message: String) -> Result<(), crate::error::ExecError> {
+        let Some(tx) = &self.notice_tx else {
+            return Ok(());
+        };
+        tx.try_send(crabka_pgwire::error::PgError::notice(message))
+            .map_err(|error| {
+                crate::error::ExecError::ObjectNotInPrerequisiteState(format!(
+                    "could not queue expression notice: {error}"
+                ))
+            })
+    }
 }
 
 impl EvalCtx {
@@ -386,6 +400,7 @@ impl EvalCtx {
             resolution: None,
             notify: None,
             warning_tx: None,
+            notice_tx: None,
             transition_relations: None,
             event_trigger: None,
             txn: None,

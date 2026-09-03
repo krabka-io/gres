@@ -3861,6 +3861,12 @@ impl SqlSession {
                 .ok()
                 .filter(|minimum| client_accepts_message(minimum, Severity::Warning))
                 .map(|_| self.notice_tx.clone()),
+            notice_tx: self
+                .guc
+                .effective("client_min_messages")
+                .ok()
+                .filter(|minimum| client_accepts_message(minimum, Severity::Notice))
+                .map(|_| self.notice_tx.clone()),
             transition_relations: Some(Arc::clone(&self.transition_relations)),
             event_trigger: self.event_trigger.clone(),
             txn: Some(Arc::new(crate::clock::TxnRuntime {
