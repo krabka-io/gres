@@ -496,8 +496,12 @@ fn create_base_type(
         default,
         input,
         output,
+        receive: None,
+        send: None,
         typmod_in,
         typmod_out,
+        analyze: None,
+        subscript: None,
         category,
         preferred,
         delimiter,
@@ -908,6 +912,12 @@ pub fn alter_type(
                         }
                         base.storage = storage;
                     }
+                    "receive" => set_base_routine(kv, &mut base.receive, option)?,
+                    "send" => set_base_routine(kv, &mut base.send, option)?,
+                    "typmod_in" => set_base_routine(kv, &mut base.typmod_in, option)?,
+                    "typmod_out" => set_base_routine(kv, &mut base.typmod_out, option)?,
+                    "analyze" => set_base_routine(kv, &mut base.analyze, option)?,
+                    "subscript" => set_base_routine(kv, &mut base.subscript, option)?,
                     other => {
                         return Err(ExecError::Unsupported(format!(
                             "type attribute \"{other}\" is not supported by ALTER TYPE"
@@ -965,6 +975,18 @@ pub fn alter_type(
         command("ALTER TYPE"),
         crabka_pgcatalog::put_user_type_ops(kv, &ty)?,
     ))
+}
+
+/// Validate and retain one base-type support routine named by `ALTER TYPE SET`.
+fn set_base_routine(
+    kv: &dyn Kv,
+    slot: &mut Option<String>,
+    option: &BaseTypeOption,
+) -> Result<(), ExecError> {
+    let routine = option_name(option)?;
+    require_routine(kv, &routine)?;
+    *slot = Some(routine);
+    Ok(())
 }
 
 fn rename_multirange(

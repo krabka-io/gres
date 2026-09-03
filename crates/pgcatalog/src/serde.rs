@@ -47,7 +47,7 @@ pub type DecodedSchema = (
 /// foreign, or materialized view — is written with this version byte; a flag
 /// byte after the owner distinguishes ordinary (`0`) from foreign (`1`), and a
 /// `CHECK` constraint list and a materialized-view flag byte close the record.
-pub const SCHEMA_VERSION: u8 = 33;
+pub const SCHEMA_VERSION: u8 = 34;
 
 /// The `interval` type payload normally is one precision byte. This marker
 /// introduces the packed field-range typmod that follows it.
@@ -2426,8 +2426,12 @@ pub fn serialize_user_type(ty: &UserType) -> Vec<u8> {
             write_optional_string(&mut out, base.default.as_deref());
             write_str(&mut out, &base.input);
             write_str(&mut out, &base.output);
+            write_optional_string(&mut out, base.receive.as_deref());
+            write_optional_string(&mut out, base.send.as_deref());
             write_optional_string(&mut out, base.typmod_in.as_deref());
             write_optional_string(&mut out, base.typmod_out.as_deref());
+            write_optional_string(&mut out, base.analyze.as_deref());
+            write_optional_string(&mut out, base.subscript.as_deref());
             write_str(&mut out, &base.category);
             out.push(u8::from(base.preferred));
             write_str(&mut out, &base.delimiter);
@@ -2581,8 +2585,12 @@ pub(crate) fn deserialize_user_type_with(
             let default = read_optional_string(&mut cur)?;
             let input = read_string(&mut cur)?;
             let output = read_string(&mut cur)?;
+            let receive = read_optional_string(&mut cur)?;
+            let send = read_optional_string(&mut cur)?;
             let typmod_in = read_optional_string(&mut cur)?;
             let typmod_out = read_optional_string(&mut cur)?;
+            let analyze = read_optional_string(&mut cur)?;
+            let subscript = read_optional_string(&mut cur)?;
             let category = read_string(&mut cur)?;
             let preferred = take_u8(&mut cur)? != 0;
             let delimiter = read_string(&mut cur)?;
@@ -2594,8 +2602,12 @@ pub(crate) fn deserialize_user_type_with(
                 default,
                 input,
                 output,
+                receive,
+                send,
                 typmod_in,
                 typmod_out,
+                analyze,
+                subscript,
                 category,
                 preferred,
                 delimiter,
@@ -3359,8 +3371,12 @@ mod tests {
                         default: None,
                         input: "int4in".into(),
                         output: "int4out".into(),
+                        receive: None,
+                        send: None,
                         typmod_in: None,
                         typmod_out: None,
+                        analyze: None,
+                        subscript: None,
                         category: "N".into(),
                         preferred: false,
                         delimiter: ",".into(),
@@ -3779,8 +3795,12 @@ mod tests {
                 default: Some("'stored default'".into()),
                 input: "stored_text_in".into(),
                 output: "stored_text_out".into(),
+                receive: Some("stored_text_recv".into()),
+                send: Some("stored_text_send".into()),
                 typmod_in: Some("stored_text_typmodin".into()),
                 typmod_out: Some("stored_text_typmodout".into()),
+                analyze: Some("stored_text_analyze".into()),
+                subscript: Some("stored_text_subscript".into()),
                 category: "U".into(),
                 preferred: false,
                 delimiter: ",".into(),

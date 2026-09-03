@@ -277,10 +277,18 @@ pub struct BaseBody {
     pub input: String,
     /// `pg_type.typoutput`.
     pub output: String,
+    /// `pg_type.typreceive`, when the type has binary input.
+    pub receive: Option<String>,
+    /// `pg_type.typsend`, when the type has binary output.
+    pub send: Option<String>,
     /// `pg_type.typmodin`, when the type accepts a modifier list.
     pub typmod_in: Option<String>,
     /// `pg_type.typmodout`, when the type renders a modifier list.
     pub typmod_out: Option<String>,
+    /// `pg_type.typanalyze`, when the type supplies a statistics collector.
+    pub analyze: Option<String>,
+    /// `pg_type.typsubscript`, when the type supports subscripting.
+    pub subscript: Option<String>,
     /// `pg_type.typcategory`, the one-character class `format_type` and the
     /// preference rules read.
     pub category: String,

@@ -3395,6 +3395,62 @@ async fn regression_c_base_types_keep_their_declared_layouts() {
                 text_row(&["123456,127,-1000,6789"]),
             ]
     );
+    run_s(
+        &mut session,
+        "ALTER TYPE widget SET (send = widget_out, receive = widget_in, \
+         typmod_in = numerictypmodin, typmod_out = numerictypmodout, \
+         analyze = ts_typanalyze, subscript = raw_array_subscript_handler)",
+    )
+    .await;
+    assert!(
+        text_rows_of(
+            &mut session,
+            "SELECT typsubscript, typinput, typoutput, typreceive, typsend, typmodin, typmodout, typanalyze \
+             FROM pg_type WHERE typname = 'widget'",
+        )
+        .await
+            == vec![text_row(&[
+                "raw_array_subscript_handler",
+                "widget_in",
+                "widget_out",
+                "widget_in",
+                "widget_out",
+                "numerictypmodin",
+                "numerictypmodout",
+                "ts_typanalyze",
+            ])]
+    );
+    run_s(&mut session, "CREATE DOMAIN widget_domain AS widget").await;
+    assert!(
+        text_rows_of(
+            &mut session,
+            "SELECT typsubscript, typinput, typoutput, typreceive, typsend, typmodin, typmodout, typanalyze \
+             FROM pg_type WHERE typname IN ('_widget', 'widget_domain') ORDER BY typname",
+        )
+        .await
+            == vec![
+                text_row(&[
+                    "array_subscript_handler",
+                    "array_in",
+                    "array_out",
+                    "array_recv",
+                    "array_send",
+                    "numerictypmodin",
+                    "numerictypmodout",
+                    "array_typanalyze",
+                ]),
+                text_row(&[
+                    "-",
+                    "domain_in",
+                    "widget_out",
+                    "domain_recv",
+                    "widget_out",
+                    "-",
+                    "-",
+                    "ts_typanalyze",
+                ]),
+            ]
+    );
 }
 
 /// `INTERNALLENGTH`/`PASSEDBYVALUE`/`ALIGNMENT` describe the same layout

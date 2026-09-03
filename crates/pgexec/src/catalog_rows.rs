@@ -1951,33 +1951,33 @@ pub(crate) fn pg_type_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecE
 /// upstream catalog sanity checks use those links as foreign keys.
 fn catalog_only_builtin_type_rows(proc_oids: &BTreeMap<String, i32>) -> Vec<Vec<Datum>> {
     [
-        (32, "pg_ddl_command", 8, "P", "p", 0, [None; 6]),
-        (269, "table_am_handler", 4, "P", "p", 0, [None; 6]),
-        (325, "index_am_handler", 4, "P", "p", 0, [None; 6]),
-        (705, "unknown", -2, "X", "p", 0, [None; 6]),
-        (2276, "any", 4, "P", "p", 0, [None; 6]),
-        (2277, "anyarray", -1, "P", "p", 0, [None; 6]),
-        (2278, "void", 4, "P", "p", 0, [None; 6]),
-        (2279, "trigger", 4, "P", "p", 0, [None; 6]),
-        (2280, "language_handler", 4, "P", "p", 0, [None; 6]),
-        (2281, "internal", 8, "P", "p", 0, [None; 6]),
-        (2283, "anyelement", 4, "P", "p", 0, [None; 6]),
-        (2776, "anynonarray", 4, "P", "p", 0, [None; 6]),
-        (3115, "fdw_handler", 4, "P", "p", 0, [None; 6]),
-        (3310, "tsm_handler", 4, "P", "p", 0, [None; 6]),
-        (3500, "anyenum", 4, "P", "p", 0, [None; 6]),
-        (3831, "anyrange", -1, "P", "p", 0, [None; 6]),
-        (3838, "event_trigger", 4, "P", "p", 0, [None; 6]),
-        (4537, "anymultirange", -1, "P", "p", 0, [None; 6]),
-        (4538, "anycompatiblemultirange", -1, "P", "p", 0, [None; 6]),
-        (5077, "anycompatible", 4, "P", "p", 0, [None; 6]),
-        (5078, "anycompatiblearray", -1, "P", "p", 0, [None; 6]),
-        (5079, "anycompatiblenonarray", 4, "P", "p", 0, [None; 6]),
-        (5080, "anycompatiblerange", -1, "P", "p", 0, [None; 6]),
-        (194, "pg_node_tree", -1, "Z", "b", 100, [None; 6]),
-        (3361, "pg_ndistinct", -1, "Z", "b", 100, [None; 6]),
-        (3402, "pg_dependencies", -1, "Z", "b", 100, [None; 6]),
-        (3642, "gtsvector", -1, "U", "b", 0, [None; 6]),
+        (32, "pg_ddl_command", 8, "P", "p", 0, [None; 8]),
+        (269, "table_am_handler", 4, "P", "p", 0, [None; 8]),
+        (325, "index_am_handler", 4, "P", "p", 0, [None; 8]),
+        (705, "unknown", -2, "X", "p", 0, [None; 8]),
+        (2276, "any", 4, "P", "p", 0, [None; 8]),
+        (2277, "anyarray", -1, "P", "p", 0, [None; 8]),
+        (2278, "void", 4, "P", "p", 0, [None; 8]),
+        (2279, "trigger", 4, "P", "p", 0, [None; 8]),
+        (2280, "language_handler", 4, "P", "p", 0, [None; 8]),
+        (2281, "internal", 8, "P", "p", 0, [None; 8]),
+        (2283, "anyelement", 4, "P", "p", 0, [None; 8]),
+        (2776, "anynonarray", 4, "P", "p", 0, [None; 8]),
+        (3115, "fdw_handler", 4, "P", "p", 0, [None; 8]),
+        (3310, "tsm_handler", 4, "P", "p", 0, [None; 8]),
+        (3500, "anyenum", 4, "P", "p", 0, [None; 8]),
+        (3831, "anyrange", -1, "P", "p", 0, [None; 8]),
+        (3838, "event_trigger", 4, "P", "p", 0, [None; 8]),
+        (4537, "anymultirange", -1, "P", "p", 0, [None; 8]),
+        (4538, "anycompatiblemultirange", -1, "P", "p", 0, [None; 8]),
+        (5077, "anycompatible", 4, "P", "p", 0, [None; 8]),
+        (5078, "anycompatiblearray", -1, "P", "p", 0, [None; 8]),
+        (5079, "anycompatiblenonarray", 4, "P", "p", 0, [None; 8]),
+        (5080, "anycompatiblerange", -1, "P", "p", 0, [None; 8]),
+        (194, "pg_node_tree", -1, "Z", "b", 100, [None; 8]),
+        (3361, "pg_ndistinct", -1, "Z", "b", 100, [None; 8]),
+        (3402, "pg_dependencies", -1, "Z", "b", 100, [None; 8]),
+        (3642, "gtsvector", -1, "U", "b", 0, [None; 8]),
         (
             4600,
             "pg_brin_bloom_summary",
@@ -1986,10 +1986,12 @@ fn catalog_only_builtin_type_rows(proc_oids: &BTreeMap<String, i32>) -> Vec<Vec<
             "b",
             100,
             [
+                None,
                 Some("brin_bloom_summary_in"),
                 Some("brin_bloom_summary_out"),
                 Some("brin_bloom_summary_recv"),
                 Some("brin_bloom_summary_send"),
+                None,
                 None,
                 None,
             ],
@@ -2002,15 +2004,17 @@ fn catalog_only_builtin_type_rows(proc_oids: &BTreeMap<String, i32>) -> Vec<Vec<
             "b",
             100,
             [
+                None,
                 Some("brin_minmax_multi_summary_in"),
                 Some("brin_minmax_multi_summary_out"),
                 Some("brin_minmax_multi_summary_recv"),
                 Some("brin_minmax_multi_summary_send"),
                 None,
                 None,
+                None,
             ],
         ),
-        (5017, "pg_mcv_list", -1, "Z", "b", 100, [None; 6]),
+        (5017, "pg_mcv_list", -1, "Z", "b", 100, [None; 8]),
     ]
     .into_iter()
     .map(
@@ -2269,7 +2273,7 @@ fn pg_type_row_with_storage(
     defined: bool,
     storage: Option<char>,
 ) -> Vec<Datum> {
-    pg_type_row_with_metadata(row, proc_oids, defined, storage, [None; 6], None, None)
+    pg_type_row_with_metadata(row, proc_oids, defined, storage, [None; 8], None, None)
 }
 
 fn pg_type_row_with_metadata(
@@ -2277,7 +2281,7 @@ fn pg_type_row_with_metadata(
     proc_oids: &BTreeMap<String, i32>,
     defined: bool,
     storage: Option<char>,
-    routine_overrides: [Option<&str>; 6],
+    routine_overrides: [Option<&str>; 8],
     default: Option<&str>,
     layout: Option<crabka_pgtypes::usertype::BaseLayout>,
 ) -> Vec<Datum> {
@@ -2364,7 +2368,7 @@ fn pg_type_row_with_metadata(
 fn pg_type_routines(
     row: &PgTypeRow<'_>,
     proc_oids: &BTreeMap<String, i32>,
-    routine_overrides: [Option<&str>; 6],
+    routine_overrides: [Option<&str>; 8],
 ) -> [Datum; 8] {
     let routine = |name: &str| {
         proc_oids
@@ -2381,8 +2385,8 @@ fn pg_type_routines(
             |oid| regproc(*oid, &plain),
         )
     };
-    if matches!(row.name, "int2vector" | "oidvector") {
-        return [
+    let mut routines = if matches!(row.name, "int2vector" | "oidvector") {
+        [
             routine("array_subscript_handler"),
             named(row.name, "in"),
             named(row.name, "out"),
@@ -2391,9 +2395,8 @@ fn pg_type_routines(
             absent_regproc(),
             absent_regproc(),
             absent_regproc(),
-        ];
-    }
-    if row.name.starts_with('_') {
+        ]
+    } else if row.name.starts_with('_') {
         let element_name = builtin_type_rows()
             .iter()
             .find(|type_row| type_row.oid == row.typelem)
@@ -2401,7 +2404,7 @@ fn pg_type_routines(
                 || row.name.trim_start_matches('_'),
                 |type_row| type_row.name,
             );
-        return [
+        [
             routine("array_subscript_handler"),
             routine("array_in"),
             routine("array_out"),
@@ -2410,10 +2413,9 @@ fn pg_type_routines(
             named(pg_type_routine_stem(element_name), "typmodin"),
             named(pg_type_routine_stem(element_name), "typmodout"),
             routine("array_typanalyze"),
-        ];
-    }
-    if row.typtype == "e" {
-        return [
+        ]
+    } else if row.typtype == "e" {
+        [
             absent_regproc(),
             routine("enum_in"),
             routine("enum_out"),
@@ -2422,10 +2424,9 @@ fn pg_type_routines(
             absent_regproc(),
             absent_regproc(),
             absent_regproc(),
-        ];
-    }
-    if row.typtype == "c" {
-        return [
+        ]
+    } else if row.typtype == "c" {
+        [
             absent_regproc(),
             routine("record_in"),
             routine("record_out"),
@@ -2434,10 +2435,9 @@ fn pg_type_routines(
             absent_regproc(),
             absent_regproc(),
             absent_regproc(),
-        ];
-    }
-    if row.typtype == "d" {
-        return [
+        ]
+    } else if row.typtype == "d" {
+        [
             absent_regproc(),
             routine("domain_in"),
             row.domain_base
@@ -2448,38 +2448,39 @@ fn pg_type_routines(
             absent_regproc(),
             absent_regproc(),
             absent_regproc(),
-        ];
-    }
-    let family = if row.typtype == "m" {
-        Some("multirange")
-    } else if row.typtype == "r" {
-        Some("range")
+        ]
     } else {
-        None
-    };
-    let io = |suffix: &str| {
-        family.map_or_else(
-            || named(pg_type_routine_stem(row.name), suffix),
-            |name| routine(&format!("{name}_{suffix}")),
-        )
-    };
-    let mut routines = [
-        absent_regproc(),
-        io("in"),
-        io("out"),
-        io("recv"),
-        io("send"),
-        named(pg_type_routine_stem(row.name), "typmodin"),
-        named(pg_type_routine_stem(row.name), "typmodout"),
-        if row.typtype == "r" {
-            routine("range_typanalyze")
+        let family = if row.typtype == "m" {
+            Some("multirange")
+        } else if row.typtype == "r" {
+            Some("range")
         } else {
-            absent_regproc()
-        },
-    ];
+            None
+        };
+        let io = |suffix: &str| {
+            family.map_or_else(
+                || named(pg_type_routine_stem(row.name), suffix),
+                |name| routine(&format!("{name}_{suffix}")),
+            )
+        };
+        [
+            absent_regproc(),
+            io("in"),
+            io("out"),
+            io("recv"),
+            io("send"),
+            named(pg_type_routine_stem(row.name), "typmodin"),
+            named(pg_type_routine_stem(row.name), "typmodout"),
+            if row.typtype == "r" {
+                routine("range_typanalyze")
+            } else {
+                absent_regproc()
+            },
+        ]
+    };
     for (index, name) in routine_overrides.into_iter().enumerate() {
         if let Some(name) = name {
-            routines[index + 1] = routine(name);
+            routines[index] = routine(name);
         }
     }
     routines
@@ -2631,8 +2632,9 @@ pub(crate) fn user_type_rows(
                 _ => None,
             }),
     );
+    let user_types = crabka_pgcatalog::list_user_types(catalog_kv)?;
     let mut rows = Vec::new();
-    for ty in crabka_pgcatalog::list_user_types(catalog_kv)? {
+    for ty in &user_types {
         let column_type = ty.column_type();
         let (typrelid, typelem, typbasetype, category) = match &ty.body {
             usertype::UserTypeBody::Composite(_) => (
@@ -2665,6 +2667,43 @@ pub(crate) fn user_type_rows(
         // A shell is the one user type with no `ColumnType`, and `TypeShellMake`
         // gives it `sizeof(int32)` regardless.
         let shell_typlen = 4;
+        let routine_overrides = match &ty.body {
+            usertype::UserTypeBody::Base(base) => [
+                base.subscript.as_deref(),
+                Some(base.input.as_str()),
+                Some(base.output.as_str()),
+                base.receive.as_deref(),
+                base.send.as_deref(),
+                base.typmod_in.as_deref(),
+                base.typmod_out.as_deref(),
+                base.analyze.as_deref(),
+            ],
+            usertype::UserTypeBody::Domain(domain) => {
+                let base = match domain.base {
+                    ColumnType::Base(reference) => user_types
+                        .iter()
+                        .find(|candidate| candidate.oid == reference.oid)
+                        .and_then(|candidate| match &candidate.body {
+                            usertype::UserTypeBody::Base(base) => Some(base),
+                            _ => None,
+                        }),
+                    _ => None,
+                };
+                base.map_or([None; 8], |base| {
+                    [
+                        None,
+                        None,
+                        Some(base.output.as_str()),
+                        None,
+                        base.send.as_deref(),
+                        None,
+                        None,
+                        base.analyze.as_deref(),
+                    ]
+                })
+            }
+            _ => [None; 8],
+        };
         rows.push(pg_type_row_with_metadata(
             PgTypeRow {
                 oid: i32::try_from(ty.oid).unwrap_or(0),
@@ -2693,17 +2732,7 @@ pub(crate) fn user_type_rows(
                 usertype::UserTypeBody::Base(base) => Some(base.storage),
                 _ => None,
             },
-            match &ty.body {
-                usertype::UserTypeBody::Base(base) => [
-                    Some(base.input.as_str()),
-                    Some(base.output.as_str()),
-                    None,
-                    None,
-                    base.typmod_in.as_deref(),
-                    base.typmod_out.as_deref(),
-                ],
-                _ => [None; 6],
-            },
+            routine_overrides,
             match &ty.body {
                 usertype::UserTypeBody::Base(base) => base.default.as_deref(),
                 _ => None,
@@ -2715,7 +2744,20 @@ pub(crate) fn user_type_rows(
         ));
         if column_type.is_some() {
             let array_name = format!("_{}", ty.name);
-            rows.push(pg_type_row(
+            let routine_overrides = match &ty.body {
+                usertype::UserTypeBody::Base(base) => [
+                    Some("array_subscript_handler"),
+                    Some("array_in"),
+                    Some("array_out"),
+                    Some("array_recv"),
+                    Some("array_send"),
+                    base.typmod_in.as_deref(),
+                    base.typmod_out.as_deref(),
+                    Some("array_typanalyze"),
+                ],
+                _ => [None; 8],
+            };
+            rows.push(pg_type_row_with_metadata(
                 PgTypeRow {
                     oid: i32::try_from(ty.array_oid).unwrap_or(0),
                     name: &array_name,
@@ -2732,6 +2774,11 @@ pub(crate) fn user_type_rows(
                     range_align: None,
                 },
                 &proc_oids,
+                true,
+                None,
+                routine_overrides,
+                None,
+                None,
             ));
         }
         if let (Some((schema, name)), Some(multirange)) =
@@ -5705,7 +5752,7 @@ mod tests {
                 &BTreeMap::new(),
                 true,
                 None,
-                [None; 6],
+                [None; 8],
                 None,
                 Some(crabka_pgtypes::usertype::BaseLayout {
                     length: -1,
