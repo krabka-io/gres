@@ -11814,6 +11814,12 @@ impl Parser {
                 }),
             });
         }
+        if self.eat_keyword(Keyword::Set) {
+            return Ok(crate::ast::Statement::AlterType {
+                name,
+                action: AlterTypeAction::Set(self.base_type_definition()?),
+            });
+        }
         if self.eat_ident_eq("rename") {
             if self.eat_ident_eq("value") {
                 let from = self.expect_string_lit()?;
@@ -28324,6 +28330,23 @@ mod q1_statement_completeness_tests {
                     ty: crabka_pgtypes::ColumnType::Text,
                     collation: Some("C".into()),
                 })
+        );
+    }
+
+    #[test]
+    fn alter_type_set_preserves_base_options() {
+        use crate::ast::BaseTypeOptionValue as Value;
+
+        let Statement::AlterType { action, .. } = one("ALTER TYPE widget SET (storage = extended)")
+        else {
+            panic!("expected ALTER TYPE");
+        };
+        assert!(
+            action
+                == crate::ast::AlterTypeAction::Set(vec![crate::ast::BaseTypeOption {
+                    name: "storage".into(),
+                    value: Value::Name("extended".into()),
+                }])
         );
     }
 

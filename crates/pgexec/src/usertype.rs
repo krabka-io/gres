@@ -859,6 +859,7 @@ pub fn alter_type(
             AlterTypeAction::RenameTo(new_name) => rename_multirange(kv, ty, name, new_name),
             AlterTypeAction::OwnerTo(_) => Ok((command("ALTER TYPE"), Vec::new())),
             AlterTypeAction::AddAttribute(_) => Err(wrong_kind(name, "a composite type")),
+            AlterTypeAction::Set(_) => Err(wrong_kind(name, "a base type")),
             AlterTypeAction::AddValue { .. } | AlterTypeAction::RenameValue { .. } => {
                 Err(wrong_kind(name, "an enum"))
             }
@@ -886,6 +887,34 @@ pub fn alter_type(
                     .pop()
                     .expect("one field produces one field"),
             );
+        }
+        AlterTypeAction::Set(options) => {
+            if ty.is_shell() {
+                return Err(ExecError::WrongObjectType(format!(
+                    "type \"{lookup_name}\" is only a shell"
+                )));
+            }
+            let UserTypeBody::Base(base) = &mut ty.body else {
+                return Err(wrong_kind(name, "a base type"));
+            };
+            for option in options {
+                match option.name.as_str() {
+                    "storage" => {
+                        let storage = option_storage(option)?;
+                        if storage == 'p' && base.layout.length == -1 {
+                            return Err(ExecError::InvalidObjectDefinition(
+                                "cannot change type's storage to PLAIN".into(),
+                            ));
+                        }
+                        base.storage = storage;
+                    }
+                    other => {
+                        return Err(ExecError::Unsupported(format!(
+                            "type attribute \"{other}\" is not supported by ALTER TYPE"
+                        )));
+                    }
+                }
+            }
         }
         AlterTypeAction::AddValue {
             label,
@@ -1901,6 +1930,70 @@ mod tests {
         .expect_err("missing neighbor")
         .into_pg();
         assert!(err.message == "\"missing\" is not an existing enum label");
+    }
+
+    #[test]
+    fn alter_base_type_storage_rejects_shells_and_plain_varlena() {
+        let kv = MemKv::default();
+        let scope = crate::relname::ResolutionScope::default_scope();
+        let shell = RelationName::public("storage_shell");
+        let (_, ops) =
+            create_type(&kv, scope, &shell, &CreateTypeDefinition::Shell).expect("create shell");
+        kv.write_batch(&ops).expect("store shell");
+        let storage = |value: &str| BaseTypeOption {
+            name: "storage".into(),
+            value: BaseTypeOptionValue::Name(value.into()),
+        };
+        let error = alter_type(
+            &kv,
+            &shell,
+            &AlterTypeAction::Set(vec![storage("extended")]),
+        )
+        .expect_err("shell cannot change storage")
+        .into_pg();
+        assert!(error.code == "42809");
+        assert!(error.message == "type \"storage_shell\" is only a shell");
+
+        let name = RelationName::public("storage_base");
+        let (_, ops) = create_type(
+            &kv,
+            scope,
+            &name,
+            &CreateTypeDefinition::Base(vec![
+                BaseTypeOption {
+                    name: "input".into(),
+                    value: BaseTypeOptionValue::Name("textin".into()),
+                },
+                BaseTypeOption {
+                    name: "output".into(),
+                    value: BaseTypeOptionValue::Name("textout".into()),
+                },
+                BaseTypeOption {
+                    name: "like".into(),
+                    value: BaseTypeOptionValue::Name("text".into()),
+                },
+                storage("main"),
+            ]),
+        )
+        .expect("create base type");
+        kv.write_batch(&ops).expect("store base type");
+
+        let (_, ops) = alter_type(&kv, &name, &AlterTypeAction::Set(vec![storage("extended")]))
+            .expect("set storage");
+        kv.write_batch(&ops).expect("store storage");
+        let ty = crabka_pgcatalog::get_user_type(&kv, &name)
+            .expect("read base type")
+            .expect("base type exists");
+        let UserTypeBody::Base(base) = ty.body else {
+            panic!("expected base type");
+        };
+        assert!(base.storage == 'x');
+
+        let error = alter_type(&kv, &name, &AlterTypeAction::Set(vec![storage("plain")]))
+            .expect_err("variable-length type cannot be plain")
+            .into_pg();
+        assert!(error.code == "42P17");
+        assert!(error.message == "cannot change type's storage to PLAIN");
     }
 
     #[test]
