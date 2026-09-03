@@ -22,7 +22,7 @@
 //! `Unknown` rather than a raised error, which is what makes
 //! `$ ? (@.missing == 1)` a quiet no-match.
 
-use std::fmt::Write as _;
+use std::{cell::Cell, fmt::Write as _};
 
 use bigdecimal::{BigDecimal, One, RoundingMode, ToPrimitive, Zero};
 use crabka_pgtypes::{ArrayValue, Datum, ElemType, JsonbValue, TypeError};
@@ -1606,6 +1606,7 @@ impl JsonPath {
         time_zone: Option<&jiff::tz::TimeZone>,
         allow_zone_conversions: bool,
     ) -> Result<Vec<JsonbValue>, ExecError> {
+        let generated_object_id = Cell::new(if vars.is_some() { 2 } else { 1 });
         let exec = Exec {
             strict: self.strict,
             stop_after_one: false,
@@ -1615,6 +1616,11 @@ impl JsonPath {
             time_zone: time_zone.cloned(),
             allow_zone_conversions,
             current_temporal: None,
+            current_origin: Some(JsonOrigin {
+                base_id: 0,
+                offset: 0,
+            }),
+            generated_object_id: &generated_object_id,
         };
         match exec.eval(&self.root, target) {
             Ok(items) => Ok(items.into_iter().map(Item::into_json).collect()),
@@ -1631,6 +1637,7 @@ impl JsonPath {
         time_zone: Option<&jiff::tz::TimeZone>,
         allow_zone_conversions: bool,
     ) -> Result<Option<JsonbValue>, ExecError> {
+        let generated_object_id = Cell::new(if vars.is_some() { 2 } else { 1 });
         let exec = Exec {
             strict: self.strict,
             // Strict, non-silent calls must inspect the whole path: a later
@@ -1643,6 +1650,11 @@ impl JsonPath {
             time_zone: time_zone.cloned(),
             allow_zone_conversions,
             current_temporal: None,
+            current_origin: Some(JsonOrigin {
+                base_id: 0,
+                offset: 0,
+            }),
+            generated_object_id: &generated_object_id,
         };
         match exec.eval(&self.root, target) {
             Ok(items) => Ok(items.into_iter().next().map(Item::into_json)),
@@ -1690,6 +1702,7 @@ impl JsonPath {
         time_zone: Option<&jiff::tz::TimeZone>,
         allow_zone_conversions: bool,
     ) -> Result<Option<bool>, ExecError> {
+        let generated_object_id = Cell::new(if vars.is_some() { 2 } else { 1 });
         let exec = Exec {
             strict: self.strict,
             stop_after_one: false,
@@ -1699,6 +1712,11 @@ impl JsonPath {
             time_zone: time_zone.cloned(),
             allow_zone_conversions,
             current_temporal: None,
+            current_origin: Some(JsonOrigin {
+                base_id: 0,
+                offset: 0,
+            }),
+            generated_object_id: &generated_object_id,
         };
         match exec.eval(&self.root, target) {
             Ok(items) => Ok(Some(!items.is_empty())),
@@ -1746,6 +1764,7 @@ impl JsonPath {
         time_zone: Option<&jiff::tz::TimeZone>,
         allow_zone_conversions: bool,
     ) -> Result<Option<bool>, ExecError> {
+        let generated_object_id = Cell::new(if vars.is_some() { 2 } else { 1 });
         let exec = Exec {
             strict: self.strict,
             stop_after_one: false,
@@ -1755,6 +1774,11 @@ impl JsonPath {
             time_zone: time_zone.cloned(),
             allow_zone_conversions,
             current_temporal: None,
+            current_origin: Some(JsonOrigin {
+                base_id: 0,
+                offset: 0,
+            }),
+            generated_object_id: &generated_object_id,
         };
         let items = match exec.eval(&self.root, target) {
             Ok(items) => items,
@@ -1817,6 +1841,10 @@ struct Exec<'a> {
     /// A filter's current item can be a datetime result whose JSON rendering
     /// alone no longer carries its SQL temporal type.
     current_temporal: Option<Datum>,
+    /// The binary location of the item currently bound to `@`.
+    current_origin: Option<JsonOrigin>,
+    /// Base-object identifiers for objects made by `.keyvalue()`.
+    generated_object_id: &'a Cell<i64>,
 }
 
 /// A JSONPath item is normally a JSON value. Date/time methods also retain the
@@ -1826,6 +1854,15 @@ struct Exec<'a> {
 struct Item {
     json: JsonbValue,
     temporal: Option<Datum>,
+    origin: Option<JsonOrigin>,
+}
+
+/// The source jsonb object that owns an item and its container offset within
+/// that object. PostgreSQL exposes this identity through `.keyvalue().id`.
+#[derive(Clone, Copy)]
+struct JsonOrigin {
+    base_id: i64,
+    offset: usize,
 }
 
 impl Item {
@@ -1833,6 +1870,18 @@ impl Item {
         Self {
             json: value,
             temporal: None,
+            origin: None,
+        }
+    }
+
+    fn rooted(value: JsonbValue) -> Self {
+        Self {
+            json: value,
+            temporal: None,
+            origin: Some(JsonOrigin {
+                base_id: 0,
+                offset: 0,
+            }),
         }
     }
 
@@ -1840,7 +1889,41 @@ impl Item {
         Self {
             json,
             temporal: Some(value),
+            origin: None,
         }
+    }
+
+    fn child(&self, value: JsonbValue, offset: usize) -> Self {
+        Self {
+            json: value,
+            temporal: None,
+            origin: self.origin.map(|origin| JsonOrigin {
+                base_id: origin.base_id,
+                offset,
+            }),
+        }
+    }
+
+    fn array_child(&self, index: usize) -> Option<Self> {
+        let JsonbValue::Array(items) = &self.json else {
+            return None;
+        };
+        let value = items.get(index)?.clone();
+        let offset = self.origin.map_or(0, |origin| {
+            jsonb_array_child_offset(&self.json, origin.offset, index)
+        });
+        Some(self.child(value, offset))
+    }
+
+    fn object_value_child(&self, index: usize) -> Option<Self> {
+        let JsonbValue::Object(pairs) = &self.json else {
+            return None;
+        };
+        let (_, value) = pairs.get(index)?;
+        let offset = self.origin.map_or(0, |origin| {
+            jsonb_object_value_offset(&self.json, origin.offset, index)
+        });
+        Some(self.child(value.clone(), offset))
     }
 
     fn into_json(self) -> JsonbValue {
@@ -1874,10 +1957,12 @@ impl Exec<'_> {
             time_zone: self.time_zone.clone(),
             allow_zone_conversions: self.allow_zone_conversions,
             current_temporal: self.current_temporal.clone(),
+            current_origin: self.current_origin,
+            generated_object_id: self.generated_object_id,
         }
     }
 
-    fn with_current_temporal(&self, temporal: Option<Datum>) -> Exec<'_> {
+    fn with_current_item(&self, item: &Item) -> Exec<'_> {
         Exec {
             strict: self.strict,
             stop_after_one: self.stop_after_one,
@@ -1886,16 +1971,19 @@ impl Exec<'_> {
             last: self.last,
             time_zone: self.time_zone.clone(),
             allow_zone_conversions: self.allow_zone_conversions,
-            current_temporal: temporal,
+            current_temporal: item.temporal.clone(),
+            current_origin: item.origin,
+            generated_object_id: self.generated_object_id,
         }
     }
 
     fn eval(&self, node: &Node, current: &JsonbValue) -> PathResult<Vec<Item>> {
         match node {
-            Node::Root => Ok(vec![Item::json(self.root.clone())]),
+            Node::Root => Ok(vec![Item::rooted(self.root.clone())]),
             Node::Current => Ok(vec![Item {
                 json: current.clone(),
                 temporal: self.current_temporal.clone(),
+                origin: self.current_origin,
             }]),
             Node::Literal(v) => Ok(vec![Item::json(v.clone())]),
             Node::Last => {
@@ -1910,17 +1998,34 @@ impl Exec<'_> {
                 )))])
             }
             Node::Var(name) => {
-                let value = self
-                    .vars
-                    .and_then(|v| v.object_get(name))
-                    .ok_or_else(|| {
-                        PathError::new(
-                            "42704",
-                            format!("could not find jsonpath variable \"{name}\""),
-                        )
-                    })?
-                    .clone();
-                Ok(vec![Item::json(value)])
+                let vars = self.vars.ok_or_else(|| {
+                    PathError::new(
+                        "42704",
+                        format!("could not find jsonpath variable \"{name}\""),
+                    )
+                })?;
+                let (index, value) = match vars {
+                    JsonbValue::Object(pairs) => pairs
+                        .iter()
+                        .enumerate()
+                        .find(|(_, (key, _))| key == name)
+                        .map(|(index, (_, value))| (index, value.clone())),
+                    _ => None,
+                }
+                .ok_or_else(|| {
+                    PathError::new(
+                        "42704",
+                        format!("could not find jsonpath variable \"{name}\""),
+                    )
+                })?;
+                Ok(vec![Item {
+                    json: value,
+                    temporal: None,
+                    origin: Some(JsonOrigin {
+                        base_id: 1,
+                        offset: jsonb_object_value_offset(vars, 0, index),
+                    }),
+                }])
             }
             Node::Predicate(p) => Ok(vec![Item::json(match self.eval_pred(p, current)? {
                 Tri::True => JsonbValue::Bool(true),
@@ -2020,25 +2125,25 @@ impl Exec<'_> {
     ) -> PathResult<()> {
         let value = item.json_ref();
         match op {
-            Accessor::Member(key) => self.member(value, key, out),
-            Accessor::MemberAll => self.member_all(value, out),
-            Accessor::Index(subs) => self.index(value, subs, current, out),
-            Accessor::IndexAll => self.index_all(value, out),
+            Accessor::Member(key) => self.member(item, key, out),
+            Accessor::MemberAll => self.member_all(item, out),
+            Accessor::Index(subs) => self.index(item, subs, current, out),
+            Accessor::IndexAll => self.index_all(item, out),
             Accessor::Any { from, to, .. } => {
                 let last = descendant_depth(value);
                 let bound = |bound| match bound {
                     DepthBound::Number(value) => value,
                     DepthBound::Last => last,
                 };
-                descend(value, 0, bound(*from), bound(*to), out);
+                descend(item, 0, bound(*from), bound(*to), out);
                 Ok(())
             }
             Accessor::Method(m, args) => self.method(*m, args, item, out),
             Accessor::Filter(pred) => {
                 let candidates: Vec<Item> = match value {
-                    JsonbValue::Array(items) if !self.strict => {
-                        items.iter().cloned().map(Item::json).collect()
-                    }
+                    JsonbValue::Array(items) if !self.strict => (0..items.len())
+                        .filter_map(|index| item.array_child(index))
+                        .collect(),
                     _ => vec![item.clone()],
                 };
                 for candidate in candidates {
@@ -2046,9 +2151,9 @@ impl Exec<'_> {
                     // raised — that is what makes `$ ? (@.missing > 1)` a quiet
                     // no-match. A missing variable is not structural and still
                     // reaches the caller.
-                    let scoped = self.with_current_temporal(candidate.temporal.clone());
+                    let scoped = self.with_current_item(&candidate);
                     if scoped.eval_pred(pred, candidate.json_ref())? == Tri::True {
-                        out.push(Item::json(candidate.json));
+                        out.push(candidate);
                     }
                 }
                 Ok(())
@@ -2056,11 +2161,14 @@ impl Exec<'_> {
         }
     }
 
-    fn member(&self, item: &JsonbValue, key: &str, out: &mut Vec<Item>) -> PathResult<()> {
-        match item {
-            JsonbValue::Object(_) => {
-                if let Some(v) = item.object_get(key) {
-                    out.push(Item::json(v.clone()));
+    fn member(&self, item: &Item, key: &str, out: &mut Vec<Item>) -> PathResult<()> {
+        match &item.json {
+            JsonbValue::Object(pairs) => {
+                if let Some(index) = pairs.iter().position(|(member, _)| member == key) {
+                    out.push(
+                        item.object_value_child(index)
+                            .expect("object member exists"),
+                    );
                 } else if self.strict {
                     return Err(PathError::new(
                         "2203A",
@@ -2070,13 +2178,17 @@ impl Exec<'_> {
                 Ok(())
             }
             JsonbValue::Array(items) if !self.strict => {
-                for elem in items {
+                for index in 0..items.len() {
+                    let elem = item.array_child(index).expect("array element exists");
                     // Auto-unwrapping is one level deep and never raises for a
                     // non-object element.
-                    if let JsonbValue::Object(_) = elem
-                        && let Some(v) = elem.object_get(key)
+                    if let JsonbValue::Object(pairs) = &elem.json
+                        && let Some(member) = pairs.iter().position(|(member, _)| member == key)
                     {
-                        out.push(Item::json(v.clone()));
+                        out.push(
+                            elem.object_value_child(member)
+                                .expect("object member exists"),
+                        );
                     }
                 }
                 Ok(())
@@ -2094,16 +2206,24 @@ impl Exec<'_> {
         }
     }
 
-    fn member_all(&self, item: &JsonbValue, out: &mut Vec<Item>) -> PathResult<()> {
-        match item {
+    fn member_all(&self, item: &Item, out: &mut Vec<Item>) -> PathResult<()> {
+        match &item.json {
             JsonbValue::Object(pairs) => {
-                out.extend(pairs.iter().map(|(_, v)| Item::json(v.clone())));
+                out.extend(
+                    (0..pairs.len())
+                        .map(|index| item.object_value_child(index).expect("member exists")),
+                );
                 Ok(())
             }
             JsonbValue::Array(items) if !self.strict => {
-                for elem in items {
-                    if let JsonbValue::Object(pairs) = elem {
-                        out.extend(pairs.iter().map(|(_, v)| Item::json(v.clone())));
+                for index in 0..items.len() {
+                    let elem = item.array_child(index).expect("array element exists");
+                    if let JsonbValue::Object(pairs) = &elem.json {
+                        out.extend(
+                            (0..pairs.len()).map(|member| {
+                                elem.object_value_child(member).expect("member exists")
+                            }),
+                        );
                     }
                 }
                 Ok(())
@@ -2123,18 +2243,16 @@ impl Exec<'_> {
 
     fn index(
         &self,
-        item: &JsonbValue,
+        item: &Item,
         subs: &[(Node, Option<Node>)],
         current: &JsonbValue,
         out: &mut Vec<Item>,
     ) -> PathResult<()> {
-        let wrapped;
-        let items: &[JsonbValue] = match item {
-            JsonbValue::Array(items) => items,
-            other if !self.strict => {
-                wrapped = [other.clone()];
-                &wrapped
-            }
+        let items: Vec<Item> = match &item.json {
+            JsonbValue::Array(items) => (0..items.len())
+                .map(|index| item.array_child(index).expect("array element exists"))
+                .collect(),
+            _ if !self.strict => vec![item.clone()],
             _ => {
                 return Err(PathError::new(
                     "22039",
@@ -2165,10 +2283,14 @@ impl Exec<'_> {
                 let Ok(idx) = usize::try_from(i) else {
                     break;
                 };
-                let Some(v) = items.get(idx) else {
+                let Some(value) = items.get(idx) else {
                     break;
                 };
-                out.push(Item::json(v.clone()));
+                let child = match &item.json {
+                    JsonbValue::Array(_) => item.array_child(idx).expect("array element exists"),
+                    _ => value.clone(),
+                };
+                out.push(child);
                 i += 1;
             }
         }
@@ -2192,20 +2314,23 @@ impl Exec<'_> {
         }
     }
 
-    fn index_all(&self, item: &JsonbValue, out: &mut Vec<Item>) -> PathResult<()> {
-        match item {
+    fn index_all(&self, item: &Item, out: &mut Vec<Item>) -> PathResult<()> {
+        match &item.json {
             JsonbValue::Array(items) => {
-                out.extend(items.iter().cloned().map(Item::json));
+                out.extend(
+                    (0..items.len())
+                        .map(|index| item.array_child(index).expect("array element exists")),
+                );
                 Ok(())
             }
-            other => {
+            _ => {
                 if self.strict {
                     Err(PathError::new(
                         "22039",
                         "jsonpath wildcard array accessor can only be applied to an array",
                     ))
                 } else {
-                    out.push(Item::json(other.clone()));
+                    out.push(item.clone());
                     Ok(())
                 }
             }
@@ -2247,9 +2372,11 @@ impl Exec<'_> {
                 }
             },
             Method::KeyValue => {
-                let objects: Vec<&JsonbValue> = match value {
-                    JsonbValue::Object(_) => vec![value],
-                    JsonbValue::Array(items) if !self.strict => items.iter().collect(),
+                let objects: Vec<Item> = match value {
+                    JsonbValue::Object(_) => vec![item.clone()],
+                    JsonbValue::Array(items) if !self.strict => (0..items.len())
+                        .filter_map(|index| item.array_child(index))
+                        .collect(),
                     _ => {
                         return Err(PathError::new(
                             "2203C",
@@ -2258,27 +2385,40 @@ impl Exec<'_> {
                     }
                 };
                 for object in objects {
-                    let JsonbValue::Object(pairs) = object else {
+                    let JsonbValue::Object(pairs) = &object.json else {
                         return Err(PathError::new(
                             "2203C",
                             "jsonpath item method .keyvalue() can only be applied to an object",
                         ));
                     };
                     for (key, value) in pairs {
-                        out.push(Item::json(JsonbValue::object_from_pairs(vec![
-                            ("id".into(), JsonbValue::Number(BigDecimal::zero())),
-                            ("key".into(), JsonbValue::String(key.clone())),
-                            ("value".into(), value.clone()),
-                        ])));
+                        let id = object.origin.map_or(0, |origin| {
+                            origin.base_id.saturating_mul(10_000_000_000)
+                                + i64::try_from(origin.offset).unwrap_or(i64::MAX)
+                        });
+                        let generated = self.generated_object_id.get();
+                        self.generated_object_id.set(generated.saturating_add(1));
+                        out.push(Item {
+                            json: JsonbValue::object_from_pairs(vec![
+                                ("id".into(), JsonbValue::Number(BigDecimal::from(id))),
+                                ("key".into(), JsonbValue::String(key.clone())),
+                                ("value".into(), value.clone()),
+                            ]),
+                            temporal: None,
+                            origin: Some(JsonOrigin {
+                                base_id: generated,
+                                offset: 0,
+                            }),
+                        });
                     }
                 }
                 Ok(())
             }
             _ => {
                 let targets: Vec<Item> = match value {
-                    JsonbValue::Array(items) if !self.strict => {
-                        items.iter().cloned().map(Item::json).collect()
-                    }
+                    JsonbValue::Array(items) if !self.strict => (0..items.len())
+                        .filter_map(|index| item.array_child(index))
+                        .collect(),
                     _ => vec![item.clone()],
                 };
                 for target in targets {
@@ -2425,16 +2565,145 @@ impl Exec<'_> {
     }
 }
 
+fn align_jsonb(offset: usize) -> usize {
+    offset.saturating_add(3) & !3
+}
+
+/// PostgreSQL stores a jsonb numeric as a varlena `Numeric`: a 6-byte short
+/// header when the scale and base-10000 weight fit, otherwise an 8-byte header.
+fn jsonb_numeric_size(value: &BigDecimal) -> usize {
+    let text = crabka_pgtypes::numeric::finite_to_text(value);
+    let unsigned = text.strip_prefix('-').unwrap_or(&text);
+    let (integer, fraction) = unsigned.split_once('.').unwrap_or((unsigned, ""));
+    let integer = integer.trim_start_matches('0');
+    let integer = if integer.is_empty() { "0" } else { integer };
+    let groups_before_decimal = integer.len().saturating_add(3) / 4;
+    let mut digits = String::with_capacity(
+        groups_before_decimal.saturating_mul(4) + fraction.len().saturating_add(3) / 4 * 4,
+    );
+    digits.extend(std::iter::repeat_n(
+        '0',
+        groups_before_decimal * 4 - integer.len(),
+    ));
+    digits.push_str(integer);
+    digits.push_str(fraction);
+    digits.extend(std::iter::repeat_n('0', (4 - fraction.len() % 4) % 4));
+
+    let mut groups: Vec<u16> = digits
+        .as_bytes()
+        .chunks(4)
+        .map(|chunk| std::str::from_utf8(chunk).expect("numeric text is ASCII"))
+        .map(|chunk| chunk.parse().expect("numeric group"))
+        .collect();
+    let mut weight = isize::try_from(groups_before_decimal).unwrap_or(isize::MAX) - 1;
+    while groups.first() == Some(&0) {
+        groups.remove(0);
+        weight -= 1;
+    }
+    while groups.last() == Some(&0) {
+        groups.pop();
+    }
+    if groups.is_empty() {
+        weight = 0;
+    }
+    let dscale = fraction.len();
+    let header = if dscale <= 63 && (-64..=63).contains(&weight) {
+        6
+    } else {
+        8
+    };
+    header + groups.len() * 2
+}
+
+fn jsonb_storage_size(value: &JsonbValue, offset: usize) -> usize {
+    match value {
+        JsonbValue::Null | JsonbValue::Bool(_) => 0,
+        JsonbValue::String(value) => value.len(),
+        JsonbValue::Number(value) => align_jsonb(offset)
+            .saturating_sub(offset)
+            .saturating_add(jsonb_numeric_size(value)),
+        JsonbValue::Array(items) => {
+            let start = align_jsonb(offset);
+            let mut end = start + 4 + 4 * items.len();
+            for item in items {
+                end = end.saturating_add(jsonb_storage_size(item, end));
+            }
+            end.saturating_sub(offset)
+        }
+        JsonbValue::Object(pairs) => {
+            let start = align_jsonb(offset);
+            let mut end = start + 4 + 8 * pairs.len();
+            end += pairs.iter().map(|(key, _)| key.len()).sum::<usize>();
+            for (_, value) in pairs {
+                end = end.saturating_add(jsonb_storage_size(value, end));
+            }
+            end.saturating_sub(offset)
+        }
+    }
+}
+
+fn jsonb_child_start(value: &JsonbValue, offset: usize) -> usize {
+    match value {
+        JsonbValue::Array(_) | JsonbValue::Object(_) => align_jsonb(offset),
+        _ => offset,
+    }
+}
+
+fn jsonb_array_child_offset(array: &JsonbValue, offset: usize, index: usize) -> usize {
+    let JsonbValue::Array(items) = array else {
+        unreachable!("array child requested from non-array")
+    };
+    let start = align_jsonb(offset);
+    let mut child = start + 4 + 4 * items.len();
+    for value in &items[..index] {
+        child = child.saturating_add(jsonb_storage_size(value, child));
+    }
+    jsonb_child_start(&items[index], child)
+}
+
+fn jsonb_object_value_offset(object: &JsonbValue, offset: usize, index: usize) -> usize {
+    let JsonbValue::Object(pairs) = object else {
+        unreachable!("object member requested from non-object")
+    };
+    let start = align_jsonb(offset);
+    let mut child = start + 4 + 8 * pairs.len();
+    child += pairs.iter().map(|(key, _)| key.len()).sum::<usize>();
+    for (_, value) in &pairs[..index] {
+        child = child.saturating_add(jsonb_storage_size(value, child));
+    }
+    jsonb_child_start(&pairs[index].1, child)
+}
+
 /// `PostgreSQL`'s lax-mode operand unwrapping: an array operand contributes its
 /// elements, everything else contributes itself.
 fn unwrap_arrays(items: Vec<Item>) -> Vec<Item> {
     let mut out = Vec::with_capacity(items.len());
-    for Item { json, temporal } in items {
+    for item in items {
+        let Item {
+            json,
+            temporal,
+            origin,
+        } = item;
         match (json, temporal) {
             (JsonbValue::Array(elems), None) => {
-                out.extend(elems.into_iter().map(Item::json));
+                let array = Item {
+                    json: JsonbValue::Array(elems),
+                    temporal: None,
+                    origin,
+                };
+                let JsonbValue::Array(elems) = &array.json else {
+                    unreachable!();
+                };
+                out.extend(
+                    (0..elems.len())
+                        .map(|index| array.array_child(index).expect("array element exists")),
+                );
             }
-            (json, temporal) => out.push(Item { json, temporal }),
+            (json, temporal) => out.push(Item {
+                json,
+                temporal,
+                origin,
+            }),
         }
     }
     out
@@ -2444,22 +2713,34 @@ fn unwrap_arrays(items: Vec<Item>) -> Vec<Item> {
 /// item itself counts as depth 0.
 ///
 /// Pre-order, which matches `PostgreSQL`'s output order.
-fn descend(item: &JsonbValue, depth: u32, from: u32, to: u32, out: &mut Vec<Item>) {
+fn descend(item: &Item, depth: u32, from: u32, to: u32, out: &mut Vec<Item>) {
     if depth >= from && depth <= to {
-        out.push(Item::json(item.clone()));
+        out.push(item.clone());
     }
     if depth >= to || out.len() > MAX_ITEMS {
         return;
     }
-    match item {
+    match &item.json {
         JsonbValue::Array(items) => {
-            for elem in items {
-                descend(elem, depth + 1, from, to, out);
+            for index in 0..items.len() {
+                descend(
+                    &item.array_child(index).expect("array element exists"),
+                    depth + 1,
+                    from,
+                    to,
+                    out,
+                );
             }
         }
         JsonbValue::Object(pairs) => {
-            for (_, value) in pairs {
-                descend(value, depth + 1, from, to, out);
+            for index in 0..pairs.len() {
+                descend(
+                    &item.object_value_child(index).expect("member exists"),
+                    depth + 1,
+                    from,
+                    to,
+                    out,
+                );
             }
         }
         _ => {}

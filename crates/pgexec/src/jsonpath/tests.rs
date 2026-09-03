@@ -1,3 +1,5 @@
+use std::cell::Cell;
+
 use assert2::assert;
 use crabka_pgtypes::{Datum, JsonbValue, jsonb};
 
@@ -95,6 +97,7 @@ fn temporal_comparisons_need_the_tz_variant_for_implicit_conversion() {
 
 #[test]
 fn datetime_template_retains_its_zoned_datum() {
+    let generated_object_id = Cell::new(1);
     let target = jsonb::parse(r#""10.03.2017 12:35 +1""#).expect("target");
     let path = JsonPath::parse(r#"$.datetime("dd.mm.yyyy HH24:MI TZH")"#).expect("path");
     let exec = Exec {
@@ -106,6 +109,8 @@ fn datetime_template_retains_its_zoned_datum() {
         time_zone: None,
         allow_zone_conversions: false,
         current_temporal: None,
+        current_origin: None,
+        generated_object_id: &generated_object_id,
     };
     let items = exec.eval(&path.root, &target).expect("eval");
     assert!(
@@ -122,6 +127,8 @@ fn datetime_template_retains_its_zoned_datum() {
         time_zone: None,
         allow_zone_conversions: false,
         current_temporal: None,
+        current_origin: None,
+        generated_object_id: &generated_object_id,
     };
     let unzoned_items = unzoned_exec
         .eval(&unzoned_path.root, &unzoned)
@@ -149,6 +156,8 @@ fn datetime_template_retains_its_zoned_datum() {
         time_zone: None,
         allow_zone_conversions: false,
         current_temporal: None,
+        current_origin: None,
+        generated_object_id: &generated_object_id,
     };
     let date_items = date_exec.eval(&date_path.root, &date).expect("eval");
     assert_eq!(
@@ -169,6 +178,8 @@ fn datetime_template_retains_its_zoned_datum() {
         time_zone: None,
         allow_zone_conversions: false,
         current_temporal: None,
+        current_origin: None,
+        generated_object_id: &generated_object_id,
     };
     let timetz_exec = Exec {
         strict: false,
@@ -179,6 +190,8 @@ fn datetime_template_retains_its_zoned_datum() {
         time_zone: None,
         allow_zone_conversions: false,
         current_temporal: None,
+        current_origin: None,
+        generated_object_id: &generated_object_id,
     };
     let time_items = time_exec.eval(&unzoned_path.root, &time).expect("eval");
     let timetz_items = timetz_exec.eval(&unzoned_path.root, &timetz).expect("eval");
@@ -434,6 +447,11 @@ fn item_methods_match_postgresql() {
             r#"{"a":1,"b":2}"#,
             "$.keyvalue()",
             r#"[{"id": 0, "key": "a", "value": 1}, {"id": 0, "key": "b", "value": 2}]"#,
+        ),
+        (
+            r#"[{"a": 1, "b": [1, 2]}, {"c": {"a": "bbb"}}]"#,
+            "$[*].keyvalue()",
+            r#"[{"id": 12, "key": "a", "value": 1}, {"id": 12, "key": "b", "value": [1, 2]}, {"id": 72, "key": "c", "value": {"a": "bbb"}}]"#,
         ),
         (r#""2023-01-02""#, "$.date()", r#"["2023-01-02"]"#),
         (
