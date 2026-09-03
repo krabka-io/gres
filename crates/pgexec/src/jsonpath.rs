@@ -1621,6 +1621,8 @@ impl JsonPath {
                 offset: 0,
             }),
             generated_object_id: &generated_object_id,
+            retain_unary_prefix_on_error: silent,
+            ignore_unary_non_numeric: false,
         };
         match exec.eval(&self.root, target) {
             Ok(items) => Ok(items.into_iter().map(Item::into_json).collect()),
@@ -1655,6 +1657,8 @@ impl JsonPath {
                 offset: 0,
             }),
             generated_object_id: &generated_object_id,
+            retain_unary_prefix_on_error: silent,
+            ignore_unary_non_numeric: false,
         };
         match exec.eval(&self.root, target) {
             Ok(items) => Ok(items.into_iter().next().map(Item::into_json)),
@@ -1717,6 +1721,8 @@ impl JsonPath {
                 offset: 0,
             }),
             generated_object_id: &generated_object_id,
+            retain_unary_prefix_on_error: false,
+            ignore_unary_non_numeric: !self.strict,
         };
         match exec.eval(&self.root, target) {
             Ok(items) => Ok(Some(!items.is_empty())),
@@ -1779,6 +1785,8 @@ impl JsonPath {
                 offset: 0,
             }),
             generated_object_id: &generated_object_id,
+            retain_unary_prefix_on_error: false,
+            ignore_unary_non_numeric: false,
         };
         let items = match exec.eval(&self.root, target) {
             Ok(items) => items,
@@ -1845,6 +1853,10 @@ struct Exec<'a> {
     current_origin: Option<JsonOrigin>,
     /// Base-object identifiers for objects made by `.keyvalue()`.
     generated_object_id: &'a Cell<i64>,
+    /// Query entry points retain values emitted before a suppressible unary error.
+    retain_unary_prefix_on_error: bool,
+    /// Existence checks only need one numeric item and skip non-numeric peers.
+    ignore_unary_non_numeric: bool,
 }
 
 /// A JSONPath item is normally a JSON value. Date/time methods also retain the
@@ -1959,6 +1971,8 @@ impl Exec<'_> {
             current_temporal: self.current_temporal.clone(),
             current_origin: self.current_origin,
             generated_object_id: self.generated_object_id,
+            retain_unary_prefix_on_error: self.retain_unary_prefix_on_error,
+            ignore_unary_non_numeric: self.ignore_unary_non_numeric,
         }
     }
 
@@ -1974,6 +1988,8 @@ impl Exec<'_> {
             current_temporal: item.temporal.clone(),
             current_origin: item.origin,
             generated_object_id: self.generated_object_id,
+            retain_unary_prefix_on_error: self.retain_unary_prefix_on_error,
+            ignore_unary_non_numeric: self.ignore_unary_non_numeric,
         }
     }
 
@@ -2042,6 +2058,12 @@ impl Exec<'_> {
                 let mut out = Vec::with_capacity(items.len());
                 for item in items {
                     let JsonbValue::Number(n) = item.json else {
+                        if self.ignore_unary_non_numeric {
+                            continue;
+                        }
+                        if self.retain_unary_prefix_on_error {
+                            return Ok(out);
+                        }
                         return Err(PathError::new(
                             "22033",
                             format!(

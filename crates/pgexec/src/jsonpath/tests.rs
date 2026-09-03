@@ -111,6 +111,8 @@ fn datetime_template_retains_its_zoned_datum() {
         current_temporal: None,
         current_origin: None,
         generated_object_id: &generated_object_id,
+        retain_unary_prefix_on_error: false,
+        ignore_unary_non_numeric: false,
     };
     let items = exec.eval(&path.root, &target).expect("eval");
     assert!(
@@ -129,6 +131,8 @@ fn datetime_template_retains_its_zoned_datum() {
         current_temporal: None,
         current_origin: None,
         generated_object_id: &generated_object_id,
+        retain_unary_prefix_on_error: false,
+        ignore_unary_non_numeric: false,
     };
     let unzoned_items = unzoned_exec
         .eval(&unzoned_path.root, &unzoned)
@@ -158,6 +162,8 @@ fn datetime_template_retains_its_zoned_datum() {
         current_temporal: None,
         current_origin: None,
         generated_object_id: &generated_object_id,
+        retain_unary_prefix_on_error: false,
+        ignore_unary_non_numeric: false,
     };
     let date_items = date_exec.eval(&date_path.root, &date).expect("eval");
     assert_eq!(
@@ -180,6 +186,8 @@ fn datetime_template_retains_its_zoned_datum() {
         current_temporal: None,
         current_origin: None,
         generated_object_id: &generated_object_id,
+        retain_unary_prefix_on_error: false,
+        ignore_unary_non_numeric: false,
     };
     let timetz_exec = Exec {
         strict: false,
@@ -192,6 +200,8 @@ fn datetime_template_retains_its_zoned_datum() {
         current_temporal: None,
         current_origin: None,
         generated_object_id: &generated_object_id,
+        retain_unary_prefix_on_error: false,
+        ignore_unary_non_numeric: false,
     };
     let time_items = time_exec.eval(&unzoned_path.root, &time).expect("eval");
     let timetz_items = timetz_exec.eval(&unzoned_path.root, &timetz).expect("eval");
@@ -683,6 +693,16 @@ fn tz_and_silent_entry_points_preserve_their_distinct_results() {
     let missing_predicate = JsonPath::parse("strict $.missing == 1").expect("parse");
     assert!(missing_predicate.predicate(&target, None, true) == Ok(None));
     assert!(missing_predicate.predicate(&target, None, false) == Ok(None));
+
+    let unary = JsonPath::parse("+$").expect("parse");
+    let unary_target = jsonb::parse(r#"[1,"2",3]"#).expect("target");
+    assert!(unary.query(&unary_target, None, true) == Ok(vec![jsonb::parse("1").expect("one")]));
+    let negate = JsonPath::parse("-$[*]").expect("parse");
+    let negate_target = jsonb::parse(r#"["1",2,0,3]"#).expect("target");
+    assert!(negate.exists(&negate_target, None, false) == Ok(Some(true)));
+    let strict_negate = JsonPath::parse("strict -$[*]").expect("parse");
+    assert!(strict_negate.exists(&negate_target, None, false).is_err());
+    assert!(strict_negate.exists(&negate_target, None, true) == Ok(None));
 }
 
 #[test]
