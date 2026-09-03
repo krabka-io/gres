@@ -33,7 +33,7 @@ use crabka_pgparser::ast::{
     RoutineParallel, RoutineReturn, RoutineSignature, RoutineVolatility, SelectItem, SelectStmt,
     Statement, TableFuncCall, TableFuncColumnDef, TargetIndirection,
 };
-use crabka_pgtypes::{ArrayValue, ColumnType, Datum};
+use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
 use crabka_pgwire::engine::QueryResult;
 
 use crate::{error::ExecError, eval::ArgType};
@@ -2261,9 +2261,17 @@ fn resolve_candidates(
                 param.ty.column
             };
             let Some(target) = target else {
-                if is_polymorphic_type(&param.ty.name) {
+                let polymorphic_name = if variadic_index
+                    .is_some_and(|variadic_index| expand_variadic && index >= variadic_index)
+                    && param.ty.name == "anyarray"
+                {
+                    "anyelement"
+                } else {
+                    &param.ty.name
+                };
+                if is_polymorphic_type(polymorphic_name) {
                     is_exact = false;
-                    is_coercible &= polymorphic_argument_matches(&param.ty.name, *arg);
+                    is_coercible &= polymorphic_argument_matches(polymorphic_name, *arg);
                 } else {
                     // A type Gres does not model can only match an untyped literal.
                     is_exact = false;
@@ -2397,6 +2405,9 @@ fn variadic_arguments_are_expanded(
     let Some(param) = params.get(index) else {
         return false;
     };
+    if param.ty.name == "anyarray" && args.len() == params.len() {
+        return !matches!(args.get(index), Some(ArgType::Known(ColumnType::Array(_))));
+    }
     args.len() != params.len()
         || !matches!((args.get(index), param.ty.column),
             (Some(ArgType::Known(arg)), Some(target)) if *arg == target)
@@ -4855,17 +4866,12 @@ fn bound_args(routine: &Routine, args: &[Expr]) -> Result<Vec<Expr>, ExecError> 
     if let Some(index) = variadic_index {
         let param = params[index];
         if variadic_expr_arguments_are_expanded(&params, args, index) {
-            let element = variadic_element_type(param).ok_or_else(|| {
-                ExecError::Unsupported(format!(
-                    "variadic parameter of {} must be an array",
-                    routine.identity()
-                ))
-            })?;
+            let element = variadic_element_type(param);
             out.push(Expr::ArrayLiteral(
                 args[index..]
                     .iter()
                     .cloned()
-                    .map(|arg| coerce_unknown_argument(arg, Some(element)))
+                    .map(|arg| coerce_unknown_argument(arg, element))
                     .collect(),
             ));
         } else {
@@ -4899,6 +4905,15 @@ fn variadic_expr_arguments_are_expanded(
     let Some(param) = params.get(index) else {
         return false;
     };
+    if param.ty.name == "anyarray" && args.len() == params.len() {
+        return !matches!(
+            crate::eval::infer_type(
+                args.get(index).expect("variadic parameter"),
+                &crate::scope::Scope::empty()
+            ),
+            Ok(ColumnType::Array(_))
+        );
+    }
     args.len() != params.len()
         || !matches!(
             (args.get(index), param.ty.column),
@@ -4917,11 +4932,32 @@ fn pack_variadic_values(
     let Some(index) = variadic_input_index(&params) else {
         return Ok(());
     };
-    if !variadic_expr_arguments_are_expanded(&params, args, index) {
+    if !variadic_expr_arguments_are_expanded(&params, args, index)
+        || (params[index].ty.name == "anyarray"
+            && args.len() == params.len()
+            && values
+                .get(index)
+                .and_then(Datum::column_type)
+                .is_some_and(|ty| matches!(ty, ColumnType::Array(_))))
+    {
         return Ok(());
     }
+    let mut elements = values.split_off(index);
     let element = match params[index].ty.column {
         Some(ColumnType::Array(element)) => element,
+        None if params[index].ty.name == "anyarray" => crate::eval::infer_type(
+            &Expr::ArrayLiteral(args[index..].to_vec()),
+            &crate::scope::Scope::empty(),
+        )
+        .ok()
+        .and_then(ColumnType::array_element)
+        .or_else(|| {
+            elements
+                .iter()
+                .find_map(Datum::column_type)
+                .and_then(ElemType::from_column_type)
+        })
+        .ok_or_else(crate::eval::undetermined_polymorphic_type)?,
         _ => {
             return Err(ExecError::Unsupported(format!(
                 "variadic parameter of {} must be an array",
@@ -4929,7 +4965,6 @@ fn pack_variadic_values(
             )));
         }
     };
-    let mut elements = values.split_off(index);
     let argument_types = vec![Some(element.column_type()); elements.len()];
     crate::eval::coerce_unknown_args(&args[index..], &mut elements, &argument_types, ctx)?;
     values.push(Datum::Array(ArrayValue::new(element, elements)));
@@ -5478,18 +5513,32 @@ pub(crate) fn resolved_polymorphic_type(
     given: &[ArgType],
     result_name: &str,
 ) -> Option<ColumnType> {
-    let inputs = routine.input_params().zip(given);
+    let params: Vec<&RoutineParam> = routine.input_params().collect();
+    let variadic_index = variadic_input_index(&params);
+    let expand_variadic =
+        variadic_index.is_some_and(|index| variadic_arguments_are_expanded(&params, given, index));
     let mut traditional_base = None;
     let mut traditional_range = None;
     let mut traditional_multirange = None;
     let mut compatible_base = None;
     let mut compatible_range = None;
     let mut compatible_multirange = None;
-    for (param, arg) in inputs {
-        let Some(candidate) = polymorphic_base_type(&param.ty.name, *arg) else {
+    for (index, arg) in given.iter().enumerate() {
+        let expanded_variadic_param =
+            variadic_index.is_some_and(|variadic_index| expand_variadic && index >= variadic_index);
+        let param = variadic_index
+            .filter(|variadic_index| expand_variadic && index >= *variadic_index)
+            .map(|variadic_index| params[variadic_index])
+            .or_else(|| params.get(index).copied())?;
+        let name = if expanded_variadic_param && param.ty.name == "anyarray" {
+            "anyelement"
+        } else {
+            &param.ty.name
+        };
+        let Some(candidate) = polymorphic_base_type(name, *arg) else {
             continue;
         };
-        let (base, range, multirange) = if param.ty.name.starts_with("anycompatible") {
+        let (base, range, multirange) = if name.starts_with("anycompatible") {
             (
                 &mut compatible_base,
                 &mut compatible_range,
@@ -5504,7 +5553,7 @@ pub(crate) fn resolved_polymorphic_type(
         };
         *base = match *base {
             None => Some(candidate),
-            Some(current) if param.ty.name.starts_with("anycompatible") => {
+            Some(current) if name.starts_with("anycompatible") => {
                 if implicitly_coercible(current, candidate) {
                     Some(candidate)
                 } else {
@@ -7299,6 +7348,10 @@ mod tests {
                  LANGUAGE sql AS 'SELECT a + b'; \
                  CREATE FUNCTION variadic_len(VARIADIC values int[]) RETURNS int \
                  LANGUAGE sql AS 'SELECT array_length(values, 1)'; \
+                 CREATE FUNCTION polymorphic_variadic_len(VARIADIC values anyarray) RETURNS int \
+                 LANGUAGE sql AS 'SELECT array_length(values, 1)'; \
+                 CREATE FUNCTION polymorphic_variadic_first(VARIADIC values anyarray) \
+                 RETURNS anyelement LANGUAGE sql AS 'SELECT values[1]'; \
                  CREATE FUNCTION table_default(a int, b int DEFAULT 2) \
                  RETURNS TABLE (first int, second int) LANGUAGE sql AS 'SELECT a, b'",
             )
@@ -7309,6 +7362,11 @@ mod tests {
             .simple_query(
                 "SELECT named_default(b => 4, a => 3), named_default(4), \
                  variadic_len(1, 2, 3), variadic_len(VARIADIC ARRAY[5, 6]), \
+                 polymorphic_variadic_len(1), \
+                 polymorphic_variadic_len(1, 2, 3), \
+                 polymorphic_variadic_len(VARIADIC ARRAY[5, 6]), \
+                 polymorphic_variadic_first(1, 2, 3), \
+                 polymorphic_variadic_first(VARIADIC ARRAY[5, 6]), \
                  make_interval(days => 2)",
             )
             .await
@@ -7326,7 +7384,7 @@ mod tests {
                     .expect("utf8 result")
             })
             .collect();
-        assert!(values == ["7", "6", "3", "2", "2 days"]);
+        assert!(values == ["7", "6", "3", "2", "1", "3", "2", "1", "5", "2 days"]);
 
         let result = session
             .simple_query("SELECT * FROM table_default(b => 9, a => 8)")
@@ -8225,6 +8283,23 @@ mod tests {
             .expect("resolution")
             .expect("variadic routine");
         assert!(matches!(bound.args.as_slice(), [Expr::ArrayLiteral(values)] if values.len() == 3));
+    }
+
+    #[test]
+    fn polymorphic_variadic_anyarray_expands_scalar_arguments() {
+        let kv = MemKv::default();
+        define(
+            &kv,
+            "CREATE FUNCTION polymorphic_variadic_len(VARIADIC values anyarray) RETURNS int \
+             LANGUAGE sql AS 'SELECT array_length(values, 1)'",
+        )
+        .expect("definition");
+        let args = vec![Expr::IntLiteral("1".into()), Expr::IntLiteral("2".into())];
+        let given = vec![ArgType::Known(ColumnType::Int4); args.len()];
+        let bound = bind_call(&kv, "polymorphic_variadic_len", &args, &given)
+            .expect("resolution")
+            .expect("polymorphic variadic routine");
+        assert!(matches!(bound.args.as_slice(), [Expr::ArrayLiteral(values)] if values.len() == 2));
     }
 
     #[test]
