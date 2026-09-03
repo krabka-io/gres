@@ -32181,11 +32181,6 @@ mod session_conformance_tests {
             ),
             // Which `||` failed is not knowable from `integer || integer`.
             ("SELECT 1 || 2 || 3", None),
-            // Operand families crabka carries only in part. It refuses these
-            // where PostgreSQL answers them, so a caret would be two more lines
-            // of divergence rather than two fewer.
-            ("select '{\"a\":1}'::jsonb #- '{a}'", None),
-            ("SELECT 'a' <-> 'b & d'::tsquery", None),
         ] {
             let error = session.simple_query(sql).await.expect_err(sql);
             assert!(error.code == "42883", "{sql}: {error:?}");

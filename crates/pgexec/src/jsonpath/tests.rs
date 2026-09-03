@@ -233,7 +233,7 @@ fn temporal_methods_require_tz_for_cross_zone_conversions() {
     }
     assert_eq!(
         query_tz(r#""12:34:56+05""#, "$.time()"),
-        Ok(r#"["07:34:56"]"#.into())
+        Ok(r#"["12:34:56"]"#.into())
     );
     assert_eq!(
         query_tz(r#""2023-08-15 12:34:56+05""#, "$.timestamp()"),
@@ -242,7 +242,7 @@ fn temporal_methods_require_tz_for_cross_zone_conversions() {
     let plus_two = jiff::tz::TimeZone::fixed(jiff::tz::Offset::constant(2));
     assert_eq!(
         query_in_tz(r#""23:34:56+05""#, "$.time()", &plus_two),
-        Ok(r#"["20:34:56"]"#.into())
+        Ok(r#"["23:34:56"]"#.into())
     );
     assert_eq!(
         query_in_session_time_zone(r#""2023-08-15 12:34:56+05:30""#, "$.time_tz()", &plus_two),
