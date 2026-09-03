@@ -1292,15 +1292,27 @@ pub(crate) fn plain_query(
     Ok(query)
 }
 
+fn starts_or_operator(source: &str) -> bool {
+    let Some(head) = source.get(..2) else {
+        return false;
+    };
+    let Some(after) = source.get(2..) else {
+        return false;
+    };
+    head.eq_ignore_ascii_case("or")
+        && matches!(after.chars().next(), Some(character) if character != '-' && character != '_' && !character.is_alphanumeric())
+        && after
+            .chars()
+            .skip(1)
+            .any(|character| !character.is_whitespace())
+}
+
 fn web_query(config: &str, source: &str, catalog: Catalog<'_>) -> Result<TsQuery, ExecError> {
     let mut parts = Vec::<(bool, TsQuery)>::new();
     let mut rest = source.trim();
     let mut next_or = false;
     while !rest.is_empty() {
-        if rest.len() >= 2
-            && rest[..2].eq_ignore_ascii_case("or")
-            && rest[2..].chars().next().is_none_or(char::is_whitespace)
-        {
+        if !parts.is_empty() && !next_or && starts_or_operator(rest) {
             next_or = true;
             rest = rest[2..].trim_start();
             continue;
@@ -2810,6 +2822,32 @@ mod tests {
         let query = web_query("simple", "fat OR rat dog", None).unwrap();
         assert_eq!(query.to_string(), "'fat' | 'rat' & 'dog'");
         assert!(to_tsvector("simple", "fat", None).unwrap().matches(&query));
+    }
+
+    #[test]
+    fn web_query_recognizes_or_between_operands() {
+        for (source, expected) in [
+            ("cat OR", "'cat' & 'or'"),
+            ("OR rat", "'or' & 'rat'"),
+            ("or OR or", "'or' | 'or'"),
+            (
+                "\"fat cat\"or\"fat rat\"",
+                "'fat' <-> 'cat' | 'fat' <-> 'rat'",
+            ),
+            ("fat or(rat", "'fat' | 'rat'"),
+            ("fat or)rat", "'fat' | 'rat'"),
+            ("fat or&rat", "'fat' | 'rat'"),
+            ("fat or|rat", "'fat' | 'rat'"),
+            ("fat or!rat", "'fat' | 'rat'"),
+            ("fat or<rat", "'fat' | 'rat'"),
+            ("fat or>rat", "'fat' | 'rat'"),
+            ("fat or ", "'fat' & 'or'"),
+        ] {
+            assert_eq!(
+                web_query("simple", source, None).unwrap().to_string(),
+                expected
+            );
+        }
     }
 
     #[test]
