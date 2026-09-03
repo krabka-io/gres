@@ -19,9 +19,19 @@ pub(crate) fn insert_source_rows(
             if rows.iter().any(|row| row.len() != width) {
                 return Err(ExecError::ValuesColumnCount);
             }
+            let statement_memory =
+                crate::scanner::StatementMemory::new(write_ctx.blocking_query_memory);
+            let mut expanded = Vec::new();
+            for row in rows {
+                expanded.extend(crate::srf::expand_insert_values_row_with_memory(
+                    row,
+                    write_ctx.eval_ctx,
+                    &statement_memory,
+                )?);
+            }
             Ok((
                 resolve_insert_targets(table, columns, indirections, width)?,
-                rows.clone(),
+                expanded,
             ))
         }
         // Every column takes its default; an explicit column list is a syntax

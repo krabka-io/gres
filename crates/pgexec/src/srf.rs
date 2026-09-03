@@ -2632,6 +2632,47 @@ pub(crate) fn expand_expressions_with_memory(
     Ok((set.scope, set.exprs, expanded))
 }
 
+/// Expand the top-level SRFs of one `INSERT ... VALUES` row.
+///
+/// Ordinary values stay as expressions so target-column coercion and `DEFAULT`
+/// evaluation retain their usual per-insert-row behavior.
+pub(crate) fn expand_insert_values_row_with_memory(
+    exprs: &[Expr],
+    ctx: &EvalCtx,
+    statement_memory: &crate::scanner::StatementMemory,
+) -> Result<Vec<Vec<Expr>>, ExecError> {
+    if !exprs_contain_srf(exprs) {
+        return Ok(vec![exprs.to_vec()]);
+    }
+    let scope = Scope::empty();
+    let set = rewrite(exprs, &scope)?;
+    let types = set
+        .exprs
+        .iter()
+        .map(|expr| crate::eval::infer_type(expr, &set.scope))
+        .collect::<Result<Vec<_>, _>>()?;
+    expand_row_values(&set, &scope, &[], ctx, statement_memory)?
+        .into_iter()
+        .map(|row| {
+            exprs
+                .iter()
+                .zip(&set.exprs)
+                .zip(&types)
+                .map(|((original, expr), ty)| {
+                    if expr_contains_srf(original) {
+                        Ok(Expr::Const {
+                            value: crate::eval::eval(expr, &set.scope, &row, ctx)?,
+                            ty: *ty,
+                        })
+                    } else {
+                        Ok(original.clone())
+                    }
+                })
+                .collect()
+        })
+        .collect()
+}
+
 fn expand_row_values(
     set: &ProjectSet,
     scope: &Scope,
@@ -5013,6 +5054,22 @@ mod tests {
 
         let result = query(&mut s, "SELECT int4mul(generate_series(1, 2), 10)").await;
         assert!(column_of(&result) == vec![Some("10".into()), Some("20".into())]);
+    }
+
+    #[tokio::test]
+    async fn insert_values_expands_set_returning_expressions() {
+        let engine = SqlEngine::new();
+        let mut s = engine.connect();
+        query(&mut s, "CREATE TABLE srf_insert (value int4)").await;
+
+        query(
+            &mut s,
+            "INSERT INTO srf_insert VALUES (generate_series(4, 5))",
+        )
+        .await;
+
+        let result = query(&mut s, "SELECT value FROM srf_insert ORDER BY value").await;
+        assert!(column_of(&result) == vec![Some("4".into()), Some("5".into())]);
     }
 
     #[tokio::test]
