@@ -1550,13 +1550,7 @@ fn write_rule_on_conflict(
         } => {
             let assignments = assignments
                 .iter()
-                .map(|(column, value)| {
-                    format!(
-                        "{} = {}",
-                        quote_identifier(column),
-                        crate::viewdef::expression_text_with_qualifiers(value, style)
-                    )
-                })
+                .map(|assignment| rule_assignment_text(assignment, None, false, style))
                 .collect::<Vec<_>>()
                 .join(", ");
             let _ = write!(out, " DO UPDATE SET {assignments}");
@@ -1594,12 +1588,18 @@ fn coerce_rule_on_conflict_literals(
         filter,
     } = &mut on_conflict.action
     {
-        for (column, value) in assignments {
+        for assignment in assignments {
+            let column = assignment
+                .targets
+                .first()
+                .expect("ON CONFLICT assignment has one target");
             let expected = columns
                 .iter()
                 .find(|candidate| candidate.name == *column)
                 .map(|column| column.ty);
-            coerce_rule_unknown_literals(value, columns, target_name, expected);
+            if let crabka_pgparser::ast::AssignmentValue::Expr(value) = &mut assignment.value {
+                coerce_rule_unknown_literals(value, columns, target_name, expected);
+            }
         }
         if let Some(filter) = filter {
             coerce_rule_unknown_literals(filter, columns, target_name, None);

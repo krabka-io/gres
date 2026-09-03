@@ -1,5 +1,6 @@
 //! Locked-row heap writes and local index entry generation.
 
+use super::dml_assignments::AssignedValue;
 use super::*;
 
 pub(super) async fn apply_locked_row_update(
@@ -236,15 +237,15 @@ pub(super) fn apply_locked_row_delete(
 /// One `ON CONFLICT DO UPDATE` application: the clause's assignments and filter,
 /// the locked stored row they run against, and the proposed row bound as
 /// `excluded`.
-pub(super) struct ConflictUpdate<'a> {
-    pub(super) assignments: &'a [(String, Expr)],
-    pub(super) filter: Option<&'a Expr>,
+pub(super) struct ConflictUpdate<'row, 'assignment, 'targets> {
+    pub(super) assignments: &'targets [(usize, AssignedValue<'assignment>)],
+    pub(super) filter: Option<&'assignment Expr>,
     pub(super) rowid: u64,
     pub(super) cur_key_xid: u64,
     pub(super) cur_xmin: u64,
     pub(super) cur_cmin: u32,
-    pub(super) cur_row: &'a [Datum],
-    pub(super) proposed: &'a [Datum],
+    pub(super) cur_row: &'row [Datum],
+    pub(super) proposed: &'row [Datum],
 }
 
 /// Run `DO UPDATE`'s filter and assignments against a locked conflicting row and
@@ -264,7 +265,7 @@ pub(super) async fn apply_insert_conflict_update(
     table: &Table,
     local_indexes: &[crabka_pgcatalog::Index],
     fk: &crate::fk::StatementFkContext,
-    update: &ConflictUpdate<'_>,
+    update: &ConflictUpdate<'_, '_, '_>,
     writes: &mut StatementWrites,
     ops: &mut Vec<crabka_pgkv::WriteOp>,
 ) -> Result<Option<(Vec<Datum>, u64)>, ExecError> {
@@ -319,20 +320,11 @@ pub(super) async fn apply_insert_conflict_update(
     if !row_matches(update.filter, &scope, &bindings, ctx)? {
         return Ok(None);
     }
-    let mut next = update.cur_row.to_vec();
-    for (column, expr) in update.assignments {
-        // Assignment targets are unqualified column names of the target table,
-        // resolved exactly as the UPDATE arm resolves its own (42703 on miss).
-        let idx = table
-            .column_index(column)
-            .ok_or_else(|| ExecError::UndefinedColumn(column.clone()))?;
-        let value = eval_assignment_value(expr, table.columns[idx].ty, &scope, &bindings, ctx)?;
-        next[idx] = coerce(value, table.columns[idx].ty, ctx)?;
-    }
+    let next = apply_assignments(table, update.assignments, &scope, &bindings, ctx)?;
     let updated_columns = update
         .assignments
         .iter()
-        .map(|(column, _)| column.clone())
+        .map(|(slot, _)| table.columns[*slot].name.clone())
         .collect::<Vec<_>>();
     let Some(next) = crate::trigger::fire_before_row(
         write_ctx.catalog_kv,

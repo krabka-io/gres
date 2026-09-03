@@ -14856,11 +14856,8 @@ impl ParamBinder<'_> {
             return Ok(());
         };
         let scope = crate::scope::Scope::insert_conflict(table);
-        for (column, expr) in assignments {
-            let Some(idx) = table.column_index(column) else {
-                return Err(ExecError::UndefinedColumn(column.clone()).into_pg());
-            };
-            self.bind_expr_with_scope(expr, Some(table.columns[idx].ty), &scope)?;
+        for assignment in assignments {
+            self.bind_assignment(assignment, table, &scope)?;
         }
         if let Some(filter) = filter {
             self.bind_expr_with_scope(filter, Some(ColumnType::Bool), &scope)?;
@@ -15766,8 +15763,8 @@ fn collect_on_conflict_param(on_conflict: &OnConflict, max: &mut usize) {
         filter,
     } = &on_conflict.action
     {
-        for (_, expr) in assignments {
-            collect_expr_param(expr, max);
+        for assignment in assignments {
+            collect_assignment_param(assignment, max);
         }
         if let Some(filter) = filter {
             collect_expr_param(filter, max);

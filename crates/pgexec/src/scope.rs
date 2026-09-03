@@ -912,8 +912,10 @@ impl StatementRefs {
                 assignments,
                 filter,
             } => {
-                for (_, expr) in assignments {
-                    self.add_expr(expr);
+                for assignment in assignments {
+                    if let crabka_pgparser::ast::AssignmentValue::Expr(expr) = &assignment.value {
+                        self.add_expr(expr);
+                    }
                 }
                 if let Some(expr) = filter {
                     self.add_expr(expr);

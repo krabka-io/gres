@@ -478,7 +478,17 @@ fn rewrite_view_conflict(
         } => OnConflictAction::DoUpdate {
             assignments: assignments
                 .iter()
-                .map(|(column, expr)| Ok((rewrite.assignable(column, view, write)?, sub(expr))))
+                .map(|assignment| {
+                    Ok(crabka_pgparser::ast::Assignment {
+                        targets: assignment
+                            .targets
+                            .iter()
+                            .map(|column| rewrite.assignable(column, view, write))
+                            .collect::<Result<Vec<_>, ExecError>>()?,
+                        indirections: assignment.indirections.clone(),
+                        value: rewrite_assignment_value(&assignment.value, &sub),
+                    })
+                })
                 .collect::<Result<Vec<_>, ExecError>>()?,
             filter: filter.as_ref().map(&sub),
         },

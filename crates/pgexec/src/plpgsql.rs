@@ -4877,8 +4877,12 @@ fn rewrite_statement_with_ctes(
                     filter,
                 } = &mut on_conflict.action
                 {
-                    for (_, expr) in assignments {
-                        *expr = binder.rewrite_expr(expr, &conflict_scope, &ctes)?;
+                    for assignment in assignments {
+                        if let crabka_pgparser::ast::AssignmentValue::Expr(expr) =
+                            &mut assignment.value
+                        {
+                            *expr = binder.rewrite_expr(expr, &conflict_scope, &ctes)?;
+                        }
                     }
                     if let Some(expr) = filter {
                         *expr = binder.rewrite_expr(expr, &conflict_scope, &ctes)?;

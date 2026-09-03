@@ -12509,7 +12509,9 @@ impl Parser {
     /// identifiers, so all four remain usable as column and table names. They
     /// are unreserved in `PostgreSQL` too.
     fn on_conflict_clause(&mut self) -> Result<Option<crate::ast::OnConflict>, ParseError> {
-        use crate::ast::{OnConflict, OnConflictAction, OnConflictTarget};
+        use crate::ast::{
+            Assignment, AssignmentValue, OnConflict, OnConflictAction, OnConflictTarget,
+        };
 
         let clause_pos = self.peek_pos();
         if !self.eat_keyword(Keyword::On) {
@@ -12561,9 +12563,14 @@ impl Parser {
             let mut assignments = Vec::new();
             loop {
                 let column = self.expect_col_id()?;
+                let indirections = self.target_indirections()?;
                 self.expect(&Token::Eq)?;
                 let value = self.expr(0)?;
-                assignments.push((column, value));
+                assignments.push(Assignment {
+                    targets: vec![column],
+                    indirections,
+                    value: AssignmentValue::Expr(value),
+                });
                 if self.eat_comma() {
                     continue;
                 }
@@ -27247,24 +27254,26 @@ mod json_array_conflict_notify_tests {
                 },
                 action: OnConflictAction::DoUpdate {
                     assignments: vec![
-                        (
-                            "v".into(),
-                            Expr::Column {
+                        crate::ast::Assignment {
+                            targets: vec!["v".into()],
+                            indirections: Vec::new(),
+                            value: crate::ast::AssignmentValue::Expr(Expr::Column {
                                 table: Some("excluded".into()),
                                 name: "v".into(),
-                            }
-                        ),
-                        (
-                            "n".into(),
-                            binary(
+                            }),
+                        },
+                        crate::ast::Assignment {
+                            targets: vec!["n".into()],
+                            indirections: Vec::new(),
+                            value: crate::ast::AssignmentValue::Expr(binary(
                                 BinaryOp::Add,
                                 Expr::Column {
                                     table: Some("t".into()),
                                     name: "n".into(),
                                 },
                                 Expr::IntLiteral("1".into()),
-                            )
-                        ),
+                            )),
+                        },
                     ],
                     filter: Some(binary(
                         BinaryOp::Lt,
@@ -27302,6 +27311,18 @@ mod json_array_conflict_notify_tests {
         assert!(functions[0].args.is_empty());
         assert!(functions[0].named_args.is_empty());
         assert!(functions[0].variadic.is_some());
+    }
+
+    #[test]
+    fn on_conflict_update_accepts_subscripted_assignment_targets() {
+        assert2::assert!(
+            parse(
+                "INSERT INTO t VALUES (1, ARRAY[10, 20, 30]) \
+             ON CONFLICT (id) DO UPDATE \
+             SET values[1] = excluded.values[1], values[3] = excluded.values[3]"
+            )
+            .is_ok()
+        );
     }
 
     #[test]

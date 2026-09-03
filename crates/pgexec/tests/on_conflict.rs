@@ -251,6 +251,29 @@ async fn do_update_upserts_and_counts_inserted_plus_updated() {
     );
 }
 
+/// `DO UPDATE` uses the same subscripted assignment targets as an ordinary
+/// `UPDATE`, while still evaluating its right side against `excluded`.
+#[tokio::test]
+async fn do_update_assigns_array_subscripts_from_excluded() {
+    let (_engine, mut s) = engine_with(&[
+        "CREATE TABLE t (id int4 PRIMARY KEY, values int4[])",
+        "INSERT INTO t VALUES (1, ARRAY[0, 0, 0])",
+    ])
+    .await;
+
+    assert!(
+        tag(
+            &mut s,
+            "INSERT INTO t VALUES (1, ARRAY[10, 20, 30]) \
+             ON CONFLICT (id) DO UPDATE \
+             SET values[1] = excluded.values[1], values[3] = excluded.values[3]",
+        )
+        .await
+            == "INSERT 0 1"
+    );
+    assert!(query(&mut s, "SELECT values::text FROM t").await == vec![row(&["{10,0,30}"])]);
+}
+
 /// A `DO UPDATE … WHERE` that is not true leaves the stored row untouched, is
 /// not inserted, produces no `RETURNING` row, and does not count.
 #[tokio::test]

@@ -280,7 +280,7 @@ fn statement_trigger_targets(
                 crate::trigger::DmlEvent::Update,
                 assignments
                     .iter()
-                    .map(|(column, _)| column.clone())
+                    .flat_map(|assignment| assignment.targets.iter().cloned())
                     .collect(),
             ),
         ]);
@@ -683,9 +683,7 @@ pub(super) fn resolve_write_subqueries(
                     assignments,
                     filter,
                 } => {
-                    for (_, expr) in assignments.iter_mut() {
-                        *expr = resolve(expr)?;
-                    }
+                    resolve_assignments(assignments)?;
                     *filter = resolve_opt(filter)?;
                 }
                 OnConflictAction::DoNothing => {}

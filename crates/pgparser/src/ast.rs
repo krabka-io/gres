@@ -2269,10 +2269,11 @@ pub enum OnConflictTarget {
 pub enum OnConflictAction {
     /// `DO NOTHING`: skip the row.
     DoNothing,
-    /// `DO UPDATE SET a = e, … [WHERE <filter>]`. Assignment right-hand sides and
-    /// the filter may reference the target table and the pseudo-table `excluded`.
+    /// `DO UPDATE SET a = e, … [WHERE <filter>]`. Assignment targets retain
+    /// their field/subscript indirections, and right-hand sides and the filter
+    /// may reference the target table and the pseudo-table `excluded`.
     DoUpdate {
-        assignments: Vec<(String, Expr)>,
+        assignments: Vec<Assignment>,
         filter: Option<Expr>,
     },
 }

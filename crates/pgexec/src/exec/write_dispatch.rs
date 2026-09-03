@@ -303,13 +303,14 @@ pub(super) async fn execute_write_body(
                             else {
                                 unreachable!("only DO UPDATE plans a row update")
                             };
+                            let targets = resolve_assignments(write_ctx, ctes, &t, assignments)?;
                             let updated = apply_insert_conflict_update(
                                 write_ctx,
                                 &t,
                                 &local_indexes,
                                 &fk_ctx,
                                 &ConflictUpdate {
-                                    assignments,
+                                    assignments: &targets,
                                     filter: filter.as_ref(),
                                     rowid: holder_rowid,
                                     cur_key_xid,

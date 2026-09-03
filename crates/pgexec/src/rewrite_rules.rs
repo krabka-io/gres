@@ -183,8 +183,10 @@ fn rule_image_in_statement(statement: &parsed::Statement, image: &mut Option<Str
                     filter,
                 } = &conflict.action
                 {
-                    for (_, expr) in assignments {
-                        rule_image_in_expr(expr, image);
+                    for assignment in assignments {
+                        if let parsed::AssignmentValue::Expr(expr) = &assignment.value {
+                            rule_image_in_expr(expr, image);
+                        }
                     }
                     if let Some(filter) = filter {
                         rule_image_in_expr(filter, image);
