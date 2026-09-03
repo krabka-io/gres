@@ -3357,25 +3357,12 @@ fn datetime_method(
                 format!("{format_name} format is not recognized: \"{text}\""),
             )
         })?;
-        match (&parsed, target) {
-            // The normal SQL cast deliberately only removes the `timetz`
-            // offset. JSONPath's `_tz` variant instead expresses it in the
-            // supplied session zone before discarding that zone.
-            (Datum::Timetz(value), ColumnType::Time) => {
-                let offset = tz.to_offset(jiff::Timestamp::now());
-                let micros = (value.utc_micros() + i64::from(offset.seconds()) * 1_000_000)
-                    .rem_euclid(86_400_000_000);
-                Datum::Time(crabka_pgtypes::datetime::time_from_micros_of_day_public(
-                    micros,
-                ))
-            }
-            _ => crabka_pgtypes::cast::cast(&parsed, target, tz).map_err(|_| {
-                PathError::new(
-                    "22007",
-                    format!("{format_name} format is not recognized: \"{text}\""),
-                )
-            })?,
-        }
+        crabka_pgtypes::cast::cast(&parsed, target, tz).map_err(|_| {
+            PathError::new(
+                "22007",
+                format!("{format_name} format is not recognized: \"{text}\""),
+            )
+        })?
     } else {
         crabka_pgtypes::cast::cast(&source, target, tz).map_err(|_| {
             PathError::new(

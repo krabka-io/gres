@@ -61,6 +61,7 @@ fn temporal_comparisons_need_the_tz_variant_for_implicit_conversion() {
             == "0A000"
     );
     assert!(path.exists_tz(&target, None, false, &jiff::tz::TimeZone::UTC) == Ok(Some(true)));
+    assert!(query_tz(r#""12:34:56 +05:30""#, "$.time()") == Ok(r#"["12:34:56"]"#.into()));
 
     for (target, source) in [
         (
