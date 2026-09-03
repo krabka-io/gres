@@ -700,6 +700,19 @@ fn tz_and_silent_entry_points_preserve_their_distinct_results() {
         Ok(Some(jsonb::parse("1").expect("first item")))
     );
 
+    let filtered_first = JsonPath::parse("$[*].a ? (@ > $min && @ < $max)").expect("parse");
+    let filtered_target = jsonb::parse(r#"[{"a":1},{"a":2},{"a":3},{"a":5}]"#).expect("target");
+    let vars = jsonb::parse(r#"{"min":1,"max":4}"#).expect("vars");
+    assert_eq!(
+        filtered_first.query_first_with_session_time_zone(
+            &filtered_target,
+            Some(&vars),
+            false,
+            &time_zone,
+        ),
+        Ok(Some(jsonb::parse("2").expect("first match")))
+    );
+
     let predicate = JsonPath::parse("$.a == 1").expect("parse");
     assert!(predicate.predicate_tz(&target, None, false, &time_zone) == Ok(Some(true)));
 

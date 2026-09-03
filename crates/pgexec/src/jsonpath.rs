@@ -1642,10 +1642,7 @@ impl JsonPath {
         let generated_object_id = Cell::new(if vars.is_some() { 2 } else { 1 });
         let exec = Exec {
             strict: self.strict,
-            // Strict, non-silent calls must inspect the whole path: a later
-            // structural error still wins over an earlier result.  Lax and
-            // silent calls can stop once their first item is known.
-            stop_after_one: !self.strict || silent,
+            stop_after_one: self.strict && silent,
             vars,
             root: target,
             last: None,
