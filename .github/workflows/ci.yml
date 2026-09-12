@@ -82,12 +82,32 @@ jobs:
           files: bazel-out/_coverage/_coverage_report.dat
           fail_ci_if_error: true
 
+  pg-compat:
+    name: pg compat matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/free-disk-space
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+        with:
+          toolchain: 1.97.1
+      - name: driver capture safety contract
+        run: |
+          python3 -m unittest \
+            tools/tests/test_gres_wire_recorder.py \
+            tools/tests/test_capture_gres_driver_goldens.py
+      - name: matrix anti-rot check
+        run: |
+          ./tools/check-pg-compat-matrix.sh --self-test
+          ./tools/check-pg-compat-matrix.sh
+
   gate:
     name: gate
     if: always()
-    needs: [verify, coverage]
+    needs: [verify, coverage, pg-compat]
     runs-on: ubuntu-latest
     steps:
       - env:
           RESULTS: ${{ join(needs.*.result, ' ') }}
-        run: test "$RESULTS" = "success success"
+        run: test "$RESULTS" = "success success success"
