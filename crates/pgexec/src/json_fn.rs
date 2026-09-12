@@ -177,7 +177,6 @@ enum JsonFunc {
 /// (`jsonb_set`, `jsonb_pretty`, the whole `jsonb_path_*` group, the operator
 /// spellings) have no `json_` sibling here either, so `json_pretty(…)` falls
 /// through to 42883 like any other unknown function.
-///
 fn json_func(name: &str) -> Option<(JsonFunc, Flavour)> {
     use Flavour::{Json, Jsonb};
 

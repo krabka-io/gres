@@ -1,0 +1,22 @@
+load("//bazel:defs.bzl", "crate_library", "crate_tests")
+
+exports_files(["Cargo.toml"])
+
+EMBEDDED_DATA = glob([
+    "src/**/*.zst",
+    "src/text_search_data/**",
+])
+
+crate_library(
+    name = "pgexec",
+    compile_data = EMBEDDED_DATA,
+)
+crate_tests(
+    lib = "pgexec",
+    compile_data = EMBEDDED_DATA,
+    # These suites install a process-global tracing subscriber per test case.
+    # Nextest gives every case its own process; libtest cannot.
+    manual = ["telemetry", "telemetry_exec"],
+    mutants_jobs = 2,
+    mutants_shards = 32,
+)

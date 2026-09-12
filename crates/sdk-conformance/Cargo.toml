@@ -7,8 +7,8 @@ license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "JSON-stdio conformance harness for Crabka application SDKs"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
 documentation = "https://docs.rs/crabka-sdk-conformance"
 readme = "README.md"
 

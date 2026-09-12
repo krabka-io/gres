@@ -10418,7 +10418,17 @@ mod tests {
         .expect("ft");
         let t = get_table(kv, &rel("orders")).expect("get ft");
         assert!(t.foreign.is_some());
-        assert_eq!(t.columns, vec![Column::new("id", ColumnType::Int4)]);
+        assert2::assert!(
+            t.columns
+                == vec![
+                    Column::new("_partition", ColumnType::Int4),
+                    Column::new("_offset", ColumnType::Int8),
+                    Column::new("_timestamp", ColumnType::Timestamptz),
+                    Column::new("_key", ColumnType::Bytea),
+                    Column::new("_headers", ColumnType::Text),
+                    Column::new("id", ColumnType::Int4),
+                ]
+        );
     }
 
     #[test]

@@ -1,0 +1,15 @@
+load("//bazel:defs.bzl", "crate_library", "crate_tests")
+
+exports_files([
+    "Cargo.toml",
+    "tests/fixtures/test-ca.pem",
+])
+
+TEST_FIXTURES = glob(["tests/fixtures/**"])
+
+crate_library(name = "pgwire")
+crate_tests(
+    lib = "pgwire",
+    compile_data = TEST_FIXTURES,
+    mutants_shards = 16,
+)

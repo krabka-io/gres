@@ -281,13 +281,9 @@ mod tests {
     }
 
     fn rfc_7677_password() -> String {
-        std::fs::read_to_string(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/fixtures/rfc_7677_password.txt"
-        ))
-        .expect("RFC 7677 password fixture")
-        .trim_end()
-        .to_owned()
+        include_str!("../tests/fixtures/rfc_7677_password.txt")
+            .trim_end()
+            .to_owned()
     }
 
     #[test]

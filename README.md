@@ -1,26 +1,26 @@
 <p align="center">
-  <img src="docs/crabka-text-wide.png" alt="Crabka" width="480">
-</p>
-
-<p align="center">
-  <a href="https://github.com/robot-head/crabka/actions/workflows/ci.yml"><img src="https://github.com/robot-head/crabka/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://codspeed.io/robot-head/crabka?utm_source=badge"><img src="https://img.shields.io/endpoint?url=https://codspeed.io/badge.json" alt="CodSpeed"></a>
-  <a href="https://codecov.io/gh/robot-head/crabka"><img src="https://codecov.io/gh/robot-head/crabka/graph/badge.svg?token=EU56CZE3DU" alt="codecov"></a>
+  <a href="https://github.com/krabka-io/gres/actions/workflows/ci.yml"><img src="https://github.com/krabka-io/gres/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://codecov.io/gh/krabka-io/gres"><img src="https://codecov.io/gh/krabka-io/gres/graph/badge.svg" alt="codecov"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache-2.0"></a>
 </p>
 
-# Crabka
+# Gres
 
-Crabka is a Rust implementation of [Apache Kafka](https://kafka.apache.org)
-infrastructure. It speaks the Kafka wire protocol, stores records in
-Kafka-compatible log segments, and runs metadata on KRaft. The test suite runs
-Crabka against the official JVM clients and command-line tools.
+Gres is Crabka's pure-Rust, PostgreSQL-compatible SQL engine. It combines a
+PostgreSQL wire server, parser, type system, MVCC catalog and executor with a
+differential conformance harness against PostgreSQL 18.
 
-Use Crabka when you want Kafka-compatible streaming infrastructure without a JVM
-runtime. Crabka gives you memory-safe Rust, async I/O, no ZooKeeper mode, and no
-GC pauses. The workspace contains the broker, the Rust clients, the Schema
-Registry, gateways, operators, and the rebalancing, replication, and
-observability services.
+This repository was extracted from the Gres development branch of Crabka. The
+core engine packages are first-class Bazel targets; Cargo.toml and Cargo.lock
+remain the only dependency source. `bazel test` covers unit, documentation and
+ordinary integration suites. The two tracing suites that require one process
+per test run under Nextest in CI, and the weekly mutation workflow includes
+ordinary integration targets in every crate sweep.
+
+The extracted snapshot still carries supporting Crabka workspace crates used by
+the distributed Gres runtime. CI's merge gate is deliberately scoped to the SQL
+engine and conformance packages while those path dependencies are separated
+into their sibling repositories.
 
 ## Project Status
 
@@ -96,8 +96,8 @@ Crabka is a Rust workspace. The pinned toolchain is in
 [rust-toolchain.toml](rust-toolchain.toml).
 
 ```bash
-git clone https://github.com/robot-head/crabka.git
-cd crabka
+git clone https://github.com/krabka-io/gres.git
+cd gres
 cargo build --workspace
 ```
 

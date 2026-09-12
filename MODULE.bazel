@@ -1,107 +1,128 @@
-"""Crabka — Bazel module (bzlmod).
+"""Gres Bazel module.
 
-Bazel is the client-focused build path. It produces the lean Kafka client
-libraries via `rust_library` targets that draw their third-party dependencies
-from `crate_universe`, which reads the *same* `Cargo.toml` / `Cargo.lock` that
-Cargo uses. Cargo stays the source of truth; nothing here forks the dep set.
-
-Re-exported targets (see //:BUILD.bazel):
-    @crabka//:client_producer   @crabka//:client_consumer
-    @crabka//:client_admin      @crabka//:client_core
-    @crabka//:schema_serde      @crabka//:protocol
-    @crabka//:security          @crabka//:compression
-    @crabka//:metadata
-    @crabka//:client_minimal    # lean facade: no polars/arrow/jsonschema
+Bazel is the build and test path for the PostgreSQL engine crates. Cargo stays
+the dependency source of truth: rules_rs reads this repository's Cargo.toml
+and Cargo.lock instead of maintaining a second dependency graph.
 """
 
 module(
-    name = "crabka",
-    version = "0.3.6",
+    name = "gres",
+    version = "0.4.0",
 )
 
-bazel_dep(name = "rules_rust", version = "0.73.0")
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "rules_rs", version = "0.0.107")
+bazel_dep(name = "rules_rs_mutants", version = "0.1.1")
 
-# ---------------------------------------------------------------------------
-# Rust toolchain — pinned to the workspace channel (rust-toolchain.toml).
-# ---------------------------------------------------------------------------
-rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
-rust.toolchain(
+single_version_override(
+    module_name = "rules_rs",
+    patch_strip = 1,
+    patches = [
+        "//bazel/patches:rules-rs-target-has-atomic.patch",
+        "//bazel/patches:rules_rs_zlib_url.patch",
+    ],
+    version = "0.0.107",
+)
+
+git_override(
+    module_name = "rules_rs_mutants",
+    commit = "63bb99ca9a7cb81eab1728bc5d2c9985f23c8560",
+    remote = "https://github.com/robot-head/rules_rs_mutants",
+)
+
+bazel_dep(name = "llvm", version = "0.8.18")
+
+register_toolchains("@llvm//toolchain:all")
+
+bazel_dep(name = "aws-lc", version = "5.1.0.bcr.2")
+bazel_dep(name = "jemalloc", version = "5.3.0-bcr.alpha.5")
+bazel_dep(name = "openssl", version = "3.5.5.bcr.0")
+bazel_dep(name = "zstd", version = "1.5.7.bcr.1")
+
+rules_rust_bindgen = use_extension("@rules_rs//rs:rules_rust_bindgen.bzl", "rules_rust_bindgen")
+use_repo(rules_rust_bindgen, "rules_rust_bindgen")
+
+register_toolchains("@rules_rust_bindgen//:all")
+
+rules_rust = use_extension("@rules_rs//rs:rules_rust.bzl", "rules_rust")
+use_repo(rules_rust, "rules_rust")
+
+toolchains = use_extension("@rules_rs//rs/toolchains:module_extension.bzl", "toolchains")
+toolchains.toolchain(
     edition = "2024",
-    versions = ["1.97.0"],
+    rustfmt_version = "nightly/2026-08-14",
+    version = "1.97.1",
 )
-use_repo(rust, "rust_toolchains")
-register_toolchains("@rust_toolchains//:all")
+use_repo(toolchains, "default_rust_toolchains")
 
-# ---------------------------------------------------------------------------
-# Third-party crates, spliced straight from the Cargo workspace.
-#
-# `crate_universe` needs *every* workspace member's manifest to reconstruct the
-# workspace before resolving against Cargo.lock, so all members are listed —
-# even the ones that don't yet have hand-written BUILD targets. In-scope client
-# crates own their Cargo.toml in their own package (`//crates/<x>:Cargo.toml`);
-# the remaining members are exported en masse from `//crates:BUILD.bazel`
-# (`//crates:<x>/Cargo.toml`).
-#
-# The `sspi` GSSAPI dependency is a normal crates.io dependency and is included
-# through the same Cargo.lock splice as the rest of the workspace.
-# ---------------------------------------------------------------------------
-crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+register_toolchains("@default_rust_toolchains//...")
+
+PLATFORM_TRIPLES = [
+    "aarch64-apple-darwin",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "x86_64-unknown-linux-gnu",
+]
+
+crate = use_extension("@rules_rs//rs:extensions.bzl", "crate")
 crate.from_cargo(
     name = "crates",
-    cargo_lockfile = "//:Cargo.lock",
-    manifests = [
-        "//:Cargo.toml",
-        # In-scope client crates (own BUILD package).
-        "//crates/client-core:Cargo.toml",
-        "//crates/client-producer:Cargo.toml",
-        "//crates/client-consumer:Cargo.toml",
-        "//crates/client-admin:Cargo.toml",
-        "//crates/schema-serde:Cargo.toml",
-        "//crates/protocol:Cargo.toml",
-        "//crates/security:Cargo.toml",
-        "//crates/compression:Cargo.toml",
-        "//crates/metadata:Cargo.toml",
-        "//crates/voters:Cargo.toml",
-        # Remaining workspace members (exported from //crates:BUILD.bazel).
-        "//crates:authz/Cargo.toml",
-        "//crates:bench-driver/Cargo.toml",
-        "//crates:broker/Cargo.toml",
-        "//crates:cli/Cargo.toml",
-        "//crates:client-streams/Cargo.toml",
-        "//crates:connect/Cargo.toml",
-        "//crates:docgen/Cargo.toml",
-        "//crates:grpc-gateway/Cargo.toml",
-        "//crates:integration-tests/Cargo.toml",
-        "//crates:kafka-tap/Cargo.toml",
-        "//crates:kraft-core/Cargo.toml",
-        "//crates:log/Cargo.toml",
-        "//crates:log-iobench/Cargo.toml",
-        "//crates:logfmt/Cargo.toml",
-        "//crates:operator/Cargo.toml",
-        "//crates:playground/Cargo.toml",
-        "//crates:pgtypes/Cargo.toml",
-        "//crates:pgparser/Cargo.toml",
-        "//crates:pgwire/Cargo.toml",
-        "//crates:pgkv/Cargo.toml",
-        "//crates:pgmvcc/Cargo.toml",
-        "//crates:pgcatalog/Cargo.toml",
-        "//crates:pgexec/Cargo.toml",
-        "//crates:gres/Cargo.toml",
-        "//crates:gres-activator/Cargo.toml",
-        "//crates:gres-balancer/Cargo.toml",
-        "//crates:gres-control/Cargo.toml",
-        "//crates:gres-fdw/Cargo.toml",
-        "//crates:gres-ranges/Cargo.toml",
-        "//crates:gres-substrate/Cargo.toml",
-        "//crates:gres-conformance/Cargo.toml",
-        "//crates:protocol-codegen/Cargo.toml",
-        "//crates:raft/Cargo.toml",
-        "//crates:rebalancer/Cargo.toml",
-        "//crates:records-legacy/Cargo.toml",
-        "//crates:remote-storage/Cargo.toml",
-        "//crates:remote-storage-topic/Cargo.toml",
-        "//crates:schema-registry/Cargo.toml",
-        "//crates:telemetry/Cargo.toml",
-    ],
+    cargo_lock = "//:Cargo.lock",
+    cargo_toml = "//:Cargo.toml",
+    platform_triples = PLATFORM_TRIPLES,
 )
-use_repo(crate, "crates")
+crate.from_cargo(
+    name = "mutants",
+    cargo_lock = "//tools/mutants:Cargo.lock",
+    cargo_toml = "//tools/mutants:Cargo.toml",
+    platform_triples = PLATFORM_TRIPLES,
+)
+crate.annotation(
+    crate = "cargo-mutants",
+    gen_binaries = ["cargo-mutants"],
+    repositories = ["mutants"],
+)
+
+# sqlx 0.9 gates both sides of Executor::describe on `offline`. Cargo unifies
+# that feature across sqlx-core and sqlx-postgres; rules_rs currently carries
+# it only to sqlx-core unless it is stated for the driver as well.
+crate.annotation(
+    crate = "sqlx-postgres",
+    crate_features = ["offline"],
+)
+crate.annotation(
+    crate = "aws-lc-rs",
+    gen_build_script = "off",
+)
+crate.annotation(
+    additive_build_file = "@rules_rs//3rd_party/aws-lc-sys:additive.BUILD.bazel",
+    crate = "aws-lc-sys",
+    extra_aliased_targets = {"aws_lc_sys_build_info": "aws_lc_sys_build_info"},
+    gen_build_script = "off",
+    rustc_flags = ["--cfg=use_bindgen_pregenerated"],
+    deps = ["@crates//:aws_lc_sys_build_info"],
+)
+crate.annotation(
+    build_script_data = ["@openssl//:gen_dir"],
+    build_script_env = {
+        "OPENSSL_DIR": "$(execpath @openssl//:gen_dir)",
+        "OPENSSL_NO_VENDOR": "1",
+        "OPENSSL_STATIC": "1",
+    },
+    crate = "openssl-sys",
+    data = ["@openssl//:gen_dir"],
+    gen_build_script = "on",
+)
+crate.annotation(
+    crate = "tikv-jemalloc-sys",
+    gen_build_script = "off",
+    deps = ["@jemalloc"],
+)
+crate.annotation(
+    crate = "zstd-sys",
+    gen_build_script = "off",
+    deps = ["@zstd"],
+)
+use_repo(crate, "crates", "mutants")
+
+inject_repo(crate, "aws-lc", "openssl")

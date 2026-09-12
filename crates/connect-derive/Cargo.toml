@@ -6,8 +6,8 @@ license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "Derive macros for crabka-connect connector configuration"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
 documentation = "https://docs.rs/crabka-connect-derive"
 
 [lib]

@@ -1,0 +1,84 @@
+name: mutants
+
+on:
+  schedule:
+    - cron: "0 7 * * 0"
+  workflow_dispatch:
+    inputs:
+      crate:
+        description: Gres crate directory, for example pgexec
+        required: true
+        default: pgexec
+        type: string
+      shards:
+        description: Number of mutation shards
+        required: true
+        default: 8
+        type: number
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      matrix: ${{ steps.matrix.outputs.value }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: aspect-build/setup-aspect@1ccd1e095c68556648eb5482231283e445e3dc5e # 2026.34
+        with:
+          aspect-api-token: ${{ secrets.ASPECT_API_TOKEN }}
+          bazelisk-cache: true
+          disk-cache: false
+          repository-cache: true
+      - id: matrix
+        env:
+          REQUESTED_CRATE: ${{ inputs.crate }}
+          REQUESTED_SHARDS: ${{ inputs.shards }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
+            crates=(pgtypes pgparser pgwire pgkv pgmvcc pgcatalog pgexec)
+          else
+            [[ "$REQUESTED_CRATE" =~ ^(pgtypes|pgparser|pgwire|pgkv|pgmvcc|pgcatalog|pgexec)$ ]]
+            (( REQUESTED_SHARDS >= 1 && REQUESTED_SHARDS <= 64 ))
+            crates=("$REQUESTED_CRATE")
+          fi
+
+          matrix='[]'
+          for crate in "${crates[@]}"; do
+            target="//crates/${crate}:${crate}_mutants"
+            bazel query "$target"
+            if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
+              total="$(bazel query --output=build "$target" | sed -ne 's/^  shard_count = \([0-9]*\),$/\1/p')"
+            else
+              total="$REQUESTED_SHARDS"
+            fi
+            [[ -n "$total" ]]
+            matrix="$(jq -c --argjson old "$matrix" --arg crate "$crate" --arg target "$target" --argjson total "$total" -n '$old + [range(0; $total) | {crate: $crate, target: $target, index: ., number: (. + 1), total: $total}]')"
+          done
+          echo "value=$matrix" >>"$GITHUB_OUTPUT"
+
+  sweep:
+    name: ${{ matrix.shard.crate }} · ${{ matrix.shard.number }}/${{ matrix.shard.total }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/free-disk-space
+      - uses: aspect-build/setup-aspect@1ccd1e095c68556648eb5482231283e445e3dc5e # 2026.34
+        with:
+          aspect-api-token: ${{ secrets.ASPECT_API_TOKEN }}
+          bazelisk-cache: true
+          disk-cache: false
+          repository-cache: true
+      - name: mutation shard
+        run: tools/check-mutants.sh '${{ matrix.shard.target }}' '${{ matrix.shard.index }}' '${{ matrix.shard.total }}'

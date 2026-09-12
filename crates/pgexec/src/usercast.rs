@@ -15,7 +15,6 @@
 //! type's I/O that renders and reads them. Where the declared input function
 //! would have read a form the representation type does not, the conversion
 //! fails loudly rather than producing some other value.
-//!
 use crabka_pgcatalog::UserCast;
 use crabka_pgkv::{Kv, WriteOp};
 use crabka_pgparser::ast::{CastContext, CastMethod, Expr, FuncArgs, FuncCall};

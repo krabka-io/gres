@@ -1,0 +1,6 @@
+load("//bazel:defs.bzl", "crate_library", "crate_tests")
+
+exports_files(["Cargo.toml"])
+
+crate_library(name = "pgkv")
+crate_tests(lib = "pgkv")

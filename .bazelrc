@@ -1,17 +1,19 @@
-# Crabka Bazel configuration.
-#
-# Bazel is a *secondary*, client-focused build path: it produces the lean Kafka
-# client libraries (producer/consumer/admin/core + serdes) for embedders who
-# want a slim dependency closure. Cargo remains the source of truth for the
-# full workspace; Bazel reads the same Cargo.toml / Cargo.lock via crate_universe.
-
-# bzlmod is the only dependency-resolution path (no legacy WORKSPACE).
-common --enable_bzlmod
-
-# Keep the action environment hermetic so build-script outputs are reproducible.
+# Cargo.toml and Cargo.lock remain the sole dependency source; MODULE.bazel
+# imports them through rules_rs.
 build --incompatible_strict_action_env
+build --linkopt=-Wno-unused-command-line-argument
+build --host_linkopt=-Wno-unused-command-line-argument
+common --repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
+common --repo_env=BAZEL_NO_APPLE_CPP_TOOLCHAIN=1
 
 test --test_output=errors
 
-# Optional developer-local overrides (registry mirrors, remote cache, etc.).
+coverage --combined_report=lcov
+coverage --instrumentation_filter=^//crates/(gres|pg|trace-context|units)[:/]
+coverage --instrument_test_targets
+coverage --build_tests_only
+
+build --@rules_rs_mutants//mutants:cargo_mutants_binary=@mutants//:cargo-mutants__cargo-mutants
+build --@rules_rs_mutants//mutants:config=//:.cargo/mutants.toml
+
 try-import %workspace%/user.bazelrc

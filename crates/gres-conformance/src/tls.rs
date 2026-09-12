@@ -52,12 +52,16 @@ pub async fn connect(
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+
     use super::*;
 
     #[test]
     fn repository_ca_builds_a_verifying_connector() {
-        let fixture =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../pgwire/tests/fixtures/test-ca.pem");
-        connector_from_root_ca(&fixture).expect("fixture CA builds connector");
+        let mut fixture = tempfile::NamedTempFile::new().expect("temporary CA file");
+        fixture
+            .write_all(include_bytes!("../../pgwire/tests/fixtures/test-ca.pem"))
+            .expect("write fixture CA");
+        connector_from_root_ca(fixture.path()).expect("fixture CA builds connector");
     }
 }

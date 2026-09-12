@@ -453,9 +453,8 @@ pub(crate) fn query_lexize_files(
 mod tests {
     use assert2::assert;
 
-    use crate::error::ExecError;
-
     use super::{lexize_files, validate_files};
+    use crate::error::ExecError;
 
     fn ispell(token: &str) -> Option<Vec<String>> {
         lexize_files(token, "ispell_sample", "ispell_sample")

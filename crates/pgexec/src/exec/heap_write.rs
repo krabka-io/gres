@@ -1,7 +1,6 @@
 //! Locked-row heap writes and local index entry generation.
 
-use super::dml_assignments::AssignedValue;
-use super::*;
+use super::{dml_assignments::AssignedValue, *};
 
 pub(super) async fn apply_locked_row_update(
     write_ctx: &WriteContext<'_>,

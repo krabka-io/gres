@@ -1,0 +1,13 @@
+[package]
+name = "gres-mutants"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+path = "stub.rs"
+
+[dependencies]
+cargo-mutants = "27.1.0"
+
+[workspace]

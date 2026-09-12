@@ -93,20 +93,6 @@ exclude_globs = [
     # reachable with built binaries via its `#[ignore]`d live test, which
     # mutant runs cannot execute.
     "crates/gres-loadtest/**",
-    # Chapter Gres vendored crates (crabgresql@93f3d17): imported wholesale in
-    # the G-1 vendoring PR; mutating ~68k imported lines under --in-diff would
-    # swamp the shard budget. Re-evaluate per-crate once gres development is
-    # incremental.
-    "crates/pgtypes/**",
-    "crates/pgparser/**",
-    "crates/pgwire/**",
-    "crates/pgkv/**",
-    "crates/pgmvcc/**",
-    "crates/pgcatalog/**",
-    "crates/pgexec/**",
-    "crates/gres/**",
-    "crates/gres-fdw/**",
-    "crates/gres-conformance/**",
 ]
 
 # Skip mutants whose display name matches these regexes. Used for spurious
