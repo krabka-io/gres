@@ -6,288 +6,171 @@
 
 # Gres
 
-Gres is Crabka's pure-Rust, PostgreSQL-compatible SQL engine. It combines a
-PostgreSQL wire server, parser, type system, MVCC catalog and executor with a
-differential conformance harness against PostgreSQL 18.
+Gres is a pure-Rust, PostgreSQL-compatible SQL engine. It provides a PostgreSQL
+wire server, parser, type system, MVCC storage, system catalog, SQL executor,
+and a differential conformance harness against PostgreSQL 18.
 
-This repository was extracted from the Gres development branch of Crabka. The
-core engine packages are first-class Bazel targets; Cargo.toml and Cargo.lock
-remain the only dependency source. `bazel test` covers unit, documentation and
-ordinary integration suites. The two tracing suites that require one process
-per test run under Nextest in CI, and the weekly mutation workflow includes
-ordinary integration targets in every crate sweep.
+Gres is beta, pre-1.0 software. It is suitable for development, compatibility
+testing, and non-critical workloads while SQL breadth and operational hardening
+continue. It does not promise storage compatibility between releases yet.
 
-The extracted snapshot still carries supporting Crabka workspace crates used by
-the distributed Gres runtime. CI's merge gate is deliberately scoped to the SQL
-engine and conformance packages while those path dependencies are separated
-into their sibling repositories.
+## Architecture
 
-## Project Status
+| Area | Crates |
+| --- | --- |
+| Server | [`gres`](crates/gres) |
+| Wire protocol | [`pgwire`](crates/pgwire) |
+| Parser and values | [`pgparser`](crates/pgparser), [`pgtypes`](crates/pgtypes) |
+| Execution | [`pgexec`](crates/pgexec), [`pgcatalog`](crates/pgcatalog) |
+| Storage and MVCC | [`pgkv`](crates/pgkv), [`pgmvcc`](crates/pgmvcc) |
+| Distributed runtime | [`gres-substrate`](crates/gres-substrate), [`gres-ranges`](crates/gres-ranges), [`gres-control`](crates/gres-control) |
+| PostgreSQL differential tests | [`gres-conformance`](crates/gres-conformance) |
 
-Crabka is **beta**, pre-1.0 software. The workspace version is in
-[Cargo.toml](Cargo.toml).
+The local server runs either in memory or on a durable local data directory.
+The optional substrate mode stores tenant WAL in an external replicated log and
+rebuilds a disposable local read model during recovery.
 
-The **0.4.0 milestone** ships metadata downgrade and client rebootstrap,
-durable transaction recovery, diskless WAL failover, tiered offset reads,
-CloudEvents and queue semantics in the gateway, operator lifecycle work, and
-shared conformance coverage for five application SDKs. The finite outcomes for
-this milestone are closed; [UNFINISHED_WORK.md](UNFINISHED_WORK.md) records the
-remaining directional horizons and known limits.
+Rust package names and environment variables retain their existing
+`crabka-` and `CRABKA_` prefixes for compatibility. In prose, the parent project
+is named krabka.
 
-The project is still greenfield infrastructure. There are no production users,
-and Crabka does not promise on-disk compatibility across versions yet. Use
-Crabka for evaluation, development, interoperability tests, and non-critical
-workloads while the project hardens.
+## Quick start
 
-Kafka compatibility is the primary constraint. The repository validates protocol
-encoding, record formats, storage behavior, KRaft metadata, and JVM tool
-interoperability against Apache Kafka behavior. This applies where those
-surfaces are in scope.
-
-## Why Crabka
-
-- **Kafka wire compatibility:** the build generates the protocol codecs from
-  Apache Kafka message schemas and checks them byte-for-byte against
-  `kafka-clients`.
-- **JVM tooling works:** acceptance tests drive tools such as
-  `kafka-topics.sh`, `kafka-configs.sh`, `kafka-acls.sh`,
-  `kafka-consumer-groups.sh`, `kafka-leader-election.sh`, and
-  `kafka-reassign-partitions.sh` against Crabka.
-- **Rust runtime:** Crabka uses `tokio`, forbids unsafe code across the
-  workspace, and avoids JVM heap tuning and garbage-collection behavior.
-- **KRaft-native:** Crabka stores metadata in a native KRaft quorum. ZooKeeper
-  mode and ZooKeeper-to-KRaft migration are out of scope.
-- **Operations included:** the workspace contains a Kubernetes operator,
-  Prometheus metrics, OTLP tracing, Helm charts, OCI images, and a
-  Cruise-Control-style partition rebalancer.
-- **Rust clients included:** producer, consumer, admin, streams, schema-serde,
-  gateway, connector, and replication crates live in the same repository.
-
-## Compatibility
-
-Crabka targets Kafka's wire, storage, and operational semantics. JVM
-implementation internals are not compatibility goals.
-
-| Area | Status |
-| ---- | ------ |
-| Wire protocol and API version negotiation | Implemented |
-| Kafka-compatible record batches, compression, and log segments | Implemented |
-| KRaft metadata quorum and controller records | Implemented |
-| Replication, ISR maintenance, leader election, and reassignment | Implemented |
-| Idempotent and transactional produce / consume | Implemented |
-| Classic and next-generation consumer groups | Implemented |
-| Share groups / queues | Implemented |
-| Tiered storage | Implemented, including Kafka 4.0 JVM segment-layout and producer-snapshot validation |
-| TLS, SASL, delegation tokens, ACLs, and quotas | Implemented |
-| Schema Registry-compatible REST service | Implemented |
-| Kubernetes operator | Implemented, including Ingress and OpenShift Route listeners |
-| Rust Streams client | Partial versus the full JVM Kafka Streams library |
-| Kafka Connect-equivalent runtime | Partial; managed Postgres CDC workers, durable offsets, connector SPI, and `KafkaConnector` CRD are implemented |
-| ZooKeeper mode and ZooKeeper-to-KRaft migration | Out of scope |
-
-For the detailed per-KIP breakdown, see
-[docs/KIP_MATRIX.md](docs/KIP_MATRIX.md).
-
-For managed Postgres CDC setup, see [docs/connect.md](docs/connect.md).
-
-## Install
-
-Crabka is a Rust workspace. The pinned toolchain is in
-[rust-toolchain.toml](rust-toolchain.toml).
+The pinned Rust toolchain is declared in
+[`rust-toolchain.toml`](rust-toolchain.toml).
 
 ```bash
 git clone https://github.com/krabka-io/gres.git
 cd gres
-cargo build --workspace
+cargo build --locked -p crabka-gres
+cargo run --locked -p crabka-gres -- --listen 127.0.0.1:5433 --auth trust
 ```
 
-Install the local broker and CLI binaries from a checkout:
+Connect with any PostgreSQL client:
 
 ```bash
-cargo install --path crates/cli
-cargo install --path crates/broker
+psql -h 127.0.0.1 -p 5433 -U postgres
 ```
 
-The project publishes the Rust client crates independently. For example:
+`--auth trust` is for local development only. To test password authentication:
 
 ```bash
-cargo add crabka-client-producer
-cargo add crabka-client-consumer
-cargo add crabka-client-admin
+cargo run --locked -p crabka-gres -- \
+  --listen 127.0.0.1:5433 \
+  --auth scram \
+  --user-cred app=change-me
 ```
 
-The project publishes container images to GHCR and Docker Hub:
+Persist the local database across restarts with `--data-dir`:
 
 ```bash
-docker pull ghcr.io/robot-head/crabka-broker:latest
-docker pull mirror.gcr.io/robothead/crabka-broker:latest
+cargo run --locked -p crabka-gres -- \
+  --listen 127.0.0.1:5433 \
+  --auth trust \
+  --data-dir target/gres-data
 ```
 
-[packaging/README.md](packaging/README.md) gives the image build, signature,
-SBOM, and attestation details. [charts/README.md](charts/README.md) documents
-the Helm chart usage.
-
-## Quick Start
-
-Start a single local broker from the source tree:
+An in-process substrate is available for development without an external log:
 
 ```bash
-export CRABKA_CLUSTER_ID=00000000-0000-0000-0000-000000000001
-rm -rf target/crabka-data
-
-cargo run -p crabka-cli --bin crabka -- format \
-  --log-dir target/crabka-data \
-  --cluster-id "$CRABKA_CLUSTER_ID" \
-  --standalone \
-  --node-id 1 \
-  --controller-listener 127.0.0.1:9093
-
-cargo run -p crabka-broker --bin crabka-broker -- \
-  --log-dir target/crabka-data \
-  --cluster-id "$CRABKA_CLUSTER_ID" \
-  --broker-id 1 \
-  --listen-addr 127.0.0.1:9092
+cargo run --locked -p crabka-gres -- \
+  --listen 127.0.0.1:5433 \
+  --substrate-bootstrap memory:// \
+  --tenant demo \
+  --auth trust \
+  --cache-dir target/gres-cache
 ```
 
-In another shell, use normal Kafka tooling against the broker:
+Run `cargo run -p crabka-gres -- --help` for TLS, SCRAM, checkpoint,
+multi-range, and runtime-limit options.
+
+## Compatibility
+
+Gres targets PostgreSQL behavior at the SQL, catalog, error, transaction, and
+wire-protocol layers. PostgreSQL page files, physical WAL, extensions written in
+C, and physical replication SQL are not compatibility goals.
+
+The detailed feature inventory and known divergences are maintained in the
+[`PostgreSQL compatibility matrix`](docs/PG_COMPAT_MATRIX.md). The conformance
+harness compares results and SQLSTATEs with PostgreSQL 18 and ratchets committed
+baselines so compatibility cannot silently regress.
+
+Run the pinned upstream `pg_regress` suite with:
 
 ```bash
-kafka-topics.sh \
-  --bootstrap-server 127.0.0.1:9092 \
-  --create \
-  --topic demo \
-  --partitions 1 \
-  --replication-factor 1
-
-kafka-console-producer.sh \
-  --bootstrap-server 127.0.0.1:9092 \
-  --topic demo
-
-kafka-console-consumer.sh \
-  --bootstrap-server 127.0.0.1:9092 \
-  --topic demo \
-  --from-beginning
+./scripts/gres-pg-regress.sh self-check both
+./scripts/gres-pg-regress.sh gres serial
+./scripts/gres-pg-regress.sh gres parallel
 ```
 
-`crabka format` initializes an empty log directory. To start again locally, stop
-the broker and delete `target/crabka-data`.
-
-## Documentation
-
-- [KIP implementation matrix](docs/KIP_MATRIX.md)
-- [Contributing guide](CONTRIBUTING.md)
-- [Container image docs](packaging/README.md)
-- [Helm chart docs](charts/README.md)
-- [Benchmark harness](bench/README.md)
-- [Style guides](docs/style_guides/README.md)
-- [docs.rs package documentation](https://docs.rs/releases/search?query=crabka)
-- [Project website](https://robot-head.github.io/crabka/)
-
-## Workspace
-
-Crabka is a Cargo workspace. The main runtime path is:
-
-```mermaid
-flowchart LR
-    clients[Kafka and Crabka clients] --> broker[crabka-broker]
-    broker --> log[Kafka-compatible log]
-    broker --> kraft[KRaft metadata quorum]
-    broker --> remote[Tiered storage]
-    broker --> telemetry[Metrics / logs / traces]
-    operator[crabka-operator] --> broker
-    registry[crabka-schema-registry] --> broker
-    gateway[crabka-grpc-gateway] --> broker
-    rebalancer[crabka-rebalancer] --> broker
-    replicator[crabka-replicator] --> broker
-```
-
-| Layer | Key crates |
-| ----- | ---------- |
-| Broker runtime | [`crabka-broker`](crates/broker), [`crabka-cli`](crates/cli), [`crabka-authz`](crates/authz), [`crabka-security`](crates/security), [`crabka-telemetry`](crates/telemetry) |
-| Protocol, records, and storage | [`crabka-protocol`](crates/protocol), [`crabka-log`](crates/log), [`crabka-raft`](crates/raft), [`crabka-metadata`](crates/metadata), [`crabka-remote-storage`](crates/remote-storage) |
-| Rust clients | [`crabka-client-core`](crates/client-core), [`crabka-client-producer`](crates/client-producer), [`crabka-client-consumer`](crates/client-consumer), [`crabka-client-admin`](crates/client-admin), [`crabka-client-streams`](crates/client-streams) |
-| Services and integration | [`crabka-schema-registry`](crates/schema-registry), [`crabka-grpc-gateway`](crates/grpc-gateway), [`crabka-connect`](crates/connect), [`crabka-connect-postgres`](crates/connect-postgres), [`crabka-replicator`](crates/replicator) |
-| Operations and observability | [`crabka-operator`](crates/operator), [`crabka-rebalancer`](crates/rebalancer), [`crabka-bench-driver`](crates/bench-driver), [`crabka-blockstore`](crates/blockstore), [`crabka-metrics`](crates/metrics), [`crabka-observability`](crates/observability) |
-| Postgres-compatible engine (Chapter Gres) | [`crabka-gres`](crates/gres), [`crabka-gres-control`](crates/gres-control), [`crabka-gres-balancer`](crates/gres-balancer), [`crabka-pgexec`](crates/pgexec), [`crabka-pgwire`](crates/pgwire), [`crabka-pgtypes`](crates/pgtypes), [`crabka-pgparser`](crates/pgparser), [`crabka-pgkv`](crates/pgkv), [`crabka-pgmvcc`](crates/pgmvcc), [`crabka-pgcatalog`](crates/pgcatalog), [`crabka-gres-fdw`](crates/gres-fdw) |
-
-Crate READMEs and rustdoc contain API-level usage details.
+See the [`gres-conformance` guide](crates/gres-conformance/README.md) for build
+prerequisites, artifacts, baseline updates, and diagnostic corpus runs.
 
 ## Development
 
-Prerequisites:
+Bazel is the CI build and test path for the Gres core. Cargo manifests and
+`Cargo.lock` remain the dependency source of truth, and `MODULE.bazel.lock`
+pins the generated Bazel graph.
 
-- Rust toolchain from [rust-toolchain.toml](rust-toolchain.toml)
-- JDK 17 for JVM differential tests
-- Docker or a compatible container runtime for integration tests that use Kafka
-  containers
-
-Common checks:
+Run the same core checks used by CI:
 
 ```bash
-cargo build --workspace
-cargo fmt --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo +nightly-2026-08-14 fmt --all -- --check
+cargo clippy \
+  -p crabka-units -p crabka-trace-context -p crabka-pgtypes \
+  -p crabka-pgparser -p crabka-pgwire -p crabka-pgkv \
+  -p crabka-pgmvcc -p crabka-pgcatalog -p crabka-pgexec \
+  -p crabka-gres-conformance --all-targets
+
+bazel test \
+  //crates/units/... //crates/trace-context/... //crates/pgtypes/... \
+  //crates/pgparser/... //crates/pgwire/... //crates/pgkv/... \
+  //crates/pgmvcc/... //crates/pgcatalog/... //crates/pgexec/... \
+  //crates/gres-conformance/...
+
+cargo nextest run -p crabka-pgexec --test telemetry --test telemetry_exec
 ```
 
-Run JVM-backed differential and acceptance tests:
+The telemetry suites use Nextest because each test needs its own process-global
+tracing subscriber. All ordinary unit, documentation, and integration tests run
+through Bazel.
+
+## Mutation testing
+
+The weekly mutation workflow covers the parser, wire layer, storage, catalog,
+and executor. Generated mutation targets include each crate's ordinary
+integration tests in addition to its unit-test binary.
+
+Run one shard locally with:
 
 ```bash
-(cd tools/oracle && ./gradlew installDist)
-cargo test --workspace -- --include-ignored
+tools/check-mutants.sh //crates/pgtypes:pgtypes_mutants 0 16
 ```
 
-Regenerate the protocol code after you edit the Kafka schemas:
+Inspect the generated target when changing test coverage:
 
 ```bash
-./tools/regenerate.sh
-git diff crates/protocol/generated
+bazel query //crates/pgtypes:pgtypes_mutants --output=build
 ```
-
-[CONTRIBUTING.md](CONTRIBUTING.md) gives more contributor workflow details.
-
-## Roadmap
-
-Near-term work focuses on production hardening and compatibility depth:
-
-- More JVM interop coverage for edge-case protocol and storage behavior.
-- Continued Kubernetes operator maturity.
-- More complete Connect runtime and connector surfaces.
-- Better deployment, security, and operations documentation.
-- Compatibility and upgrade tests as the project approaches 1.0.
-
-[docs/KIP_MATRIX.md](docs/KIP_MATRIX.md) and the design notes under
-[docs/superpowers/specs](docs/superpowers/specs) give the detailed
-implementation status.
 
 ## Contributing
 
-Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md). Open an
-issue for a large design or compatibility change. Keep Kafka wire and behavior
-compatibility as the primary constraint.
+Open an issue before a large design or compatibility change. Keep behavioral
+changes paired with focused tests. Corpus growth and conformance-baseline changes
+must land together with the parity evidence that explains the new floor.
 
-Run `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
-and the relevant tests before you open a pull request. `release-plz` uses
-conventional commits for automated versioning and changelog generation.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for repository conventions.
 
 ## Security
 
-Crabka includes authentication, authorization, TLS, mTLS, delegation-token, and
-OPA integration work, but it is still beta infrastructure. Do not use it as the
-sole security boundary for critical production systems yet.
+Do not use trust authentication outside local development. Production-facing
+deployments should configure TLS and SCRAM, and multi-range RPC endpoints require
+mTLS plus an explicit principal allowlist.
 
-If you find a security vulnerability, do not post exploit details in a public
-issue. Use GitHub private vulnerability reporting if the repository has it
-enabled. If not, contact the maintainers privately through the repository owner.
+Report vulnerabilities through GitHub private vulnerability reporting rather
+than a public issue.
 
 ## License
 
-Crabka is licensed under the Apache License, Version 2.0. See
-[LICENSE](LICENSE) and [NOTICE](NOTICE).
-
-## Acknowledgements
-
-Crabka is a derivative, compatibility-focused implementation of Apache Kafka
-protocols, record formats, and operational semantics. The project depends on the
-Apache Kafka schema corpus and JVM client/tool behavior as its compatibility
-oracle.
+Gres is licensed under the Apache License, Version 2.0. See
+[`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
