@@ -6590,21 +6590,22 @@ impl SqlSession {
         let mut ops = Vec::new();
         for (name, columns) in relations {
             if let Ok(table) = crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &name) {
-                for (index, column) in table.columns.iter().enumerate() {
-                    if columns
-                        .as_ref()
-                        .is_some_and(|requested| !requested.iter().any(|name| name == &column.name))
-                    {
-                        continue;
-                    }
-                    if let Some(stats) = self
-                        .collect_attribute_statistics(
-                            &name,
-                            &crate::catalog_fn::quote_identifier(&column.name),
-                            self.statistics_target(column.statistics_target),
-                        )
-                        .await
-                    {
+                let attributes = table
+                    .columns
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, column)| {
+                        columns.as_ref().is_none_or(|requested| {
+                            requested.iter().any(|name| name == &column.name)
+                        })
+                    })
+                    .map(|(index, column)| (index, column.name.clone(), column.statistics_target))
+                    .collect::<Vec<_>>();
+                for ((index, _, _), stats) in attributes.iter().zip(
+                    self.collect_table_attribute_statistics(&name, &attributes)
+                        .await,
+                ) {
+                    if let Some(stats) = stats {
                         let Ok(attnum) = i16::try_from(index + 1) else {
                             continue;
                         };
@@ -7144,6 +7145,70 @@ impl SqlSession {
         let [field] = fields.as_slice() else {
             return None;
         };
+        self.attribute_statistics_from_rows(field, rows, statistics_target)
+    }
+
+    /// A table `ANALYZE` reads all requested attributes in one heap scan. The
+    /// statistic slots remain per attribute, matching PostgreSQL's catalog.
+    async fn collect_table_attribute_statistics(
+        &mut self,
+        relation: &crabka_pgcatalog::RelationName,
+        attributes: &[(usize, String, i16)],
+    ) -> Vec<Option<crate::attrstats::AttributeStats>> {
+        if attributes.is_empty() {
+            return Vec::new();
+        }
+        let only = match crate::partition::is_partitioned(self.catalog_kv.as_ref(), relation) {
+            Ok(partitioned) => !partitioned,
+            Err(_) => return vec![None; attributes.len()],
+        };
+        let expressions = attributes
+            .iter()
+            .map(|(_, name, _)| crate::catalog_fn::quote_identifier(name))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!(
+            "SELECT {expressions} FROM {}{}.{}",
+            if only { "ONLY " } else { "" },
+            crate::catalog_fn::quote_identifier(&relation.schema),
+            crate::catalog_fn::quote_identifier(&relation.name),
+        );
+        let Ok(parsed) = crabka_pgparser::parse(&sql) else {
+            return vec![None; attributes.len()];
+        };
+        let [statement] = parsed.as_slice() else {
+            return vec![None; attributes.len()];
+        };
+        let Ok(QueryResult::Rows { fields, rows, .. }) = Box::pin(self.run_select(statement)).await
+        else {
+            return vec![None; attributes.len()];
+        };
+        if fields.len() != attributes.len() {
+            return vec![None; attributes.len()];
+        }
+        attributes
+            .iter()
+            .enumerate()
+            .map(|(position, (_, _, target))| {
+                let rows = rows
+                    .iter()
+                    .filter_map(|row| row.get(position).cloned().map(|cell| vec![cell]))
+                    .collect();
+                self.attribute_statistics_from_rows(
+                    &fields[position],
+                    rows,
+                    self.statistics_target(*target),
+                )
+            })
+            .collect()
+    }
+
+    fn attribute_statistics_from_rows(
+        &self,
+        field: &FieldDescription,
+        rows: Vec<Vec<Option<Cell>>>,
+        statistics_target: usize,
+    ) -> Option<crate::attrstats::AttributeStats> {
         let column_type = crate::exec::column_type_from_oid(field.type_oid).ok()?;
         let range_type = matches!(
             column_type,
@@ -33768,6 +33833,28 @@ mod session_conformance_tests {
             )
             .await
                 == "a"
+        );
+    }
+
+    #[tokio::test]
+    async fn analyze_collects_statistics_for_each_table_column() {
+        let engine = SqlEngine::new();
+        let mut session = engine.connect();
+        for sql in [
+            "CREATE TABLE analyzed_columns (a int4, b text)",
+            "INSERT INTO analyzed_columns VALUES (1, 'one'), (2, 'two')",
+            "ANALYZE analyzed_columns",
+        ] {
+            run(&mut session, sql).await.expect(sql);
+        }
+        assert!(
+            scalar(
+                &mut session,
+                "SELECT string_agg(attname, ',' ORDER BY attname) FROM pg_stats \
+                 WHERE tablename = 'analyzed_columns'",
+            )
+            .await
+                == "a,b"
         );
     }
 
