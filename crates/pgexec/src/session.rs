@@ -6591,6 +6591,12 @@ impl SqlSession {
         for (name, columns) in relations {
             if let Ok(table) = crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &name) {
                 for (index, column) in table.columns.iter().enumerate() {
+                    if columns
+                        .as_ref()
+                        .is_some_and(|requested| !requested.iter().any(|name| name == &column.name))
+                    {
+                        continue;
+                    }
                     if let Some(stats) = self
                         .collect_attribute_statistics(
                             &name,
@@ -33740,6 +33746,28 @@ mod session_conformance_tests {
             )
             .await
                 == "2"
+        );
+    }
+
+    #[tokio::test]
+    async fn analyze_column_list_collects_only_requested_columns() {
+        let engine = SqlEngine::new();
+        let mut session = engine.connect();
+        for sql in [
+            "CREATE TABLE analyzed_columns (a int4, b int4)",
+            "INSERT INTO analyzed_columns VALUES (1, 2), (3, 4)",
+            "ANALYZE analyzed_columns (a)",
+        ] {
+            run(&mut session, sql).await.expect(sql);
+        }
+        assert!(
+            scalar(
+                &mut session,
+                "SELECT string_agg(attname, ',' ORDER BY attname) \
+                 FROM pg_stats WHERE tablename = 'analyzed_columns'",
+            )
+            .await
+                == "a"
         );
     }
 
