@@ -2283,6 +2283,9 @@ impl Polygon {
     /// crossing. A point *on* an edge counts as contained. O(n).
     #[must_use]
     pub fn contains_point(&self, point: Point) -> bool {
+        if point.x.is_nan() || point.y.is_nan() {
+            return false;
+        }
         point_inside(point, &self.points) != 0
     }
 
@@ -3522,6 +3525,11 @@ mod tests {
             (
                 "point out of polygon",
                 square.contains_point(point("(11,5)")),
+                false,
+            ),
+            (
+                "NaN point is outside polygon",
+                square.contains_point(point("(NaN,NaN)")),
                 false,
             ),
             (

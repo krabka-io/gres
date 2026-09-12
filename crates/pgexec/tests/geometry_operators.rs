@@ -408,7 +408,7 @@ async fn the_positional_operators_refuse_the_families_they_do_not_declare() {
 async fn containment_is_declared_one_direction_at_a_time() {
     let (_engine, mut s) = session();
 
-    let cases: [(&str, bool); 20] = [
+    let cases: [(&str, bool); 21] = [
         ("box '(0,0),(3,3)' <@ box '(0,0),(4,4)'", true),
         ("box '(0,0),(5,5)' <@ box '(0,0),(4,4)'", false),
         ("circle '<(0,0),1>' <@ circle '<(0,0),2>'", true),
@@ -424,6 +424,10 @@ async fn containment_is_declared_one_direction_at_a_time() {
         ("point '(1,1)' <@ lseg '[(0,0),(2,2)]'", true),
         ("point '(1,1)' <@ path '[(0,0),(2,2)]'", true),
         ("point '(1,1)' <@ polygon '((0,0),(4,0),(4,4),(0,4))'", true),
+        (
+            "point '(NaN,NaN)' <@ polygon '((0,0),(4,0),(4,4),(0,4))'",
+            false,
+        ),
         (
             "polygon '((1,1),(2,1),(2,2))' <@ polygon '((0,0),(4,0),(4,4),(0,4))'",
             true,
