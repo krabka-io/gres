@@ -33572,6 +33572,15 @@ mod session_conformance_tests {
             assert_class_stats(&mut s, "par", analyzed, "t", label).await;
             if partitioned {
                 assert!(
+                    scalar(
+                        &mut s,
+                        "SELECT count(*) FROM pg_stats \
+                         WHERE tablename = 'par' AND attname = 'i'",
+                    )
+                    .await
+                        == "1"
+                );
+                assert!(
                     run(
                         &mut s,
                         "SELECT relpages FROM pg_class WHERE oid = 'par'::regclass",
