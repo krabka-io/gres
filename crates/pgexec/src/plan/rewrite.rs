@@ -89,10 +89,10 @@ fn rewrite_self_equality_expr(filter: &Expr, scope: &Scope) -> Expr {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crabka_pgparser::ast::BinaryOp;
     use crabka_pgtypes::ColumnType;
 
+    use super::*;
     use crate::scope::{ColumnBinding, Exposure};
 
     fn not_null_table() -> Table {

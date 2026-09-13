@@ -36,8 +36,7 @@ use crabka_pgparser::ast::{
 use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
 use crabka_pgwire::engine::QueryResult;
 
-use crate::exec::is_immutable_function;
-use crate::{error::ExecError, eval::ArgType};
+use crate::{error::ExecError, eval::ArgType, exec::is_immutable_function};
 
 pub(crate) struct ScalarFunctionRequest {
     pub routine: Option<Routine>,
