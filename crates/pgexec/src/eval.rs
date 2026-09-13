@@ -4415,7 +4415,7 @@ fn is_collatable(ty: ColumnType) -> bool {
 pub(crate) fn select_field(value: &Datum, field: &str) -> Result<Datum, ExecError> {
     match value {
         Datum::Null => Ok(Datum::Null),
-        Datum::Record(record) => record.field(field).cloned().ok_or_else(|| {
+        Datum::Record(record) => record.field_value(field).ok_or_else(|| {
             ExecError::UndefinedColumn(format!(
                 "column \"{field}\" not found in data type {}",
                 record.column_type().name()

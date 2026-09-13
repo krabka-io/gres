@@ -2313,6 +2313,20 @@ impl RecordValue {
         self.values.get(index)
     }
 
+    #[must_use]
+    pub fn field_value(&self, name: &str) -> Option<Datum> {
+        if let Some(reference) = self.ty
+            && let Some(ty) = crate::usertype::lookup_oid(reference.oid)
+            && let Some(fields) = ty.fields()
+            && let Some(index) = fields
+                .iter()
+                .position(|field| !field.dropped && field.name == name)
+        {
+            return Some(self.values.get(index).cloned().unwrap_or(Datum::Null));
+        }
+        self.field(name).cloned()
+    }
+
     /// This record's current name for a field position. Named composites read
     /// their descriptor at access time, so an `ALTER TYPE` attribute rename is
     /// visible to values written before the change.

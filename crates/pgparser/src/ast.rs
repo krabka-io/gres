@@ -1542,7 +1542,10 @@ pub struct CompositeFieldDef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AlterTypeAction {
     /// `ADD ATTRIBUTE name type [COLLATE collation]`.
-    AddAttribute(CompositeFieldDef),
+    AddAttribute {
+        field: CompositeFieldDef,
+        cascade: bool,
+    },
     /// `SET (option = value, …)` on a base type.
     Set(Vec<BaseTypeOption>),
     /// `ADD VALUE [IF NOT EXISTS] 'label' [{BEFORE | AFTER} 'existing']`.

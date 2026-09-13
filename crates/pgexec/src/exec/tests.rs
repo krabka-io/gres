@@ -2051,8 +2051,20 @@ async fn alter_type_rename_attribute_cascades_to_its_typed_table() {
     )
     .await;
     assert!(
-        text_rows_of(&mut session, "SELECT id, name FROM rename_people").await
-            == vec![text_row(&["1", "Ada"])]
+        sqlstate_of(&mut session, "ALTER TYPE rename_pair ADD ATTRIBUTE age int").await == "2BP01"
+    );
+    run_s(
+        &mut session,
+        "ALTER TYPE rename_pair ADD ATTRIBUTE age int CASCADE",
+    )
+    .await;
+    assert!(
+        text_rows_of(
+            &mut session,
+            "SELECT id, name, coalesce(age::text, '') FROM rename_people",
+        )
+        .await
+            == vec![text_row(&["1", "Ada", ""])]
     );
     run_s(
         &mut session,
@@ -2061,7 +2073,7 @@ async fn alter_type_rename_attribute_cascades_to_its_typed_table() {
     .await;
     run_s(
         &mut session,
-        "INSERT INTO rename_store VALUES (ROW(2, 'Bea')::rename_pair)",
+        "INSERT INTO rename_store VALUES (ROW(2, 'Bea', NULL)::rename_pair)",
     )
     .await;
     run_s(
@@ -2075,7 +2087,10 @@ async fn alter_type_rename_attribute_cascades_to_its_typed_table() {
             "SELECT (value).display_name, row_to_json(value)::text FROM rename_store",
         )
         .await
-            == vec![text_row(&["Bea", "{\"id\":2,\"display_name\":\"Bea\"}"])]
+            == vec![text_row(&[
+                "Bea",
+                "{\"id\":2,\"display_name\":\"Bea\",\"age\":null}",
+            ])]
     );
 }
 

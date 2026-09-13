@@ -917,7 +917,7 @@ fn alter_type_inner(
         return match action {
             AlterTypeAction::RenameTo(new_name) => rename_multirange(kv, ty, name, new_name),
             AlterTypeAction::OwnerTo(_) => Ok((command("ALTER TYPE"), Vec::new())),
-            AlterTypeAction::AddAttribute(_) => Err(wrong_kind(name, "a composite type")),
+            AlterTypeAction::AddAttribute { .. } => Err(wrong_kind(name, "a composite type")),
             AlterTypeAction::Set(_) => Err(wrong_kind(name, "a base type")),
             AlterTypeAction::AddValue { .. }
             | AlterTypeAction::RenameValue { .. }
@@ -925,7 +925,7 @@ fn alter_type_inner(
         };
     }
     match action {
-        AlterTypeAction::AddAttribute(field) => {
+        AlterTypeAction::AddAttribute { field, cascade } => {
             if column_type_contains_oid(field.ty, ty.oid, &mut HashSet::new()) {
                 return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
                     "42P16",
@@ -946,6 +946,49 @@ fn alter_type_inner(
                     .pop()
                     .expect("one field produces one field"),
             );
+            let tables = typed_tables_using_type(kv, ty.oid)?;
+            if !tables.is_empty() && !cascade {
+                return Err(ExecError::Remote(
+                    crabka_pgwire::error::PgError::error(
+                        "2BP01",
+                        format!(
+                            "cannot alter type \"{lookup_name}\" because it is the type of a typed table"
+                        ),
+                    )
+                    .with_hint("Use ALTER ... CASCADE to alter the typed tables too."),
+                ));
+            }
+            if !tables.is_empty() {
+                let Some(fctx) = fctx else {
+                    return Err(ExecError::Unsupported(
+                        "ALTER TYPE ADD ATTRIBUTE needs a session context for typed tables".into(),
+                    ));
+                };
+                let action = crabka_pgparser::ast::AlterTableAction::AddColumn {
+                    if_not_exists: false,
+                    column: crabka_pgparser::ast::ColumnDef {
+                        name: field.name.clone(),
+                        ty: field.ty,
+                        typmod: None,
+                        serial: None,
+                        collation: field.collation.clone(),
+                        constraints: Vec::new(),
+                    },
+                    options: Vec::new(),
+                };
+                let mut ops = crabka_pgcatalog::put_user_type_ops(kv, &ty)?;
+                for table in tables {
+                    let mut state =
+                        crate::exec::ddl_alter::AlterTableState::new(table, fctx.own_xid);
+                    crate::exec::ddl_alter::alter_table_action_ops(kv, &mut state, &action, fctx)?;
+                    ops.extend(crate::exec::ddl_alter::alter_table_state_ops(
+                        kv,
+                        &state.table.name.clone(),
+                        &mut state,
+                    )?);
+                }
+                return Ok((command("ALTER TYPE"), ops));
+            }
         }
         AlterTypeAction::Set(options) => {
             if ty.is_shell() {
@@ -2266,13 +2309,16 @@ mod tests {
         let error = alter_type(
             &kv,
             &RelationName::new(&composite.schema, &composite.name),
-            &AlterTypeAction::AddAttribute(CompositeFieldDef {
-                name: "recursive".into(),
-                ty: range
-                    .column_type()
-                    .expect("a range always has a column type"),
-                collation: None,
-            }),
+            &AlterTypeAction::AddAttribute {
+                field: CompositeFieldDef {
+                    name: "recursive".into(),
+                    ty: range
+                        .column_type()
+                        .expect("a range always has a column type"),
+                    collation: None,
+                },
+                cascade: false,
+            },
         )
         .expect_err("recursive member");
         assert!(error.into_pg().code == "42P16");

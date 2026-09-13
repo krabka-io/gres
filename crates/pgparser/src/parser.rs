@@ -11881,15 +11881,22 @@ impl Parser {
             } else {
                 None
             };
-            self.eat_ident_eq("cascade");
-            self.eat_ident_eq("restrict");
+            let cascade = if self.eat_ident_eq("cascade") {
+                true
+            } else {
+                self.eat_ident_eq("restrict");
+                false
+            };
             return Ok(crate::ast::Statement::AlterType {
                 name,
-                action: AlterTypeAction::AddAttribute(crate::ast::CompositeFieldDef {
-                    name: field_name,
-                    ty,
-                    collation,
-                }),
+                action: AlterTypeAction::AddAttribute {
+                    field: crate::ast::CompositeFieldDef {
+                        name: field_name,
+                        ty,
+                        collation,
+                    },
+                    cascade,
+                },
             });
         }
         if self.eat_keyword(Keyword::Set) {
@@ -28533,11 +28540,14 @@ mod q1_statement_completeness_tests {
         };
         assert!(
             action
-                == crate::ast::AlterTypeAction::AddAttribute(crate::ast::CompositeFieldDef {
-                    name: "label".into(),
-                    ty: crabka_pgtypes::ColumnType::Text,
-                    collation: Some("C".into()),
-                })
+                == crate::ast::AlterTypeAction::AddAttribute {
+                    field: crate::ast::CompositeFieldDef {
+                        name: "label".into(),
+                        ty: crabka_pgtypes::ColumnType::Text,
+                        collation: Some("C".into()),
+                    },
+                    cascade: true,
+                }
         );
     }
 
