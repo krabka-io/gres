@@ -25240,7 +25240,7 @@ mod tests {
                     vec!["  Conflict Arbiter Indexes: hat_data_pkey".into()],
                     vec!["  Conflict Filter: (excluded.color <> 'forbidden'::bpchar)".into()],
                     vec!["  CTE data".into()],
-                    vec!["    ->  Values Scan on \"*VALUES*\"".into()],
+                    vec!["    ->  Result".into()],
                     vec!["  ->  CTE Scan on data".into()],
                 ])
         );
