@@ -1011,11 +1011,19 @@ pub(crate) fn pg_attribute_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, 
     }
     for virtual_table in virtual_table_names() {
         let table = virtual_catalog_table(virtual_table);
-        rows.extend(attribute_rows_for_table(
+        let mut attributes = attribute_rows_for_table(
             virtual_relation_oid(virtual_table),
             &table,
             &acl,
-        )?);
+        )?;
+        // PostgreSQL's system catalogs sort their collatable fields under C,
+        // independently of the database default collation.
+        for attribute in &mut attributes {
+            if attribute[19] == int(crate::catalog_rel::DEFAULT_COLLATION_OID) {
+                attribute[19] = int(crate::catalog_rel::C_COLLATION_OID);
+            }
+        }
+        rows.extend(attributes);
     }
     for index in BUILTIN_CATALOG_OID_INDEXES {
         let table = builtin_catalog_index_table(index);
@@ -5761,6 +5769,16 @@ mod tests {
             .find(|row| row[0] == oid(1017))
             .expect("point[] pg_type row");
         assert_eq!(array[22], Datum::InternalChar(b'd'));
+    }
+
+    #[test]
+    fn virtual_catalog_text_columns_use_c_collation() {
+        let attribute = pg_attribute_rows(&MemKv::default())
+            .expect("pg_attribute rows")
+            .into_iter()
+            .find(|row| row[0] == int(1259) && row[1] == text("relname"))
+            .expect("pg_class.relname attribute");
+        assert_eq!(attribute[19], int(crate::catalog_rel::C_COLLATION_OID));
     }
 
     #[test]

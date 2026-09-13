@@ -101,6 +101,7 @@ pub(crate) fn builtin_operator_family_oid(method: &str, name: &str) -> Option<i3
 
 /// Oid of the `default` collation, as in PostgreSQL.
 pub(crate) const DEFAULT_COLLATION_OID: i32 = 100;
+pub(crate) const C_COLLATION_OID: i32 = 950;
 
 /// Canonicalize a written relation name to this module's key.
 ///
@@ -2659,7 +2660,7 @@ fn pg_authid_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
 /// apart.
 pub(crate) const BUILTIN_COLLATIONS: &[(i32, &str, &str, i32)] = &[
     (DEFAULT_COLLATION_OID, "default", "d", 0),
-    (950, "C", "c", -1),
+    (C_COLLATION_OID, "C", "c", -1),
     (951, "POSIX", "c", -1),
 ];
 
