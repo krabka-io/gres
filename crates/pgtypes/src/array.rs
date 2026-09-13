@@ -412,7 +412,9 @@ fn malformed(input: &str) -> TypeError {
 }
 
 fn mismatched_subarrays(input: &str) -> TypeError {
-    malformed(input)
+    TypeError::ArrayDimensionMismatch {
+        value: input.to_string(),
+    }
 }
 
 fn too_many_dims(ndims: usize) -> TypeError {
@@ -581,6 +583,16 @@ mod tests {
             let error = parse_literal(input).expect_err("rejected");
             assert!(error.sqlstate() == "22P02", "expected 22P02 for {input:?}");
         }
+    }
+
+    #[test]
+    fn mismatched_nested_arrays_explain_their_dimensions() {
+        let error = parse_literal("{{1,2},{3}} ").expect_err("mismatched dimensions");
+        assert!(error.sqlstate() == "22P02");
+        assert!(
+            error.detail().as_deref()
+                == Some("Multidimensional arrays must have sub-arrays with matching dimensions.")
+        );
     }
 
     #[test]
