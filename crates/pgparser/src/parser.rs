@@ -11667,6 +11667,7 @@ impl Parser {
             let mut subtype = None;
             let mut collation = None;
             let mut multirange_type_name = None;
+            let mut subtype_diff = None;
             while *self.peek() != Token::RParen {
                 // A `def_elem` name is a `ColLabel` in PostgreSQL, so every
                 // keyword may be one: `CREATE TYPE r AS RANGE (COLLATION = "C")`
@@ -11685,6 +11686,7 @@ impl Parser {
                             None => crate::ast::RelationRef::bare(written),
                         });
                     }
+                    "subtype_diff" => subtype_diff = Some(self.def_arg_name()?),
                     // The remaining options name support functions or an
                     // explicit multirange type. Preserve the semantic options
                     // above and consume these names for later catalog expansion.
@@ -11705,6 +11707,7 @@ impl Parser {
                     })?,
                     collation,
                     multirange_type_name,
+                    subtype_diff,
                 },
             });
         }

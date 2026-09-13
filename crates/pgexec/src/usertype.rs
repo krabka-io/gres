@@ -15,6 +15,7 @@ use crabka_pgkv::{Kv, WriteOp};
 use crabka_pgparser::ast::{
     AlterDomainAction, AlterTypeAction, BaseTypeOption, BaseTypeOptionValue, CompositeFieldDef,
     CreateTypeDefinition, DomainConstraint, EnumValuePosition,
+    Expr, FuncArgs, FuncCall,
 };
 use crabka_pgtypes::{
     ColumnType, Datum, TypeError,
@@ -107,7 +108,11 @@ pub fn create_type(
             subtype,
             collation,
             multirange_type_name,
+            subtype_diff,
         } => {
+            if let Some(subtype_diff) = subtype_diff {
+                validate_range_subtype_diff(*subtype, subtype_diff)?;
+            }
             let (schema, companion) = match multirange_type_name {
                 Some(companion) => companion_identity(kv, resolution, companion)?,
                 None => (
@@ -128,6 +133,41 @@ pub fn create_type(
         }
     };
     register(kv, name, body, "CREATE TYPE")
+}
+
+fn validate_range_subtype_diff(subtype: ColumnType, name: &str) -> Result<(), ExecError> {
+    let argument = || Expr::Const {
+        value: Datum::Null,
+        ty: subtype,
+    };
+    let call = FuncCall {
+        name: name.to_owned(),
+        distinct: false,
+        args: FuncArgs::Exprs(vec![argument(), argument()]),
+        order_by: Vec::new(),
+        within_group: false,
+        filter: None,
+        sql_syntax: false,
+    };
+    let result = match crate::func::scalar_result_type(&call, &crate::scope::Scope::empty()) {
+        Err(ExecError::UndefinedFunction(_)) => {
+            return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+                "42883",
+                format!(
+                    "function {name}({}, {}) does not exist",
+                    subtype.name(),
+                    subtype.name()
+                ),
+            )));
+        }
+        result => result?,
+    };
+    match result {
+        ColumnType::Float8 => Ok(()),
+        _ => Err(ExecError::InvalidObjectDefinition(format!(
+            "range subtype_diff function {name} must return type double precision"
+        ))),
+    }
 }
 
 /// Create the shell PostgreSQL makes for an unknown `CREATE FUNCTION` return
@@ -2005,7 +2045,7 @@ fn value_scope(base: ColumnType) -> crate::scope::Scope {
 mod tests {
     use assert2::assert;
     use crabka_pgkv::MemKv;
-    use crabka_pgparser::ast::RelationRef;
+    use crabka_pgparser::ast::{RelationRef, Statement};
 
     use super::*;
 
@@ -2081,6 +2121,30 @@ mod tests {
                 "widget_out"
             )
             .is_none()
+        );
+    }
+
+    #[test]
+    fn range_subtype_diff_requires_the_subtype_signature() {
+        let statements = crabka_pgparser::parse(
+            "CREATE TYPE bogus_float8range AS RANGE (subtype = float8, subtype_diff = float4mi)",
+        )
+        .expect("parse");
+        let [Statement::CreateType { name, definition }] = statements.as_slice() else {
+            panic!("expected CREATE TYPE")
+        };
+        let error = create_type(
+            &MemKv::default(),
+            crate::relname::ResolutionScope::default_scope(),
+            &RelationName::public(&name.name),
+            definition,
+        )
+        .expect_err("float4mi has no float8 signature")
+        .into_pg();
+
+        assert!(error.code == "42883");
+        assert!(
+            error.message == "function float4mi(double precision, double precision) does not exist"
         );
     }
 
@@ -2254,6 +2318,7 @@ mod tests {
                 subtype: ColumnType::Text,
                 collation: None,
                 multirange_type_name: Some(RelationRef::bare("named_multirange_test")),
+                subtype_diff: None,
             },
         )
         .expect("explicit companion");
@@ -2274,6 +2339,7 @@ mod tests {
                 subtype: ColumnType::Text,
                 collation: None,
                 multirange_type_name: Some(RelationRef::bare("named_multirange_test")),
+                subtype_diff: None,
             },
         )
         .expect_err("existing companion collision");
@@ -2290,6 +2356,7 @@ mod tests {
                     schema: Some("pg_catalog".into()),
                     name: "int4".into(),
                 }),
+                subtype_diff: None,
             },
         )
         .expect_err("exact pg_catalog type collision");

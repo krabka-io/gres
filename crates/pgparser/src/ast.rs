@@ -1457,6 +1457,7 @@ pub enum CreateTypeDefinition {
         subtype: ColumnType,
         collation: Option<String>,
         multirange_type_name: Option<RelationRef>,
+        subtype_diff: Option<String>,
     },
     /// `CREATE TYPE name (option = value, …)`: a user-defined base type. The
     /// options are carried through verbatim, in written order, because which of
