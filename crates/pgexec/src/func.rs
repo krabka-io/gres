@@ -89,6 +89,7 @@ enum ScalarFunc {
     Log,
     Pi,
     Float4Send,
+    Float8Send,
     // SP33: string family.
     Lpad,
     Rpad,
@@ -389,6 +390,7 @@ fn scalar_func(name: &str) -> Option<ScalarFunc> {
         "log" => ScalarFunc::Log,
         "pi" => ScalarFunc::Pi,
         "float4send" => ScalarFunc::Float4Send,
+        "float8send" => ScalarFunc::Float8Send,
         "lpad" => ScalarFunc::Lpad,
         "rpad" => ScalarFunc::Rpad,
         "left" => ScalarFunc::Left,
@@ -1506,6 +1508,23 @@ fn builtin_scalar_result_type(fc: &FuncCall, scope: &Scope) -> Result<ColumnType
                 if !matches!(
                     t,
                     ColumnType::Float4 | ColumnType::Int2 | ColumnType::Int4 | ColumnType::Int8
+                ) {
+                    return Err(undefined_function_spelled(&fc.name, args, scope));
+                }
+            }
+            Ok(ColumnType::Bytea)
+        }
+        ScalarFunc::Float8Send => {
+            require_arity(fc, n == 1)?;
+            if !is_unknown_literal(&args[0]) {
+                let t = crate::eval::infer_type(&args[0], scope)?;
+                if !matches!(
+                    t,
+                    ColumnType::Float4
+                        | ColumnType::Float8
+                        | ColumnType::Int2
+                        | ColumnType::Int4
+                        | ColumnType::Int8
                 ) {
                     return Err(undefined_function_spelled(&fc.name, args, scope));
                 }
@@ -3278,6 +3297,17 @@ fn eval_eager(
             };
             Ok(Datum::Bytea(crabka_pgtypes::encoding::encode_binary(
                 &Datum::Float4(value),
+            )))
+        }
+        ScalarFunc::Float8Send => {
+            require_arity(fc, vals.len() == 1)?;
+            let Datum::Float8(value) =
+                crabka_pgtypes::cast::cast(&vals[0], ColumnType::Float8, &ctx.time_zone)?
+            else {
+                return Err(type_error("float8send", &vals[0]));
+            };
+            Ok(Datum::Bytea(crabka_pgtypes::encoding::encode_binary(
+                &Datum::Float8(value),
             )))
         }
         ScalarFunc::Lpad | ScalarFunc::Rpad => {
@@ -5956,6 +5986,17 @@ mod tests {
         // no candidate at all.
         assert!(err_code("float4send(1::float8)", None) == "42883");
         assert!(err_code("float4send('a'::text)", None) == "42883");
+    }
+
+    #[test]
+    fn float8send_reports_the_eight_wire_bytes_of_a_double() {
+        for (sql, expected) in [
+            ("float8send(1::float8)", r"\x3ff0000000000000"),
+            ("float8send('-0'::float8)", r"\x8000000000000000"),
+        ] {
+            assert!(rendered(sql) == expected, "{sql} gave {}", rendered(sql));
+        }
+        assert!(err_code("float8send('a'::text)", None) == "42883");
     }
 
     #[test]
