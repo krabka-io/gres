@@ -6009,13 +6009,16 @@ pub(crate) fn plpgsql_table_function_schema(
         RoutineResult::Table(columns) => columns
             .iter()
             .map(|(name, ty)| {
-                ty.column.map(|ty| (name.clone(), ty)).ok_or_else(|| {
-                    ExecError::Unsupported(format!(
-                        "function {} returns unsupported type {}",
-                        routine.identity(),
-                        ty.name
-                    ))
-                })
+                ty.column
+                    .or_else(|| resolved_polymorphic_type(&routine, &given, &ty.name))
+                    .map(|ty| (name.clone(), ty))
+                    .ok_or_else(|| {
+                        ExecError::Unsupported(format!(
+                            "function {} returns unsupported type {}",
+                            routine.identity(),
+                            ty.name
+                        ))
+                    })
             })
             .collect::<Result<Vec<_>, _>>()?,
         RoutineResult::Unspecified => output_params()?,
@@ -7452,6 +7455,29 @@ mod tests {
         assert!(
             matches!(result.as_slice(), [QueryResult::Command { tag }] if tag == "CREATE FUNCTION")
         );
+    }
+
+    #[tokio::test]
+    async fn table_results_resolve_polymorphic_range_subtypes() {
+        let mut session = crate::SqlEngine::new().connect();
+        session
+            .simple_query(
+                "CREATE FUNCTION range_bounds(r anyrange) \
+                 RETURNS TABLE (lower_bound anyelement, upper_bound anyelement) \
+                 LANGUAGE sql AS $$ SELECT lower(r), upper(r) $$",
+            )
+            .await
+            .expect("define polymorphic table function");
+        let result = session
+            .simple_query("SELECT * FROM range_bounds(int4range(1, 11))")
+            .await
+            .expect("execute polymorphic table function");
+        let [QueryResult::Rows { rows, .. }] = result.as_slice() else {
+            panic!("expected rows");
+        };
+        assert!(rows.len() == 1);
+        assert!(rows[0][0].as_ref().expect("lower").text.as_ref() == b"1");
+        assert!(rows[0][1].as_ref().expect("upper").text.as_ref() == b"11");
     }
 
     #[tokio::test]
