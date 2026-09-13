@@ -41,6 +41,8 @@ fn timestamp_storage_reaches_postgres_full_calendar_range() {
         timestamp_from_binary(&timestamp_to_binary(upper)).expect("binary round trip") == upper
     );
     assert!(parse_timestamp("294277-01-01 00:00:00").is_err());
+    let refused = parse_timestamp("Feb 16 17:32:01 5097 BC").expect_err("below timestamp range");
+    assert!(refused.to_string() == "timestamp out of range: \"Feb 16 17:32:01 5097 BC\"");
 }
 
 /// `PostgreSQL`'s `INTERVAL_MULDIV_TBL` and the four scalings the `interval`

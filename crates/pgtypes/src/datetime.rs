@@ -2208,11 +2208,13 @@ fn combine_parts(date: Date, micros_of_day: i64, s: &str) -> Result<PgTimestamp,
         (date, micros_of_day)
     };
     let days = epoch_days_from_date(date);
-    i64::from(days)
+    let micros = i64::from(days)
         .checked_mul(USECS_PER_DAY_I64)
         .and_then(|micros| micros.checked_add(micros_of_day))
-        .and_then(|micros| timestamp_from_epoch_micros(micros).ok())
-        .ok_or_else(overflow)
+        .ok_or_else(overflow)?;
+    timestamp_from_epoch_micros(micros).map_err(|_| TypeError::DatetimeOutOfRange {
+        message: format!("timestamp out of range: \"{s}\""),
+    })
 }
 
 /// The civil half of [`combine_parts`] for `timestamptz` input.
