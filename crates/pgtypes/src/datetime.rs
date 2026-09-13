@@ -1313,6 +1313,18 @@ pub fn zoned_instant(dt: DateTime, tz: &TimeZone) -> Result<Timestamp, jiff::Err
     zone_offset_for(dt, tz).to_timestamp(dt)
 }
 
+/// The dynamic-abbreviation variant of [`zoned_instant`]: forward-transition
+/// gaps use the post-transition offset, while folds keep PostgreSQL's later
+/// instant rule.
+pub fn zoned_instant_after_gap(dt: DateTime, tz: &TimeZone) -> Result<Timestamp, jiff::Error> {
+    let offset = match tz.to_ambiguous_timestamp(dt).offset() {
+        AmbiguousOffset::Unambiguous { offset } => offset,
+        AmbiguousOffset::Gap { before, after } => before.max(after),
+        AmbiguousOffset::Fold { before, after } => before.min(after),
+    };
+    offset.to_timestamp(dt)
+}
+
 /// Resolve a whole-value reserved date spelling.
 ///
 /// The clock-relative spellings never reach here: they fill calendar fields
@@ -1966,7 +1978,7 @@ pub fn parse_timetz_in_at(
         // A zone whose offset moves needs a date to be resolved against; the
         // decoder has already refused one that has neither a date nor a single
         // offset for all time, so a dateless zone here resolves without one.
-        Some(Zone::Named(zone)) => match parts.date {
+        Some(Zone::Named(zone) | Zone::NamedAfterGap(zone)) => match parts.date {
             Some(date) => zone_offset_for(instant_on(date), &zone),
             None => zone.to_fixed_offset().map_err(|_| syntax())?,
         },
@@ -2364,6 +2376,9 @@ pub fn parse_timestamptz_in_at(
             let instant = match parts.zone {
                 Some(Zone::Offset(off)) => off.to_timestamp(civil).map_err(|_| overflow())?,
                 Some(Zone::Named(zone)) => zoned_instant(civil, &zone).map_err(|_| overflow())?,
+                Some(Zone::NamedAfterGap(zone)) => {
+                    zoned_instant_after_gap(civil, &zone).map_err(|_| overflow())?
+                }
                 None => zoned_instant(civil, tz).map_err(|_| overflow())?,
             };
             // The range check belongs on the INSTANT, not on the local reading:
@@ -8149,6 +8164,12 @@ mod io_tests {
         assert_eq!(
             timestamptz_to_text(mmt, &TimeZone::UTC),
             "1912-01-01 03:44:51+00"
+        );
+        let msk = parse_timestamptz("2011-03-27 02:00:00 MSK", &TimeZone::UTC)
+            .expect("MSK gap");
+        assert_eq!(
+            timestamptz_to_text(msk, &TimeZone::UTC),
+            "2011-03-26 22:00:00+00"
         );
     }
 

@@ -499,6 +499,18 @@ pub(crate) fn eval_datetime(
                 Some(zone) => zone_arg(zone)?,
                 None => ctx.time_zone.clone(),
             };
+            if let (Some(Datum::Text(name)), Datum::Timestamp(dt)) = (&zone, &value)
+                && name.eq_ignore_ascii_case("msk")
+            {
+                return crabka_pgtypes::datetime::zoned_instant_after_gap(
+                    dt.civil().ok_or_else(|| {
+                        invalid_param("timestamp out of range for time zone conversion")
+                    })?,
+                    &tz,
+                )
+                .map(Datum::Timestamptz)
+                .map_err(|_| invalid_param("timestamp out of range for time zone conversion"));
+            }
             timezone_convert(&tz, &value)
         }
         DtFunc::IsFinite => {
@@ -2627,6 +2639,12 @@ mod tests {
                 "TIMESTAMP '2011-03-13 02:30:00' AT TIME ZONE 'America/Los_Angeles'",
                 &ctx
             )) == at(1_300_012_200)
+        );
+        assert2::assert!(
+            epoch(&ev(
+                "TIMESTAMP '2011-03-27 02:00:00' AT TIME ZONE 'MSK'",
+                &ctx
+            )) == at(1_301_176_800)
         );
         // Truncating to the hour inside that fold keeps the source offset, so
         // 08:30 UTC (PDT) becomes 08:00 UTC and stays on the pre-transition

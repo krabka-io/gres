@@ -109,6 +109,8 @@ pub enum Zone {
     /// A zone-database name or dynamic abbreviation, whose offset depends on the
     /// instant it is applied to.
     Named(TimeZone),
+    /// A dynamic abbreviation that takes the post-transition offset in gaps.
+    NamedAfterGap(TimeZone),
 }
 
 impl Zone {
@@ -117,7 +119,7 @@ impl Zone {
     pub fn into_time_zone(self) -> TimeZone {
         match self {
             Zone::Offset(offset) => TimeZone::fixed(offset),
-            Zone::Named(tz) => tz,
+            Zone::Named(tz) | Zone::NamedAfterGap(tz) => tz,
         }
     }
 }
@@ -728,7 +730,7 @@ pub fn decode_at(
         // time-only literal usually has none: `'15:36:39 America/New_York'` is
         // malformed while `'15:36:39 UTC'` — a zone with one offset for all
         // time — is not.
-        if let Some(Zone::Named(named)) = &zone
+        if let Some(Zone::Named(named) | Zone::NamedAfterGap(named)) = &zone
             && date.is_none()
             && named.to_fixed_offset().is_err()
         {
@@ -1591,7 +1593,7 @@ fn lookup_abbrev(word: &str) -> Option<Zone> {
         .find(|(abbrev, _)| *abbrev == word)
         .and_then(|(_, name)| zone_by_name(name))
     {
-        return Some(Zone::Named(zone));
+        return Some(Zone::NamedAfterGap(zone));
     }
     FIXED_ABBREVS
         .iter()
@@ -1638,7 +1640,7 @@ fn mmt_zone(word: &str, tz: &TimeZone) -> Option<Zone> {
 pub(super) fn abbrev_offset(word: &str) -> Option<(i32, Option<TimeZone>)> {
     match lookup_abbrev(word)? {
         Zone::Offset(offset) => Some((offset.seconds(), None)),
-        Zone::Named(zone) => Some((0, Some(zone))),
+        Zone::Named(zone) | Zone::NamedAfterGap(zone) => Some((0, Some(zone))),
     }
 }
 
