@@ -7483,6 +7483,23 @@ mod tests {
         kv
     }
 
+    #[test]
+    fn volatile_call_distinguishes_catalog_and_user_routines() {
+        let kv = MemKv::default();
+        assert!(is_volatile_call(&kv, "clock_timestamp"));
+        assert!(!is_volatile_call(&kv, "now"));
+        defined(
+            &kv,
+            "CREATE FUNCTION volatile_cursor_value() RETURNS int LANGUAGE sql AS 'SELECT 1'",
+        );
+        defined(
+            &kv,
+            "CREATE FUNCTION stable_cursor_value() RETURNS int STABLE LANGUAGE sql AS 'SELECT 1'",
+        );
+        assert!(is_volatile_call(&kv, "volatile_cursor_value"));
+        assert!(!is_volatile_call(&kv, "stable_cursor_value"));
+    }
+
     #[tokio::test]
     async fn routine_composite_results_follow_the_session_search_path() {
         let mut session = crate::SqlEngine::new().connect();
