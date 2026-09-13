@@ -1020,7 +1020,7 @@ pub fn cast_in(
             crate::datetime::parse_timestamptz_in(s, order, tz).map(Datum::Timestamptz)
         }
         (Datum::Text(s), ColumnType::Interval) => {
-            crate::datetime::parse_interval(s).map(Datum::Interval)
+            crate::datetime::parse_interval_in(s, style.interval_style).map(Datum::Interval)
         }
         (Datum::Text(s), ColumnType::Uuid) => {
             crate::uuid::UuidBytes::parse(s).map(|uuid| Datum::Text(uuid.to_canonical_text()))

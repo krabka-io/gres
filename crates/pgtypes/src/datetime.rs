@@ -2581,7 +2581,12 @@ const CLOCK_FIELDS: u32 =
 /// quantities spill into the next-smaller unit; weeks fold to days, years to
 /// months.
 pub fn parse_interval(s: &str) -> Result<Interval, TypeError> {
-    parse_interval_ranged(s, None)
+    parse_interval_in(s, IntervalStyle::Postgres)
+}
+
+/// Parse an interval using the session's input style rules.
+pub fn parse_interval_in(s: &str, style: IntervalStyle) -> Result<Interval, TypeError> {
+    parse_interval_ranged_in(s, None, style)
 }
 
 /// [`parse_interval`] with the field range an `INTERVAL '…' <field> [TO <field>]`
@@ -2591,6 +2596,14 @@ pub fn parse_interval(s: &str) -> Result<Interval, TypeError> {
 pub fn parse_interval_ranged(
     s: &str,
     range: Option<(IntervalField, IntervalField)>,
+) -> Result<Interval, TypeError> {
+    parse_interval_ranged_in(s, range, IntervalStyle::Postgres)
+}
+
+fn parse_interval_ranged_in(
+    s: &str,
+    range: Option<(IntervalField, IntervalField)>,
+    style: IntervalStyle,
 ) -> Result<Interval, TypeError> {
     let t = s.trim();
     // The two non-finite intervals, spelled exactly as PostgreSQL accepts them.
@@ -2606,7 +2619,7 @@ pub fn parse_interval_ranged(
     // gives interval its own code, so `interval_in` promotes the shared
     // decoder's 22008 field overflow to it), while a decode that only fails when
     // years and months are combined is `interval out of range` (22008).
-    let itm = decode_interval(t, range).map_err(|e| match e {
+    let itm = decode_interval(t, range, style).map_err(|e| match e {
         IntervalError::Format => TypeError::InvalidDatetimeFormat {
             type_name: "interval",
             value: s.to_string(),
@@ -2877,6 +2890,7 @@ fn split_interval_fields(text: &str) -> Vec<String> {
 fn decode_interval(
     t: &str,
     range: Option<(IntervalField, IntervalField)>,
+    style: IntervalStyle,
 ) -> Result<ItmIn, IntervalError> {
     if t.is_empty() {
         return Err(IntervalError::Format);
@@ -2894,6 +2908,24 @@ fn decode_interval(
     let negate = tokens.last().is_some_and(|last| last == "ago");
     if negate {
         tokens.pop();
+    }
+    if style == IntervalStyle::SqlStandard {
+        let signed = tokens
+            .iter()
+            .filter(|token| token.starts_with(['+', '-']))
+            .count();
+        if signed == 1 && tokens.iter().any(|token| token.starts_with('-')) {
+            for token in &mut tokens {
+                if !token.starts_with(['+', '-'])
+                    && token
+                        .bytes()
+                        .next()
+                        .is_some_and(|byte| byte.is_ascii_digit() || byte == b'.')
+                {
+                    token.insert(0, '-');
+                }
+            }
+        }
     }
     let tokens: Vec<&str> = tokens.iter().map(String::as_str).collect();
     // With no qualifier the rightmost bare quantity is seconds, PostgreSQL's
@@ -8144,6 +8176,32 @@ mod io_tests {
         assert_eq!(
             interval_to_text(parse_interval("-1 day").expect("valid interval")),
             "-1 days"
+        );
+    }
+
+    #[test]
+    fn parse_interval_sql_standard_matches_leading_signs() {
+        assert_eq!(
+            interval_to_text_in(
+                parse_interval_in(
+                    "-1 day 23 hours 45 min 12.34 sec",
+                    IntervalStyle::SqlStandard,
+                )
+                .expect("sql-standard interval"),
+                IntervalStyle::SqlStandard,
+            ),
+            "-1 23:45:12.34"
+        );
+        assert_eq!(
+            interval_to_text_in(
+                parse_interval_in(
+                    "-1 year 2 months 1 day 23 hours 45 min +12.34 sec",
+                    IntervalStyle::SqlStandard,
+                )
+                .expect("explicit sign"),
+                IntervalStyle::SqlStandard,
+            ),
+            "-0-10 +1 +23:45:12.34"
         );
     }
 
