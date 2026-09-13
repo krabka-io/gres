@@ -7588,8 +7588,10 @@ impl Parser {
             // START TRANSACTION is valid; bare START is not a statement.
             self.expect(&Token::Keyword(Keyword::Transaction))?;
         } else {
-            // TRANSACTION is optional after BEGIN.
-            self.eat_keyword(Keyword::Transaction);
+            // TRANSACTION and WORK are optional after BEGIN.
+            if !self.eat_keyword(Keyword::Transaction) {
+                self.eat_ident_eq("work");
+            }
         }
         let modes = self.transaction_modes()?;
         Ok(Statement::Begin {
@@ -21567,6 +21569,7 @@ mod tests {
         };
         let cases: &[(&str, Statement)] = &[
             ("BEGIN", begin(None, None, None)),
+            ("BEGIN WORK", begin(None, None, None)),
             ("START TRANSACTION", begin(None, None, None)),
             (
                 "BEGIN ISOLATION LEVEL REPEATABLE READ",
@@ -21608,6 +21611,7 @@ mod tests {
         }
         // `READ` must be followed by one of the two access modes.
         assert!(parse("BEGIN READ").is_err());
+        assert!(parse("BEGIN TRANSACTION WORK").is_err());
         assert!(parse("BEGIN READ SIDEWAYS").is_err());
     }
 
