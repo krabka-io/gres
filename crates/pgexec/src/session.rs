@@ -18176,13 +18176,13 @@ fn attach_array_runtime_position(sql: &str, error: PgError) -> PgError {
     let offset = if error.message.starts_with("subscripted assignment to ") {
         tokens
             .iter()
-            .position(|(token, _)| *token == Token::Keyword(Keyword::Values))
-            .and_then(|values| tokens.get(values + 1..))
-            .and_then(|after_values| {
-                after_values
+            .position(|(token, _)| *token == Token::Keyword(Keyword::Into))
+            .and_then(|into| {
+                let after_into = tokens.get(into + 1..)?;
+                let open = after_into
                     .iter()
-                    .find(|(token, _)| !matches!(token, Token::LParen))
-                    .map(|(_, offset)| *offset)
+                    .position(|(token, _)| matches!(token, Token::LParen))?;
+                after_into.get(open + 1).map(|(_, offset)| *offset)
             })
     } else if matches!(
         error.message.as_str(),
@@ -18191,8 +18191,11 @@ fn attach_array_runtime_position(sql: &str, error: PgError) -> PgError {
     ) {
         let positions: Vec<_> = tokens
             .iter()
-            .filter_map(|(token, offset)| {
-                matches!(token, Token::Keyword(Keyword::Any | Keyword::All)).then_some(*offset)
+            .enumerate()
+            .filter_map(|(index, (token, _))| {
+                matches!(token, Token::Keyword(Keyword::Any | Keyword::All))
+                    .then(|| tokens.get(index.checked_sub(1)?).map(|(_, offset)| *offset))
+                    .flatten()
             })
             .collect();
         match positions.as_slice() {

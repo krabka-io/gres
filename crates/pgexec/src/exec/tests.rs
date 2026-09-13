@@ -5307,7 +5307,7 @@ async fn array_target_subscripts_name_the_required_value_type() {
                 .diagnostics
                 .as_ref()
                 .and_then(|diagnostics| diagnostics.position)
-                == sql.find("now").map(|offset| offset + 1)
+                == sql.find("(a").map(|offset| offset + 2)
         );
     }
 }
@@ -5336,7 +5336,7 @@ async fn quantified_array_type_errors_point_at_any_or_all() {
                 .diagnostics
                 .as_ref()
                 .and_then(|diagnostics| diagnostics.position)
-                == sql.find("ANY").map(|offset| offset + 1)
+                == sql.find('*').map(|offset| offset + 1)
         );
     }
 }
