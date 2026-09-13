@@ -1585,7 +1585,7 @@ fn apply_pow(l: &Datum, r: &Datum) -> Result<Datum, ExecError> {
     }
     let result = base.powf(exp);
     if result.is_infinite() && base.is_finite() && exp.is_finite() {
-        return Err(ExecError::Type(TypeError::Overflow));
+        return Err(ExecError::Type(TypeError::float_overflow()));
     }
     Ok(Datum::Float8(result))
 }
@@ -1682,31 +1682,24 @@ pub(crate) fn apply_binary_of(
     };
     let (ol, or) = (oidvector(left, l)?, oidvector(right, r)?);
     let (l, r) = (ol.as_ref().unwrap_or(l), or.as_ref().unwrap_or(r));
-    // A stored float8 can use the numeric Datum representation. Resolve an
-    // unknown exponent from the expression's type instead of that storage
-    // detail, so `float8_column ^ '1e200'` chooses float8 power.
-    let coerce_float8_pow = |literal: &Expr,
-                              value: &Datum,
-                              other: &Expr|
-     -> Result<Option<Datum>, ExecError> {
-        if op == BinaryOp::Pow
-            && matches!(literal, Expr::StringLiteral(_))
-            && matches!(value, Datum::Text(_))
-            && infer_type(other, scope)? == ColumnType::Float8
-        {
-            return cast_value(value, ColumnType::Float8, &ctx.time_zone).map(Some);
-        }
-        Ok(None)
-    };
-    let (pow_left, pow_right) = (
-        coerce_float8_pow(left, l, right)?,
-        coerce_float8_pow(right, r, left)?,
-    );
-    let (lc, rc) = if pow_left.is_some() || pow_right.is_some() {
-        (pow_left, pow_right)
-    } else {
-        coerce_untyped_literal_operands(op, left, right, l, r, ctx)?
-    };
+    // A stored float8 may be represented by a numeric Datum. `^` still uses
+    // the float8 operator whenever either resolved operand is float8.
+    if op == BinaryOp::Pow
+        && (infer_type(left, scope)? == ColumnType::Float8
+            || infer_type(right, scope)? == ColumnType::Float8)
+    {
+        let as_float8 = |expr: &Expr, value: &Datum| -> Result<Datum, ExecError> {
+            if matches!(expr, Expr::StringLiteral(_)) && matches!(value, Datum::Text(_)) {
+                return cast_value(value, ColumnType::Float8, &ctx.time_zone);
+            }
+            Ok(to_f64(value)
+                .map(Datum::Float8)
+                .unwrap_or_else(|| value.clone()))
+        };
+        let (l, r) = (as_float8(left, l)?, as_float8(right, r)?);
+        return apply_binary(op, &l, &r, ctx);
+    }
+    let (lc, rc) = coerce_untyped_literal_operands(op, left, right, l, r, ctx)?;
     let (l, r) = (lc.as_ref().unwrap_or(l), rc.as_ref().unwrap_or(r));
     if op == BinaryOp::Concat {
         let (kind, _) = resolve_concat(left, right, scope)?;
@@ -7998,6 +7991,27 @@ mod tests {
         assert!(err_code("(-2) ^ 0.5", None, &[]) == "2201F");
         assert!(err_code("5 % 0", None, &[]) == "22012");
         assert!(infer_err("1.5::float8 % 2").into_pg().code == "42883");
+    }
+
+    #[tokio::test]
+    async fn float8_column_power_coerces_an_unknown_exponent_before_evaluation() {
+        use crabka_pgwire::engine::{Engine, Session};
+
+        let engine = crate::SqlEngine::new();
+        let mut session = engine.connect();
+        session
+            .simple_query(
+                "CREATE TEMP TABLE float_power (f1 float8); INSERT INTO float_power VALUES (2)",
+            )
+            .await
+            .expect("fixture");
+        let error = session
+            .simple_query("SELECT f.f1 ^ '1e200' FROM float_power f")
+            .await
+            .expect_err("float8 power overflows");
+
+        assert_eq!(error.code, "22003");
+        assert_eq!(error.message, "value out of range: overflow");
     }
 
     #[test]
