@@ -2095,6 +2095,35 @@ async fn alter_type_rename_attribute_cascades_to_its_typed_table() {
 }
 
 #[tokio::test]
+async fn alter_type_drop_attribute_preserves_composite_positions() {
+    use assert2::assert;
+
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    run_s(
+        &mut session,
+        "CREATE TYPE drop_pair AS (first int, middle text, last int)",
+    )
+    .await;
+    run_s(&mut session, "CREATE TABLE drop_store (value drop_pair)").await;
+    run_s(
+        &mut session,
+        "INSERT INTO drop_store VALUES (ROW(1, 'gone', 3)::drop_pair)",
+    )
+    .await;
+    run_s(&mut session, "ALTER TYPE drop_pair DROP ATTRIBUTE middle").await;
+    assert!(
+        text_rows_of(
+            &mut session,
+            "SELECT (value).first, (value).last, row_to_json(value)::text FROM drop_store",
+        )
+        .await
+            == vec![text_row(&["1", "3", "{\"first\":1,\"last\":3}"])]
+    );
+    assert!(sqlstate_of(&mut session, "SELECT (value).middle FROM drop_store").await == "42703");
+}
+
+#[tokio::test]
 async fn alter_table_can_associate_and_disassociate_a_matching_row_type() {
     use assert2::assert;
 

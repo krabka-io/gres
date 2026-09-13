@@ -2361,6 +2361,34 @@ impl RecordValue {
         }
         self.names.to_vec()
     }
+
+    /// The current visible fields and their physical values. Named composites
+    /// retain dropped attributes in storage, so their descriptor—not a compact
+    /// enumeration—chooses each value's position.
+    #[must_use]
+    pub fn visible_field_values(&self) -> Vec<(String, Datum)> {
+        if let Some(reference) = self.ty
+            && let Some(ty) = crate::usertype::lookup_oid(reference.oid)
+            && let Some(fields) = ty.fields()
+        {
+            return fields
+                .iter()
+                .enumerate()
+                .filter(|(_, field)| !field.dropped)
+                .map(|(index, field)| {
+                    (
+                        field.name.clone(),
+                        self.values.get(index).cloned().unwrap_or(Datum::Null),
+                    )
+                })
+                .collect();
+        }
+        self.names
+            .iter()
+            .cloned()
+            .zip(self.values.iter().cloned())
+            .collect()
+    }
 }
 
 /// `PostgreSQL`'s `record_eq`: positional over the field values. Field *names*

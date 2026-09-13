@@ -1546,6 +1546,12 @@ pub enum AlterTypeAction {
         field: CompositeFieldDef,
         cascade: bool,
     },
+    /// `DROP ATTRIBUTE [IF EXISTS] name [CASCADE | RESTRICT]`.
+    DropAttribute {
+        name: String,
+        if_exists: bool,
+        cascade: bool,
+    },
     /// `SET (option = value, …)` on a base type.
     Set(Vec<BaseTypeOption>),
     /// `ADD VALUE [IF NOT EXISTS] 'label' [{BEFORE | AFTER} 'existing']`.

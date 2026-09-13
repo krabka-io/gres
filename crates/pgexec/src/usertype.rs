@@ -917,7 +917,9 @@ fn alter_type_inner(
         return match action {
             AlterTypeAction::RenameTo(new_name) => rename_multirange(kv, ty, name, new_name),
             AlterTypeAction::OwnerTo(_) => Ok((command("ALTER TYPE"), Vec::new())),
-            AlterTypeAction::AddAttribute { .. } => Err(wrong_kind(name, "a composite type")),
+            AlterTypeAction::AddAttribute { .. } | AlterTypeAction::DropAttribute { .. } => {
+                Err(wrong_kind(name, "a composite type"))
+            }
             AlterTypeAction::Set(_) => Err(wrong_kind(name, "a base type")),
             AlterTypeAction::AddValue { .. }
             | AlterTypeAction::RenameValue { .. }
@@ -989,6 +991,48 @@ fn alter_type_inner(
                 }
                 return Ok((command("ALTER TYPE"), ops));
             }
+        }
+        AlterTypeAction::DropAttribute {
+            name: attribute,
+            if_exists,
+            cascade,
+        } => {
+            let UserTypeBody::Composite(fields) = &mut ty.body else {
+                return Err(wrong_kind(name, "a composite type"));
+            };
+            let Some(index) = fields
+                .iter()
+                .position(|field| !field.dropped && field.name == *attribute)
+            else {
+                if *if_exists {
+                    return Ok((command("ALTER TYPE"), Vec::new()));
+                }
+                return Err(ExecError::UndefinedTableColumn {
+                    column: attribute.clone(),
+                    table: lookup_name,
+                });
+            };
+            let tables = typed_tables_using_type(kv, ty.oid)?;
+            if !tables.is_empty() {
+                if !cascade {
+                    return Err(ExecError::Remote(
+                        crabka_pgwire::error::PgError::error(
+                            "2BP01",
+                            format!(
+                                "cannot alter type \"{lookup_name}\" because it is the type of a typed table"
+                            ),
+                        )
+                        .with_hint("Use ALTER TYPE ... CASCADE to alter the typed tables too."),
+                    ));
+                }
+                return Err(ExecError::Unsupported(
+                    "ALTER TYPE DROP ATTRIBUTE CASCADE needs dropped-column placeholders for typed tables"
+                        .into(),
+                ));
+            }
+            let field = &mut fields[index];
+            field.name = format!("........pg.dropped.{}........", index + 1);
+            field.dropped = true;
         }
         AlterTypeAction::Set(options) => {
             if ty.is_shell() {

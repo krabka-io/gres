@@ -11899,6 +11899,25 @@ impl Parser {
                 },
             });
         }
+        if self.eat_keyword(Keyword::Drop) {
+            self.expect_ident_eq("attribute")?;
+            let if_exists = self.eat_if_exists();
+            let attribute = self.expect_col_id()?;
+            let cascade = if self.eat_ident_eq("cascade") {
+                true
+            } else {
+                self.eat_ident_eq("restrict");
+                false
+            };
+            return Ok(crate::ast::Statement::AlterType {
+                name,
+                action: AlterTypeAction::DropAttribute {
+                    name: attribute,
+                    if_exists,
+                    cascade,
+                },
+            });
+        }
         if self.eat_keyword(Keyword::Set) {
             return Ok(crate::ast::Statement::AlterType {
                 name,
@@ -28563,6 +28582,23 @@ mod q1_statement_completeness_tests {
                 == crate::ast::AlterTypeAction::RenameAttribute {
                     from: "label".into(),
                     to: "name".into(),
+                    cascade: true,
+                }
+        );
+    }
+
+    #[test]
+    fn alter_type_drop_attribute_preserves_options() {
+        let Statement::AlterType { action, .. } =
+            one("ALTER TYPE pair DROP ATTRIBUTE IF EXISTS label CASCADE")
+        else {
+            panic!("expected ALTER TYPE");
+        };
+        assert!(
+            action
+                == crate::ast::AlterTypeAction::DropAttribute {
+                    name: "label".into(),
+                    if_exists: true,
                     cascade: true,
                 }
         );
