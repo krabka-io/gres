@@ -119,10 +119,7 @@ pub enum TypeError {
     /// `array_in` preserves a structural parse diagnosis in DETAIL while the
     /// primary error names the rejected literal.
     #[error("malformed array literal: \"{value}\"")]
-    ArrayMalformed {
-        value: String,
-        detail: &'static str,
-    },
+    ArrayMalformed { value: String, detail: &'static str },
     #[error("malformed range literal: \"{value}\"")]
     RangeMalformed { value: String, detail: &'static str },
     /// `cidr_in`'s own rejection (22P02): the text parses as an address, but a
@@ -212,9 +209,7 @@ impl TypeError {
             TypeError::ArrayDimensionMismatch { .. } => Some(std::borrow::Cow::Borrowed(
                 "Multidimensional arrays must have sub-arrays with matching dimensions.",
             )),
-            TypeError::ArrayMalformed { detail, .. } => {
-                Some(std::borrow::Cow::Borrowed(*detail))
-            }
+            TypeError::ArrayMalformed { detail, .. } => Some(std::borrow::Cow::Borrowed(*detail)),
             TypeError::RangeMalformed { detail, .. } => Some(std::borrow::Cow::Borrowed(*detail)),
             TypeError::InvalidCidr { .. } => Some(std::borrow::Cow::Borrowed(
                 "Value has bits set to right of mask.",

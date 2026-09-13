@@ -7331,7 +7331,9 @@ mod tests {
         let rows = builtin_pg_proc_rows().expect("built-in pg_proc rows");
         let counts = rows
             .iter()
-            .filter(|row| row[1] == Datum::Text("count".into()) && row[9] == Datum::Text("a".into()))
+            .filter(|row| {
+                row[1] == Datum::Text("count".into()) && row[9] == Datum::Text("a".into())
+            })
             .collect::<Vec<_>>();
         assert_eq!(counts.len(), 2, "count aggregate signatures: {counts:?}");
         assert!(counts.iter().any(|row| row[16] == Datum::Int2(0)));

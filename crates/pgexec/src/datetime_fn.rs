@@ -473,7 +473,10 @@ pub(crate) fn eval_datetime(
             // sugar for `AT TIME ZONE current_setting('TimeZone')`, which is
             // why the session zone is read here instead of being planted as an
             // argument at parse time.
-            let mut values = args.iter().map(&mut eval_child).collect::<Result<Vec<_>, _>>()?;
+            let mut values = args
+                .iter()
+                .map(&mut eval_child)
+                .collect::<Result<Vec<_>, _>>()?;
             if args.len() == 2 {
                 crate::eval::coerce_unknown_args(
                     args,
@@ -529,7 +532,10 @@ pub(crate) fn eval_datetime(
         }
         DtFunc::DateBin => {
             require_arity(fc, args.len() == 3)?;
-            let mut values = args.iter().map(&mut eval_child).collect::<Result<Vec<_>, _>>()?;
+            let mut values = args
+                .iter()
+                .map(&mut eval_child)
+                .collect::<Result<Vec<_>, _>>()?;
             crate::eval::coerce_unknown_args(
                 args,
                 &mut values,

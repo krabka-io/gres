@@ -1306,11 +1306,7 @@ fn tand(x: f64) -> f64 {
     } else {
         sign * (s / c)
     };
-    if value == 0.0 {
-        0.0
-    } else {
-        value
-    }
+    if value == 0.0 { 0.0 } else { value }
 }
 
 fn cotd(x: f64) -> f64 {
@@ -1322,11 +1318,7 @@ fn cotd(x: f64) -> f64 {
     } else {
         sign * (c / s)
     };
-    if value == 0.0 {
-        0.0
-    } else {
-        value
-    }
+    if value == 0.0 { 0.0 } else { value }
 }
 
 #[cfg(test)]

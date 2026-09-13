@@ -996,10 +996,7 @@ fn virtual_relations() -> &'static BTreeMap<RelationName, i32> {
                         }),
                 )
                 .chain(std::iter::once((
-                    RelationName::new(
-                        crate::search_path::PG_CATALOG,
-                        "pg_aggregate_fnoid_index",
-                    ),
+                    RelationName::new(crate::search_path::PG_CATALOG, "pg_aggregate_fnoid_index"),
                     2650,
                 )))
                 .collect()

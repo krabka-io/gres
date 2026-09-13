@@ -982,7 +982,11 @@ pub(crate) fn pg_attribute_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, 
                 materialized: None,
                 checks: Vec::new(),
             };
-            rows.extend(attribute_rows_for_table(toast_relation_oid(table.id)?, &toast, &acl)?);
+            rows.extend(attribute_rows_for_table(
+                toast_relation_oid(table.id)?,
+                &toast,
+                &acl,
+            )?);
         }
     }
     for index in crabka_pgcatalog::list_indexes(catalog_kv)? {
@@ -1020,11 +1024,8 @@ pub(crate) fn pg_attribute_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, 
     }
     for virtual_table in virtual_table_names() {
         let table = virtual_catalog_table(virtual_table);
-        let mut attributes = attribute_rows_for_table(
-            virtual_relation_oid(virtual_table),
-            &table,
-            &acl,
-        )?;
+        let mut attributes =
+            attribute_rows_for_table(virtual_relation_oid(virtual_table), &table, &acl)?;
         // PostgreSQL's system catalogs sort their collatable fields under C,
         // independently of the database default collation.
         for attribute in &mut attributes {
@@ -1765,10 +1766,14 @@ fn attribute_layout(
     let align = match ty {
         C::Name => b'c',
         C::Point | C::Box | C::Circle | C::Lseg | C::Line => b'd',
-        C::Array(_) if matches!(
-            ty.oid(),
-            crabka_pgtypes::oids::ACLITEMARRAY | crabka_pgtypes::oids::FLOAT8ARRAY
-        ) => b'd',
+        C::Array(_)
+            if matches!(
+                ty.oid(),
+                crabka_pgtypes::oids::ACLITEMARRAY | crabka_pgtypes::oids::FLOAT8ARRAY
+            ) =>
+        {
+            b'd'
+        }
         _ => match len {
             1 => b'c',
             2 => b's',
@@ -2016,21 +2021,9 @@ pub(crate) fn pg_type_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecE
                     domain_base: None,
                     range_align: match ty.name {
                         "name" => Some("c"),
-                        "aclitem"
-                        | "_aclitem"
-                        | "_point"
-                        | "_lseg"
-                        | "_box"
-                        | "_line"
-                        | "_circle"
-                        | "point"
-                        | "lseg"
-                        | "box"
-                        | "line"
-                        | "circle"
-                        | "tsrange"
-                        | "tstzrange"
-                        | "int8range" => Some("d"),
+                        "aclitem" | "_aclitem" | "_point" | "_lseg" | "_box" | "_line"
+                        | "_circle" | "point" | "lseg" | "box" | "line" | "circle" | "tsrange"
+                        | "tstzrange" | "int8range" => Some("d"),
                         _ => None,
                     },
                 },
@@ -5930,11 +5923,13 @@ mod tests {
             .find(|row| row[0] == int(PG_AGGREGATE_FNOID_INDEX.oid))
             .expect("pg_aggregate_fnoid_index");
         assert_eq!(row[1], int(2600));
-        let oid_vector = |oid| Datum::OidVector(crabka_pgtypes::ArrayValue::with_dims(
-            crabka_pgtypes::ElemType::Int4,
-            vec![Datum::Int4(oid)],
-            vec![crabka_pgtypes::ArrayDim::new(0, 1)],
-        ));
+        let oid_vector = |oid| {
+            Datum::OidVector(crabka_pgtypes::ArrayValue::with_dims(
+                crabka_pgtypes::ElemType::Int4,
+                vec![Datum::Int4(oid)],
+                vec![crabka_pgtypes::ArrayDim::new(0, 1)],
+            ))
+        };
         assert_eq!(row[15], oid_vector(1));
         assert_eq!(row[17], oid_vector(1981));
     }

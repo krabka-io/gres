@@ -657,13 +657,19 @@ mod tests {
     #[test]
     fn malformed_array_literals_report_postgres_details() {
         let cases = [
-            ("}{", "Array value must start with \"{\" or dimension information."),
+            (
+                "}{",
+                "Array value must start with \"{\" or dimension information.",
+            ),
             ("{}}", "Junk after closing right brace."),
             ("{foo{}}", "Unexpected \"{\" character."),
             ("{foo,,bar}", "Unexpected \",\" character."),
             (r#"{"a"b}"#, "Incorrectly quoted array element."),
             (r#"{{"1 2"} x,{3}}"#, "Unexpected array element."),
-            ("[2]={1}", "Specified array dimensions do not match array contents."),
+            (
+                "[2]={1}",
+                "Specified array dimensions do not match array contents.",
+            ),
             ("[1:]={1}", "Missing array dimension value."),
             (
                 "[:1]={1}",

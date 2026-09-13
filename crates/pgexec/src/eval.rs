@@ -8042,7 +8042,9 @@ mod tests {
             ev(
                 "a ^ '2.5'",
                 Some(&float_table),
-                &[Datum::Numeric(crabka_pgtypes::numeric::parse("4").expect("numeric"))],
+                &[Datum::Numeric(
+                    crabka_pgtypes::numeric::parse("4").expect("numeric")
+                )],
             ),
             Datum::Float8(32.0)
         );

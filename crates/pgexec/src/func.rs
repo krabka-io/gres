@@ -3234,13 +3234,13 @@ fn eval_eager(
             }
             let x = as_f64(&vals[0])?;
             if x == 0.0 {
-                return Err(domain(
-                    "2201E",
-                    "cannot take logarithm of zero",
-                ));
+                return Err(domain("2201E", "cannot take logarithm of zero"));
             }
             if x < 0.0 {
-                return Err(domain("2201E", "cannot take logarithm of a negative number"));
+                return Err(domain(
+                    "2201E",
+                    "cannot take logarithm of a negative number",
+                ));
             }
             Ok(Datum::Float8(x.ln()))
         }
@@ -3258,13 +3258,13 @@ fn eval_eager(
             }
             let x = as_f64(&vals[0])?;
             if x == 0.0 {
-                return Err(domain(
-                    "2201E",
-                    "cannot take logarithm of zero",
-                ));
+                return Err(domain("2201E", "cannot take logarithm of zero"));
             }
             if x < 0.0 {
-                return Err(domain("2201E", "cannot take logarithm of a negative number"));
+                return Err(domain(
+                    "2201E",
+                    "cannot take logarithm of a negative number",
+                ));
             }
             Ok(Datum::Float8(x.log10()))
         }
@@ -6801,7 +6801,10 @@ mod tests {
         assert!(ec_eval("lgamma(0::float8)") == "22003");
         assert!(ec_eval("lgamma(-1::float8)") == "22003");
         assert!(ec_eval("lgamma(1e308::float8)") == "22003");
-        assert_eq!(ev("lgamma('-infinity'::float8)"), Datum::Float8(f64::INFINITY));
+        assert_eq!(
+            ev("lgamma('-infinity'::float8)"),
+            Datum::Float8(f64::INFINITY)
+        );
     }
 
     #[test]
@@ -6872,9 +6875,15 @@ mod tests {
         assert_eq!(ec_eval("log(0)"), "2201E");
         for (sql, message) in [
             ("ln(0::float8)", "cannot take logarithm of zero"),
-            ("ln(-1::float8)", "cannot take logarithm of a negative number"),
+            (
+                "ln(-1::float8)",
+                "cannot take logarithm of a negative number",
+            ),
             ("log(0::float8)", "cannot take logarithm of zero"),
-            ("log(-1::float8)", "cannot take logarithm of a negative number"),
+            (
+                "log(-1::float8)",
+                "cannot take logarithm of a negative number",
+            ),
         ] {
             let ctx = crate::clock::EvalCtx::test_default();
             let error = crate::eval::eval(&pexpr(sql).expect("parse"), &Scope::empty(), &[], &ctx)
@@ -6895,12 +6904,11 @@ mod tests {
 
     #[test]
     fn float8_power_preserves_nonfinite_inputs() {
-        let power = |base: &str, exp: &str| match ev(&format!(
-            "power({base}::float8, {exp}::float8)"
-        )) {
-            Datum::Float8(value) => value,
-            value => panic!("expected float8, got {value:?}"),
-        };
+        let power =
+            |base: &str, exp: &str| match ev(&format!("power({base}::float8, {exp}::float8)")) {
+                Datum::Float8(value) => value,
+                value => panic!("expected float8, got {value:?}"),
+            };
         assert!(power("-1", "'NaN'").is_nan());
         assert_eq!(power("-1", "'Infinity'"), 1.0);
         assert_eq!(power("-1", "'-Infinity'"), 1.0);

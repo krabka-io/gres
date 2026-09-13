@@ -14,8 +14,7 @@ use crabka_pgcatalog::RelationName;
 use crabka_pgkv::{Kv, WriteOp};
 use crabka_pgparser::ast::{
     AlterDomainAction, AlterTypeAction, BaseTypeOption, BaseTypeOptionValue, CompositeFieldDef,
-    CreateTypeDefinition, DomainConstraint, EnumValuePosition,
-    Expr, FuncArgs, FuncCall,
+    CreateTypeDefinition, DomainConstraint, EnumValuePosition, Expr, FuncArgs, FuncCall,
 };
 use crabka_pgtypes::{
     ColumnType, Datum, TypeError,

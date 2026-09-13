@@ -1174,13 +1174,7 @@ pub(crate) fn array_assign(
         && subscripts.iter().any(|subscript| {
             matches!(
                 subscript,
-                SubscriptArg::Slice {
-                    lower: None,
-                    ..
-                } | SubscriptArg::Slice {
-                    upper: None,
-                    ..
-                }
+                SubscriptArg::Slice { lower: None, .. } | SubscriptArg::Slice { upper: None, .. }
             )
         })
     {
@@ -2738,7 +2732,9 @@ mod tests {
         assert!(
             eval_quantified(&Datum::Int4(44), Quantifier::Any, eq(1))
                 .expect_err("right side must be an array")
-                == ExecError::TypeMismatch("op ANY/ALL (array) requires array on right side".into())
+                == ExecError::TypeMismatch(
+                    "op ANY/ALL (array) requires array on right side".into()
+                )
         );
         assert!(
             eval_quantified(&plain, Quantifier::Any, |_| Ok(Datum::Int4(33)))

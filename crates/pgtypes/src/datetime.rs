@@ -8149,8 +8149,8 @@ mod io_tests {
 
         let la = jiff::tz::TimeZone::get("America/Los_Angeles").expect("tzdb has LA");
         let lmt = parse_timestamptz("2024-01-01 00:00:00 LMT", &la).expect("LMT");
-        let expected = parse_timestamptz("2024-01-01 00:00:00-07:52:58", &TimeZone::UTC)
-            .expect("LMT offset");
+        let expected =
+            parse_timestamptz("2024-01-01 00:00:00-07:52:58", &TimeZone::UTC).expect("LMT offset");
         assert_eq!(lmt, expected);
         assert!(parse_timestamptz("2024-01-01 00:00:00 LMT", &TimeZone::UTC).is_err());
 
@@ -8165,8 +8165,7 @@ mod io_tests {
             timestamptz_to_text(mmt, &TimeZone::UTC),
             "1912-01-01 03:44:51+00"
         );
-        let msk = parse_timestamptz("2011-03-27 02:00:00 MSK", &TimeZone::UTC)
-            .expect("MSK gap");
+        let msk = parse_timestamptz("2011-03-27 02:00:00 MSK", &TimeZone::UTC).expect("MSK gap");
         assert_eq!(
             timestamptz_to_text(msk, &TimeZone::UTC),
             "2011-03-26 22:00:00+00"
