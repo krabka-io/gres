@@ -562,6 +562,17 @@ fn to_char(value: &Datum, template: &str, ctx: &EvalCtx, name: &str) -> Result<D
 /// an absolute instant, that is a `timestamptz`.
 fn to_timestamp_epoch(value: &Datum, name: &str) -> Result<Datum, ExecError> {
     let secs = f64_arg(value, name)?;
+    if secs == f64::INFINITY {
+        return Ok(Datum::Timestamptz(datetime::timestamptz_infinity()));
+    }
+    if secs == f64::NEG_INFINITY {
+        return Ok(Datum::Timestamptz(datetime::timestamptz_neg_infinity()));
+    }
+    if secs.is_nan() {
+        return Err(ExecError::InvalidParameterValueMessage(
+            "timestamp cannot be NaN".to_string(),
+        ));
+    }
     if !secs.is_finite() {
         return Err(ExecError::Type(TypeError::DatetimeFieldOverflow {
             value: secs.to_string(),
@@ -1005,6 +1016,14 @@ mod tests {
         assert_eq!(
             ev("to_timestamp(0)"),
             Datum::Timestamptz("1970-01-01T00:00:00Z".parse().expect("ts"))
+        );
+        assert_eq!(
+            ev("to_timestamp('Infinity'::float8)"),
+            Datum::Timestamptz(crabka_pgtypes::datetime::timestamptz_infinity())
+        );
+        assert_eq!(
+            ev("to_timestamp('-Infinity'::float8)"),
+            Datum::Timestamptz(crabka_pgtypes::datetime::timestamptz_neg_infinity())
         );
         assert_eq!(
             ev("make_date(2024, 7, 4)"),
