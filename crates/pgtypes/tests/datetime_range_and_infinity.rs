@@ -11,11 +11,12 @@ use assert2::assert;
 use crabka_pgtypes::{
     TypeError,
     datetime::{
-        DATE_INFINITY, DATE_NEG_INFINITY, Interval, PgTime, TIMESTAMP_INFINITY,
-        TIMESTAMP_NEG_INFINITY, combine_date_time, date_from_binary, date_plus_days,
-        date_to_binary, date_to_text, div_interval, interval_to_time, justify_days, justify_hours,
-        justify_interval, make_date, make_interval, make_time, make_timestamp_civil, mul_interval,
-        parse_date, parse_interval, parse_time, sub_interval,
+        DATE_INFINITY, DATE_NEG_INFINITY, DateOrder, DateStyle, Interval, PgTime,
+        TIMESTAMP_INFINITY, TIMESTAMP_NEG_INFINITY, combine_date_time, date_from_binary,
+        date_plus_days, date_to_binary, date_to_text, date_to_text_in, div_interval,
+        interval_to_time, justify_days, justify_hours, justify_interval, make_date, make_interval,
+        make_time, make_timestamp_civil, mul_interval, parse_date, parse_interval, parse_time,
+        sub_interval,
     },
 };
 
@@ -373,6 +374,8 @@ fn date_storage_and_arithmetic_cover_postgres_full_calendar_range() {
     assert!(parse_date("5874898-01-01").is_err());
     assert!(date_to_text(first) == "4714-11-24 BC");
     assert!(date_to_text(last) == "5874897-12-31");
+    assert!(date_to_text_in(last, DateStyle::Sql, DateOrder::Dmy) == "31/12/5874897");
+    assert!(date_to_text_in(last, DateStyle::German, DateOrder::Mdy) == "31.12.5874897");
     assert!(date_to_binary(first) == (-2_451_545i32).to_be_bytes());
     assert!(date_to_binary(last) == 2_145_031_948i32.to_be_bytes());
     assert!(date_from_binary(&date_to_binary(last)).expect("wire round trip") == last);

@@ -1393,8 +1393,23 @@ impl DateStyle {
 
 /// The calendar-date half of a non-ISO rendering, without the era suffix.
 fn styled_date(d: Date, style: DateStyle, order: DateOrder) -> String {
-    let (year, _) = era_year(d.year());
-    let (month, day) = (d.month(), d.day());
+    styled_date_parts(
+        i32::from(d.year()),
+        i32::from(d.month()),
+        i32::from(d.day()),
+        style,
+        order,
+    )
+}
+
+fn styled_date_parts(
+    year: i32,
+    month: i32,
+    day: i32,
+    style: DateStyle,
+    order: DateOrder,
+) -> String {
+    let (year, _) = era_year_i32(year);
     let separator = if style == DateStyle::German { '.' } else { '/' };
     match style {
         DateStyle::Iso => format!("{year:04}-{month:02}-{day:02}"),
@@ -1441,15 +1456,15 @@ fn postgres_style_datetime(dt: DateTime, order: DateOrder) -> String {
 /// Render a `date` in the session's `DateStyle`.
 #[must_use]
 pub fn date_to_text_in(d: PgDate, style: DateStyle, order: DateOrder) -> String {
-    let Some(civil) = d.finite() else {
-        // The two non-finite values spell the same in every style.
-        return date_to_text(d);
-    };
     if style == DateStyle::Iso {
         return date_to_text(d);
     }
-    let (_, era) = era_year(civil.year());
-    format!("{}{era}", styled_date(civil, style, order))
+    let Some(days) = d.epoch_days() else {
+        return date_to_text(d);
+    };
+    let (year, month, day) = date_parts(days);
+    let (_, era) = era_year_i32(year);
+    format!("{}{era}", styled_date_parts(year, month, day, style, order))
 }
 
 /// Render a `timestamp` in the session's `DateStyle`.
