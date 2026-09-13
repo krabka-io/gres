@@ -5827,6 +5827,7 @@ mod tests {
             UserTypeBody::Composite(vec![CompositeField {
                 name: "id".into(),
                 ty: ColumnType::Int4,
+                dropped: false,
             }]),
         )
         .expect("create type operations");
