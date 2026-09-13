@@ -1248,6 +1248,9 @@ pub fn parse_date_in_at(
     tz: &TimeZone,
     now: Timestamp,
 ) -> Result<PgDate, TypeError> {
+    if let Some(parsed) = parse_extended_iso_date(s) {
+        return parsed;
+    }
     match decode_at(s.trim(), order, DecodeMode::DateTime, tz, now)
         .map_err(|e| decode_error(e, "date", s))?
     {
@@ -1271,6 +1274,50 @@ pub fn parse_date_in_at(
             Ok(date.into())
         }
     }
+}
+
+/// Parse the ISO spelling whose year lies beyond Jiff's civil range.
+///
+/// The general decoder remains authoritative for every ordinary spelling. This
+/// narrow pre-pass exists solely because PostgreSQL accepts calendar years up
+/// to 5,874,897 while Jiff stops at 9,999.
+fn parse_extended_iso_date(s: &str) -> Option<Result<PgDate, TypeError>> {
+    let input = s.trim();
+    let (date, bc) = input
+        .strip_suffix(" BC")
+        .map_or((input, false), |date| (date, true));
+    let mut fields = date.split('-');
+    let (Some(year), Some(month), Some(day), None) =
+        (fields.next(), fields.next(), fields.next(), fields.next())
+    else {
+        return None;
+    };
+    if year.len() <= 4 || !year.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    let parse = |field: &str| field.parse::<i32>().ok();
+    let (Some(year), Some(month), Some(day)) = (parse(year), parse(month), parse(day)) else {
+        return None;
+    };
+    if !(1..=12).contains(&month) {
+        return None;
+    }
+    Some(
+        make_date(if bc { -year } else { year }, month, day).map_err(|error| match error {
+            TypeError::DatetimeOutOfRange { message } if message.starts_with("date field") => {
+                TypeError::DatetimeFieldOverflow {
+                    value: input.to_string(),
+                }
+            }
+            TypeError::DatetimeOutOfRange { .. } => TypeError::DatetimeOutOfRange {
+                message: format!("date out of range: \"{input}\""),
+            },
+            TypeError::DatetimeFieldOverflow { .. } => TypeError::DatetimeFieldOverflow {
+                value: input.to_string(),
+            },
+            error => error,
+        }),
+    )
 }
 
 /// The earliest finite date PostgreSQL represents, 4714-11-24 BC, in the

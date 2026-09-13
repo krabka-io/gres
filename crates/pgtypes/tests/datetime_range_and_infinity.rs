@@ -369,6 +369,8 @@ fn make_date_reads_a_negative_year_as_the_bc_era() {
 fn date_storage_and_arithmetic_cover_postgres_full_calendar_range() {
     let first = make_date(-4714, 11, 24).expect("first PostgreSQL date");
     let last = make_date(5_874_897, 12, 31).expect("last PostgreSQL date");
+    assert!(parse_date("5874897-12-31").expect("upper ISO literal") == last);
+    assert!(parse_date("5874898-01-01").is_err());
     assert!(date_to_text(first) == "4714-11-24 BC");
     assert!(date_to_text(last) == "5874897-12-31");
     assert!(date_to_binary(first) == (-2_451_545i32).to_be_bytes());
