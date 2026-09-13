@@ -5425,7 +5425,11 @@ pub(crate) fn array_literal_elem_type(
     scope: &Scope,
 ) -> Result<ElemType, ExecError> {
     if items.is_empty() {
-        return Err(indeterminate_type("cannot determine type of empty array"));
+        return Err(ExecError::Type(TypeError::CodedWithHint {
+            sqlstate: "42P18",
+            message: "cannot determine type of empty array".into(),
+            hint: "Explicitly cast to the desired type, for example ARRAY[]::integer[].",
+        }));
     }
     let mut acc: Option<ColumnType> = None;
     for item in items {
@@ -5715,11 +5719,6 @@ pub(crate) fn empty_array_cast(expr: &Expr, ty: ColumnType) -> Result<Option<Dat
         }
         _ => Ok(None),
     }
-}
-
-/// 42P18 (`indeterminate_datatype`).
-fn indeterminate_type(message: &str) -> ExecError {
-    ExecError::IndeterminateType(message.to_string())
 }
 
 /// Infer a `CASE`'s result type by unifying every THEN result and the ELSE. A
@@ -7349,6 +7348,19 @@ mod tests {
         for (sql, want) in cases {
             assert2::assert!(infer_jt(sql).expect("infer") == *want, "for {sql}");
         }
+    }
+
+    #[test]
+    fn empty_array_constructor_suggests_an_explicit_cast() {
+        let error = array_literal_elem_type(&[], &Scope::empty())
+            .expect_err("ARRAY[] needs a type")
+            .into_pg();
+        assert2::assert!(error.code == "42P18");
+        assert2::assert!(error.message == "cannot determine type of empty array");
+        assert2::assert!(
+            error.diagnostics.as_ref().and_then(|d| d.hint.as_deref())
+                == Some("Explicitly cast to the desired type, for example ARRAY[]::integer[].")
+        );
     }
 
     /// Operand combinations no operator resolves are 42883 at PLAN time.
