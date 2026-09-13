@@ -24041,7 +24041,7 @@ mod tests {
             .await
                 == Ok(vec![vec![
                     "c".into(),
-                    "SELECT 42".into(),
+                    "DECLARE c BINARY NO SCROLL CURSOR WITH HOLD FOR SELECT 42;".into(),
                     "t".into(),
                     "t".into(),
                     "f".into(),

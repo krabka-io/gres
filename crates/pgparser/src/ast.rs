@@ -1280,7 +1280,7 @@ pub enum Statement {
         /// neither was written (`PostgreSQL`'s plan-dependent default).
         scroll: Option<bool>,
         hold: bool,
-        /// The query text `pg_cursors.statement` exposes for this portal.
+        /// The declaration text `pg_cursors.statement` exposes for this portal.
         query_source: String,
         query: Box<QueryExpr>,
     },

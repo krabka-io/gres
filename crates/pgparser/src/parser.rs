@@ -6620,6 +6620,7 @@ impl Parser {
     /// S2: `DECLARE <name> [BINARY] [INSENSITIVE|ASENSITIVE] [[NO] SCROLL] CURSOR
     /// [{WITH|WITHOUT} HOLD] FOR <query>`. Positioned at the `declare` ident.
     fn declare_cursor(&mut self) -> Result<crate::ast::Statement, ParseError> {
+        let declaration_start = self.peek_pos();
         self.bump(); // declare
         let name = self.expect_col_id()?;
         let mut binary = false;
@@ -6655,9 +6656,11 @@ impl Parser {
             self.expect_ident_eq("hold")?;
         }
         self.expect(&Token::Keyword(Keyword::For))?;
-        let query_start = self.peek_pos();
         let query = self.in_nested_query(Self::query_expr)?;
-        let query_source = self.source[query_start..self.peek_pos()].trim().to_string();
+        let query_source = format!(
+            "{};",
+            self.source[declaration_start..self.peek_pos()].trim()
+        );
         Ok(crate::ast::Statement::DeclareCursor {
             name,
             binary,
