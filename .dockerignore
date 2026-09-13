@@ -1,7 +1,6 @@
-# Keep `docker build` contexts rooted at the repo (e.g. the demo image,
-# demo/observability/Dockerfile) small: none of these are needed inside a
-# build. Only applies to Docker build contexts — melange/apko `--source-dir`
-# builds are unaffected.
+# Keep `docker build` contexts rooted at the repo small: none of these are
+# needed inside a build. This file applies only to Docker build contexts.
+# melange/apko `--source-dir` builds are unaffected.
 .git
 .github
 .claude

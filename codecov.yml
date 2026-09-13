@@ -41,12 +41,9 @@ coverage:
 ignore:
   - "crates/protocol/generated/**"
   # Binary entrypoints are arg-parsing + client wiring + a serve loop — glue
-  # with no unit-testable logic. The gateway's main() is covered end-to-end by
-  # the (Docker-gated) jvm_differential test, not the integration suite, so
-  # holding its 60+ wiring lines to patch coverage just blocks new-crate PRs.
-  - "crates/grpc-gateway/src/bin/**"
-  # Same rationale for the schema-registry binary: the unit-testable config
-  # assembly (CLI flags -> SecurityConfig) lives in the `cli` lib module and is
+  # with no unit-testable logic. For the schema-registry binary, the
+  # unit-testable config assembly (CLI flags -> SecurityConfig) lives in the
+  # `cli` lib module and is
   # covered there; what remains in main() is arg-parsing + the serve/election
   # loop, exercised end-to-end by the in-process ha.rs / security.rs tests.
   - "crates/schema-registry/src/bin/**"
@@ -56,12 +53,6 @@ ignore:
   # Same rationale as the binary entrypoints above; the controllers' own
   # reconcile logic stays measured (it's in controller/*.rs, not here).
   - "crates/operator/src/run.rs"
-  # The observability demo app is a runnable producer/consumer demo — order
-  # generation, produce/consume serve loops, and self-telemetry (traces/metrics)
-  # emission. It exists to drive the `demo/observability` stack and is exercised
-  # by running that stack end-to-end, not by the unit suite. Same "binary glue,
-  # no unit-testable production logic" rationale as the entrypoints above.
-  - "crates/observability-demo-app/**"
 
 flags:
   unit:
