@@ -24441,6 +24441,14 @@ mod tests {
                     vec!["  Filter: (id = 1)".into()],
                 ])
         );
+        assert!(
+            rows_or_sqlstate(&mut s, "EXPLAIN (COSTS OFF) SELECT proname FROM pg_proc").await
+                == Ok(vec![vec!["Seq Scan on pg_proc".into()]])
+        );
+        assert!(
+            rows_or_sqlstate(&mut s, "EXPLAIN (COSTS OFF) SELECT * FROM no_such_table").await
+                == Err("42P01".into())
+        );
         s.simple_query("ANALYZE t").await.expect("analyze");
         assert!(
             rows_or_sqlstate(&mut s, "EXPLAIN (ANALYZE) SELECT * FROM t WHERE id = 1").await

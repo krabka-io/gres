@@ -227,7 +227,11 @@ pub(crate) fn apply_local_text_search_path(
         name,
         crate::relname::SchemaDisposition::Reference,
     )?;
-    let table = crabka_pgcatalog::get_table(catalog_kv, &relation)?;
+    let table = match crabka_pgcatalog::get_table(catalog_kv, &relation) {
+        Ok(table) => table,
+        Err(_) if crate::exec::is_virtual_relation(&relation) => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
     let scan = crate::plan_dist::plan_scan(&table, select.filter.as_ref(), &select.projection);
     let Some(predicate) = scan.text_search else {
         return Ok(());
