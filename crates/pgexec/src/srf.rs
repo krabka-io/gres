@@ -37,7 +37,7 @@ use crabka_pgparser::ast::{
     TableFuncCall, TableFuncColumnDef,
 };
 use crabka_pgtypes::{
-    ArrayValue, ColumnType, Datum, ElemType, RecordValue, TsVector, TypeError, Weight,
+    ArrayDim, ArrayValue, ColumnType, Datum, ElemType, RecordValue, TsVector, TypeError, Weight,
     numeric::NumericValue, usertype::UserTypeRef,
 };
 use crabka_pgwire::engine::FieldDescription;
@@ -3123,10 +3123,8 @@ fn series_advance(
 
 // ---- generate_subscripts ----
 
-/// `generate_subscripts(array, dim [, reverse])`: crabka arrays are
-/// one-dimensional and 1-based. So any `dim` other than 1 yields no rows, and so
-/// does any empty or NULL array. PostgreSQL does the same for a dimension the
-/// array does not have.
+/// `generate_subscripts(array, dim [, reverse])`: emit the bounds of the
+/// requested dimension, or no rows for an empty array or a missing dimension.
 fn subscript_rows(name: &str, vals: &[Datum]) -> Result<Vec<Vec<Datum>>, ExecError> {
     let Datum::Array(array) = &vals[0] else {
         return Err(ExecError::TypeMismatch(format!(
@@ -3145,14 +3143,17 @@ fn subscript_rows(name: &str, vals: &[Datum]) -> Result<Vec<Vec<Datum>>, ExecErr
         }
     };
     let reverse = matches!(vals.get(2), Some(Datum::Bool(true)));
-    if dim != 1 || array.elems.is_empty() {
+    let Some(dim) = usize::try_from(dim)
+        .ok()
+        .and_then(|dim| dim.checked_sub(1))
+        .and_then(|dim| array.dims.get(dim))
+    else {
         return Ok(Vec::new());
-    }
-    let len = i32::try_from(array.elems.len()).map_err(|_| ExecError::Type(TypeError::Overflow))?;
+    };
     let subscripts: Vec<i32> = if reverse {
-        (1..=len).rev().collect()
+        (dim.lower..=dim.upper()).rev().collect()
     } else {
-        (1..=len).collect()
+        (dim.lower..=dim.upper()).collect()
     };
     Ok(subscripts
         .into_iter()
@@ -4391,6 +4392,14 @@ mod tests {
     #[test]
     fn generate_subscripts_counts_a_one_dimensional_array() {
         let a = array(ElemType::Text, texts(&["x", "y", "z"]));
+        let square = constant(
+            Datum::Array(ArrayValue::with_dims(
+                ElemType::Int4,
+                ints(&[1, 2, 3, 4, 5, 6]),
+                vec![ArrayDim::from_len(2), ArrayDim::from_len(3)],
+            )),
+            ColumnType::Array(ElemType::Int4),
+        );
         let cases: Vec<(Vec<Expr>, Vec<Datum>)> = vec![
             (vec![a.clone(), int4(1)], ints(&[1, 2, 3])),
             (
@@ -4401,6 +4410,8 @@ mod tests {
                 ],
                 ints(&[3, 2, 1]),
             ),
+            (vec![square.clone(), int4(1)], ints(&[1, 2])),
+            (vec![square, int4(2)], ints(&[1, 2, 3])),
             (vec![a, int4(2)], Vec::new()),
             (vec![array(ElemType::Int4, Vec::new()), int4(1)], Vec::new()),
             (

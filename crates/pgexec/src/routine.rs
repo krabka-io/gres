@@ -6040,13 +6040,15 @@ pub(crate) fn plpgsql_table_function_schema(
         }
         RoutineResult::Type { ty, .. } => vec![(
             routine.name.clone(),
-            ty.column.ok_or_else(|| {
-                ExecError::Unsupported(format!(
-                    "function {} returns unsupported type {}",
-                    routine.identity(),
-                    ty.name
-                ))
-            })?,
+            ty.column
+                .or_else(|| resolved_polymorphic_type(&routine, &given, &ty.name))
+                .ok_or_else(|| {
+                    ExecError::Unsupported(format!(
+                        "function {} returns unsupported type {}",
+                        routine.identity(),
+                        ty.name
+                    ))
+                })?,
         )],
     };
     if columns.is_empty() {
@@ -7494,6 +7496,30 @@ mod tests {
         assert!(rows.len() == 1);
         assert!(rows[0][0].as_ref().expect("lower").text.as_ref() == b"1");
         assert!(rows[0][1].as_ref().expect("upper").text.as_ref() == b"11");
+    }
+
+    #[tokio::test]
+    async fn setof_anyelement_resolves_from_an_anyarray_argument() {
+        let mut session = crate::SqlEngine::new().connect();
+        session
+            .simple_query(
+                "CREATE FUNCTION array_members(anyarray) RETURNS SETOF anyelement \
+                 LANGUAGE sql AS $$ SELECT unnest($1) $$",
+            )
+            .await
+            .expect("define polymorphic set function");
+        let result = session
+            .simple_query("SELECT * FROM array_members(ARRAY[1, 2, 3])")
+            .await
+            .expect("execute polymorphic set function");
+        let [QueryResult::Rows { rows, .. }] = result.as_slice() else {
+            panic!("expected rows");
+        };
+        assert!(
+            rows.iter()
+                .map(|row| row[0].as_ref().expect("value").text.as_ref())
+                .eq([b"1".as_slice(), b"2", b"3"])
+        );
     }
 
     #[tokio::test]
