@@ -231,7 +231,23 @@ pub(crate) fn eval_format(
     let args = exprs_of(fc)?;
     // Evaluate every argument up front, then short-circuit to NULL on any NULL
     // (PG strictness). The arity is re-checked per-arm below.
-    let vals: Vec<Datum> = args.iter().map(&mut eval_child).collect::<Result<_, _>>()?;
+    let mut vals: Vec<Datum> = args.iter().map(&mut eval_child).collect::<Result<_, _>>()?;
+    if f == FmtFunc::MakeInterval {
+        crate::eval::coerce_unknown_args(
+            args,
+            &mut vals,
+            &[
+                Some(ColumnType::Int4),
+                Some(ColumnType::Int4),
+                Some(ColumnType::Int4),
+                Some(ColumnType::Int4),
+                Some(ColumnType::Int4),
+                Some(ColumnType::Int4),
+                Some(ColumnType::Float8),
+            ],
+            ctx,
+        )?;
+    }
     if vals.iter().any(Datum::is_null) {
         // Still validate the arity so a NULL with wrong arity is 42883, not silent NULL.
         check_arity(f, fc, vals.len())?;
@@ -1036,6 +1052,10 @@ mod tests {
                 days: 5,
                 micros: 0
             })
+        );
+        assert_eq!(
+            pg_error("make_interval(0, 0, 0, 0, 0, 0, 'inf')").message,
+            "interval out of range"
         );
         assert_eq!(
             ev("justify_hours(INTERVAL '27 hours')"),
