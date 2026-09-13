@@ -1936,8 +1936,8 @@ impl Parser {
         }))
     }
 
-    /// The tail of `INTERVAL 'string' [field [TO field]]`, positioned just after
-    /// the string.
+    /// The tail of `INTERVAL 'string' [field [TO field] [(precision)]]`, positioned
+    /// just after the string.
     ///
     /// A field qualifier does two things in `PostgreSQL`: it supplies the unit an
     /// unadorned quantity in the string is measured in (`interval '90' minute` is
@@ -1976,6 +1976,17 @@ impl Parser {
             .ok_or_else(|| ParseError::new("expected an interval field", field_pos))?;
         let value = crabka_pgtypes::datetime::parse_interval_ranged(&string, Some(range))
             .map_err(|e| ParseError::new_sqlstate(e.sqlstate(), e.to_string(), field_pos))?;
+        // PostgreSQL accepts a fractional-seconds precision only after the
+        // terminal SECOND field, including `MINUTE TO SECOND(p)`.
+        let value = if range.1 == IntervalField::Second && *self.peek() == Token::LParen {
+            self.bump();
+            let precision = self.expect_u16("fractional seconds precision")?;
+            self.expect(&Token::RParen)?;
+            crabka_pgtypes::datetime::apply_interval_typmod(value, Some(precision.min(6) as u8))
+                .map_err(|e| ParseError::new_sqlstate(e.sqlstate(), e.to_string(), field_pos))?
+        } else {
+            value
+        };
         Ok(interval(crabka_pgtypes::datetime::interval_to_text(value)))
     }
 
@@ -22594,6 +22605,11 @@ mod tests {
             ("interval '1.5' day", "1 day"),
             // SECOND keeps its fractional part, so it is not truncated.
             ("interval '1.5' second", "00:00:01.5"),
+            ("interval '1.234' second(2)", "00:00:01.23"),
+            (
+                "interval '12:34.5678' minute to second(2)",
+                "00:12:34.57",
+            ),
             ("interval '90' minute", "01:30:00"),
             // A bare quantity takes the range's LAST field, and each quantity to
             // its left takes the next coarser one.
