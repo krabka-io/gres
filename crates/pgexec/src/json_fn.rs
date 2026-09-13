@@ -2222,13 +2222,9 @@ pub(crate) fn record_pairs(
     r.values
         .iter()
         .enumerate()
-        .map(|(index, value)| {
-            let name = r
-                .names
-                .get(index)
-                .cloned()
-                .unwrap_or_else(|| format!("f{}", index + 1));
-            Ok((name, to_jsonb(value, ctx)?))
+        .filter_map(|(index, value)| {
+            r.field_name(index)
+                .map(|name| to_jsonb(value, ctx).map(|value| (name, value)))
         })
         .collect()
 }
@@ -2352,18 +2348,18 @@ fn write_json(d: &Datum, punct: Punct, ctx: &EvalCtx, out: &mut String) -> Resul
         // difference from `to_jsonb`, whose object collapses them last-wins.
         Datum::Record(r) => {
             out.push('{');
+            let mut first = true;
             for (index, value) in r.values.iter().enumerate() {
-                out.push_str(if index == 0 { punct.pad } else { punct.comma });
-                let name = r
-                    .names
-                    .get(index)
-                    .cloned()
-                    .unwrap_or_else(|| format!("f{}", index + 1));
+                let Some(name) = r.field_name(index) else {
+                    continue;
+                };
+                out.push_str(if first { punct.pad } else { punct.comma });
+                first = false;
                 json::write_string(&name, out);
                 out.push_str(punct.colon);
                 write_json(value, Punct::COMPACT, ctx, out)?;
             }
-            if !r.values.is_empty() {
+            if !first {
                 out.push_str(punct.pad);
             }
             out.push('}');

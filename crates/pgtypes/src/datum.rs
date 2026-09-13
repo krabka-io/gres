@@ -2300,8 +2300,34 @@ impl RecordValue {
     /// already case-folded an unquoted reference).
     #[must_use]
     pub fn field(&self, name: &str) -> Option<&Datum> {
+        if let Some(reference) = self.ty
+            && let Some(ty) = crate::usertype::lookup_oid(reference.oid)
+            && let Some(fields) = ty.fields()
+            && let Some(index) = fields
+                .iter()
+                .position(|field| !field.dropped && field.name == name)
+        {
+            return self.values.get(index);
+        }
         let index = self.names.iter().position(|field| field == name)?;
         self.values.get(index)
+    }
+
+    /// This record's current name for a field position. Named composites read
+    /// their descriptor at access time, so an `ALTER TYPE` attribute rename is
+    /// visible to values written before the change.
+    #[must_use]
+    pub fn field_name(&self, index: usize) -> Option<String> {
+        if let Some(reference) = self.ty
+            && let Some(ty) = crate::usertype::lookup_oid(reference.oid)
+            && let Some(fields) = ty.fields()
+        {
+            return fields
+                .get(index)
+                .filter(|field| !field.dropped)
+                .map(|field| field.name.clone());
+        }
+        self.names.get(index).cloned()
     }
 }
 
