@@ -5635,6 +5635,8 @@ impl SqlBinder<'_, '_> {
                 right,
                 kind,
                 constraint,
+                alias,
+                columns,
             } => {
                 self.rewrite_table(left, outer, query_outers, ctes)?;
                 let left_scope = crate::exec::build_from_schema_with_ctes_and_context(
@@ -5654,6 +5656,8 @@ impl SqlBinder<'_, '_> {
                         right: right.clone(),
                         kind: *kind,
                         constraint: JoinConstraint::None,
+                        alias: alias.clone(),
+                        columns: columns.clone(),
                     };
                     let join_scope = crate::exec::build_from_schema_with_ctes_and_context(
                         self.catalog(),

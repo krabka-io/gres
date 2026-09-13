@@ -1091,6 +1091,7 @@ impl StatementRefs {
                 right,
                 kind: _,
                 constraint,
+                ..
             } => {
                 self.add_table_expr(left);
                 self.add_table_expr(right);

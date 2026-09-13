@@ -154,6 +154,7 @@ pub(super) fn try_execute_local_join_count(
             right,
             kind,
             constraint,
+            ..
         },
     ] = s.from.as_slice()
     else {

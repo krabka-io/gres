@@ -3693,6 +3693,9 @@ pub enum TableExpr {
         right: Box<TableExpr>,
         kind: JoinKind,
         constraint: JoinConstraint,
+        /// An alias on the joined relation, including `JOIN ... USING (...) AS j`.
+        alias: Option<String>,
+        columns: Option<Vec<String>>,
     },
     /// One or more set-returning functions in FROM position
     /// (`unnest(a) AS u(x)`, `ROWS FROM (f(…), g(…)) WITH ORDINALITY`). The

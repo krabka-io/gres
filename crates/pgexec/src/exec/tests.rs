@@ -5206,6 +5206,24 @@ async fn scalar_subquery_accepts_parenthesized_set_operations() {
 }
 
 #[tokio::test]
+async fn join_using_alias_qualifies_the_joined_relation() {
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    run_s(&mut session, "CREATE TABLE a (id int4, left_value text)").await;
+    run_s(&mut session, "CREATE TABLE b (id int4, right_value text)").await;
+    run_s(&mut session, "INSERT INTO a VALUES (1, 'a')").await;
+    run_s(&mut session, "INSERT INTO b VALUES (1, 'b')").await;
+    assert_eq!(
+        text_rows_of(
+            &mut session,
+            "SELECT j.id, j.left_value, j.right_value FROM a JOIN b USING (id) AS j",
+        )
+        .await,
+        vec![text_row(&["1", "a", "b"])]
+    );
+}
+
+#[tokio::test]
 async fn select_uses_local_index_for_simple_equality_with_residual_filter() {
     let mut engine = SqlEngine::new();
     run(&engine, "CREATE TABLE t (id int4, name text, active bool)").await;

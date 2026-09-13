@@ -14459,11 +14459,19 @@ impl Parser {
                 self.peek_pos(),
             ));
         };
+        let alias = self.opt_alias()?;
+        let columns = if alias.is_some() {
+            self.opt_column_aliases()?
+        } else {
+            None
+        };
         Ok(TableExpr::Join {
             left: Box::new(left),
             right: Box::new(right),
             kind,
             constraint,
+            alias,
+            columns,
         })
     }
 
@@ -14593,6 +14601,11 @@ impl Parser {
                     *columns = self.opt_column_aliases()?;
                 }
                 *nested_lateral |= lateral;
+            } else if let TableExpr::Join { alias, columns, .. } = &mut inner {
+                if let Some(outer_alias) = self.opt_alias()? {
+                    *alias = Some(outer_alias);
+                    *columns = self.opt_column_aliases()?;
+                }
             }
             return Ok(inner);
         }
@@ -24510,6 +24523,7 @@ mod tests {
                 constraint,
                 left,
                 right,
+                ..
             } => {
                 assert_eq!(*kind, JoinKind::Left);
                 assert_eq!(*constraint, JoinConstraint::Using(vec!["id".into()]));
@@ -24544,6 +24558,17 @@ mod tests {
         ));
         let s = only_select("SELECT d.n FROM (SELECT n FROM t) AS d");
         assert!(matches!(&s.from[0], TableExpr::Derived { alias, .. } if alias == "d"));
+    }
+
+    #[test]
+    fn join_using_accepts_a_relation_alias() {
+        use crate::ast::TableExpr;
+
+        let select = only_select("SELECT j.id FROM a JOIN b USING (id) AS j");
+        assert!(matches!(
+            &select.from[..],
+            [TableExpr::Join { alias: Some(alias), columns: None, .. }] if alias == "j"
+        ));
     }
 
     #[test]

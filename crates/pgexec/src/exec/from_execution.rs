@@ -39,6 +39,8 @@ pub(super) fn build_table_expr(
             right,
             kind,
             constraint,
+            alias,
+            columns,
         } => {
             if let Some(relation) =
                 try_distributed_inner_equi_join(read_ctx, left, right, *kind, constraint)?
@@ -64,7 +66,7 @@ pub(super) fn build_table_expr(
             let l = build_table_expr(read_ctx, left, None, None, nested_filter)?;
             // A lateral right side sees the left side's columns, so it is rebuilt
             // per left row instead of materialized once.
-            append_from_item(
+            let relation = append_from_item(
                 read_ctx,
                 l,
                 right,
@@ -74,7 +76,12 @@ pub(super) fn build_table_expr(
                 None,
                 security_free_from_item(read_ctx, left),
                 security_free_from_item(read_ctx, right),
-            )
+            )?;
+            if let Some(alias) = alias {
+                crate::values::requalify_join(relation, alias, columns)
+            } else {
+                Ok(relation)
+            }
         }
         TableExpr::Derived {
             subquery,

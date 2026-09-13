@@ -681,6 +681,7 @@ fn plan_nested_loop_source(
             right,
             kind,
             constraint,
+            ..
         } => Some(Plan {
             target_list: Vec::new(),
             quals: Vec::new(),
