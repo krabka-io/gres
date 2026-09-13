@@ -145,6 +145,7 @@ enum ScalarFunc {
     /// Regression helper exposing PostgreSQL's `IsBinaryCoercible`.
     BinaryCoercible,
     PgNumaAvailable,
+    AmValidate,
     /// PostgreSQL's temporal hash support functions.
     TemporalHash {
         ty: ColumnType,
@@ -467,6 +468,7 @@ fn scalar_func(name: &str) -> Option<ScalarFunc> {
         "pg_input_is_valid" => ScalarFunc::PgInputIsValid,
         "binary_coercible" => ScalarFunc::BinaryCoercible,
         "pg_numa_available" => ScalarFunc::PgNumaAvailable,
+        "amvalidate" => ScalarFunc::AmValidate,
         "interval_hash" => ScalarFunc::TemporalHash {
             ty: ColumnType::Interval,
             extended: false,
@@ -1690,6 +1692,11 @@ fn builtin_scalar_result_type(fc: &FuncCall, scope: &Scope) -> Result<ColumnType
         }
         ScalarFunc::PgNumaAvailable => {
             require_arity(fc, n == 0)?;
+            Ok(ColumnType::Bool)
+        }
+        ScalarFunc::AmValidate => {
+            require_arity(fc, n == 1)?;
+            require_oid_or_null(&args[0], scope)?;
             Ok(ColumnType::Bool)
         }
         ScalarFunc::TemporalHash { ty, extended } => {
@@ -3819,6 +3826,12 @@ fn eval_eager(
         ScalarFunc::PgNumaAvailable => {
             require_arity(fc, vals.is_empty())?;
             Ok(Datum::Bool(false))
+        }
+        // Gres has no pluggable index access methods, so every catalogued
+        // operator class is valid for its access method.
+        ScalarFunc::AmValidate => {
+            require_arity(fc, vals.len() == 1)?;
+            Ok(Datum::Bool(true))
         }
         ScalarFunc::TemporalHash { ty, extended } => {
             require_arity(fc, vals.len() == if extended { 2 } else { 1 })?;

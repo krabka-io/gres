@@ -33118,6 +33118,14 @@ mod session_conformance_tests {
         assert!(
             scalar(
                 &mut session,
+                "SELECT count(*) FROM pg_catalog.pg_opclass WHERE NOT amvalidate(oid)",
+            )
+            .await
+                == "0"
+        );
+        assert!(
+            scalar(
+                &mut session,
                 "SELECT count(*) FROM pg_catalog.pg_description WHERE classoid = 1255",
             )
             .await
