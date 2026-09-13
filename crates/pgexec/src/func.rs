@@ -88,6 +88,10 @@ enum ScalarFunc {
     Ln,
     Log,
     Pi,
+    Erf,
+    Erfc,
+    Gamma,
+    Lgamma,
     Float4Send,
     Float8Send,
     // SP33: string family.
@@ -389,6 +393,10 @@ fn scalar_func(name: &str) -> Option<ScalarFunc> {
         "ln" => ScalarFunc::Ln,
         "log" => ScalarFunc::Log,
         "pi" => ScalarFunc::Pi,
+        "erf" => ScalarFunc::Erf,
+        "erfc" => ScalarFunc::Erfc,
+        "gamma" => ScalarFunc::Gamma,
+        "lgamma" => ScalarFunc::Lgamma,
         "float4send" => ScalarFunc::Float4Send,
         "float8send" => ScalarFunc::Float8Send,
         "lpad" => ScalarFunc::Lpad,
@@ -1426,7 +1434,14 @@ fn builtin_scalar_result_type(fc: &FuncCall, scope: &Scope) -> Result<ColumnType
                 Ok(ColumnType::Numeric(None))
             }
         }
-        ScalarFunc::Sqrt | ScalarFunc::Exp | ScalarFunc::Ln | ScalarFunc::Log => {
+        ScalarFunc::Sqrt
+        | ScalarFunc::Exp
+        | ScalarFunc::Ln
+        | ScalarFunc::Log
+        | ScalarFunc::Erf
+        | ScalarFunc::Erfc
+        | ScalarFunc::Gamma
+        | ScalarFunc::Lgamma => {
             require_arity(fc, n == 1 || (f == ScalarFunc::Log && n == 2))?;
             if n == 2 {
                 // `log(base, num)` is declared over `numeric` alone — there is
@@ -2551,7 +2566,11 @@ fn coerce_unknown_args(
         | ScalarFunc::Sqrt
         | ScalarFunc::Exp
         | ScalarFunc::Ln
-        | ScalarFunc::Log => ColumnType::Float8,
+        | ScalarFunc::Log
+        | ScalarFunc::Erf
+        | ScalarFunc::Erfc
+        | ScalarFunc::Gamma
+        | ScalarFunc::Lgamma => ColumnType::Float8,
         // `power` has both a `float8` and a `numeric` candidate, so a typed
         // operand picks the overload the same way `mod`'s does.
         ScalarFunc::Power if args.len() == 2 => {
@@ -3182,6 +3201,22 @@ fn eval_eager(
                     .map_err(ExecError::Type);
             }
             finite_or_overflow(as_f64(&vals[0])?.exp())
+        }
+        ScalarFunc::Erf => {
+            require_arity(fc, vals.len() == 1)?;
+            Ok(Datum::Float8(libm::erf(as_f64(&vals[0])?)))
+        }
+        ScalarFunc::Erfc => {
+            require_arity(fc, vals.len() == 1)?;
+            Ok(Datum::Float8(libm::erfc(as_f64(&vals[0])?)))
+        }
+        ScalarFunc::Gamma => {
+            require_arity(fc, vals.len() == 1)?;
+            gamma(as_f64(&vals[0])?)
+        }
+        ScalarFunc::Lgamma => {
+            require_arity(fc, vals.len() == 1)?;
+            lgamma(as_f64(&vals[0])?)
         }
         ScalarFunc::Ln => {
             require_arity(fc, vals.len() == 1)?;
@@ -5475,6 +5510,27 @@ fn finite_or_overflow(x: f64) -> Result<Datum, ExecError> {
     }
 }
 
+fn gamma(x: f64) -> Result<Datum, ExecError> {
+    if x == f64::NEG_INFINITY || (x.is_finite() && x <= 0.0 && x.fract() == 0.0) {
+        return Err(ExecError::Type(crabka_pgtypes::TypeError::float_overflow()));
+    }
+    let value = libm::tgamma(x);
+    if value.is_infinite() && x.is_finite() {
+        Err(ExecError::Type(crabka_pgtypes::TypeError::float_overflow()))
+    } else if value == 0.0 && x.is_finite() {
+        Err(ExecError::Type(crabka_pgtypes::TypeError::float_underflow()))
+    } else {
+        Ok(Datum::Float8(value))
+    }
+}
+
+fn lgamma(x: f64) -> Result<Datum, ExecError> {
+    if x.is_finite() && x <= 0.0 && x.fract() == 0.0 {
+        return Err(ExecError::Type(crabka_pgtypes::TypeError::float_overflow()));
+    }
+    Ok(Datum::Float8(libm::lgamma(x)))
+}
+
 /// PostgreSQL power result type. It is float8 if any operand is float8. If not,
 /// it is numeric if any operand is numeric. Otherwise it is float8, the all-int
 /// case, which is PG's preferred type.
@@ -6705,8 +6761,22 @@ mod tests {
         assert_eq!(ev("ln(1)"), Datum::Float8(0.0));
         assert_eq!(ev("log(1000)"), Datum::Float8(3.0));
         assert_eq!(ev("pi()"), Datum::Float8(std::f64::consts::PI));
+        assert_eq!(ev("erf(0)"), Datum::Float8(0.0));
+        assert_eq!(ev("erfc(0)"), Datum::Float8(1.0));
+        assert_eq!(ev("gamma(5)"), Datum::Float8(24.0));
+        assert_eq!(ev("lgamma(5)"), Datum::Float8(24.0_f64.ln()));
         // strict NULL
         assert_eq!(ev("sqrt(null)"), Datum::Null);
+    }
+
+    #[test]
+    fn gamma_reports_postgres_range_errors() {
+        assert!(ec_eval("gamma(-1::float8)") == "22003");
+        assert!(ec_eval("gamma(-1000.5::float8)") == "22003");
+        assert!(ec_eval("gamma(1000::float8)") == "22003");
+        assert!(ec_eval("lgamma(0::float8)") == "22003");
+        assert!(ec_eval("lgamma(-1::float8)") == "22003");
+        assert_eq!(ev("lgamma('-infinity'::float8)"), Datum::Float8(f64::INFINITY));
     }
 
     #[test]
