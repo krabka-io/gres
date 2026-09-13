@@ -447,7 +447,7 @@ pub(crate) fn eval_datetime(
                 None => {
                     let today = ctx.time_zone.to_datetime(ctx.now).date();
                     (
-                        crabka_pgtypes::datetime::date_to_midnight(today.into()),
+                        crabka_pgtypes::datetime::date_to_midnight(today.into())?,
                         as_datetime(&a, &ctx.time_zone)?,
                     )
                 }
@@ -690,7 +690,7 @@ fn temporal_infinite_sign(d: &Datum) -> i32 {
 fn as_datetime(d: &Datum, tz: &TimeZone) -> Result<DateTime, ExecError> {
     match d {
         Datum::Timestamp(dt) => Ok(*dt),
-        Datum::Date(dd) => Ok(crabka_pgtypes::datetime::date_to_midnight(*dd)),
+        Datum::Date(dd) => Ok(crabka_pgtypes::datetime::date_to_midnight(*dd)?),
         Datum::Timestamptz(ts) => Ok(tz.to_datetime(*ts)),
         other => Err(type_error("age", other)),
     }
@@ -782,7 +782,7 @@ fn extract_field(field: &str, source: &Datum, tz: &TimeZone) -> Result<Option<St
                 NonFinite::Null => return Ok(None),
                 NonFinite::Finite => {}
             }
-            let dt = crabka_pgtypes::datetime::date_to_midnight(*d);
+            let dt = crabka_pgtypes::datetime::date_to_midnight(*d)?;
             if unit == "epoch" {
                 let micros = dt
                     .since((Unit::Microsecond, unix_epoch_civil()))
@@ -1412,7 +1412,7 @@ fn trunc_datetime(unit: &str, type_name: &str, dt: DateTime) -> Result<DateTime,
             let back = i64::from(d.weekday().to_monday_one_offset()) - 1;
             let monday = crabka_pgtypes::datetime::date_plus_days(d.into(), -back)
                 .map_err(|_| invalid_param("date_trunc week out of range"))?;
-            crabka_pgtypes::datetime::date_to_midnight(monday)
+            crabka_pgtypes::datetime::date_to_midnight(monday)?
         }
         "month" => mk(y, m, 1, 0, 0, 0)?,
         "quarter" => {

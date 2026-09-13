@@ -479,7 +479,8 @@ fn to_char(value: &Datum, template: &str, ctx: &EvalCtx, name: &str) -> Result<D
     }
     let text = match value {
         Datum::Date(d) => {
-            let fields = datetime::DateTimeFields::from_civil(datetime::date_to_midnight(*d), None);
+            let fields =
+                datetime::DateTimeFields::from_civil(datetime::date_to_midnight(*d)?, None);
             datetime::format_datetime(template, &fields).map_err(map_type)?
         }
         Datum::Timestamp(dt) => {

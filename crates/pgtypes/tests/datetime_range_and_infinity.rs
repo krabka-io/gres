@@ -12,9 +12,10 @@ use crabka_pgtypes::{
     TypeError,
     datetime::{
         DATE_INFINITY, DATE_NEG_INFINITY, Interval, PgTime, TIMESTAMP_INFINITY,
-        TIMESTAMP_NEG_INFINITY, combine_date_time, div_interval, interval_to_time, justify_days,
-        justify_hours, justify_interval, make_date, make_interval, make_time, make_timestamp_civil,
-        mul_interval, parse_date, parse_interval, parse_time, sub_interval,
+        TIMESTAMP_NEG_INFINITY, combine_date_time, date_from_binary, date_plus_days,
+        date_to_binary, date_to_text, div_interval, interval_to_time, justify_days, justify_hours,
+        justify_interval, make_date, make_interval, make_time, make_timestamp_civil, mul_interval,
+        parse_date, parse_interval, parse_time, sub_interval,
     },
 };
 
@@ -253,9 +254,10 @@ fn a_non_finite_date_swallows_the_time_it_is_combined_with() {
     assert!(combine_date_time(day, PgTime::MIDNIGHT).is_some());
     assert!(
         combine_date_time(day, end_of_day)
-            == Some(crabka_pgtypes::datetime::date_to_midnight(
-                parse_date("2020-01-02").expect("date")
-            ))
+            == Some(
+                crabka_pgtypes::datetime::date_to_midnight(parse_date("2020-01-02").expect("date"))
+                    .expect("ordinary date fits timestamp")
+            )
     );
 }
 
@@ -361,6 +363,19 @@ fn make_date_reads_a_negative_year_as_the_bc_era() {
             "make_date({year},{month},{day})"
         );
     }
+}
+
+#[test]
+fn date_storage_and_arithmetic_cover_postgres_full_calendar_range() {
+    let first = make_date(-4714, 11, 24).expect("first PostgreSQL date");
+    let last = make_date(5_874_897, 12, 31).expect("last PostgreSQL date");
+    assert!(date_to_text(first) == "4714-11-24 BC");
+    assert!(date_to_text(last) == "5874897-12-31");
+    assert!(date_to_binary(first) == (-2_451_545i32).to_be_bytes());
+    assert!(date_to_binary(last) == 2_145_031_948i32.to_be_bytes());
+    assert!(date_from_binary(&date_to_binary(last)).expect("wire round trip") == last);
+    assert!(date_plus_days(last, 1).is_err());
+    assert!(date_plus_days(first, -1).is_err());
 }
 
 /// The `make_*` constructors word their complaints the way `PostgreSQL` words

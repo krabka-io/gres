@@ -1032,7 +1032,7 @@ pub fn cast_in(
         // casts to the non-finite timestamp of the same sign — every temporal
         // cast below carries infinity through rather than computing with it.
         (Datum::Date(d), ColumnType::Timestamp) => match crate::datetime::date_infinite_sign(*d) {
-            0 => Ok(Datum::Timestamp(crate::datetime::date_to_midnight(*d))),
+            0 => Ok(Datum::Timestamp(crate::datetime::date_to_midnight(*d)?)),
             sign => Ok(Datum::Timestamp(
                 crate::datetime::timestamp_infinity_of_sign(sign),
             )),
@@ -1040,7 +1040,7 @@ pub fn cast_in(
         // date → timestamptz: midnight in the session tz → absolute instant.
         (Datum::Date(d), ColumnType::Timestamptz) => {
             match crate::datetime::date_infinite_sign(*d) {
-                0 => crate::datetime::date_to_midnight(*d)
+                0 => crate::datetime::date_to_midnight(*d)?
                     .to_zoned(tz.clone())
                     .map(|z| Datum::Timestamptz(z.timestamp()))
                     .map_err(|_| TypeError::DatetimeFieldOverflow {
