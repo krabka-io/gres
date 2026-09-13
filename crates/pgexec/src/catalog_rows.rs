@@ -258,9 +258,8 @@ pub(crate) fn pg_partitioned_table_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<D
         let natts = i16::try_from(scheme.keys.len())
             .map_err(|_| ExecError::Unsupported("partnatts exceeds int2 range".into()))?;
         // `partattrs` is an int2vector, printed as a space-separated list of
-        // one-based attribute numbers. Crabka compacts the column list on `DROP
-        // COLUMN`, so an attribute number is the column's position *now* and is
-        // derived here rather than stored.
+        // one-based physical attribute numbers. `DROP COLUMN` keeps a dropped
+        // slot, so an attribute number stays stable for the relation's life.
         let attrs = crate::partition::key_ordinals(&scheme, &table.columns)?
             .into_iter()
             .map(|ordinal| (ordinal + 1).to_string())

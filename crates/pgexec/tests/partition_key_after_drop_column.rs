@@ -1,12 +1,7 @@
 //! A partition key survives `DROP COLUMN` on the relation it is keyed on.
 //!
-//! `DROP COLUMN` compacts Crabka's column list and every stored row, unlike
-//! `PostgreSQL`, which leaves the attribute in place and sets `attisdropped`.
-//! A partition key that recorded a column *position* therefore pointed at the
-//! neighbouring column as soon as anything before it was dropped, and a
-//! partitioned table then routed rows into the wrong leaf with no error at all.
-//! The key records the column's name instead, and the position is resolved
-//! against the live column list at every use.
+//! A dropped column remains a physical NULL slot, like `PostgreSQL`, while
+//! partition keys continue to resolve their live column names correctly.
 
 use assert2::assert;
 use crabka_pgexec::{SqlEngine, SqlSession};
@@ -54,9 +49,8 @@ async fn rows_of(session: &mut SqlSession, sql: &str) -> Vec<String> {
         .collect()
 }
 
-/// The defect in its plainest form. `a` is declared second, so a key recorded
-/// as position 1 read `a` before the drop and `b` after it -- and both writes
-/// below then landed in the partition that names the *other* value.
+/// `a` is declared second, so its physical key slot remains attnum 2 after the
+/// earlier column is dropped.
 #[tokio::test]
 async fn a_row_routes_by_its_key_column_after_an_earlier_column_is_dropped() {
     let engine = SqlEngine::new();
@@ -94,9 +88,8 @@ async fn a_row_routes_by_its_key_column_after_an_earlier_column_is_dropped() {
     );
 }
 
-/// The same slide, seen through `pg_partitioned_table`. `partattrs` is an
-/// attribute number, and Crabka's attribute numbers are positions in the live
-/// column list, so the drop has to move it.
+/// `partattrs` is a physical attribute number, so the key's attnum remains
+/// stable after an earlier column is dropped.
 #[tokio::test]
 async fn partattrs_reports_the_key_column_position_the_relation_has_now() {
     let engine = SqlEngine::new();
@@ -110,7 +103,7 @@ async fn partattrs_reports_the_key_column_position_the_relation_has_now() {
     assert!(rows_of(&mut session, attrs).await == vec!["2"]);
 
     run(&mut session, "ALTER TABLE p DROP COLUMN fdrop").await;
-    assert!(rows_of(&mut session, attrs).await == vec!["1"]);
+    assert!(rows_of(&mut session, attrs).await == vec!["2"]);
     // The key still prints under the name it was written with.
     assert!(
         rows_of(&mut session, "SELECT pg_get_partkeydef('p'::regclass)").await == vec!["LIST (a)"]
@@ -289,7 +282,7 @@ async fn retyping_a_partition_key_column_is_refused() {
 }
 
 /// `RENAME COLUMN` and `DROP COLUMN` compose. The rename rewrites the key, and
-/// the drop then slides the renamed column without the key losing track of it.
+/// the later dropped slot leaves the renamed key's physical position intact.
 #[tokio::test]
 async fn a_renamed_key_column_still_routes_after_a_later_drop() {
     let engine = SqlEngine::new();

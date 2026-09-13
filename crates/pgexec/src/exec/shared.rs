@@ -103,18 +103,22 @@ impl Reach {
     }
 }
 
-/// For each of `target`'s columns, the ordinal of the same-named column in
-/// `source`, the permutation that rewrites a `source`-shaped row into a
-/// `target`-shaped one. A partition and its parent always declare the same
-/// column names, but `ATTACH PARTITION` maps them by name, not by position.
+/// For each of `target`'s physical columns, the ordinal of the same-named
+/// column in `source`, the permutation that rewrites a `source`-shaped row
+/// into a `target`-shaped one. A dropped target slot has no visible name to
+/// match, so it becomes a NULL slot in the reshaped row.
 pub(crate) fn column_mapping(target: &Table, source: &Table) -> Result<Vec<usize>, ExecError> {
     target
         .columns
         .iter()
         .map(|column| {
-            source
-                .column_index(&column.name)
-                .ok_or_else(|| ExecError::ChildMissingColumn(column.name.clone()))
+            if column.dropped {
+                Ok(usize::MAX)
+            } else {
+                source
+                    .column_index(&column.name)
+                    .ok_or_else(|| ExecError::ChildMissingColumn(column.name.clone()))
+            }
         })
         .collect()
 }

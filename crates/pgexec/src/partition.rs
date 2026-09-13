@@ -114,16 +114,10 @@ impl Strategy {
 /// A key column's *position* in the parent's column list is not stored, and is
 /// resolved from the live column list at every use. See [`key_ordinals`].
 ///
-/// `PostgreSQL` can store `pg_partitioned_table.partattrs` as attribute numbers
-/// because an attnum is stable for the life of the relation: `DROP COLUMN`
-/// leaves the attribute in place and sets `attisdropped`. Crabka instead
-/// *compacts* the column list and every stored row, so a position is only
-/// meaningful against one particular version of the schema. A stored position
-/// silently decays into a pointer at the neighbouring column the moment
-/// anything earlier is dropped — and a partition key that reads the wrong
-/// column routes rows into the wrong leaf without an error. A name cannot decay
-/// that way: `RENAME COLUMN` rewrites it, and `DROP COLUMN` refuses to remove a
-/// column a key names at all.
+/// `PostgreSQL` stores `pg_partitioned_table.partattrs` as stable attribute
+/// numbers because `DROP COLUMN` leaves the attribute in place and sets
+/// `attisdropped`. Crabka preserves those physical slots too. We still store a
+/// name so `RENAME COLUMN` can rewrite the key without changing its meaning.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Scheme {
     pub strategy: Strategy,

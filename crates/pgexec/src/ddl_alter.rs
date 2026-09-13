@@ -5684,6 +5684,7 @@ pub(crate) fn attach_partition_ops(
     if let Some(missing) = parent
         .columns
         .iter()
+        .filter(|column| !column.dropped)
         .find(|column| candidate.column_index(&column.name).is_none())
     {
         return Err(ExecError::ChildMissingColumn(missing.name.clone()));
@@ -5704,7 +5705,7 @@ pub(crate) fn attach_partition_ops(
     // them, collation included: PostgreSQL compares the two declarations rather
     // than what they do, so `char(2) COLLATE "POSIX"` cannot join a parent whose
     // column says `COLLATE "C"` even where both order text by byte value.
-    for column in &parent.columns {
+    for column in parent.columns.iter().filter(|column| !column.dropped) {
         let Some(index) = candidate.column_index(&column.name) else {
             continue;
         };
@@ -5737,21 +5738,10 @@ pub(crate) fn attach_partition_ops(
 
     // PostgreSQL maps the candidate's columns onto the parent's by NAME, so a
     // table declared in a different column order still attaches.
-    let ordinals = parent
-        .columns
-        .iter()
-        .map(|column| {
-            candidate
-                .column_index(&column.name)
-                .ok_or_else(|| ExecError::ChildMissingColumn(column.name.clone()))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let ordinals = crate::exec::column_mapping(parent, &candidate)?;
     let versions = scan_all_row_versions(kv, &candidate)?;
     for (_, _, stored) in live_row_versions(kv, &candidate, &versions, own_xid)? {
-        let row = ordinals
-            .iter()
-            .map(|ordinal| stored.get(*ordinal).cloned().unwrap_or(Datum::Null))
-            .collect::<Vec<_>>();
+        let row = crate::exec::permuted_row(&stored, &ordinals);
         if !crate::partition::satisfies(&scheme, &parent.columns, &resolved, &siblings, &row)? {
             return Err(ExecError::PartitionConstraintViolationOnExistingRows(
                 child.to_string(),

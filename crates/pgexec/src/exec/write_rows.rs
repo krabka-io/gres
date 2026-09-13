@@ -3,7 +3,8 @@
 use super::*;
 
 /// Resolve INSERT target column indices: explicit `(cols...)` mapped to their
-/// catalog positions (42703 on miss), or all columns in declared order.
+/// catalog positions (42703 on miss), or every visible column in declared
+/// order.
 pub(super) fn resolve_targets(
     t: &Table,
     columns: &Option<Vec<String>>,
@@ -24,7 +25,12 @@ pub(super) fn resolve_targets(
                 })
                 .collect::<Result<_, _>>()
         }
-        None => Ok((0..t.columns.len()).collect()),
+        None => Ok(t
+            .columns
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, column)| (!column.dropped).then_some(slot))
+            .collect()),
     }
 }
 
