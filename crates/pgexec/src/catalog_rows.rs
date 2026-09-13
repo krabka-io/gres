@@ -1727,6 +1727,10 @@ fn attribute_layout(
     let align = match ty {
         C::Name => b'c',
         C::Point | C::Box | C::Circle | C::Lseg | C::Line => b'd',
+        C::Array(_) if matches!(
+            ty.oid(),
+            crabka_pgtypes::oids::ACLITEMARRAY | crabka_pgtypes::oids::FLOAT8ARRAY
+        ) => b'd',
         _ => match len {
             1 => b'c',
             2 => b's',
@@ -5727,6 +5731,13 @@ mod tests {
         assert_eq!(attribute_layout(ColumnType::Name, None), (64, false, b'c'));
         assert_eq!(attribute_layout(ColumnType::Float8, None), (8, true, b'd'));
         assert_eq!(attribute_layout(ColumnType::Int2, None), (2, true, b's'));
+        assert_eq!(
+            attribute_layout(
+                ColumnType::array_of(ColumnType::Float8).expect("float8[]"),
+                None,
+            ),
+            (-1, false, b'd')
+        );
     }
 
     #[test]
