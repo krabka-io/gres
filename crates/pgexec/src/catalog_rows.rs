@@ -1953,7 +1953,7 @@ pub(crate) fn pg_type_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecE
 /// [`ColumnType`]. Their I/O links still need matching `pg_proc` rows: the
 /// upstream catalog sanity checks use those links as foreign keys.
 fn catalog_only_builtin_type_rows(proc_oids: &BTreeMap<String, i32>) -> Vec<Vec<Datum>> {
-    [
+    let mut rows: Vec<Vec<Datum>> = [
         (32, "pg_ddl_command", 8, "P", "p", 0, [None; 8]),
         (269, "table_am_handler", 4, "P", "p", 0, [None; 8]),
         (325, "index_am_handler", 4, "P", "p", 0, [None; 8]),
@@ -2047,7 +2047,31 @@ fn catalog_only_builtin_type_rows(proc_oids: &BTreeMap<String, i32>) -> Vec<Vec<
             )
         },
     )
-    .collect()
+    .collect();
+    let gtsvector = rows
+        .iter_mut()
+        .find(|row| row[0] == oid(3642))
+        .expect("gtsvector catalog row");
+    gtsvector[14] = oid(3644);
+    rows.push(pg_type_row(
+        PgTypeRow {
+            oid: 3644,
+            name: "_gtsvector",
+            namespace: PG_CATALOG_NAMESPACE_OID,
+            len: -1,
+            category: "A",
+            typtype: "b",
+            typrelid: 0,
+            typelem: 3642,
+            typarray: 0,
+            typbasetype: 0,
+            typcollation: 0,
+            domain_base: None,
+            range_align: None,
+        },
+        proc_oids,
+    ));
+    rows
 }
 
 /// The composite type and array row each ordinary relation owns.
@@ -5589,6 +5613,22 @@ mod tests {
             .find(|row| row[1] == Datum::Text("unknown".into()))
             .expect("unknown pg_type row");
         assert_eq!(row[23], Datum::InternalChar(b'p'));
+    }
+
+    #[test]
+    fn gtsvector_has_its_catalog_array_type() {
+        let rows = catalog_only_builtin_type_rows(&BTreeMap::new());
+        let base = rows
+            .iter()
+            .find(|row| row[0] == oid(3642))
+            .expect("gtsvector pg_type row");
+        let array = rows
+            .iter()
+            .find(|row| row[0] == oid(3644))
+            .expect("gtsvector[] pg_type row");
+        assert_eq!(base[14], oid(3644));
+        assert_eq!(array[1], Datum::Text("_gtsvector".into()));
+        assert_eq!(array[13], oid(3642));
     }
 
     #[test]
