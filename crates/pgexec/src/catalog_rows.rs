@@ -1980,6 +1980,11 @@ pub(crate) fn pg_type_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecE
                         "name" => Some("c"),
                         "aclitem"
                         | "_aclitem"
+                        | "_point"
+                        | "_lseg"
+                        | "_box"
+                        | "_line"
+                        | "_circle"
                         | "point"
                         | "lseg"
                         | "box"
@@ -5742,12 +5747,20 @@ mod tests {
 
     #[test]
     fn point_type_uses_double_alignment() {
-        let point = pg_type_rows(&MemKv::default())
+        let rows = pg_type_rows(&MemKv::default())
             .expect("pg_type rows")
             .into_iter()
+            .collect::<Vec<_>>();
+        let point = rows
+            .iter()
             .find(|row| row[0] == oid(600))
             .expect("point pg_type row");
         assert_eq!(point[22], Datum::InternalChar(b'd'));
+        let array = rows
+            .iter()
+            .find(|row| row[0] == oid(1017))
+            .expect("point[] pg_type row");
+        assert_eq!(array[22], Datum::InternalChar(b'd'));
     }
 
     #[test]
