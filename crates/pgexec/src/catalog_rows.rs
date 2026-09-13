@@ -955,6 +955,26 @@ pub(crate) fn pg_attribute_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, 
             &table,
             &acl,
         )?);
+        if table_has_toast_relation(catalog_kv, &table)? {
+            let toast = Table {
+                id: 0,
+                owner: table.owner.clone(),
+                name: toast_relation_name(table.id)?,
+                columns: vec![
+                    Column::new("chunk_id", ColumnType::Oid),
+                    Column::new("chunk_seq", ColumnType::Int4),
+                    Column::new("chunk_data", ColumnType::Bytea),
+                ],
+                sharded: false,
+                row_security: false,
+                force_row_security: false,
+                sharding: None,
+                foreign: None,
+                materialized: None,
+                checks: Vec::new(),
+            };
+            rows.extend(attribute_rows_for_table(toast_relation_oid(table.id)?, &toast, &acl)?);
+        }
     }
     for index in crabka_pgcatalog::list_indexes(catalog_kv)? {
         let source = crabka_pgcatalog::get_table(catalog_kv, &index.table)?;
@@ -5648,6 +5668,21 @@ mod tests {
             .find(|row| matches!(&row[17], Datum::Text(kind) if kind == "t"))
             .expect("toast pg_class row");
         assert_eq!(toast[6], Datum::Int4(2));
+        let toast_oid = toast[0].clone();
+        let attributes = pg_attribute_rows(&kv)
+            .expect("pg_attribute rows")
+            .into_iter()
+            .filter(|row| row[0] == toast_oid)
+            .map(|row| row[1].clone())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            attributes,
+            vec![
+                Datum::Text("chunk_id".into()),
+                Datum::Text("chunk_seq".into()),
+                Datum::Text("chunk_data".into()),
+            ]
+        );
     }
 
     #[test]
