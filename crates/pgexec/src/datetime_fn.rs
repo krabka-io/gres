@@ -803,7 +803,7 @@ fn extract_field(field: &str, source: &Datum, tz: &TimeZone) -> Result<Option<St
             if unit == "epoch" {
                 let micros = dt
                     .epoch_micros()
-                    .and_then(|micros| micros.checked_add(-946_684_800_000_000))
+                    .and_then(|micros| micros.checked_add(946_684_800_000_000))
                     .ok_or_else(|| invalid_param("date out of range for epoch"))?;
                 return Ok(Some((micros / 1_000_000).to_string()));
             }
@@ -2386,6 +2386,12 @@ mod tests {
     #[test]
     fn extract_epoch_timestamp_and_timestamptz() {
         let ctx = ctx_at("2024-01-15T12:00:00Z");
+        // A date is stored from PostgreSQL's 2000 epoch too, but its epoch is
+        // rendered from the Unix epoch as a whole-second integer.
+        assert_eq!(
+            ev("extract(epoch from DATE '2024-01-01')", &ctx),
+            num("1704067200")
+        );
         // timestamp epoch is "as if UTC": 2024-01-01 00:00:00 → 1704067200.
         assert_eq!(
             ev("extract(epoch from TIMESTAMP '2024-01-01 00:00:00')", &ctx),
