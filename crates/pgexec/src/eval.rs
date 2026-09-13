@@ -1577,7 +1577,7 @@ fn apply_pow(l: &Datum, r: &Datum) -> Result<Datum, ExecError> {
             "zero raised to a negative power is undefined",
         ));
     }
-    if base < 0.0 && exp.fract() != 0.0 {
+    if base < 0.0 && exp.is_finite() && exp.fract() != 0.0 {
         return Err(domain_error(
             "2201F",
             "a negative number raised to a non-integer power yields a complex result",
@@ -7950,6 +7950,15 @@ mod tests {
         }
         // A numeric operand selects the exact numeric `^`.
         assert!(matches!(ev("5.0 ^ 2", None, &[]), Datum::Numeric(_)));
+        assert!(matches!(
+            ev("-1::float8 ^ 'NaN'::float8", None, &[]),
+            Datum::Float8(value) if value.is_nan()
+        ));
+        assert_eq!(
+            ev("-1::float8 ^ 'Infinity'::float8", None, &[]),
+            Datum::Float8(1.0)
+        );
+        assert_eq!(err_code("2::float8 ^ '1e200'", None, &[]), "22003");
         // Domain errors are 2201F; `% 0` is 22012; float8 has no `%` at all.
         assert!(err_code("0 ^ -1", None, &[]) == "2201F");
         assert!(err_code("(-2) ^ 0.5", None, &[]) == "2201F");
