@@ -1115,7 +1115,10 @@ pub fn apply_interval_range_typmod(
     range: (IntervalField, IntervalField),
     precision: Option<u8>,
 ) -> Result<Interval, TypeError> {
-    let value = truncate_to_range(value, Some(range));
+    let mut value = truncate_to_range(value, Some(range));
+    if range.0 == IntervalField::Year && !value.is_infinite() {
+        value.months -= value.months % 12;
+    }
     precision.map_or(Ok(value), |precision| {
         apply_interval_typmod(value, Some(precision))
     })
@@ -2989,7 +2992,7 @@ fn truncate_to_range(iv: Interval, range: Option<(IntervalField, IntervalField)>
         }
     };
     Interval {
-        micros: iv.micros - iv.micros.rem_euclid(step),
+        micros: iv.micros - iv.micros % step,
         ..iv
     }
 }
@@ -8978,6 +8981,41 @@ mod make_justify_tests {
                 months: 0,
                 days: 1,
                 micros: 7_380_000_000,
+            }
+        );
+
+        assert_eq!(
+            super::apply_interval_range_typmod(
+                Interval {
+                    months: 13,
+                    days: 2,
+                    micros: 3,
+                },
+                (IntervalField::Year, IntervalField::Year),
+                None,
+            )
+            .expect("year range"),
+            Interval {
+                months: 12,
+                days: 0,
+                micros: 0,
+            }
+        );
+        assert_eq!(
+            super::apply_interval_range_typmod(
+                Interval {
+                    months: 0,
+                    days: 0,
+                    micros: -14_000_000,
+                },
+                (IntervalField::Day, IntervalField::Minute),
+                None,
+            )
+            .expect("minute range"),
+            Interval {
+                months: 0,
+                days: 0,
+                micros: 0,
             }
         );
         assert_eq!(
