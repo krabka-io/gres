@@ -8197,6 +8197,7 @@ impl SqlSession {
                 method,
                 family,
                 key_type,
+                members,
             } => {
                 let method = method.to_ascii_lowercase();
                 if crate::catalog_rel::access_method_oid(&method).is_none() {
@@ -8223,7 +8224,7 @@ impl SqlSession {
                     })
                     .transpose()?;
                 let _catalog_guard = Arc::clone(&self.catalog_lock).lock_owned().await;
-                let (_, ops) = crabka_pgcatalog::create_operator_class_ops(
+                let (class, mut ops) = crabka_pgcatalog::create_operator_class_ops(
                     self.catalog_kv.as_ref(),
                     &name,
                     &method,
@@ -8233,6 +8234,65 @@ impl SqlSession {
                     *default,
                     key_type.map_or(0, crabka_pgtypes::ColumnType::oid),
                 )?;
+                let members = members
+                    .iter()
+                    .map(|member| match member {
+                        crabka_pgparser::ast::OperatorFamilyMember::Operator {
+                            number,
+                            operator,
+                            left_type,
+                            right_type,
+                            order_family,
+                        } => Ok(crabka_pgcatalog::OperatorFamilyMember::Operator {
+                            number: *number,
+                            operator: operator.clone(),
+                            left_type_oid: left_type.oid(),
+                            right_type_oid: right_type.oid(),
+                            order_family_oid: order_family
+                                .as_ref()
+                                .map(|family| {
+                                    resolve_ordering_family_oid(
+                                        &*self.catalog_kv,
+                                        &self.resolution_scope(),
+                                        family,
+                                    )
+                                })
+                                .transpose()?
+                                .unwrap_or_default(),
+                        }),
+                        crabka_pgparser::ast::OperatorFamilyMember::Function {
+                            number,
+                            left_type,
+                            right_type,
+                            function,
+                            argument_types,
+                        } => {
+                            let left = left_type
+                                .or_else(|| argument_types.first().and_then(|ty| ty.column()))
+                                .ok_or_else(|| {
+                                    ExecError::Remote(PgError::error(
+                                        "42601",
+                                        "support function must have an associated data type",
+                                    ))
+                                })?;
+                            Ok(crabka_pgcatalog::OperatorFamilyMember::Function {
+                                number: *number,
+                                function: function.to_string(),
+                                left_type_oid: left.oid(),
+                                right_type_oid: right_type
+                                    .or_else(|| argument_types.get(1).and_then(|ty| ty.column()))
+                                    .unwrap_or(left)
+                                    .oid(),
+                                argument_type_oids: argument_types.iter().map(|ty| ty.oid()).collect(),
+                            })
+                        }
+                    })
+                    .collect::<Result<Vec<_>, ExecError>>()?;
+                ops.extend(crabka_pgcatalog::add_operator_family_members_ops(
+                    &*self.catalog_kv,
+                    class.family_oid,
+                    &members,
+                )?);
                 self.commit_catalog(ops).await?;
                 Ok(QueryResult::Command {
                     tag: "CREATE OPERATOR CLASS".into(),
@@ -33086,6 +33146,13 @@ mod session_conformance_tests {
             )
             .await
             .expect("create class with implicit family");
+        session
+            .simple_query(
+                "CREATE OPERATOR CLASS member_class FOR TYPE int4 USING hash AS \
+                 OPERATOR 1 =, FUNCTION 1 hashint4(int4)",
+            )
+            .await
+            .expect("create class members");
         assert!(
             scalar(
                 &mut session,
@@ -33113,8 +33180,26 @@ mod session_conformance_tests {
             .await
                 == "2"
         );
-        assert!(scalar(&mut session, "SELECT count(*) FROM pg_catalog.pg_amop").await == "945");
-        assert!(scalar(&mut session, "SELECT count(*) FROM pg_catalog.pg_amproc").await == "714");
+        assert!(
+            scalar(
+                &mut session,
+                "SELECT count(*) FROM pg_catalog.pg_amop a JOIN pg_catalog.pg_opclass c \
+                 ON c.opcfamily = a.amopfamily WHERE c.opcname = 'member_class'",
+            )
+            .await
+                == "1"
+        );
+        assert!(
+            scalar(
+                &mut session,
+                "SELECT count(*) FROM pg_catalog.pg_amproc a JOIN pg_catalog.pg_opclass c \
+                 ON c.opcfamily = a.amprocfamily WHERE c.opcname = 'member_class'",
+            )
+            .await
+                == "1"
+        );
+        assert!(scalar(&mut session, "SELECT count(*) FROM pg_catalog.pg_amop").await == "946");
+        assert!(scalar(&mut session, "SELECT count(*) FROM pg_catalog.pg_amproc").await == "715");
         assert!(
             scalar(
                 &mut session,

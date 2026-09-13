@@ -11123,20 +11123,12 @@ impl Parser {
             .then(|| self.relation_ref())
             .transpose()?;
         self.expect_keyword_or_ident(Keyword::As, "as")?;
-        // Each member is already validated when its referenced operator or
-        // support function is used. Keep the DDL boundary strict (non-empty,
-        // comma-separated) without duplicating those parsers here.
-        let mut member_tokens = 0usize;
-        let mut key_type = None;
-        while !matches!(self.peek(), Token::Semicolon | Token::Eof) {
-            if self.eat_ident_eq("storage") {
-                key_type = Some(self.parse_type_name()?);
-            } else {
-                self.bump();
-            }
-            member_tokens += 1;
-        }
-        if member_tokens == 0 {
+        let (key_type, members) = if self.eat_ident_eq("storage") {
+            (Some(self.parse_type_name()?), Vec::new())
+        } else {
+            (None, self.operator_family_add_members(Some(input_type))?)
+        };
+        if key_type.is_none() && members.is_empty() {
             return Err(ParseError::new(
                 "operator class requires at least one member",
                 self.peek_pos(),
@@ -11150,6 +11142,7 @@ impl Parser {
                 method,
                 family,
                 key_type,
+                members,
             },
         ))
     }
@@ -11344,7 +11337,7 @@ impl Parser {
         self.expect_keyword_or_ident(Keyword::Using, "using")?;
         let method = self.expect_object_name()?;
         let action = if kind == OperatorObjectKind::Family && self.eat_ident_eq("add") {
-            OperatorObjectAlterAction::AddMembers(self.operator_family_add_members()?)
+            OperatorObjectAlterAction::AddMembers(self.operator_family_add_members(None)?)
         } else if kind == OperatorObjectKind::Family
             && (self.eat_keyword(Keyword::Drop) || self.eat_ident_eq("drop"))
         {
@@ -11376,6 +11369,7 @@ impl Parser {
 
     fn operator_family_add_members(
         &mut self,
+        default_type: Option<crabka_pgtypes::ColumnType>,
     ) -> Result<Vec<crate::ast::OperatorFamilyMember>, ParseError> {
         use crate::ast::OperatorFamilyMember;
 
@@ -11388,14 +11382,17 @@ impl Parser {
                 // it has to be sliced out of the source the way `CREATE OPERATOR`
                 // slices it rather than read one token at a time.
                 let operator = self.operator_name()?.to_string();
-                if *self.peek() != Token::LParen {
+                let (left_type, right_type) = if *self.peek() == Token::LParen {
+                    self.operator_family_type_pair(false)?
+                } else if let Some(default_type) = default_type {
+                    (default_type, default_type)
+                } else {
                     return Err(ParseError::new_sqlstate(
                         "42601",
                         "operator argument types must be specified in ALTER OPERATOR FAMILY",
                         self.peek_pos(),
                     ));
-                }
-                let (left_type, right_type) = self.operator_family_type_pair(false)?;
+                };
                 let order_family = if self.eat_keyword(Keyword::For) {
                     self.expect_keyword_or_ident(Keyword::Order, "order")?;
                     self.expect_keyword_or_ident(Keyword::By, "by")?;
@@ -29946,6 +29943,7 @@ mod operator_tests {
                     method: "btree".into(),
                     family: None,
                     key_type: Some(ColumnType::Int4),
+                    members: vec![],
                 }
         );
         for (sql, kind) in [

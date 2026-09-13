@@ -1686,6 +1686,7 @@ pub enum UtilityStatement {
         method: String,
         family: Option<RelationRef>,
         key_type: Option<ColumnType>,
+        members: Vec<OperatorFamilyMember>,
     },
     AlterOperatorObject {
         kind: OperatorObjectKind,
