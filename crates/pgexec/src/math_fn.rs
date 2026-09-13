@@ -1301,10 +1301,15 @@ fn tand(x: f64) -> f64 {
     let (a, sin_sign, cos_sign) = reduce_degrees(x);
     let sign = f64::from(sin_sign * cos_sign);
     let (s, c) = (sind_q1(a), cosd_q1(a));
-    if c == 0.0 {
+    let value = if c == 0.0 {
         sign * f64::INFINITY
     } else {
         sign * (s / c)
+    };
+    if value == 0.0 {
+        0.0
+    } else {
+        value
     }
 }
 
@@ -1312,10 +1317,15 @@ fn cotd(x: f64) -> f64 {
     let (a, sin_sign, cos_sign) = reduce_degrees(x);
     let sign = f64::from(sin_sign * cos_sign);
     let (s, c) = (sind_q1(a), cosd_q1(a));
-    if s == 0.0 {
+    let value = if s == 0.0 {
         sign * f64::INFINITY
     } else {
         sign * (c / s)
+    };
+    if value == 0.0 {
+        0.0
+    } else {
+        value
     }
 }
 

@@ -5534,7 +5534,12 @@ fn lgamma(x: f64) -> Result<Datum, ExecError> {
     if x.is_finite() && x <= 0.0 && x.fract() == 0.0 {
         return Err(ExecError::Type(crabka_pgtypes::TypeError::float_overflow()));
     }
-    Ok(Datum::Float8(libm::lgamma(x)))
+    let value = libm::lgamma(x);
+    if value.is_infinite() && x.is_finite() {
+        Err(ExecError::Type(crabka_pgtypes::TypeError::float_overflow()))
+    } else {
+        Ok(Datum::Float8(value))
+    }
 }
 
 /// PostgreSQL power result type. It is float8 if any operand is float8. If not,
@@ -6782,6 +6787,7 @@ mod tests {
         assert!(ec_eval("gamma(1000::float8)") == "22003");
         assert!(ec_eval("lgamma(0::float8)") == "22003");
         assert!(ec_eval("lgamma(-1::float8)") == "22003");
+        assert!(ec_eval("lgamma(1e308::float8)") == "22003");
         assert_eq!(ev("lgamma('-infinity'::float8)"), Datum::Float8(f64::INFINITY));
     }
 

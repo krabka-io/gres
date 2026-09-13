@@ -1682,7 +1682,31 @@ pub(crate) fn apply_binary_of(
     };
     let (ol, or) = (oidvector(left, l)?, oidvector(right, r)?);
     let (l, r) = (ol.as_ref().unwrap_or(l), or.as_ref().unwrap_or(r));
-    let (lc, rc) = coerce_untyped_literal_operands(op, left, right, l, r, ctx)?;
+    // A stored float8 can use the numeric Datum representation. Resolve an
+    // unknown exponent from the expression's type instead of that storage
+    // detail, so `float8_column ^ '1e200'` chooses float8 power.
+    let coerce_float8_pow = |literal: &Expr,
+                              value: &Datum,
+                              other: &Expr|
+     -> Result<Option<Datum>, ExecError> {
+        if op == BinaryOp::Pow
+            && matches!(literal, Expr::StringLiteral(_))
+            && matches!(value, Datum::Text(_))
+            && infer_type(other, scope)? == ColumnType::Float8
+        {
+            return cast_value(value, ColumnType::Float8, &ctx.time_zone).map(Some);
+        }
+        Ok(None)
+    };
+    let (pow_left, pow_right) = (
+        coerce_float8_pow(left, l, right)?,
+        coerce_float8_pow(right, r, left)?,
+    );
+    let (lc, rc) = if pow_left.is_some() || pow_right.is_some() {
+        (pow_left, pow_right)
+    } else {
+        coerce_untyped_literal_operands(op, left, right, l, r, ctx)?
+    };
     let (l, r) = (lc.as_ref().unwrap_or(l), rc.as_ref().unwrap_or(r));
     if op == BinaryOp::Concat {
         let (kind, _) = resolve_concat(left, right, scope)?;
@@ -7959,6 +7983,16 @@ mod tests {
             Datum::Float8(1.0)
         );
         assert_eq!(err_code("2::float8 ^ '1e200'", None, &[]), "22003");
+        let mut float_table = table();
+        float_table.columns[0] = Column::new("a", ColumnType::Float8);
+        assert_eq!(
+            ev(
+                "a ^ '2.5'",
+                Some(&float_table),
+                &[Datum::Numeric(crabka_pgtypes::numeric::parse("4").expect("numeric"))],
+            ),
+            Datum::Float8(32.0)
+        );
         // Domain errors are 2201F; `% 0` is 22012; float8 has no `%` at all.
         assert!(err_code("0 ^ -1", None, &[]) == "2201F");
         assert!(err_code("(-2) ^ 0.5", None, &[]) == "2201F");
