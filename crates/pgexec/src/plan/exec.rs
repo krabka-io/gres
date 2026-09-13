@@ -19,6 +19,15 @@ use crate::{
     scope::{ColumnBinding, POSITION_QUALIFIER, Scope},
 };
 
+/// Bind the planner's typed, safe qual rewrites against this relation scope.
+fn bind_rewritten_filter(
+    filter: Option<&Expr>,
+    scope: &Scope,
+) -> Result<Option<BoundExpr>, ExecError> {
+    let rewritten = crate::plan::rewrite::rewrite_self_equality(filter, scope);
+    bind_optional(rewritten.as_ref(), scope)
+}
+
 /// Execute the subset of SELECT that is exactly one scalar `Result` node.
 /// Returns `None` for every shape that still needs a later P0a node.
 #[cfg(test)]
@@ -164,7 +173,7 @@ fn try_execute_nested_loop_with_state(
         } else {
             bind_target_list(&exprs, &fields, &scope)?
         },
-        quals: bind_optional(select.filter.as_ref(), &scope)?
+        quals: bind_rewritten_filter(select.filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -314,7 +323,7 @@ fn execute_nested_loop_window_with_state(
     };
     let filter = Plan {
         target_list: Vec::new(),
-        quals: bind_optional(select.filter.as_ref(), scope)?
+        quals: bind_rewritten_filter(select.filter.as_ref(), scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -1071,7 +1080,7 @@ fn plan_result(select: &SelectStmt) -> Result<Option<ResultPlan>, ExecError> {
         return Ok(None);
     }
     let target_list = bind_target_list(&exprs, &fields, &scope)?;
-    let quals = bind_optional(select.filter.as_ref(), &scope)?
+    let quals = bind_rewritten_filter(select.filter.as_ref(), &scope)?
         .into_iter()
         .map(|clause| RestrictInfo {
             clause,
@@ -1176,7 +1185,7 @@ fn plan_seq_scan(
         crate::grouping::resolve_group_references(select, &scope)?;
     }
     if window {
-        let quals = bind_optional(select.filter.as_ref(), &scope)?
+        let quals = bind_rewritten_filter(select.filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -1231,7 +1240,7 @@ fn plan_seq_scan(
             crate::eval::require_equality_operator(*ty)?;
         }
     }
-    let quals = bind_optional(select.filter.as_ref(), &scope)?
+    let quals = bind_rewritten_filter(select.filter.as_ref(), &scope)?
         .into_iter()
         .map(|clause| RestrictInfo {
             clause,
@@ -1472,7 +1481,7 @@ fn plan_function_scan(
         .scope
     };
     if window {
-        let quals = bind_optional(select.filter.as_ref(), &scope)?
+        let quals = bind_rewritten_filter(select.filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -1537,7 +1546,7 @@ fn plan_function_scan(
         } else {
             target_list.clone()
         },
-        quals: bind_optional(select.filter.as_ref(), &scope)?
+        quals: bind_rewritten_filter(select.filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -1711,7 +1720,7 @@ fn plan_subquery_scan(
     )?
     .scope;
     if window {
-        let quals = bind_optional(select.filter.as_ref(), &scope)?
+        let quals = bind_rewritten_filter(select.filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -1774,7 +1783,7 @@ fn plan_subquery_scan(
         } else {
             target_list.clone()
         },
-        quals: bind_optional(select.filter.as_ref(), &scope)?
+        quals: bind_rewritten_filter(select.filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -1980,7 +1989,7 @@ fn plan_cte_scan(
     )?
     .scope;
     if window {
-        let quals = bind_optional(select.filter.as_ref(), &scope)?
+        let quals = bind_rewritten_filter(select.filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -2041,7 +2050,7 @@ fn plan_cte_scan(
         } else {
             target_list.clone()
         },
-        quals: bind_optional(select.filter.as_ref(), &scope)?
+        quals: bind_rewritten_filter(select.filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -2236,7 +2245,7 @@ fn plan_named_tuplestore_scan(
         scope
     };
     if window {
-        let quals = bind_optional(select.filter.as_ref(), &scope)?
+        let quals = bind_rewritten_filter(select.filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -2297,7 +2306,7 @@ fn plan_named_tuplestore_scan(
         } else {
             target_list.clone()
         },
-        quals: bind_optional(select.filter.as_ref(), &scope)?
+        quals: bind_rewritten_filter(select.filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
