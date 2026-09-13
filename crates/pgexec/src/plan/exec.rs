@@ -78,7 +78,7 @@ pub(crate) fn try_execute_seq_scan_with_state(
     let Some(planned) = plan_seq_scan(read_ctx, select)? else {
         return Ok(None);
     };
-    if crate::plan::rewrite::is_literal_false(select.filter.as_ref())
+    if plan_has_literal_false_qual(&planned.plan)
         && planned.aggregate.is_none()
         && planned.project_set.is_none()
         && planned.window.is_none()
@@ -113,6 +113,26 @@ pub(crate) fn try_execute_seq_scan_with_state(
     let mut state = PlanState::new(planned.plan.clone(), Scope::empty());
     let relation = execute_seq_scan_plan(&mut state, read_ctx, planned)?;
     Ok(Some((relation, state)))
+}
+
+fn plan_has_literal_false_qual(plan: &Plan) -> bool {
+    plan.quals
+        .iter()
+        .any(|qual| matches!(qual.clause.expr(), Expr::BoolLiteral(false)))
+        || match &plan.node {
+            PlanNode::Filter { input }
+            | PlanNode::Aggregate { input }
+            | PlanNode::Sort { input }
+            | PlanNode::Unique { input }
+            | PlanNode::Limit { input }
+            | PlanNode::ProjectSet { input }
+            | PlanNode::WindowAgg { input }
+            | PlanNode::SubqueryScan { input } => plan_has_literal_false_qual(input),
+            PlanNode::NestedLoop { outer, inner, .. } => {
+                plan_has_literal_false_qual(outer) || plan_has_literal_false_qual(inner)
+            }
+            _ => false,
+        }
 }
 
 fn try_execute_nested_loop_with_state(
@@ -1159,18 +1179,25 @@ fn plan_seq_scan(
         return Ok(None);
     }
 
+    let TableExpr::Table { name, alias, .. } = source else {
+        return Ok(None);
+    };
+    let relation = crate::relname::resolve_relation(
+        read_ctx.catalog_kv,
+        read_ctx.fctx.resolution,
+        name,
+        crate::relname::SchemaDisposition::Reference,
+    )?;
+    let table = crabka_pgcatalog::get_table(read_ctx.catalog_kv, &relation)?;
+    let filter = crate::plan::rewrite::reduce_not_null_test(
+        select.filter.as_ref(),
+        &table,
+        alias.as_deref().unwrap_or(&name.name),
+    );
+
     // The legacy path already turns filtered indexed tables into bounded index
     // probes. Keep that access path until P3 supplies an index scan leaf.
-    if select.filter.is_some() {
-        let TableExpr::Table { name, .. } = source else {
-            return Ok(None);
-        };
-        let relation = crate::relname::resolve_relation(
-            read_ctx.catalog_kv,
-            read_ctx.fctx.resolution,
-            name,
-            crate::relname::SchemaDisposition::Reference,
-        )?;
+    if filter.is_some() && !matches!(filter, Some(Expr::BoolLiteral(_))) {
         if !crabka_pgcatalog::list_table_indexes(read_ctx.catalog_kv, &relation)?.is_empty() {
             return Ok(None);
         }
@@ -1189,7 +1216,7 @@ fn plan_seq_scan(
         crate::grouping::resolve_group_references(select, &scope)?;
     }
     if window {
-        let quals = bind_rewritten_filter(select.filter.as_ref(), &scope)?
+        let quals = bind_rewritten_filter(filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -1244,7 +1271,7 @@ fn plan_seq_scan(
             crate::eval::require_equality_operator(*ty)?;
         }
     }
-    let quals = bind_rewritten_filter(select.filter.as_ref(), &scope)?
+    let quals = bind_rewritten_filter(filter.as_ref(), &scope)?
         .into_iter()
         .map(|clause| RestrictInfo {
             clause,

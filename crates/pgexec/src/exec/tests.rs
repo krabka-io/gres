@@ -5270,6 +5270,17 @@ async fn a_literal_false_qual_does_not_scan_its_table() {
 }
 
 #[tokio::test]
+async fn an_impossible_not_null_test_does_not_scan_its_table() {
+    let mut engine = SqlEngine::new();
+    run(&engine, "CREATE TABLE not_null_qual (id int4 NOT NULL)").await;
+    run(&engine, "INSERT INTO not_null_qual VALUES (1)").await;
+    engine.set_range_scanner(Arc::new(RejectingRangeScanner));
+
+    let result = run(&engine, "SELECT id FROM not_null_qual WHERE id IS NULL").await;
+    assert!(rows_of(&result[0]).is_empty());
+}
+
+#[tokio::test]
 async fn ordered_local_index_stream_returns_order_by_order() {
     let engine = SqlEngine::new();
     run(&engine, "CREATE TABLE t (a int4 NOT NULL)").await;

@@ -1,5 +1,6 @@
 //! Rule-based rewrites that are sound before cost-based planning.
 
+use crabka_pgcatalog::Table;
 use crabka_pgparser::ast::{BinaryOp, Expr, ValuesStmt};
 
 use crate::scope::Scope;
@@ -15,6 +16,27 @@ pub(crate) fn is_literal_false(filter: Option<&Expr>) -> bool {
 /// A one-row `VALUES` relation needs no scan node.
 pub(crate) fn is_single_row_values(values: &ValuesStmt) -> bool {
     values.rows.len() == 1
+}
+
+/// Reduce a root null test on a stored `NOT NULL` column to its known truth.
+///
+/// The caller supplies the only legal qualifier for this one-relation scope,
+/// preventing a malformed reference from being hidden by the reduction.
+pub(crate) fn reduce_not_null_test(
+    filter: Option<&Expr>,
+    table: &Table,
+    qualifier: &str,
+) -> Option<Expr> {
+    filter.map(|filter| match filter {
+        Expr::IsNull { expr, negated }
+            if matches!(expr.as_ref(), Expr::Column { table: column_table, name }
+                if column_table.as_deref().is_none_or(|written| written == qualifier)
+                    && table.column_index(name).is_some_and(|index| table.columns[index].not_null)) =>
+        {
+            Expr::BoolLiteral(*negated)
+        }
+        _ => filter.clone(),
+    })
 }
 
 /// Rewrite a typed `column = column` qual to `column IS NOT NULL`.
@@ -82,6 +104,50 @@ mod tests {
                 vec![Expr::IntLiteral("2".into())],
             ],
         }));
+    }
+
+    #[test]
+    fn reduces_only_a_not_null_column_test_in_its_own_scope() {
+        let mut column_metadata = crabka_pgcatalog::Column::new("a", ColumnType::Int4);
+        column_metadata.not_null = true;
+        let table = Table {
+            id: 1,
+            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            name: crabka_pgcatalog::RelationName::public("t"),
+            columns: vec![column_metadata],
+            sharded: false,
+            row_security: false,
+            force_row_security: false,
+            sharding: None,
+            foreign: None,
+            materialized: None,
+            checks: Vec::new(),
+        };
+        let column = Expr::Column {
+            table: Some("t".into()),
+            name: "a".into(),
+        };
+        assert!(
+            reduce_not_null_test(
+                Some(&Expr::IsNull {
+                    expr: Box::new(column.clone()),
+                    negated: false,
+                }),
+                &table,
+                "t",
+            ) == Some(Expr::BoolLiteral(false))
+        );
+        assert!(
+            reduce_not_null_test(
+                Some(&Expr::IsNull {
+                    expr: Box::new(column),
+                    negated: true,
+                }),
+                &table,
+                "other",
+            )
+            .is_some_and(|expr| !matches!(expr, Expr::BoolLiteral(_)))
+        );
     }
 
     #[test]
