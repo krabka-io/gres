@@ -8085,6 +8085,12 @@ mod io_tests {
         let epoch = parse_timestamptz("epoch", &tz).expect("epoch");
         assert_eq!(epoch, Timestamp::UNIX_EPOCH);
         assert_eq!(timestamptz_to_text(epoch, &tz), "1969-12-31 19:00:00-05");
+
+        let la = jiff::tz::TimeZone::get("America/Los_Angeles").expect("tzdb has LA");
+        let lmt = parse_timestamptz("2024-01-01 00:00:00 LMT", &la).expect("LMT");
+        let expected = parse_timestamptz("2024-01-01 00:00:00-07:52:58", &TimeZone::UTC)
+            .expect("LMT offset");
+        assert_eq!(lmt, expected);
     }
 
     #[test]

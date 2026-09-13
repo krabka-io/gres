@@ -14,7 +14,7 @@
 
 use jiff::{
     Span, Timestamp, Zoned,
-    civil::Date,
+    civil::{Date, DateTime},
     tz::{Offset, TimeZone},
 };
 
@@ -675,8 +675,9 @@ pub fn decode_at(
                         // Day-of-week names are decoration; PostgreSQL does not
                         // cross-check them against the date.
                         have_non_date = true;
-                    } else if let Some(found) =
-                        lookup_abbrev(word).or_else(|| lookup_zone_name(word))
+                    } else if let Some(found) = lmt_zone(word, tz)
+                        .or_else(|| lookup_abbrev(word))
+                        .or_else(|| lookup_zone_name(word))
                     {
                         // An abbreviation wins over a same-spelled database
                         // name, as in PostgreSQL: `EST` is the fixed -05 of the
@@ -1596,6 +1597,19 @@ fn lookup_abbrev(word: &str) -> Option<Zone> {
         .find(|(abbrev, _)| *abbrev == word)
         .and_then(|(_, seconds)| Offset::from_seconds(*seconds).ok())
         .map(Zone::Offset)
+}
+
+/// `LMT` is the session zone's historical local-mean-time offset, not a
+/// globally fixed abbreviation. PostgreSQL retains that initial offset even
+/// when the literal's date is modern, so sample it before the first tzdb
+/// transition rather than at the value being parsed.
+fn lmt_zone(word: &str, tz: &TimeZone) -> Option<Zone> {
+    if word != "lmt" {
+        return None;
+    }
+    let civil = DateTime::constant(1000, 1, 1, 0, 0, 0, 0);
+    let instant = super::zoned_instant(civil, tz).ok()?;
+    Some(Zone::Offset(tz.to_offset(instant)))
 }
 
 /// Resolve a lowercased timezone abbreviation to a UTC offset, for the template
