@@ -18691,7 +18691,7 @@ fn attach_type_input_literal_position(sql: &str, error: PgError) -> PgError {
     // program_limit_exceeded, which is what an array dimension out of `int4`
     // range raises. Testing the code first keeps the re-lex off the failure path
     // of every statement that fails for another reason.
-    if !matches!(
+    let input_sqlstate = matches!(
         error.code.as_str(),
         "22P02"
             | "22003"
@@ -18702,7 +18702,8 @@ fn attach_type_input_literal_position(sql: &str, error: PgError) -> PgError {
             | "22P05"
             | "54000"
             | "55P04"
-    ) || error
+    ) || (error.code == "42601" && error.message.starts_with("syntax error in tsvector:"));
+    if !input_sqlstate || error
         .diagnostics
         .as_ref()
         .is_some_and(|diagnostics| diagnostics.position.is_some())
