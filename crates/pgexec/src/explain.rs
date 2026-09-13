@@ -2394,10 +2394,31 @@ pub(crate) fn apply_runtime_state(rendered: &mut PlanNode, runtime: &PlanNode) {
     }
 }
 
+/// Mark a plan whose enclosing command deliberately skipped its source query.
+pub(crate) fn mark_never_executed(node: &mut PlanNode) {
+    node.actual = Some(PlanActual {
+        rows: 0,
+        loops: 0,
+        rows_removed: 0,
+    });
+    for child in &mut node.children {
+        mark_never_executed(child);
+    }
+    for cte in &mut node.init_plans {
+        mark_never_executed(&mut cte.plan);
+    }
+}
+
 /// Build the plan tree the interpreter will execute for `statement`.
 pub(crate) fn plan_statement(statement: &Statement) -> PlanNode {
     let (mut node, with) = match statement {
         Statement::Query(query) => (plan_query(query), None),
+        // CTAS runs its query to populate the new relation, so EXPLAIN exposes
+        // that query's plan rather than a utility Result node.
+        Statement::CreateTableAs {
+            source: crabka_pgparser::ast::CreateAsSource::Query(query),
+            ..
+        } => (plan_query(query), None),
         Statement::Insert {
             table,
             source,

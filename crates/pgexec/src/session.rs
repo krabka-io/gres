@@ -3448,6 +3448,7 @@ struct WriteActorContext {
     repeatable_read: bool,
     eval_ctx: crate::clock::EvalCtx,
     prune_horizon: Option<u64>,
+    explain_plan_state: Option<Arc<Mutex<Option<crate::plan::query::PlanState>>>>,
 }
 
 enum WriteActorWork {
@@ -4023,6 +4024,7 @@ impl SqlSession {
             // to draining them at the implicit commit a moment later.
             deferred_fk: matches!(self.state, TxnState::InTransaction(_))
                 .then(|| &*self.deferred_fk),
+            explain_plan_state: self.explain_plan_state.as_ref(),
         }
     }
 
@@ -6275,6 +6277,30 @@ impl SqlSession {
         options: &ExplainOptions,
         statement: &Statement,
     ) -> Result<QueryResult, ExecError> {
+        // CTAS resolves a SQL prepared statement before it creates or fills the
+        // table. Do it once here too, so EXPLAIN renders that query rather than
+        // an opaque utility node.
+        let mut explained_statement;
+        let statement = if let Statement::CreateTableAs {
+            source: CreateAsSource::Execute { name, args },
+            ..
+        } = statement
+        {
+            let Some(Statement::Query(query)) = self.bound_prepared_statement(name, args).await?
+            else {
+                return Err(ExecError::Syntax(format!(
+                    "prepared statement \"{name}\" is not a SELECT"
+                )));
+            };
+            explained_statement = statement.clone();
+            let Statement::CreateTableAs { source, .. } = &mut explained_statement else {
+                unreachable!("matched CREATE TABLE AS")
+            };
+            *source = CreateAsSource::Query(Box::new(query));
+            &explained_statement
+        } else {
+            statement
+        };
         // EXPLAIN analyses its statement before planning it, so a missing
         // relation or column is the same error the statement itself would give
         // (42P01 / 42703) rather than a plan for a query that cannot run. The
@@ -6286,6 +6312,34 @@ impl SqlSession {
         crate::routine::with_scalar_runtime(&self.catalog_kv, None, || {
             crate::exec::describe_statement(&*self.catalog_kv, &self.resolution_scope(), statement)
         })?;
+        let ctas_skipped = if let Statement::CreateTableAs {
+            name,
+            temporary,
+            if_not_exists: true,
+            ..
+        } = statement
+        {
+            let name = crate::relname::resolve_relation(
+                self.catalog_kv.as_ref(),
+                &self.resolution_scope(),
+                name,
+                if *temporary {
+                    crate::relname::SchemaDisposition::TemporaryCreation
+                } else {
+                    crate::relname::SchemaDisposition::Creation
+                },
+            )?;
+            crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &name).is_ok()
+        } else {
+            false
+        };
+        let ctas_without_data = matches!(
+            statement,
+            Statement::CreateTableAs {
+                with_data: false,
+                ..
+            }
+        );
         let mut actual_rows = 0;
         let explain_plan_state = if options.analyze {
             Some(Arc::new(Mutex::new(None)))
@@ -6338,7 +6392,14 @@ impl SqlSession {
             let runtime = crate::explain::plan_runtime_state(&state);
             crate::explain::apply_runtime_state(&mut plan, &runtime);
         }
-        let lines = crate::explain::render_with_rows(&plan, options, actual_rows);
+        if options.analyze && ctas_without_data {
+            crate::explain::mark_never_executed(&mut plan);
+        }
+        let lines = if options.analyze && ctas_skipped {
+            Vec::new()
+        } else {
+            crate::explain::render_with_rows(&plan, options, actual_rows)
+        };
         let field = FieldDescription {
             name: "QUERY PLAN".into(),
             table_oid: 0,
@@ -13097,6 +13158,7 @@ impl SqlSession {
                 repeatable_read,
                 eval_ctx,
                 prune_horizon,
+                explain_plan_state,
             } = statement;
             let runtime = match tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -13155,6 +13217,7 @@ impl SqlSession {
                 trigger_write,
                 deferred_fk: defer_constraints.then(|| &*deferred_fk),
                 policy_stack: &policy_stack,
+                explain_plan_state: explain_plan_state.as_ref(),
             };
             with_guc_runtime(guc_values, guc_settings, prepared, cursors, || {
                 crate::trigger::with_after_trigger_queue(|| {
@@ -13419,6 +13482,7 @@ impl SqlSession {
                             repeatable_read,
                             eval_ctx: ctx,
                             prune_horizon,
+                            explain_plan_state: self.explain_plan_state.clone(),
                         },
                     )
                     .await?;
@@ -13527,6 +13591,7 @@ impl SqlSession {
                             repeatable_read: false,
                             eval_ctx: ctx,
                             prune_horizon,
+                            explain_plan_state: self.explain_plan_state.clone(),
                         },
                     )
                     .await
@@ -14042,6 +14107,7 @@ impl SqlSession {
                             repeatable_read: false,
                             eval_ctx: ctx,
                             prune_horizon: None,
+                            explain_plan_state: self.explain_plan_state.clone(),
                         },
                     )
                     .await?;
@@ -14132,6 +14198,7 @@ impl SqlSession {
                             repeatable_read: false,
                             eval_ctx: ctx,
                             prune_horizon: None,
+                            explain_plan_state: self.explain_plan_state.clone(),
                         },
                     )
                     .await
@@ -24217,6 +24284,51 @@ mod tests {
         );
         assert!(sqlstate(&mut s, "EXPLAIN (NO_SUCH_OPTION) SELECT 1").await == "42601");
         assert!(sqlstate(&mut s, "EXPLAIN (FORMAT NONSENSE) SELECT 1").await == "22023");
+    }
+
+    #[tokio::test]
+    async fn explain_ctas_uses_its_source_query_plan() {
+        let engine = SqlEngine::new();
+        let mut s = engine.connect();
+        s.simple_query("PREPARE ctas_prepared AS SELECT generate_series(1,3)")
+            .await
+            .expect("prepare");
+        for sql in [
+            "EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) \
+             CREATE TABLE ctas_source (a) AS SELECT generate_series(1,3)",
+            "EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) \
+             CREATE TABLE ctas_prepared_target (a) AS EXECUTE ctas_prepared",
+        ] {
+            assert!(
+                rows_or_sqlstate(&mut s, sql).await
+                    == Ok(vec![
+                        vec!["ProjectSet (actual rows=3.00 loops=1)".into()],
+                        vec!["  ->  Result (actual rows=1.00 loops=1)".into()],
+                    ]),
+                "{sql}"
+            );
+        }
+        assert!(
+            rows_or_sqlstate(
+                &mut s,
+                "EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) \
+                 CREATE TABLE ctas_nodata (a) AS SELECT generate_series(1,3) WITH NO DATA",
+            )
+            .await
+                == Ok(vec![
+                    vec!["ProjectSet (never executed)".into()],
+                    vec!["  ->  Result (never executed)".into()],
+                ])
+        );
+        assert!(
+            rows_or_sqlstate(
+                &mut s,
+                "EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) \
+                 CREATE TABLE IF NOT EXISTS ctas_source (a) AS SELECT generate_series(1,3)",
+            )
+            .await
+                == Ok(Vec::new())
+        );
     }
 
     #[tokio::test]
