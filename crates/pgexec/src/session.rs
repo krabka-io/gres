@@ -23178,6 +23178,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn width_bucket_over_float8_values_keeps_nan_as_float8() {
+        let engine = SqlEngine::new();
+        let mut session = engine.connect();
+        let values = "(VALUES (-5.2::float8), (4::float8), (77::float8), ('NaN'::float8)) v(op)";
+        let rows = rows_or_sqlstate(
+            &mut session,
+            &format!(
+                "SELECT op, width_bucket(op, ARRAY[1, 3, 9, 'NaN', 'NaN']::float8[]) FROM {values}"
+            ),
+        )
+        .await
+        .expect("float8 VALUES query");
+        assert!(
+            rows == vec![
+                vec!["-5.2".to_string(), "0".to_string()],
+                vec!["4".to_string(), "2".to_string()],
+                vec!["77".to_string(), "3".to_string()],
+                vec!["NaN".to_string(), "5".to_string()],
+            ]
+        );
+    }
+
+    #[tokio::test]
     async fn the_savepoint_stack_reuses_names_and_reports_3b001_for_an_unknown_one() {
         use assert2::assert;
         let engine = SqlEngine::new();

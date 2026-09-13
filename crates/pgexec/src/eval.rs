@@ -713,6 +713,11 @@ fn eval_depth_inner(
             if let Some(empty) = empty_array_cast(expr, *ty)? {
                 return Ok(empty);
             }
+            if let (Expr::ArrayLiteral(items), ColumnType::Array(elem)) = (expr.as_ref(), ty) {
+                return eval_array_constructor_with_elem(items, *elem, ctx, &mut |item| {
+                    eval_depth(item, scope, values, ctx, d)
+                });
+            }
             let v = eval_depth(expr, scope, values, ctx, d)?;
             // `character → text`/`varchar` (and `name`, which shares `Text`
             // here) is the written spelling of the one cast function every
@@ -5464,6 +5469,31 @@ fn eval_array_constructor(
             Expr::ArrayLiteral(_) => value,
             _ => cast_value(&value, target, &ctx.time_zone)?,
         });
+    }
+    array_fn::build_constructor(elem, parts)
+}
+
+/// `ARRAY[…]::element[]` evaluates every element in the target element's type
+/// context. This matters for unknown literals such as `'NaN'::float8`.
+pub(crate) fn eval_array_constructor_with_elem(
+    items: &[Expr],
+    elem: ElemType,
+    ctx: &EvalCtx,
+    eval_child: &mut impl FnMut(&Expr) -> Result<Datum, ExecError>,
+) -> Result<Datum, ExecError> {
+    let target = elem.column_type();
+    let mut parts = Vec::with_capacity(items.len());
+    for item in items {
+        let value = match item {
+            Expr::ArrayLiteral(inner) => {
+                eval_array_constructor_with_elem(inner, elem, ctx, eval_child)?
+            }
+            _ => {
+                let value = eval_child(item)?;
+                cast_operand(&value, target, ctx)?
+            }
+        };
+        parts.push(value);
     }
     array_fn::build_constructor(elem, parts)
 }
