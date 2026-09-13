@@ -14561,8 +14561,24 @@ impl Parser {
                     lateral,
                 });
             }
-            let inner = self.join_tree()?;
+            let mut inner = self.join_tree()?;
             self.expect(&Token::RParen)?;
+            // An extra pair of parentheses around a derived table does not
+            // create another relation, so its alias still belongs to the
+            // existing Derived node.
+            if let TableExpr::Derived {
+                alias,
+                columns,
+                lateral: nested_lateral,
+                ..
+            } = &mut inner
+            {
+                if let Some(outer_alias) = self.opt_alias()? {
+                    *alias = outer_alias;
+                    *columns = self.opt_column_aliases()?;
+                }
+                *nested_lateral |= lateral;
+            }
             return Ok(inner);
         }
         // `ROWS FROM (f(…), g(…))` — several functions expanded in lockstep.
@@ -24553,6 +24569,18 @@ mod tests {
             names("SELECT * FROM (SELECT 1), (SELECT 2) q, (SELECT 3)"),
             ["unnamed_subquery", "q", "unnamed_subquery_1"]
         );
+    }
+
+    #[test]
+    fn doubly_parenthesized_derived_table_accepts_its_outer_alias() {
+        use crate::ast::TableExpr;
+
+        let select = only_select("SELECT d.n FROM ((SELECT 1 AS n)) AS d(n)");
+        assert!(matches!(
+            &select.from[..],
+            [TableExpr::Derived { alias, columns: Some(columns), .. }]
+                if alias == "d" && columns == &["n"]
+        ));
     }
 
     // ---- SP34: subquery expressions ----
