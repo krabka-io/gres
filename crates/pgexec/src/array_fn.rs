@@ -1462,7 +1462,11 @@ pub(crate) fn eval_quantified(
     let array = match array {
         Datum::Null => return Ok(Datum::Null),
         Datum::Array(a) | Datum::OidVector(a) => a,
-        other => return Err(not_an_array(other)),
+        _ => {
+            return Err(ExecError::TypeMismatch(
+                "op ANY/ALL (array) requires array on right side".into(),
+            ));
+        }
     };
     let mut saw_null = false;
     for elem in &array.elems {
@@ -1478,11 +1482,10 @@ pub(crate) fn eval_quantified(
                 }
             }
             Datum::Null => saw_null = true,
-            other => {
-                return Err(ExecError::TypeMismatch(format!(
-                    "argument of quantified comparison must be type boolean, not type {}",
-                    type_name(&other)
-                )));
+            _ => {
+                return Err(ExecError::TypeMismatch(
+                    "op ANY/ALL (array) requires operator to yield boolean".into(),
+                ));
             }
         }
     }
@@ -2732,6 +2735,18 @@ mod tests {
         // A NULL array is unknown for both.
         assert!(eval_quantified(&Datum::Null, Quantifier::Any, eq(1)).expect("any") == Datum::Null);
         assert!(eval_quantified(&Datum::Null, Quantifier::All, eq(1)).expect("all") == Datum::Null);
+        assert!(
+            eval_quantified(&Datum::Int4(44), Quantifier::Any, eq(1))
+                .expect_err("right side must be an array")
+                == ExecError::TypeMismatch("op ANY/ALL (array) requires array on right side".into())
+        );
+        assert!(
+            eval_quantified(&plain, Quantifier::Any, |_| Ok(Datum::Int4(33)))
+                .expect_err("operator result must be boolean")
+                == ExecError::TypeMismatch(
+                    "op ANY/ALL (array) requires operator to yield boolean".into()
+                )
+        );
     }
 
     #[test]
