@@ -165,9 +165,12 @@ pub(crate) fn execute_ddl(
             &resolve_relation(kv, resolution, name, SchemaDisposition::Creation)?,
             definition,
         ),
-        Statement::AlterType { name, action } => {
-            crate::usertype::alter_type(kv, &resolve_user_type(kv, resolution, name)?, action)
-        }
+        Statement::AlterType { name, action } => crate::usertype::alter_type_with_context(
+            kv,
+            &resolve_user_type(kv, resolution, name)?,
+            action,
+            fctx,
+        ),
         Statement::DropType {
             names,
             if_exists,

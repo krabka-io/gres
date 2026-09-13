@@ -11908,6 +11908,21 @@ impl Parser {
                     action: AlterTypeAction::RenameValue { from, to },
                 });
             }
+            if self.eat_ident_eq("attribute") {
+                let from = self.expect_col_id()?;
+                self.expect(&Token::Keyword(Keyword::To))?;
+                let to = self.expect_col_id()?;
+                let cascade = if self.eat_ident_eq("cascade") {
+                    true
+                } else {
+                    self.eat_ident_eq("restrict");
+                    false
+                };
+                return Ok(crate::ast::Statement::AlterType {
+                    name,
+                    action: AlterTypeAction::RenameAttribute { from, to, cascade },
+                });
+            }
             self.expect(&Token::Keyword(Keyword::To))?;
             let new_name = self.expect_col_id()?;
             return Ok(crate::ast::Statement::AlterType {
@@ -22425,6 +22440,7 @@ mod tests {
             body: UserTypeBody::Composite(vec![CompositeField {
                 name: "value".into(),
                 ty: ColumnType::Int4,
+                dropped: false,
             }]),
         };
         crabka_pgtypes::usertype::replace(&rowtype);
@@ -28522,6 +28538,23 @@ mod q1_statement_completeness_tests {
                     ty: crabka_pgtypes::ColumnType::Text,
                     collation: Some("C".into()),
                 })
+        );
+    }
+
+    #[test]
+    fn alter_type_rename_attribute_preserves_cascade() {
+        let Statement::AlterType { action, .. } =
+            one("ALTER TYPE pair RENAME ATTRIBUTE label TO name CASCADE")
+        else {
+            panic!("expected ALTER TYPE");
+        };
+        assert!(
+            action
+                == crate::ast::AlterTypeAction::RenameAttribute {
+                    from: "label".into(),
+                    to: "name".into(),
+                    cascade: true,
+                }
         );
     }
 

@@ -2025,6 +2025,38 @@ async fn a_table_of_a_composite_type_copies_its_fields() {
 }
 
 #[tokio::test]
+async fn alter_type_rename_attribute_cascades_to_its_typed_table() {
+    use assert2::assert;
+
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    run_s(
+        &mut session,
+        "CREATE TYPE rename_pair AS (id int, label text)",
+    )
+    .await;
+    run_s(&mut session, "CREATE TABLE rename_people OF rename_pair").await;
+    run_s(&mut session, "INSERT INTO rename_people VALUES (1, 'Ada')").await;
+    assert!(
+        sqlstate_of(
+            &mut session,
+            "ALTER TYPE rename_pair RENAME ATTRIBUTE label TO name",
+        )
+        .await
+            == "2BP01"
+    );
+    run_s(
+        &mut session,
+        "ALTER TYPE rename_pair RENAME ATTRIBUTE label TO name CASCADE",
+    )
+    .await;
+    assert!(
+        text_rows_of(&mut session, "SELECT id, name FROM rename_people").await
+            == vec![text_row(&["1", "Ada"])]
+    );
+}
+
+#[tokio::test]
 async fn alter_table_can_associate_and_disassociate_a_matching_row_type() {
     use assert2::assert;
 

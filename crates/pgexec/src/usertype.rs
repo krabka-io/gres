@@ -891,6 +891,26 @@ pub fn alter_type(
     name: &RelationName,
     action: &AlterTypeAction,
 ) -> Result<(QueryResult, Vec<WriteOp>), ExecError> {
+    alter_type_inner(kv, name, action, None)
+}
+
+/// Execute `ALTER TYPE` from the session DDL path, where an attribute rename
+/// can cascade through its typed tables.
+pub(crate) fn alter_type_with_context(
+    kv: &dyn Kv,
+    name: &RelationName,
+    action: &AlterTypeAction,
+    fctx: crate::exec::ForeignCtx<'_>,
+) -> Result<(QueryResult, Vec<WriteOp>), ExecError> {
+    alter_type_inner(kv, name, action, Some(fctx))
+}
+
+fn alter_type_inner(
+    kv: &dyn Kv,
+    name: &RelationName,
+    action: &AlterTypeAction,
+    fctx: Option<crate::exec::ForeignCtx<'_>>,
+) -> Result<(QueryResult, Vec<WriteOp>), ExecError> {
     let lookup_name = name.to_string();
     let (mut ty, is_multirange) = require_type_or_multirange(kv, name)?;
     if is_multirange {
@@ -899,9 +919,9 @@ pub fn alter_type(
             AlterTypeAction::OwnerTo(_) => Ok((command("ALTER TYPE"), Vec::new())),
             AlterTypeAction::AddAttribute(_) => Err(wrong_kind(name, "a composite type")),
             AlterTypeAction::Set(_) => Err(wrong_kind(name, "a base type")),
-            AlterTypeAction::AddValue { .. } | AlterTypeAction::RenameValue { .. } => {
-                Err(wrong_kind(name, "an enum"))
-            }
+            AlterTypeAction::AddValue { .. }
+            | AlterTypeAction::RenameValue { .. }
+            | AlterTypeAction::RenameAttribute { .. } => Err(wrong_kind(name, "an enum")),
         };
     }
     match action {
@@ -999,6 +1019,66 @@ pub fn alter_type(
             }
             check_label_length(to)?;
             labels[index] = to.clone();
+        }
+        AlterTypeAction::RenameAttribute { from, to, cascade } => {
+            let UserTypeBody::Composite(fields) = &mut ty.body else {
+                return Err(wrong_kind(name, "a composite type"));
+            };
+            let Some(index) = fields
+                .iter()
+                .position(|field| !field.dropped && field.name == *from)
+            else {
+                return Err(ExecError::UndefinedTableColumn {
+                    column: from.clone(),
+                    table: lookup_name,
+                });
+            };
+            if fields
+                .iter()
+                .any(|existing| !existing.dropped && existing.name == *to)
+            {
+                return Err(ExecError::DuplicateObject(format!(
+                    "column \"{to}\" of relation \"{lookup_name}\" already exists"
+                )));
+            }
+            fields[index].name = to.clone();
+            let tables = typed_tables_using_type(kv, ty.oid)?;
+            if !tables.is_empty() && !cascade {
+                return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+                    "2BP01",
+                    format!(
+                        "cannot alter type \"{lookup_name}\" because it is the type of a typed table"
+                    ),
+                )
+                .with_hint("Use ALTER TYPE ... CASCADE to alter the typed tables too.")));
+            }
+            let Some(fctx) = fctx else {
+                if !tables.is_empty() {
+                    return Err(ExecError::Unsupported(
+                        "ALTER TYPE RENAME ATTRIBUTE needs a session context for typed tables"
+                            .into(),
+                    ));
+                }
+                return Ok((
+                    command("ALTER TYPE"),
+                    crabka_pgcatalog::put_user_type_ops(kv, &ty)?,
+                ));
+            };
+            let action = crabka_pgparser::ast::AlterTableAction::RenameColumn {
+                column: from.clone(),
+                new_name: to.clone(),
+            };
+            let mut ops = crabka_pgcatalog::put_user_type_ops(kv, &ty)?;
+            for table in tables {
+                let mut state = crate::exec::ddl_alter::AlterTableState::new(table, fctx.own_xid);
+                crate::exec::ddl_alter::alter_table_action_ops(kv, &mut state, &action, fctx)?;
+                ops.extend(crate::exec::ddl_alter::alter_table_state_ops(
+                    kv,
+                    &state.table.name.clone(),
+                    &mut state,
+                )?);
+            }
+            return Ok((command("ALTER TYPE"), ops));
         }
         AlterTypeAction::RenameTo(new_name) => return rename(kv, ty, new_name, "ALTER TYPE"),
         // The engine has a single type owner, so an ownership change is a

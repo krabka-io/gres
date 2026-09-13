@@ -1553,6 +1553,12 @@ pub enum AlterTypeAction {
     },
     /// `RENAME VALUE 'from' TO 'to'`.
     RenameValue { from: String, to: String },
+    /// `RENAME ATTRIBUTE from TO to [CASCADE | RESTRICT]`.
+    RenameAttribute {
+        from: String,
+        to: String,
+        cascade: bool,
+    },
     /// `RENAME TO new_name`.
     RenameTo(String),
     /// `OWNER TO role`: accepted and ignored; the engine has one type owner.
