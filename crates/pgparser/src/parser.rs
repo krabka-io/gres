@@ -6900,7 +6900,7 @@ impl Parser {
                 match name.as_str() {
                     "format" => {
                         let value_pos = self.peek_pos();
-                        let value = self.expect_ident()?;
+                        let value = self.explain_option_value()?;
                         options.format = match value.to_ascii_lowercase().as_str() {
                             "text" => ExplainFormat::Text,
                             "json" => ExplainFormat::Json,
@@ -6931,7 +6931,7 @@ impl Parser {
                     "memory" => options.memory = self.explain_option_flag()?,
                     "serialize" => {
                         let value_pos = self.peek_pos();
-                        let value = self.expect_ident()?;
+                        let value = self.explain_option_value()?;
                         options.serialize = Some(match value.to_ascii_lowercase().as_str() {
                             "text" => ExplainSerialize::Text,
                             "binary" => ExplainSerialize::Binary,
@@ -6998,6 +6998,25 @@ impl Parser {
             Token::Comma | Token::RParen => Ok(true),
             other => Err(ParseError::new(
                 format!("expected an EXPLAIN option value, found {other:?}"),
+                pos,
+            )),
+        }
+    }
+
+    /// EXPLAIN's enum-valued options use `def_arg`, so PostgreSQL accepts
+    /// either an identifier or a string literal (`FORMAT json` and
+    /// `FORMAT 'json'`).  Keep this narrower than a general expression: an
+    /// integer remains a syntax error at the option value.
+    fn explain_option_value(&mut self) -> Result<String, ParseError> {
+        let pos = self.peek_pos();
+        if let Some(value) = self.peek_keyword_as_col_id() {
+            self.bump();
+            return Ok(value);
+        }
+        match self.bump() {
+            Token::Ident(value) | Token::StringLit(value) => Ok(value),
+            other => Err(ParseError::new(
+                format!("expected identifier, found {other:?}"),
                 pos,
             )),
         }
@@ -18310,6 +18329,11 @@ mod tests {
             panic!("expected EXPLAIN");
         };
         assert_eq!(options.serialize, Some(ExplainSerialize::Text));
+        let Statement::Explain { options, .. } = one("EXPLAIN (SERIALIZE 'binary') SELECT 1")
+        else {
+            panic!("expected EXPLAIN");
+        };
+        assert_eq!(options.serialize, Some(ExplainSerialize::Binary));
         assert_eq!(
             crate::parse("EXPLAIN (SERIALIZE neither) SELECT 1")
                 .expect_err("invalid SERIALIZE value is rejected")
@@ -18321,6 +18345,7 @@ mod tests {
             ("TEXT", ExplainFormat::Text),
             ("JSON", ExplainFormat::Json),
             ("XML", ExplainFormat::Xml),
+            ("'yaml'", ExplainFormat::Yaml),
         ] {
             let Statement::Explain { options, .. } =
                 one(&format!("EXPLAIN (FORMAT {format}) SELECT 1"))
