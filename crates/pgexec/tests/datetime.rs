@@ -204,6 +204,23 @@ async fn typed_literals() {
     );
 }
 
+#[tokio::test]
+async fn date_literals_use_postgres_full_calendar_range() {
+    let client = connect(spawn().await).await;
+    assert_eq!(
+        text(&client, "SELECT DATE '5874897-12-31'").await,
+        Some("5874897-12-31".into())
+    );
+    assert_eq!(
+        text(&client, "SELECT DATE '5874897-12-30' + 1").await,
+        Some("5874897-12-31".into())
+    );
+    assert_eq!(
+        err_code(&client, "SELECT DATE '5874897-12-31' + 1").await,
+        "22008"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Arithmetic
 // ---------------------------------------------------------------------------
