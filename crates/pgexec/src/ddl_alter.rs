@@ -1365,6 +1365,12 @@ pub(crate) fn execute_ddl(
                     // DDL result and catalog shape aligned until P2 persists it.
                     Ok((command("ALTER INDEX"), Vec::new()))
                 }
+                AlterIndexAction::SetAttributeOptions { column, options: _ } => {
+                    if !index.columns.iter().any(|key| key == column) {
+                        return Err(ExecError::UndefinedColumn(column.clone()));
+                    }
+                    Ok((command("ALTER INDEX"), Vec::new()))
+                }
                 // The written options were checked against the reloption
                 // catalog at parse time. Crabka's index storage has no page
                 // fill to tune and no pending list to hold, so an accepted

@@ -577,6 +577,11 @@ pub enum AlterIndexAction {
         column: i32,
         target: i32,
     },
+    /// `ALTER COLUMN name SET (n_distinct = …, …)`.
+    SetAttributeOptions {
+        column: String,
+        options: Vec<(String, Option<String>)>,
+    },
     /// `SET (name = value, …)` — the index's storage parameters. The list has
     /// already been checked against the reloption catalog, against *every*
     /// index access method's options: the statement names no method, and the

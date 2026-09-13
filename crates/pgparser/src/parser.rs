@@ -4497,8 +4497,20 @@ impl Parser {
         let name = self.relation_ref()?;
         if self.eat_ident_eq("alter") {
             self.eat_ident_eq("column");
-            let column = self.expect_i32("column number")?;
+            let column = match self.peek() {
+                Token::IntLit(_) => self.expect_i32("column number")?.to_string(),
+                _ => self.expect_col_id()?,
+            };
             self.expect(&Token::Keyword(Keyword::Set))?;
+            if *self.peek() == Token::LParen {
+                let options = self.checked_storage_parameter_list(
+                    crate::reloptions::RelOptionTarget::Attribute,
+                )?;
+                return Ok(crate::ast::Statement::AlterIndex {
+                    name,
+                    action: AlterIndexAction::SetAttributeOptions { column, options },
+                });
+            }
             self.expect_ident_eq("statistics")?;
             let negative = *self.peek() == Token::Minus;
             if negative {
@@ -4508,7 +4520,12 @@ impl Parser {
             let target = if negative { -target } else { target };
             return Ok(crate::ast::Statement::AlterIndex {
                 name,
-                action: AlterIndexAction::SetStatistics { column, target },
+                action: AlterIndexAction::SetStatistics {
+                    column: column
+                        .parse()
+                        .map_err(|_| ParseError::new("expected column number", self.peek_pos()))?,
+                    target,
+                },
             });
         }
         if self.eat_ident_eq("reset") {
@@ -19470,6 +19487,7 @@ mod tests {
                     subtype: ColumnType::Text,
                     collation: Some(ref name),
                     multirange_type_name: None,
+                    ..
                 },
                 ..
             } if name == "C"
@@ -21083,6 +21101,16 @@ mod tests {
             };
             assert!(*action == expected, "{sql}");
         }
+        let statements =
+            crate::parse("ALTER INDEX attmp_idx ALTER COLUMN id SET (n_distinct = 100)")
+                .expect("parse named index attribute option");
+        assert!(matches!(
+            statements.as_slice(),
+            [Statement::AlterIndex {
+                action: AlterIndexAction::SetAttributeOptions { column, options },
+                ..
+            }] if column == "id" && options == &vec![("n_distinct".into(), Some("100".into()))]
+        ));
     }
 
     #[test]

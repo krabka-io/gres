@@ -4906,6 +4906,11 @@ async fn create_index_resolves_and_validates_operator_classes() {
     )
     .await;
     run_s(&mut session, "CREATE INDEX i_bpchar ON t (b bpchar_ops)").await;
+    run_s(
+        &mut session,
+        "ALTER INDEX i_bpchar ALTER COLUMN b SET (n_distinct = 100)",
+    )
+    .await;
     run_s(&mut session, "CREATE INDEX i7 ON t ((b || b) text_ops)").await;
     let index = crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("i6"))
         .expect("index metadata");
