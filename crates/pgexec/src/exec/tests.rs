@@ -5347,7 +5347,10 @@ async fn array_bound_and_empty_constructor_errors_have_positions() {
 
     let engine = SqlEngine::new();
     let mut session = engine.connect();
-    for (sql, needle) in [("SELECT '[1:0]={}'::int4[]", "'[1:0]={}'")] {
+    for (sql, needle) in [
+        ("SELECT '[1:0]={}'::int4[]", "'[1:0]={}'"),
+        ("SELECT ARRAY[]", "ARRAY"),
+    ] {
         let error = session.simple_query(sql).await.expect_err(sql);
         assert!(
             error

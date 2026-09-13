@@ -18161,11 +18161,12 @@ fn attach_known_runtime_diagnostics(sql: &str, stmt: &Statement, error: PgError)
 fn attach_array_runtime_position(sql: &str, error: PgError) -> PgError {
     use crabka_pgparser::token::{Keyword, Token};
 
+    let empty_array = error.code == "42P18" && error.message == "cannot determine type of empty array";
     if error
         .diagnostics
         .as_ref()
         .is_some_and(|diagnostics| diagnostics.position.is_some())
-        || error.code != "42804"
+        || (error.code != "42804" && !empty_array)
     {
         return error;
     }
@@ -18220,6 +18221,15 @@ fn attach_array_runtime_position(sql: &str, error: PgError) -> PgError {
             [offset] => Some(*offset),
             _ => None,
         }
+    } else if empty_array {
+        tokens
+            .windows(3)
+            .find(|tokens| {
+                matches!(tokens[0].0, Token::Keyword(Keyword::Array))
+                    && matches!(tokens[1].0, Token::LBracket)
+                    && matches!(tokens[2].0, Token::RBracket)
+            })
+            .map(|tokens| tokens[0].1)
     } else {
         None
     };
