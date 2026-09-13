@@ -118,7 +118,7 @@ pub(crate) fn try_execute_seq_scan_with_state(
 fn plan_has_literal_false_qual(plan: &Plan) -> bool {
     plan.quals
         .iter()
-        .any(|qual| matches!(qual.clause.expr(), Expr::BoolLiteral(false)))
+        .any(|qual| short_circuits_to_false(qual.clause.expr()))
         || match &plan.node {
             PlanNode::Filter { input }
             | PlanNode::Aggregate { input }
@@ -133,6 +133,25 @@ fn plan_has_literal_false_qual(plan: &Plan) -> bool {
             }
             _ => false,
         }
+}
+
+/// A false left operand skips its right operand in the evaluator, so this is
+/// also safe when that operand contains a volatile call or would fail.
+fn short_circuits_to_false(expr: &Expr) -> bool {
+    match expr {
+        Expr::BoolLiteral(false) => true,
+        Expr::Binary {
+            op: crabka_pgparser::ast::BinaryOp::And,
+            left,
+            ..
+        } => short_circuits_to_false(left),
+        Expr::Binary {
+            op: crabka_pgparser::ast::BinaryOp::Or,
+            left,
+            right,
+        } => short_circuits_to_false(left) && short_circuits_to_false(right),
+        _ => false,
+    }
 }
 
 fn try_execute_nested_loop_with_state(

@@ -18,7 +18,7 @@ pub(crate) fn is_single_row_values(values: &ValuesStmt) -> bool {
     values.rows.len() == 1
 }
 
-/// Reduce a root null test on a stored `NOT NULL` column to its known truth.
+/// Reduce null tests on stored `NOT NULL` columns to their known truth.
 ///
 /// The caller supplies the only legal qualifier for this one-relation scope,
 /// preventing a malformed reference from being hidden by the reduction.
@@ -27,7 +27,11 @@ pub(crate) fn reduce_not_null_test(
     table: &Table,
     qualifier: &str,
 ) -> Option<Expr> {
-    filter.map(|filter| match filter {
+    filter.map(|filter| reduce_not_null_test_expr(filter, table, qualifier))
+}
+
+fn reduce_not_null_test_expr(filter: &Expr, table: &Table, qualifier: &str) -> Expr {
+    match filter {
         Expr::IsNull { expr, negated }
             if matches!(expr.as_ref(), Expr::Column { table: column_table, name }
                 if column_table.as_deref().is_none_or(|written| written == qualifier)
@@ -35,8 +39,13 @@ pub(crate) fn reduce_not_null_test(
         {
             Expr::BoolLiteral(*negated)
         }
+        Expr::Binary { op, left, right } => Expr::Binary {
+            op: *op,
+            left: Box::new(reduce_not_null_test_expr(left, table, qualifier)),
+            right: Box::new(reduce_not_null_test_expr(right, table, qualifier)),
+        },
         _ => filter.clone(),
-    })
+    }
 }
 
 /// Rewrite a typed `column = column` qual to `column IS NOT NULL`.
@@ -86,6 +95,24 @@ mod tests {
 
     use crate::scope::{ColumnBinding, Exposure};
 
+    fn not_null_table() -> Table {
+        let mut column = crabka_pgcatalog::Column::new("a", ColumnType::Int4);
+        column.not_null = true;
+        Table {
+            id: 1,
+            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            name: crabka_pgcatalog::RelationName::public("t"),
+            columns: vec![column],
+            sharded: false,
+            row_security: false,
+            force_row_security: false,
+            sharding: None,
+            foreign: None,
+            materialized: None,
+            checks: Vec::new(),
+        }
+    }
+
     #[test]
     fn only_the_false_literal_is_a_constant_false_qual() {
         assert!(is_literal_false(Some(&Expr::BoolLiteral(false))));
@@ -108,21 +135,7 @@ mod tests {
 
     #[test]
     fn reduces_only_a_not_null_column_test_in_its_own_scope() {
-        let mut column_metadata = crabka_pgcatalog::Column::new("a", ColumnType::Int4);
-        column_metadata.not_null = true;
-        let table = Table {
-            id: 1,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
-            name: crabka_pgcatalog::RelationName::public("t"),
-            columns: vec![column_metadata],
-            sharded: false,
-            row_security: false,
-            force_row_security: false,
-            sharding: None,
-            foreign: None,
-            materialized: None,
-            checks: Vec::new(),
-        };
+        let table = not_null_table();
         let column = Expr::Column {
             table: Some("t".into()),
             name: "a".into(),
@@ -147,6 +160,30 @@ mod tests {
                 "other",
             )
             .is_some_and(|expr| !matches!(expr, Expr::BoolLiteral(_)))
+        );
+    }
+
+    #[test]
+    fn reduces_not_null_tests_inside_boolean_qual_trees() {
+        let table = not_null_table();
+        let filter = Expr::Binary {
+            op: BinaryOp::And,
+            left: Box::new(Expr::IsNull {
+                expr: Box::new(Expr::Column {
+                    table: None,
+                    name: "a".into(),
+                }),
+                negated: false,
+            }),
+            right: Box::new(Expr::BoolLiteral(true)),
+        };
+        assert!(
+            reduce_not_null_test(Some(&filter), &table, "t")
+                == Some(Expr::Binary {
+                    op: BinaryOp::And,
+                    left: Box::new(Expr::BoolLiteral(false)),
+                    right: Box::new(Expr::BoolLiteral(true)),
+                })
         );
     }
 
