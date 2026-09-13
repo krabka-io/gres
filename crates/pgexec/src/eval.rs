@@ -1758,6 +1758,9 @@ fn coerce_untyped_literal_operands(
                 | BinaryOp::Le
                 | BinaryOp::Gt
                 | BinaryOp::Ge => other.column_type(),
+                BinaryOp::Mul | BinaryOp::Div if matches!(other, Datum::Interval(_)) => {
+                    Some(ColumnType::Float8)
+                }
                 _ => None,
             };
         }
