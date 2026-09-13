@@ -401,6 +401,11 @@ pub(crate) fn cascade_drop_notice(
             names,
             cascade: true,
             ..
+        }
+        | Statement::DropDomain {
+            names,
+            cascade: true,
+            ..
         } => {
             let mut lines = Vec::new();
             for reference in names {

@@ -1474,14 +1474,17 @@ pub fn drop_types(
         let dependents = dependent_user_types(kv, ty.oid)?;
         let typed_tables = typed_tables_using_type(kv, ty.oid)?;
         if !cascade && let Some(dependent) = dependents.first() {
-            return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
-                "2BP01",
-                format!(
-                    "cannot drop type {name} because other objects depend on it\nDETAIL:  \
-                     type {} depends on type {name}",
+            return Err(ExecError::Remote(
+                crabka_pgwire::error::PgError::error(
+                    "2BP01",
+                    format!("cannot drop type {name} because other objects depend on it"),
+                )
+                .with_detail(format!(
+                    "type {} depends on type {name}",
                     dependent.qualified_name()
-                ),
-            )));
+                ))
+                .with_hint("Use DROP ... CASCADE to drop the dependent objects too."),
+            ));
         }
         // A routine that names the type in its signature, and a cast that names
         // it at either end, both depend on it. Leaving either behind would be
@@ -2325,6 +2328,30 @@ mod tests {
         hydrate(&kv).expect("publish range");
 
         let composite_name = RelationName::new(&composite.schema, &composite.name);
+        let error = drop_types(
+            &kv,
+            std::slice::from_ref(&composite_name),
+            false,
+            false,
+            false,
+        )
+        .expect_err("dependent range rejects a non-cascade drop")
+        .into_pg();
+        assert!(error.code == "2BP01");
+        assert!(
+            error
+                .diagnostics
+                .as_ref()
+                .and_then(|fields| fields.detail.as_deref())
+                == Some("type cascade_composite_range_test depends on type cascade_composite_test")
+        );
+        assert!(
+            error
+                .diagnostics
+                .as_ref()
+                .and_then(|fields| fields.hint.as_deref())
+                == Some("Use DROP ... CASCADE to drop the dependent objects too.")
+        );
         let before = crabka_pgcatalog::list_user_types(&kv).expect("types before drop");
         let (_, drop_ops) = drop_types(
             &kv,
