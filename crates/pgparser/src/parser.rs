@@ -1563,11 +1563,9 @@ impl Parser {
             }
             Token::LParen => {
                 // SP34: `( SELECT … )` is a scalar subquery; anything else is a
-                // parenthesised (grouping) expression.
-                if matches!(
-                    self.peek2(),
-                    Token::Keyword(Keyword::Select | Keyword::Values | Keyword::With)
-                ) {
+                // parenthesised (grouping) expression. The query can itself be
+                // parenthesized when it is a set-operation operand.
+                if self.parenthesized_query_starts_here() {
                     self.bump();
                     let sub = self.in_nested_query(Self::query_expr_after_open_paren)?;
                     Ok(Expr::ScalarSubquery(Box::new(sub)))
@@ -14516,6 +14514,20 @@ impl Parser {
         )
     }
 
+    /// Whether this opening parenthesis eventually reaches a query after zero
+    /// or more parentheses. This admits `((SELECT 1) UNION SELECT 2)` as a
+    /// scalar subquery without treating ordinary grouped expressions as queries.
+    fn parenthesized_query_starts_here(&self) -> bool {
+        let mut offset = 1;
+        while *self.peek_n(offset) == Token::LParen {
+            offset += 1;
+        }
+        matches!(
+            self.peek_n(offset),
+            Token::Keyword(Keyword::Select | Keyword::Values | Keyword::With | Keyword::Table)
+        )
+    }
+
     /// True when the cursor sits on a data-modifying statement, one of the four
     /// spellings `PostgreSQL` allows inside a `WITH` list.
     fn starts_dml_statement(&self) -> bool {
@@ -24614,6 +24626,10 @@ mod tests {
         assert!(matches!(
             expr("1 + (SELECT a FROM t)"),
             Expr::Binary { right, .. } if matches!(*right, Expr::ScalarSubquery(_))
+        ));
+        assert!(matches!(
+            expr("((SELECT 2) UNION SELECT 2)"),
+            Expr::ScalarSubquery(query) if matches!(query.body, crate::ast::SetExpr::SetOp { .. })
         ));
         assert!(matches!(expr("(1 + 2) * 3"), Expr::Binary { .. }));
     }

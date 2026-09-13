@@ -5196,6 +5196,16 @@ async fn drop_index_list_removes_every_named_index() {
 }
 
 #[tokio::test]
+async fn scalar_subquery_accepts_parenthesized_set_operations() {
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    assert_eq!(
+        text_rows_of(&mut session, "SELECT ((SELECT 2) UNION SELECT 2)").await,
+        vec![text_row(&["2"])]
+    );
+}
+
+#[tokio::test]
 async fn select_uses_local_index_for_simple_equality_with_residual_filter() {
     let mut engine = SqlEngine::new();
     run(&engine, "CREATE TABLE t (id int4, name text, active bool)").await;
