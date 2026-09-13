@@ -1716,12 +1716,12 @@ fn pg_foreign_table_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
 /// Column lists for the `pg_catalog` relations, in PostgreSQL 18.4 order.
 fn pg_catalog_columns(name: &str) -> Vec<Column> {
     use ColumnType::{
-        Bool, Float4, Int2, Int4, Int8, Regoper, Regproc, Regtype, Text, Timestamptz,
+        Bool, Float4, Int2, Int4, Int8, Oid, Regoper, Regproc, Regtype, Text, Timestamptz,
     };
     let acl = ColumnType::Array(ElemType::Text);
     match name {
         "pg_aggregate" => cols(&[
-            ("aggfnoid", Regproc),
+            ("aggfnoid", Oid),
             ("aggkind", Text),
             ("aggnumdirectargs", Int2),
             ("aggtransfn", Regproc),
@@ -5461,6 +5461,7 @@ mod tests {
                 sequence,
                 sequence_rowtype_columns()
                     .into_iter()
+                    .filter(|column| !column.dropped)
                     .map(|column| (column.name, column.ty))
                     .collect(),
             ),

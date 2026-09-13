@@ -6014,6 +6014,7 @@ pub(crate) fn plpgsql_table_function_schema(
                 registered.fields().map(|fields| {
                     fields
                         .iter()
+                        .filter(|field| !field.dropped)
                         .map(|field| (field.name.clone(), field.ty))
                         .collect()
                 })

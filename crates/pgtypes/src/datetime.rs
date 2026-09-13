@@ -228,11 +228,22 @@ impl PgTimestamp {
     /// The timestamp as a Jiff civil value when Jiff can represent it.
     #[must_use]
     pub fn civil(self) -> Option<DateTime> {
-        let micros = self.epoch_micros()?;
-        let unix_micros = micros.checked_add(PG_EPOCH_UNIX_SECS * 1_000_000)?;
-        Timestamp::from_microsecond(unix_micros)
-            .ok()
-            .map(|timestamp| timestamp.to_zoned(TimeZone::UTC).datetime())
+        let (year, month, day, micros) = timestamp_parts(self)?;
+        let hour = micros / USECS_PER_HOUR;
+        let micros = micros % USECS_PER_HOUR;
+        let minute = micros / USECS_PER_MINUTE;
+        let micros = micros % USECS_PER_MINUTE;
+        let second = micros / USECS_PER_SEC;
+        DateTime::new(
+            i16::try_from(year).ok()?,
+            i8::try_from(month).ok()?,
+            i8::try_from(day).ok()?,
+            i8::try_from(hour).ok()?,
+            i8::try_from(minute).ok()?,
+            i8::try_from(second).ok()?,
+            i32::try_from((micros % USECS_PER_SEC) * 1_000).ok()?,
+        )
+        .ok()
     }
 
     /// `1` for `infinity`, `-1` for `-infinity`, `0` for finite values.
@@ -1116,7 +1127,7 @@ pub fn apply_interval_range_typmod(
     precision: Option<u8>,
 ) -> Result<Interval, TypeError> {
     let mut value = truncate_to_range(value, Some(range));
-    if range.0 == IntervalField::Year && !value.is_infinite() {
+    if range.1 == IntervalField::Year && !value.is_infinite() {
         value.months -= value.months % 12;
     }
     precision.map_or(Ok(value), |precision| {

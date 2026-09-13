@@ -4198,15 +4198,14 @@ async fn attcollation_follows_the_type_for_every_relation_without_a_collate() {
     .await;
 
     // A table, a view, a materialized view, a CREATE TABLE AS, a composite
-    // type and a catalog relation of the engine's own — every one reports
-    // the type's collation and nothing else, so `\d` prints no Collation.
+    // type — every one reports the type's collation and nothing else, so `\d`
+    // prints no Collation. Catalog text fields deliberately use C collation.
     let relations = [
         "'base'::regclass",
         "'v'::regclass",
         "'m'::regclass",
         "'ctas'::regclass",
         "SELECT typrelid FROM pg_type WHERE typname = 'pair'",
-        "'pg_class'::regclass",
     ];
     for relation in relations {
         let printed = collation_shown_by_backslash_d(&mut session, relation).await;
@@ -4216,6 +4215,8 @@ async fn attcollation_follows_the_type_for_every_relation_without_a_collate() {
             "{relation} prints a collation: {printed:?}"
         );
     }
+    let catalog = collation_shown_by_backslash_d(&mut session, "'pg_class'::regclass").await;
+    assert!(catalog.iter().any(|row| row[1].as_deref() == Some("C")));
 
     // And the underlying value is the database default for a text column,
     // not 0 and not a named collation.
