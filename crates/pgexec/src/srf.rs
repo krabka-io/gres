@@ -3041,6 +3041,12 @@ fn step_sign(step: &Datum) -> Result<std::cmp::Ordering, ExecError> {
         Datum::Int4(n) => n.cmp(&0),
         Datum::Int8(n) => n.cmp(&0),
         Datum::Numeric(n) => n.cmp(&NumericValue::from(0i64)),
+        Datum::Interval(iv) if iv.is_infinite() => {
+            return Err(ExecError::Type(TypeError::Domain {
+                sqlstate: "22023",
+                message: "step size cannot be infinite",
+            }));
+        }
         Datum::Interval(iv) => iv.canonical_micros().cmp(&0),
         other => {
             return Err(ExecError::TypeMismatch(format!(
@@ -4228,6 +4234,35 @@ mod tests {
             .into_pg();
         assert!(error.code == "22023");
         assert!(error.message == "step size cannot equal zero");
+    }
+
+    #[test]
+    fn an_infinite_generate_series_step_is_22023() {
+        let error = single_column(
+            "generate_series",
+            &[
+                constant(
+                    Datum::Timestamp(
+                        crabka_pgtypes::datetime::parse_timestamp("2024-01-01").expect("start"),
+                    ),
+                    ColumnType::Timestamp,
+                ),
+                constant(
+                    Datum::Timestamp(
+                        crabka_pgtypes::datetime::parse_timestamp("2024-01-03").expect("stop"),
+                    ),
+                    ColumnType::Timestamp,
+                ),
+                constant(
+                    Datum::Interval(crabka_pgtypes::datetime::Interval::INFINITY),
+                    ColumnType::Interval,
+                ),
+            ],
+        )
+        .expect_err("infinite step")
+        .into_pg();
+        assert!(error.code == "22023");
+        assert!(error.message == "step size cannot be infinite");
     }
 
     #[test]

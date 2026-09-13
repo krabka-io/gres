@@ -19,7 +19,7 @@
 
 use crabka_pgparser::ast::{Expr, FuncArgs, FuncCall};
 use crabka_pgtypes::{
-    ColumnType, Datum, TypeError,
+    ColumnType, Datum, TemporalType, TypeError,
     datetime::{self, Interval},
     numeric,
 };
@@ -170,6 +170,14 @@ fn is_formattable(t: ColumnType) -> bool {
             | ColumnType::Timestamp
             | ColumnType::Timestamptz
             | ColumnType::Interval
+            | ColumnType::Temporal(
+                TemporalType::Time
+                    | TemporalType::Timetz
+                    | TemporalType::Timestamp
+                    | TemporalType::Timestamptz
+                    | TemporalType::Interval,
+                _,
+            )
             | ColumnType::Int2
             | ColumnType::Int4
             | ColumnType::Int8
@@ -928,6 +936,10 @@ mod tests {
         assert_eq!(ev("to_char(485, '999')"), Datum::Text(" 485".into()));
         assert_eq!(ty("to_char(485, '999')"), ColumnType::Text);
         assert_eq!(ty("to_char(now(), 'YYYY')"), ColumnType::Text);
+        assert_eq!(
+            ty("to_char(TIMESTAMP(2) '2024-01-15 13:45:06', 'YYYY-MM-DD')"),
+            ColumnType::Text
+        );
     }
 
     #[test]

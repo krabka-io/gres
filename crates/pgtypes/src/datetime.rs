@@ -4006,6 +4006,10 @@ trait FieldSource {
         None
     }
 
+    fn has_roman_month(&self) -> bool {
+        true
+    }
+
     /// The year `to_char` PRINTS. PostgreSQL never prints a negative year for a
     /// date/time: the astronomical year `0` is `1 BC` and prints as `1`, so a
     /// non-positive year is folded to `1 - year` and the era is left to the
@@ -4086,7 +4090,8 @@ impl FieldSource for DateTimeFields {
         i64::from(self.iso_week)
     }
     fn iso_year(&self) -> i64 {
-        i64::from(self.iso_year)
+        let year = i64::from(self.iso_year);
+        if year <= 0 { 1 - year } else { year }
     }
     fn week_of_year(&self) -> i64 {
         i64::from(self.week_of_year)
@@ -4144,6 +4149,16 @@ impl FieldSource for IntervalFields {
     }
     fn month(&self) -> i64 {
         self.months % 12
+    }
+    fn month_name_index(&self) -> usize {
+        if self.months > 0 {
+            (self.months - 1).rem_euclid(12) as usize
+        } else {
+            self.months.rem_euclid(12) as usize
+        }
+    }
+    fn has_roman_month(&self) -> bool {
+        self.months != 0
     }
     fn day(&self) -> i64 {
         self.days
@@ -4592,6 +4607,9 @@ fn match_pattern(
     // `RM`/`rm`: PostgreSQL left-justifies the Roman month numeral in a width-4
     // field (the widest is "VIII"); `FM` strips that padding.
     if matches_at(chars, i, "RM") {
+        if !f.has_roman_month() {
+            return Ok(Some((2, String::new(), None)));
+        }
         return Ok(Some((
             2,
             pad_roman(ROMAN_MONTHS[f.month_name_index()], fm),
@@ -4599,6 +4617,9 @@ fn match_pattern(
         )));
     }
     if matches_at(chars, i, "rm") {
+        if !f.has_roman_month() {
+            return Ok(Some((2, String::new(), None)));
+        }
         let lower = ROMAN_MONTHS[f.month_name_index()].to_ascii_lowercase();
         return Ok(Some((2, pad_roman(&lower, fm), None)));
     }
@@ -6908,7 +6929,7 @@ pub fn justify_interval(iv: Interval) -> Result<Interval, TypeError> {
 
 #[cfg(test)]
 mod format_tests {
-    use super::{DateTimeFields, format_datetime};
+    use super::{DateTimeFields, Interval, format_datetime, format_interval};
 
     fn fields_monday() -> DateTimeFields {
         // 2024-01-15 13:45:06.5, a Monday.
@@ -6967,6 +6988,14 @@ mod format_tests {
         assert_eq!(fmt("IYY"), "024");
         assert_eq!(fmt("IY"), "24");
         assert_eq!(fmt("I"), "4");
+        let bc = DateTimeFields::from_civil(
+            jiff::civil::DateTime::constant(-96, 2, 16, 0, 0, 0, 0),
+            None,
+        );
+        assert_eq!(
+            format_datetime("IYYY IYY IY I", &bc).expect("BC ISO year"),
+            "0097 097 97 7"
+        );
     }
 
     #[test]
@@ -6997,6 +7026,25 @@ mod format_tests {
         assert_eq!(fmt("FMRM"), "I"); // FM strips the left-justify padding
         assert_eq!(fmt("FMMonth"), "January");
         assert_eq!(fmt("FMMM"), "1");
+        let interval = |months| Interval {
+            months,
+            days: 0,
+            micros: 0,
+        };
+        assert_eq!(format_interval(interval(0), "rm").expect("zero month"), "");
+        assert_eq!(
+            format_interval(interval(1), "RM").expect("one month"),
+            "I   "
+        );
+        assert_eq!(
+            format_interval(interval(-12), "RM").expect("minus year"),
+            "I   "
+        );
+        assert_eq!(format_interval(interval(12), "RM").expect("year"), "XII ");
+        assert_eq!(
+            format_interval(interval(-1), "rm").expect("minus month"),
+            "xii "
+        );
     }
 
     #[test]
