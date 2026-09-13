@@ -3226,11 +3226,14 @@ fn eval_eager(
                     .map_err(ExecError::Type);
             }
             let x = as_f64(&vals[0])?;
-            if x <= 0.0 {
+            if x == 0.0 {
                 return Err(domain(
                     "2201E",
-                    "cannot take logarithm of a non-positive number",
+                    "cannot take logarithm of zero",
                 ));
+            }
+            if x < 0.0 {
+                return Err(domain("2201E", "cannot take logarithm of a negative number"));
             }
             Ok(Datum::Float8(x.ln()))
         }
@@ -3247,11 +3250,14 @@ fn eval_eager(
                     .map_err(ExecError::Type);
             }
             let x = as_f64(&vals[0])?;
-            if x <= 0.0 {
+            if x == 0.0 {
                 return Err(domain(
                     "2201E",
-                    "cannot take logarithm of a non-positive number",
+                    "cannot take logarithm of zero",
                 ));
+            }
+            if x < 0.0 {
+                return Err(domain("2201E", "cannot take logarithm of a negative number"));
             }
             Ok(Datum::Float8(x.log10()))
         }
@@ -6845,6 +6851,18 @@ mod tests {
         assert_eq!(ec_eval("ln(0)"), "2201E");
         assert_eq!(ec_eval("ln(-1)"), "2201E");
         assert_eq!(ec_eval("log(0)"), "2201E");
+        for (sql, message) in [
+            ("ln(0::float8)", "cannot take logarithm of zero"),
+            ("ln(-1::float8)", "cannot take logarithm of a negative number"),
+            ("log(0::float8)", "cannot take logarithm of zero"),
+            ("log(-1::float8)", "cannot take logarithm of a negative number"),
+        ] {
+            let ctx = crate::clock::EvalCtx::test_default();
+            let error = crate::eval::eval(&pexpr(sql).expect("parse"), &Scope::empty(), &[], &ctx)
+                .expect_err("expected logarithm error")
+                .into_pg();
+            assert_eq!(error.message, message, "{sql}");
+        }
         assert_eq!(ec_eval("exp(1000::float8)"), "22003");
         assert_eq!(ec_eval("exp(-1000::float8)"), "22003");
         assert_eq!(ev("exp('Infinity'::float8)"), Datum::Float8(f64::INFINITY));
