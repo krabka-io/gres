@@ -27,10 +27,10 @@ fn named_relation(sql: &str) -> RelationRef {
         | Statement::CreateTableAs { name, .. }
         | Statement::CreateView { name, .. }
         | Statement::DropView { name, .. }
-        | Statement::DropIndex { name, .. }
         | Statement::CreateType { name, .. }
         | Statement::CreateDomain { name, .. }
         | Statement::CreateForeignTable { name, .. } => name,
+        Statement::DropIndex { mut names, .. } => names.remove(0),
         Statement::DropForeignTable { mut names, .. } => names.remove(0),
         Statement::Insert { table, .. }
         | Statement::Update { table, .. }

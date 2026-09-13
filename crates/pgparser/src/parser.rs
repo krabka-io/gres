@@ -12459,9 +12459,12 @@ impl Parser {
         self.expect(&Token::Keyword(Keyword::Drop))?;
         self.expect(&Token::Keyword(Keyword::Index))?;
         let if_exists = self.eat_if_exists();
-        let name = self.relation_ref()?;
+        let mut names = vec![self.relation_ref()?];
+        while self.eat_comma() {
+            names.push(self.relation_ref()?);
+        }
         Ok(Statement::DropIndex {
-            name,
+            names,
             if_exists,
             cascade: self.eat_drop_behavior(),
         })
@@ -20515,11 +20518,23 @@ mod tests {
         assert_eq!(
             one("DROP INDEX IF EXISTS \"Users Name Idx\""),
             Statement::DropIndex {
-                name: "Users Name Idx".into(),
+                names: vec!["Users Name Idx".into()],
                 if_exists: true,
                 cascade: false,
             }
         );
+    }
+
+    #[test]
+    fn parses_drop_index_lists() {
+        let Statement::DropIndex { names, cascade, .. } = one("DROP INDEX a, s.b CASCADE") else {
+            panic!("expected DROP INDEX");
+        };
+        assert_eq!(
+            names,
+            vec!["a".into(), crate::ast::RelationRef::qualified("s", "b")]
+        );
+        assert!(cascade);
     }
 
     #[test]
@@ -22641,10 +22656,7 @@ mod tests {
             // SECOND keeps its fractional part, so it is not truncated.
             ("interval '1.5' second", "00:00:01.5"),
             ("interval '1.234' second(2)", "00:00:01.23"),
-            (
-                "interval '12:34.5678' minute to second(2)",
-                "00:12:34.57",
-            ),
+            ("interval '12:34.5678' minute to second(2)", "00:12:34.57"),
             ("interval '90' minute", "01:30:00"),
             // A bare quantity takes the range's LAST field, and each quantity to
             // its left takes the next coarser one.

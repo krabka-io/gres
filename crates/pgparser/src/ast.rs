@@ -723,7 +723,7 @@ pub enum Statement {
         comment: Option<String>,
     },
     DropIndex {
-        name: RelationRef,
+        names: Vec<RelationRef>,
         if_exists: bool,
         /// `CASCADE` was written: dependent objects are dropped too rather than
         /// the drop being refused with 2BP01. `RESTRICT` is the default and is

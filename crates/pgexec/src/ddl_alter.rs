@@ -1245,63 +1245,66 @@ pub(crate) fn execute_ddl(
             Ok((command("CREATE INDEX"), ops))
         }
         Statement::DropIndex {
-            name,
+            names,
             if_exists,
             cascade,
         } => {
-            let name = &match resolve_relation(kv, resolution, name, SchemaDisposition::Utility) {
-                Ok(name) => name,
-                Err(error) if *if_exists && is_missing_schema(&error) => {
-                    return Ok((command("DROP INDEX"), Vec::new()));
+            let mut all_ops = Vec::new();
+            for name in names {
+                let name = match resolve_relation(kv, resolution, name, SchemaDisposition::Utility)
+                {
+                    Ok(name) => name,
+                    Err(error) if *if_exists && is_missing_schema(&error) => continue,
+                    Err(error) => return Err(error),
+                };
+                if let Some(error) = drop_kind_mismatch(kv, &name, "index") {
+                    return Err(error);
                 }
-                Err(error) => return Err(error),
-            };
-            if let Some(error) = drop_kind_mismatch(kv, name, "index") {
-                return Err(error);
-            }
-            let (index, mut ops) = match crabka_pgcatalog::drop_index_ops(kv, name) {
-                Ok(result) => result,
-                Err(crabka_pgcatalog::CatalogError::UndefinedIndex(_)) if *if_exists => {
-                    return Ok((command("DROP INDEX"), Vec::new()));
+                let (index, mut ops) = match crabka_pgcatalog::drop_index_ops(kv, &name) {
+                    Ok(result) => result,
+                    Err(crabka_pgcatalog::CatalogError::UndefinedIndex(_)) if *if_exists => {
+                        continue;
+                    }
+                    Err(error) => return Err(error.into()),
+                };
+                if index.placement == crabka_pgcatalog::IndexPlacement::Global {
+                    return Err(ExecError::Unsupported(
+                        "dropping global indexes is not supported until distributed index cleanup exists"
+                            .into(),
+                    ));
                 }
-                Err(error) => return Err(error.into()),
-            };
-            if index.placement == crabka_pgcatalog::IndexPlacement::Global {
-                return Err(ExecError::Unsupported(
-                    "dropping global indexes is not supported until distributed index cleanup exists"
-                        .into(),
-                ));
-            }
-            // A foreign key that chose this index as the one proving its
-            // referenced columns unique depends on it; CASCADE drops the
-            // referencing constraint, not the referencing relation.
-            let dependents = crate::fk::dependents_blocking_index_drop(kv, &index)?;
-            if !dependents.is_empty() {
-                if !*cascade {
-                    return Err(ExecError::DependentForeignKeys(Box::new(
-                        crate::error::ForeignKeyDependents {
-                            dropped: crate::error::DroppedObject::Index(index.name.clone()),
-                            dependents,
-                        },
-                    )));
+                // A foreign key that chose this index as the one proving its
+                // referenced columns unique depends on it; CASCADE drops the
+                // referencing constraint, not the referencing relation.
+                let dependents = crate::fk::dependents_blocking_index_drop(kv, &index)?;
+                if !dependents.is_empty() {
+                    if !*cascade {
+                        return Err(ExecError::DependentForeignKeys(Box::new(
+                            crate::error::ForeignKeyDependents {
+                                dropped: crate::error::DroppedObject::Index(index.name.clone()),
+                                dependents,
+                            },
+                        )));
+                    }
+                    for dependent in &dependents {
+                        let child = crabka_pgcatalog::get_table(kv, &dependent.table)?;
+                        let (_, drop_ops) = crabka_pgcatalog::drop_foreign_key_ops(
+                            kv,
+                            child.id,
+                            &dependent.constraint,
+                        )?;
+                        ops.extend(drop_ops);
+                    }
                 }
-                for dependent in &dependents {
-                    let child = crabka_pgcatalog::get_table(kv, &dependent.table)?;
-                    let (_, drop_ops) = crabka_pgcatalog::drop_foreign_key_ops(
-                        kv,
-                        child.id,
-                        &dependent.constraint,
-                    )?;
-                    ops.extend(drop_ops);
+                for (key, _) in kv.scan_prefix(&crabka_pgkv::key::secondary_index_prefix(
+                    index.table_id,
+                    index.id,
+                ))? {
+                    ops.push(crabka_pgkv::WriteOp::Delete { key });
                 }
+                all_ops.extend(ops);
             }
-            for (key, _) in kv.scan_prefix(&crabka_pgkv::key::secondary_index_prefix(
-                index.table_id,
-                index.id,
-            ))? {
-                ops.push(crabka_pgkv::WriteOp::Delete { key });
-            }
-            Ok((command("DROP INDEX"), ops))
+            Ok((command("DROP INDEX"), all_ops))
         }
         Statement::AlterIndex { name, action } => {
             use crabka_pgparser::ast::AlterIndexAction;

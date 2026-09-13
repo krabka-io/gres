@@ -5164,6 +5164,38 @@ async fn drop_index_removes_catalog_metadata_and_local_entries_in_one_ddl_batch(
 }
 
 #[tokio::test]
+async fn drop_index_list_removes_every_named_index() {
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    session
+        .simple_query("CREATE TABLE t (id int4, name text)")
+        .await
+        .expect("create table");
+    session
+        .simple_query("CREATE INDEX t_id_idx ON t (id)")
+        .await
+        .expect("create id index");
+    session
+        .simple_query("CREATE INDEX t_name_idx ON t (name)")
+        .await
+        .expect("create name index");
+
+    session
+        .simple_query("DROP INDEX t_id_idx, t_name_idx")
+        .await
+        .expect("drop index list");
+
+    for name in ["t_id_idx", "t_name_idx"] {
+        assert_eq!(
+            crabka_pgcatalog::get_index(engine.catalog_kv.as_ref(), &RelationName::public(name))
+                .expect_err("index metadata removed")
+                .sqlstate(),
+            "42704"
+        );
+    }
+}
+
+#[tokio::test]
 async fn select_uses_local_index_for_simple_equality_with_residual_filter() {
     let mut engine = SqlEngine::new();
     run(&engine, "CREATE TABLE t (id int4, name text, active bool)").await;
