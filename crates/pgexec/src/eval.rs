@@ -4455,7 +4455,7 @@ fn field_type(base: ColumnType, field: &str) -> Result<ColumnType, ExecError> {
     ty.fields()
         .unwrap_or(&[])
         .iter()
-        .find(|attribute| attribute.name == field)
+        .find(|attribute| !attribute.dropped && attribute.name == field)
         .map(|attribute| attribute.ty)
         .ok_or_else(|| {
             ExecError::UndefinedColumn(format!(

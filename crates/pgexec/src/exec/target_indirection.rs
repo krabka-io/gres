@@ -67,7 +67,7 @@ pub(super) fn target_indirection_type(
             let fields = definition.fields().unwrap_or(&[]);
             let field = fields
                 .iter()
-                .find(|candidate| candidate.name == *field)
+                .find(|candidate| !candidate.dropped && candidate.name == *field)
                 .ok_or_else(|| {
                     ExecError::UndefinedColumn(format!(
                         "column \"{field}\" not found in data type {}",
