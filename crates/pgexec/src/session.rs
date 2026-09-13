@@ -18616,6 +18616,15 @@ fn rejected_input(message: &str) -> Option<RejectedInput<'_>> {
             indirect_ok: false,
         });
     }
+    if message == "upper bound cannot be less than lower bound"
+        || message.starts_with("array upper bound is too large:")
+    {
+        return Some(RejectedInput {
+            value: None,
+            expected: RejectedType::AnyArray,
+            indirect_ok: true,
+        });
+    }
     if let Some(value) = tail(message, "invalid cidr value") {
         return Some(named(value, "cidr"));
     }
@@ -18988,6 +18997,7 @@ fn attach_type_input_literal_position(sql: &str, error: PgError) -> PgError {
             | "22007"
             | "22008"
             | "22009"
+            | "2202E"
             | "22023"
             | "22015"
             | "22P05"

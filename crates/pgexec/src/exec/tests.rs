@@ -5342,6 +5342,25 @@ async fn quantified_array_type_errors_point_at_any_or_all() {
 }
 
 #[tokio::test]
+async fn array_bound_and_empty_constructor_errors_have_positions() {
+    use assert2::assert;
+
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    for (sql, needle) in [("SELECT '[1:0]={}'::int4[]", "'[1:0]={}'")] {
+        let error = session.simple_query(sql).await.expect_err(sql);
+        assert!(
+            error
+                .diagnostics
+                .as_ref()
+                .and_then(|diagnostics| diagnostics.position)
+                == sql.find(needle).map(|offset| offset + 1),
+            "{sql}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn drop_index_removes_catalog_metadata_and_local_entries_in_one_ddl_batch() {
     let engine = SqlEngine::new();
     let mut session = engine.connect();
