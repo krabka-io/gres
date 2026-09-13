@@ -86,6 +86,13 @@ fn structural_figure_colnames_match_parser_rules() {
         let expr = crabka_pgparser::parser::parse_expr_for_test(sql).expect("parse");
         assert2::assert!(super::derived_name(&expr) == *expected, "{sql}");
     }
+    for (sql, expected) in [
+        ("'{}'::integer[]", "int4"),
+        ("'{}'::double precision[]", "float8"),
+    ] {
+        let expr = crabka_pgparser::parser::parse_expr_for_test(sql).expect("parse");
+        assert2::assert!(super::derived_name(&expr) == expected, "{sql}");
+    }
 
     let column = || Expr::Column {
         table: None,

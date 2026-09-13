@@ -242,8 +242,8 @@ fn scalar_subquery_set_expr_name(set_expr: &crabka_pgparser::ast::SetExpr) -> Op
 /// parser, which is `pg_type.typname` rather than an SQL alias (`boolean`
 /// becomes `bool`, `bigint` becomes `int8`, and so on).
 fn catalog_type_name(ty: ColumnType) -> String {
-    if matches!(ty, ColumnType::Array(_)) {
-        return ty.name().trim_end_matches("[]").to_string();
+    if let ColumnType::Array(elem) = ty {
+        return catalog_type_name(elem.column_type());
     }
     builtin_type_rows()
         .iter()
