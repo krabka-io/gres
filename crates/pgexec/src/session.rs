@@ -13122,6 +13122,7 @@ impl SqlSession {
                 current_user: &current_role,
                 session_user: &session_user,
                 row_security,
+                resolution: eval_ctx.resolution(),
                 ..crate::exec::ForeignCtx::none()
             };
             let policy_stack = crate::rls::PolicyStack::default();
@@ -23924,6 +23925,26 @@ mod tests {
         assert!(
             rows_or_sqlstate(&mut s, "FETCH ALL FROM c").await == Ok(vec![vec!["apple".into()]])
         );
+        s.simple_query("ROLLBACK").await.expect("rollback");
+    }
+
+    #[tokio::test]
+    async fn locking_cursor_resolves_a_temporary_table() {
+        use assert2::assert;
+
+        let engine = SqlEngine::new();
+        let mut s = engine.connect();
+        s.simple_query("CREATE TEMP TABLE t (id int4)")
+            .await
+            .expect("ddl");
+        s.simple_query("INSERT INTO t VALUES (1)")
+            .await
+            .expect("seed");
+        s.simple_query("BEGIN").await.expect("begin");
+        s.simple_query("DECLARE c CURSOR FOR SELECT id FROM t FOR UPDATE")
+            .await
+            .expect("declare");
+        assert!(rows_or_sqlstate(&mut s, "FETCH FROM c").await == Ok(vec![vec!["1".into()]]));
         s.simple_query("ROLLBACK").await.expect("rollback");
     }
 
