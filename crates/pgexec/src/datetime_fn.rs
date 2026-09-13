@@ -1494,6 +1494,9 @@ fn trunc_datetime(unit: &str, type_name: &str, dt: DateTime) -> Result<DateTime,
 
 /// Truncate an interval to `unit`, and zero out the finer stored fields.
 fn trunc_interval(unit: &str, iv: Interval) -> Result<Interval, ExecError> {
+    if iv.is_infinite() {
+        return Ok(iv);
+    }
     let months = iv.months;
     let days = iv.days;
     let micros = iv.micros;
@@ -2047,6 +2050,10 @@ mod tests {
         )
         .expect_err("date_trunc must still refuse week for an interval");
         assert!(format!("{refused:?}").contains("not supported for type interval"));
+        assert!(
+            ev("date_trunc('hour', INTERVAL 'infinity')", &ctx)
+                == Datum::Interval(crabka_pgtypes::datetime::Interval::INFINITY)
+        );
     }
 
     /// The whole non-finite unit table for `interval`, both signs.
