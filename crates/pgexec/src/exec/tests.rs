@@ -6342,6 +6342,11 @@ fn local_join_count_plan_deferral_requires_bare_equality() {
             (true, true),
         ),
         (
+            "SELECT count(*) FROM l INNER JOIN r USING (a)",
+            (true, true),
+        ),
+        ("SELECT count(*) FROM l NATURAL INNER JOIN r", (true, false)),
+        (
             "SELECT count(*) FROM l INNER JOIN r ON l.a = r.a + 1",
             (true, false),
         ),
@@ -6365,6 +6370,33 @@ fn local_join_count_plan_deferral_requires_bare_equality() {
             "{sql}"
         );
     }
+}
+
+#[tokio::test]
+async fn local_join_count_using_does_not_materialize_join_rows() {
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    for table in ["left_rows", "right_rows"] {
+        run_s(
+            &mut session,
+            &format!(
+                "CREATE TABLE {table} AS \
+                 SELECT generate_series(1, 20000) AS id, \
+                        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' AS payload"
+            ),
+        )
+        .await;
+    }
+    run_s(&mut session, "SET work_mem = '4MB'").await;
+
+    assert_eq!(
+        text_rows_of(
+            &mut session,
+            "SELECT count(*) FROM left_rows JOIN right_rows USING (id)",
+        )
+        .await,
+        cell_rows(&[&["20000"]]),
+    );
 }
 
 #[test]

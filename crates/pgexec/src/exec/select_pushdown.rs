@@ -121,21 +121,21 @@ pub(crate) fn should_defer_local_join_count_plan(s: &SelectStmt) -> bool {
     if !uses_local_join_count_shape(s) {
         return false;
     }
-    let [
-        crabka_pgparser::ast::TableExpr::Join {
-            constraint:
-                crabka_pgparser::ast::JoinConstraint::On(crabka_pgparser::ast::Expr::Binary {
-                    op: crabka_pgparser::ast::BinaryOp::Eq,
-                    left,
-                    right,
-                }),
-            ..
-        },
-    ] = s.from.as_slice()
-    else {
+    let [crabka_pgparser::ast::TableExpr::Join { constraint, .. }] = s.from.as_slice() else {
         return false;
     };
-    matches!(left.as_ref(), Expr::Column { .. }) && matches!(right.as_ref(), Expr::Column { .. })
+    match constraint {
+        crabka_pgparser::ast::JoinConstraint::Using(_) => true,
+        crabka_pgparser::ast::JoinConstraint::On(crabka_pgparser::ast::Expr::Binary {
+            op: crabka_pgparser::ast::BinaryOp::Eq,
+            left,
+            right,
+        }) => {
+            matches!(left.as_ref(), Expr::Column { .. })
+                && matches!(right.as_ref(), Expr::Column { .. })
+        }
+        _ => false,
+    }
 }
 
 /// Count one direct local INNER/LEFT join without retaining its output rows.
@@ -164,8 +164,17 @@ pub(super) fn try_execute_local_join_count(
         return Ok(None);
     }
 
-    let left = build_table_expr(read_ctx, left, None, None, None)?;
-    let right = build_table_expr(read_ctx, right, None, None, None)?;
+    let (left, right) = if let crabka_pgparser::ast::JoinConstraint::Using(names) = constraint {
+        (
+            build_local_join_count_table(read_ctx, left, names)?,
+            build_local_join_count_table(read_ctx, right, names)?,
+        )
+    } else {
+        (
+            build_table_expr(read_ctx, left, None, None, None)?,
+            build_table_expr(read_ctx, right, None, None, None)?,
+        )
+    };
     let count = count_join_rows(
         &left,
         &right,
@@ -179,6 +188,36 @@ pub(super) fn try_execute_local_join_count(
         scope: projected_scope(&fields, &types),
         rows: vec![vec![Datum::Int8(count)]],
     }))
+}
+
+/// The counter only evaluates `USING` columns, so it need not retain unrelated
+/// payload columns while scanning either side.
+fn build_local_join_count_table(
+    read_ctx: &crate::subquery::SubCtx<'_>,
+    expression: &crabka_pgparser::ast::TableExpr,
+    names: &[String],
+) -> Result<Relation, ExecError> {
+    let crabka_pgparser::ast::TableExpr::Table { name, alias, .. } = expression else {
+        unreachable!("local join count only accepts base tables");
+    };
+    let Some(table) = scan_plan_table(read_ctx.catalog_kv, read_ctx.fctx.resolution, name)? else {
+        unreachable!("local join count only accepts stored tables");
+    };
+    let scope = Scope::single(&table, alias.as_deref().unwrap_or(&table.name.name));
+    let columns = scope
+        .columns
+        .iter()
+        .filter(|column| column.exposure == Exposure::Output && names.contains(&column.name))
+        .cloned()
+        .collect::<Vec<_>>();
+    scan_stored_base_table(
+        read_ctx,
+        expression,
+        &table.name,
+        None,
+        None,
+        Some(&columns),
+    )
 }
 
 fn is_plain_local_join_table(
