@@ -5361,6 +5361,24 @@ async fn array_bound_and_empty_constructor_errors_have_positions() {
 }
 
 #[tokio::test]
+async fn scalar_subscript_error_points_at_the_base_expression() {
+    use assert2::assert;
+
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    let sql = "SELECT (now())[1]";
+    let error = session.simple_query(sql).await.expect_err(sql);
+    assert!(error.code == "42804");
+    assert!(
+        error
+            .diagnostics
+            .as_ref()
+            .and_then(|diagnostics| diagnostics.position)
+            == sql.find("now").map(|offset| offset + 1)
+    );
+}
+
+#[tokio::test]
 async fn drop_index_removes_catalog_metadata_and_local_entries_in_one_ddl_batch() {
     let engine = SqlEngine::new();
     let mut session = engine.connect();

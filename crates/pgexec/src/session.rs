@@ -18202,6 +18202,24 @@ fn attach_array_runtime_position(sql: &str, error: PgError) -> PgError {
             [offset] => Some(*offset),
             _ => None,
         }
+    } else if error.message.starts_with("cannot subscript type ") {
+        let positions: Vec<_> = tokens
+            .iter()
+            .enumerate()
+            .filter_map(|(index, (token, _))| {
+                matches!(token, Token::LBracket).then(|| {
+                    tokens[..index]
+                        .iter()
+                        .rev()
+                        .find_map(|(token, offset)| matches!(token, Token::Ident(_)).then_some(*offset))
+                })
+            })
+            .flatten()
+            .collect();
+        match positions.as_slice() {
+            [offset] => Some(*offset),
+            _ => None,
+        }
     } else {
         None
     };
