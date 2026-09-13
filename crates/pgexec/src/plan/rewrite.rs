@@ -1,6 +1,6 @@
 //! Rule-based rewrites that are sound before cost-based planning.
 
-use crabka_pgparser::ast::{Expr, ValuesStmt};
+use crabka_pgparser::ast::{BinaryOp, Expr, ValuesStmt};
 
 use crate::scope::Scope;
 
@@ -23,9 +23,13 @@ pub(crate) fn is_single_row_values(values: &ValuesStmt) -> bool {
 /// every type, while `=` is not. Keeping the original expression in that case
 /// preserves the analysis error the query owes.
 pub(crate) fn rewrite_self_equality(filter: Option<&Expr>, scope: &Scope) -> Option<Expr> {
-    filter.map(|filter| match filter {
+    filter.map(|filter| rewrite_self_equality_expr(filter, scope))
+}
+
+fn rewrite_self_equality_expr(filter: &Expr, scope: &Scope) -> Expr {
+    match filter {
         Expr::Binary {
-            op: crabka_pgparser::ast::BinaryOp::Eq,
+            op: BinaryOp::Eq,
             left,
             right,
         } if left == right => {
@@ -43,8 +47,13 @@ pub(crate) fn rewrite_self_equality(filter: Option<&Expr>, scope: &Scope) -> Opt
                 negated: true,
             }
         }
+        Expr::Binary { op, left, right } => Expr::Binary {
+            op: *op,
+            left: Box::new(rewrite_self_equality_expr(left, scope)),
+            right: Box::new(rewrite_self_equality_expr(right, scope)),
+        },
         _ => filter.clone(),
-    })
+    }
 }
 
 #[cfg(test)]
@@ -102,5 +111,41 @@ mod tests {
         );
         scope.columns[0].ty = ColumnType::Json;
         assert!(rewrite_self_equality(Some(&equality), &scope) == Some(equality));
+    }
+
+    #[test]
+    fn rewrites_self_equality_inside_boolean_qual_trees() {
+        let column = Expr::Column {
+            table: Some("t".into()),
+            name: "a".into(),
+        };
+        let equality = Expr::Binary {
+            op: BinaryOp::Eq,
+            left: Box::new(column.clone()),
+            right: Box::new(column.clone()),
+        };
+        let filter = Expr::Binary {
+            op: BinaryOp::And,
+            left: Box::new(Expr::BoolLiteral(true)),
+            right: Box::new(equality),
+        };
+        let mut scope = Scope::empty();
+        scope.columns.push(ColumnBinding {
+            qualifier: Some("t".into()),
+            name: "a".into(),
+            ty: ColumnType::Int4,
+            exposure: Exposure::Output,
+        });
+        assert!(
+            rewrite_self_equality(Some(&filter), &scope)
+                == Some(Expr::Binary {
+                    op: BinaryOp::And,
+                    left: Box::new(Expr::BoolLiteral(true)),
+                    right: Box::new(Expr::IsNull {
+                        expr: Box::new(column),
+                        negated: true,
+                    }),
+                })
+        );
     }
 }
