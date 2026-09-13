@@ -92,6 +92,18 @@ fn ordered_column_type(ty: crabka_pgtypes::ColumnType) -> bool {
             | crabka_pgtypes::ColumnType::PgLsn
             | crabka_pgtypes::ColumnType::Money
             | crabka_pgtypes::ColumnType::JsonPath
+            | crabka_pgtypes::ColumnType::Array(
+                crabka_pgtypes::ElemType::Bool
+                    | crabka_pgtypes::ElemType::Int2
+                    | crabka_pgtypes::ElemType::Int4
+                    | crabka_pgtypes::ElemType::Int8
+                    | crabka_pgtypes::ElemType::Text
+                    | crabka_pgtypes::ElemType::Float4
+                    | crabka_pgtypes::ElemType::Float8
+                    | crabka_pgtypes::ElemType::Bytea
+                    | crabka_pgtypes::ElemType::JsonPath
+                    | crabka_pgtypes::ElemType::Varchar(_)
+            )
     )
 }
 

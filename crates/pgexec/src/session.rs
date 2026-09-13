@@ -8283,7 +8283,10 @@ impl SqlSession {
                                     .or_else(|| argument_types.get(1).and_then(|ty| ty.column()))
                                     .unwrap_or(left)
                                     .oid(),
-                                argument_type_oids: argument_types.iter().map(|ty| ty.oid()).collect(),
+                                argument_type_oids: argument_types
+                                    .iter()
+                                    .map(|ty| ty.oid())
+                                    .collect(),
                             })
                         }
                     })
@@ -17504,6 +17507,16 @@ impl SqlSession {
             Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => return None,
             Err(error) => return Some(Err(error.into())),
         };
+        // This cursor opens a raw range scan itself. It cannot honor an
+        // explicitly forced local index path, which belongs to the ordinary
+        // stored-relation executor.
+        if self
+            .guc
+            .effective("enable_seqscan")
+            .is_ok_and(|value| value == "off")
+        {
+            return None;
+        }
         // A partitioned parent stores no rows of its own — they live in its
         // leaves. This cursor scans exactly one relation, so serving `SELECT *
         // FROM parent` here silently returns nothing instead of the partitions'
@@ -18161,7 +18174,8 @@ fn attach_known_runtime_diagnostics(sql: &str, stmt: &Statement, error: PgError)
 fn attach_array_runtime_position(sql: &str, error: PgError) -> PgError {
     use crabka_pgparser::token::{Keyword, Token};
 
-    let empty_array = error.code == "42P18" && error.message == "cannot determine type of empty array";
+    let empty_array =
+        error.code == "42P18" && error.message == "cannot determine type of empty array";
     if error
         .diagnostics
         .as_ref()
@@ -18209,10 +18223,9 @@ fn attach_array_runtime_position(sql: &str, error: PgError) -> PgError {
             .enumerate()
             .filter_map(|(index, (token, _))| {
                 matches!(token, Token::LBracket).then(|| {
-                    tokens[..index]
-                        .iter()
-                        .rev()
-                        .find_map(|(token, offset)| matches!(token, Token::Ident(_)).then_some(*offset))
+                    tokens[..index].iter().rev().find_map(|(token, offset)| {
+                        matches!(token, Token::Ident(_)).then_some(*offset)
+                    })
                 })
             })
             .flatten()
@@ -19031,11 +19044,13 @@ fn attach_type_input_literal_position(sql: &str, error: PgError) -> PgError {
             | "22P05"
             | "54000"
             | "55P04"
-    ) || (error.code == "42601" && error.message.starts_with("syntax error in tsvector:"));
-    if !input_sqlstate || error
-        .diagnostics
-        .as_ref()
-        .is_some_and(|diagnostics| diagnostics.position.is_some())
+    ) || (error.code == "42601"
+        && error.message.starts_with("syntax error in tsvector:"));
+    if !input_sqlstate
+        || error
+            .diagnostics
+            .as_ref()
+            .is_some_and(|diagnostics| diagnostics.position.is_some())
     {
         return error;
     }
@@ -29997,7 +30012,6 @@ mod tests {
                 == Ok(vec![vec!["1".into()], vec!["2".into()]])
         );
     }
-
 }
 #[cfg(test)]
 mod compatibility_refusal_tests {
@@ -30134,10 +30148,9 @@ mod notify_and_binary_parameter_tests {
             assert!(
                 param_column_type(&param).expect("a known oid") == Some(expected),
                 "oid {oid}"
-        );
+            );
+        }
     }
-
-}
 
     #[test]
     fn an_unsupported_parameter_oid_is_still_rejected() {

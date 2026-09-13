@@ -5626,6 +5626,58 @@ async fn ordered_local_index_stream_returns_order_by_order() {
 }
 
 #[tokio::test]
+async fn forced_index_scan_orders_array_range_results() {
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    run_s(&mut session, "CREATE TEMP TABLE arr_tbl (f1 int[] UNIQUE)").await;
+    for value in ["{1,2,3}", "{1,2}"] {
+        run_s(
+            &mut session,
+            &format!("INSERT INTO arr_tbl VALUES ('{value}')"),
+        )
+        .await;
+    }
+    assert_eq!(
+        sqlstate_of(&mut session, "INSERT INTO arr_tbl VALUES ('{1,2,3}')").await,
+        "23505"
+    );
+    for value in ["{2,3,4}", "{1,5,3}", "{1,2,10}"] {
+        run_s(
+            &mut session,
+            &format!("INSERT INTO arr_tbl VALUES ('{value}')"),
+        )
+        .await;
+    }
+    run_s(&mut session, "SET enable_seqscan = off").await;
+    run_s(&mut session, "SET enable_bitmapscan = off").await;
+    let table = crabka_pgcatalog::list_tables(engine.catalog_kv.as_ref())
+        .expect("tables")
+        .into_iter()
+        .find(|table| table.name.name == "arr_tbl")
+        .expect("temporary table");
+    let index = crabka_pgcatalog::list_table_indexes(engine.catalog_kv.as_ref(), &table.name)
+        .expect("indexes")
+        .into_iter()
+        .next()
+        .expect("unique index");
+    assert!(super::local_index_supports_ordered_scan(&table, &index));
+    let select = parsed_select("SELECT f1 FROM arr_tbl WHERE f1 > '{1,2,3}' AND f1 <= '{1,5,3}'");
+    assert!(matches!(
+        crate::plan_dist::strict_predicate_for_filter(&table, select.filter.as_ref()),
+        Ok(crate::scanner::PredicatePushdown::Conjunctive(predicates)) if predicates.len() == 2
+    ));
+
+    assert_eq!(
+        text_rows_of(
+            &mut session,
+            "SELECT f1::text FROM arr_tbl WHERE f1 > '{1,2,3}' AND f1 <= '{1,5,3}'",
+        )
+        .await,
+        cell_rows(&[&["{1,2,10}"], &["{1,5,3}"]]),
+    );
+}
+
+#[tokio::test]
 async fn local_index_select_ignores_stale_entries_after_update_and_delete() {
     let mut engine = SqlEngine::new();
     run(&engine, "CREATE TABLE t (id int4, name text)").await;
