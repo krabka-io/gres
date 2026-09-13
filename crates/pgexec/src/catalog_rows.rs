@@ -1974,7 +1974,16 @@ pub(crate) fn pg_type_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecE
                     domain_base: None,
                     range_align: match ty.name {
                         "name" => Some("c"),
-                        "aclitem" | "_aclitem" | "tsrange" | "tstzrange" | "int8range" => Some("d"),
+                        "aclitem"
+                        | "_aclitem"
+                        | "point"
+                        | "lseg"
+                        | "box"
+                        | "line"
+                        | "circle"
+                        | "tsrange"
+                        | "tstzrange"
+                        | "int8range" => Some("d"),
                         _ => None,
                     },
                 },
@@ -5718,6 +5727,16 @@ mod tests {
         assert_eq!(attribute_layout(ColumnType::Name, None), (64, false, b'c'));
         assert_eq!(attribute_layout(ColumnType::Float8, None), (8, true, b'd'));
         assert_eq!(attribute_layout(ColumnType::Int2, None), (2, true, b's'));
+    }
+
+    #[test]
+    fn point_type_uses_double_alignment() {
+        let point = pg_type_rows(&MemKv::default())
+            .expect("pg_type rows")
+            .into_iter()
+            .find(|row| row[0] == oid(600))
+            .expect("point pg_type row");
+        assert_eq!(point[22], Datum::InternalChar(b'd'));
     }
 
     #[test]
