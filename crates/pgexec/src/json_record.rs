@@ -209,13 +209,12 @@ impl RecordShape {
     /// omits, whose value is inherited unchanged either way.
     pub(crate) fn of_value(value: &RecordValue) -> Self {
         let fields = value
-            .values
-            .iter()
+            .field_names()
+            .into_iter()
             .enumerate()
-            .filter_map(|(index, datum)| {
-                value
-                    .field_name(index)
-                    .map(|name| (name, datum.column_type().unwrap_or(ColumnType::Text)))
+            .map(|(index, name)| {
+                let datum = value.values.get(index).unwrap_or(&Datum::Null);
+                (name, datum.column_type().unwrap_or(ColumnType::Text))
             })
             .collect();
         RecordShape { fields }

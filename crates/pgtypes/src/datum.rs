@@ -2329,6 +2329,24 @@ impl RecordValue {
         }
         self.names.get(index).cloned()
     }
+
+    /// The current visible field names. A named composite uses its live type
+    /// descriptor, so attributes added after this value was stored still read
+    /// as trailing `NULL`s.
+    #[must_use]
+    pub fn field_names(&self) -> Vec<String> {
+        if let Some(reference) = self.ty
+            && let Some(ty) = crate::usertype::lookup_oid(reference.oid)
+            && let Some(fields) = ty.fields()
+        {
+            return fields
+                .iter()
+                .filter(|field| !field.dropped)
+                .map(|field| field.name.clone())
+                .collect();
+        }
+        self.names.to_vec()
+    }
 }
 
 /// `PostgreSQL`'s `record_eq`: positional over the field values. Field *names*

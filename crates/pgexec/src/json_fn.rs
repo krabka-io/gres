@@ -2219,12 +2219,12 @@ pub(crate) fn record_pairs(
     r: &crabka_pgtypes::RecordValue,
     ctx: &EvalCtx,
 ) -> Result<Vec<(String, JsonbValue)>, ExecError> {
-    r.values
-        .iter()
+    r.field_names()
+        .into_iter()
         .enumerate()
-        .filter_map(|(index, value)| {
-            r.field_name(index)
-                .map(|name| to_jsonb(value, ctx).map(|value| (name, value)))
+        .map(|(index, name)| {
+            let value = r.values.get(index).unwrap_or(&Datum::Null);
+            to_jsonb(value, ctx).map(|value| (name, value))
         })
         .collect()
 }
@@ -2349,14 +2349,12 @@ fn write_json(d: &Datum, punct: Punct, ctx: &EvalCtx, out: &mut String) -> Resul
         Datum::Record(r) => {
             out.push('{');
             let mut first = true;
-            for (index, value) in r.values.iter().enumerate() {
-                let Some(name) = r.field_name(index) else {
-                    continue;
-                };
+            for (index, name) in r.field_names().into_iter().enumerate() {
                 out.push_str(if first { punct.pad } else { punct.comma });
                 first = false;
                 json::write_string(&name, out);
                 out.push_str(punct.colon);
+                let value = r.values.get(index).unwrap_or(&Datum::Null);
                 write_json(value, Punct::COMPACT, ctx, out)?;
             }
             if !first {
