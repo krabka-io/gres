@@ -2990,6 +2990,11 @@ pub struct SqlSession {
     /// `EvalCtx`'s `time_zone`; `SET`/`SHOW`/`RESET timezone` mutate/read it, and
     /// COMMIT/ROLLBACK promote/revert it in lockstep with the transaction outcome.
     guc: GucState,
+    /// Commands that evaluate user expressions while maintaining stored
+    /// objects expose PostgreSQL's restricted `search_path` to those
+    /// expressions. Name resolution keeps the caller's path: object names and
+    /// already-bound function calls must still work.
+    maintenance_search_path: bool,
     /// SP40: the foreign-table scanner (shared from the engine). `Some` when the
     /// binary registered a `kafka_fdw` via `SqlEngine::set_foreign_scanner`; a
     /// `SELECT` from a foreign table with this `None` returns `0A000`.
@@ -3592,6 +3597,7 @@ impl SqlSession {
                 crate::math_fn::entropy_seed(),
             ))),
             guc: GucState::default(),
+            maintenance_search_path: false,
             foreign_scanner,
             range_scanner,
             join_stats,
@@ -3666,6 +3672,14 @@ impl SqlSession {
             backend_id: self.backend_pid,
             database: self.database.clone(),
         }
+    }
+
+    fn guc_runtime_values(&self) -> BTreeMap<String, String> {
+        let mut values = self.guc.effective_map();
+        if self.maintenance_search_path {
+            values.insert("search_path".into(), "pg_catalog, pg_temp".into());
+        }
+        values
     }
 
     fn type_search_schemas(&self) -> Result<Vec<String>, ExecError> {
@@ -4188,7 +4202,7 @@ impl SqlSession {
         }
         let catalog = Arc::clone(&self.catalog_kv);
         let ctx = self.eval_ctx();
-        let guc_values = self.guc.effective_map();
+        let guc_values = self.guc_runtime_values();
         let guc_settings = self.guc.settings();
         let prepared = self.prepared_statement_rows();
         let cursors = self.cursor_rows();
@@ -10385,7 +10399,7 @@ impl SqlSession {
         let session_locks = Arc::clone(&self.session_locks);
         let row_locks = Arc::clone(&self.lockmgr);
         let session_lock_id = self.session_lock_id;
-        let guc_values = self.guc.effective_map();
+        let guc_values = self.guc_runtime_values();
         let row_security = self.guc.row_security();
         let guc_settings = self.guc.settings();
         let prepared = self.prepared_statement_rows();
@@ -11413,6 +11427,16 @@ impl SqlSession {
         &mut self,
         stmt: &Statement,
     ) -> Result<QueryResult, ExecError> {
+        let previous = std::mem::replace(&mut self.maintenance_search_path, true);
+        let result = self.run_create_materialized_view_inner(stmt).await;
+        self.maintenance_search_path = previous;
+        result
+    }
+
+    async fn run_create_materialized_view_inner(
+        &mut self,
+        stmt: &Statement,
+    ) -> Result<QueryResult, ExecError> {
         let Statement::CreateMaterializedView {
             name,
             if_not_exists,
@@ -11487,6 +11511,16 @@ impl SqlSession {
     /// autocommit refresh commits the empty first, and a query that raises then
     /// leaves an empty relation the catalog still calls populated.
     async fn run_refresh_materialized_view(
+        &mut self,
+        stmt: &Statement,
+    ) -> Result<QueryResult, ExecError> {
+        let previous = std::mem::replace(&mut self.maintenance_search_path, true);
+        let result = self.run_refresh_materialized_view_inner(stmt).await;
+        self.maintenance_search_path = previous;
+        result
+    }
+
+    async fn run_refresh_materialized_view_inner(
         &mut self,
         stmt: &Statement,
     ) -> Result<QueryResult, ExecError> {
@@ -12520,8 +12554,14 @@ impl SqlSession {
             _ => None,
         };
         let check_function_bodies = self.guc.effective("check_function_bodies")? == "on";
-        let (result, ops) =
-            crate::exec::execute_ddl(&*self.catalog_kv, stmt, fctx, check_function_bodies)?;
+        let (ddl_result, guc_mutations) = with_guc_runtime(
+            self.guc_runtime_values(),
+            self.guc.settings(),
+            self.prepared_statement_rows(),
+            self.cursor_rows(),
+            || crate::exec::execute_ddl(&*self.catalog_kv, stmt, fctx, check_function_bodies),
+        );
+        let (result, ops) = ddl_result?;
         // An open block needs the before-images whether or not it has taken a
         // savepoint: DDL commits its batch here and now, so `ROLLBACK` has
         // nothing but these images to undo it with.
@@ -12587,6 +12627,7 @@ impl SqlSession {
         drop(_g);
         drop(_id_guard);
         drop(_unique_guard);
+        self.apply_guc_mutations(guc_mutations)?;
         self.record_catalog_undo(&catalog_before);
         let event_result = async {
             let ddl_end_context = if let Some(dropped) = &drop_event_context {
@@ -13021,7 +13062,7 @@ impl SqlSession {
         let lock_owner = self.lock_owner;
         let current_role = self.current_role.clone();
         let session_user = self.session_user.clone();
-        let guc_values = self.guc.effective_map();
+        let guc_values = self.guc_runtime_values();
         let row_security = self.guc.row_security();
         let guc_settings = self.guc.settings();
         let prepared = self.prepared_statement_rows();
@@ -14146,7 +14187,7 @@ impl SqlSession {
         let kv = Arc::clone(&self.kv);
         let seq = Arc::clone(&self.seq);
         let stmt = stmt.clone();
-        let guc_values = self.guc.effective_map();
+        let guc_values = self.guc_runtime_values();
         let guc_settings = self.guc.settings();
         let prepared = self.prepared_statement_rows();
         let cursors = self.cursor_rows();
@@ -29557,6 +29598,32 @@ mod tests {
             );
         }
     }
+
+    #[tokio::test]
+    async fn materialized_view_population_uses_the_maintenance_search_path() {
+        let engine = SqlEngine::new();
+        let mut session = engine.connect();
+        session
+            .simple_query(
+                "CREATE SCHEMA maint; \
+                 SET search_path = maint; \
+                 CREATE FUNCTION path_fn() RETURNS text IMMUTABLE LANGUAGE plpgsql AS \
+                 $$ BEGIN RETURN current_setting('search_path'); END $$; \
+                 CREATE MATERIALIZED VIEW mv AS SELECT path_fn() AS path",
+            )
+            .await
+            .expect("create materialized view");
+
+        assert!(
+            rows_or_sqlstate(&mut session, "SELECT path FROM mv").await
+                == Ok(vec![vec!["pg_catalog, pg_temp".into()]])
+        );
+        assert!(
+            rows_or_sqlstate(&mut session, "SELECT current_setting('search_path')").await
+                == Ok(vec![vec!["maint".into()]])
+        );
+    }
+
 }
 #[cfg(test)]
 mod compatibility_refusal_tests {
@@ -29693,9 +29760,10 @@ mod notify_and_binary_parameter_tests {
             assert!(
                 param_column_type(&param).expect("a known oid") == Some(expected),
                 "oid {oid}"
-            );
-        }
+        );
     }
+
+}
 
     #[test]
     fn an_unsupported_parameter_oid_is_still_rejected() {
