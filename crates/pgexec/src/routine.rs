@@ -6718,17 +6718,21 @@ fn decode_builtin_pg_proc_rows() -> Result<Vec<Vec<Datum>>, ExecError> {
                 Datum::Int2(short(argument_count)?),
                 Datum::Int2(short(default_count)?),
                 Datum::Oid(int(result_type)?.cast_unsigned()),
-                Datum::OidVector(crabka_pgtypes::ArrayValue::with_dims(
-                    crabka_pgtypes::ElemType::Int4,
-                    argument_types
+                // `oidvector` retains its zero-length `[0:-1]` header. A
+                // regular empty array normalizes to zero dimensions, but
+                // `pg_proc.proargtypes` relies on this distinction to tell
+                // `count(*)` from `count(any)`.
+                Datum::OidVector(crabka_pgtypes::ArrayValue {
+                    elem: crabka_pgtypes::ElemType::Int4,
+                    elems: argument_types
                         .split_whitespace()
                         .map(|value| int(value).map(Datum::Int4))
                         .collect::<Result<Vec<_>, _>>()?,
-                    vec![crabka_pgtypes::ArrayDim::new(
+                    dims: vec![crabka_pgtypes::ArrayDim::new(
                         0,
                         i32::from(short(argument_count)?),
                     )],
-                )),
+                }),
                 match all_argument_types {
                     Some(types) => Datum::Array(crabka_pgtypes::ArrayValue::new(
                         crabka_pgtypes::ElemType::from_column_type(crabka_pgtypes::ColumnType::Oid)
@@ -7291,6 +7295,18 @@ mod tests {
             .expect("starts_with row");
         assert!(starts_with[8] == Datum::Int4(6242));
         assert!(rows.iter().all(|row| matches!(row[8], Datum::Int4(_))));
+    }
+
+    #[test]
+    fn builtin_count_aggregates_include_star_and_any() {
+        let rows = builtin_pg_proc_rows().expect("built-in pg_proc rows");
+        let counts = rows
+            .iter()
+            .filter(|row| row[1] == Datum::Text("count".into()) && row[9] == Datum::Text("a".into()))
+            .collect::<Vec<_>>();
+        assert_eq!(counts.len(), 2, "count aggregate signatures: {counts:?}");
+        assert!(counts.iter().any(|row| row[16] == Datum::Int2(0)));
+        assert!(counts.iter().any(|row| row[16] == Datum::Int2(1)));
     }
 
     #[test]
