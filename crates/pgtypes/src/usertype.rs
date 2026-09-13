@@ -184,6 +184,9 @@ pub struct CompositeField {
     pub name: String,
     /// `pg_attribute.atttypid`, as a column type.
     pub ty: ColumnType,
+    /// `pg_attribute.attisdropped`. Dropped attributes keep their ordinal so
+    /// stored composite values and row types remain positionally stable.
+    pub dropped: bool,
 }
 
 /// One `CHECK` constraint on a domain.
@@ -1264,6 +1267,7 @@ mod tests {
             UserTypeBody::Composite(vec![CompositeField {
                 name: "x".into(),
                 ty: ColumnType::Int4,
+                dropped: false,
             }]),
         );
         let found = lookup("UT_REG_COMPOSITE").expect("case-insensitive lookup");

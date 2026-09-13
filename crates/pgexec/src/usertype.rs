@@ -713,6 +713,7 @@ fn composite_fields(fields: &[CompositeFieldDef]) -> Result<Vec<CompositeField>,
         out.push(CompositeField {
             name: field.name.clone(),
             ty: field.ty,
+            dropped: false,
         });
     }
     Ok(out)
@@ -2114,6 +2115,7 @@ mod tests {
             UserTypeBody::Composite(vec![CompositeField {
                 name: "value".into(),
                 ty: ColumnType::Int4,
+                dropped: false,
             }]),
         )
         .expect("composite");

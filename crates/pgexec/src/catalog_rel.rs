@@ -713,6 +713,7 @@ fn relation_rowtype_definition(
                 .map(|column| CompositeField {
                     name: column.name.clone(),
                     ty: column.ty,
+                    dropped: false,
                 })
                 .collect(),
         ),

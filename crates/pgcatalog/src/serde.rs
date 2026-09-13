@@ -47,7 +47,7 @@ pub type DecodedSchema = (
 /// foreign, or materialized view — is written with this version byte; a flag
 /// byte after the owner distinguishes ordinary (`0`) from foreign (`1`), and a
 /// `CHECK` constraint list and a materialized-view flag byte close the record.
-pub const SCHEMA_VERSION: u8 = 35;
+pub const SCHEMA_VERSION: u8 = 36;
 
 /// The `interval` type payload normally is one precision byte. This marker
 /// introduces the packed field-range typmod that follows it.
@@ -2348,6 +2348,7 @@ pub fn serialize_user_type(ty: &UserType) -> Vec<u8> {
             for field in fields {
                 write_str(&mut out, &field.name);
                 write_type(&mut out, field.ty);
+                out.push(u8::from(field.dropped));
             }
         }
         UserTypeBody::Enum(labels) => {
@@ -2492,6 +2493,7 @@ pub(crate) fn deserialize_user_type_with(
                 fields.push(CompositeField {
                     name: field_name,
                     ty: read_type_with(&mut cur, resolve_user_type)?,
+                    dropped: take_u8(&mut cur)? != 0,
                 });
             }
             UserTypeBody::Composite(fields)
@@ -3793,6 +3795,29 @@ mod tests {
                 multirange_schema: Some("multirange_schema".into()),
                 multirange_name: Some("multirange_of_text".into()),
             }),
+        };
+        assert_eq!(deserialize_user_type(&serialize_user_type(&ty)), Ok(ty));
+    }
+
+    #[test]
+    fn roundtrip_composite_type_keeps_dropped_attributes() {
+        let ty = UserType {
+            oid: 300_001,
+            array_oid: crabka_pgtypes::usertype::user_array_oid(300_001),
+            schema: "catalog_types".into(),
+            name: "composite_with_gap".into(),
+            body: UserTypeBody::Composite(vec![
+                CompositeField {
+                    name: "kept".into(),
+                    ty: ColumnType::Int4,
+                    dropped: false,
+                },
+                CompositeField {
+                    name: "........pg.dropped.2........".into(),
+                    ty: ColumnType::Int4,
+                    dropped: true,
+                },
+            ]),
         };
         assert_eq!(deserialize_user_type(&serialize_user_type(&ty)), Ok(ty));
     }
