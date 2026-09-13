@@ -5565,7 +5565,6 @@ impl SqlSession {
             return Ok(None);
         };
         if query.with.is_some()
-            || query.locking.is_some()
             || select.distinct.dedups()
             || !select.group_by.is_empty()
             || select.grouping.is_some()
@@ -23954,6 +23953,10 @@ mod tests {
             .await
             .expect("declare");
         assert!(rows_or_sqlstate(&mut s, "FETCH FROM c").await == Ok(vec![vec!["1".into()]]));
+        s.simple_query("UPDATE t SET id = 2 WHERE CURRENT OF c")
+            .await
+            .expect("update current row");
+        assert!(rows_or_sqlstate(&mut s, "SELECT id FROM t").await == Ok(vec![vec!["2".into()]]));
         s.simple_query("ROLLBACK").await.expect("rollback");
     }
 

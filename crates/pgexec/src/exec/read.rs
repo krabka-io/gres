@@ -265,6 +265,9 @@ pub(super) async fn execute_read_locking_relation(
     } = resolve_select_subqueries(read_ctx, s)?;
     let s = &resolved;
     let mut scope = Scope::single(&t, &qualifier);
+    let refs = crate::scope::StatementRefs::of_select(s);
+    let stamp = crate::scope::SystemColumns::of(Some(&refs), &t).stamp(t.id)?;
+    stamp.extend_scope(&mut scope, &qualifier);
     let mut binder = correlated.then(|| {
         LateralBinder::new(catalog_kv, read_ctx.fctx.resolution, read_ctx.ctes)
             .with_initplans(initplans)
@@ -305,6 +308,8 @@ pub(super) async fn execute_read_locking_relation(
         for ScannedRow {
             rowid,
             xmin: scanned_xmin,
+            cmin: scanned_cmin,
+            cmax: scanned_cmax,
             row: mut scanned_row,
             ..
         } in read_ctx.range_scanner.scan(ScanRequest {
@@ -331,7 +336,15 @@ pub(super) async fn execute_read_locking_relation(
                 ctx,
                 crate::scope::GeneratedReads::every(),
             )?;
-            let scanned_row = reshape_row(scanned_row, ordinals);
+            let mut scanned_row = reshape_row(scanned_row, ordinals);
+            stamp.extend_row(
+                &mut scanned_row,
+                rowid,
+                scanned_xmin,
+                0,
+                scanned_cmin,
+                scanned_cmax,
+            );
             // 0. Row security first: a row a policy hides must not be locked,
             //    because a lock is observable through NOWAIT, SKIP LOCKED and
             //    an ordinary waiter.
@@ -384,7 +397,7 @@ pub(super) async fn execute_read_locking_relation(
             // 3. EvalPlanQual: re-read the row under the lock (40001 under RR
             //    if changed since our snapshot; RC re-finds the latest live
             //    version).
-            let Some((_cur_rowid, _cur_key_xid, cur_xmin, _cur_cmin, _cur_cmax, cur_row)) =
+            let Some((cur_rowid, _cur_key_xid, cur_xmin, cur_cmin, cur_cmax, cur_row)) =
                 eval_plan_qual(
                     &MutationContext {
                         kv,
@@ -403,7 +416,8 @@ pub(super) async fn execute_read_locking_relation(
             else {
                 continue; // deleted by a concurrent committed txn — skip
             };
-            let cur_row = reshape_row(cur_row, ordinals);
+            let mut cur_row = reshape_row(cur_row, ordinals);
+            stamp.extend_row(&mut cur_row, cur_rowid, cur_xmin, 0, cur_cmin, cur_cmax);
 
             // 4. Re-apply the filters only when EvalPlanQual found a newer
             //    tuple version. Re-running a volatile predicate against the
