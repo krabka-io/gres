@@ -206,7 +206,7 @@ pub const TIMESTAMP_NEG_INFINITY: DateTime = DateTime::MIN;
 /// Whether a `date` is one of the two non-finite values.
 #[must_use]
 pub fn date_is_infinite(d: PgDate) -> bool {
-    d.finite().is_none()
+    !matches!(d, PgDate::Finite(_))
 }
 
 /// Whether a `timestamp` is one of the two non-finite values.
