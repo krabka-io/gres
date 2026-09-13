@@ -191,6 +191,9 @@ pub(crate) fn datetime_func_result_type(
         // timestamp → timestamptz, timestamptz → timestamp, timetz → timetz.
         DtFunc::Timezone => {
             require_arity(fc, n == 1 || n == 2)?;
+            if n == 2 && crate::eval::is_unknown_literal(&args[1]) {
+                return Ok(ColumnType::Timestamp);
+            }
             match crate::eval::infer_type(&args[n - 1], scope)? {
                 ColumnType::Timestamp => ColumnType::Timestamptz,
                 ColumnType::Timestamptz => ColumnType::Timestamp,
@@ -470,11 +473,20 @@ pub(crate) fn eval_datetime(
             // sugar for `AT TIME ZONE current_setting('TimeZone')`, which is
             // why the session zone is read here instead of being planted as an
             // argument at parse time.
-            let [zone, value] = match args {
-                [value] => [None, Some(eval_child(value)?)],
+            let mut values = args.iter().map(&mut eval_child).collect::<Result<Vec<_>, _>>()?;
+            if args.len() == 2 {
+                crate::eval::coerce_unknown_args(
+                    args,
+                    &mut values,
+                    &[Some(ColumnType::Text), Some(ColumnType::Timestamptz)],
+                    ctx,
+                )?;
+            }
+            let [zone, value] = match values.as_slice() {
+                [value] => [None, Some(value.clone())],
                 // Zone FIRST: that is the argument order `AT TIME ZONE` lowers
                 // to, and `pg_proc` declares.
-                [zone, value] => [Some(eval_child(zone)?), Some(eval_child(value)?)],
+                [zone, value] => [Some(zone.clone()), Some(value.clone())],
                 _ => unreachable!("arity checked above"),
             };
             let Some(value) = value else {
@@ -2866,6 +2878,12 @@ mod tests {
         assert_eq!(
             ev("TIMESTAMP '2024-01-15 12:00:00' AT TIME ZONE 'UTC'", &ctx),
             Datum::Timestamptz("2024-01-15T12:00:00Z".parse().expect("ts"))
+        );
+        assert_eq!(
+            ev("'2024-01-15 12:00:00' AT TIME ZONE 'UTC'", &ctx),
+            Datum::Timestamp(
+                crabka_pgtypes::datetime::parse_timestamp("2024-01-15 12:00:00").expect("ts")
+            )
         );
     }
 
