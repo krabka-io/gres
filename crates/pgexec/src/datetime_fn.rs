@@ -517,9 +517,16 @@ pub(crate) fn eval_datetime(
         }
         DtFunc::DateBin => {
             require_arity(fc, args.len() == 3)?;
-            let stride = eval_child(&args[0])?;
-            let source = eval_child(&args[1])?;
-            let origin = eval_child(&args[2])?;
+            let mut values = args.iter().map(&mut eval_child).collect::<Result<Vec<_>, _>>()?;
+            crate::eval::coerce_unknown_args(
+                args,
+                &mut values,
+                &[Some(ColumnType::Interval), None, None],
+                ctx,
+            )?;
+            let [stride, source, origin] = values.as_slice() else {
+                unreachable!("arity checked above")
+            };
             if stride.is_null() || source.is_null() || origin.is_null() {
                 return Ok(Datum::Null);
             }
