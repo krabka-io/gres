@@ -1494,6 +1494,12 @@ fn trunc_datetime(unit: &str, type_name: &str, dt: DateTime) -> Result<DateTime,
 
 /// Truncate an interval to `unit`, and zero out the finer stored fields.
 fn trunc_interval(unit: &str, iv: Interval) -> Result<Interval, ExecError> {
+    if unit == "week" {
+        return Err(ExecError::UnsupportedWithDetail {
+            message: format!("unit \"{unit}\" not supported for type interval"),
+            detail: "Months usually have fractional weeks.".into(),
+        });
+    }
     if iv.is_infinite() {
         return Ok(iv);
     }
