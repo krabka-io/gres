@@ -3,7 +3,7 @@ Evaluate target_has_atomic for the aarch64/x86_64 triples configured here.
 diff --git a/rs/private/cfg_parser.bzl b/rs/private/cfg_parser.bzl
 --- a/rs/private/cfg_parser.bzl
 +++ b/rs/private/cfg_parser.bzl
-@@ -259,6 +259,9 @@ def _eval_eq(ctx, key, value, features):
+@@ -259,6 +259,9 @@
          return value in features
      if key == "target_feature":
          return _target_has_feature(ctx, value)
@@ -16,10 +16,13 @@ diff --git a/rs/private/cfg_parser.bzl b/rs/private/cfg_parser.bzl
 diff --git a/rs/private/cfg_parser_test.bzl b/rs/private/cfg_parser_test.bzl
 --- a/rs/private/cfg_parser_test.bzl
 +++ b/rs/private/cfg_parser_test.bzl
-@@ -73,3 +73,6 @@ def _cfg_parser_smoke_test_impl(ctx):
+@@ -73,6 +73,9 @@
      asserts.false(env, cfg_matches(_cfg('feature = "serde"'), mac))
      asserts.true(env, cfg_matches(_cfg('target_feature = "sse2"'), linux_gnu))
      asserts.false(env, cfg_matches(_cfg('target_feature = "sse2"'), mac))
 +    asserts.true(env, cfg_matches(_cfg('target_has_atomic = "64"'), linux_gnu))
 +    asserts.true(env, cfg_matches(_cfg('target_has_atomic = "ptr"'), mac))
 +    asserts.false(env, cfg_matches(_cfg('target_has_atomic = "64"'), wasm))
+ 
+     triples = [mac, linux_gnu, linux_musl, win, win_gnu, win_gnullvm, wasm, riscv32imac, riscv64gc]
+ 
