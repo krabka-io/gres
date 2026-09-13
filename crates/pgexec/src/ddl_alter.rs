@@ -1373,11 +1373,22 @@ pub(crate) fn execute_ddl(
                     // DDL result and catalog shape aligned until P2 persists it.
                     Ok((command("ALTER INDEX"), Vec::new()))
                 }
-                AlterIndexAction::SetAttributeOptions { column, options: _ } => {
-                    if !index.columns.iter().any(|key| key == column) {
-                        return Err(ExecError::UndefinedColumn(column.clone()));
-                    }
-                    Ok((command("ALTER INDEX"), Vec::new()))
+                AlterIndexAction::SetAttributeOptions { .. } => {
+                    let detail = if crate::partition::is_partitioned(kv, &index.table)? {
+                        "This operation is not supported for partitioned indexes."
+                    } else {
+                        "This operation is not supported for indexes."
+                    };
+                    Err(ExecError::Remote(
+                        crabka_pgwire::error::PgError::error(
+                            "42P17",
+                            format!(
+                                "ALTER action ALTER COLUMN ... SET cannot be performed on relation \"{}\"",
+                                index.name
+                            ),
+                        )
+                        .with_detail(detail),
+                    ))
                 }
                 // The written options were checked against the reloption
                 // catalog at parse time. Crabka's index storage has no page

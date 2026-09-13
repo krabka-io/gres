@@ -4930,11 +4930,43 @@ async fn create_index_resolves_and_validates_operator_classes() {
     )
     .await;
     run_s(&mut session, "CREATE INDEX i_bpchar ON t (b bpchar_ops)").await;
+    let attribute_options = session
+        .simple_query("ALTER INDEX i_bpchar ALTER COLUMN b SET (n_distinct = 100)")
+        .await
+        .expect_err("index attribute options are rejected");
+    assert!(attribute_options.code == "42P17");
+    assert!(
+        attribute_options.message
+            == "ALTER action ALTER COLUMN ... SET cannot be performed on relation \"i_bpchar\""
+    );
+    assert!(
+        attribute_options
+            .diagnostics
+            .as_ref()
+            .and_then(|fields| fields.detail.as_deref())
+            == Some("This operation is not supported for indexes.")
+    );
     run_s(
         &mut session,
-        "ALTER INDEX i_bpchar ALTER COLUMN b SET (n_distinct = 100)",
+        "CREATE TABLE partitioned_index_t (a int) PARTITION BY RANGE (a)",
     )
     .await;
+    run_s(
+        &mut session,
+        "CREATE INDEX partitioned_index_i ON partitioned_index_t (a)",
+    )
+    .await;
+    let partitioned_attribute_options = session
+        .simple_query("ALTER INDEX partitioned_index_i ALTER COLUMN a SET (n_distinct = 100)")
+        .await
+        .expect_err("partitioned index attribute options are rejected");
+    assert!(
+        partitioned_attribute_options
+            .diagnostics
+            .as_ref()
+            .and_then(|fields| fields.detail.as_deref())
+            == Some("This operation is not supported for partitioned indexes.")
+    );
     run_s(&mut session, "CREATE INDEX i7 ON t ((b || b) text_ops)").await;
     let index = crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("i6"))
         .expect("index metadata");
@@ -4958,6 +4990,12 @@ async fn create_index_resolves_and_validates_operator_classes() {
         crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("i7"))
             .expect("expression index metadata");
     assert!(expression_index.key_options[0].opclass.as_deref() == Some("text_ops"));
+    let opclass_options = session
+        .simple_query("CREATE INDEX invalid_btree_options ON t (a int4_ops (foo=1))")
+        .await
+        .expect_err("btree opclass options are rejected");
+    assert!(opclass_options.code == "42P17");
+    assert!(opclass_options.message == "operator class int4_ops has no options");
     run_s(&mut session, "CREATE TABLE g (i tsvector, j tsvector)").await;
     run_s(
         &mut session,

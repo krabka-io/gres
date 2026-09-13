@@ -53,6 +53,11 @@ pub(crate) fn index_key_options(
                 {
                     Some(tsvector_opclass_options(options)?)
                 }
+                (Some(opclass), Some(_)) => {
+                    return Err(ExecError::InvalidObjectDefinition(format!(
+                        "operator class {opclass} has no options"
+                    )));
+                }
                 (_, options) => options.clone(),
             };
             Ok(crabka_pgcatalog::IndexKeyOptions {
