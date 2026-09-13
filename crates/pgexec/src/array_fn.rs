@@ -1168,6 +1168,28 @@ pub(crate) fn array_assign(
     into: ElemType,
     ctx: &EvalCtx,
 ) -> Result<Datum, ExecError> {
+    let empty = matches!(current, Datum::Null)
+        || matches!(current, Datum::Array(array) if array.dims.is_empty());
+    if empty
+        && subscripts.iter().any(|subscript| {
+            matches!(
+                subscript,
+                SubscriptArg::Slice {
+                    lower: None,
+                    ..
+                } | SubscriptArg::Slice {
+                    upper: None,
+                    ..
+                }
+            )
+        })
+    {
+        return Err(ExecError::FunctionErrorWithDetail {
+            sqlstate: "2202E",
+            message: "array slice subscript must provide both boundaries",
+            detail: "When assigning to a slice of an empty array value, slice boundaries must be fully specified.",
+        });
+    }
     let array = match current {
         Datum::Null => ArrayValue::new(into, Vec::new()),
         Datum::Array(a) => a.clone(),
@@ -3056,6 +3078,24 @@ mod tests {
                 .expect_err("refused");
             assert!(sqlstate(error) == *code, "{start:?} {subscripts:?}");
         }
+
+        let error = array_assign(
+            &Datum::Null,
+            &[slice(None, None)],
+            &int_arr("{1,2,3}"),
+            ElemType::Int4,
+            &ctx(),
+        )
+        .expect_err("empty array slice needs both bounds")
+        .into_pg();
+        assert!(error.code == "2202E");
+        assert!(error.message == "array slice subscript must provide both boundaries");
+        assert!(
+            error.diagnostics.as_ref().and_then(|d| d.detail.as_deref())
+                == Some(
+                    "When assigning to a slice of an empty array value, slice boundaries must be fully specified."
+                )
+        );
     }
 
     /// The dimension-reporting functions over the shapes that distinguish them.
