@@ -23900,6 +23900,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn sql_function_binds_parameters_in_a_cursor_declaration() {
+        use assert2::assert;
+
+        let engine = SqlEngine::new();
+        let mut s = engine.connect();
+        s.simple_query("CREATE TABLE t (value text)")
+            .await
+            .expect("ddl");
+        s.simple_query("INSERT INTO t VALUES ('apple'), ('banana')")
+            .await
+            .expect("seed");
+        s.simple_query(
+            "CREATE FUNCTION declare_filtered_cursor(text) RETURNS void \
+             AS 'DECLARE c CURSOR FOR SELECT value FROM t WHERE value LIKE $1' LANGUAGE SQL",
+        )
+        .await
+        .expect("function");
+        s.simple_query("BEGIN").await.expect("begin");
+        s.simple_query("SELECT declare_filtered_cursor('a%')")
+            .await
+            .expect("declare through function");
+        assert!(
+            rows_or_sqlstate(&mut s, "FETCH ALL FROM c").await == Ok(vec![vec!["apple".into()]])
+        );
+        s.simple_query("ROLLBACK").await.expect("rollback");
+    }
+
+    #[tokio::test]
     async fn where_current_of_changes_only_the_cursor_row() {
         use assert2::assert;
 
@@ -24037,6 +24065,9 @@ mod tests {
         s.simple_query("DECLARE h CURSOR WITH HOLD FOR SELECT id FROM t ORDER BY id")
             .await
             .expect("declare");
+        s.simple_query("DECLARE n NO SCROLL CURSOR WITH HOLD FOR SELECT id FROM t ORDER BY id")
+            .await
+            .expect("declare no-scroll");
         s.simple_query("DECLARE p CURSOR FOR SELECT id FROM t ORDER BY id")
             .await
             .expect("declare");
@@ -24045,6 +24076,10 @@ mod tests {
             rows_or_sqlstate(&mut s, "FETCH ALL FROM h").await
                 == Ok(vec![vec!["1".into()], vec!["2".into()]])
         );
+        s.simple_query("FETCH ABSOLUTE 2 FROM n")
+            .await
+            .expect("forward absolute fetch");
+        assert!(sqlstate(&mut s, "FETCH ABSOLUTE 2 FROM n").await == "55000");
         assert!(sqlstate(&mut s, "FETCH ALL FROM p").await == "34000");
         s.simple_query("CLOSE h").await.expect("close");
     }

@@ -4838,6 +4838,9 @@ fn rewrite_statement_with_ctes(
         Statement::Query(query) => {
             *query = binder.rewrite_query(query, parent_ctes)?;
         }
+        Statement::DeclareCursor { query, .. } => {
+            **query = binder.rewrite_query(query, parent_ctes)?;
+        }
         Statement::Insert {
             table,
             source,
