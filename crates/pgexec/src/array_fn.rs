@@ -1930,6 +1930,9 @@ fn array_sort(
     };
     let a = array_value(array, name)?;
     let slices = outer_slices(a);
+    if slices.len() > 1 {
+        crate::eval::require_comparison_function(a.elem.column_type())?;
+    }
     let mut order: Vec<usize> = (0..slices.len()).collect();
     let mut failure = None;
     order.sort_by(|x, y| {
@@ -3333,6 +3336,18 @@ mod tests {
             let error = call(name, args.clone()).expect_err(name);
             assert!(sqlstate(error) == *code, "{name} {args:?}");
         }
+        let xid = ElemType::from_column_type(ColumnType::Xid).expect("xid has an array type");
+        assert!(
+            datum_text(
+                &call("array_sort", vec![array_expr("{1}", xid)]).expect("one xid"),
+                &ctx()
+            ) == "{1}"
+        );
+        let error = call("array_sort", vec![array_expr("{1,2,3}", xid)])
+            .expect_err("xid has no comparison function")
+            .into_pg();
+        assert!(error.code == "42883");
+        assert!(error.message == "could not identify a comparison function for type xid");
     }
 
     /// `array_cat` and `||` join along the OUTERMOST dimension, so the operand
