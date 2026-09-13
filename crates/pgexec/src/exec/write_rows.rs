@@ -249,6 +249,7 @@ pub(super) fn build_insert_row_with_subscripts(
         row[*slot] = assign_target_indirections(
             &row[*slot],
             table.columns[*slot].ty,
+            Some(&table.columns[*slot].name),
             indirections,
             &value,
             &Scope::empty(),

@@ -107,6 +107,7 @@ pub(super) fn target_indirection_type(
 pub(super) fn assign_target_indirections(
     base: &Datum,
     ty: ColumnType,
+    target_column: Option<&str>,
     indirections: &[TargetIndirection],
     value: &Datum,
     scope: &Scope,
@@ -175,6 +176,7 @@ pub(super) fn assign_target_indirections(
             record.values[index] = assign_target_indirections(
                 &record.values[index],
                 fields[index].ty,
+                target_column,
                 rest,
                 value,
                 scope,
@@ -197,6 +199,23 @@ pub(super) fn assign_target_indirections(
                 .collect::<Vec<_>>();
             let args = crate::eval::eval_assignment_subscripts(&subscripts, scope, row, ctx)?;
             if let Some(elem) = array_assignment_element(ty) {
+                if count == indirections.len()
+                    && let Some(column) = target_column
+                {
+                    let required = target_indirection_type(ty, indirections)?;
+                    if let Err(error) = coerce(value.clone(), required, ctx) {
+                        if let ExecError::TypeMismatch(_) = error {
+                            return Err(ExecError::SubscriptedAssignmentTypeMismatch {
+                                column: column.into(),
+                                required: required.name().into(),
+                                actual: value
+                                    .column_type()
+                                    .map_or_else(|| "unknown".into(), |ty| ty.name().into()),
+                            });
+                        }
+                        return Err(error);
+                    }
+                }
                 if args.iter().any(crate::array_fn::SubscriptArg::is_slice)
                     && count == indirections.len()
                 {
@@ -206,6 +225,7 @@ pub(super) fn assign_target_indirections(
                 let replacement = assign_target_indirections(
                     &current,
                     elem.column_type(),
+                    target_column,
                     &indirections[count..],
                     value,
                     scope,

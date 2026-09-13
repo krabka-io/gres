@@ -5277,6 +5277,35 @@ async fn point_subscript_assignments_use_geometric_storage() {
 }
 
 #[tokio::test]
+async fn array_target_subscripts_name_the_required_value_type() {
+    use assert2::assert;
+
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    run_s(&mut session, "CREATE TABLE t (a int4[])").await;
+    for (sql, required) in [
+        ("INSERT INTO t (a[2]) VALUES (now())", "integer"),
+        ("INSERT INTO t (a[1:2]) VALUES (now())", "integer[]"),
+    ] {
+        let error = session.simple_query(sql).await.expect_err(sql);
+        assert!(error.code == "42804");
+        assert!(
+            error.message
+                == format!(
+                    "subscripted assignment to \"a\" requires type {required} but expression is of type timestamp with time zone"
+                )
+        );
+        assert!(
+            error
+                .diagnostics
+                .as_ref()
+                .and_then(|diagnostics| diagnostics.hint.as_deref())
+                == Some("You will need to rewrite or cast the expression.")
+        );
+    }
+}
+
+#[tokio::test]
 async fn drop_index_removes_catalog_metadata_and_local_entries_in_one_ddl_batch() {
     let engine = SqlEngine::new();
     let mut session = engine.connect();

@@ -57,6 +57,12 @@ pub enum ExecError {
     /// Wrong type in a context that demands a specific one (42804), for example
     /// a non-boolean WHERE.
     TypeMismatch(String),
+    /// An INSERT or UPDATE array target needs the type below its subscript path.
+    SubscriptedAssignmentTypeMismatch {
+        column: String,
+        required: String,
+        actual: String,
+    },
     /// A `WITH RECURSIVE` item breaks one of PostgreSQL's recursion rules
     /// (42P19): a missing or misplaced self-reference, or an unsupported
     /// construct in the recursive term.
@@ -1156,6 +1162,17 @@ impl ExecError {
                 PgError::error("0A000", message).with_detail(detail)
             }
             ExecError::TypeMismatch(m) => PgError::error("42804", m),
+            ExecError::SubscriptedAssignmentTypeMismatch {
+                column,
+                required,
+                actual,
+            } => PgError::error(
+                "42804",
+                format!(
+                    "subscripted assignment to \"{column}\" requires type {required} but expression is of type {actual}"
+                ),
+            )
+            .with_hint("You will need to rewrite or cast the expression."),
             ExecError::NotNullViolation { column, table, row } => {
                 let error = PgError::error(
                     "23502",
