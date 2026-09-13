@@ -781,8 +781,8 @@ fn class_index(class: OpClass) -> usize {
 }
 
 /// HDR histogram with the workspace-standard latency bounds. See
-/// `crates/bench-driver/src/hist.rs`. The recorder counts whole microseconds,
-/// which is the unit the bounds convert into.
+/// `crates/bench-driver/src/hist.rs` in krabka-io/krabka-broker. The recorder
+/// counts whole microseconds, which is the unit the bounds convert into.
 #[cfg(test)]
 fn new_histogram() -> Histogram<u64> {
     new_histogram_with_policy(LoadtestRuntimePolicy::default())

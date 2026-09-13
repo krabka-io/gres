@@ -27,11 +27,6 @@ ignore = [
     # operations (no PKINIT), so the network-observable timing leak does not
     # apply. The advisory has no fixed release available.
     "RUSTSEC-2023-0071",
-    # bincode is unmaintained (the team ceased development; v2.0.1 is considered
-    # feature-complete and "no safe upgrade is available"). This is an
-    # unmaintained notice, not a vulnerability. Pulled in transitively via
-    # `polars-utils` (the `polars` columnar-streams feature).
-    "RUSTSEC-2025-0141",
     # paste is unmaintained. Pulled in transitively by the pinned DataFusion
     # dependency used by the new internal profiles crates; no fixed release is
     # available through that DataFusion revision.
@@ -94,8 +89,6 @@ unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [
-    # Temporary DataFusion pin for profile query support.
-    "https://github.com/apache/datafusion",
     # Temporary compatibility pin until testcontainers-modules publishes a
     # release that depends on testcontainers 0.28.
     "https://github.com/testcontainers/testcontainers-rs-modules-community",

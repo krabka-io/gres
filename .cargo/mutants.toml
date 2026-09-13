@@ -21,16 +21,12 @@ timeout_multiplier = 5.0
 minimum_test_timeout = 120
 
 # Don't generate mutants in files that carry no unit-testable signal. The first
-# four mirror the codecov `ignore` list in codecov.yml: machine-emitted protocol
+# entries mirror the codecov `ignore` list in codecov.yml: machine-emitted protocol
 # codecs (encode/decode/populate per record type) and pure entrypoint/serve-loop
-# glue. The last three keep mutation focused on the system under test rather than
-# the test/bench harnesses themselves — `bench-driver` is the GKE load/measurement
-# harness whose `run`/`run_consumer` loops drive real brokers, producers, and
-# Prometheus end-to-end (not unit-testable), so it is a bench harness in the same
-# sense as `benches/**` even though it lives in its own crate.
+# glue. The last entries keep mutation focused on the system under test rather
+# than the test/bench harnesses themselves.
 exclude_globs = [
     "crates/protocol/generated/**",
-    "crates/grpc-gateway/src/bin/**",
     "crates/schema-registry/src/bin/**",
     # `crabka-broker`'s `main` is pure entrypoint glue: parse CLI args, derive the
     # controller listener + self single-voter set, build `BrokerConfig`, hand it to
@@ -38,44 +34,20 @@ exclude_globs = [
     # No unit-testable signal (no test constructs the live broker from CLI args);
     # it is exercised end-to-end by `tests/cli_smoke.rs` (boots the real binary)
     # and every in-process broker/integration test. Same rationale as the
-    # grpc-gateway / schema-registry `src/bin/**` globs above. NB: a file glob is
+    # schema-registry `src/bin/**` glob above. NB: a file glob is
     # used rather than an `exclude_re` on the mutant name because name-regex
     # exclusions do not reliably match struct-field-deletion mutants here.
     "crates/broker/src/bin/**",
     # crabka-audit's `verify` CLI: clap arg-parse + VerifyReport→ExitCode glue.
     # The verification logic lives in verify.rs and IS mutation-tested. Same
-    # rationale as the grpc-gateway / schema-registry / broker `src/bin/**` globs.
+    # rationale as the schema-registry / broker `src/bin/**` globs.
     "crates/audit/src/bin/**",
     "crates/operator/src/run.rs",
-    # `TokioPgCatalog` is the live-PostgreSQL adapter behind connect-postgres'
-    # `PgCatalog` seam: every method runs one query and extracts opaque
-    # `tokio_postgres::Row` fields (a `Row` cannot be constructed in a test),
-    # delegating every decision back to the unit-tested pure helpers in
-    # source.rs. No offline signal — same rationale as the serve-loop entrypoints
-    # above; the logic it feeds is mutation-tested via `source::catalog_tests`.
-    "crates/connect-postgres/src/catalog.rs",
     # KIP-939 idle-transaction reaper background task: a `tokio::interval` run
     # loop + `current_image`/leader-refresh orchestration. Pure serve-loop glue
     # (same rationale as `operator/src/run.rs`); its decision core lives in
     # `txn/two_pc.rs` and is mutation-tested + model-checked there.
     "crates/broker/src/txn/expiration.rs",
-    # The observability demo app is a runnable producer/consumer demo — order
-    # generation, produce/consume serve loops, and self-telemetry (traces +
-    # metrics) emission — exercised by running the `demo/observability` stack,
-    # not the unit suite. Same "demonstration/bench harness, no unit-testable
-    # production signal" rationale as `bench-driver` below; mirrors its
-    # codecov.yml `ignore` entry.
-    "crates/observability-demo-app/**",
-    # The observability-service binaries (traces / metrics / profiles / logs) are
-    # `main` + `run` / `run_block_builder` entrypoint + serve-loop glue: parse
-    # args, build config, run the ingest/compact loop until shutdown. No
-    # unit-testable signal — each service's decision core lives in its lib and is
-    # mutation-tested there. Same rationale as the grpc-gateway / schema-registry
-    # / broker / audit `src/bin/**` globs above.
-    "crates/traces/src/bin/**",
-    "crates/metrics/src/bin/**",
-    "crates/profiles/src/bin/**",
-    "crates/observability/src/bin/**",
     "crates/*/tests/**",
     # In-source unit-test modules and test-only helpers are part of the test
     # harness, not the production system under test. Large refactors that split
@@ -85,10 +57,9 @@ exclude_globs = [
     "crates/*/src/**/tests.rs",
     "crates/*/src/**/test_*.rs",
     "crates/*/benches/**",
-    "crates/bench-driver/**",
     # The gres load/chaos harness drives real broker + crabka-gres child
-    # processes behind chaos proxies end-to-end — same "test/bench harness, not
-    # the system under test" rationale as `bench-driver` above. Most of its
+    # processes behind chaos proxies end-to-end. It is a test/bench harness, not
+    # the system under test. Most of its
     # surface (cluster orchestration, fault execution, process sampling) is only
     # reachable with built binaries via its `#[ignore]`d live test, which
     # mutant runs cannot execute.
@@ -101,24 +72,10 @@ exclude_globs = [
 # under `#[cfg(not(feature = ...))]` gets mutated even though the active build
 # never compiles it — the mutation is a no-op that always "survives".
 exclude_re = [
-    # These PromQL helpers are compiled only with `experimental-functions`.
-    # The default cargo-mutants package run compiles them out, while the
-    # feature-enabled conformance and engine suites exercise them in CI.
-    "promql/src/engine/aggregation\\.rs.*(limit_ratio_includes_sample|prometheus_labels_hash)",
-    "promql/src/engine/scalar_eval\\.rs.*eval_duration_helper_call",
     # Removing the client-metrics shutdown call leaves the live OTLP worker
     # waiting forever. The drain test detects that, but cargo-mutants can only
     # classify the deliberately stuck process as a timeout.
     "broker/src/client_metrics/mod\\.rs.*replace ClientMetrics::shutdown with \\(\\)",
-    # Live service entrypoint loops. Their decision logic lives in testable
-    # helpers; replacing the whole loop with success has no offline signal.
-    "metrics-service/src/main\\.rs.*replace main ->",
-    "profiles/src/blockbuilder\\.rs.*replace run_with_config ->",
-    # Equivalent mutant: `if bytes > 0 { counter.inc_by(bytes) }` vs `>= 0`. The
-    # two differ only at the value 0, where the mutant runs `inc_by(0)` — a no-op
-    # on a prometheus counter — so the observable metric state is identical and no
-    # test can distinguish them. (`> with <` / `> with ==` ARE caught.)
-    "profiles/src/metrics\\.rs.*replace > with >= in ServiceMetrics::record_ingest",
     # `BatchedTsoClient` flusher-liveness mutants: never spawning a flusher
     # (`delete !` flips the single-flusher test-and-set) or spawning a no-op one
     # makes every timestamp grant await a reply that can never arrive. The
@@ -151,10 +108,7 @@ exclude_re = [
     # module is compiled out and every mutation in it is a no-op that always
     # "survives" — the same default-feature-compiles-it-out case as the
     # compression stubs above. The simulator's logic IS exercised: its unit tests
-    # run in the feature-enabled workspace test job (codecov covers the lines),
-    # the curated scenarios are driven by crabka-docgen, and the equivalent
-    # `crabka_playground::Playground::*` wrappers are mutation-tested (and caught)
-    # because that crate always enables `sim`.
+    # run in the feature-enabled workspace test job (codecov covers the lines).
     "kraft-core/src/sim\\.rs",
     # crabka-security's SSPI provider is behind the optional `sspi-keytab`
     # feature and is compiled out in the crate's default package run, so default
@@ -206,75 +160,20 @@ exclude_re = [
     "schema-serde/src/format/(avro|json|protobuf)\\.rs",
     "schema-serde/src/format/mod\\.rs.*Binding::register",
 
-    # crabka-admin-ui's broker-backed seam adapter performs live AdminClient RPC
-    # translation. Unit tests exercise request validation and injected seams; the
-    # concrete adapter is covered by broker/client integration tests and cannot be
-    # mutation-killed without a live broker.
-    "admin-ui/src/server_fns\\.rs.*(ensure_topic_config_resource|acl_filter_from_request|parse_resource_type|parse_acl_operation|parse_permission_type)",
-    # Redaction-only Debug impls deliberately collapse to constant text; returning
-    # Ok(()) leaves the same absence-of-secret observable to callers.
-    "admin-ui/src/session\\.rs.*<impl fmt::Debug for (SessionId|SessionCredentials|SessionStore)>",
-    # render_document currently escapes only RoutePage::title(), whose route titles are
-    # static ASCII strings without HTML metacharacters; dynamic page body escaping is
-    # asserted through Dioxus SSR view tests.
-    "admin-ui/src/views/page\\.rs.*push_escaped",
     # `live_committed_end` is a live-broker seam adapter: it constructs a
     # `LiveCommittedEndSampler` over the real broker dialer and delegates. The
     # sampler's committed-end logic is unit-tested against a counting fake
     # dialer (follower.rs); only the live-broker construction — which returns
     # a real committed offset the tests below cannot pin without a broker —
     # remains, so the `Ok(-1|0|1)` mutants are covered only by broker
-    # integration tests. Same rationale as the client-producer/admin-ui live
-    # adapters above.
+    # integration tests. Same rationale as the client-producer live adapter
+    # above.
     "(crates/)?gres-substrate/src/recovery\\.rs.*replace live_committed_end",
     # Live broker/client SCRAM wire-shape fields are integration-level signal; the
     # branch's new admin UI unit tests cover the DTO/seam behaviour without a
     # running broker.
     "broker/src/handlers/(alter_user_scram_credentials|describe_user_scram_credentials)\\.rs.*delete field (throttle_time_ms|error_message|credential_infos)",
     "client-admin/src/users\\.rs.*(describe_user_scram_credentials|delete field (users|name))",
-    # --- traces signal (crabka-traceql / crabka-blockstore) equivalent mutants ---
-    # lexer `prev` is only ever read as `prev == Prev::Dot` (lexer.rs:127), so
-    # mapping a `Token::Ident` to `Prev::Ident` rather than the `_ => Prev::Other`
-    # fallthrough is indistinguishable downstream. Every other op-token arm IS
-    # mutation-tested.
-    "traceql/src/lexer\\.rs.*delete match arm Token::Ident\\(_\\) in lex",
-    # `scan_number_or_duration` consumes a `.` only when the NEXT char is a digit
-    # (`chars.nth(1).is_some_and(is_digit)`), and that digit is then consumed on
-    # the following iteration, overwriting `end`. So `end = idx + 1` vs `idx * 1`
-    # (= idx) at the dot is never observable — the trailing digit always resets
-    # `end`. The `&&` guards on those same lines ARE mutation-tested.
-    "traceql/src/lexer\\.rs.*replace \\+ with \\* in scan_number_or_duration",
-    # `usize_from_integer_f64` rejects non-finite/negative/fractional inputs; the
-    # `||` -> `&&` rewrites of that validation guard still yield `Err` for every
-    # differing input (the subsequent `to_string().parse()` fails on it), so the
-    # observable `Result` is unchanged. The `<` boundary checks ARE mutation-tested.
-    "traceql/src/engine\\.rs.*replace \\|\\| with && in usize_from_integer_f64",
-    # `metric_label_value`'s Utf8 type guard: a non-string dictionary that skips
-    # the guard still `Err`s downstream (`string_array_value` recurses into the
-    # dictionary's non-Utf8 values and returns None -> Err), identical to the
-    # guarded path that falls straight through to `Err`.
-    "traceql/src/engine\\.rs.*replace match guard .* in metric_label_value",
-    # `assign_nested_set` self-parent guard (`parent_idx != i`): a self-parented
-    # span pushed into its own children list is inert — it is marked visited
-    # before its children are walked, and the unreached-node sweep re-seeds every
-    # span regardless, so the nested-set output is identical with the guard true.
-    "blockstore/src/nested_set\\.rs.*replace match guard parent_idx != i with true in assign_nested_set",
-    # `new_str_list` / `new_str_list_list` only choose a builder *constructor*
-    # (`new` vs `from`, default capacity); the produced column's schema and values
-    # are identical regardless, so the difference is unobservable. The promoted
-    # column CONTENTS are mutation-tested via the append/promote tests.
-    "blockstore/src/span_block\\.rs.*replace new_str_list(_list)? ->",
-    # NB: `crates/broker/src/bin/**` (the broker entrypoint, incl. its
-    # `BrokerConfig` field wiring and `wait_for_termination_signal`) is excluded
-    # via `exclude_globs` above — name-regex exclusions don't reliably match the
-    # struct-field-deletion mutants the entrypoint generates.
-    # The parsed LSN high half is shifted left by 32 bits and the low half is
-    # bounded to 32 bits, so OR and XOR produce identical values here.
-    "connect-postgres/src/offset\\.rs.*replace \\| with \\^ in <impl FromStr for PgLsn>::from_str",
-    # In PostgresWalSource::poll this mutation requeues a non-transactional row
-    # forever (`transaction.is_some() || row.commit_lsn.is_none()`), so
-    # cargo-mutants reports a timeout instead of an assertion gap.
-    "connect-postgres/src/source\\.rs.*replace && with \\|\\| in <impl Source<Bytes, Bytes> for PostgresWalSource>::poll",
     # (client-core's `FetchTransport`/pool/`Client`/`Connection` live-IO seams
     # are skipped in-source via `#[cfg_attr(test, mutants::skip)]`: the adapter
     # `<impl FetchTransport for Connection>::fetch`, the thin `fetch_partition`
@@ -298,26 +197,10 @@ exclude_re = [
     "(crates/)?client-core/src/transport\\.rs.*replace != with == in put_uvarint",
     "(crates/)?client-core/src/transport\\.rs.*replace & with (\\||\\^) in put_uvarint",
     "(crates/)?client-core/src/transport\\.rs.*replace \\| with \\^ in put_uvarint",
-    # `read_all`'s consecutive-empty-poll drain bound (`consecutive_empty >=
-    # MAX_EMPTY`): breaking after 1 vs N consecutive empty polls both fully drain
-    # an already-populated topic (records arrive in non-empty batches first), so
-    # the boundary has no deterministic unit signal — a behavioural test of "how
-    # many empty polls before giving up" is inherently timing-flaky. The drain
-    # *result* (every record returned, in order) is covered by
-    # `ensure_produce_read_roundtrip` and every integration suite that reads a
-    # topic back.
-    "replicator/src/admin_util\\.rs.*replace >= with < in read_all",
-    # (replicator's `FlowWorker::start` retry loop and the background-task
-    # graceful-shutdown teardowns — FlowSupervisor/FlowWorker/HeartbeatTask/
-    # CheckpointTask `shutdown` — are skipped in-source via `#[cfg_attr(test,
-    # mutants::skip)]`: start needs a persistently-unreachable cluster and the
-    # shutdowns differ only in task-await timing. The pure `next_backoff` helper
-    # and each task's work stay mutation-tested.)
-    # Two infinite-loop mutants that HANG rather than yield a wrong result, so
-    # cargo-mutants reports a TIMEOUT, not an assertion gap (same category as the
-    # connect-postgres `poll` requeue exclusion above):
+    # An infinite-loop mutant that HANGS rather than yields a wrong result, so
+    # cargo-mutants reports a TIMEOUT, not an assertion gap:
     # - `Consumer::poll -> Ok(vec![])`: an always-empty poll makes every
-    #   poll-until-data loop (the drain helpers, the connect runtime driver) spin
+    #   poll-until-data loop spin
     #   forever — no assertion can observe a hang. The real poll's fetch/decode/
     #   seek/commit logic is unit- and integration-tested.
     "client-consumer/src/poll\\.rs.*replace Consumer::poll .* with Ok\\(vec!\\[\\]\\)",
@@ -366,14 +249,6 @@ exclude_re = [
     # these wrappers need a broker-side share fetch/ack endpoint to observe.
     "(crates/)?client-consumer/src/share/poll\\.rs.*replace ShareConsumer::(poll|renew|commit|flush_pending_acks) -> Result<",
     "(crates/)?client-consumer/src/share/poll\\.rs.*replace ShareConsumer::acknowledge -> Result<\\(\\), ConsumerError> with Ok\\(\\(\\)\\)",
-    # - `read_all`'s `consecutive_empty += 1` -> `*= 1` pins the empty-poll
-    #   counter at 0 so the drain loop never terminates (companion to the `>=`
-    #   drain-bound exclusion above).
-    "replicator/src/admin_util\\.rs.*replace \\+= with \\*= in read_all",
-    # Changing the COORDINATOR_LOAD_IN_PROGRESS retry guard from `==` to `!=`
-    # makes a successful StreamsMembership join retry forever, so cargo-mutants
-    # can only classify it as a timeout rather than an assertion gap.
-    "(crates/)?client-streams/src/membership/client\\.rs.*replace == with != in StreamsMembership::start",
     # (The manual `Debug` impls — `FileEd25519Signer` (keeps key material out of
     # logs) and `KafkaTopicAuditSink` (only because BrokerMetrics isn't Debug) —
     # and the `now_ms` wall-clock helper are skipped in-source via
@@ -455,12 +330,6 @@ exclude_re = [
     # cargo-mutants reports a TIMEOUT, not an assertion gap. (`+ with -` on the
     # same line IS caught, so this excludes only the `*` variant.)
     "log/src/segment\\.rs.*replace \\+ with \\* in Segment::read$",
-    # Equivalent mutant: `format_metric_range_selector`'s sign test (`offset_ns <
-    # 0`) runs only inside the `offset_ns != 0` branch (the outer `== 0` guard
-    # already returns the no-offset form), so `< 0` and `<= 0` pick the same sign
-    # for every reachable (non-zero) offset. The negative/positive sign paths are
-    # asserted by `format_metric_range_selector_signs_negative_offset`.
-    "observability/src/lib\\.rs.*replace < with <= in format_metric_range_selector",
     # Creusot-only proof/spec helpers are behind `#[cfg(creusot)]` and are not
     # compiled by cargo-mutants' default `cargo nextest` package runs. Mutating
     # them is therefore a no-op for mutation testing; `creusot-verify` replays the
@@ -579,7 +448,6 @@ exclude_re = [
     "broker/src/txn/handlers/end_txn\\.rs:.*delete - in prepare_completion_identities_with_fresh",
     "broker/src/txn/handlers/end_txn\\.rs:.*replace && with \\|\\| in is_completed_end_txn_retry",
     "broker/src/txn/handlers/end_txn\\.rs:.*replace == with != in is_completed_end_txn_retry",
-    "promql/src/engine/histogram\\.rs:.*replace - with \\+ in reduced_counts_outside_zero",
     "crates/broker/src/broker\\.rs:641:40: replace == with != in start_coordinators",
     "crates/broker/src/coordinator/bootstrap\\.rs:263:19: delete ! in bootstrap",
     "crates/broker/src/coordinator/bootstrap\\.rs:313:26: replace == with != in bootstrap",
@@ -734,14 +602,6 @@ exclude_re = [
     "crates/client-producer/src/sender\\.rs:1029:27: replace != with == in send_one_batch",
     "crates/client-producer/src/transport\\.rs:48:9: replace ProduceTransport::send_produce_no_response -> Result<\\(\\), ClientError> with Ok\\(\\(\\)\\)",
     "crates/client-producer/src/transport\\.rs:93:9: replace <impl ProduceTransport for ClientTransport>::send_produce_no_response -> Result<\\(\\), ClientError> with Ok\\(\\(\\)\\)",
-    "crates/client-streams/src/runtime/io_broker\\.rs:103:20: replace match guard is_stale_route_error\\(error_code\\) with false in <impl RecordFetcher for BrokerFetcher>::fetch",
-    "crates/client-streams/src/runtime/io_broker\\.rs:103:20: replace match guard is_stale_route_error\\(error_code\\) with true in <impl RecordFetcher for BrokerFetcher>::fetch",
-    "crates/client-streams/src/runtime/io_broker\\.rs:111:29: delete field topic_id from struct IsolatedFetch expression in <impl RecordFetcher for BrokerFetcher>::fetch",
-    "crates/client-streams/src/runtime/io_broker\\.rs:306:9: replace <impl RecordProducer for BrokerProducer>::flush -> Result<\\(\\), StreamsClientError> with Ok\\(\\(\\)\\)",
-    "crates/grpc-gateway/src/consume\\.rs:136:9: replace ConsumeSession::commit -> Result<\\(\\), GatewayError> with Ok\\(\\(\\)\\)",
-    "crates/grpc-gateway/src/consume\\.rs:157:9: replace ConsumeSession::commit_record -> Result<\\(\\), GatewayError> with Ok\\(\\(\\)\\)",
-    "crates/grpc-gateway/src/streaming\\.rs:49:15: replace < with <= in validate_ack",
-    "crates/grpc-gateway/src/streaming\\.rs:49:15: replace < with == in validate_ack",
     "crates/log/src/log\\.rs:398:20: replace < with <= in Log::rebuild_transaction_state",
     "crates/log/src/log\\.rs:408:63: replace && with \\|\\| in Log::rebuild_transaction_state",
     "crates/log/src/log\\.rs:413:56: replace \\+ with - in Log::rebuild_transaction_state",
@@ -763,16 +623,6 @@ exclude_re = [
     "crates/operator/src/leader_election\\.rs:190:8: delete ! in renew_once",
     "crates/operator/src/leader_election\\.rs:36:9: replace Leadership::wait -> anyhow::Result<\\(\\)> with Ok\\(\\(\\)\\)",
     "crates/operator/src/leader_election\\.rs:44:9: replace <impl Drop for Leadership>::drop with \\(\\)",
-    "crates/promql/src/engine/binary\\.rs:276:5: replace validate_set_modifier -> Result<\\(\\)> with Ok\\(\\(\\)\\)",
-    "crates/promql/src/engine/binary\\.rs:279:43: replace \\|\\| with && in validate_set_modifier",
-    "crates/promql/src/engine/binary\\.rs:88:13: delete match arm T_LAND \\| T_LOR \\| T_LUNLESS in BinaryOp::try_from_token",
-    "crates/promql/src/engine/histogram\\.rs:528:19: replace \\|= with &= in add_compatible_native_histogram",
-    "crates/promql/src/engine/histogram\\.rs:559:33: replace == with != in add_exponential_histogram",
-    "crates/promql/src/engine/histogram\\.rs:618:40: replace && with \\|\\| in zero_count_at_threshold",
-    "crates/promql/src/engine/histogram\\.rs:618:49: replace > with >= in zero_count_at_threshold",
-    "crates/promql/src/engine/histogram\\.rs:623:31: replace == with != in zero_count_at_threshold",
-    "crates/promql/src/engine/histogram\\.rs:638:51: replace - with \\+ in reduced_counts_outside_zero",
-    "crates/promql/src/engine/histogram\\.rs:642:66: replace < with <= in reduced_counts_outside_zero",
     "crates/schema-registry/src/kafkastore/mod\\.rs:134:13: replace \\|\\| with && in KafkaStore::prepare_write",
     "crates/schema-registry/src/kafkastore/mod\\.rs:135:13: replace \\|\\| with && in KafkaStore::prepare_write",
     "crates/schema-registry/src/kafkastore/mod\\.rs:587:9: replace KafkaStore::clear_subject_mode -> Result<\\(\\), SrError> with Ok\\(\\(\\)\\)",

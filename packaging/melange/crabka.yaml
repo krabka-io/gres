@@ -2,7 +2,7 @@ package:
   name: crabka
   version: 0.1.1
   epoch: 0
-  description: Crabka server binaries (broker, CLI, operator, gateway, schema-registry, Connect worker, bench driver)
+  description: Gres server binaries (tenant compute and connection activator)
   copyright:
     - license: Apache-2.0
 
@@ -21,11 +21,9 @@ environment:
       - pkgconf
       - rustup
 
-# A single cargo build compiles the shared dependency graph (protocol, log,
-# compression, security, metadata, raft, ...) exactly once and emits every
-# server binary. Each image's contents are carved out into a subpackage below,
-# so `melange build` produces the same set of APKs that the four old per-binary
-# recipes did — without recompiling the workspace once per image.
+# A single cargo build compiles the shared dependency graph once and emits both
+# Gres server binaries. Each image's contents are carved out into a subpackage
+# below, so the workspace is not compiled once per image.
 pipeline:
   - name: Install pinned Rust toolchain
     runs: |
@@ -33,7 +31,7 @@ pipeline:
       export PATH="$HOME/.cargo/bin:$PATH"
       rustup toolchain install 1.97.0 --component cargo --profile minimal
       rustup default 1.97.0
-  - name: Build all crabka binaries
+  - name: Build the Gres binaries
     runs: |
       export PATH="$HOME/.cargo/bin:$PATH"
       # When `melange build --cache-dir` is supplied, the host cache directory
@@ -53,55 +51,14 @@ pipeline:
         target="target"
       fi
       cargo build --release \
-        -p crabka-broker -p crabka-cli -p crabka-operator \
-        -p crabka-grpc-gateway -p crabka-schema-registry \
-        -p crabka-connect-worker -p crabka-bench-driver \
         -p crabka-gres -p crabka-gres-activator \
-        --bin crabka-broker --bin crabka --bin crabka-operator \
-        --bin crabka-grpc-gateway --bin crabka-schema-registry \
-        --bin crabka-connect-worker \
-        --bin crabka-bench-driver --bin crabka-bench-report \
         --bin crabka-gres --bin crabka-gres-activator
       mkdir -p dist
-      for bin in crabka-broker crabka crabka-operator crabka-grpc-gateway \
-                 crabka-schema-registry \
-                 crabka-connect-worker crabka-bench-driver crabka-bench-report \
-                 crabka-gres crabka-gres-activator; do
+      for bin in crabka-gres crabka-gres-activator; do
         install -m 0755 "$target/release/$bin" "dist/$bin"
       done
 
 subpackages:
-  - name: crabka-broker
-    description: Single-node Apache Kafka-compatible broker (MVP) plus the crabka operator CLI
-    pipeline:
-      - runs: |
-          install -D -m 0755 dist/crabka-broker "${{targets.subpkgdir}}/usr/bin/crabka-broker"
-          install -D -m 0755 dist/crabka "${{targets.subpkgdir}}/usr/bin/crabka"
-
-  - name: crabka-operator
-    description: Kubernetes operator for Crabka clusters
-    pipeline:
-      - runs: |
-          install -D -m 0755 dist/crabka-operator "${{targets.subpkgdir}}/usr/bin/crabka-operator"
-
-  - name: crabka-grpc-gateway
-    description: Connect-RPC and HTTP gateway for Crabka topics
-    pipeline:
-      - runs: |
-          install -D -m 0755 dist/crabka-grpc-gateway "${{targets.subpkgdir}}/usr/bin/crabka-grpc-gateway"
-
-  - name: crabka-schema-registry
-    description: Confluent Schema Registry-compatible service for Crabka
-    pipeline:
-      - runs: |
-          install -D -m 0755 dist/crabka-schema-registry "${{targets.subpkgdir}}/usr/bin/crabka-schema-registry"
-
-  - name: crabka-connect-worker
-    description: Managed Postgres CDC connector worker for Crabka
-    pipeline:
-      - runs: |
-          install -D -m 0755 dist/crabka-connect-worker "${{targets.subpkgdir}}/usr/bin/crabka-connect-worker"
-
   - name: crabka-gres
     description: Gres PostgreSQL-compatible tenant compute
     pipeline:
@@ -113,12 +70,3 @@ subpackages:
     pipeline:
       - runs: |
           install -D -m 0755 dist/crabka-gres-activator "${{targets.subpkgdir}}/usr/bin/crabka-gres-activator"
-
-  - name: crabka-bench-driver
-    description: Load driver + report aggregator for the Crabka vs Strimzi benchmark harness
-    pipeline:
-      - runs: |
-          install -D -m 0755 dist/crabka-bench-driver "${{targets.subpkgdir}}/usr/bin/crabka-bench-driver"
-          install -D -m 0755 dist/crabka-bench-report "${{targets.subpkgdir}}/usr/bin/crabka-bench-report"
-          mkdir -p "${{targets.subpkgdir}}/etc/crabka-bench/scenarios"
-          cp -r bench/scenarios/. "${{targets.subpkgdir}}/etc/crabka-bench/scenarios/"
