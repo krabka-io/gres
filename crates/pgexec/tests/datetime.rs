@@ -207,8 +207,16 @@ async fn typed_literals() {
 #[tokio::test]
 async fn date_literals_use_postgres_full_calendar_range() {
     let client = connect(spawn().await).await;
+    client
+        .batch_execute("CREATE TABLE wide_dates (d date); INSERT INTO wide_dates VALUES (DATE '5874897-12-31')")
+        .await
+        .expect("store upper date");
     assert_eq!(
         text(&client, "SELECT DATE '5874897-12-31'").await,
+        Some("5874897-12-31".into())
+    );
+    assert_eq!(
+        text(&client, "SELECT d FROM wide_dates").await,
         Some("5874897-12-31".into())
     );
     assert_eq!(
