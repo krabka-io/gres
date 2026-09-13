@@ -867,6 +867,18 @@ pub(crate) fn rows_with_memory(
     ctx: &EvalCtx,
     statement_memory: &crate::scanner::StatementMemory,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
+    rows_with_memory_up_to(plan, args, vals, ctx, statement_memory, None)
+}
+
+/// Expand a planned call with an optional consumer row cap.
+fn rows_with_memory_up_to(
+    plan: &SrfPlan,
+    args: &[Expr],
+    vals: &mut [Datum],
+    ctx: &EvalCtx,
+    statement_memory: &crate::scanner::StatementMemory,
+    max_rows: Option<usize>,
+) -> Result<Vec<Vec<Datum>>, ExecError> {
     let params = param_types(plan);
     crate::eval::coerce_unknown_args(args, vals, &params, ctx)?;
     // A STRICT SRF returns no rows at all — not one NULL row — when any of the
@@ -892,7 +904,7 @@ pub(crate) fn rows_with_memory(
     }
     let produced = match plan.kind {
         Srf::Unnest => unnest_rows(vals),
-        Srf::GenerateSeries => series_rows(plan, vals, ctx, statement_memory)?,
+        Srf::GenerateSeries => series_rows(plan, vals, ctx, statement_memory, max_rows)?,
         Srf::GenerateSubscripts => subscript_rows(&plan.name, vals)?,
         Srf::StringToTable => string_to_table_rows(&plan.name, vals)?,
         Srf::RegexpSplitToTable => regexp_split_rows(&plan.name, vals)?,
@@ -2432,6 +2444,26 @@ pub(crate) fn project_rows_ordered_with_memory(
     ctx: &EvalCtx,
     statement_memory: &crate::scanner::StatementMemory,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
+    let window = crate::exec::RowWindow {
+        offset: crate::exec::eval_row_count(
+            s.offset.as_ref(),
+            crate::exec::RowCountClause::Offset,
+            ctx,
+        )?,
+        limit: crate::exec::eval_row_count(
+            s.limit.as_ref(),
+            crate::exec::RowCountClause::Limit,
+            ctx,
+        )?,
+        with_ties: s.with_ties,
+    };
+    let max_rows = (s.order_by.is_empty()
+        && matches!(s.distinct, crabka_pgparser::ast::DistinctClause::All)
+        && window.offset.is_none_or(|offset| offset == 0)
+        && !window.with_ties)
+        .then(|| window.limit)
+        .flatten()
+        .map(|limit| usize::try_from(limit).unwrap_or(usize::MAX));
     let order_keys = crate::exec::resolve_select_order_keys(
         &s.order_by,
         scope,
@@ -2486,6 +2518,10 @@ pub(crate) fn project_rows_ordered_with_memory(
 
     let mut projected: Vec<(Vec<Datum>, Vec<Datum>, Vec<Datum>, Vec<Datum>)> = Vec::new();
     for row in &kept {
+        let remaining = max_rows.map(|max_rows| max_rows.saturating_sub(projected.len()));
+        if remaining == Some(0) {
+            break;
+        }
         let source_keys = order_keys
             .iter()
             .zip(&junk_key_columns)
@@ -2497,7 +2533,7 @@ pub(crate) fn project_rows_ordered_with_memory(
                 }
             })
             .collect::<Result<Vec<_>, ExecError>>()?;
-        for expanded in expand_row(&set, scope, row, ctx, statement_memory)? {
+        for expanded in expand_row(&set, scope, row, ctx, statement_memory, remaining)? {
             let keys: Vec<Datum> = order_keys
                 .iter()
                 .zip(&source_keys)
@@ -2553,19 +2589,6 @@ pub(crate) fn project_rows_ordered_with_memory(
     if !s.order_by.is_empty() {
         projected.sort_by(|a, b| crate::exec::order_cmp(&a.0, &b.0, &s.order_by));
     }
-    let window = crate::exec::RowWindow {
-        offset: crate::exec::eval_row_count(
-            s.offset.as_ref(),
-            crate::exec::RowCountClause::Offset,
-            ctx,
-        )?,
-        limit: crate::exec::eval_row_count(
-            s.limit.as_ref(),
-            crate::exec::RowCountClause::Limit,
-            ctx,
-        )?,
-        with_ties: s.with_ties,
-    };
     Ok(crate::exec::apply_row_window(
         projected
             .into_iter()
@@ -2636,8 +2659,9 @@ fn expand_row(
     row: &[Datum],
     ctx: &EvalCtx,
     statement_memory: &crate::scanner::StatementMemory,
+    max_rows: Option<usize>,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
-    expand_row_values(set, scope, row, ctx, statement_memory)?
+    expand_row_values_up_to(set, scope, row, ctx, statement_memory, max_rows)?
         .into_iter()
         .map(|row| {
             let cells = set
@@ -2717,6 +2741,17 @@ fn expand_row_values(
     ctx: &EvalCtx,
     statement_memory: &crate::scanner::StatementMemory,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
+    expand_row_values_up_to(set, scope, row, ctx, statement_memory, None)
+}
+
+fn expand_row_values_up_to(
+    set: &ProjectSet,
+    scope: &Scope,
+    row: &[Datum],
+    ctx: &EvalCtx,
+    statement_memory: &crate::scanner::StatementMemory,
+    max_rows: Option<usize>,
+) -> Result<Vec<Vec<Datum>>, ExecError> {
     let mut initial = row.to_vec();
     initial.extend(std::iter::repeat_n(Datum::Null, set.calls.len()));
     let mut expanded = vec![initial];
@@ -2743,7 +2778,14 @@ fn expand_row_values(
                             .iter()
                             .map(|arg| crate::eval::eval(arg, &call_scope, &input, ctx))
                             .collect::<Result<Vec<_>, _>>()?;
-                        let rows = rows_with_memory(plan, args, &mut vals, ctx, statement_memory)?;
+                        let rows = rows_with_memory_up_to(
+                            plan,
+                            args,
+                            &mut vals,
+                            ctx,
+                            statement_memory,
+                            max_rows,
+                        )?;
                         collapse_projection(plan, rows)
                     }
                     SrfCall::PlPgSql { call, .. } => {
@@ -2772,6 +2814,9 @@ fn expand_row_values(
                         column.get(index).cloned().unwrap_or(Datum::Null);
                 }
                 next.push(row);
+                if max_rows.is_some_and(|max_rows| next.len() == max_rows) {
+                    break;
+                }
             }
         }
         expanded = next;
@@ -2976,6 +3021,7 @@ fn series_rows(
     vals: &[Datum],
     ctx: &EvalCtx,
     statement_memory: &crate::scanner::StatementMemory,
+    max_rows: Option<usize>,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
     let value_ty = plan.columns[0].ty;
     let start = crabka_pgtypes::cast::cast(&vals[0], value_ty, &ctx.time_zone)?;
@@ -3009,6 +3055,9 @@ fn series_rows(
     let mut budget = crate::scanner::MemoryBudget::new(statement_memory.limit());
     let mut current = start;
     loop {
+        if max_rows.is_some_and(|max_rows| out.len() == max_rows) {
+            break;
+        }
         let ordering = crabka_pgtypes::ops::compare(&current, &bound)?;
         let past_end = match ordering {
             Some(std::cmp::Ordering::Greater) => ascending,
@@ -3551,6 +3600,31 @@ mod tests {
             .into_pg();
 
         assert!(error.code == "53200");
+    }
+
+    #[test]
+    fn bounded_series_stops_before_the_statement_memory_limit() {
+        let args = [int4(1), int4(1_000_000)];
+        let plan = plan(
+            "generate_series",
+            &args,
+            CallSite::FromItem(None),
+            &Scope::empty(),
+        )
+        .expect("plan");
+        let mut values = vec![Datum::Int4(1), Datum::Int4(1_000_000)];
+        let statement_memory = crate::scanner::StatementMemory::new(crabka_units::bytes(1024));
+        let rows = rows_with_memory_up_to(
+            &plan,
+            &args,
+            &mut values,
+            &ctx(),
+            &statement_memory,
+            Some(2),
+        )
+        .expect("bounded series");
+
+        assert!(rows == vec![vec![Datum::Int4(1)], vec![Datum::Int4(2)]]);
     }
 
     #[test]
