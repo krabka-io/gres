@@ -2914,7 +2914,18 @@ fn decode_interval(
             .iter()
             .filter(|token| token.starts_with(['+', '-']))
             .count();
-        if signed == 1 && tokens.iter().any(|token| token.starts_with('-')) {
+        let leading_sign = tokens
+            .iter()
+            .position(|token| token.starts_with(['+', '-']))
+            .is_some_and(|index| {
+                tokens[..index].iter().all(|token| {
+                    !token
+                        .bytes()
+                        .next()
+                        .is_some_and(|byte| byte.is_ascii_digit() || byte == b'.')
+                })
+            });
+        if signed == 1 && leading_sign && tokens.iter().any(|token| token.starts_with('-')) {
             for token in &mut tokens {
                 if !token.starts_with(['+', '-'])
                     && token
@@ -8202,6 +8213,14 @@ mod io_tests {
                 IntervalStyle::SqlStandard,
             ),
             "-0-10 +1 +23:45:12.34"
+        );
+        assert_eq!(
+            interval_to_text_in(
+                parse_interval_in("1 day -1 hours", IntervalStyle::SqlStandard)
+                    .expect("trailing sign"),
+                IntervalStyle::SqlStandard,
+            ),
+            "+0-0 +1 -1:00:00"
         );
     }
 
