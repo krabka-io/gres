@@ -420,6 +420,8 @@ pub(crate) fn pg_class_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
                 crate::exec::PG_TOAST_NAMESPACE_OID,
             );
             toast.relnatts = 3;
+            // TOAST storage is heap-backed, like an ordinary table.
+            toast.relam = 2;
             toast.relowner = table_owner_oids[&table.name];
             toast.relpersistence = crabka_pgcatalog::relpersistence_of(&table.name.schema);
             rows.push(toast.build()?);
@@ -5632,6 +5634,20 @@ mod tests {
         assert_eq!(base[14], oid(3644));
         assert_eq!(array[1], Datum::Text("_gtsvector".into()));
         assert_eq!(array[13], oid(3642));
+    }
+
+    #[test]
+    fn toast_relations_use_the_heap_access_method() {
+        let kv = MemKv::default();
+        let table = RelationName::public("toast_catalog_row");
+        crabka_pgcatalog::create_table(&kv, &table, vec![Column::new("value", ColumnType::Text)])
+            .expect("create toastable table");
+        let toast = pg_class_rows(&kv)
+            .expect("pg_class rows")
+            .into_iter()
+            .find(|row| matches!(&row[17], Datum::Text(kind) if kind == "t"))
+            .expect("toast pg_class row");
+        assert_eq!(toast[6], Datum::Int4(2));
     }
 
     #[test]
