@@ -534,6 +534,45 @@ fn literal_for_type(expr: &Expr, ty: ColumnType) -> Result<Option<Datum>, ExecEr
             .map_err(|_| ExecError::TypeMismatch("int8 predicate literal is out of range".into())),
         (Expr::StringLiteral(value), ColumnType::Text) => Ok(Some(Datum::Text(value.clone()))),
         (Expr::BoolLiteral(value), ColumnType::Bool) => Ok(Some(Datum::Bool(*value))),
+        (Expr::StringLiteral(value), ColumnType::Array(crabka_pgtypes::ElemType::Int4)) => {
+            let literal = crabka_pgtypes::array::parse_literal(value)?;
+            let elements = literal
+                .elements
+                .into_iter()
+                .map(|item| match item {
+                    Some(value) => value.parse().map(Datum::Int4).map_err(|_| {
+                        ExecError::TypeMismatch(
+                            "int4 array predicate literal is out of range".into(),
+                        )
+                    }),
+                    None => Ok(Datum::Null),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(Some(Datum::Array(crabka_pgtypes::ArrayValue::with_dims(
+                crabka_pgtypes::ElemType::Int4,
+                elements,
+                literal.dims,
+            ))))
+        }
+        (Expr::ArrayLiteral(items), ColumnType::Array(crabka_pgtypes::ElemType::Int4)) => {
+            let elements = items
+                .iter()
+                .map(|item| match item {
+                    Expr::IntLiteral(value) => value.parse().map(Datum::Int4).map_err(|_| {
+                        ExecError::TypeMismatch(
+                            "int4 array predicate literal is out of range".into(),
+                        )
+                    }),
+                    _ => Err(ExecError::Unsupported(
+                        "array predicate pushdown requires integer literal elements".into(),
+                    )),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(Some(Datum::Array(crabka_pgtypes::ArrayValue::new(
+                crabka_pgtypes::ElemType::Int4,
+                elements,
+            ))))
+        }
         (
             Expr::Const {
                 value,
@@ -548,7 +587,11 @@ fn literal_for_type(expr: &Expr, ty: ColumnType) -> Result<Option<Datum>, ExecEr
 fn scanner_predicate_type_is_supported(ty: ColumnType) -> bool {
     matches!(
         ty,
-        ColumnType::Bool | ColumnType::Int4 | ColumnType::Int8 | ColumnType::Text
+        ColumnType::Bool
+            | ColumnType::Int4
+            | ColumnType::Int8
+            | ColumnType::Text
+            | ColumnType::Array(crabka_pgtypes::ElemType::Int4)
     )
 }
 

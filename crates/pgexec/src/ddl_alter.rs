@@ -165,9 +165,12 @@ pub(crate) fn execute_ddl(
             &resolve_relation(kv, resolution, name, SchemaDisposition::Creation)?,
             definition,
         ),
-        Statement::AlterType { name, action } => {
-            crate::usertype::alter_type(kv, &resolve_user_type(kv, resolution, name)?, action)
-        }
+        Statement::AlterType { name, action } => crate::usertype::alter_type_with_context(
+            kv,
+            &resolve_user_type(kv, resolution, name)?,
+            action,
+            fctx,
+        ),
         Statement::DropType {
             names,
             if_exists,
@@ -1188,8 +1191,16 @@ pub(crate) fn execute_ddl(
             reject_index_over_virtual_generated(&table_meta, columns, None)?;
             validate_index_opclasses(kv, resolution, &table_meta, keys, index_method)?;
             let key_options = index_key_options(keys, index_method)?;
-            validate_index_expressions(&table_meta, keys, *unique, placement, index_method)?;
-            validate_index_predicate(&table_meta, predicate.as_deref())?;
+            validate_index_expressions(
+                kv,
+                resolution,
+                &table_meta,
+                keys,
+                *unique,
+                placement,
+                index_method,
+            )?;
+            validate_index_predicate(kv, resolution, &table_meta, predicate.as_deref())?;
             validate_index_method(&table_meta, columns, *unique, placement, index_method)?;
             if *nulls_not_distinct && !unique {
                 return Err(ExecError::Unsupported(
@@ -1245,63 +1256,66 @@ pub(crate) fn execute_ddl(
             Ok((command("CREATE INDEX"), ops))
         }
         Statement::DropIndex {
-            name,
+            names,
             if_exists,
             cascade,
         } => {
-            let name = &match resolve_relation(kv, resolution, name, SchemaDisposition::Utility) {
-                Ok(name) => name,
-                Err(error) if *if_exists && is_missing_schema(&error) => {
-                    return Ok((command("DROP INDEX"), Vec::new()));
+            let mut all_ops = Vec::new();
+            for name in names {
+                let name = match resolve_relation(kv, resolution, name, SchemaDisposition::Utility)
+                {
+                    Ok(name) => name,
+                    Err(error) if *if_exists && is_missing_schema(&error) => continue,
+                    Err(error) => return Err(error),
+                };
+                if let Some(error) = drop_kind_mismatch(kv, &name, "index") {
+                    return Err(error);
                 }
-                Err(error) => return Err(error),
-            };
-            if let Some(error) = drop_kind_mismatch(kv, name, "index") {
-                return Err(error);
-            }
-            let (index, mut ops) = match crabka_pgcatalog::drop_index_ops(kv, name) {
-                Ok(result) => result,
-                Err(crabka_pgcatalog::CatalogError::UndefinedIndex(_)) if *if_exists => {
-                    return Ok((command("DROP INDEX"), Vec::new()));
+                let (index, mut ops) = match crabka_pgcatalog::drop_index_ops(kv, &name) {
+                    Ok(result) => result,
+                    Err(crabka_pgcatalog::CatalogError::UndefinedIndex(_)) if *if_exists => {
+                        continue;
+                    }
+                    Err(error) => return Err(error.into()),
+                };
+                if index.placement == crabka_pgcatalog::IndexPlacement::Global {
+                    return Err(ExecError::Unsupported(
+                        "dropping global indexes is not supported until distributed index cleanup exists"
+                            .into(),
+                    ));
                 }
-                Err(error) => return Err(error.into()),
-            };
-            if index.placement == crabka_pgcatalog::IndexPlacement::Global {
-                return Err(ExecError::Unsupported(
-                    "dropping global indexes is not supported until distributed index cleanup exists"
-                        .into(),
-                ));
-            }
-            // A foreign key that chose this index as the one proving its
-            // referenced columns unique depends on it; CASCADE drops the
-            // referencing constraint, not the referencing relation.
-            let dependents = crate::fk::dependents_blocking_index_drop(kv, &index)?;
-            if !dependents.is_empty() {
-                if !*cascade {
-                    return Err(ExecError::DependentForeignKeys(Box::new(
-                        crate::error::ForeignKeyDependents {
-                            dropped: crate::error::DroppedObject::Index(index.name.clone()),
-                            dependents,
-                        },
-                    )));
+                // A foreign key that chose this index as the one proving its
+                // referenced columns unique depends on it; CASCADE drops the
+                // referencing constraint, not the referencing relation.
+                let dependents = crate::fk::dependents_blocking_index_drop(kv, &index)?;
+                if !dependents.is_empty() {
+                    if !*cascade {
+                        return Err(ExecError::DependentForeignKeys(Box::new(
+                            crate::error::ForeignKeyDependents {
+                                dropped: crate::error::DroppedObject::Index(index.name.clone()),
+                                dependents,
+                            },
+                        )));
+                    }
+                    for dependent in &dependents {
+                        let child = crabka_pgcatalog::get_table(kv, &dependent.table)?;
+                        let (_, drop_ops) = crabka_pgcatalog::drop_foreign_key_ops(
+                            kv,
+                            child.id,
+                            &dependent.constraint,
+                        )?;
+                        ops.extend(drop_ops);
+                    }
                 }
-                for dependent in &dependents {
-                    let child = crabka_pgcatalog::get_table(kv, &dependent.table)?;
-                    let (_, drop_ops) = crabka_pgcatalog::drop_foreign_key_ops(
-                        kv,
-                        child.id,
-                        &dependent.constraint,
-                    )?;
-                    ops.extend(drop_ops);
+                for (key, _) in kv.scan_prefix(&crabka_pgkv::key::secondary_index_prefix(
+                    index.table_id,
+                    index.id,
+                ))? {
+                    ops.push(crabka_pgkv::WriteOp::Delete { key });
                 }
+                all_ops.extend(ops);
             }
-            for (key, _) in kv.scan_prefix(&crabka_pgkv::key::secondary_index_prefix(
-                index.table_id,
-                index.id,
-            ))? {
-                ops.push(crabka_pgkv::WriteOp::Delete { key });
-            }
-            Ok((command("DROP INDEX"), ops))
+            Ok((command("DROP INDEX"), all_ops))
         }
         Statement::AlterIndex { name, action } => {
             use crabka_pgparser::ast::AlterIndexAction;
@@ -1358,6 +1372,23 @@ pub(crate) fn execute_ddl(
                     // statistics, but accepting the valid statement keeps the
                     // DDL result and catalog shape aligned until P2 persists it.
                     Ok((command("ALTER INDEX"), Vec::new()))
+                }
+                AlterIndexAction::SetAttributeOptions { .. } => {
+                    let detail = if crate::partition::is_partitioned(kv, &index.table)? {
+                        "This operation is not supported for partitioned indexes."
+                    } else {
+                        "This operation is not supported for indexes."
+                    };
+                    Err(ExecError::Remote(
+                        crabka_pgwire::error::PgError::error(
+                            "42P17",
+                            format!(
+                                "ALTER action ALTER COLUMN ... SET cannot be performed on relation \"{}\"",
+                                index.name
+                            ),
+                        )
+                        .with_detail(detail),
+                    ))
                 }
                 // The written options were checked against the reloption
                 // catalog at parse time. Crabka's index storage has no page
@@ -5678,6 +5709,7 @@ pub(crate) fn attach_partition_ops(
     if let Some(missing) = parent
         .columns
         .iter()
+        .filter(|column| !column.dropped)
         .find(|column| candidate.column_index(&column.name).is_none())
     {
         return Err(ExecError::ChildMissingColumn(missing.name.clone()));
@@ -5698,7 +5730,7 @@ pub(crate) fn attach_partition_ops(
     // them, collation included: PostgreSQL compares the two declarations rather
     // than what they do, so `char(2) COLLATE "POSIX"` cannot join a parent whose
     // column says `COLLATE "C"` even where both order text by byte value.
-    for column in &parent.columns {
+    for column in parent.columns.iter().filter(|column| !column.dropped) {
         let Some(index) = candidate.column_index(&column.name) else {
             continue;
         };
@@ -5731,21 +5763,10 @@ pub(crate) fn attach_partition_ops(
 
     // PostgreSQL maps the candidate's columns onto the parent's by NAME, so a
     // table declared in a different column order still attaches.
-    let ordinals = parent
-        .columns
-        .iter()
-        .map(|column| {
-            candidate
-                .column_index(&column.name)
-                .ok_or_else(|| ExecError::ChildMissingColumn(column.name.clone()))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let ordinals = crate::exec::column_mapping(parent, &candidate)?;
     let versions = scan_all_row_versions(kv, &candidate)?;
     for (_, _, stored) in live_row_versions(kv, &candidate, &versions, own_xid)? {
-        let row = ordinals
-            .iter()
-            .map(|ordinal| stored.get(*ordinal).cloned().unwrap_or(Datum::Null))
-            .collect::<Vec<_>>();
+        let row = crate::exec::permuted_row(&stored, &ordinals);
         if !crate::partition::satisfies(&scheme, &parent.columns, &resolved, &siblings, &row)? {
             return Err(ExecError::PartitionConstraintViolationOnExistingRows(
                 child.to_string(),
@@ -6176,7 +6197,13 @@ pub(crate) fn add_check_constraint(
     ctx: &crate::clock::EvalCtx,
 ) -> Result<(), ExecError> {
     validate_check_predicate(&state.table, predicate)?;
-    let column_names: Vec<String> = state.table.columns.iter().map(|c| c.name.clone()).collect();
+    let column_names: Vec<String> = state
+        .table
+        .columns
+        .iter()
+        .filter(|column| !column.dropped)
+        .map(|column| column.name.clone())
+        .collect();
     let default = default_check_name(&state.table.name, predicate, &column_names);
     // A generated name takes the lowest free numeric suffix, so only an
     // explicit `CONSTRAINT <name>` can collide here.
@@ -6697,11 +6724,6 @@ pub(crate) fn drop_table_column(
             }
         }
     }
-    for (_, _, _, _, _, row) in state.rows_mut(kv)? {
-        if index < row.len() {
-            row.remove(index);
-        }
-    }
     for foreign_key in state.current_foreign_keys(kv)? {
         if foreign_key.columns.iter().any(|name| name == column) {
             drop_foreign_key_constraint(kv, state, &foreign_key.name);
@@ -6723,8 +6745,19 @@ pub(crate) fn drop_table_column(
             )?;
         }
     }
-    state.table.columns.remove(index);
-    let column_names: Vec<String> = state.table.columns.iter().map(|c| c.name.clone()).collect();
+    state.table.columns[index].dropped = true;
+    state.table.columns[index].name = format!("........pg.dropped.{}........", index + 1);
+    state.table.columns[index].not_null = false;
+    state.table.columns[index].default = None;
+    state.table.columns[index].generated = None;
+    state.table.columns[index].identity = None;
+    let column_names: Vec<String> = state
+        .table
+        .columns
+        .iter()
+        .filter(|column| !column.dropped)
+        .map(|column| column.name.clone())
+        .collect();
     state
         .table
         .checks
@@ -6741,25 +6774,13 @@ fn drop_statistics_referencing_column_ops(
     column: &str,
     index: usize,
 ) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
-    let attnum = i16::try_from(index + 1)
-        .map_err(|_| ExecError::Unsupported("statistics column number exceeds int2".into()))?;
     let mut ops = Vec::new();
-    for mut statistics in crabka_pgcatalog::statistics::list(kv)? {
+    for statistics in crabka_pgcatalog::statistics::list(kv)? {
         if statistics_references_column(&statistics, table, column, index) {
             ops.extend(crabka_pgcatalog::statistics::drop_ops(
                 kv,
                 &statistics.name,
             )?);
-        } else if statistics.table_id == table.id && statistics.keys.iter().any(|key| *key > attnum)
-        {
-            for key in &mut statistics.keys {
-                if *key > attnum {
-                    *key -= 1;
-                }
-            }
-            statistics.data = None;
-            statistics.inherited_data = None;
-            ops.push(crabka_pgcatalog::statistics::put_op(&statistics));
         }
     }
     Ok(ops)

@@ -36,7 +36,7 @@ use crabka_pgparser::ast::{
 use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
 use crabka_pgwire::engine::QueryResult;
 
-use crate::{error::ExecError, eval::ArgType};
+use crate::{error::ExecError, eval::ArgType, exec::is_immutable_function};
 
 pub(crate) struct ScalarFunctionRequest {
     pub routine: Option<Routine>,
@@ -2174,6 +2174,32 @@ fn shadowing_user_aggregate(kv: &dyn Kv, name: &str, arity: usize) -> bool {
 /// evaluator.
 pub(crate) fn is_user_routine(kv: &dyn Kv, name: &str) -> bool {
     routines_named(kv, name).is_ok_and(|found| found.iter().any(|routine| !routine.is_aggregate()))
+}
+
+/// Whether every user routine with this name is immutable, or the built-in
+/// routine fallback is immutable when the name has no user definition.
+pub(crate) fn is_immutable_call(kv: &dyn Kv, name: &str) -> bool {
+    match routines_named(kv, name) {
+        Ok(routines) if routines.is_empty() => is_immutable_function(name),
+        Ok(routines) => routines.iter().all(|routine| routine.volatility == 'i'),
+        Err(_) => false,
+    }
+}
+
+/// Whether any overload of `name` can change within a scan.
+pub(crate) fn is_volatile_call(kv: &dyn Kv, name: &str) -> bool {
+    match routines_named(kv, name) {
+        Ok(routines) if !routines.is_empty() => {
+            routines.iter().any(|routine| routine.volatility == 'v')
+        }
+        Ok(_) => builtin_pg_proc_rows().is_ok_and(|rows| {
+            rows.iter().any(|row| {
+                matches!(row.get(1), Some(Datum::Text(found)) if found == name)
+                    && matches!(row.get(14), Some(Datum::Text(volatility)) if volatility == "v")
+            })
+        }),
+        Err(_) => true,
+    }
 }
 
 /// Whether `name` is a routine exposed by the immutable `pg_catalog.pg_proc`
@@ -5988,6 +6014,7 @@ pub(crate) fn plpgsql_table_function_schema(
                 registered.fields().map(|fields| {
                     fields
                         .iter()
+                        .filter(|field| !field.dropped)
                         .map(|field| (field.name.clone(), field.ty))
                         .collect()
                 })
@@ -6009,13 +6036,16 @@ pub(crate) fn plpgsql_table_function_schema(
         RoutineResult::Table(columns) => columns
             .iter()
             .map(|(name, ty)| {
-                ty.column.map(|ty| (name.clone(), ty)).ok_or_else(|| {
-                    ExecError::Unsupported(format!(
-                        "function {} returns unsupported type {}",
-                        routine.identity(),
-                        ty.name
-                    ))
-                })
+                ty.column
+                    .or_else(|| resolved_polymorphic_type(&routine, &given, &ty.name))
+                    .map(|ty| (name.clone(), ty))
+                    .ok_or_else(|| {
+                        ExecError::Unsupported(format!(
+                            "function {} returns unsupported type {}",
+                            routine.identity(),
+                            ty.name
+                        ))
+                    })
             })
             .collect::<Result<Vec<_>, _>>()?,
         RoutineResult::Unspecified => output_params()?,
@@ -6037,13 +6067,15 @@ pub(crate) fn plpgsql_table_function_schema(
         }
         RoutineResult::Type { ty, .. } => vec![(
             routine.name.clone(),
-            ty.column.ok_or_else(|| {
-                ExecError::Unsupported(format!(
-                    "function {} returns unsupported type {}",
-                    routine.identity(),
-                    ty.name
-                ))
-            })?,
+            ty.column
+                .or_else(|| resolved_polymorphic_type(&routine, &given, &ty.name))
+                .ok_or_else(|| {
+                    ExecError::Unsupported(format!(
+                        "function {} returns unsupported type {}",
+                        routine.identity(),
+                        ty.name
+                    ))
+                })?,
         )],
     };
     if columns.is_empty() {
@@ -6715,17 +6747,21 @@ fn decode_builtin_pg_proc_rows() -> Result<Vec<Vec<Datum>>, ExecError> {
                 Datum::Int2(short(argument_count)?),
                 Datum::Int2(short(default_count)?),
                 Datum::Oid(int(result_type)?.cast_unsigned()),
-                Datum::OidVector(crabka_pgtypes::ArrayValue::with_dims(
-                    crabka_pgtypes::ElemType::Int4,
-                    argument_types
+                // `oidvector` retains its zero-length `[0:-1]` header. A
+                // regular empty array normalizes to zero dimensions, but
+                // `pg_proc.proargtypes` relies on this distinction to tell
+                // `count(*)` from `count(any)`.
+                Datum::OidVector(crabka_pgtypes::ArrayValue {
+                    elem: crabka_pgtypes::ElemType::Int4,
+                    elems: argument_types
                         .split_whitespace()
                         .map(|value| int(value).map(Datum::Int4))
                         .collect::<Result<Vec<_>, _>>()?,
-                    vec![crabka_pgtypes::ArrayDim::new(
+                    dims: vec![crabka_pgtypes::ArrayDim::new(
                         0,
                         i32::from(short(argument_count)?),
                     )],
-                )),
+                }),
                 match all_argument_types {
                     Some(types) => Datum::Array(crabka_pgtypes::ArrayValue::new(
                         crabka_pgtypes::ElemType::from_column_type(crabka_pgtypes::ColumnType::Oid)
@@ -7291,6 +7327,20 @@ mod tests {
     }
 
     #[test]
+    fn builtin_count_aggregates_include_star_and_any() {
+        let rows = builtin_pg_proc_rows().expect("built-in pg_proc rows");
+        let counts = rows
+            .iter()
+            .filter(|row| {
+                row[1] == Datum::Text("count".into()) && row[9] == Datum::Text("a".into())
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(counts.len(), 2, "count aggregate signatures: {counts:?}");
+        assert!(counts.iter().any(|row| row[16] == Datum::Int2(0)));
+        assert!(counts.iter().any(|row| row[16] == Datum::Int2(1)));
+    }
+
+    #[test]
     fn builtin_routines_preserve_catalog_sources() {
         let rows = builtin_pg_proc_rows().expect("built-in pg_proc rows");
         for (oid, source) in [
@@ -7435,6 +7485,23 @@ mod tests {
         kv
     }
 
+    #[test]
+    fn volatile_call_distinguishes_catalog_and_user_routines() {
+        let kv = MemKv::default();
+        assert!(is_volatile_call(&kv, "clock_timestamp"));
+        assert!(!is_volatile_call(&kv, "now"));
+        defined(
+            &kv,
+            "CREATE FUNCTION volatile_cursor_value() RETURNS int LANGUAGE sql AS 'SELECT 1'",
+        );
+        defined(
+            &kv,
+            "CREATE FUNCTION stable_cursor_value() RETURNS int STABLE LANGUAGE sql AS 'SELECT 1'",
+        );
+        assert!(is_volatile_call(&kv, "volatile_cursor_value"));
+        assert!(!is_volatile_call(&kv, "stable_cursor_value"));
+    }
+
     #[tokio::test]
     async fn routine_composite_results_follow_the_session_search_path() {
         let mut session = crate::SqlEngine::new().connect();
@@ -7451,6 +7518,53 @@ mod tests {
             .expect("temporary composite result");
         assert!(
             matches!(result.as_slice(), [QueryResult::Command { tag }] if tag == "CREATE FUNCTION")
+        );
+    }
+
+    #[tokio::test]
+    async fn table_results_resolve_polymorphic_range_subtypes() {
+        let mut session = crate::SqlEngine::new().connect();
+        session
+            .simple_query(
+                "CREATE FUNCTION range_bounds(r anyrange) \
+                 RETURNS TABLE (lower_bound anyelement, upper_bound anyelement) \
+                 LANGUAGE sql AS $$ SELECT lower(r), upper(r) $$",
+            )
+            .await
+            .expect("define polymorphic table function");
+        let result = session
+            .simple_query("SELECT * FROM range_bounds(int4range(1, 11))")
+            .await
+            .expect("execute polymorphic table function");
+        let [QueryResult::Rows { rows, .. }] = result.as_slice() else {
+            panic!("expected rows");
+        };
+        assert!(rows.len() == 1);
+        assert!(rows[0][0].as_ref().expect("lower").text.as_ref() == b"1");
+        assert!(rows[0][1].as_ref().expect("upper").text.as_ref() == b"11");
+    }
+
+    #[tokio::test]
+    async fn setof_anyelement_resolves_from_an_anyarray_argument() {
+        let mut session = crate::SqlEngine::new().connect();
+        session
+            .simple_query(
+                "CREATE FUNCTION array_members(anyarray) RETURNS SETOF anyelement \
+                 LANGUAGE sql AS $$ SELECT unnest($1) $$",
+            )
+            .await
+            .expect("define polymorphic set function");
+        let result = session
+            .simple_query("SELECT * FROM array_members(ARRAY[1, 2, 3])")
+            .await
+            .expect("execute polymorphic set function");
+        let [QueryResult::Rows { rows, .. }] = result.as_slice() else {
+            panic!("expected rows");
+        };
+        assert!(
+            rows.iter()
+                .map(|row| row[0].as_ref().expect("value").text.as_ref())
+                .eq([b"1".as_slice(), b"2", b"3"])
         );
     }
 

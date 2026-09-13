@@ -1629,13 +1629,16 @@ pub(crate) fn apply_generated_columns(
     if table
         .columns
         .iter()
-        .all(|column| column.generated.is_none())
+        .all(|column| column.dropped || column.generated.is_none())
     {
         return Ok(());
     }
     let scope = Scope::single(table, &table.name.name);
     let snapshot = row.to_vec();
     for (index, column) in table.columns.iter().enumerate() {
+        if column.dropped {
+            continue;
+        }
         if column.is_virtual_generated() {
             row[index] = Datum::Null;
             continue;
@@ -1663,12 +1666,15 @@ pub(crate) fn virtual_generated_needed_for_constraints(table: &Table) -> bool {
             || table
                 .columns
                 .iter()
-                .any(|column| column.is_virtual_generated() && column.not_null))
+                .any(|column| !column.dropped && column.is_virtual_generated() && column.not_null))
 }
 
 /// Whether `table` has a column whose value is never written down.
 pub(crate) fn has_virtual_generated(table: &Table) -> bool {
-    table.columns.iter().any(Column::is_virtual_generated)
+    table
+        .columns
+        .iter()
+        .any(|column| !column.dropped && column.is_virtual_generated())
 }
 
 /// `row` as it is written to storage: every `VIRTUAL` generated column blanked
@@ -1767,7 +1773,7 @@ pub(crate) fn expand_virtual_generated_row(
     let scope = Scope::single(table, &table.name.name);
     let snapshot = row.to_vec();
     for (index, column) in table.columns.iter().enumerate() {
-        if !column.is_virtual_generated() {
+        if column.dropped || !column.is_virtual_generated() {
             continue;
         }
         if !reads.reads(&column.name) {

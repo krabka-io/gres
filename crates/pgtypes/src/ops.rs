@@ -637,8 +637,10 @@ pub fn compare(a: &Datum, b: &Datum) -> Result<Option<Ordering>, TypeError> {
         (Datum::Timestamptz(x), Datum::Timestamptz(y)) => x.cmp(y),
         (Datum::Interval(x), Datum::Interval(y)) => x.cmp(y),
         // date ↔ timestamp: promote the date to midnight and compare.
-        (Datum::Date(d), Datum::Timestamp(ts)) => crate::datetime::date_to_midnight(*d).cmp(ts),
-        (Datum::Timestamp(ts), Datum::Date(d)) => ts.cmp(&crate::datetime::date_to_midnight(*d)),
+        (Datum::Date(d), Datum::Timestamp(ts)) => crate::datetime::date_cmp_timestamp(*d, *ts),
+        (Datum::Timestamp(ts), Datum::Date(d)) => {
+            crate::datetime::date_cmp_timestamp(*d, *ts).reverse()
+        }
         // jsonb btree order (Object > Array > Bool > Number > String > Null).
         // Placed before the numeric fall-throughs, which would otherwise try to
         // promote these to f64 and fail.

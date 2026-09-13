@@ -40,7 +40,10 @@ pub fn parse_literal(input: &str) -> Result<ArrayLiteral, TypeError> {
     let mut pos = skip_ws(bytes, 0);
     let explicit = read_dim_header(input, bytes, &mut pos)?;
     if bytes.get(pos) != Some(&b'{') {
-        return Err(malformed(input));
+        return Err(malformed_with_detail(
+            input,
+            "Array value must start with \"{\" or dimension information.",
+        ));
     }
     let mut state = Scan {
         input,
@@ -50,7 +53,10 @@ pub fn parse_literal(input: &str) -> Result<ArrayLiteral, TypeError> {
     };
     pos = state.level(bytes, pos, 0)?;
     if skip_ws(bytes, pos) != bytes.len() {
-        return Err(malformed(input));
+        return Err(malformed_with_detail(
+            input,
+            "Junk after closing right brace.",
+        ));
     }
     let Scan {
         elements, extents, ..
@@ -71,7 +77,10 @@ pub fn parse_literal(input: &str) -> Result<ArrayLiteral, TypeError> {
                     .zip(&extents)
                     .all(|(d, len)| usize::try_from(d.len) == Ok(*len));
             if !matches_braces {
-                return Err(malformed(input));
+                return Err(malformed_with_detail(
+                    input,
+                    "Specified array dimensions do not match array contents.",
+                ));
             }
             header
         }
@@ -143,7 +152,12 @@ fn read_bound(input: &str, bytes: &[u8], pos: &mut usize) -> Result<i32, TypeErr
         *pos += 1;
     }
     if *pos == digits {
-        return Err(malformed(input));
+        let detail = if bytes.get(*pos) == Some(&b':') {
+            "\"[\" must introduce explicitly-specified array dimensions."
+        } else {
+            "Missing array dimension value."
+        };
+        return Err(malformed_with_detail(input, detail));
     }
     input[start..*pos]
         .parse::<i32>()
@@ -182,12 +196,25 @@ impl Scan<'_> {
         let mut count = 0usize;
         loop {
             pos = skip_ws(bytes, pos);
+            if let Some(byte @ (b',' | b'}')) = bytes.get(pos).copied() {
+                return Err(malformed_with_detail(
+                    self.input,
+                    if byte == b',' {
+                        "Unexpected \",\" character."
+                    } else {
+                        "Unexpected \"}\" character."
+                    },
+                ));
+            }
+            let nested;
             if bytes.get(pos) == Some(&b'{') {
+                nested = true;
                 if self.leaf_depth == Some(depth) {
                     return Err(mismatched_subarrays(self.input));
                 }
                 pos = self.level(bytes, pos, depth + 1)?;
             } else {
+                nested = false;
                 if self.leaf_depth.is_some_and(|leaf| leaf != depth) {
                     return Err(mismatched_subarrays(self.input));
                 }
@@ -204,7 +231,24 @@ impl Scan<'_> {
                     self.record(depth, count)?;
                     return Ok(pos + 1);
                 }
-                _ => return Err(malformed(self.input)),
+                Some(b'{') => {
+                    return Err(malformed_with_detail(
+                        self.input,
+                        "Unexpected \"{\" character.",
+                    ));
+                }
+                _ if nested => {
+                    return Err(malformed_with_detail(
+                        self.input,
+                        "Unexpected array element.",
+                    ));
+                }
+                _ => {
+                    return Err(malformed_with_detail(
+                        self.input,
+                        "Incorrectly quoted array element.",
+                    ));
+                }
             }
         }
     }
@@ -270,7 +314,15 @@ fn parse_element(
         while let Some(byte) = bytes.get(pos) {
             match byte {
                 b',' | b'}' => break,
-                b'{' | b'"' => return Err(malformed(input)),
+                b'{' => {
+                    return Err(malformed_with_detail(input, "Unexpected \"{\" character."));
+                }
+                b'"' => {
+                    return Err(malformed_with_detail(
+                        input,
+                        "Incorrectly quoted array element.",
+                    ));
+                }
                 b'\\' => {
                     let start = pos + 1;
                     if start >= bytes.len() {
@@ -411,8 +463,17 @@ fn malformed(input: &str) -> TypeError {
     }
 }
 
+fn malformed_with_detail(input: &str, detail: &'static str) -> TypeError {
+    TypeError::ArrayMalformed {
+        value: input.to_string(),
+        detail,
+    }
+}
+
 fn mismatched_subarrays(input: &str) -> TypeError {
-    malformed(input)
+    TypeError::ArrayDimensionMismatch {
+        value: input.to_string(),
+    }
 }
 
 fn too_many_dims(ndims: usize) -> TypeError {
@@ -580,6 +641,45 @@ mod tests {
         ] {
             let error = parse_literal(input).expect_err("rejected");
             assert!(error.sqlstate() == "22P02", "expected 22P02 for {input:?}");
+        }
+    }
+
+    #[test]
+    fn mismatched_nested_arrays_explain_their_dimensions() {
+        let error = parse_literal("{{1,2},{3}} ").expect_err("mismatched dimensions");
+        assert!(error.sqlstate() == "22P02");
+        assert!(
+            error.detail().as_deref()
+                == Some("Multidimensional arrays must have sub-arrays with matching dimensions.")
+        );
+    }
+
+    #[test]
+    fn malformed_array_literals_report_postgres_details() {
+        let cases = [
+            (
+                "}{",
+                "Array value must start with \"{\" or dimension information.",
+            ),
+            ("{}}", "Junk after closing right brace."),
+            ("{foo{}}", "Unexpected \"{\" character."),
+            ("{foo,,bar}", "Unexpected \",\" character."),
+            (r#"{"a"b}"#, "Incorrectly quoted array element."),
+            (r#"{{"1 2"} x,{3}}"#, "Unexpected array element."),
+            (
+                "[2]={1}",
+                "Specified array dimensions do not match array contents.",
+            ),
+            ("[1:]={1}", "Missing array dimension value."),
+            (
+                "[:1]={1}",
+                "\"[\" must introduce explicitly-specified array dimensions.",
+            ),
+            ("{1,}", "Unexpected \"}\" character."),
+        ];
+        for (input, detail) in cases {
+            let error = parse_literal(input).expect_err("malformed array literal");
+            assert!(error.detail().as_deref() == Some(detail), "{input}");
         }
     }
 

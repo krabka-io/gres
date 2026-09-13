@@ -4347,7 +4347,7 @@ mod tests {
         };
         use crabka_pgwire::engine::{Engine, Session};
 
-        use crate::lockmgr::LockMode;
+        use crate::lockmgr::{LockMode, LockOwner};
 
         // One in-memory store plays both this range's local clog/versions AND range 0's
         // global clog (single-store engine: kv == catalog_kv).
@@ -4392,6 +4392,15 @@ mod tests {
             vec![(li, g)],
             "the inherited (Li -> g) is re-acquired"
         );
+        let rowid = engine
+            .lockmgr
+            .row_holds()
+            .into_iter()
+            .find_map(|(held_table, rowid, mode, owner)| {
+                (held_table == table && mode == LockMode::Exclusive && owner == LockOwner::Xid(li))
+                    .then_some(rowid)
+            })
+            .expect("re-acquired row lock");
 
         // A concurrent writer for the SAME row must BLOCK on the re-acquired lock.
         let blocked = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -4400,13 +4409,7 @@ mod tests {
         let other_xid = li + 1000;
         let waiter = tokio::spawn(async move {
             lockmgr
-                .acquire(
-                    table,
-                    /*rowid*/ 1,
-                    LockMode::Exclusive,
-                    other_xid,
-                    None,
-                )
+                .acquire(table, rowid, LockMode::Exclusive, other_xid, None)
                 .await
                 .expect("not a deadlock");
             blocked2.store(true, std::sync::atomic::Ordering::SeqCst);

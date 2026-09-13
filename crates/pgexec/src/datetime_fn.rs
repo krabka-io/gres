@@ -191,6 +191,9 @@ pub(crate) fn datetime_func_result_type(
         // timestamp → timestamptz, timestamptz → timestamp, timetz → timetz.
         DtFunc::Timezone => {
             require_arity(fc, n == 1 || n == 2)?;
+            if n == 2 && crate::eval::is_unknown_literal(&args[1]) {
+                return Ok(ColumnType::Timestamp);
+            }
             match crate::eval::infer_type(&args[n - 1], scope)? {
                 ColumnType::Timestamp => ColumnType::Timestamptz,
                 ColumnType::Timestamptz => ColumnType::Timestamp,
@@ -251,9 +254,14 @@ pub(crate) fn eval_datetime_constructor(
             let Datum::Timestamp(timestamp) = crabka_pgtypes::ops::add(&date, &time)? else {
                 unreachable!("date + time always returns timestamp");
             };
-            crabka_pgtypes::datetime::zoned_instant(timestamp, &ctx.time_zone)
-                .map(Datum::Timestamptz)
-                .map_err(|_| invalid_param("timestamp out of range for time zone conversion"))
+            crabka_pgtypes::datetime::zoned_instant(
+                timestamp.civil().ok_or_else(|| {
+                    invalid_param("timestamp out of range for time zone conversion")
+                })?,
+                &ctx.time_zone,
+            )
+            .map(Datum::Timestamptz)
+            .map_err(|_| invalid_param("timestamp out of range for time zone conversion"))
         }
         ("timestamptz", Datum::Date(_), Datum::Timetz(_)) => {
             Ok(crabka_pgtypes::ops::add(&date, &time)?)
@@ -308,7 +316,7 @@ pub(crate) fn eval_datetime(
         }
         DtFunc::LocalTimestamp => {
             require_arity(fc, args.is_empty())?;
-            Ok(Datum::Timestamp(ctx.time_zone.to_datetime(ctx.now)))
+            Ok(Datum::Timestamp(ctx.time_zone.to_datetime(ctx.now).into()))
         }
         // ---- extract / date_part ----
         DtFunc::Extract => {
@@ -447,7 +455,9 @@ pub(crate) fn eval_datetime(
                 None => {
                     let today = ctx.time_zone.to_datetime(ctx.now).date();
                     (
-                        crabka_pgtypes::datetime::date_to_midnight(today.into()),
+                        crabka_pgtypes::datetime::date_to_midnight(today.into())?
+                            .civil()
+                            .expect("today fits Jiff"),
                         as_datetime(&a, &ctx.time_zone)?,
                     )
                 }
@@ -463,11 +473,23 @@ pub(crate) fn eval_datetime(
             // sugar for `AT TIME ZONE current_setting('TimeZone')`, which is
             // why the session zone is read here instead of being planted as an
             // argument at parse time.
-            let [zone, value] = match args {
-                [value] => [None, Some(eval_child(value)?)],
+            let mut values = args
+                .iter()
+                .map(&mut eval_child)
+                .collect::<Result<Vec<_>, _>>()?;
+            if args.len() == 2 {
+                crate::eval::coerce_unknown_args(
+                    args,
+                    &mut values,
+                    &[Some(ColumnType::Text), Some(ColumnType::Timestamptz)],
+                    ctx,
+                )?;
+            }
+            let [zone, value] = match values.as_slice() {
+                [value] => [None, Some(value.clone())],
                 // Zone FIRST: that is the argument order `AT TIME ZONE` lowers
                 // to, and `pg_proc` declares.
-                [zone, value] => [Some(eval_child(zone)?), Some(eval_child(value)?)],
+                [zone, value] => [Some(zone.clone()), Some(value.clone())],
                 _ => unreachable!("arity checked above"),
             };
             let Some(value) = value else {
@@ -480,6 +502,18 @@ pub(crate) fn eval_datetime(
                 Some(zone) => zone_arg(zone)?,
                 None => ctx.time_zone.clone(),
             };
+            if let (Some(Datum::Text(name)), Datum::Timestamp(dt)) = (&zone, &value)
+                && name.eq_ignore_ascii_case("msk")
+            {
+                return crabka_pgtypes::datetime::zoned_instant_after_gap(
+                    dt.civil().ok_or_else(|| {
+                        invalid_param("timestamp out of range for time zone conversion")
+                    })?,
+                    &tz,
+                )
+                .map(Datum::Timestamptz)
+                .map_err(|_| invalid_param("timestamp out of range for time zone conversion"));
+            }
             timezone_convert(&tz, &value)
         }
         DtFunc::IsFinite => {
@@ -498,9 +532,19 @@ pub(crate) fn eval_datetime(
         }
         DtFunc::DateBin => {
             require_arity(fc, args.len() == 3)?;
-            let stride = eval_child(&args[0])?;
-            let source = eval_child(&args[1])?;
-            let origin = eval_child(&args[2])?;
+            let mut values = args
+                .iter()
+                .map(&mut eval_child)
+                .collect::<Result<Vec<_>, _>>()?;
+            crate::eval::coerce_unknown_args(
+                args,
+                &mut values,
+                &[Some(ColumnType::Interval), None, None],
+                ctx,
+            )?;
+            let [stride, source, origin] = values.as_slice() else {
+                unreachable!("arity checked above")
+            };
             if stride.is_null() || source.is_null() || origin.is_null() {
                 return Ok(Datum::Null);
             }
@@ -570,9 +614,15 @@ fn date_bin(
     }
     let source_micros = micros_of(source)?;
     let origin_micros = micros_of(origin)?;
-    let delta = i128::from(source_micros) - i128::from(origin_micros);
-    let binned =
-        i128::from(origin_micros) + delta.div_euclid(i128::from(width)) * i128::from(width);
+    // PostgreSQL forms this delta in its `Timestamp` (i64 microseconds) domain
+    // before it divides by the stride.  Keeping it in i128 makes a pair of
+    // individually valid endpoints appear binned when their distance itself is
+    // not a valid interval.
+    let delta = source_micros
+        .checked_sub(origin_micros)
+        .ok_or_else(|| out_of_range("interval out of range"))?;
+    let binned = i128::from(origin_micros)
+        + i128::from(delta).div_euclid(i128::from(width)) * i128::from(width);
     let binned = i64::try_from(binned)
         .map_err(|_| out_of_range("interval out of range"))?
         .to_be_bytes();
@@ -689,8 +739,12 @@ fn temporal_infinite_sign(d: &Datum) -> i32 {
 /// midnight.
 fn as_datetime(d: &Datum, tz: &TimeZone) -> Result<DateTime, ExecError> {
     match d {
-        Datum::Timestamp(dt) => Ok(*dt),
-        Datum::Date(dd) => Ok(crabka_pgtypes::datetime::date_to_midnight(*dd)),
+        Datum::Timestamp(dt) => dt
+            .civil()
+            .ok_or_else(|| invalid_param("timestamp out of range")),
+        Datum::Date(dd) => crabka_pgtypes::datetime::date_to_midnight(*dd)?
+            .civil()
+            .ok_or_else(|| invalid_param("date out of range for timestamp")),
         Datum::Timestamptz(ts) => Ok(tz.to_datetime(*ts)),
         other => Err(type_error("age", other)),
     }
@@ -782,18 +836,29 @@ fn extract_field(field: &str, source: &Datum, tz: &TimeZone) -> Result<Option<St
                 NonFinite::Null => return Ok(None),
                 NonFinite::Finite => {}
             }
-            let dt = crabka_pgtypes::datetime::date_to_midnight(*d);
+            let dt = crabka_pgtypes::datetime::date_to_midnight(*d)?;
             if unit == "epoch" {
                 let micros = dt
-                    .since((Unit::Microsecond, unix_epoch_civil()))
-                    .map(|s| s.get_microseconds())
-                    .map_err(|_| invalid_param("date out of range for epoch"))?;
+                    .epoch_micros()
+                    .and_then(|micros| micros.checked_add(946_684_800_000_000))
+                    .ok_or_else(|| invalid_param("date out of range for epoch"))?;
                 return Ok(Some((micros / 1_000_000).to_string()));
             }
             if unit == "julian" {
-                return Ok(Some(julian_day(dt.date()).to_string()));
+                let days = dt
+                    .epoch_micros()
+                    .expect("finite date timestamp")
+                    .div_euclid(86_400_000_000);
+                return Ok(Some((days + 2_451_545).to_string()));
             }
-            extract_from_datetime(unit, dt, None, "date").map(Some)
+            extract_from_datetime(
+                unit,
+                dt.civil()
+                    .ok_or_else(|| invalid_param("date out of range for extract"))?,
+                None,
+                "date",
+            )
+            .map(Some)
         }
         Datum::Timestamp(dt) => {
             match non_finite_field(
@@ -807,7 +872,19 @@ fn extract_field(field: &str, source: &Datum, tz: &TimeZone) -> Result<Option<St
                 NonFinite::Null => return Ok(None),
                 NonFinite::Finite => {}
             }
-            extract_from_datetime(unit, *dt, None, "timestamp without time zone").map(Some)
+            if unit == "epoch" {
+                let micros = i128::from(dt.epoch_micros().expect("finite timestamp"))
+                    + 946_684_800_i128 * 1_000_000;
+                return Ok(Some(epoch_string_micros_wide(micros)));
+            }
+            extract_from_datetime(
+                unit,
+                dt.civil()
+                    .ok_or_else(|| invalid_param("timestamp out of range for extract"))?,
+                None,
+                "timestamp without time zone",
+            )
+            .map(Some)
         }
         Datum::Timestamptz(ts) => {
             match non_finite_field(
@@ -1309,11 +1386,15 @@ fn date_trunc(
                 trunc_datetime(unit, ColumnType::Timestamp.name(), DateTime::default())?;
                 return Ok(Datum::Timestamp(*dt));
             }
-            Ok(Datum::Timestamp(trunc_datetime(
-                unit,
-                ColumnType::Timestamp.name(),
-                *dt,
-            )?))
+            Ok(Datum::Timestamp(
+                trunc_datetime(
+                    unit,
+                    ColumnType::Timestamp.name(),
+                    dt.civil()
+                        .ok_or_else(|| invalid_param("timestamp out of range for date_trunc"))?,
+                )?
+                .into(),
+            ))
         }
         // PostgreSQL has no `date_trunc(text, date)`: the date is coerced to
         // `timestamptz`, so the result carries the session zone.
@@ -1412,7 +1493,9 @@ fn trunc_datetime(unit: &str, type_name: &str, dt: DateTime) -> Result<DateTime,
             let back = i64::from(d.weekday().to_monday_one_offset()) - 1;
             let monday = crabka_pgtypes::datetime::date_plus_days(d.into(), -back)
                 .map_err(|_| invalid_param("date_trunc week out of range"))?;
-            crabka_pgtypes::datetime::date_to_midnight(monday)
+            crabka_pgtypes::datetime::date_to_midnight(monday)?
+                .civil()
+                .ok_or_else(|| invalid_param("date_trunc out of range"))?
         }
         "month" => mk(y, m, 1, 0, 0, 0)?,
         "quarter" => {
@@ -1429,6 +1512,15 @@ fn trunc_datetime(unit: &str, type_name: &str, dt: DateTime) -> Result<DateTime,
 
 /// Truncate an interval to `unit`, and zero out the finer stored fields.
 fn trunc_interval(unit: &str, iv: Interval) -> Result<Interval, ExecError> {
+    if unit == "week" {
+        return Err(ExecError::UnsupportedWithDetail {
+            message: format!("unit \"{unit}\" not supported for type interval"),
+            detail: "Months usually have fractional weeks.".into(),
+        });
+    }
+    if iv.is_infinite() {
+        return Ok(iv);
+    }
     let months = iv.months;
     let days = iv.days;
     let micros = iv.micros;
@@ -1595,10 +1687,14 @@ fn timezone_convert(tz: &TimeZone, value: &Datum) -> Result<Datum, ExecError> {
         // `DetermineTimeZoneOffset` picks the later instant either way, which is
         // what `zoned_instant` applies. jiff's own `Compatible` strategy takes
         // the *earlier* instant in a fold, so it cannot stand in here.
-        Datum::Timestamp(dt) => crabka_pgtypes::datetime::zoned_instant(*dt, tz)
-            .map(Datum::Timestamptz)
-            .map_err(|_| invalid_param("timestamp out of range for time zone conversion")),
-        Datum::Timestamptz(ts) => Ok(Datum::Timestamp(tz.to_datetime(*ts))),
+        Datum::Timestamp(dt) => crabka_pgtypes::datetime::zoned_instant(
+            dt.civil()
+                .ok_or_else(|| invalid_param("timestamp out of range for time zone conversion"))?,
+            tz,
+        )
+        .map(Datum::Timestamptz)
+        .map_err(|_| invalid_param("timestamp out of range for time zone conversion")),
+        Datum::Timestamptz(ts) => Ok(Datum::Timestamp(tz.to_datetime(*ts).into())),
         // `timetz AT TIME ZONE zone` re-expresses the same instant-of-day at the
         // target zone's offset, keeping the type.
         Datum::Timetz(t) => {
@@ -1772,7 +1868,9 @@ mod tests {
                 "1969-12-31T16:00:00",
             ),
         ] {
-            let want = Datum::Timestamp(expected.parse().expect("expected civil datetime"));
+            let want = Datum::Timestamp(
+                crabka_pgtypes::datetime::parse_timestamp(expected).expect("expected timestamp"),
+            );
             assert!(ev(expr, &ctx) == want, "{expr}");
         }
     }
@@ -1823,12 +1921,18 @@ mod tests {
 
         assert_eq!(
             ev("timestamp(date '2000-01-01', time '11:00')", &ctx),
-            Datum::Timestamp("2000-01-01T11:00:00".parse().expect("timestamp"))
+            Datum::Timestamp(
+                crabka_pgtypes::datetime::parse_timestamp("2000-01-01T11:00:00")
+                    .expect("timestamp"),
+            )
         );
         // The same name retains its ordinary one-argument cast overload.
         assert_eq!(
             ev("timestamp(date '2000-01-01')", &ctx),
-            Datum::Timestamp("2000-01-01T00:00:00".parse().expect("timestamp"))
+            Datum::Timestamp(
+                crabka_pgtypes::datetime::parse_timestamp("2000-01-01T00:00:00")
+                    .expect("timestamp"),
+            )
         );
         // A two-argument call to another scalar family must not be intercepted.
         assert_eq!(ev("power(2, 3)", &ctx), Datum::Float8(8.0));
@@ -1970,6 +2074,10 @@ mod tests {
         )
         .expect_err("date_trunc must still refuse week for an interval");
         assert!(format!("{refused:?}").contains("not supported for type interval"));
+        assert!(
+            ev("date_trunc('hour', INTERVAL 'infinity')", &ctx)
+                == Datum::Interval(crabka_pgtypes::datetime::Interval::INFINITY)
+        );
     }
 
     /// The whole non-finite unit table for `interval`, both signs.
@@ -2314,19 +2422,26 @@ mod tests {
             ("millennium", "1501-01-01 BC", -1999),
         ] {
             let sql = format!("date_trunc('{unit}', TIMESTAMP '{literal}')");
-            let want = Datum::Timestamp(jiff::civil::date(expected_year, 1, 1).at(0, 0, 0, 0));
+            let want =
+                Datum::Timestamp(jiff::civil::date(expected_year, 1, 1).at(0, 0, 0, 0).into());
             assert!(ev(&sql, &ctx) == want, "{sql}");
         }
         // `week` reaches back to the Monday of the ISO week, which for the
         // first day of 1 BC is in the year before it.
         let sql = "date_trunc('week', TIMESTAMP '0001-01-01 BC')";
-        let want = Datum::Timestamp(jiff::civil::date(-1, 12, 27).at(0, 0, 0, 0));
+        let want = Datum::Timestamp(jiff::civil::date(-1, 12, 27).at(0, 0, 0, 0).into());
         assert!(ev(sql, &ctx) == want, "{sql}");
     }
 
     #[test]
     fn extract_epoch_timestamp_and_timestamptz() {
         let ctx = ctx_at("2024-01-15T12:00:00Z");
+        // A date is stored from PostgreSQL's 2000 epoch too, but its epoch is
+        // rendered from the Unix epoch as a whole-second integer.
+        assert_eq!(
+            ev("extract(epoch from DATE '2024-01-01')", &ctx),
+            num("1704067200")
+        );
         // timestamp epoch is "as if UTC": 2024-01-01 00:00:00 → 1704067200.
         assert_eq!(
             ev("extract(epoch from TIMESTAMP '2024-01-01 00:00:00')", &ctx),
@@ -2530,6 +2645,12 @@ mod tests {
                 "TIMESTAMP '2011-03-13 02:30:00' AT TIME ZONE 'America/Los_Angeles'",
                 &ctx
             )) == at(1_300_012_200)
+        );
+        assert2::assert!(
+            epoch(&ev(
+                "TIMESTAMP '2011-03-27 02:00:00' AT TIME ZONE 'MSK'",
+                &ctx
+            )) == at(1_301_176_800)
         );
         // Truncating to the hour inside that fold keeps the source offset, so
         // 08:30 UTC (PDT) becomes 08:00 UTC and stays on the pre-transition
@@ -2801,6 +2922,12 @@ mod tests {
         assert_eq!(
             ev("TIMESTAMP '2024-01-15 12:00:00' AT TIME ZONE 'UTC'", &ctx),
             Datum::Timestamptz("2024-01-15T12:00:00Z".parse().expect("ts"))
+        );
+        assert_eq!(
+            ev("'2024-01-15 12:00:00' AT TIME ZONE 'UTC'", &ctx),
+            Datum::Timestamp(
+                crabka_pgtypes::datetime::parse_timestamp("2024-01-15 12:00:00").expect("ts")
+            )
         );
     }
 

@@ -1280,11 +1280,7 @@ fn lookup_key_is_immutable(catalog_kv: &dyn Kv, expr: &Expr) -> bool {
         let Expr::Func(call) = node else {
             return;
         };
-        immutable &= match crabka_pgcatalog::routine::routines_named(catalog_kv, &call.name) {
-            Ok(routines) if routines.is_empty() => is_immutable_function(&call.name),
-            Ok(routines) => routines.iter().all(|routine| routine.volatility == 'i'),
-            Err(_) => false,
-        };
+        immutable &= crate::routine::is_immutable_call(catalog_kv, &call.name);
     });
     immutable
 }

@@ -86,6 +86,13 @@ fn structural_figure_colnames_match_parser_rules() {
         let expr = crabka_pgparser::parser::parse_expr_for_test(sql).expect("parse");
         assert2::assert!(super::derived_name(&expr) == *expected, "{sql}");
     }
+    for (sql, expected) in [
+        ("'{}'::integer[]", "int4"),
+        ("'{}'::double precision[]", "float8"),
+    ] {
+        let expr = crabka_pgparser::parser::parse_expr_for_test(sql).expect("parse");
+        assert2::assert!(super::derived_name(&expr) == expected, "{sql}");
+    }
 
     let column = || Expr::Column {
         table: None,
@@ -1717,6 +1724,7 @@ async fn a_dropped_column_takes_its_comment_with_it() {
         )
         .await
             == vec![
+                vec![Some("........pg.dropped.1........".to_string()), None],
                 vec![Some("a".to_string()), None],
                 text_row(&["b", "the second"]),
             ]
@@ -2022,6 +2030,134 @@ async fn a_table_of_a_composite_type_copies_its_fields() {
     assert!(sqlstate_of(&mut session, "DROP TYPE person_type RESTRICT").await == "2BP01");
     run_s(&mut session, "DROP TYPE person_type CASCADE").await;
     assert!(sqlstate_of(&mut session, "SELECT * FROM persons").await == "42P01");
+}
+
+#[tokio::test]
+async fn alter_type_rename_attribute_cascades_to_its_typed_table() {
+    use assert2::assert;
+
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    run_s(
+        &mut session,
+        "CREATE TYPE rename_pair AS (id int, label text)",
+    )
+    .await;
+    run_s(&mut session, "CREATE TABLE rename_people OF rename_pair").await;
+    run_s(&mut session, "INSERT INTO rename_people VALUES (1, 'Ada')").await;
+    assert!(
+        sqlstate_of(
+            &mut session,
+            "ALTER TYPE rename_pair RENAME ATTRIBUTE label TO name",
+        )
+        .await
+            == "2BP01"
+    );
+    run_s(
+        &mut session,
+        "ALTER TYPE rename_pair RENAME ATTRIBUTE label TO name CASCADE",
+    )
+    .await;
+    assert!(
+        sqlstate_of(&mut session, "ALTER TYPE rename_pair ADD ATTRIBUTE age int").await == "2BP01"
+    );
+    run_s(
+        &mut session,
+        "ALTER TYPE rename_pair ADD ATTRIBUTE age int CASCADE",
+    )
+    .await;
+    assert!(
+        text_rows_of(
+            &mut session,
+            "SELECT id, name, coalesce(age::text, '') FROM rename_people",
+        )
+        .await
+            == vec![text_row(&["1", "Ada", ""])]
+    );
+    run_s(
+        &mut session,
+        "CREATE TABLE rename_store (value rename_pair)",
+    )
+    .await;
+    run_s(
+        &mut session,
+        "INSERT INTO rename_store VALUES (ROW(2, 'Bea', NULL)::rename_pair)",
+    )
+    .await;
+    run_s(
+        &mut session,
+        "ALTER TYPE rename_pair RENAME ATTRIBUTE name TO display_name CASCADE",
+    )
+    .await;
+    assert!(
+        text_rows_of(
+            &mut session,
+            "SELECT (value).display_name, row_to_json(value)::text FROM rename_store",
+        )
+        .await
+            == vec![text_row(&[
+                "Bea",
+                "{\"id\":2,\"display_name\":\"Bea\",\"age\":null}",
+            ])]
+    );
+    assert!(
+        sqlstate_of(
+            &mut session,
+            "ALTER TYPE rename_pair DROP ATTRIBUTE display_name",
+        )
+        .await
+            == "2BP01"
+    );
+    run_s(
+        &mut session,
+        "ALTER TYPE rename_pair DROP ATTRIBUTE display_name CASCADE",
+    )
+    .await;
+    assert!(
+        text_rows_of(&mut session, "SELECT id, age::text FROM rename_people").await
+            == vec![vec![Some("1".into()), None]]
+    );
+    assert!(
+        text_rows_of(
+            &mut session,
+            "SELECT (value).id, (value).age::text, row_to_json(value)::text FROM rename_store",
+        )
+        .await
+            == vec![vec![
+                Some("2".into()),
+                None,
+                Some("{\"id\":2,\"age\":null}".into()),
+            ]]
+    );
+}
+
+#[tokio::test]
+async fn alter_type_drop_attribute_preserves_composite_positions() {
+    use assert2::assert;
+
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    run_s(
+        &mut session,
+        "CREATE TYPE drop_pair AS (first int, middle text, last int)",
+    )
+    .await;
+    run_s(&mut session, "CREATE TABLE drop_store (value drop_pair)").await;
+    run_s(
+        &mut session,
+        "INSERT INTO drop_store VALUES (ROW(1, 'gone', 3)::drop_pair)",
+    )
+    .await;
+    run_s(&mut session, "ALTER TYPE drop_pair DROP ATTRIBUTE middle").await;
+    assert!(
+        text_rows_of(
+            &mut session,
+            "SELECT (value).first, (value).last, row_to_json(value)::text FROM drop_store",
+        )
+        .await
+            == vec![text_row(&["1", "3", "{\"first\":1,\"last\":3}"])]
+    );
+    assert!(sqlstate_of(&mut session, "SELECT (value).middle FROM drop_store").await == "42703");
 }
 
 #[tokio::test]
@@ -4062,15 +4198,14 @@ async fn attcollation_follows_the_type_for_every_relation_without_a_collate() {
     .await;
 
     // A table, a view, a materialized view, a CREATE TABLE AS, a composite
-    // type and a catalog relation of the engine's own — every one reports
-    // the type's collation and nothing else, so `\d` prints no Collation.
+    // type — every one reports the type's collation and nothing else, so `\d`
+    // prints no Collation. Catalog text fields deliberately use C collation.
     let relations = [
         "'base'::regclass",
         "'v'::regclass",
         "'m'::regclass",
         "'ctas'::regclass",
         "SELECT typrelid FROM pg_type WHERE typname = 'pair'",
-        "'pg_class'::regclass",
     ];
     for relation in relations {
         let printed = collation_shown_by_backslash_d(&mut session, relation).await;
@@ -4080,6 +4215,8 @@ async fn attcollation_follows_the_type_for_every_relation_without_a_collate() {
             "{relation} prints a collation: {printed:?}"
         );
     }
+    let catalog = collation_shown_by_backslash_d(&mut session, "'pg_class'::regclass").await;
+    assert!(catalog.iter().any(|row| row[1].as_deref() == Some("C")));
 
     // And the underlying value is the database default for a text column,
     // not 0 and not a named collation.
@@ -4156,7 +4293,7 @@ async fn unnamed_check_constraints_take_postgresql_default_names() {
 }
 
 /// `ADD COLUMN` back-fills stored rows with the new column's default and
-/// `DROP COLUMN` reclaims the position, so later reads line up.
+/// `DROP COLUMN` preserves its physical slot, so later reads line up.
 #[tokio::test]
 async fn add_and_drop_column_rewrite_stored_rows() {
     use assert2::assert;
@@ -4177,6 +4314,38 @@ async fn add_and_drop_column_rewrite_stored_rows() {
             == vec![text_row(&["1", "7"]), text_row(&["2", "7"])]
     );
     assert!(sqlstate_of(&mut session, "SELECT label FROM t").await == "42703");
+    assert!(
+        text_rows_of(&mut session, "SELECT * FROM t ORDER BY id").await
+            == vec![text_row(&["1", "7"]), text_row(&["2", "7"])]
+    );
+    run_s(&mut session, "INSERT INTO t (id, n) VALUES (3, 8)").await;
+    run_s(
+        &mut session,
+        "ALTER TABLE t ADD COLUMN later text DEFAULT 'new'",
+    )
+    .await;
+    assert!(
+        text_rows_of(&mut session, "SELECT id, n, later FROM t ORDER BY id").await
+            == vec![
+                text_row(&["1", "7", "new"]),
+                text_row(&["2", "7", "new"]),
+                text_row(&["3", "8", "new"]),
+            ]
+    );
+    assert!(
+        text_rows_of(
+            &mut session,
+            "SELECT attname, atttypid::text, attnum::text, attisdropped::text FROM pg_attribute \
+             WHERE attrelid = 't'::regclass AND attnum > 0 ORDER BY attnum",
+        )
+        .await
+            == vec![
+                text_row(&["id", "23", "1", "false"]),
+                text_row(&["........pg.dropped.2........", "0", "2", "true"]),
+                text_row(&["n", "23", "3", "false"]),
+                text_row(&["later", "25", "4", "false"]),
+            ]
+    );
 }
 
 /// `SET NOT NULL` and `ADD CONSTRAINT … CHECK` back-validate the stored
@@ -4589,8 +4758,32 @@ async fn btree_expression_indexes_store_physical_entries() {
     let mut session = engine.connect();
     run_s(&mut session, "CREATE TABLE t (a int4)").await;
     run_s(&mut session, "INSERT INTO t VALUES (1), (2)").await;
+    run_s(&mut session, "CREATE TABLE btree_test_expr (n int)").await;
+    run_s(
+        &mut session,
+        "CREATE FUNCTION btree_test_func() RETURNS int LANGUAGE sql IMMUTABLE RETURN 0",
+    )
+    .await;
 
     run_s(&mut session, "CREATE INDEX t_expr_idx ON t ((1))").await;
+    run_s(
+        &mut session,
+        "CREATE INDEX btree_test_expr_idx ON btree_test_expr (btree_test_func())",
+    )
+    .await;
+    run_s(
+        &mut session,
+        "CREATE FUNCTION btree_volatile() RETURNS int LANGUAGE sql VOLATILE RETURN 0",
+    )
+    .await;
+    assert!(
+        sqlstate_of(
+            &mut session,
+            "CREATE INDEX btree_volatile_idx ON btree_test_expr (btree_volatile())",
+        )
+        .await
+            == "42P17"
+    );
     let index =
         crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_expr_idx"))
             .expect("expression index");
@@ -4737,15 +4930,73 @@ async fn create_index_resolves_and_validates_operator_classes() {
         "CREATE INDEX i6 ON t (b COLLATE \"C\" text_ops)",
     )
     .await;
+    run_s(&mut session, "CREATE INDEX i_bpchar ON t (b bpchar_ops)").await;
+    let attribute_options = session
+        .simple_query("ALTER INDEX i_bpchar ALTER COLUMN b SET (n_distinct = 100)")
+        .await
+        .expect_err("index attribute options are rejected");
+    assert!(attribute_options.code == "42P17");
+    assert!(
+        attribute_options.message
+            == "ALTER action ALTER COLUMN ... SET cannot be performed on relation \"i_bpchar\""
+    );
+    assert!(
+        attribute_options
+            .diagnostics
+            .as_ref()
+            .and_then(|fields| fields.detail.as_deref())
+            == Some("This operation is not supported for indexes.")
+    );
+    run_s(
+        &mut session,
+        "CREATE TABLE partitioned_index_t (a int) PARTITION BY RANGE (a)",
+    )
+    .await;
+    run_s(
+        &mut session,
+        "CREATE INDEX partitioned_index_i ON partitioned_index_t (a)",
+    )
+    .await;
+    let partitioned_attribute_options = session
+        .simple_query("ALTER INDEX partitioned_index_i ALTER COLUMN a SET (n_distinct = 100)")
+        .await
+        .expect_err("partitioned index attribute options are rejected");
+    assert!(
+        partitioned_attribute_options
+            .diagnostics
+            .as_ref()
+            .and_then(|fields| fields.detail.as_deref())
+            == Some("This operation is not supported for partitioned indexes.")
+    );
     run_s(&mut session, "CREATE INDEX i7 ON t ((b || b) text_ops)").await;
     let index = crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("i6"))
         .expect("index metadata");
     assert!(index.key_options[0].collation.as_deref() == Some("C"));
     assert!(index.key_options[0].opclass.as_deref() == Some("text_ops"));
+    assert!(
+        text_rows_of(&mut session, "SELECT pg_get_indexdef('i_bpchar'::regclass)",).await
+            == vec![text_row(&[
+                "CREATE INDEX i_bpchar ON public.t USING btree (b bpchar_ops)"
+            ])]
+    );
+    assert!(
+        text_rows_of(
+            &mut session,
+            "SELECT indclass::text FROM pg_index WHERE indexrelid = 'i_bpchar'::regclass",
+        )
+        .await
+            == vec![text_row(&["320004"])]
+    );
     let expression_index =
         crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("i7"))
             .expect("expression index metadata");
     assert!(expression_index.key_options[0].opclass.as_deref() == Some("text_ops"));
+    let opclass_options = session
+        .simple_query("CREATE INDEX invalid_btree_options ON t (a int4_ops (foo=1))")
+        .await
+        .expect_err("btree opclass options are rejected");
+    assert!(opclass_options.code == "42P17");
+    assert!(opclass_options.message == "operator class int4_ops has no options");
     run_s(&mut session, "CREATE TABLE g (i tsvector, j tsvector)").await;
     run_s(
         &mut session,
@@ -5109,6 +5360,111 @@ async fn point_subscript_assignments_use_geometric_storage() {
 }
 
 #[tokio::test]
+async fn array_target_subscripts_name_the_required_value_type() {
+    use assert2::assert;
+
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    run_s(&mut session, "CREATE TABLE t (a int4[])").await;
+    for (sql, required) in [
+        ("INSERT INTO t (a[2]) VALUES (now())", "integer"),
+        ("INSERT INTO t (a[1:2]) VALUES (now())", "integer[]"),
+    ] {
+        let error = session.simple_query(sql).await.expect_err(sql);
+        assert!(error.code == "42804");
+        assert!(
+            error.message
+                == format!(
+                    "subscripted assignment to \"a\" requires type {required} but expression is of type timestamp with time zone"
+                )
+        );
+        assert!(
+            error
+                .diagnostics
+                .as_ref()
+                .and_then(|diagnostics| diagnostics.hint.as_deref())
+                == Some("You will need to rewrite or cast the expression.")
+        );
+        assert!(
+            error
+                .diagnostics
+                .as_ref()
+                .and_then(|diagnostics| diagnostics.position)
+                == sql.find("(a").map(|offset| offset + 2)
+        );
+    }
+}
+
+#[tokio::test]
+async fn quantified_array_type_errors_point_at_any_or_all() {
+    use assert2::assert;
+
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    for (sql, message) in [
+        (
+            "SELECT 33 * ANY ('{1,2,3}')",
+            "op ANY/ALL (array) requires operator to yield boolean",
+        ),
+        (
+            "SELECT 33 * ANY (44)",
+            "op ANY/ALL (array) requires array on right side",
+        ),
+    ] {
+        let error = session.simple_query(sql).await.expect_err(sql);
+        assert!(error.code == "42804");
+        assert!(error.message == message);
+        assert!(
+            error
+                .diagnostics
+                .as_ref()
+                .and_then(|diagnostics| diagnostics.position)
+                == sql.find('*').map(|offset| offset + 1)
+        );
+    }
+}
+
+#[tokio::test]
+async fn array_bound_and_empty_constructor_errors_have_positions() {
+    use assert2::assert;
+
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    for (sql, needle) in [
+        ("SELECT '[1:0]={}'::int4[]", "'[1:0]={}'"),
+        ("SELECT ARRAY[]", "ARRAY"),
+    ] {
+        let error = session.simple_query(sql).await.expect_err(sql);
+        assert!(
+            error
+                .diagnostics
+                .as_ref()
+                .and_then(|diagnostics| diagnostics.position)
+                == sql.find(needle).map(|offset| offset + 1),
+            "{sql}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn scalar_subscript_error_points_at_the_base_expression() {
+    use assert2::assert;
+
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    let sql = "SELECT (now())[1]";
+    let error = session.simple_query(sql).await.expect_err(sql);
+    assert!(error.code == "42804");
+    assert!(
+        error
+            .diagnostics
+            .as_ref()
+            .and_then(|diagnostics| diagnostics.position)
+            == sql.find("now").map(|offset| offset + 1)
+    );
+}
+
+#[tokio::test]
 async fn drop_index_removes_catalog_metadata_and_local_entries_in_one_ddl_batch() {
     let engine = SqlEngine::new();
     let mut session = engine.connect();
@@ -5164,6 +5520,66 @@ async fn drop_index_removes_catalog_metadata_and_local_entries_in_one_ddl_batch(
 }
 
 #[tokio::test]
+async fn drop_index_list_removes_every_named_index() {
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    session
+        .simple_query("CREATE TABLE t (id int4, name text)")
+        .await
+        .expect("create table");
+    session
+        .simple_query("CREATE INDEX t_id_idx ON t (id)")
+        .await
+        .expect("create id index");
+    session
+        .simple_query("CREATE INDEX t_name_idx ON t (name)")
+        .await
+        .expect("create name index");
+
+    session
+        .simple_query("DROP INDEX t_id_idx, t_name_idx")
+        .await
+        .expect("drop index list");
+
+    for name in ["t_id_idx", "t_name_idx"] {
+        assert_eq!(
+            crabka_pgcatalog::get_index(engine.catalog_kv.as_ref(), &RelationName::public(name))
+                .expect_err("index metadata removed")
+                .sqlstate(),
+            "42704"
+        );
+    }
+}
+
+#[tokio::test]
+async fn scalar_subquery_accepts_parenthesized_set_operations() {
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    assert_eq!(
+        text_rows_of(&mut session, "SELECT ((SELECT 2) UNION SELECT 2)").await,
+        vec![text_row(&["2"])]
+    );
+}
+
+#[tokio::test]
+async fn join_using_alias_qualifies_the_joined_relation() {
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    run_s(&mut session, "CREATE TABLE a (id int4, left_value text)").await;
+    run_s(&mut session, "CREATE TABLE b (id int4, right_value text)").await;
+    run_s(&mut session, "INSERT INTO a VALUES (1, 'a')").await;
+    run_s(&mut session, "INSERT INTO b VALUES (1, 'b')").await;
+    assert_eq!(
+        text_rows_of(
+            &mut session,
+            "SELECT j.id, j.left_value, j.right_value FROM a JOIN b USING (id) AS j",
+        )
+        .await,
+        vec![text_row(&["1", "a", "b"])]
+    );
+}
+
+#[tokio::test]
 async fn select_uses_local_index_for_simple_equality_with_residual_filter() {
     let mut engine = SqlEngine::new();
     run(&engine, "CREATE TABLE t (id int4, name text, active bool)").await;
@@ -5183,6 +5599,60 @@ async fn select_uses_local_index_for_simple_equality_with_residual_filter() {
 
     assert_eq!(rows_of(&result[0]).len(), 1);
     assert_eq!(text(&rows_of(&result[0])[0][0]).as_deref(), Some("1"));
+}
+
+#[tokio::test]
+async fn a_literal_false_qual_does_not_scan_its_table() {
+    let mut engine = SqlEngine::new();
+    run(&engine, "CREATE TABLE false_qual (id int4)").await;
+    run(&engine, "INSERT INTO false_qual VALUES (1)").await;
+    engine.set_range_scanner(Arc::new(RejectingRangeScanner));
+
+    let result = run(&engine, "SELECT id FROM false_qual WHERE false").await;
+    assert!(rows_of(&result[0]).is_empty());
+
+    assert_eq!(
+        text_rows_of(
+            &mut engine.connect(),
+            "EXPLAIN (ANALYZE, COSTS OFF) SELECT id FROM false_qual WHERE false",
+        )
+        .await,
+        vec![
+            text_row(&["Result (actual rows=0.00 loops=1)"]),
+            text_row(&["  One-Time Filter: false"]),
+            text_row(&["  ->  Seq Scan on false_qual (never executed)"]),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn an_impossible_not_null_test_does_not_scan_its_table() {
+    let mut engine = SqlEngine::new();
+    run(&engine, "CREATE TABLE not_null_qual (id int4 NOT NULL)").await;
+    run(&engine, "INSERT INTO not_null_qual VALUES (1)").await;
+    engine.set_range_scanner(Arc::new(RejectingRangeScanner));
+
+    let result = run(&engine, "SELECT id FROM not_null_qual WHERE id IS NULL").await;
+    assert!(rows_of(&result[0]).is_empty());
+}
+
+#[tokio::test]
+async fn an_impossible_nested_not_null_test_does_not_scan_its_table() {
+    let mut engine = SqlEngine::new();
+    run(
+        &engine,
+        "CREATE TABLE nested_not_null_qual (id int4 NOT NULL)",
+    )
+    .await;
+    run(&engine, "INSERT INTO nested_not_null_qual VALUES (1)").await;
+    engine.set_range_scanner(Arc::new(RejectingRangeScanner));
+
+    let result = run(
+        &engine,
+        "SELECT id FROM nested_not_null_qual WHERE id IS NULL AND id = 1",
+    )
+    .await;
+    assert!(rows_of(&result[0]).is_empty());
 }
 
 #[tokio::test]
@@ -5236,6 +5706,58 @@ async fn ordered_local_index_stream_returns_order_by_order() {
         .collect::<Vec<_>>();
 
     assert_eq!(values, vec![3, 2, 1]);
+}
+
+#[tokio::test]
+async fn forced_index_scan_orders_array_range_results() {
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    run_s(&mut session, "CREATE TEMP TABLE arr_tbl (f1 int[] UNIQUE)").await;
+    for value in ["{1,2,3}", "{1,2}"] {
+        run_s(
+            &mut session,
+            &format!("INSERT INTO arr_tbl VALUES ('{value}')"),
+        )
+        .await;
+    }
+    assert_eq!(
+        sqlstate_of(&mut session, "INSERT INTO arr_tbl VALUES ('{1,2,3}')").await,
+        "23505"
+    );
+    for value in ["{2,3,4}", "{1,5,3}", "{1,2,10}"] {
+        run_s(
+            &mut session,
+            &format!("INSERT INTO arr_tbl VALUES ('{value}')"),
+        )
+        .await;
+    }
+    run_s(&mut session, "SET enable_seqscan = off").await;
+    run_s(&mut session, "SET enable_bitmapscan = off").await;
+    let table = crabka_pgcatalog::list_tables(engine.catalog_kv.as_ref())
+        .expect("tables")
+        .into_iter()
+        .find(|table| table.name.name == "arr_tbl")
+        .expect("temporary table");
+    let index = crabka_pgcatalog::list_table_indexes(engine.catalog_kv.as_ref(), &table.name)
+        .expect("indexes")
+        .into_iter()
+        .next()
+        .expect("unique index");
+    assert!(super::local_index_supports_ordered_scan(&table, &index));
+    let select = parsed_select("SELECT f1 FROM arr_tbl WHERE f1 > '{1,2,3}' AND f1 <= '{1,5,3}'");
+    assert!(matches!(
+        crate::plan_dist::strict_predicate_for_filter(&table, select.filter.as_ref()),
+        Ok(crate::scanner::PredicatePushdown::Conjunctive(predicates)) if predicates.len() == 2
+    ));
+
+    assert_eq!(
+        text_rows_of(
+            &mut session,
+            "SELECT f1::text FROM arr_tbl WHERE f1 > '{1,2,3}' AND f1 <= '{1,5,3}'",
+        )
+        .await,
+        cell_rows(&[&["{1,2,10}"], &["{1,5,3}"]]),
+    );
 }
 
 #[tokio::test]
@@ -5903,6 +6425,11 @@ fn local_join_count_plan_deferral_requires_bare_equality() {
             (true, true),
         ),
         (
+            "SELECT count(*) FROM l INNER JOIN r USING (a)",
+            (true, true),
+        ),
+        ("SELECT count(*) FROM l NATURAL INNER JOIN r", (true, false)),
+        (
             "SELECT count(*) FROM l INNER JOIN r ON l.a = r.a + 1",
             (true, false),
         ),
@@ -5926,6 +6453,33 @@ fn local_join_count_plan_deferral_requires_bare_equality() {
             "{sql}"
         );
     }
+}
+
+#[tokio::test]
+async fn local_join_count_using_does_not_materialize_join_rows() {
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    for table in ["left_rows", "right_rows"] {
+        run_s(
+            &mut session,
+            &format!(
+                "CREATE TABLE {table} AS \
+                 SELECT generate_series(1, 20000) AS id, \
+                        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' AS payload"
+            ),
+        )
+        .await;
+    }
+    run_s(&mut session, "SET work_mem = '4MB'").await;
+
+    assert_eq!(
+        text_rows_of(
+            &mut session,
+            "SELECT count(*) FROM left_rows JOIN right_rows USING (id)",
+        )
+        .await,
+        cell_rows(&[&["20000"]]),
+    );
 }
 
 #[test]

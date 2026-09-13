@@ -11,10 +11,13 @@ use assert2::assert;
 use crabka_pgtypes::{
     TypeError,
     datetime::{
-        DATE_INFINITY, DATE_NEG_INFINITY, Interval, PgTime, TIMESTAMP_INFINITY,
-        TIMESTAMP_NEG_INFINITY, combine_date_time, div_interval, interval_to_time, justify_days,
-        justify_hours, justify_interval, make_date, make_interval, make_time, make_timestamp_civil,
-        mul_interval, parse_date, parse_interval, parse_time, sub_interval,
+        DATE_INFINITY, DATE_NEG_INFINITY, DateOrder, DateStyle, Interval, PgTime,
+        TIMESTAMP_INFINITY, TIMESTAMP_NEG_INFINITY, combine_date_time, date_diff_days,
+        date_from_binary, date_is_infinite, date_plus_days, date_to_binary, date_to_text,
+        date_to_text_in, div_interval, interval_to_time, justify_days, justify_hours,
+        justify_interval, make_date, make_interval, make_time, make_timestamp_civil, mul_interval,
+        parse_date, parse_interval, parse_time, parse_timestamp, sub_interval,
+        timestamp_from_binary, timestamp_to_binary, timestamp_to_text,
     },
 };
 
@@ -28,6 +31,18 @@ fn fields(iv: Interval) -> (i32, i32, i64) {
 
 fn interval(text: &str) -> Interval {
     parse_interval(text).unwrap_or_else(|error| panic!("interval {text:?}: {error}"))
+}
+
+#[test]
+fn timestamp_storage_reaches_postgres_full_calendar_range() {
+    let upper = parse_timestamp("294276-12-31 23:59:59.999999").expect("upper timestamp");
+    assert!(timestamp_to_text(upper) == "294276-12-31 23:59:59.999999");
+    assert!(
+        timestamp_from_binary(&timestamp_to_binary(upper)).expect("binary round trip") == upper
+    );
+    assert!(parse_timestamp("294277-01-01 00:00:00").is_err());
+    let refused = parse_timestamp("Feb 16 17:32:01 5097 BC").expect_err("below timestamp range");
+    assert!(refused.to_string() == "timestamp out of range: \"Feb 16 17:32:01 5097 BC\"");
 }
 
 /// `PostgreSQL`'s `INTERVAL_MULDIV_TBL` and the four scalings the `interval`
@@ -253,9 +268,10 @@ fn a_non_finite_date_swallows_the_time_it_is_combined_with() {
     assert!(combine_date_time(day, PgTime::MIDNIGHT).is_some());
     assert!(
         combine_date_time(day, end_of_day)
-            == Some(crabka_pgtypes::datetime::date_to_midnight(
-                parse_date("2020-01-02").expect("date")
-            ))
+            == Some(
+                crabka_pgtypes::datetime::date_to_midnight(parse_date("2020-01-02").expect("date"))
+                    .expect("ordinary date fits timestamp")
+            )
     );
 }
 
@@ -361,6 +377,25 @@ fn make_date_reads_a_negative_year_as_the_bc_era() {
             "make_date({year},{month},{day})"
         );
     }
+}
+
+#[test]
+fn date_storage_and_arithmetic_cover_postgres_full_calendar_range() {
+    let first = make_date(-4714, 11, 24).expect("first PostgreSQL date");
+    let last = make_date(5_874_897, 12, 31).expect("last PostgreSQL date");
+    assert!(parse_date("5874897-12-31").expect("upper ISO literal") == last);
+    assert!(parse_date("5874898-01-01").is_err());
+    assert!(date_to_text(first) == "4714-11-24 BC");
+    assert!(date_to_text(last) == "5874897-12-31");
+    assert!(!date_is_infinite(last));
+    assert!(date_to_text_in(last, DateStyle::Sql, DateOrder::Dmy) == "31/12/5874897");
+    assert!(date_to_text_in(last, DateStyle::German, DateOrder::Mdy) == "31.12.5874897");
+    assert!(date_to_binary(first) == (-2_451_545i32).to_be_bytes());
+    assert!(date_to_binary(last) == 2_145_031_948i32.to_be_bytes());
+    assert!(date_from_binary(&date_to_binary(last)).expect("wire round trip") == last);
+    assert!(date_diff_days(last, first).expect("full range difference") == 2_147_483_493);
+    assert!(date_plus_days(last, 1).is_err());
+    assert!(date_plus_days(first, -1).is_err());
 }
 
 /// The `make_*` constructors word their complaints the way `PostgreSQL` words

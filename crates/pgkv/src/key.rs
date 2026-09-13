@@ -341,9 +341,28 @@ fn ordered_index_component(value: &crabka_pgtypes::Datum, nulls_first: bool) -> 
         Datum::Float8(value) => put_u64(&mut out, ordered_float8(*value)),
         Datum::Oid(value) | Datum::Xid(value) | Datum::Cid(value) => put_u32(&mut out, *value),
         Datum::Xid8(value) | Datum::PgLsn(value) => put_u64(&mut out, *value),
+        Datum::Array(value) => ordered_array_component(&mut out, value)?,
         _ => return None,
     }
     Some(out)
+}
+
+fn ordered_array_component(out: &mut Vec<u8>, value: &crabka_pgtypes::ArrayValue) -> Option<()> {
+    // `array_cmp` compares elements first, then the shape. A zero byte sorts
+    // before every non-NULL element component and a NULL's 0xff tag, so it
+    // correctly ends a common element prefix.
+    for element in &value.elems {
+        out.extend_from_slice(&ordered_index_component(element, false)?);
+    }
+    out.push(0);
+    put_u32(out, u32::try_from(value.dims.len()).ok()?);
+    for dim in &value.dims {
+        put_i32(out, dim.len);
+    }
+    for dim in &value.dims {
+        put_i32(out, dim.lower);
+    }
+    Some(())
 }
 
 fn ordered_float4(value: f32) -> u32 {
@@ -1062,6 +1081,47 @@ mod tests {
                     1
                 )
                 .expect("ordered key")
+        );
+    }
+
+    #[test]
+    fn ordered_array_index_entries_follow_array_comparison() {
+        use crabka_pgtypes::{ArrayDim, ArrayValue, Datum, ElemType};
+
+        let key = |array| {
+            secondary_index_ordered_entry_key(7, 1, &[Datum::Array(array)], &[false], &[false], 1)
+                .expect("array key")
+        };
+        assert!(
+            key(ArrayValue::new(ElemType::Int4, vec![Datum::Int4(1)]))
+                < key(ArrayValue::new(
+                    ElemType::Int4,
+                    vec![Datum::Int4(1), Datum::Int4(2)]
+                ))
+        );
+        assert!(
+            key(ArrayValue::new(ElemType::Int4, vec![Datum::Int4(2)]))
+                < key(ArrayValue::new(ElemType::Int4, vec![Datum::Null]))
+        );
+        assert!(
+            key(ArrayValue::new(
+                ElemType::Int4,
+                vec![Datum::Int4(1), Datum::Int4(2), Datum::Int4(3)],
+            )) < key(ArrayValue::new(
+                ElemType::Int4,
+                vec![Datum::Int4(1), Datum::Int4(2), Datum::Int4(10)],
+            ))
+        );
+        assert!(
+            key(ArrayValue::with_dims(
+                ElemType::Int4,
+                vec![Datum::Int4(1)],
+                vec![ArrayDim::new(1, 1)],
+            )) < key(ArrayValue::with_dims(
+                ElemType::Int4,
+                vec![Datum::Int4(1)],
+                vec![ArrayDim::new(2, 1)],
+            ))
         );
     }
 

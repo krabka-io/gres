@@ -235,6 +235,8 @@ pub(crate) struct WriteContext<'a> {
     pub deferred_fk: Option<&'a std::sync::Mutex<crate::fk::DeferredConstraints>>,
     /// The row-security recursion guard for the queries that feed this write.
     pub policy_stack: &'a crate::rls::PolicyStack,
+    /// Runtime counters for a query feeding this write during `EXPLAIN ANALYZE`.
+    pub explain_plan_state: Option<&'a Arc<Mutex<Option<crate::plan::query::PlanState>>>>,
     /// The `WITH CHECK OPTION`s of the views this statement was rewritten
     /// through, empty for a statement that named a relation directly.
     ///
@@ -313,7 +315,7 @@ impl<'a> WriteContext<'a> {
             security_role: self.fctx.effective_role(),
             policy_stack: self.policy_stack,
             refs: None,
-            explain_plan_state: None,
+            explain_plan_state: self.explain_plan_state.cloned(),
         }
     }
 

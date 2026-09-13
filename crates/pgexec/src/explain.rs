@@ -227,7 +227,11 @@ pub(crate) fn apply_local_text_search_path(
         name,
         crate::relname::SchemaDisposition::Reference,
     )?;
-    let table = crabka_pgcatalog::get_table(catalog_kv, &relation)?;
+    let table = match crabka_pgcatalog::get_table(catalog_kv, &relation) {
+        Ok(table) => table,
+        Err(_) if crate::exec::is_virtual_relation(&relation) => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
     let scan = crate::plan_dist::plan_scan(&table, select.filter.as_ref(), &select.projection);
     let Some(predicate) = scan.text_search else {
         return Ok(());
@@ -2394,10 +2398,31 @@ pub(crate) fn apply_runtime_state(rendered: &mut PlanNode, runtime: &PlanNode) {
     }
 }
 
+/// Mark a plan whose enclosing command deliberately skipped its source query.
+pub(crate) fn mark_never_executed(node: &mut PlanNode) {
+    node.actual = Some(PlanActual {
+        rows: 0,
+        loops: 0,
+        rows_removed: 0,
+    });
+    for child in &mut node.children {
+        mark_never_executed(child);
+    }
+    for cte in &mut node.init_plans {
+        mark_never_executed(&mut cte.plan);
+    }
+}
+
 /// Build the plan tree the interpreter will execute for `statement`.
 pub(crate) fn plan_statement(statement: &Statement) -> PlanNode {
     let (mut node, with) = match statement {
         Statement::Query(query) => (plan_query(query), None),
+        // CTAS runs its query to populate the new relation, so EXPLAIN exposes
+        // that query's plan rather than a utility Result node.
+        Statement::CreateTableAs {
+            source: crabka_pgparser::ast::CreateAsSource::Query(query),
+            ..
+        } => (plan_query(query), None),
         Statement::Insert {
             table,
             source,
@@ -2664,6 +2689,9 @@ fn plan_set_expr(body: &SetExpr) -> PlanNode {
     match body {
         SetExpr::Query(QueryBody::Select(select)) => plan_select(select),
         SetExpr::Query(QueryBody::Values(values)) => {
+            if crate::plan::rewrite::is_single_row_values(values) {
+                return PlanNode::new("Result");
+            }
             let mut node = PlanNode::new("Values Scan").with_relation("*VALUES*");
             node.alias = None;
             let _ = values;
@@ -2761,6 +2789,11 @@ fn plan_select(select: &SelectStmt) -> PlanNode {
 }
 
 fn plan_from(from: &[TableExpr], filter: Option<&Expr>) -> PlanNode {
+    if !from.is_empty() && crate::plan::rewrite::is_literal_false(filter) {
+        return PlanNode::new("Result")
+            .detail("One-Time Filter", "false".into())
+            .with_child(plan_from(from, None));
+    }
     match from {
         [] => {
             let mut node = PlanNode::new("Result");
@@ -3895,6 +3928,19 @@ mod tests {
     }
 
     #[test]
+    fn a_literal_false_table_qual_is_a_result_one_time_filter() {
+        let parsed =
+            crabka_pgparser::parse("SELECT a FROM t WHERE false").expect("statement parses");
+        let [statement] = parsed.as_slice() else {
+            panic!("expected one statement");
+        };
+        assert!(
+            render_with_rows(&plan_statement(statement), &costs_off(), 0)
+                == vec!["Result", "  One-Time Filter: false", "  ->  Seq Scan on t"]
+        );
+    }
+
+    #[test]
     fn runtime_tree_renders_each_nodes_actual_counters() {
         use crate::{
             plan::query::{Plan as ExecutablePlan, PlanNode as ExecutableNode, PlanState},
@@ -4257,6 +4303,8 @@ mod tests {
                 &["Seq Scan on d1 x", "  Filter: (id = 1)"],
             ),
             ("SELECT 1 + 1", &["Result"]),
+            ("VALUES (1)", &["Result"]),
+            ("VALUES (1), (2)", &["Values Scan on \"*VALUES*\""]),
             (
                 "UPDATE d1 SET s = 'z' WHERE id = 1",
                 &[

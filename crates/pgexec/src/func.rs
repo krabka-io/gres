@@ -88,7 +88,12 @@ enum ScalarFunc {
     Ln,
     Log,
     Pi,
+    Erf,
+    Erfc,
+    Gamma,
+    Lgamma,
     Float4Send,
+    Float8Send,
     // SP33: string family.
     Lpad,
     Rpad,
@@ -140,6 +145,7 @@ enum ScalarFunc {
     /// Regression helper exposing PostgreSQL's `IsBinaryCoercible`.
     BinaryCoercible,
     PgNumaAvailable,
+    AmValidate,
     /// PostgreSQL's temporal hash support functions.
     TemporalHash {
         ty: ColumnType,
@@ -388,7 +394,12 @@ fn scalar_func(name: &str) -> Option<ScalarFunc> {
         "ln" => ScalarFunc::Ln,
         "log" => ScalarFunc::Log,
         "pi" => ScalarFunc::Pi,
+        "erf" => ScalarFunc::Erf,
+        "erfc" => ScalarFunc::Erfc,
+        "gamma" => ScalarFunc::Gamma,
+        "lgamma" => ScalarFunc::Lgamma,
         "float4send" => ScalarFunc::Float4Send,
+        "float8send" => ScalarFunc::Float8Send,
         "lpad" => ScalarFunc::Lpad,
         "rpad" => ScalarFunc::Rpad,
         "left" => ScalarFunc::Left,
@@ -457,6 +468,7 @@ fn scalar_func(name: &str) -> Option<ScalarFunc> {
         "pg_input_is_valid" => ScalarFunc::PgInputIsValid,
         "binary_coercible" => ScalarFunc::BinaryCoercible,
         "pg_numa_available" => ScalarFunc::PgNumaAvailable,
+        "amvalidate" => ScalarFunc::AmValidate,
         "interval_hash" => ScalarFunc::TemporalHash {
             ty: ColumnType::Interval,
             extended: false,
@@ -1424,7 +1436,14 @@ fn builtin_scalar_result_type(fc: &FuncCall, scope: &Scope) -> Result<ColumnType
                 Ok(ColumnType::Numeric(None))
             }
         }
-        ScalarFunc::Sqrt | ScalarFunc::Exp | ScalarFunc::Ln | ScalarFunc::Log => {
+        ScalarFunc::Sqrt
+        | ScalarFunc::Exp
+        | ScalarFunc::Ln
+        | ScalarFunc::Log
+        | ScalarFunc::Erf
+        | ScalarFunc::Erfc
+        | ScalarFunc::Gamma
+        | ScalarFunc::Lgamma => {
             require_arity(fc, n == 1 || (f == ScalarFunc::Log && n == 2))?;
             if n == 2 {
                 // `log(base, num)` is declared over `numeric` alone — there is
@@ -1506,6 +1525,23 @@ fn builtin_scalar_result_type(fc: &FuncCall, scope: &Scope) -> Result<ColumnType
                 if !matches!(
                     t,
                     ColumnType::Float4 | ColumnType::Int2 | ColumnType::Int4 | ColumnType::Int8
+                ) {
+                    return Err(undefined_function_spelled(&fc.name, args, scope));
+                }
+            }
+            Ok(ColumnType::Bytea)
+        }
+        ScalarFunc::Float8Send => {
+            require_arity(fc, n == 1)?;
+            if !is_unknown_literal(&args[0]) {
+                let t = crate::eval::infer_type(&args[0], scope)?;
+                if !matches!(
+                    t,
+                    ColumnType::Float4
+                        | ColumnType::Float8
+                        | ColumnType::Int2
+                        | ColumnType::Int4
+                        | ColumnType::Int8
                 ) {
                     return Err(undefined_function_spelled(&fc.name, args, scope));
                 }
@@ -1656,6 +1692,11 @@ fn builtin_scalar_result_type(fc: &FuncCall, scope: &Scope) -> Result<ColumnType
         }
         ScalarFunc::PgNumaAvailable => {
             require_arity(fc, n == 0)?;
+            Ok(ColumnType::Bool)
+        }
+        ScalarFunc::AmValidate => {
+            require_arity(fc, n == 1)?;
+            require_oid_or_null(&args[0], scope)?;
             Ok(ColumnType::Bool)
         }
         ScalarFunc::TemporalHash { ty, extended } => {
@@ -2532,7 +2573,11 @@ fn coerce_unknown_args(
         | ScalarFunc::Sqrt
         | ScalarFunc::Exp
         | ScalarFunc::Ln
-        | ScalarFunc::Log => ColumnType::Float8,
+        | ScalarFunc::Log
+        | ScalarFunc::Erf
+        | ScalarFunc::Erfc
+        | ScalarFunc::Gamma
+        | ScalarFunc::Lgamma => ColumnType::Float8,
         // `power` has both a `float8` and a `numeric` candidate, so a typed
         // operand picks the overload the same way `mod`'s does.
         ScalarFunc::Power if args.len() == 2 => {
@@ -3162,7 +3207,23 @@ fn eval_eager(
                     .map(Datum::Numeric)
                     .map_err(ExecError::Type);
             }
-            finite_or_overflow(as_f64(&vals[0])?.exp())
+            exp(as_f64(&vals[0])?)
+        }
+        ScalarFunc::Erf => {
+            require_arity(fc, vals.len() == 1)?;
+            Ok(Datum::Float8(libm::erf(as_f64(&vals[0])?)))
+        }
+        ScalarFunc::Erfc => {
+            require_arity(fc, vals.len() == 1)?;
+            Ok(Datum::Float8(libm::erfc(as_f64(&vals[0])?)))
+        }
+        ScalarFunc::Gamma => {
+            require_arity(fc, vals.len() == 1)?;
+            gamma(as_f64(&vals[0])?)
+        }
+        ScalarFunc::Lgamma => {
+            require_arity(fc, vals.len() == 1)?;
+            lgamma(as_f64(&vals[0])?)
         }
         ScalarFunc::Ln => {
             require_arity(fc, vals.len() == 1)?;
@@ -3172,10 +3233,13 @@ fn eval_eager(
                     .map_err(ExecError::Type);
             }
             let x = as_f64(&vals[0])?;
-            if x <= 0.0 {
+            if x == 0.0 {
+                return Err(domain("2201E", "cannot take logarithm of zero"));
+            }
+            if x < 0.0 {
                 return Err(domain(
                     "2201E",
-                    "cannot take logarithm of a non-positive number",
+                    "cannot take logarithm of a negative number",
                 ));
             }
             Ok(Datum::Float8(x.ln()))
@@ -3193,10 +3257,13 @@ fn eval_eager(
                     .map_err(ExecError::Type);
             }
             let x = as_f64(&vals[0])?;
-            if x <= 0.0 {
+            if x == 0.0 {
+                return Err(domain("2201E", "cannot take logarithm of zero"));
+            }
+            if x < 0.0 {
                 return Err(domain(
                     "2201E",
-                    "cannot take logarithm of a non-positive number",
+                    "cannot take logarithm of a negative number",
                 ));
             }
             Ok(Datum::Float8(x.log10()))
@@ -3278,6 +3345,17 @@ fn eval_eager(
             };
             Ok(Datum::Bytea(crabka_pgtypes::encoding::encode_binary(
                 &Datum::Float4(value),
+            )))
+        }
+        ScalarFunc::Float8Send => {
+            require_arity(fc, vals.len() == 1)?;
+            let Datum::Float8(value) =
+                crabka_pgtypes::cast::cast(&vals[0], ColumnType::Float8, &ctx.time_zone)?
+            else {
+                return Err(type_error("float8send", &vals[0]));
+            };
+            Ok(Datum::Bytea(crabka_pgtypes::encoding::encode_binary(
+                &Datum::Float8(value),
             )))
         }
         ScalarFunc::Lpad | ScalarFunc::Rpad => {
@@ -3748,6 +3826,12 @@ fn eval_eager(
         ScalarFunc::PgNumaAvailable => {
             require_arity(fc, vals.is_empty())?;
             Ok(Datum::Bool(false))
+        }
+        // Gres has no pluggable index access methods, so every catalogued
+        // operator class is valid for its access method.
+        ScalarFunc::AmValidate => {
+            require_arity(fc, vals.len() == 1)?;
+            Ok(Datum::Bool(true))
         }
         ScalarFunc::TemporalHash { ty, extended } => {
             require_arity(fc, vals.len() == if extended { 2 } else { 1 })?;
@@ -5434,14 +5518,40 @@ pub(crate) fn domain(sqlstate: &'static str, message: &'static str) -> ExecError
     ExecError::Type(crabka_pgtypes::TypeError::Domain { sqlstate, message })
 }
 
-/// Wrap an f64 result and map an overflow to infinity onto 22003. This matches
-/// the engine's float8 arithmetic, which treats a finite-to-infinite overflow as
-/// out of range.
-fn finite_or_overflow(x: f64) -> Result<Datum, ExecError> {
-    if x.is_infinite() {
-        Err(ExecError::Type(crabka_pgtypes::TypeError::Overflow))
+fn exp(x: f64) -> Result<Datum, ExecError> {
+    let value = x.exp();
+    if value.is_infinite() && x.is_finite() {
+        Err(ExecError::Type(crabka_pgtypes::TypeError::float_overflow()))
+    } else if value == 0.0 && x.is_finite() {
+        Err(ExecError::Type(crabka_pgtypes::TypeError::float_underflow()))
     } else {
-        Ok(Datum::Float8(x))
+        Ok(Datum::Float8(value))
+    }
+}
+
+fn gamma(x: f64) -> Result<Datum, ExecError> {
+    if x == f64::NEG_INFINITY || (x.is_finite() && x <= 0.0 && x.fract() == 0.0) {
+        return Err(ExecError::Type(crabka_pgtypes::TypeError::float_overflow()));
+    }
+    let value = libm::tgamma(x);
+    if value.is_infinite() && x.is_finite() {
+        Err(ExecError::Type(crabka_pgtypes::TypeError::float_overflow()))
+    } else if value == 0.0 && x.is_finite() {
+        Err(ExecError::Type(crabka_pgtypes::TypeError::float_underflow()))
+    } else {
+        Ok(Datum::Float8(value))
+    }
+}
+
+fn lgamma(x: f64) -> Result<Datum, ExecError> {
+    if x.is_finite() && x <= 0.0 && x.fract() == 0.0 {
+        return Err(ExecError::Type(crabka_pgtypes::TypeError::float_overflow()));
+    }
+    let value = libm::lgamma(x);
+    if value.is_infinite() && x.is_finite() {
+        Err(ExecError::Type(crabka_pgtypes::TypeError::float_overflow()))
+    } else {
+        Ok(Datum::Float8(value))
     }
 }
 
@@ -5495,13 +5605,17 @@ fn power(base: f64, exp: f64) -> Result<Datum, ExecError> {
             "zero raised to a negative power is undefined",
         ));
     }
-    if base < 0.0 && exp.fract() != 0.0 {
+    if base < 0.0 && exp.is_finite() && exp.fract() != 0.0 {
         return Err(domain(
             "2201F",
             "a negative number raised to a non-integer power yields a complex result",
         ));
     }
-    finite_or_overflow(base.powf(exp))
+    let result = base.powf(exp);
+    if result.is_infinite() && base.is_finite() && exp.is_finite() {
+        return Err(ExecError::Type(crabka_pgtypes::TypeError::Overflow));
+    }
+    Ok(Datum::Float8(result))
 }
 
 /// `sign` of a float8: −1 / 0 / 1, and `NaN` for `NaN` (PostgreSQL `dsign`).
@@ -5952,6 +6066,17 @@ mod tests {
         // no candidate at all.
         assert!(err_code("float4send(1::float8)", None) == "42883");
         assert!(err_code("float4send('a'::text)", None) == "42883");
+    }
+
+    #[test]
+    fn float8send_reports_the_eight_wire_bytes_of_a_double() {
+        for (sql, expected) in [
+            ("float8send(1::float8)", r"\x3ff0000000000000"),
+            ("float8send('-0'::float8)", r"\x8000000000000000"),
+        ] {
+            assert!(rendered(sql) == expected, "{sql} gave {}", rendered(sql));
+        }
+        assert!(err_code("float8send('a'::text)", None) == "42883");
     }
 
     #[test]
@@ -6660,8 +6785,26 @@ mod tests {
         assert_eq!(ev("ln(1)"), Datum::Float8(0.0));
         assert_eq!(ev("log(1000)"), Datum::Float8(3.0));
         assert_eq!(ev("pi()"), Datum::Float8(std::f64::consts::PI));
+        assert_eq!(ev("erf(0)"), Datum::Float8(0.0));
+        assert_eq!(ev("erfc(0)"), Datum::Float8(1.0));
+        assert_eq!(ev("gamma(5)"), Datum::Float8(24.0));
+        assert_eq!(ev("lgamma(5)"), Datum::Float8(24.0_f64.ln()));
         // strict NULL
         assert_eq!(ev("sqrt(null)"), Datum::Null);
+    }
+
+    #[test]
+    fn gamma_reports_postgres_range_errors() {
+        assert!(ec_eval("gamma(-1::float8)") == "22003");
+        assert!(ec_eval("gamma(-1000.5::float8)") == "22003");
+        assert!(ec_eval("gamma(1000::float8)") == "22003");
+        assert!(ec_eval("lgamma(0::float8)") == "22003");
+        assert!(ec_eval("lgamma(-1::float8)") == "22003");
+        assert!(ec_eval("lgamma(1e308::float8)") == "22003");
+        assert_eq!(
+            ev("lgamma('-infinity'::float8)"),
+            Datum::Float8(f64::INFINITY)
+        );
     }
 
     #[test]
@@ -6730,11 +6873,51 @@ mod tests {
         assert_eq!(ec_eval("ln(0)"), "2201E");
         assert_eq!(ec_eval("ln(-1)"), "2201E");
         assert_eq!(ec_eval("log(0)"), "2201E");
+        for (sql, message) in [
+            ("ln(0::float8)", "cannot take logarithm of zero"),
+            (
+                "ln(-1::float8)",
+                "cannot take logarithm of a negative number",
+            ),
+            ("log(0::float8)", "cannot take logarithm of zero"),
+            (
+                "log(-1::float8)",
+                "cannot take logarithm of a negative number",
+            ),
+        ] {
+            let ctx = crate::clock::EvalCtx::test_default();
+            let error = crate::eval::eval(&pexpr(sql).expect("parse"), &Scope::empty(), &[], &ctx)
+                .expect_err("expected logarithm error")
+                .into_pg();
+            assert_eq!(error.message, message, "{sql}");
+        }
+        assert_eq!(ec_eval("exp(1000::float8)"), "22003");
+        assert_eq!(ec_eval("exp(-1000::float8)"), "22003");
+        assert_eq!(ev("exp('Infinity'::float8)"), Datum::Float8(f64::INFINITY));
+        assert_eq!(ev("exp('-Infinity'::float8)"), Datum::Float8(0.0));
         // zero to a negative power → 2201F
         assert_eq!(ec_eval("power(0, -1)"), "2201F");
         // wrong arity → 42883
         assert_eq!(err_code("pi(1)", Some(&t)), "42883");
         assert_eq!(err_code("power(2)", Some(&t)), "42883");
+    }
+
+    #[test]
+    fn float8_power_preserves_nonfinite_inputs() {
+        let power =
+            |base: &str, exp: &str| match ev(&format!("power({base}::float8, {exp}::float8)")) {
+                Datum::Float8(value) => value,
+                value => panic!("expected float8, got {value:?}"),
+            };
+        assert!(power("-1", "'NaN'").is_nan());
+        assert_eq!(power("-1", "'Infinity'"), 1.0);
+        assert_eq!(power("-1", "'-Infinity'"), 1.0);
+        assert_eq!(power("-0.1", "'Infinity'"), 0.0);
+        assert!(power("1.1", "'Infinity'").is_infinite());
+        assert!(power("0.1", "'-Infinity'").is_infinite());
+        assert_eq!(power("-1.1", "'-Infinity'"), 0.0);
+        assert!(power("'Infinity'", "2").is_infinite());
+        assert!(power("'-Infinity'", "2").is_infinite());
     }
 
     #[test]

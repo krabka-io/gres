@@ -223,6 +223,12 @@ run_pg_regress() {
     else
         rc=$?
     fi
+    # Full PostgreSQL schedules include expected skips, for which pg_regress
+    # returns 2 despite its TAP summary confirming every scheduled test passed.
+    if [[ "$subject" == self-check && "$rc" -eq 2 ]] &&
+        grep -Eq '^# All [0-9]+ tests passed\.$' "${output}/command.log"; then
+        rc=0
+    fi
     printf '%s\n' "$rc" >"${output}/exit-status"
 
     if [[ "$subject" == self-check && -f "${output}/temp-instance/postmaster.pid" ]]; then

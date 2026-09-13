@@ -1616,8 +1616,16 @@ fn eval_grouped_depth(
         // `tableoid::regclass … GROUP BY tableoid` prints the relation's name
         // and not the bare oid.
         Expr::Cast { expr, ty } => {
-            if let Some(empty) = crate::eval::empty_array_cast(expr, *ty) {
+            if let Some(empty) = crate::eval::empty_array_cast(expr, *ty)? {
                 return Ok(empty);
+            }
+            if let (Expr::ArrayLiteral(items), ColumnType::Array(elem)) = (expr.as_ref(), ty) {
+                return crate::eval::eval_array_constructor_with_elem(
+                    items,
+                    *elem,
+                    ctx,
+                    &mut |item| eval_grouped_depth(item, grouped, d),
+                );
             }
             let v = eval_grouped_depth(expr, grouped, d)?;
             crate::eval::cast_operand(&v, *ty, ctx)

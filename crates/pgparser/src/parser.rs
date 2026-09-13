@@ -1563,11 +1563,9 @@ impl Parser {
             }
             Token::LParen => {
                 // SP34: `( SELECT … )` is a scalar subquery; anything else is a
-                // parenthesised (grouping) expression.
-                if matches!(
-                    self.peek2(),
-                    Token::Keyword(Keyword::Select | Keyword::Values | Keyword::With)
-                ) {
+                // parenthesised (grouping) expression. The query can itself be
+                // parenthesized when it is a set-operation operand.
+                if self.parenthesized_query_starts_here() {
                     self.bump();
                     let sub = self.in_nested_query(Self::query_expr_after_open_paren)?;
                     Ok(Expr::ScalarSubquery(Box::new(sub)))
@@ -1936,8 +1934,8 @@ impl Parser {
         }))
     }
 
-    /// The tail of `INTERVAL 'string' [field [TO field]]`, positioned just after
-    /// the string.
+    /// The tail of `INTERVAL 'string' [field [TO field] [(precision)]]`, positioned
+    /// just after the string.
     ///
     /// A field qualifier does two things in `PostgreSQL`: it supplies the unit an
     /// unadorned quantity in the string is measured in (`interval '90' minute` is
@@ -1976,6 +1974,17 @@ impl Parser {
             .ok_or_else(|| ParseError::new("expected an interval field", field_pos))?;
         let value = crabka_pgtypes::datetime::parse_interval_ranged(&string, Some(range))
             .map_err(|e| ParseError::new_sqlstate(e.sqlstate(), e.to_string(), field_pos))?;
+        // PostgreSQL accepts a fractional-seconds precision only after the
+        // terminal SECOND field, including `MINUTE TO SECOND(p)`.
+        let value = if range.1 == IntervalField::Second && *self.peek() == Token::LParen {
+            self.bump();
+            let precision = self.expect_u16("fractional seconds precision")?;
+            self.expect(&Token::RParen)?;
+            crabka_pgtypes::datetime::apply_interval_typmod(value, Some(precision.min(6) as u8))
+                .map_err(|e| ParseError::new_sqlstate(e.sqlstate(), e.to_string(), field_pos))?
+        } else {
+            value
+        };
         Ok(interval(crabka_pgtypes::datetime::interval_to_text(value)))
     }
 
@@ -4488,8 +4497,20 @@ impl Parser {
         let name = self.relation_ref()?;
         if self.eat_ident_eq("alter") {
             self.eat_ident_eq("column");
-            let column = self.expect_i32("column number")?;
+            let column = match self.peek() {
+                Token::IntLit(_) => self.expect_i32("column number")?.to_string(),
+                _ => self.expect_col_id()?,
+            };
             self.expect(&Token::Keyword(Keyword::Set))?;
+            if *self.peek() == Token::LParen {
+                let options = self.checked_storage_parameter_list(
+                    crate::reloptions::RelOptionTarget::Attribute,
+                )?;
+                return Ok(crate::ast::Statement::AlterIndex {
+                    name,
+                    action: AlterIndexAction::SetAttributeOptions { column, options },
+                });
+            }
             self.expect_ident_eq("statistics")?;
             let negative = *self.peek() == Token::Minus;
             if negative {
@@ -4499,7 +4520,12 @@ impl Parser {
             let target = if negative { -target } else { target };
             return Ok(crate::ast::Statement::AlterIndex {
                 name,
-                action: AlterIndexAction::SetStatistics { column, target },
+                action: AlterIndexAction::SetStatistics {
+                    column: column
+                        .parse()
+                        .map_err(|_| ParseError::new("expected column number", self.peek_pos()))?,
+                    target,
+                },
             });
         }
         if self.eat_ident_eq("reset") {
@@ -6594,6 +6620,7 @@ impl Parser {
     /// S2: `DECLARE <name> [BINARY] [INSENSITIVE|ASENSITIVE] [[NO] SCROLL] CURSOR
     /// [{WITH|WITHOUT} HOLD] FOR <query>`. Positioned at the `declare` ident.
     fn declare_cursor(&mut self) -> Result<crate::ast::Statement, ParseError> {
+        let declaration_start = self.peek_pos();
         self.bump(); // declare
         let name = self.expect_col_id()?;
         let mut binary = false;
@@ -6629,9 +6656,11 @@ impl Parser {
             self.expect_ident_eq("hold")?;
         }
         self.expect(&Token::Keyword(Keyword::For))?;
-        let query_start = self.peek_pos();
         let query = self.in_nested_query(Self::query_expr)?;
-        let query_source = self.source[query_start..self.peek_pos()].trim().to_string();
+        let query_source = format!(
+            "{};",
+            self.source[declaration_start..self.peek_pos()].trim()
+        );
         Ok(crate::ast::Statement::DeclareCursor {
             name,
             binary,
@@ -6891,7 +6920,7 @@ impl Parser {
                 match name.as_str() {
                     "format" => {
                         let value_pos = self.peek_pos();
-                        let value = self.expect_ident()?;
+                        let value = self.explain_option_value()?;
                         options.format = match value.to_ascii_lowercase().as_str() {
                             "text" => ExplainFormat::Text,
                             "json" => ExplainFormat::Json,
@@ -6922,7 +6951,7 @@ impl Parser {
                     "memory" => options.memory = self.explain_option_flag()?,
                     "serialize" => {
                         let value_pos = self.peek_pos();
-                        let value = self.expect_ident()?;
+                        let value = self.explain_option_value()?;
                         options.serialize = Some(match value.to_ascii_lowercase().as_str() {
                             "text" => ExplainSerialize::Text,
                             "binary" => ExplainSerialize::Binary,
@@ -6989,6 +7018,25 @@ impl Parser {
             Token::Comma | Token::RParen => Ok(true),
             other => Err(ParseError::new(
                 format!("expected an EXPLAIN option value, found {other:?}"),
+                pos,
+            )),
+        }
+    }
+
+    /// EXPLAIN's enum-valued options use `def_arg`, so PostgreSQL accepts
+    /// either an identifier or a string literal (`FORMAT json` and
+    /// `FORMAT 'json'`).  Keep this narrower than a general expression: an
+    /// integer remains a syntax error at the option value.
+    fn explain_option_value(&mut self) -> Result<String, ParseError> {
+        let pos = self.peek_pos();
+        if let Some(value) = self.peek_keyword_as_col_id() {
+            self.bump();
+            return Ok(value);
+        }
+        match self.bump() {
+            Token::Ident(value) | Token::StringLit(value) => Ok(value),
+            other => Err(ParseError::new(
+                format!("expected identifier, found {other:?}"),
                 pos,
             )),
         }
@@ -7577,8 +7625,10 @@ impl Parser {
             // START TRANSACTION is valid; bare START is not a statement.
             self.expect(&Token::Keyword(Keyword::Transaction))?;
         } else {
-            // TRANSACTION is optional after BEGIN.
-            self.eat_keyword(Keyword::Transaction);
+            // TRANSACTION and WORK are optional after BEGIN.
+            if !self.eat_keyword(Keyword::Transaction) {
+                self.eat_ident_eq("work");
+            }
         }
         let modes = self.transaction_modes()?;
         Ok(Statement::Begin {
@@ -11093,20 +11143,12 @@ impl Parser {
             .then(|| self.relation_ref())
             .transpose()?;
         self.expect_keyword_or_ident(Keyword::As, "as")?;
-        // Each member is already validated when its referenced operator or
-        // support function is used. Keep the DDL boundary strict (non-empty,
-        // comma-separated) without duplicating those parsers here.
-        let mut member_tokens = 0usize;
-        let mut key_type = None;
-        while !matches!(self.peek(), Token::Semicolon | Token::Eof) {
-            if self.eat_ident_eq("storage") {
-                key_type = Some(self.parse_type_name()?);
-            } else {
-                self.bump();
-            }
-            member_tokens += 1;
-        }
-        if member_tokens == 0 {
+        let (key_type, members) = if self.eat_ident_eq("storage") {
+            (Some(self.parse_type_name()?), Vec::new())
+        } else {
+            (None, self.operator_family_add_members(Some(input_type))?)
+        };
+        if key_type.is_none() && members.is_empty() {
             return Err(ParseError::new(
                 "operator class requires at least one member",
                 self.peek_pos(),
@@ -11120,6 +11162,7 @@ impl Parser {
                 method,
                 family,
                 key_type,
+                members,
             },
         ))
     }
@@ -11314,7 +11357,7 @@ impl Parser {
         self.expect_keyword_or_ident(Keyword::Using, "using")?;
         let method = self.expect_object_name()?;
         let action = if kind == OperatorObjectKind::Family && self.eat_ident_eq("add") {
-            OperatorObjectAlterAction::AddMembers(self.operator_family_add_members()?)
+            OperatorObjectAlterAction::AddMembers(self.operator_family_add_members(None)?)
         } else if kind == OperatorObjectKind::Family
             && (self.eat_keyword(Keyword::Drop) || self.eat_ident_eq("drop"))
         {
@@ -11346,6 +11389,7 @@ impl Parser {
 
     fn operator_family_add_members(
         &mut self,
+        default_type: Option<crabka_pgtypes::ColumnType>,
     ) -> Result<Vec<crate::ast::OperatorFamilyMember>, ParseError> {
         use crate::ast::OperatorFamilyMember;
 
@@ -11358,14 +11402,17 @@ impl Parser {
                 // it has to be sliced out of the source the way `CREATE OPERATOR`
                 // slices it rather than read one token at a time.
                 let operator = self.operator_name()?.to_string();
-                if *self.peek() != Token::LParen {
+                let (left_type, right_type) = if *self.peek() == Token::LParen {
+                    self.operator_family_type_pair(false)?
+                } else if let Some(default_type) = default_type {
+                    (default_type, default_type)
+                } else {
                     return Err(ParseError::new_sqlstate(
                         "42601",
                         "operator argument types must be specified in ALTER OPERATOR FAMILY",
                         self.peek_pos(),
                     ));
-                }
-                let (left_type, right_type) = self.operator_family_type_pair(false)?;
+                };
                 let order_family = if self.eat_keyword(Keyword::For) {
                     self.expect_keyword_or_ident(Keyword::Order, "order")?;
                     self.expect_keyword_or_ident(Keyword::By, "by")?;
@@ -11637,6 +11684,7 @@ impl Parser {
             let mut subtype = None;
             let mut collation = None;
             let mut multirange_type_name = None;
+            let mut subtype_diff = None;
             while *self.peek() != Token::RParen {
                 // A `def_elem` name is a `ColLabel` in PostgreSQL, so every
                 // keyword may be one: `CREATE TYPE r AS RANGE (COLLATION = "C")`
@@ -11655,6 +11703,7 @@ impl Parser {
                             None => crate::ast::RelationRef::bare(written),
                         });
                     }
+                    "subtype_diff" => subtype_diff = Some(self.def_arg_name()?),
                     // The remaining options name support functions or an
                     // explicit multirange type. Preserve the semantic options
                     // above and consume these names for later catalog expansion.
@@ -11675,6 +11724,7 @@ impl Parser {
                     })?,
                     collation,
                     multirange_type_name,
+                    subtype_diff,
                 },
             });
         }
@@ -11683,7 +11733,7 @@ impl Parser {
         if *self.peek() != Token::RParen {
             loop {
                 let field_name = self.expect_col_id()?;
-                let ty = self.parse_type_name()?;
+                let (ty, _, _) = self.parse_column_type(&field_name)?;
                 let collation = if self.eat_ident_eq("collate") {
                     Some(self.expect_collation_name()?)
                 } else {
@@ -11851,15 +11901,41 @@ impl Parser {
             } else {
                 None
             };
-            self.eat_ident_eq("cascade");
-            self.eat_ident_eq("restrict");
+            let cascade = if self.eat_ident_eq("cascade") {
+                true
+            } else {
+                self.eat_ident_eq("restrict");
+                false
+            };
             return Ok(crate::ast::Statement::AlterType {
                 name,
-                action: AlterTypeAction::AddAttribute(crate::ast::CompositeFieldDef {
-                    name: field_name,
-                    ty,
-                    collation,
-                }),
+                action: AlterTypeAction::AddAttribute {
+                    field: crate::ast::CompositeFieldDef {
+                        name: field_name,
+                        ty,
+                        collation,
+                    },
+                    cascade,
+                },
+            });
+        }
+        if self.eat_keyword(Keyword::Drop) {
+            self.expect_ident_eq("attribute")?;
+            let if_exists = self.eat_if_exists();
+            let attribute = self.expect_col_id()?;
+            let cascade = if self.eat_ident_eq("cascade") {
+                true
+            } else {
+                self.eat_ident_eq("restrict");
+                false
+            };
+            return Ok(crate::ast::Statement::AlterType {
+                name,
+                action: AlterTypeAction::DropAttribute {
+                    name: attribute,
+                    if_exists,
+                    cascade,
+                },
             });
         }
         if self.eat_keyword(Keyword::Set) {
@@ -11876,6 +11952,21 @@ impl Parser {
                 return Ok(crate::ast::Statement::AlterType {
                     name,
                     action: AlterTypeAction::RenameValue { from, to },
+                });
+            }
+            if self.eat_ident_eq("attribute") {
+                let from = self.expect_col_id()?;
+                self.expect(&Token::Keyword(Keyword::To))?;
+                let to = self.expect_col_id()?;
+                let cascade = if self.eat_ident_eq("cascade") {
+                    true
+                } else {
+                    self.eat_ident_eq("restrict");
+                    false
+                };
+                return Ok(crate::ast::Statement::AlterType {
+                    name,
+                    action: AlterTypeAction::RenameAttribute { from, to, cascade },
                 });
             }
             self.expect(&Token::Keyword(Keyword::To))?;
@@ -12446,9 +12537,12 @@ impl Parser {
         self.expect(&Token::Keyword(Keyword::Drop))?;
         self.expect(&Token::Keyword(Keyword::Index))?;
         let if_exists = self.eat_if_exists();
-        let name = self.relation_ref()?;
+        let mut names = vec![self.relation_ref()?];
+        while self.eat_comma() {
+            names.push(self.relation_ref()?);
+        }
         Ok(Statement::DropIndex {
-            name,
+            names,
             if_exists,
             cascade: self.eat_drop_behavior(),
         })
@@ -14445,11 +14539,19 @@ impl Parser {
                 self.peek_pos(),
             ));
         };
+        let alias = self.opt_alias()?;
+        let columns = if alias.is_some() {
+            self.opt_column_aliases()?
+        } else {
+            None
+        };
         Ok(TableExpr::Join {
             left: Box::new(left),
             right: Box::new(right),
             kind,
             constraint,
+            alias,
+            columns,
         })
     }
 
@@ -14497,6 +14599,20 @@ impl Parser {
             self.peek(),
             Token::Keyword(Keyword::Select | Keyword::Values | Keyword::With | Keyword::Table)
                 | Token::LParen
+        )
+    }
+
+    /// Whether this opening parenthesis eventually reaches a query after zero
+    /// or more parentheses. This admits `((SELECT 1) UNION SELECT 2)` as a
+    /// scalar subquery without treating ordinary grouped expressions as queries.
+    fn parenthesized_query_starts_here(&self) -> bool {
+        let mut offset = 1;
+        while *self.peek_n(offset) == Token::LParen {
+            offset += 1;
+        }
+        matches!(
+            self.peek_n(offset),
+            Token::Keyword(Keyword::Select | Keyword::Values | Keyword::With | Keyword::Table)
         )
     }
 
@@ -14548,8 +14664,29 @@ impl Parser {
                     lateral,
                 });
             }
-            let inner = self.join_tree()?;
+            let mut inner = self.join_tree()?;
             self.expect(&Token::RParen)?;
+            // An extra pair of parentheses around a derived table does not
+            // create another relation, so its alias still belongs to the
+            // existing Derived node.
+            if let TableExpr::Derived {
+                alias,
+                columns,
+                lateral: nested_lateral,
+                ..
+            } = &mut inner
+            {
+                if let Some(outer_alias) = self.opt_alias()? {
+                    *alias = outer_alias;
+                    *columns = self.opt_column_aliases()?;
+                }
+                *nested_lateral |= lateral;
+            } else if let TableExpr::Join { alias, columns, .. } = &mut inner {
+                if let Some(outer_alias) = self.opt_alias()? {
+                    *alias = Some(outer_alias);
+                    *columns = self.opt_column_aliases()?;
+                }
+            }
             return Ok(inner);
         }
         // `ROWS FROM (f(…), g(…))` — several functions expanded in lockstep.
@@ -18253,6 +18390,11 @@ mod tests {
             panic!("expected EXPLAIN");
         };
         assert_eq!(options.serialize, Some(ExplainSerialize::Text));
+        let Statement::Explain { options, .. } = one("EXPLAIN (SERIALIZE 'binary') SELECT 1")
+        else {
+            panic!("expected EXPLAIN");
+        };
+        assert_eq!(options.serialize, Some(ExplainSerialize::Binary));
         assert_eq!(
             crate::parse("EXPLAIN (SERIALIZE neither) SELECT 1")
                 .expect_err("invalid SERIALIZE value is rejected")
@@ -18264,6 +18406,7 @@ mod tests {
             ("TEXT", ExplainFormat::Text),
             ("JSON", ExplainFormat::Json),
             ("XML", ExplainFormat::Xml),
+            ("'yaml'", ExplainFormat::Yaml),
         ] {
             let Statement::Explain { options, .. } =
                 one(&format!("EXPLAIN (FORMAT {format}) SELECT 1"))
@@ -19347,6 +19490,7 @@ mod tests {
                     subtype: ColumnType::Text,
                     collation: Some(ref name),
                     multirange_type_name: None,
+                    ..
                 },
                 ..
             } if name == "C"
@@ -20147,6 +20291,21 @@ mod tests {
     }
 
     #[test]
+    fn composite_type_fields_reject_pseudo_types() {
+        for (sql, column, ty) in [
+            ("CREATE TYPE t AS (u unknown)", "u", "unknown"),
+            ("CREATE TYPE t AS (r record)", "r", "record"),
+        ] {
+            let error = parse(sql).expect_err(sql);
+            assert!(error.sqlstate() == "42P16", "{sql}");
+            assert!(
+                error.message == format!("column \"{column}\" has pseudo-type {ty}"),
+                "{sql}"
+            );
+        }
+    }
+
+    #[test]
     fn parses_a_table_of_a_composite_type() {
         let Statement::CreateTable { name, of_type, .. } =
             one("CREATE TABLE persons OF person_type")
@@ -20471,11 +20630,23 @@ mod tests {
         assert_eq!(
             one("DROP INDEX IF EXISTS \"Users Name Idx\""),
             Statement::DropIndex {
-                name: "Users Name Idx".into(),
+                names: vec!["Users Name Idx".into()],
                 if_exists: true,
                 cascade: false,
             }
         );
+    }
+
+    #[test]
+    fn parses_drop_index_lists() {
+        let Statement::DropIndex { names, cascade, .. } = one("DROP INDEX a, s.b CASCADE") else {
+            panic!("expected DROP INDEX");
+        };
+        assert_eq!(
+            names,
+            vec!["a".into(), crate::ast::RelationRef::qualified("s", "b")]
+        );
+        assert!(cascade);
     }
 
     #[test]
@@ -20933,6 +21104,16 @@ mod tests {
             };
             assert!(*action == expected, "{sql}");
         }
+        let statements =
+            crate::parse("ALTER INDEX attmp_idx ALTER COLUMN id SET (n_distinct = 100)")
+                .expect("parse named index attribute option");
+        assert!(matches!(
+            statements.as_slice(),
+            [Statement::AlterIndex {
+                action: AlterIndexAction::SetAttributeOptions { column, options },
+                ..
+            }] if column == "id" && options == &vec![("n_distinct".into(), Some("100".into()))]
+        ));
     }
 
     #[test]
@@ -21541,6 +21722,7 @@ mod tests {
         };
         let cases: &[(&str, Statement)] = &[
             ("BEGIN", begin(None, None, None)),
+            ("BEGIN WORK", begin(None, None, None)),
             ("START TRANSACTION", begin(None, None, None)),
             (
                 "BEGIN ISOLATION LEVEL REPEATABLE READ",
@@ -21582,6 +21764,7 @@ mod tests {
         }
         // `READ` must be followed by one of the two access modes.
         assert!(parse("BEGIN READ").is_err());
+        assert!(parse("BEGIN TRANSACTION WORK").is_err());
         assert!(parse("BEGIN READ SIDEWAYS").is_err());
     }
 
@@ -22314,6 +22497,7 @@ mod tests {
             body: UserTypeBody::Composite(vec![CompositeField {
                 name: "value".into(),
                 ty: ColumnType::Int4,
+                dropped: false,
             }]),
         };
         crabka_pgtypes::usertype::replace(&rowtype);
@@ -22594,6 +22778,8 @@ mod tests {
             ("interval '1.5' day", "1 day"),
             // SECOND keeps its fractional part, so it is not truncated.
             ("interval '1.5' second", "00:00:01.5"),
+            ("interval '1.234' second(2)", "00:00:01.23"),
+            ("interval '12:34.5678' minute to second(2)", "00:12:34.57"),
             ("interval '90' minute", "01:30:00"),
             // A bare quantity takes the range's LAST field, and each quantity to
             // its left takes the next coarser one.
@@ -24435,6 +24621,7 @@ mod tests {
                 constraint,
                 left,
                 right,
+                ..
             } => {
                 assert_eq!(*kind, JoinKind::Left);
                 assert_eq!(*constraint, JoinConstraint::Using(vec!["id".into()]));
@@ -24469,6 +24656,17 @@ mod tests {
         ));
         let s = only_select("SELECT d.n FROM (SELECT n FROM t) AS d");
         assert!(matches!(&s.from[0], TableExpr::Derived { alias, .. } if alias == "d"));
+    }
+
+    #[test]
+    fn join_using_accepts_a_relation_alias() {
+        use crate::ast::TableExpr;
+
+        let select = only_select("SELECT j.id FROM a JOIN b USING (id) AS j");
+        assert!(matches!(
+            &select.from[..],
+            [TableExpr::Join { alias: Some(alias), columns: None, .. }] if alias == "j"
+        ));
     }
 
     #[test]
@@ -24520,6 +24718,18 @@ mod tests {
         );
     }
 
+    #[test]
+    fn doubly_parenthesized_derived_table_accepts_its_outer_alias() {
+        use crate::ast::TableExpr;
+
+        let select = only_select("SELECT d.n FROM ((SELECT 1 AS n)) AS d(n)");
+        assert!(matches!(
+            &select.from[..],
+            [TableExpr::Derived { alias, columns: Some(columns), .. }]
+                if alias == "d" && columns == &["n"]
+        ));
+    }
+
     // ---- SP34: subquery expressions ----
 
     #[test]
@@ -24539,6 +24749,10 @@ mod tests {
         assert!(matches!(
             expr("1 + (SELECT a FROM t)"),
             Expr::Binary { right, .. } if matches!(*right, Expr::ScalarSubquery(_))
+        ));
+        assert!(matches!(
+            expr("((SELECT 2) UNION SELECT 2)"),
+            Expr::ScalarSubquery(query) if matches!(query.body, crate::ast::SetExpr::SetOp { .. })
         ));
         assert!(matches!(expr("(1 + 2) * 3"), Expr::Binary { .. }));
     }
@@ -28376,11 +28590,48 @@ mod q1_statement_completeness_tests {
         };
         assert!(
             action
-                == crate::ast::AlterTypeAction::AddAttribute(crate::ast::CompositeFieldDef {
+                == crate::ast::AlterTypeAction::AddAttribute {
+                    field: crate::ast::CompositeFieldDef {
+                        name: "label".into(),
+                        ty: crabka_pgtypes::ColumnType::Text,
+                        collation: Some("C".into()),
+                    },
+                    cascade: true,
+                }
+        );
+    }
+
+    #[test]
+    fn alter_type_rename_attribute_preserves_cascade() {
+        let Statement::AlterType { action, .. } =
+            one("ALTER TYPE pair RENAME ATTRIBUTE label TO name CASCADE")
+        else {
+            panic!("expected ALTER TYPE");
+        };
+        assert!(
+            action
+                == crate::ast::AlterTypeAction::RenameAttribute {
+                    from: "label".into(),
+                    to: "name".into(),
+                    cascade: true,
+                }
+        );
+    }
+
+    #[test]
+    fn alter_type_drop_attribute_preserves_options() {
+        let Statement::AlterType { action, .. } =
+            one("ALTER TYPE pair DROP ATTRIBUTE IF EXISTS label CASCADE")
+        else {
+            panic!("expected ALTER TYPE");
+        };
+        assert!(
+            action
+                == crate::ast::AlterTypeAction::DropAttribute {
                     name: "label".into(),
-                    ty: crabka_pgtypes::ColumnType::Text,
-                    collation: Some("C".into()),
-                })
+                    if_exists: true,
+                    cascade: true,
+                }
         );
     }
 
@@ -29723,6 +29974,7 @@ mod operator_tests {
                     method: "btree".into(),
                     family: None,
                     key_type: Some(ColumnType::Int4),
+                    members: vec![],
                 }
         );
         for (sql, kind) in [

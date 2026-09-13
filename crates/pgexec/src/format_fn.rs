@@ -19,7 +19,7 @@
 
 use crabka_pgparser::ast::{Expr, FuncArgs, FuncCall};
 use crabka_pgtypes::{
-    ColumnType, Datum, TypeError,
+    ColumnType, Datum, TemporalType, TypeError,
     datetime::{self, Interval},
     numeric,
 };
@@ -170,6 +170,14 @@ fn is_formattable(t: ColumnType) -> bool {
             | ColumnType::Timestamp
             | ColumnType::Timestamptz
             | ColumnType::Interval
+            | ColumnType::Temporal(
+                TemporalType::Time
+                    | TemporalType::Timetz
+                    | TemporalType::Timestamp
+                    | TemporalType::Timestamptz
+                    | TemporalType::Interval,
+                _,
+            )
             | ColumnType::Int2
             | ColumnType::Int4
             | ColumnType::Int8
@@ -223,7 +231,23 @@ pub(crate) fn eval_format(
     let args = exprs_of(fc)?;
     // Evaluate every argument up front, then short-circuit to NULL on any NULL
     // (PG strictness). The arity is re-checked per-arm below.
-    let vals: Vec<Datum> = args.iter().map(&mut eval_child).collect::<Result<_, _>>()?;
+    let mut vals: Vec<Datum> = args.iter().map(&mut eval_child).collect::<Result<_, _>>()?;
+    if f == FmtFunc::MakeInterval {
+        crate::eval::coerce_unknown_args(
+            args,
+            &mut vals,
+            &[
+                Some(ColumnType::Int4),
+                Some(ColumnType::Int4),
+                Some(ColumnType::Int4),
+                Some(ColumnType::Int4),
+                Some(ColumnType::Int4),
+                Some(ColumnType::Int4),
+                Some(ColumnType::Float8),
+            ],
+            ctx,
+        )?;
+    }
     if vals.iter().any(Datum::is_null) {
         // Still validate the arity so a NULL with wrong arity is 42883, not silent NULL.
         check_arity(f, fc, vals.len())?;
@@ -305,13 +329,20 @@ pub(crate) fn eval_format(
             };
             // A reading on a daylight-saving boundary resolves by PostgreSQL's
             // rule, not jiff's default; see `datetime::zone_offset_for`.
-            datetime::zoned_instant(dt, &zone)
-                .map(Datum::Timestamptz)
-                .map_err(|_| {
-                    ExecError::Type(TypeError::DatetimeFieldOverflow {
-                        value: format!("{y}-{mo}-{d} {h}:{mi}:{sec}"),
+            datetime::zoned_instant(
+                dt.civil().ok_or_else(|| {
+                    map_type(crabka_pgtypes::TypeError::DatetimeOutOfRange {
+                        message: "timestamp out of range".into(),
                     })
+                })?,
+                &zone,
+            )
+            .map(Datum::Timestamptz)
+            .map_err(|_| {
+                ExecError::Type(TypeError::DatetimeFieldOverflow {
+                    value: format!("{y}-{mo}-{d} {h}:{mi}:{sec}"),
                 })
+            })
         }
         FmtFunc::MakeInterval => {
             // 0..=7 positional args; first 6 are ints (default 0), the 7th `secs` is
@@ -479,11 +510,25 @@ fn to_char(value: &Datum, template: &str, ctx: &EvalCtx, name: &str) -> Result<D
     }
     let text = match value {
         Datum::Date(d) => {
-            let fields = datetime::DateTimeFields::from_civil(datetime::date_to_midnight(*d), None);
+            let fields = datetime::DateTimeFields::from_civil(
+                datetime::date_to_midnight(*d)?.civil().ok_or_else(|| {
+                    map_type(TypeError::DatetimeOutOfRange {
+                        message: "date out of range for timestamp".into(),
+                    })
+                })?,
+                None,
+            );
             datetime::format_datetime(template, &fields).map_err(map_type)?
         }
         Datum::Timestamp(dt) => {
-            let fields = datetime::DateTimeFields::from_civil(*dt, None);
+            let fields = datetime::DateTimeFields::from_civil(
+                dt.civil().ok_or_else(|| {
+                    map_type(TypeError::DatetimeOutOfRange {
+                        message: "timestamp out of range".into(),
+                    })
+                })?,
+                None,
+            );
             datetime::format_datetime(template, &fields).map_err(map_type)?
         }
         Datum::Time(t) => {
@@ -533,6 +578,17 @@ fn to_char(value: &Datum, template: &str, ctx: &EvalCtx, name: &str) -> Result<D
 /// an absolute instant, that is a `timestamptz`.
 fn to_timestamp_epoch(value: &Datum, name: &str) -> Result<Datum, ExecError> {
     let secs = f64_arg(value, name)?;
+    if secs == f64::INFINITY {
+        return Ok(Datum::Timestamptz(datetime::timestamptz_infinity()));
+    }
+    if secs == f64::NEG_INFINITY {
+        return Ok(Datum::Timestamptz(datetime::timestamptz_neg_infinity()));
+    }
+    if secs.is_nan() {
+        return Err(ExecError::InvalidParameterValueMessage(
+            "timestamp cannot be NaN".to_string(),
+        ));
+    }
     if !secs.is_finite() {
         return Err(ExecError::Type(TypeError::DatetimeFieldOverflow {
             value: secs.to_string(),
@@ -907,6 +963,10 @@ mod tests {
         assert_eq!(ev("to_char(485, '999')"), Datum::Text(" 485".into()));
         assert_eq!(ty("to_char(485, '999')"), ColumnType::Text);
         assert_eq!(ty("to_char(now(), 'YYYY')"), ColumnType::Text);
+        assert_eq!(
+            ty("to_char(TIMESTAMP(2) '2024-01-15 13:45:06', 'YYYY-MM-DD')"),
+            ColumnType::Text
+        );
     }
 
     #[test]
@@ -925,7 +985,7 @@ mod tests {
         }
         assert_eq!(
             super::to_char(
-                &Datum::Timestamp(jiff::civil::datetime(2024, 1, 1, 0, 0, 0, 0)),
+                &Datum::Timestamp(jiff::civil::datetime(2024, 1, 1, 0, 0, 0, 0).into()),
                 "YYYY",
                 &ctx,
                 "to_char"
@@ -974,6 +1034,14 @@ mod tests {
             Datum::Timestamptz("1970-01-01T00:00:00Z".parse().expect("ts"))
         );
         assert_eq!(
+            ev("to_timestamp('Infinity'::float8)"),
+            Datum::Timestamptz(crabka_pgtypes::datetime::timestamptz_infinity())
+        );
+        assert_eq!(
+            ev("to_timestamp('-Infinity'::float8)"),
+            Datum::Timestamptz(crabka_pgtypes::datetime::timestamptz_neg_infinity())
+        );
+        assert_eq!(
             ev("make_date(2024, 7, 4)"),
             Datum::Date(jiff::civil::date(2024, 7, 4).into())
         );
@@ -984,6 +1052,10 @@ mod tests {
                 days: 5,
                 micros: 0
             })
+        );
+        assert_eq!(
+            pg_error("make_interval(0, 0, 0, 0, 0, 0, 'inf')").message,
+            "interval out of range"
         );
         assert_eq!(
             ev("justify_hours(INTERVAL '27 hours')"),
@@ -1161,7 +1233,7 @@ mod tests {
         );
         assert_eq!(
             ev("make_timestamp(2024, 7, 4, 13, 45, 6)"),
-            Datum::Timestamp(jiff::civil::datetime(2024, 7, 4, 13, 45, 6, 0))
+            Datum::Timestamp(jiff::civil::datetime(2024, 7, 4, 13, 45, 6, 0).into())
         );
         // justify_interval rolls 27h → +1 day, 3h and 35 days → +1 month, 5 days.
         assert_eq!(

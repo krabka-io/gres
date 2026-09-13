@@ -2505,7 +2505,8 @@ fn compare_datums(
         (Datum::Int8(left), Datum::Int8(right)) => compare_order(left.cmp(right), op),
         (Datum::Text(left), Datum::Text(right)) => compare_order(left.cmp(right), op),
         (Datum::Bool(left), Datum::Bool(right)) => compare_order(left.cmp(right), op),
-        _ => false,
+        _ => crabka_pgtypes::ops::compare(left, right)
+            .is_ok_and(|ordering| ordering.is_some_and(|ordering| compare_order(ordering, op))),
     }
 }
 

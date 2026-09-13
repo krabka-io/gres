@@ -575,6 +575,7 @@ pub(crate) fn apply_assignments(
                 assign_target_indirections(
                     &next[*idx],
                     table.columns[*idx].ty,
+                    Some(&table.columns[*idx].name),
                     indirections,
                     &new_value,
                     scope,
@@ -588,6 +589,7 @@ pub(crate) fn apply_assignments(
             } => assign_target_indirections(
                 &next[*idx],
                 table.columns[*idx].ty,
+                Some(&table.columns[*idx].name),
                 indirections,
                 value,
                 scope,

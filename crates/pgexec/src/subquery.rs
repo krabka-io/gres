@@ -893,7 +893,7 @@ pub(crate) fn resolve_types_in_values_with_ctes(
 /// EXISTS / IN / quantified subqueries stay as they are: they infer as `bool`
 /// without substitution, and the shared walk already leaves their inner queries
 /// (separate scopes) alone while still descending into their outer operands.
-fn resolve_types_in_expr(
+pub(crate) fn resolve_types_in_expr(
     catalog_kv: &dyn crabka_pgkv::Kv,
     resolution: &crate::relname::ResolutionScope,
     e: &Expr,

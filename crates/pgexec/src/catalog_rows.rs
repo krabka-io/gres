@@ -258,9 +258,8 @@ pub(crate) fn pg_partitioned_table_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<D
         let natts = i16::try_from(scheme.keys.len())
             .map_err(|_| ExecError::Unsupported("partnatts exceeds int2 range".into()))?;
         // `partattrs` is an int2vector, printed as a space-separated list of
-        // one-based attribute numbers. Crabka compacts the column list on `DROP
-        // COLUMN`, so an attribute number is the column's position *now* and is
-        // derived here rather than stored.
+        // one-based physical attribute numbers. `DROP COLUMN` keeps a dropped
+        // slot, so an attribute number stays stable for the relation's life.
         let attrs = crate::partition::key_ordinals(&scheme, &table.columns)?
             .into_iter()
             .map(|ordinal| (ordinal + 1).to_string())
@@ -421,6 +420,8 @@ pub(crate) fn pg_class_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
                 crate::exec::PG_TOAST_NAMESPACE_OID,
             );
             toast.relnatts = 3;
+            // TOAST storage is heap-backed, like an ordinary table.
+            toast.relam = 2;
             toast.relowner = table_owner_oids[&table.name];
             toast.relpersistence = crabka_pgcatalog::relpersistence_of(&table.name.schema);
             rows.push(toast.build()?);
@@ -503,6 +504,15 @@ pub(crate) fn pg_class_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
         }
         rows.push(row.build()?);
     }
+    let mut aggregate_index = PgClassRow::new(
+        PG_AGGREGATE_FNOID_INDEX.oid,
+        PG_AGGREGATE_FNOID_INDEX.name,
+        "i",
+        PG_CATALOG_NAMESPACE_OID,
+    );
+    aggregate_index.relnatts = 1;
+    aggregate_index.relam = crate::catalog_rel::BTREE_AM_OID;
+    rows.push(aggregate_index.build()?);
     for index in indexes {
         // An index lives in the schema of the table it indexes, which is also
         // what makes a temporary table's index temporary.
@@ -954,6 +964,30 @@ pub(crate) fn pg_attribute_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, 
             &table,
             &acl,
         )?);
+        if table_has_toast_relation(catalog_kv, &table)? {
+            let toast = Table {
+                id: 0,
+                owner: table.owner.clone(),
+                name: toast_relation_name(table.id)?,
+                columns: vec![
+                    Column::new("chunk_id", ColumnType::Oid),
+                    Column::new("chunk_seq", ColumnType::Int4),
+                    Column::new("chunk_data", ColumnType::Bytea),
+                ],
+                sharded: false,
+                row_security: false,
+                force_row_security: false,
+                sharding: None,
+                foreign: None,
+                materialized: None,
+                checks: Vec::new(),
+            };
+            rows.extend(attribute_rows_for_table(
+                toast_relation_oid(table.id)?,
+                &toast,
+                &acl,
+            )?);
+        }
     }
     for index in crabka_pgcatalog::list_indexes(catalog_kv)? {
         let source = crabka_pgcatalog::get_table(catalog_kv, &index.table)?;
@@ -990,16 +1024,42 @@ pub(crate) fn pg_attribute_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, 
     }
     for virtual_table in virtual_table_names() {
         let table = virtual_catalog_table(virtual_table);
-        rows.extend(attribute_rows_for_table(
-            virtual_relation_oid(virtual_table),
-            &table,
-            &acl,
-        )?);
+        let mut attributes =
+            attribute_rows_for_table(virtual_relation_oid(virtual_table), &table, &acl)?;
+        // PostgreSQL's system catalogs sort their collatable fields under C,
+        // independently of the database default collation.
+        for attribute in &mut attributes {
+            if attribute[19] == int(crate::catalog_rel::DEFAULT_COLLATION_OID) {
+                attribute[19] = int(crate::catalog_rel::C_COLLATION_OID);
+            }
+        }
+        rows.extend(attributes);
     }
     for index in BUILTIN_CATALOG_OID_INDEXES {
         let table = builtin_catalog_index_table(index);
         rows.extend(attribute_rows_for_table(index.oid, &table, &acl)?);
     }
+    let aggregate_index = Table {
+        id: 2650,
+        owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+        name: crabka_pgcatalog::RelationName::new(
+            crate::search_path::PG_CATALOG,
+            PG_AGGREGATE_FNOID_INDEX.name,
+        ),
+        columns: vec![Column::new("aggfnoid", ColumnType::Regproc)],
+        sharded: false,
+        row_security: false,
+        force_row_security: false,
+        sharding: None,
+        foreign: None,
+        materialized: None,
+        checks: Vec::new(),
+    };
+    rows.extend(attribute_rows_for_table(
+        PG_AGGREGATE_FNOID_INDEX.oid,
+        &aggregate_index,
+        &acl,
+    )?);
     // A composite type's attributes hang off the relation its `pg_type.typrelid`
     // points at, which is how `\d <type>` and the driver introspection queries
     // reach them.
@@ -1589,9 +1649,7 @@ pub(crate) fn attribute_rows_for_table(
         .enumerate()
         .map(|(idx, column)| {
             let layout = crate::usertype::declared_base_layout(column.ty);
-            let typlen = layout.map_or_else(|| column.ty.type_size(), |layout| layout.length);
-            let typbyval = layout.map_or(typlen > 0, |layout| layout.by_value);
-            let typalign = layout.map_or(b'i', |layout| layout.alignment as u8);
+            let (typlen, typbyval, typalign) = attribute_layout(column.ty, layout);
             let attnum = i16::try_from(idx + 1)
                 .map_err(|_| ExecError::Unsupported("attnum exceeds int2 range".into()))?;
             let identity = match column.identity {
@@ -1602,7 +1660,11 @@ pub(crate) fn attribute_rows_for_table(
             Ok(vec![
                 int(relid),
                 text(&column.name),
-                int(oid_i32(column.ty.oid())?),
+                int(if column.dropped {
+                    0
+                } else {
+                    oid_i32(column.ty.oid())?
+                }),
                 Datum::Int2(typlen),
                 Datum::Int2(attnum),
                 int(column.typmod.unwrap_or_else(|| catalog_typmod(column.ty))),
@@ -1631,7 +1693,7 @@ pub(crate) fn attribute_rows_for_table(
                         .copied()
                         .unwrap_or(b'\0'),
                 ),
-                Datum::Bool(false),
+                Datum::Bool(column.dropped),
                 Datum::Bool(true),
                 Datum::Int2(0),
                 int(column_collation_oid(column)),
@@ -1654,6 +1716,72 @@ pub(crate) fn attribute_rows_for_table(
             ])
         })
         .collect()
+}
+
+/// The physical fields that `pg_attribute` duplicates from `pg_type`.
+fn attribute_layout(
+    ty: ColumnType,
+    layout: Option<crabka_pgtypes::usertype::BaseLayout>,
+) -> (i16, bool, u8) {
+    if let Some(layout) = layout {
+        return (layout.length, layout.by_value, layout.alignment as u8);
+    }
+    use ColumnType as C;
+    let len = ty.type_size();
+    let by_value = matches!(
+        ty,
+        C::Bool
+            | C::Int2
+            | C::Int4
+            | C::Int8
+            | C::InternalChar
+            | C::Float4
+            | C::Float8
+            | C::Date
+            | C::Time
+            | C::Timetz
+            | C::Timestamp
+            | C::Timestamptz
+            | C::Interval
+            | C::IntervalTypmod(_)
+            | C::Temporal(_, _)
+            | C::Money
+            | C::Oid
+            | C::Xid
+            | C::Xid8
+            | C::Cid
+            | C::PgLsn
+            | C::Regclass
+            | C::Regtype
+            | C::Regprocedure
+            | C::Regnamespace
+            | C::Regproc
+            | C::Regoper
+            | C::Regoperator
+            | C::Regconfig
+            | C::Regdictionary
+            | C::Regrole
+            | C::Regcollation
+    );
+    let align = match ty {
+        C::Name => b'c',
+        C::Point | C::Box | C::Circle | C::Lseg | C::Line => b'd',
+        C::Array(_)
+            if matches!(
+                ty.oid(),
+                crabka_pgtypes::oids::ACLITEMARRAY | crabka_pgtypes::oids::FLOAT8ARRAY
+            ) =>
+        {
+            b'd'
+        }
+        _ => match len {
+            1 => b'c',
+            2 => b's',
+            8 => b'd',
+            _ => b'i',
+        },
+    };
+    (len, by_value, align)
 }
 
 /// The columns PostgreSQL exposes for an index relation. Expression keys have
@@ -1893,7 +2021,9 @@ pub(crate) fn pg_type_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecE
                     domain_base: None,
                     range_align: match ty.name {
                         "name" => Some("c"),
-                        "aclitem" | "_aclitem" | "tsrange" | "tstzrange" | "int8range" => Some("d"),
+                        "aclitem" | "_aclitem" | "_point" | "_lseg" | "_box" | "_line"
+                        | "_circle" | "point" | "lseg" | "box" | "line" | "circle" | "tsrange"
+                        | "tstzrange" | "int8range" => Some("d"),
                         _ => None,
                     },
                 },
@@ -1950,7 +2080,7 @@ pub(crate) fn pg_type_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecE
 /// [`ColumnType`]. Their I/O links still need matching `pg_proc` rows: the
 /// upstream catalog sanity checks use those links as foreign keys.
 fn catalog_only_builtin_type_rows(proc_oids: &BTreeMap<String, i32>) -> Vec<Vec<Datum>> {
-    [
+    let mut rows: Vec<Vec<Datum>> = [
         (32, "pg_ddl_command", 8, "P", "p", 0, [None; 8]),
         (269, "table_am_handler", 4, "P", "p", 0, [None; 8]),
         (325, "index_am_handler", 4, "P", "p", 0, [None; 8]),
@@ -2037,14 +2167,38 @@ fn catalog_only_builtin_type_rows(proc_oids: &BTreeMap<String, i32>) -> Vec<Vec<
                 },
                 proc_oids,
                 true,
-                None,
+                (name == "unknown").then_some('p'),
                 routine_overrides,
                 None,
                 None,
             )
         },
     )
-    .collect()
+    .collect();
+    let gtsvector = rows
+        .iter_mut()
+        .find(|row| row[0] == oid(3642))
+        .expect("gtsvector catalog row");
+    gtsvector[14] = oid(3644);
+    rows.push(pg_type_row(
+        PgTypeRow {
+            oid: 3644,
+            name: "_gtsvector",
+            namespace: PG_CATALOG_NAMESPACE_OID,
+            len: -1,
+            category: "A",
+            typtype: "b",
+            typrelid: 0,
+            typelem: 3642,
+            typarray: 0,
+            typbasetype: 0,
+            typcollation: 0,
+            domain_base: None,
+            range_align: None,
+        },
+        proc_oids,
+    ));
+    rows
 }
 
 /// The composite type and array row each ordinary relation owns.
@@ -2771,7 +2925,10 @@ pub(crate) fn user_type_rows(
                     typbasetype: 0,
                     typcollation: 0,
                     domain_base: None,
-                    range_align: None,
+                    range_align: ty.range().map(|range| match range.subtype.type_size() {
+                        8 => "d",
+                        _ => "i",
+                    }),
                 },
                 &proc_oids,
                 true,
@@ -2925,6 +3082,12 @@ pub(crate) struct BuiltinCatalogOidIndex {
     pub(crate) name: &'static str,
     pub(crate) oid: i32,
 }
+
+const PG_AGGREGATE_FNOID_INDEX: BuiltinCatalogOidIndex = BuiltinCatalogOidIndex {
+    table: "pg_aggregate",
+    name: "pg_aggregate_fnoid_index",
+    oid: 2650,
+};
 
 pub(crate) const BUILTIN_CATALOG_OID_INDEXES: &[BuiltinCatalogOidIndex] = &[
     BuiltinCatalogOidIndex {
@@ -3325,6 +3488,41 @@ pub(crate) fn pg_index_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
             Datum::Null,
         ]);
     }
+    rows.push(vec![
+        int(PG_AGGREGATE_FNOID_INDEX.oid),
+        int(virtual_relation_oid("pg_aggregate")),
+        Datum::Int2(1),
+        Datum::Int2(1),
+        Datum::Bool(true),
+        Datum::Bool(false),
+        Datum::Bool(true),
+        Datum::Bool(false),
+        Datum::Bool(true),
+        Datum::Bool(false),
+        Datum::Bool(true),
+        Datum::Bool(false),
+        Datum::Bool(true),
+        Datum::Bool(true),
+        Datum::Bool(false),
+        Datum::OidVector(crabka_pgtypes::ArrayValue::with_dims(
+            crabka_pgtypes::ElemType::Int4,
+            vec![Datum::Int4(1)],
+            vec![crabka_pgtypes::ArrayDim::new(0, 1)],
+        )),
+        Datum::Null,
+        Datum::OidVector(crabka_pgtypes::ArrayValue::with_dims(
+            crabka_pgtypes::ElemType::Int4,
+            vec![Datum::Int4(1981)],
+            vec![crabka_pgtypes::ArrayDim::new(0, 1)],
+        )),
+        Datum::OidVector(crabka_pgtypes::ArrayValue::with_dims(
+            crabka_pgtypes::ElemType::Int2,
+            vec![Datum::Int2(0)],
+            vec![crabka_pgtypes::ArrayDim::new(0, 1)],
+        )),
+        Datum::Null,
+        Datum::Null,
+    ]);
     Ok(rows)
 }
 
@@ -3342,9 +3540,8 @@ fn index_opclass_oid(
         crabka_pgcatalog::IndexMethod::Spgist => crate::catalog_rel::SPGIST_AM_OID,
     };
     let compatible = |input_oid: i32| {
-        input_oid == ty.oid() as i32
-            || (input_oid == crabka_pgtypes::oids::TEXT as i32
-                && matches!(ty, ColumnType::Text | ColumnType::Varchar(_)))
+        u32::try_from(input_oid)
+            .is_ok_and(|input_oid| crate::exec::index_opclass_accepts_type(input_oid, ty))
     };
     let explicit = option
         .opclass
@@ -5580,6 +5777,103 @@ mod tests {
     use super::*;
 
     #[test]
+    fn unknown_type_uses_plain_storage() {
+        let row = catalog_only_builtin_type_rows(&BTreeMap::new())
+            .into_iter()
+            .find(|row| row[1] == Datum::Text("unknown".into()))
+            .expect("unknown pg_type row");
+        assert_eq!(row[23], Datum::InternalChar(b'p'));
+    }
+
+    #[test]
+    fn gtsvector_has_its_catalog_array_type() {
+        let rows = catalog_only_builtin_type_rows(&BTreeMap::new());
+        let base = rows
+            .iter()
+            .find(|row| row[0] == oid(3642))
+            .expect("gtsvector pg_type row");
+        let array = rows
+            .iter()
+            .find(|row| row[0] == oid(3644))
+            .expect("gtsvector[] pg_type row");
+        assert_eq!(base[14], oid(3644));
+        assert_eq!(array[1], Datum::Text("_gtsvector".into()));
+        assert_eq!(array[13], oid(3642));
+    }
+
+    #[test]
+    fn builtin_attribute_layout_matches_pg_type_physics() {
+        assert_eq!(attribute_layout(ColumnType::Point, None), (16, false, b'd'));
+        assert_eq!(attribute_layout(ColumnType::Name, None), (64, false, b'c'));
+        assert_eq!(attribute_layout(ColumnType::Float8, None), (8, true, b'd'));
+        assert_eq!(attribute_layout(ColumnType::Int2, None), (2, true, b's'));
+        assert_eq!(
+            attribute_layout(
+                ColumnType::array_of(ColumnType::Float8).expect("float8[]"),
+                None,
+            ),
+            (-1, false, b'd')
+        );
+    }
+
+    #[test]
+    fn point_type_uses_double_alignment() {
+        let rows = pg_type_rows(&MemKv::default())
+            .expect("pg_type rows")
+            .into_iter()
+            .collect::<Vec<_>>();
+        let point = rows
+            .iter()
+            .find(|row| row[0] == oid(600))
+            .expect("point pg_type row");
+        assert_eq!(point[22], Datum::InternalChar(b'd'));
+        let array = rows
+            .iter()
+            .find(|row| row[0] == oid(1017))
+            .expect("point[] pg_type row");
+        assert_eq!(array[22], Datum::InternalChar(b'd'));
+    }
+
+    #[test]
+    fn virtual_catalog_text_columns_use_c_collation() {
+        let attribute = pg_attribute_rows(&MemKv::default())
+            .expect("pg_attribute rows")
+            .into_iter()
+            .find(|row| row[0] == int(1259) && row[1] == text("relname"))
+            .expect("pg_class.relname attribute");
+        assert_eq!(attribute[19], int(crate::catalog_rel::C_COLLATION_OID));
+    }
+
+    #[test]
+    fn toast_relations_use_the_heap_access_method() {
+        let kv = MemKv::default();
+        let table = RelationName::public("toast_catalog_row");
+        crabka_pgcatalog::create_table(&kv, &table, vec![Column::new("value", ColumnType::Text)])
+            .expect("create toastable table");
+        let toast = pg_class_rows(&kv)
+            .expect("pg_class rows")
+            .into_iter()
+            .find(|row| matches!(&row[17], Datum::Text(kind) if kind == "t"))
+            .expect("toast pg_class row");
+        assert_eq!(toast[6], Datum::Int4(2));
+        let toast_oid = toast[0].clone();
+        let attributes = pg_attribute_rows(&kv)
+            .expect("pg_attribute rows")
+            .into_iter()
+            .filter(|row| row[0] == toast_oid)
+            .map(|row| row[1].clone())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            attributes,
+            vec![
+                Datum::Text("chunk_id".into()),
+                Datum::Text("chunk_seq".into()),
+                Datum::Text("chunk_data".into()),
+            ]
+        );
+    }
+
+    #[test]
     fn foreign_column_options_are_exposed_by_pg_attribute() {
         let table = Table {
             id: 1,
@@ -5618,6 +5912,26 @@ mod tests {
         let index = builtin_catalog_oid_index("pg_largeobject_metadata").expect("catalog index");
         assert_eq!(index.name, "pg_largeobject_metadata_oid_index");
         assert_eq!(index.oid, 2996);
+    }
+
+    #[test]
+    fn aggregate_function_index_uses_oid_ops() {
+        let kv = MemKv::default();
+        let row = pg_index_rows(&kv)
+            .expect("pg_index rows")
+            .into_iter()
+            .find(|row| row[0] == int(PG_AGGREGATE_FNOID_INDEX.oid))
+            .expect("pg_aggregate_fnoid_index");
+        assert_eq!(row[1], int(2600));
+        let oid_vector = |oid| {
+            Datum::OidVector(crabka_pgtypes::ArrayValue::with_dims(
+                crabka_pgtypes::ElemType::Int4,
+                vec![Datum::Int4(oid)],
+                vec![crabka_pgtypes::ArrayDim::new(0, 1)],
+            ))
+        };
+        assert_eq!(row[15], oid_vector(1));
+        assert_eq!(row[17], oid_vector(1981));
     }
 
     #[test]
@@ -5827,6 +6141,7 @@ mod tests {
             UserTypeBody::Composite(vec![CompositeField {
                 name: "id".into(),
                 ty: ColumnType::Int4,
+                dropped: false,
             }]),
         )
         .expect("create type operations");
@@ -5882,6 +6197,29 @@ mod tests {
         assert!(scalar[14] == Datum::Oid(array_oid));
         assert!(array[4] == Datum::Int2(-1));
         assert!(array[13] == Datum::Oid(multirange.oid()));
+    }
+
+    #[test]
+    fn float8_range_array_uses_double_alignment() {
+        let kv = MemKv::default();
+        let (range, ops) = crabka_pgcatalog::create_user_type_ops(
+            &kv,
+            &RelationName::public("catalog_float8range"),
+            UserTypeBody::Range(RangeBody {
+                subtype: ColumnType::Float8,
+                collation: None,
+                multirange_schema: None,
+                multirange_name: None,
+            }),
+        )
+        .expect("create range operations");
+        kv.write_batch(&ops).expect("store range");
+        let rows = user_type_rows(&kv, &BTreeMap::new()).expect("user type rows");
+        let array = rows
+            .iter()
+            .find(|row| row[0] == Datum::Oid(range.array_oid))
+            .expect("range array pg_type row");
+        assert_eq!(array[22], Datum::InternalChar(b'd'));
     }
 
     #[test]

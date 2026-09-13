@@ -2219,17 +2219,9 @@ pub(crate) fn record_pairs(
     r: &crabka_pgtypes::RecordValue,
     ctx: &EvalCtx,
 ) -> Result<Vec<(String, JsonbValue)>, ExecError> {
-    r.values
-        .iter()
-        .enumerate()
-        .map(|(index, value)| {
-            let name = r
-                .names
-                .get(index)
-                .cloned()
-                .unwrap_or_else(|| format!("f{}", index + 1));
-            Ok((name, to_jsonb(value, ctx)?))
-        })
+    r.visible_field_values()
+        .into_iter()
+        .map(|(name, value)| to_jsonb(&value, ctx).map(|value| (name, value)))
         .collect()
 }
 
@@ -2352,18 +2344,15 @@ fn write_json(d: &Datum, punct: Punct, ctx: &EvalCtx, out: &mut String) -> Resul
         // difference from `to_jsonb`, whose object collapses them last-wins.
         Datum::Record(r) => {
             out.push('{');
-            for (index, value) in r.values.iter().enumerate() {
-                out.push_str(if index == 0 { punct.pad } else { punct.comma });
-                let name = r
-                    .names
-                    .get(index)
-                    .cloned()
-                    .unwrap_or_else(|| format!("f{}", index + 1));
+            let mut first = true;
+            for (name, value) in r.visible_field_values() {
+                out.push_str(if first { punct.pad } else { punct.comma });
+                first = false;
                 json::write_string(&name, out);
                 out.push_str(punct.colon);
-                write_json(value, Punct::COMPACT, ctx, out)?;
+                write_json(&value, Punct::COMPACT, ctx, out)?;
             }
-            if !r.values.is_empty() {
+            if !first {
                 out.push_str(punct.pad);
             }
             out.push('}');
@@ -4528,7 +4517,7 @@ mod tests {
         // Date/time values use the JSON spelling, not the SQL one.
         assert!(
             to_jsonb(
-                &Datum::Timestamp(jiff::civil::datetime(2024, 1, 15, 13, 45, 6, 0)),
+                &Datum::Timestamp(jiff::civil::datetime(2024, 1, 15, 13, 45, 6, 0).into()),
                 &ctx
             )
             .expect("ts")

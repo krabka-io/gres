@@ -2037,6 +2037,7 @@ dependencies = [
  "encoding_rs",
  "hex",
  "jiff",
+ "libm",
  "md-5 0.11.0",
  "opentelemetry",
  "opentelemetry_sdk",

@@ -101,6 +101,7 @@ pub(crate) fn builtin_operator_family_oid(method: &str, name: &str) -> Option<i3
 
 /// Oid of the `default` collation, as in PostgreSQL.
 pub(crate) const DEFAULT_COLLATION_OID: i32 = 100;
+pub(crate) const C_COLLATION_OID: i32 = 950;
 
 /// Canonicalize a written relation name to this module's key.
 ///
@@ -713,6 +714,7 @@ fn relation_rowtype_definition(
                 .map(|column| CompositeField {
                     name: column.name.clone(),
                     ty: column.ty,
+                    dropped: column.dropped,
                 })
                 .collect(),
         ),
@@ -993,6 +995,10 @@ fn virtual_relations() -> &'static BTreeMap<RelationName, i32> {
                             )
                         }),
                 )
+                .chain(std::iter::once((
+                    RelationName::new(crate::search_path::PG_CATALOG, "pg_aggregate_fnoid_index"),
+                    2650,
+                )))
                 .collect()
         });
     &NAMES
@@ -2658,7 +2664,7 @@ fn pg_authid_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
 /// apart.
 pub(crate) const BUILTIN_COLLATIONS: &[(i32, &str, &str, i32)] = &[
     (DEFAULT_COLLATION_OID, "default", "d", 0),
-    (950, "C", "c", -1),
+    (C_COLLATION_OID, "C", "c", -1),
     (951, "POSIX", "c", -1),
 ];
 
@@ -5455,6 +5461,7 @@ mod tests {
                 sequence,
                 sequence_rowtype_columns()
                     .into_iter()
+                    .filter(|column| !column.dropped)
                     .map(|column| (column.name, column.ty))
                     .collect(),
             ),

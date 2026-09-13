@@ -111,6 +111,15 @@ pub enum TypeError {
         sqlstate: &'static str,
         message: String,
     },
+    /// `array_in` rejects nested array values whose dimensions disagree. The
+    /// primary message retains the input literal while DETAIL identifies the
+    /// structural fault.
+    #[error("malformed array literal: \"{value}\"")]
+    ArrayDimensionMismatch { value: String },
+    /// `array_in` preserves a structural parse diagnosis in DETAIL while the
+    /// primary error names the rejected literal.
+    #[error("malformed array literal: \"{value}\"")]
+    ArrayMalformed { value: String, detail: &'static str },
     #[error("malformed range literal: \"{value}\"")]
     RangeMalformed { value: String, detail: &'static str },
     /// `cidr_in`'s own rejection (22P02): the text parses as an address, but a
@@ -177,6 +186,8 @@ impl TypeError {
             TypeError::FeatureNotSupported { .. } => "0A000",
             TypeError::OutOfRange { .. } => "22003",
             TypeError::Coded { sqlstate, .. } => sqlstate,
+            TypeError::ArrayDimensionMismatch { .. } => "22P02",
+            TypeError::ArrayMalformed { .. } => "22P02",
             TypeError::RangeMalformed { .. } => "22P02",
             TypeError::InvalidCidr { .. } => "22P02",
             TypeError::CodedWithHint { sqlstate, .. } => sqlstate,
@@ -195,6 +206,10 @@ impl TypeError {
                 detail: Some(detail),
                 ..
             } => Some(std::borrow::Cow::Borrowed(detail)),
+            TypeError::ArrayDimensionMismatch { .. } => Some(std::borrow::Cow::Borrowed(
+                "Multidimensional arrays must have sub-arrays with matching dimensions.",
+            )),
+            TypeError::ArrayMalformed { detail, .. } => Some(std::borrow::Cow::Borrowed(*detail)),
             TypeError::RangeMalformed { detail, .. } => Some(std::borrow::Cow::Borrowed(*detail)),
             TypeError::InvalidCidr { .. } => Some(std::borrow::Cow::Borrowed(
                 "Value has bits set to right of mask.",

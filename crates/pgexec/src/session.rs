@@ -24,11 +24,11 @@ use std::{
 use crabka_pgkv::{Kv, WriteOp};
 use crabka_pgmvcc::{clog::XidStatus, visibility::Snapshot};
 use crabka_pgparser::ast::{
-    BinaryOp, CopyDestination, CopyDirection, CopySource, CopyStmt, CopyTarget, CreateAsSource,
-    CursorTarget, DiscardTarget, ExplainOptions, Expr, FetchCount, FetchDirection, FuncArgs,
-    IsolationLevel, JoinConstraint, OnConflict, OnConflictAction, OnConflictTarget, QueryBody,
-    QueryExpr, ResetTarget, SelectItem, SetExpr, Statement, TableExpr, TableLockMode, UnaryOp,
-    UnlistenTarget, UtilityStatement,
+    BaseTypeOptionValue, BinaryOp, CopyDestination, CopyDirection, CopySource, CopyStmt,
+    CopyTarget, CreateAsSource, CreateTypeDefinition, CursorTarget, DiscardTarget, ExplainOptions,
+    Expr, FetchCount, FetchDirection, FuncArgs, IsolationLevel, JoinConstraint, OnConflict,
+    OnConflictAction, OnConflictTarget, QueryBody, QueryExpr, ResetTarget, SelectItem, SetExpr,
+    Statement, TableExpr, TableLockMode, UnaryOp, UnlistenTarget, UtilityStatement,
 };
 use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType, RangeValue};
 use crabka_pgwire::{
@@ -2990,6 +2990,11 @@ pub struct SqlSession {
     /// `EvalCtx`'s `time_zone`; `SET`/`SHOW`/`RESET timezone` mutate/read it, and
     /// COMMIT/ROLLBACK promote/revert it in lockstep with the transaction outcome.
     guc: GucState,
+    /// Commands that evaluate user expressions while maintaining stored
+    /// objects expose PostgreSQL's restricted `search_path` to those
+    /// expressions. Name resolution keeps the caller's path: object names and
+    /// already-bound function calls must still work.
+    maintenance_search_path: bool,
     /// SP40: the foreign-table scanner (shared from the engine). `Some` when the
     /// binary registered a `kafka_fdw` via `SqlEngine::set_foreign_scanner`; a
     /// `SELECT` from a foreign table with this `None` returns `0A000`.
@@ -3443,6 +3448,7 @@ struct WriteActorContext {
     repeatable_read: bool,
     eval_ctx: crate::clock::EvalCtx,
     prune_horizon: Option<u64>,
+    explain_plan_state: Option<Arc<Mutex<Option<crate::plan::query::PlanState>>>>,
 }
 
 enum WriteActorWork {
@@ -3592,6 +3598,7 @@ impl SqlSession {
                 crate::math_fn::entropy_seed(),
             ))),
             guc: GucState::default(),
+            maintenance_search_path: false,
             foreign_scanner,
             range_scanner,
             join_stats,
@@ -3666,6 +3673,14 @@ impl SqlSession {
             backend_id: self.backend_pid,
             database: self.database.clone(),
         }
+    }
+
+    fn guc_runtime_values(&self) -> BTreeMap<String, String> {
+        let mut values = self.guc.effective_map();
+        if self.maintenance_search_path {
+            values.insert("search_path".into(), "pg_catalog, pg_temp".into());
+        }
+        values
     }
 
     fn type_search_schemas(&self) -> Result<Vec<String>, ExecError> {
@@ -4009,6 +4024,7 @@ impl SqlSession {
             // to draining them at the implicit commit a moment later.
             deferred_fk: matches!(self.state, TxnState::InTransaction(_))
                 .then(|| &*self.deferred_fk),
+            explain_plan_state: self.explain_plan_state.as_ref(),
         }
     }
 
@@ -4188,7 +4204,7 @@ impl SqlSession {
         }
         let catalog = Arc::clone(&self.catalog_kv);
         let ctx = self.eval_ctx();
-        let guc_values = self.guc.effective_map();
+        let guc_values = self.guc_runtime_values();
         let guc_settings = self.guc.settings();
         let prepared = self.prepared_statement_rows();
         let cursors = self.cursor_rows();
@@ -5450,6 +5466,10 @@ impl SqlSession {
         if self.cursors.contains_key(name) {
             return Err(ExecError::DuplicateCursor(name.to_string()));
         }
+        let mut volatile = false;
+        crate::viewdeps::walk_query(query, &mut |node| {
+            volatile |= matches!(node, crate::viewdeps::Node::Expr(Expr::Func(call)) if crate::routine::is_volatile_call(&*self.catalog_kv, &call.name));
+        });
         let pinned = self.cursor_pinned_relations(query);
         self.cursors.insert(
             name.to_string(),
@@ -5463,9 +5483,8 @@ impl SqlSession {
                 identities: None,
                 position: crate::cursor::CursorPosition::new(0),
                 pinned,
-                // A materialized result always supports a backward scan, so only
-                // an explicit NO SCROLL forbids one.
-                scrollable: scroll != Some(false),
+                // Locking cursors are forward-only unless explicitly declared SCROLL.
+                scrollable: scroll.unwrap_or(query.locking.is_none() && !volatile),
                 hold,
                 // A holdable cursor declared outside a block is committed by
                 // the autocommit statement that declared it.
@@ -5549,7 +5568,6 @@ impl SqlSession {
             return Ok(None);
         };
         if query.with.is_some()
-            || query.locking.is_some()
             || select.distinct.dedups()
             || !select.group_by.is_empty()
             || select.grouping.is_some()
@@ -5708,7 +5726,9 @@ impl SqlSession {
             .ok_or_else(|| ExecError::UndefinedCursor(name.to_string()))?;
         let mut probe = cursor.position;
         let plan = probe.walk(direction);
-        if plan.backward && !cursor.scrollable {
+        if !cursor.scrollable
+            && (plan.backward || matches!(direction, FetchDirection::RelativeOne(0)))
+        {
             return Err(ExecError::CursorCanOnlyScanForward);
         }
         cursor.position = probe;
@@ -6261,6 +6281,30 @@ impl SqlSession {
         options: &ExplainOptions,
         statement: &Statement,
     ) -> Result<QueryResult, ExecError> {
+        // CTAS resolves a SQL prepared statement before it creates or fills the
+        // table. Do it once here too, so EXPLAIN renders that query rather than
+        // an opaque utility node.
+        let mut explained_statement;
+        let statement = if let Statement::CreateTableAs {
+            source: CreateAsSource::Execute { name, args },
+            ..
+        } = statement
+        {
+            let Some(Statement::Query(query)) = self.bound_prepared_statement(name, args).await?
+            else {
+                return Err(ExecError::Syntax(format!(
+                    "prepared statement \"{name}\" is not a SELECT"
+                )));
+            };
+            explained_statement = statement.clone();
+            let Statement::CreateTableAs { source, .. } = &mut explained_statement else {
+                unreachable!("matched CREATE TABLE AS")
+            };
+            *source = CreateAsSource::Query(Box::new(query));
+            &explained_statement
+        } else {
+            statement
+        };
         // EXPLAIN analyses its statement before planning it, so a missing
         // relation or column is the same error the statement itself would give
         // (42P01 / 42703) rather than a plan for a query that cannot run. The
@@ -6272,6 +6316,34 @@ impl SqlSession {
         crate::routine::with_scalar_runtime(&self.catalog_kv, None, || {
             crate::exec::describe_statement(&*self.catalog_kv, &self.resolution_scope(), statement)
         })?;
+        let ctas_skipped = if let Statement::CreateTableAs {
+            name,
+            temporary,
+            if_not_exists: true,
+            ..
+        } = statement
+        {
+            let name = crate::relname::resolve_relation(
+                self.catalog_kv.as_ref(),
+                &self.resolution_scope(),
+                name,
+                if *temporary {
+                    crate::relname::SchemaDisposition::TemporaryCreation
+                } else {
+                    crate::relname::SchemaDisposition::Creation
+                },
+            )?;
+            crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &name).is_ok()
+        } else {
+            false
+        };
+        let ctas_without_data = matches!(
+            statement,
+            Statement::CreateTableAs {
+                with_data: false,
+                ..
+            }
+        );
         let mut actual_rows = 0;
         let explain_plan_state = if options.analyze {
             Some(Arc::new(Mutex::new(None)))
@@ -6324,7 +6396,14 @@ impl SqlSession {
             let runtime = crate::explain::plan_runtime_state(&state);
             crate::explain::apply_runtime_state(&mut plan, &runtime);
         }
-        let lines = crate::explain::render_with_rows(&plan, options, actual_rows);
+        if options.analyze && ctas_without_data {
+            crate::explain::mark_never_executed(&mut plan);
+        }
+        let lines = if options.analyze && ctas_skipped {
+            Vec::new()
+        } else {
+            crate::explain::render_with_rows(&plan, options, actual_rows)
+        };
         let field = FieldDescription {
             name: "QUERY PLAN".into(),
             table_oid: 0,
@@ -6590,15 +6669,22 @@ impl SqlSession {
         let mut ops = Vec::new();
         for (name, columns) in relations {
             if let Ok(table) = crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &name) {
-                for (index, column) in table.columns.iter().enumerate() {
-                    if let Some(stats) = self
-                        .collect_attribute_statistics(
-                            &name,
-                            &crate::catalog_fn::quote_identifier(&column.name),
-                            self.statistics_target(column.statistics_target),
-                        )
-                        .await
-                    {
+                let attributes = table
+                    .columns
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, column)| {
+                        columns.as_ref().is_none_or(|requested| {
+                            requested.iter().any(|name| name == &column.name)
+                        })
+                    })
+                    .map(|(index, column)| (index, column.name.clone(), column.statistics_target))
+                    .collect::<Vec<_>>();
+                for ((index, _, _), stats) in attributes.iter().zip(
+                    self.collect_table_attribute_statistics(&name, &attributes)
+                        .await,
+                ) {
+                    if let Some(stats) = stats {
                         let Ok(attnum) = i16::try_from(index + 1) else {
                             continue;
                         };
@@ -7138,6 +7224,70 @@ impl SqlSession {
         let [field] = fields.as_slice() else {
             return None;
         };
+        self.attribute_statistics_from_rows(field, rows, statistics_target)
+    }
+
+    /// A table `ANALYZE` reads all requested attributes in one heap scan. The
+    /// statistic slots remain per attribute, matching PostgreSQL's catalog.
+    async fn collect_table_attribute_statistics(
+        &mut self,
+        relation: &crabka_pgcatalog::RelationName,
+        attributes: &[(usize, String, i16)],
+    ) -> Vec<Option<crate::attrstats::AttributeStats>> {
+        if attributes.is_empty() {
+            return Vec::new();
+        }
+        let only = match crate::partition::is_partitioned(self.catalog_kv.as_ref(), relation) {
+            Ok(partitioned) => !partitioned,
+            Err(_) => return vec![None; attributes.len()],
+        };
+        let expressions = attributes
+            .iter()
+            .map(|(_, name, _)| crate::catalog_fn::quote_identifier(name))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!(
+            "SELECT {expressions} FROM {}{}.{}",
+            if only { "ONLY " } else { "" },
+            crate::catalog_fn::quote_identifier(&relation.schema),
+            crate::catalog_fn::quote_identifier(&relation.name),
+        );
+        let Ok(parsed) = crabka_pgparser::parse(&sql) else {
+            return vec![None; attributes.len()];
+        };
+        let [statement] = parsed.as_slice() else {
+            return vec![None; attributes.len()];
+        };
+        let Ok(QueryResult::Rows { fields, rows, .. }) = Box::pin(self.run_select(statement)).await
+        else {
+            return vec![None; attributes.len()];
+        };
+        if fields.len() != attributes.len() {
+            return vec![None; attributes.len()];
+        }
+        attributes
+            .iter()
+            .enumerate()
+            .map(|(position, (_, _, target))| {
+                let rows = rows
+                    .iter()
+                    .filter_map(|row| row.get(position).cloned().map(|cell| vec![cell]))
+                    .collect();
+                self.attribute_statistics_from_rows(
+                    &fields[position],
+                    rows,
+                    self.statistics_target(*target),
+                )
+            })
+            .collect()
+    }
+
+    fn attribute_statistics_from_rows(
+        &self,
+        field: &FieldDescription,
+        rows: Vec<Vec<Option<Cell>>>,
+        statistics_target: usize,
+    ) -> Option<crate::attrstats::AttributeStats> {
         let column_type = crate::exec::column_type_from_oid(field.type_oid).ok()?;
         let range_type = matches!(
             column_type,
@@ -8051,6 +8201,7 @@ impl SqlSession {
                 method,
                 family,
                 key_type,
+                members,
             } => {
                 let method = method.to_ascii_lowercase();
                 if crate::catalog_rel::access_method_oid(&method).is_none() {
@@ -8077,7 +8228,7 @@ impl SqlSession {
                     })
                     .transpose()?;
                 let _catalog_guard = Arc::clone(&self.catalog_lock).lock_owned().await;
-                let (_, ops) = crabka_pgcatalog::create_operator_class_ops(
+                let (class, mut ops) = crabka_pgcatalog::create_operator_class_ops(
                     self.catalog_kv.as_ref(),
                     &name,
                     &method,
@@ -8087,6 +8238,68 @@ impl SqlSession {
                     *default,
                     key_type.map_or(0, crabka_pgtypes::ColumnType::oid),
                 )?;
+                let members = members
+                    .iter()
+                    .map(|member| match member {
+                        crabka_pgparser::ast::OperatorFamilyMember::Operator {
+                            number,
+                            operator,
+                            left_type,
+                            right_type,
+                            order_family,
+                        } => Ok(crabka_pgcatalog::OperatorFamilyMember::Operator {
+                            number: *number,
+                            operator: operator.clone(),
+                            left_type_oid: left_type.oid(),
+                            right_type_oid: right_type.oid(),
+                            order_family_oid: order_family
+                                .as_ref()
+                                .map(|family| {
+                                    resolve_ordering_family_oid(
+                                        &*self.catalog_kv,
+                                        &self.resolution_scope(),
+                                        family,
+                                    )
+                                })
+                                .transpose()?
+                                .unwrap_or_default(),
+                        }),
+                        crabka_pgparser::ast::OperatorFamilyMember::Function {
+                            number,
+                            left_type,
+                            right_type,
+                            function,
+                            argument_types,
+                        } => {
+                            let left = left_type
+                                .or_else(|| argument_types.first().and_then(|ty| ty.column()))
+                                .ok_or_else(|| {
+                                    ExecError::Remote(PgError::error(
+                                        "42601",
+                                        "support function must have an associated data type",
+                                    ))
+                                })?;
+                            Ok(crabka_pgcatalog::OperatorFamilyMember::Function {
+                                number: *number,
+                                function: function.to_string(),
+                                left_type_oid: left.oid(),
+                                right_type_oid: right_type
+                                    .or_else(|| argument_types.get(1).and_then(|ty| ty.column()))
+                                    .unwrap_or(left)
+                                    .oid(),
+                                argument_type_oids: argument_types
+                                    .iter()
+                                    .map(|ty| ty.oid())
+                                    .collect(),
+                            })
+                        }
+                    })
+                    .collect::<Result<Vec<_>, ExecError>>()?;
+                ops.extend(crabka_pgcatalog::add_operator_family_members_ops(
+                    &*self.catalog_kv,
+                    class.family_oid,
+                    &members,
+                )?);
                 self.commit_catalog(ops).await?;
                 Ok(QueryResult::Command {
                     tag: "CREATE OPERATOR CLASS".into(),
@@ -9780,6 +9993,15 @@ impl SqlSession {
 
     async fn end_block_commit(&mut self) -> Result<QueryResult, ExecError> {
         // `WITH HOLD` cursors are the one thing that survives a commit.
+        let held_cursors: Vec<_> = self
+            .cursors
+            .iter()
+            .filter(|(_, cursor)| cursor.hold && cursor.rows.is_none())
+            .map(|(name, _)| name.clone())
+            .collect();
+        for name in held_cursors {
+            Box::pin(self.materialize_cursor(&name)).await?;
+        }
         self.finish_transaction_scoped_state(true);
         match std::mem::replace(&mut self.state, TxnState::Idle) {
             TxnState::InTransaction(ctx) => self.commit_open_block(ctx).await,
@@ -10314,7 +10536,7 @@ impl SqlSession {
         let session_locks = Arc::clone(&self.session_locks);
         let row_locks = Arc::clone(&self.lockmgr);
         let session_lock_id = self.session_lock_id;
-        let guc_values = self.guc.effective_map();
+        let guc_values = self.guc_runtime_values();
         let row_security = self.guc.row_security();
         let guc_settings = self.guc.settings();
         let prepared = self.prepared_statement_rows();
@@ -11342,6 +11564,16 @@ impl SqlSession {
         &mut self,
         stmt: &Statement,
     ) -> Result<QueryResult, ExecError> {
+        let previous = std::mem::replace(&mut self.maintenance_search_path, true);
+        let result = self.run_create_materialized_view_inner(stmt).await;
+        self.maintenance_search_path = previous;
+        result
+    }
+
+    async fn run_create_materialized_view_inner(
+        &mut self,
+        stmt: &Statement,
+    ) -> Result<QueryResult, ExecError> {
         let Statement::CreateMaterializedView {
             name,
             if_not_exists,
@@ -11416,6 +11648,16 @@ impl SqlSession {
     /// autocommit refresh commits the empty first, and a query that raises then
     /// leaves an empty relation the catalog still calls populated.
     async fn run_refresh_materialized_view(
+        &mut self,
+        stmt: &Statement,
+    ) -> Result<QueryResult, ExecError> {
+        let previous = std::mem::replace(&mut self.maintenance_search_path, true);
+        let result = self.run_refresh_materialized_view_inner(stmt).await;
+        self.maintenance_search_path = previous;
+        result
+    }
+
+    async fn run_refresh_materialized_view_inner(
         &mut self,
         stmt: &Statement,
     ) -> Result<QueryResult, ExecError> {
@@ -12449,8 +12691,14 @@ impl SqlSession {
             _ => None,
         };
         let check_function_bodies = self.guc.effective("check_function_bodies")? == "on";
-        let (result, ops) =
-            crate::exec::execute_ddl(&*self.catalog_kv, stmt, fctx, check_function_bodies)?;
+        let (ddl_result, guc_mutations) = with_guc_runtime(
+            self.guc_runtime_values(),
+            self.guc.settings(),
+            self.prepared_statement_rows(),
+            self.cursor_rows(),
+            || crate::exec::execute_ddl(&*self.catalog_kv, stmt, fctx, check_function_bodies),
+        );
+        let (result, ops) = ddl_result?;
         // An open block needs the before-images whether or not it has taken a
         // savepoint: DDL commits its batch here and now, so `ROLLBACK` has
         // nothing but these images to undo it with.
@@ -12516,6 +12764,7 @@ impl SqlSession {
         drop(_g);
         drop(_id_guard);
         drop(_unique_guard);
+        self.apply_guc_mutations(guc_mutations)?;
         self.record_catalog_undo(&catalog_before);
         let event_result = async {
             let ddl_end_context = if let Some(dropped) = &drop_event_context {
@@ -12886,6 +13135,7 @@ impl SqlSession {
                 current_user: &current_role,
                 session_user: &session_user,
                 row_security,
+                resolution: eval_ctx.resolution(),
                 ..crate::exec::ForeignCtx::none()
             };
             let policy_stack = crate::rls::PolicyStack::default();
@@ -12950,7 +13200,7 @@ impl SqlSession {
         let lock_owner = self.lock_owner;
         let current_role = self.current_role.clone();
         let session_user = self.session_user.clone();
-        let guc_values = self.guc.effective_map();
+        let guc_values = self.guc_runtime_values();
         let row_security = self.guc.row_security();
         let guc_settings = self.guc.settings();
         let prepared = self.prepared_statement_rows();
@@ -12985,6 +13235,7 @@ impl SqlSession {
                 repeatable_read,
                 eval_ctx,
                 prune_horizon,
+                explain_plan_state,
             } = statement;
             let runtime = match tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -13043,6 +13294,7 @@ impl SqlSession {
                 trigger_write,
                 deferred_fk: defer_constraints.then(|| &*deferred_fk),
                 policy_stack: &policy_stack,
+                explain_plan_state: explain_plan_state.as_ref(),
             };
             with_guc_runtime(guc_values, guc_settings, prepared, cursors, || {
                 crate::trigger::with_after_trigger_queue(|| {
@@ -13307,6 +13559,7 @@ impl SqlSession {
                             repeatable_read,
                             eval_ctx: ctx,
                             prune_horizon,
+                            explain_plan_state: self.explain_plan_state.clone(),
                         },
                     )
                     .await?;
@@ -13415,6 +13668,7 @@ impl SqlSession {
                             repeatable_read: false,
                             eval_ctx: ctx,
                             prune_horizon,
+                            explain_plan_state: self.explain_plan_state.clone(),
                         },
                     )
                     .await
@@ -13930,6 +14184,7 @@ impl SqlSession {
                             repeatable_read: false,
                             eval_ctx: ctx,
                             prune_horizon: None,
+                            explain_plan_state: self.explain_plan_state.clone(),
                         },
                     )
                     .await?;
@@ -14020,6 +14275,7 @@ impl SqlSession {
                             repeatable_read: false,
                             eval_ctx: ctx,
                             prune_horizon: None,
+                            explain_plan_state: self.explain_plan_state.clone(),
                         },
                     )
                     .await
@@ -14075,7 +14331,7 @@ impl SqlSession {
         let kv = Arc::clone(&self.kv);
         let seq = Arc::clone(&self.seq);
         let stmt = stmt.clone();
-        let guc_values = self.guc.effective_map();
+        let guc_values = self.guc_runtime_values();
         let guc_settings = self.guc.settings();
         let prepared = self.prepared_statement_rows();
         let cursors = self.cursor_rows();
@@ -17265,6 +17521,16 @@ impl SqlSession {
             Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => return None,
             Err(error) => return Some(Err(error.into())),
         };
+        // This cursor opens a raw range scan itself. It cannot honor an
+        // explicitly forced local index path, which belongs to the ordinary
+        // stored-relation executor.
+        if self
+            .guc
+            .effective("enable_seqscan")
+            .is_ok_and(|value| value == "off")
+        {
+            return None;
+        }
         // A partitioned parent stores no rows of its own — they live in its
         // leaves. This cursor scans exactly one relation, so serving `SELECT *
         // FROM parent` here silently returns nothing instead of the partitions'
@@ -17900,8 +18166,10 @@ fn attach_known_runtime_diagnostics(sql: &str, stmt: &Statement, error: PgError)
     let error = attach_plpgsql_definition_return_position(sql, stmt, error);
     let error = attach_rule_action_position(sql, stmt, error);
     let error = attach_typed_table_position(sql, stmt, error);
+    let error = attach_create_type_like_position(sql, stmt, error);
     let error = attach_variadic_array_position(sql, error);
     let error = attach_reg_cast_literal_position(sql, error);
+    let error = attach_array_runtime_position(sql, error);
     // The date/time family first: it owns the temporal operand names, which
     // `attach_operator_resolution_position` therefore leaves out.
     let error = crate::temporal_arith::attach_operator_position(sql, error);
@@ -17912,6 +18180,133 @@ fn attach_known_runtime_diagnostics(sql: &str, stmt: &Statement, error: PgError)
         stmt,
         attach_range_literal_position(sql, attach_type_input_literal_position(sql, error)),
     )
+}
+
+/// Add the expression position PostgreSQL reports for array-target and
+/// quantified-array type errors. These reach the executor after parsing, so
+/// their parser token offsets are the only source-location information left.
+fn attach_array_runtime_position(sql: &str, error: PgError) -> PgError {
+    use crabka_pgparser::token::{Keyword, Token};
+
+    let empty_array =
+        error.code == "42P18" && error.message == "cannot determine type of empty array";
+    if error
+        .diagnostics
+        .as_ref()
+        .is_some_and(|diagnostics| diagnostics.position.is_some())
+        || (error.code != "42804" && !empty_array)
+    {
+        return error;
+    }
+    let Ok(tokens) = crabka_pgparser::lexer::lex(sql) else {
+        return error;
+    };
+    let position = |offset| sql[..offset].chars().count() + 1;
+    let offset = if error.message.starts_with("subscripted assignment to ") {
+        tokens
+            .iter()
+            .position(|(token, _)| *token == Token::Keyword(Keyword::Into))
+            .and_then(|into| {
+                let after_into = tokens.get(into + 1..)?;
+                let open = after_into
+                    .iter()
+                    .position(|(token, _)| matches!(token, Token::LParen))?;
+                after_into.get(open + 1).map(|(_, offset)| *offset)
+            })
+    } else if matches!(
+        error.message.as_str(),
+        "op ANY/ALL (array) requires operator to yield boolean"
+            | "op ANY/ALL (array) requires array on right side"
+    ) {
+        let positions: Vec<_> = tokens
+            .iter()
+            .enumerate()
+            .filter_map(|(index, (token, _))| {
+                matches!(token, Token::Keyword(Keyword::Any | Keyword::All))
+                    .then(|| tokens.get(index.checked_sub(1)?).map(|(_, offset)| *offset))
+                    .flatten()
+            })
+            .collect();
+        match positions.as_slice() {
+            [offset] => Some(*offset),
+            _ => None,
+        }
+    } else if error.message.starts_with("cannot subscript type ") {
+        let positions: Vec<_> = tokens
+            .iter()
+            .enumerate()
+            .filter_map(|(index, (token, _))| {
+                matches!(token, Token::LBracket).then(|| {
+                    tokens[..index].iter().rev().find_map(|(token, offset)| {
+                        matches!(token, Token::Ident(_)).then_some(*offset)
+                    })
+                })
+            })
+            .flatten()
+            .collect();
+        match positions.as_slice() {
+            [offset] => Some(*offset),
+            _ => None,
+        }
+    } else if empty_array {
+        tokens
+            .windows(3)
+            .find(|tokens| {
+                matches!(tokens[0].0, Token::Keyword(Keyword::Array))
+                    && matches!(tokens[1].0, Token::LBracket)
+                    && matches!(tokens[2].0, Token::RBracket)
+            })
+            .map(|tokens| tokens[0].1)
+    } else {
+        None
+    };
+    match offset {
+        Some(offset) => error.with_position(position(offset)),
+        None => error,
+    }
+}
+
+/// Point at the missing source type in `CREATE TYPE ... LIKE = source`.
+fn attach_create_type_like_position(sql: &str, stmt: &Statement, error: PgError) -> PgError {
+    if error
+        .diagnostics
+        .as_ref()
+        .is_some_and(|diagnostics| diagnostics.position.is_some())
+        || error.code != "42704"
+    {
+        return error;
+    }
+    let Statement::CreateType {
+        definition: CreateTypeDefinition::Base(options),
+        ..
+    } = stmt
+    else {
+        return error;
+    };
+    let Some(BaseTypeOptionValue::Name(name)) = options
+        .iter()
+        .find(|option| option.name == "like")
+        .map(|option| &option.value)
+    else {
+        return error;
+    };
+    if error.message != format!("type \"{name}\" does not exist") {
+        return error;
+    }
+    let Ok(tokens) = crabka_pgparser::lexer::lex(sql) else {
+        return error;
+    };
+    let positions: Vec<_> = tokens
+        .iter()
+        .filter_map(|(token, offset)| {
+            matches!(token, crabka_pgparser::token::Token::Ident(found) if found == name)
+                .then(|| sql[..*offset].chars().count() + 1)
+        })
+        .collect();
+    match positions.as_slice() {
+        [position] => error.with_position(*position),
+        _ => error,
+    }
 }
 
 fn attach_plpgsql_definition_return_position(
@@ -18141,6 +18536,10 @@ enum RejectedType {
     OneOf(&'static [&'static str]),
     /// `array_in` names no type, but only an array literal can reach it.
     AnyArray,
+    /// A time-zone lookup names the rejected zone itself, so that exact string
+    /// is enough to identify a literal even when a target column supplies its
+    /// temporal type.
+    TimeZone,
 }
 
 impl RejectedType {
@@ -18151,6 +18550,7 @@ impl RejectedType {
             RejectedType::Named(name) => stated == name,
             RejectedType::OneOf(keys) => keys.contains(&stated),
             RejectedType::AnyArray => stated.ends_with("[]"),
+            RejectedType::TimeZone => true,
         }
     }
 }
@@ -18206,6 +18606,13 @@ fn rejected_input(message: &str) -> Option<RejectedInput<'_>> {
         }
     }
 
+    if let Some(rest) = message.strip_prefix("syntax error in ") {
+        let (type_name, value) = rest.split_once(": \"")?;
+        if matches!(type_name, "tsvector" | "tsquery") {
+            return Some(named(value.strip_suffix('"')?, type_name));
+        }
+    }
+
     if let Some(rest) = message.strip_prefix("invalid input syntax for type ") {
         if let Some((type_name, quoted)) = rest.split_once(": \"") {
             let value = quoted.strip_suffix('"')?;
@@ -18234,6 +18641,16 @@ fn rejected_input(message: &str) -> Option<RejectedInput<'_>> {
     if let Some(value) = tail(message, "timestamp out of range") {
         return Some(family(value, TIMESTAMP_TYPE_KEYS));
     }
+    if let Some(zone) = message
+        .strip_prefix("time zone \"")
+        .and_then(|zone| zone.strip_suffix("\" not recognized"))
+    {
+        return Some(RejectedInput {
+            value: Some(zone),
+            expected: RejectedType::TimeZone,
+            indirect_ok: true,
+        });
+    }
     // `date_in`'s own range complaint. It names one type, not a family: the two
     // `timestamp` spellings above borrow each other's wording because an offset
     // plays no part in a day being unreachable, but `date` is only ever `date`.
@@ -18252,6 +18669,15 @@ fn rejected_input(message: &str) -> Option<RejectedInput<'_>> {
             value: None,
             expected: RejectedType::AnyArray,
             indirect_ok: false,
+        });
+    }
+    if message == "upper bound cannot be less than lower bound"
+        || message.starts_with("array upper bound is too large:")
+    {
+        return Some(RejectedInput {
+            value: None,
+            expected: RejectedType::AnyArray,
+            indirect_ok: true,
         });
     }
     if let Some(value) = tail(message, "invalid cidr value") {
@@ -18522,7 +18948,13 @@ fn blamed_literal_positions(
                 return None;
             };
             let carries = match reading {
-                LiteralMatch::Whole => rejected.value.is_none_or(|value| candidate == value),
+                LiteralMatch::Whole => rejected.value.is_none_or(|value| {
+                    candidate == value
+                        || matches!(rejected.expected, RejectedType::TimeZone)
+                            && candidate
+                                .split_whitespace()
+                                .any(|part| part.eq_ignore_ascii_case(value))
+                }),
                 LiteralMatch::Component => rejected
                     .value
                     .is_some_and(|value| spells_component(candidate, value)),
@@ -18613,13 +19045,26 @@ fn attach_type_input_literal_position(sql: &str, error: PgError) -> PgError {
     // program_limit_exceeded, which is what an array dimension out of `int4`
     // range raises. Testing the code first keeps the re-lex off the failure path
     // of every statement that fails for another reason.
-    if !matches!(
+    let input_sqlstate = matches!(
         error.code.as_str(),
-        "22P02" | "22003" | "22007" | "22008" | "22009" | "22015" | "22P05" | "54000" | "55P04"
-    ) || error
-        .diagnostics
-        .as_ref()
-        .is_some_and(|diagnostics| diagnostics.position.is_some())
+        "22P02"
+            | "22003"
+            | "22007"
+            | "22008"
+            | "22009"
+            | "2202E"
+            | "22023"
+            | "22015"
+            | "22P05"
+            | "54000"
+            | "55P04"
+    ) || (error.code == "42601"
+        && error.message.starts_with("syntax error in tsvector:"));
+    if !input_sqlstate
+        || error
+            .diagnostics
+            .as_ref()
+            .is_some_and(|diagnostics| diagnostics.position.is_some())
     {
         return error;
     }
@@ -20405,6 +20850,29 @@ mod tests {
                 .as_ref()
                 .and_then(|fields| fields.position)
                 == Some(32),
+        );
+    }
+
+    #[test]
+    fn create_type_like_error_points_at_the_missing_type() {
+        let sql =
+            "CREATE TYPE xfloat8 (input = xfloat8in, output = xfloat8out, like = no_such_type)";
+        let statement = crabka_pgparser::parse(sql)
+            .expect("parse")
+            .pop()
+            .expect("one statement");
+        let error = super::attach_create_type_like_position(
+            sql,
+            &statement,
+            crabka_pgwire::error::PgError::error("42704", "type \"no_such_type\" does not exist"),
+        );
+
+        assert!(
+            error
+                .diagnostics
+                .as_ref()
+                .and_then(|fields| fields.position)
+                == Some(sql.find("no_such_type").expect("type name") + 1),
         );
     }
 
@@ -22834,6 +23302,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn width_bucket_over_float8_values_keeps_nan_as_float8() {
+        let engine = SqlEngine::new();
+        let mut session = engine.connect();
+        let values = "(VALUES (-5.2::float8), (4::float8), (77::float8), ('NaN'::float8)) v(op)";
+        let rows = rows_or_sqlstate(
+            &mut session,
+            &format!(
+                "SELECT op, width_bucket(op, ARRAY[1, 3, 9, 'NaN', 'NaN']::float8[]) FROM {values}"
+            ),
+        )
+        .await
+        .expect("float8 VALUES query");
+        assert!(
+            rows == vec![
+                vec!["-5.2".to_string(), "0".to_string()],
+                vec!["4".to_string(), "2".to_string()],
+                vec!["77".to_string(), "3".to_string()],
+                vec!["NaN".to_string(), "5".to_string()],
+            ]
+        );
+    }
+
+    #[tokio::test]
     async fn the_savepoint_stack_reuses_names_and_reports_3b001_for_an_unknown_one() {
         use assert2::assert;
         let engine = SqlEngine::new();
@@ -23423,6 +23914,77 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn sql_function_binds_parameters_in_a_cursor_declaration() {
+        use assert2::assert;
+
+        let engine = SqlEngine::new();
+        let mut s = engine.connect();
+        s.simple_query("CREATE TABLE t (value text)")
+            .await
+            .expect("ddl");
+        s.simple_query("INSERT INTO t VALUES ('apple'), ('banana')")
+            .await
+            .expect("seed");
+        s.simple_query(
+            "CREATE FUNCTION declare_filtered_cursor(text) RETURNS void \
+             AS 'DECLARE c CURSOR FOR SELECT value FROM t WHERE value LIKE $1' LANGUAGE SQL",
+        )
+        .await
+        .expect("function");
+        s.simple_query("BEGIN").await.expect("begin");
+        s.simple_query("SELECT declare_filtered_cursor('a%')")
+            .await
+            .expect("declare through function");
+        assert!(
+            rows_or_sqlstate(&mut s, "FETCH ALL FROM c").await == Ok(vec![vec!["apple".into()]])
+        );
+        s.simple_query("ROLLBACK").await.expect("rollback");
+    }
+
+    #[tokio::test]
+    async fn locking_cursor_resolves_a_temporary_table() {
+        use assert2::assert;
+
+        let engine = SqlEngine::new();
+        let mut s = engine.connect();
+        s.simple_query("CREATE TEMP TABLE t (id int4)")
+            .await
+            .expect("ddl");
+        s.simple_query("INSERT INTO t VALUES (1)")
+            .await
+            .expect("seed");
+        s.simple_query("BEGIN").await.expect("begin");
+        s.simple_query("DECLARE c CURSOR FOR SELECT id FROM t FOR UPDATE")
+            .await
+            .expect("declare");
+        assert!(rows_or_sqlstate(&mut s, "FETCH FROM c").await == Ok(vec![vec!["1".into()]]));
+        s.simple_query("UPDATE t SET id = 2 WHERE CURRENT OF c")
+            .await
+            .expect("update current row");
+        assert!(rows_or_sqlstate(&mut s, "SELECT id FROM t").await == Ok(vec![vec!["2".into()]]));
+        assert!(sqlstate(&mut s, "FETCH RELATIVE 0 FROM c").await == "55000");
+        s.simple_query("ROLLBACK").await.expect("rollback");
+    }
+
+    #[tokio::test]
+    async fn volatile_cursor_defaults_to_no_scroll() {
+        use assert2::assert;
+
+        let engine = SqlEngine::new();
+        let mut s = engine.connect();
+        s.simple_query("CREATE FUNCTION cursor_value() RETURNS int4 LANGUAGE sql AS 'SELECT 1'")
+            .await
+            .expect("function");
+        s.simple_query("BEGIN").await.expect("begin");
+        s.simple_query("DECLARE c CURSOR FOR SELECT cursor_value()")
+            .await
+            .expect("declare");
+        assert!(rows_or_sqlstate(&mut s, "FETCH FROM c").await == Ok(vec![vec!["1".into()]]));
+        assert!(sqlstate(&mut s, "FETCH RELATIVE 0 FROM c").await == "55000");
+        s.simple_query("ROLLBACK").await.expect("rollback");
+    }
+
+    #[tokio::test]
     async fn where_current_of_changes_only_the_cursor_row() {
         use assert2::assert;
 
@@ -23536,7 +24098,7 @@ mod tests {
             .await
                 == Ok(vec![vec![
                     "c".into(),
-                    "SELECT 42".into(),
+                    "DECLARE c BINARY NO SCROLL CURSOR WITH HOLD FOR SELECT 42;".into(),
                     "t".into(),
                     "t".into(),
                     "f".into(),
@@ -23560,6 +24122,9 @@ mod tests {
         s.simple_query("DECLARE h CURSOR WITH HOLD FOR SELECT id FROM t ORDER BY id")
             .await
             .expect("declare");
+        s.simple_query("DECLARE n NO SCROLL CURSOR WITH HOLD FOR SELECT id FROM t ORDER BY id")
+            .await
+            .expect("declare no-scroll");
         s.simple_query("DECLARE p CURSOR FOR SELECT id FROM t ORDER BY id")
             .await
             .expect("declare");
@@ -23568,8 +24133,39 @@ mod tests {
             rows_or_sqlstate(&mut s, "FETCH ALL FROM h").await
                 == Ok(vec![vec!["1".into()], vec!["2".into()]])
         );
+        s.simple_query("FETCH ABSOLUTE 2 FROM n")
+            .await
+            .expect("forward absolute fetch");
+        assert!(sqlstate(&mut s, "FETCH ABSOLUTE 2 FROM n").await == "55000");
         assert!(sqlstate(&mut s, "FETCH ALL FROM p").await == "34000");
         s.simple_query("CLOSE h").await.expect("close");
+    }
+
+    #[tokio::test]
+    async fn a_with_hold_cursor_materializes_before_commit() {
+        use assert2::assert;
+
+        let engine = SqlEngine::new();
+        let mut s = engine.connect();
+        s.simple_query("CREATE TABLE t (id int4)")
+            .await
+            .expect("ddl");
+        s.simple_query("BEGIN").await.expect("begin");
+        s.simple_query("INSERT INTO t VALUES (1)")
+            .await
+            .expect("seed");
+        s.simple_query("DECLARE h CURSOR WITH HOLD FOR SELECT id FROM t ORDER BY id")
+            .await
+            .expect("declare");
+        s.simple_query("INSERT INTO t VALUES (2)")
+            .await
+            .expect("later insert");
+        s.simple_query("COMMIT").await.expect("commit");
+        s.simple_query("DELETE FROM t").await.expect("delete");
+        assert!(
+            rows_or_sqlstate(&mut s, "FETCH ALL FROM h").await
+                == Ok(vec![vec!["1".into()], vec!["2".into()]])
+        );
     }
 
     #[tokio::test]
@@ -23964,6 +24560,14 @@ mod tests {
                     vec!["  Filter: (id = 1)".into()],
                 ])
         );
+        assert!(
+            rows_or_sqlstate(&mut s, "EXPLAIN (COSTS OFF) SELECT proname FROM pg_proc").await
+                == Ok(vec![vec!["Seq Scan on pg_proc".into()]])
+        );
+        assert!(
+            rows_or_sqlstate(&mut s, "EXPLAIN (COSTS OFF) SELECT * FROM no_such_table").await
+                == Err("42P01".into())
+        );
         s.simple_query("ANALYZE t").await.expect("analyze");
         assert!(
             rows_or_sqlstate(&mut s, "EXPLAIN (ANALYZE) SELECT * FROM t WHERE id = 1").await
@@ -24000,6 +24604,51 @@ mod tests {
         );
         assert!(sqlstate(&mut s, "EXPLAIN (NO_SUCH_OPTION) SELECT 1").await == "42601");
         assert!(sqlstate(&mut s, "EXPLAIN (FORMAT NONSENSE) SELECT 1").await == "22023");
+    }
+
+    #[tokio::test]
+    async fn explain_ctas_uses_its_source_query_plan() {
+        let engine = SqlEngine::new();
+        let mut s = engine.connect();
+        s.simple_query("PREPARE ctas_prepared AS SELECT generate_series(1,3)")
+            .await
+            .expect("prepare");
+        for sql in [
+            "EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) \
+             CREATE TABLE ctas_source (a) AS SELECT generate_series(1,3)",
+            "EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) \
+             CREATE TABLE ctas_prepared_target (a) AS EXECUTE ctas_prepared",
+        ] {
+            assert!(
+                rows_or_sqlstate(&mut s, sql).await
+                    == Ok(vec![
+                        vec!["ProjectSet (actual rows=3.00 loops=1)".into()],
+                        vec!["  ->  Result (actual rows=1.00 loops=1)".into()],
+                    ]),
+                "{sql}"
+            );
+        }
+        assert!(
+            rows_or_sqlstate(
+                &mut s,
+                "EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) \
+                 CREATE TABLE ctas_nodata (a) AS SELECT generate_series(1,3) WITH NO DATA",
+            )
+            .await
+                == Ok(vec![
+                    vec!["ProjectSet (never executed)".into()],
+                    vec!["  ->  Result (never executed)".into()],
+                ])
+        );
+        assert!(
+            rows_or_sqlstate(
+                &mut s,
+                "EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) \
+                 CREATE TABLE IF NOT EXISTS ctas_source (a) AS SELECT generate_series(1,3)",
+            )
+            .await
+                == Ok(Vec::new())
+        );
     }
 
     #[tokio::test]
@@ -25153,7 +25802,7 @@ mod tests {
                     vec!["  Conflict Arbiter Indexes: hat_data_pkey".into()],
                     vec!["  Conflict Filter: (excluded.color <> 'forbidden'::bpchar)".into()],
                     vec!["  CTE data".into()],
-                    vec!["    ->  Values Scan on \"*VALUES*\"".into()],
+                    vec!["    ->  Result".into()],
                     vec!["  ->  CTE Scan on data".into()],
                 ])
         );
@@ -29448,6 +30097,48 @@ mod tests {
             );
         }
     }
+
+    #[tokio::test]
+    async fn materialized_view_population_uses_the_maintenance_search_path() {
+        let engine = SqlEngine::new();
+        let mut session = engine.connect();
+        session
+            .simple_query(
+                "CREATE SCHEMA maint; \
+                 SET search_path = maint; \
+                 CREATE FUNCTION path_fn() RETURNS text IMMUTABLE LANGUAGE plpgsql AS \
+                 $$ BEGIN RETURN current_setting('search_path'); END $$; \
+                 CREATE MATERIALIZED VIEW mv AS SELECT path_fn() AS path",
+            )
+            .await
+            .expect("create materialized view");
+
+        assert!(
+            rows_or_sqlstate(&mut session, "SELECT path FROM mv").await
+                == Ok(vec![vec!["pg_catalog, pg_temp".into()]])
+        );
+        assert!(
+            rows_or_sqlstate(&mut session, "SELECT current_setting('search_path')").await
+                == Ok(vec![vec!["maint".into()]])
+        );
+    }
+
+    #[tokio::test]
+    async fn plpgsql_setof_function_expands_in_the_select_list() {
+        let engine = SqlEngine::new();
+        let mut session = engine.connect();
+        session
+            .simple_query(
+                "CREATE FUNCTION setof_int() RETURNS SETOF int LANGUAGE plpgsql AS \
+                 $$ BEGIN RETURN NEXT 1; RETURN NEXT 2; END $$",
+            )
+            .await
+            .expect("create set-returning function");
+        assert!(
+            rows_or_sqlstate(&mut session, "SELECT setof_int()").await
+                == Ok(vec![vec!["1".into()], vec!["2".into()]])
+        );
+    }
 }
 #[cfg(test)]
 mod compatibility_refusal_tests {
@@ -32019,6 +32710,44 @@ mod session_conformance_tests {
     }
 
     #[tokio::test]
+    async fn text_search_input_errors_point_at_the_unique_literal() {
+        let engine = SqlEngine::new();
+        let mut session = engine.connect();
+        let sql = "SELECT $$'' '1' '2'$$::tsvector";
+        let error = session.simple_query(sql).await.expect_err("bad tsvector");
+        assert!(error.code == "42601", "{error:?}");
+        assert!(
+            error
+                .diagnostics
+                .as_ref()
+                .and_then(|diagnostics| diagnostics.position)
+                == Some(8),
+            "{error:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn unknown_datetime_zone_points_at_the_unique_literal() {
+        let engine = SqlEngine::new();
+        let mut session = engine.connect();
+        session
+            .simple_query("CREATE TABLE zone_position (value timestamp)")
+            .await
+            .expect("create table");
+        let sql = "INSERT INTO zone_position VALUES ('19970710 173201 America/Does_not_exist')";
+        let error = session.simple_query(sql).await.expect_err("unknown zone");
+        assert!(error.code == "22023", "{error:?}");
+        assert!(
+            error
+                .diagnostics
+                .as_ref()
+                .and_then(|diagnostics| diagnostics.position)
+                == Some(sql.find('\'').expect("literal") + 1),
+            "{error:?}"
+        );
+    }
+
+    #[tokio::test]
     async fn range_cast_errors_point_at_the_unique_literal() {
         let engine = SqlEngine::new();
         let mut session = engine.connect();
@@ -32675,6 +33404,13 @@ mod session_conformance_tests {
             )
             .await
             .expect("create class with implicit family");
+        session
+            .simple_query(
+                "CREATE OPERATOR CLASS member_class FOR TYPE int4 USING hash AS \
+                 OPERATOR 1 =, FUNCTION 1 hashint4(int4)",
+            )
+            .await
+            .expect("create class members");
         assert!(
             scalar(
                 &mut session,
@@ -32702,8 +33438,34 @@ mod session_conformance_tests {
             .await
                 == "2"
         );
-        assert!(scalar(&mut session, "SELECT count(*) FROM pg_catalog.pg_amop").await == "945");
-        assert!(scalar(&mut session, "SELECT count(*) FROM pg_catalog.pg_amproc").await == "714");
+        assert!(
+            scalar(
+                &mut session,
+                "SELECT count(*) FROM pg_catalog.pg_amop a JOIN pg_catalog.pg_opclass c \
+                 ON c.opcfamily = a.amopfamily WHERE c.opcname = 'member_class'",
+            )
+            .await
+                == "1"
+        );
+        assert!(
+            scalar(
+                &mut session,
+                "SELECT count(*) FROM pg_catalog.pg_amproc a JOIN pg_catalog.pg_opclass c \
+                 ON c.opcfamily = a.amprocfamily WHERE c.opcname = 'member_class'",
+            )
+            .await
+                == "1"
+        );
+        assert!(scalar(&mut session, "SELECT count(*) FROM pg_catalog.pg_amop").await == "946");
+        assert!(scalar(&mut session, "SELECT count(*) FROM pg_catalog.pg_amproc").await == "715");
+        assert!(
+            scalar(
+                &mut session,
+                "SELECT count(*) FROM pg_catalog.pg_opclass WHERE NOT amvalidate(oid)",
+            )
+            .await
+                == "0"
+        );
         assert!(
             scalar(
                 &mut session,
@@ -32984,6 +33746,41 @@ mod session_conformance_tests {
             )
             .await
                 == "0"
+        );
+    }
+
+    #[tokio::test]
+    async fn count_catalog_signatures_have_distinct_argument_dimensions() {
+        let engine = SqlEngine::new();
+        let mut session = engine.connect();
+        assert_eq!(
+            scalar(
+                &mut session,
+                "SELECT count(*) FROM pg_proc AS p1, pg_proc AS p2 \
+                 WHERE p1.oid < p2.oid AND p1.proname = p2.proname \
+                 AND p1.prokind = 'a' AND p2.prokind = 'a' \
+                 AND array_dims(p1.proargtypes) != array_dims(p2.proargtypes) \
+                 AND p1.proname = 'count'",
+            )
+            .await,
+            "1"
+        );
+    }
+
+    #[tokio::test]
+    async fn aggregate_catalog_signature_check_fits_statement_memory() {
+        let engine = SqlEngine::new();
+        let mut session = engine.connect();
+        assert_eq!(
+            scalar(
+                &mut session,
+                "SELECT count(*) FROM pg_proc AS p1, pg_proc AS p2 \
+                 WHERE p1.oid < p2.oid AND p1.proname = p2.proname \
+                 AND p1.prokind = 'a' AND p2.prokind = 'a' \
+                 AND array_dims(p1.proargtypes) != array_dims(p2.proargtypes)",
+            )
+            .await,
+            "1"
         );
     }
 
@@ -33501,6 +34298,15 @@ mod session_conformance_tests {
             assert_class_stats(&mut s, "par", analyzed, "t", label).await;
             if partitioned {
                 assert!(
+                    scalar(
+                        &mut s,
+                        "SELECT count(*) FROM pg_stats \
+                         WHERE tablename = 'par' AND attname = 'i'",
+                    )
+                    .await
+                        == "1"
+                );
+                assert!(
                     run(
                         &mut s,
                         "SELECT relpages FROM pg_class WHERE oid = 'par'::regclass",
@@ -33740,6 +34546,50 @@ mod session_conformance_tests {
             )
             .await
                 == "2"
+        );
+    }
+
+    #[tokio::test]
+    async fn analyze_column_list_collects_only_requested_columns() {
+        let engine = SqlEngine::new();
+        let mut session = engine.connect();
+        for sql in [
+            "CREATE TABLE analyzed_columns (a int4, b int4)",
+            "INSERT INTO analyzed_columns VALUES (1, 2), (3, 4)",
+            "ANALYZE analyzed_columns (a)",
+        ] {
+            run(&mut session, sql).await.expect(sql);
+        }
+        assert!(
+            scalar(
+                &mut session,
+                "SELECT string_agg(attname, ',' ORDER BY attname) \
+                 FROM pg_stats WHERE tablename = 'analyzed_columns'",
+            )
+            .await
+                == "a"
+        );
+    }
+
+    #[tokio::test]
+    async fn analyze_collects_statistics_for_each_table_column() {
+        let engine = SqlEngine::new();
+        let mut session = engine.connect();
+        for sql in [
+            "CREATE TABLE analyzed_columns (a int4, b text)",
+            "INSERT INTO analyzed_columns VALUES (1, 'one'), (2, 'two')",
+            "ANALYZE analyzed_columns",
+        ] {
+            run(&mut session, sql).await.expect(sql);
+        }
+        assert!(
+            scalar(
+                &mut session,
+                "SELECT string_agg(attname, ',' ORDER BY attname) FROM pg_stats \
+                 WHERE tablename = 'analyzed_columns'",
+            )
+            .await
+                == "a,b"
         );
     }
 

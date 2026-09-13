@@ -19,6 +19,15 @@ use crate::{
     scope::{ColumnBinding, POSITION_QUALIFIER, Scope},
 };
 
+/// Bind the planner's typed, safe qual rewrites against this relation scope.
+fn bind_rewritten_filter(
+    filter: Option<&Expr>,
+    scope: &Scope,
+) -> Result<Option<BoundExpr>, ExecError> {
+    let rewritten = crate::plan::rewrite::rewrite_self_equality(filter, scope);
+    bind_optional(rewritten.as_ref(), scope)
+}
+
 /// Execute the subset of SELECT that is exactly one scalar `Result` node.
 /// Returns `None` for every shape that still needs a later P0a node.
 #[cfg(test)]
@@ -69,9 +78,80 @@ pub(crate) fn try_execute_seq_scan_with_state(
     let Some(planned) = plan_seq_scan(read_ctx, select)? else {
         return Ok(None);
     };
+    if plan_has_literal_false_qual(&planned.plan)
+        && planned.aggregate.is_none()
+        && planned.project_set.is_none()
+        && planned.window.is_none()
+        && matches!(select.distinct, DistinctClause::All)
+        && select.order_by.is_empty()
+        && select.limit.is_none()
+        && select.offset.is_none()
+    {
+        let plan = Plan {
+            target_list: planned.plan.target_list,
+            quals: Vec::new(),
+            node: PlanNode::Result,
+        };
+        let mut state = PlanState::new(plan, exec::projected_scope(&planned.fields, &planned.tys));
+        state.begin_loop();
+        state.children.push(PlanState::new(
+            Plan {
+                target_list: Vec::new(),
+                quals: Vec::new(),
+                node: PlanNode::SeqScan { scanrelid: 1 },
+            },
+            Scope::empty(),
+        ));
+        return Ok(Some((
+            Relation {
+                scope: state.scope.clone(),
+                rows: Vec::new(),
+            },
+            state,
+        )));
+    }
     let mut state = PlanState::new(planned.plan.clone(), Scope::empty());
     let relation = execute_seq_scan_plan(&mut state, read_ctx, planned)?;
     Ok(Some((relation, state)))
+}
+
+fn plan_has_literal_false_qual(plan: &Plan) -> bool {
+    plan.quals
+        .iter()
+        .any(|qual| short_circuits_to_false(qual.clause.expr()))
+        || match &plan.node {
+            PlanNode::Filter { input }
+            | PlanNode::Aggregate { input }
+            | PlanNode::Sort { input }
+            | PlanNode::Unique { input }
+            | PlanNode::Limit { input }
+            | PlanNode::ProjectSet { input }
+            | PlanNode::WindowAgg { input }
+            | PlanNode::SubqueryScan { input } => plan_has_literal_false_qual(input),
+            PlanNode::NestedLoop { outer, inner, .. } => {
+                plan_has_literal_false_qual(outer) || plan_has_literal_false_qual(inner)
+            }
+            _ => false,
+        }
+}
+
+/// A false left operand skips its right operand in the evaluator, so this is
+/// also safe when that operand contains a volatile call or would fail.
+fn short_circuits_to_false(expr: &Expr) -> bool {
+    match expr {
+        Expr::BoolLiteral(false) => true,
+        Expr::Binary {
+            op: crabka_pgparser::ast::BinaryOp::And,
+            left,
+            ..
+        } => short_circuits_to_false(left),
+        Expr::Binary {
+            op: crabka_pgparser::ast::BinaryOp::Or,
+            left,
+            right,
+        } => short_circuits_to_false(left) && short_circuits_to_false(right),
+        _ => false,
+    }
 }
 
 fn try_execute_nested_loop_with_state(
@@ -132,7 +212,7 @@ fn try_execute_nested_loop_with_state(
         } else {
             bind_target_list(&exprs, &fields, &scope)?
         },
-        quals: bind_optional(select.filter.as_ref(), &scope)?
+        quals: bind_rewritten_filter(select.filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -282,7 +362,7 @@ fn execute_nested_loop_window_with_state(
     };
     let filter = Plan {
         target_list: Vec::new(),
-        quals: bind_optional(select.filter.as_ref(), scope)?
+        quals: bind_rewritten_filter(select.filter.as_ref(), scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -681,6 +761,7 @@ fn plan_nested_loop_source(
             right,
             kind,
             constraint,
+            ..
         } => Some(Plan {
             target_list: Vec::new(),
             quals: Vec::new(),
@@ -988,8 +1069,8 @@ fn execute_seq_scan_plan(
     }
 }
 
-/// Execute a `VALUES` query through its `ValuesScan` node, including the query
-/// expression's ORDER BY/OFFSET/LIMIT tail.
+/// Execute a `VALUES` query through its `Result` or `ValuesScan` node,
+/// including the query expression's ORDER BY/OFFSET/LIMIT tail.
 pub(crate) fn execute_values(
     ctx: &crate::subquery::SubCtx<'_>,
     query: &QueryExpr,
@@ -998,7 +1079,11 @@ pub(crate) fn execute_values(
     let plan = Plan {
         target_list: Vec::new(),
         quals: Vec::new(),
-        node: PlanNode::ValuesScan,
+        node: if crate::plan::rewrite::is_single_row_values(values) {
+            PlanNode::Result
+        } else {
+            PlanNode::ValuesScan
+        },
     };
     let mut state = PlanState::new(plan, Scope::empty());
     ValuesExecutor { ctx, query, values }.execute(&mut state)
@@ -1038,7 +1123,7 @@ fn plan_result(select: &SelectStmt) -> Result<Option<ResultPlan>, ExecError> {
         return Ok(None);
     }
     let target_list = bind_target_list(&exprs, &fields, &scope)?;
-    let quals = bind_optional(select.filter.as_ref(), &scope)?
+    let quals = bind_rewritten_filter(select.filter.as_ref(), &scope)?
         .into_iter()
         .map(|clause| RestrictInfo {
             clause,
@@ -1113,18 +1198,25 @@ fn plan_seq_scan(
         return Ok(None);
     }
 
+    let TableExpr::Table { name, alias, .. } = source else {
+        return Ok(None);
+    };
+    let relation = crate::relname::resolve_relation(
+        read_ctx.catalog_kv,
+        read_ctx.fctx.resolution,
+        name,
+        crate::relname::SchemaDisposition::Reference,
+    )?;
+    let table = crabka_pgcatalog::get_table(read_ctx.catalog_kv, &relation)?;
+    let filter = crate::plan::rewrite::reduce_not_null_test(
+        select.filter.as_ref(),
+        &table,
+        alias.as_deref().unwrap_or(&name.name),
+    );
+
     // The legacy path already turns filtered indexed tables into bounded index
     // probes. Keep that access path until P3 supplies an index scan leaf.
-    if select.filter.is_some() {
-        let TableExpr::Table { name, .. } = source else {
-            return Ok(None);
-        };
-        let relation = crate::relname::resolve_relation(
-            read_ctx.catalog_kv,
-            read_ctx.fctx.resolution,
-            name,
-            crate::relname::SchemaDisposition::Reference,
-        )?;
+    if filter.is_some() && !matches!(filter, Some(Expr::BoolLiteral(_))) {
         if !crabka_pgcatalog::list_table_indexes(read_ctx.catalog_kv, &relation)?.is_empty() {
             return Ok(None);
         }
@@ -1143,7 +1235,7 @@ fn plan_seq_scan(
         crate::grouping::resolve_group_references(select, &scope)?;
     }
     if window {
-        let quals = bind_optional(select.filter.as_ref(), &scope)?
+        let quals = bind_rewritten_filter(filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -1198,7 +1290,7 @@ fn plan_seq_scan(
             crate::eval::require_equality_operator(*ty)?;
         }
     }
-    let quals = bind_optional(select.filter.as_ref(), &scope)?
+    let quals = bind_rewritten_filter(filter.as_ref(), &scope)?
         .into_iter()
         .map(|clause| RestrictInfo {
             clause,
@@ -1439,7 +1531,7 @@ fn plan_function_scan(
         .scope
     };
     if window {
-        let quals = bind_optional(select.filter.as_ref(), &scope)?
+        let quals = bind_rewritten_filter(select.filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -1504,7 +1596,7 @@ fn plan_function_scan(
         } else {
             target_list.clone()
         },
-        quals: bind_optional(select.filter.as_ref(), &scope)?
+        quals: bind_rewritten_filter(select.filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -1678,7 +1770,7 @@ fn plan_subquery_scan(
     )?
     .scope;
     if window {
-        let quals = bind_optional(select.filter.as_ref(), &scope)?
+        let quals = bind_rewritten_filter(select.filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -1741,7 +1833,7 @@ fn plan_subquery_scan(
         } else {
             target_list.clone()
         },
-        quals: bind_optional(select.filter.as_ref(), &scope)?
+        quals: bind_rewritten_filter(select.filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -1887,14 +1979,18 @@ fn plan_subquery_input(
                 Ok(plan_seq_scan(read_ctx, &inner)?.map(|planned| planned.plan))
             }
         }
-        crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Values(_)) => {
+        crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Values(values)) => {
             if subquery.with.is_some() || subquery.locking.is_some() {
                 return Ok(None);
             }
             Ok(Some(Plan {
                 target_list: Vec::new(),
                 quals: Vec::new(),
-                node: PlanNode::ValuesScan,
+                node: if crate::plan::rewrite::is_single_row_values(values) {
+                    PlanNode::Result
+                } else {
+                    PlanNode::ValuesScan
+                },
             }))
         }
         _ => Ok(None),
@@ -1947,7 +2043,7 @@ fn plan_cte_scan(
     )?
     .scope;
     if window {
-        let quals = bind_optional(select.filter.as_ref(), &scope)?
+        let quals = bind_rewritten_filter(select.filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -2008,7 +2104,7 @@ fn plan_cte_scan(
         } else {
             target_list.clone()
         },
-        quals: bind_optional(select.filter.as_ref(), &scope)?
+        quals: bind_rewritten_filter(select.filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -2203,7 +2299,7 @@ fn plan_named_tuplestore_scan(
         scope
     };
     if window {
-        let quals = bind_optional(select.filter.as_ref(), &scope)?
+        let quals = bind_rewritten_filter(select.filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -2264,7 +2360,7 @@ fn plan_named_tuplestore_scan(
         } else {
             target_list.clone()
         },
-        quals: bind_optional(select.filter.as_ref(), &scope)?
+        quals: bind_rewritten_filter(select.filter.as_ref(), &scope)?
             .into_iter()
             .map(|clause| RestrictInfo {
                 clause,
@@ -3454,9 +3550,15 @@ struct ValuesExecutor<'a, 'b> {
 
 impl Executor for ValuesExecutor<'_, '_> {
     fn execute(&mut self, state: &mut PlanState) -> Result<Relation, ExecError> {
-        if !matches!(state.plan.node, PlanNode::ValuesScan) {
+        if !matches!(
+            (
+                &state.plan.node,
+                crate::plan::rewrite::is_single_row_values(self.values)
+            ),
+            (PlanNode::Result, true) | (PlanNode::ValuesScan, false)
+        ) {
             return Err(ExecError::Unsupported(
-                "ValuesExecutor received a non-ValuesScan plan".into(),
+                "ValuesExecutor received an invalid VALUES plan".into(),
             ));
         }
         crate::session::check_query_canceled()?;

@@ -577,6 +577,11 @@ pub enum AlterIndexAction {
         column: i32,
         target: i32,
     },
+    /// `ALTER COLUMN name SET (n_distinct = …, …)`.
+    SetAttributeOptions {
+        column: String,
+        options: Vec<(String, Option<String>)>,
+    },
     /// `SET (name = value, …)` — the index's storage parameters. The list has
     /// already been checked against the reloption catalog, against *every*
     /// index access method's options: the statement names no method, and the
@@ -723,7 +728,7 @@ pub enum Statement {
         comment: Option<String>,
     },
     DropIndex {
-        name: RelationRef,
+        names: Vec<RelationRef>,
         if_exists: bool,
         /// `CASCADE` was written: dependent objects are dropped too rather than
         /// the drop being refused with 2BP01. `RESTRICT` is the default and is
@@ -1275,7 +1280,7 @@ pub enum Statement {
         /// neither was written (`PostgreSQL`'s plan-dependent default).
         scroll: Option<bool>,
         hold: bool,
-        /// The query text `pg_cursors.statement` exposes for this portal.
+        /// The declaration text `pg_cursors.statement` exposes for this portal.
         query_source: String,
         query: Box<QueryExpr>,
     },
@@ -1457,6 +1462,7 @@ pub enum CreateTypeDefinition {
         subtype: ColumnType,
         collation: Option<String>,
         multirange_type_name: Option<RelationRef>,
+        subtype_diff: Option<String>,
     },
     /// `CREATE TYPE name (option = value, …)`: a user-defined base type. The
     /// options are carried through verbatim, in written order, because which of
@@ -1542,7 +1548,16 @@ pub struct CompositeFieldDef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AlterTypeAction {
     /// `ADD ATTRIBUTE name type [COLLATE collation]`.
-    AddAttribute(CompositeFieldDef),
+    AddAttribute {
+        field: CompositeFieldDef,
+        cascade: bool,
+    },
+    /// `DROP ATTRIBUTE [IF EXISTS] name [CASCADE | RESTRICT]`.
+    DropAttribute {
+        name: String,
+        if_exists: bool,
+        cascade: bool,
+    },
     /// `SET (option = value, …)` on a base type.
     Set(Vec<BaseTypeOption>),
     /// `ADD VALUE [IF NOT EXISTS] 'label' [{BEFORE | AFTER} 'existing']`.
@@ -1553,6 +1568,12 @@ pub enum AlterTypeAction {
     },
     /// `RENAME VALUE 'from' TO 'to'`.
     RenameValue { from: String, to: String },
+    /// `RENAME ATTRIBUTE from TO to [CASCADE | RESTRICT]`.
+    RenameAttribute {
+        from: String,
+        to: String,
+        cascade: bool,
+    },
     /// `RENAME TO new_name`.
     RenameTo(String),
     /// `OWNER TO role`: accepted and ignored; the engine has one type owner.
@@ -1670,6 +1691,7 @@ pub enum UtilityStatement {
         method: String,
         family: Option<RelationRef>,
         key_type: Option<ColumnType>,
+        members: Vec<OperatorFamilyMember>,
     },
     AlterOperatorObject {
         kind: OperatorObjectKind,
@@ -3693,6 +3715,9 @@ pub enum TableExpr {
         right: Box<TableExpr>,
         kind: JoinKind,
         constraint: JoinConstraint,
+        /// An alias on the joined relation, including `JOIN ... USING (...) AS j`.
+        alias: Option<String>,
+        columns: Option<Vec<String>>,
     },
     /// One or more set-returning functions in FROM position
     /// (`unnest(a) AS u(x)`, `ROWS FROM (f(…), g(…)) WITH ORDINALITY`). The

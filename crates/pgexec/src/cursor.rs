@@ -91,7 +91,7 @@ impl CursorPosition {
                 }
             }
             FetchDirection::Absolute(target) if target > 0 => {
-                let backward = target < i64::try_from(self.position).unwrap_or(i64::MAX);
+                let backward = target <= i64::try_from(self.position).unwrap_or(i64::MAX);
                 self.jump(target, backward)
             }
             FetchDirection::Absolute(target) => {
@@ -238,6 +238,7 @@ mod tests {
             ("LAST", 1, true),
             ("ABSOLUTE 2", 4, true),
             ("ABSOLUTE 4", 2, false),
+            ("ABSOLUTE 4", 4, true),
             ("RELATIVE -1", 3, true),
             ("RELATIVE 0", 3, false),
         ];

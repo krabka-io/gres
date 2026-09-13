@@ -14,7 +14,7 @@
 
 use jiff::{
     Span, Timestamp, Zoned,
-    civil::Date,
+    civil::{Date, DateTime},
     tz::{Offset, TimeZone},
 };
 
@@ -109,6 +109,8 @@ pub enum Zone {
     /// A zone-database name or dynamic abbreviation, whose offset depends on the
     /// instant it is applied to.
     Named(TimeZone),
+    /// A dynamic abbreviation that takes the post-transition offset in gaps.
+    NamedAfterGap(TimeZone),
 }
 
 impl Zone {
@@ -117,7 +119,7 @@ impl Zone {
     pub fn into_time_zone(self) -> TimeZone {
         match self {
             Zone::Offset(offset) => TimeZone::fixed(offset),
-            Zone::Named(tz) => tz,
+            Zone::Named(tz) | Zone::NamedAfterGap(tz) => tz,
         }
     }
 }
@@ -675,8 +677,10 @@ pub fn decode_at(
                         // Day-of-week names are decoration; PostgreSQL does not
                         // cross-check them against the date.
                         have_non_date = true;
-                    } else if let Some(found) =
-                        lookup_abbrev(word).or_else(|| lookup_zone_name(word))
+                    } else if let Some(found) = lmt_zone(word, tz)
+                        .or_else(|| mmt_zone(word, tz))
+                        .or_else(|| lookup_abbrev(word))
+                        .or_else(|| lookup_zone_name(word))
                     {
                         // An abbreviation wins over a same-spelled database
                         // name, as in PostgreSQL: `EST` is the fixed -05 of the
@@ -726,7 +730,7 @@ pub fn decode_at(
         // time-only literal usually has none: `'15:36:39 America/New_York'` is
         // malformed while `'15:36:39 UTC'` — a zone with one offset for all
         // time — is not.
-        if let Some(Zone::Named(named)) = &zone
+        if let Some(Zone::Named(named) | Zone::NamedAfterGap(named)) = &zone
             && date.is_none()
             && named.to_fixed_offset().is_err()
         {
@@ -1589,13 +1593,39 @@ fn lookup_abbrev(word: &str) -> Option<Zone> {
         .find(|(abbrev, _)| *abbrev == word)
         .and_then(|(_, name)| zone_by_name(name))
     {
-        return Some(Zone::Named(zone));
+        return Some(Zone::NamedAfterGap(zone));
     }
     FIXED_ABBREVS
         .iter()
         .find(|(abbrev, _)| *abbrev == word)
         .and_then(|(_, seconds)| Offset::from_seconds(*seconds).ok())
         .map(Zone::Offset)
+}
+
+/// `LMT` is the session zone's historical local-mean-time offset, not a
+/// globally fixed abbreviation. PostgreSQL retains that initial offset even
+/// when the literal's date is modern, so sample it before the first tzdb
+/// transition rather than at the value being parsed.
+fn lmt_zone(word: &str, tz: &TimeZone) -> Option<Zone> {
+    if word != "lmt" {
+        return None;
+    }
+    let civil = DateTime::constant(1000, 1, 1, 0, 0, 0, 0);
+    let instant = super::zoned_instant(civil, tz).ok()?;
+    let offset = tz.to_offset(instant);
+    (offset.seconds() != 0).then_some(Zone::Offset(offset))
+}
+
+/// `MMT` retains the default abbreviation's fixed UTC+06:30 meaning unless
+/// the session zone itself used Montevideo mean time at the historical probe.
+fn mmt_zone(word: &str, tz: &TimeZone) -> Option<Zone> {
+    if word != "mmt" {
+        return None;
+    }
+    let civil = DateTime::constant(1912, 1, 1, 0, 0, 0, 0);
+    let instant = super::zoned_instant(civil, tz).ok()?;
+    let info = tz.to_offset_info(instant);
+    (info.abbreviation().eq_ignore_ascii_case("MMT")).then_some(Zone::Offset(info.offset()))
 }
 
 /// Resolve a lowercased timezone abbreviation to a UTC offset, for the template
@@ -1610,7 +1640,7 @@ fn lookup_abbrev(word: &str) -> Option<Zone> {
 pub(super) fn abbrev_offset(word: &str) -> Option<(i32, Option<TimeZone>)> {
     match lookup_abbrev(word)? {
         Zone::Offset(offset) => Some((offset.seconds(), None)),
-        Zone::Named(zone) => Some((0, Some(zone))),
+        Zone::Named(zone) | Zone::NamedAfterGap(zone) => Some((0, Some(zone))),
     }
 }
 
@@ -1817,7 +1847,7 @@ const FIXED_ABBREVS: &[(&str, i32)] = &[
     ("met", 3600),
     ("metdst", 7200),
     ("mht", 43200),
-    ("mmt", 23400),
+    ("mmt", 23_400),
     ("mpt", 36000),
     ("mst", -25200),
     ("mut", 14400),

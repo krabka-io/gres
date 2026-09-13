@@ -1168,6 +1168,22 @@ pub(crate) fn array_assign(
     into: ElemType,
     ctx: &EvalCtx,
 ) -> Result<Datum, ExecError> {
+    let empty = matches!(current, Datum::Null)
+        || matches!(current, Datum::Array(array) if array.dims.is_empty());
+    if empty
+        && subscripts.iter().any(|subscript| {
+            matches!(
+                subscript,
+                SubscriptArg::Slice { lower: None, .. } | SubscriptArg::Slice { upper: None, .. }
+            )
+        })
+    {
+        return Err(ExecError::FunctionErrorWithDetail {
+            sqlstate: "2202E",
+            message: "array slice subscript must provide both boundaries",
+            detail: "When assigning to a slice of an empty array value, slice boundaries must be fully specified.",
+        });
+    }
     let array = match current {
         Datum::Null => ArrayValue::new(into, Vec::new()),
         Datum::Array(a) => a.clone(),
@@ -1440,7 +1456,11 @@ pub(crate) fn eval_quantified(
     let array = match array {
         Datum::Null => return Ok(Datum::Null),
         Datum::Array(a) | Datum::OidVector(a) => a,
-        other => return Err(not_an_array(other)),
+        _ => {
+            return Err(ExecError::TypeMismatch(
+                "op ANY/ALL (array) requires array on right side".into(),
+            ));
+        }
     };
     let mut saw_null = false;
     for elem in &array.elems {
@@ -1456,11 +1476,10 @@ pub(crate) fn eval_quantified(
                 }
             }
             Datum::Null => saw_null = true,
-            other => {
-                return Err(ExecError::TypeMismatch(format!(
-                    "argument of quantified comparison must be type boolean, not type {}",
-                    type_name(&other)
-                )));
+            _ => {
+                return Err(ExecError::TypeMismatch(
+                    "op ANY/ALL (array) requires operator to yield boolean".into(),
+                ));
             }
         }
     }
@@ -1635,7 +1654,15 @@ fn array_fill(
         message: "dimension array or low bound array cannot be null".into(),
     });
     if matches!(dims, Datum::Array(array) if array.dims.len() > 1) {
-        return Err(wrong_number_of_subscripts());
+        return Err(wrong_number_of_subscripts_with_detail(
+            "Dimension array must be one dimensional.",
+        ));
+    }
+    if matches!(dims, Datum::Array(array) if array.elems.iter().any(Datum::is_null)) {
+        return Err(ExecError::Type(TypeError::Coded {
+            sqlstate: "22004",
+            message: "dimension values cannot be null".into(),
+        }));
     }
     let lengths = int_array_arg(dims).ok_or(null_shape)?;
     let lowers = match lower_bounds {
@@ -1648,7 +1675,9 @@ fn array_fill(
         None => vec![1; lengths.len()],
         Some(d) => {
             if matches!(d, Datum::Array(array) if array.dims.len() > 1) {
-                return Err(wrong_number_of_subscripts());
+                return Err(wrong_number_of_subscripts_with_detail(
+                    "Low bound array must be one dimensional.",
+                ));
             }
             let lowers = int_array_arg(d).ok_or_else(|| {
                 ExecError::Type(TypeError::Coded {
@@ -1657,7 +1686,9 @@ fn array_fill(
                 })
             })?;
             if lowers.len() != lengths.len() {
-                return Err(wrong_number_of_subscripts());
+                return Err(wrong_number_of_subscripts_with_detail(
+                    "Low bound array has different size than dimensions array.",
+                ));
             }
             lowers
         }
@@ -1695,6 +1726,14 @@ fn array_fill(
         vec![value.clone(); total],
         shape,
     )))
+}
+
+fn wrong_number_of_subscripts_with_detail(detail: &'static str) -> ExecError {
+    ExecError::FunctionErrorWithDetail {
+        sqlstate: "2202E",
+        message: "wrong number of array subscripts",
+        detail,
+    }
 }
 
 /// The `int[]` shape arguments of `array_fill`. Returns `None` for a NULL
@@ -1930,6 +1969,9 @@ fn array_sort(
     };
     let a = array_value(array, name)?;
     let slices = outer_slices(a);
+    if slices.len() > 1 {
+        crate::eval::require_comparison_function(a.elem.column_type())?;
+    }
     let mut order: Vec<usize> = (0..slices.len()).collect();
     let mut failure = None;
     order.sort_by(|x, y| {
@@ -2687,6 +2729,20 @@ mod tests {
         // A NULL array is unknown for both.
         assert!(eval_quantified(&Datum::Null, Quantifier::Any, eq(1)).expect("any") == Datum::Null);
         assert!(eval_quantified(&Datum::Null, Quantifier::All, eq(1)).expect("all") == Datum::Null);
+        assert!(
+            eval_quantified(&Datum::Int4(44), Quantifier::Any, eq(1))
+                .expect_err("right side must be an array")
+                == ExecError::TypeMismatch(
+                    "op ANY/ALL (array) requires array on right side".into()
+                )
+        );
+        assert!(
+            eval_quantified(&plain, Quantifier::Any, |_| Ok(Datum::Int4(33)))
+                .expect_err("operator result must be boolean")
+                == ExecError::TypeMismatch(
+                    "op ANY/ALL (array) requires operator to yield boolean".into()
+                )
+        );
     }
 
     #[test]
@@ -3033,6 +3089,24 @@ mod tests {
                 .expect_err("refused");
             assert!(sqlstate(error) == *code, "{start:?} {subscripts:?}");
         }
+
+        let error = array_assign(
+            &Datum::Null,
+            &[slice(None, None)],
+            &int_arr("{1,2,3}"),
+            ElemType::Int4,
+            &ctx(),
+        )
+        .expect_err("empty array slice needs both bounds")
+        .into_pg();
+        assert!(error.code == "2202E");
+        assert!(error.message == "array slice subscript must provide both boundaries");
+        assert!(
+            error.diagnostics.as_ref().and_then(|d| d.detail.as_deref())
+                == Some(
+                    "When assigning to a slice of an empty array value, slice boundaries must be fully specified."
+                )
+        );
     }
 
     /// The dimension-reporting functions over the shapes that distinguish them.
@@ -3333,6 +3407,43 @@ mod tests {
             let error = call(name, args.clone()).expect_err(name);
             assert!(sqlstate(error) == *code, "{name} {args:?}");
         }
+        for (args, code, message, detail) in [
+            (
+                vec![int_expr(1), ints("{2,2}"), ints("{1}")],
+                "2202E",
+                "wrong number of array subscripts",
+                Some("Low bound array has different size than dimensions array."),
+            ),
+            (
+                vec![int_expr(1), ints("{1,2,NULL}")],
+                "22004",
+                "dimension values cannot be null",
+                None,
+            ),
+            (
+                vec![int_expr(1), ints("{{1,2},{3,4}}")],
+                "2202E",
+                "wrong number of array subscripts",
+                Some("Dimension array must be one dimensional."),
+            ),
+        ] {
+            let error = call("array_fill", args).expect_err("array_fill").into_pg();
+            assert!(error.code == code);
+            assert!(error.message == message);
+            assert!(error.diagnostics.as_ref().and_then(|d| d.detail.as_deref()) == detail);
+        }
+        let xid = ElemType::from_column_type(ColumnType::Xid).expect("xid has an array type");
+        assert!(
+            datum_text(
+                &call("array_sort", vec![array_expr("{1}", xid)]).expect("one xid"),
+                &ctx()
+            ) == "{1}"
+        );
+        let error = call("array_sort", vec![array_expr("{1,2,3}", xid)])
+            .expect_err("xid has no comparison function")
+            .into_pg();
+        assert!(error.code == "42883");
+        assert!(error.message == "could not identify a comparison function for type xid");
     }
 
     /// `array_cat` and `||` join along the OUTERMOST dimension, so the operand

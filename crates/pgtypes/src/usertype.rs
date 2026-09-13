@@ -184,6 +184,9 @@ pub struct CompositeField {
     pub name: String,
     /// `pg_attribute.atttypid`, as a column type.
     pub ty: ColumnType,
+    /// `pg_attribute.attisdropped`. Dropped attributes keep their ordinal so
+    /// stored composite values and row types remain positionally stable.
+    pub dropped: bool,
 }
 
 /// One `CHECK` constraint on a domain.
@@ -461,6 +464,13 @@ impl UserType {
             UserTypeBody::Composite(fields) => Some(fields),
             _ => None,
         }
+    }
+
+    /// The composite attributes SQL exposes by name, preserving the storage
+    /// list separately for callers that need stable physical positions.
+    pub fn visible_fields(&self) -> Option<impl Iterator<Item = &CompositeField>> {
+        self.fields()
+            .map(|fields| fields.iter().filter(|field| !field.dropped))
     }
 
     /// The enum's labels in sort order, or `None` when this is not an enum.
@@ -1264,6 +1274,7 @@ mod tests {
             UserTypeBody::Composite(vec![CompositeField {
                 name: "x".into(),
                 ty: ColumnType::Int4,
+                dropped: false,
             }]),
         );
         let found = lookup("UT_REG_COMPOSITE").expect("case-insensitive lookup");

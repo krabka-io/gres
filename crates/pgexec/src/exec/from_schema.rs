@@ -238,6 +238,8 @@ fn build_table_expr_schema_with_ctes(
             right,
             kind,
             constraint,
+            alias,
+            columns,
         } => {
             let l =
                 build_table_expr_schema_with_ctes(catalog_kv, resolution, left, ctes, ctx, refs)?;
@@ -245,14 +247,19 @@ fn build_table_expr_schema_with_ctes(
             let r =
                 build_table_expr_schema_with_ctes(catalog_kv, resolution, right, ctes, ctx, refs)?;
             // Schema-only: no rows, so no ON predicate is ever evaluated.
-            join_relations(
+            let relation = join_relations(
                 l,
                 r,
                 *kind,
                 constraint,
                 &crate::clock::EvalCtx::test_default(),
                 crate::join::JoinPolicy::default(),
-            )
+            )?;
+            if let Some(alias) = alias {
+                crate::values::requalify_join(relation, alias, columns)
+            } else {
+                Ok(relation)
+            }
         }
         TableExpr::Derived {
             subquery,

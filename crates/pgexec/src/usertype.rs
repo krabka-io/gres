@@ -14,7 +14,7 @@ use crabka_pgcatalog::RelationName;
 use crabka_pgkv::{Kv, WriteOp};
 use crabka_pgparser::ast::{
     AlterDomainAction, AlterTypeAction, BaseTypeOption, BaseTypeOptionValue, CompositeFieldDef,
-    CreateTypeDefinition, DomainConstraint, EnumValuePosition,
+    CreateTypeDefinition, DomainConstraint, EnumValuePosition, Expr, FuncArgs, FuncCall,
 };
 use crabka_pgtypes::{
     ColumnType, Datum, TypeError,
@@ -107,7 +107,11 @@ pub fn create_type(
             subtype,
             collation,
             multirange_type_name,
+            subtype_diff,
         } => {
+            if let Some(subtype_diff) = subtype_diff {
+                validate_range_subtype_diff(*subtype, subtype_diff)?;
+            }
             let (schema, companion) = match multirange_type_name {
                 Some(companion) => companion_identity(kv, resolution, companion)?,
                 None => (
@@ -128,6 +132,41 @@ pub fn create_type(
         }
     };
     register(kv, name, body, "CREATE TYPE")
+}
+
+fn validate_range_subtype_diff(subtype: ColumnType, name: &str) -> Result<(), ExecError> {
+    let argument = || Expr::Const {
+        value: Datum::Null,
+        ty: subtype,
+    };
+    let call = FuncCall {
+        name: name.to_owned(),
+        distinct: false,
+        args: FuncArgs::Exprs(vec![argument(), argument()]),
+        order_by: Vec::new(),
+        within_group: false,
+        filter: None,
+        sql_syntax: false,
+    };
+    let result = match crate::func::scalar_result_type(&call, &crate::scope::Scope::empty()) {
+        Err(ExecError::UndefinedFunction(_)) => {
+            return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+                "42883",
+                format!(
+                    "function {name}({}, {}) does not exist",
+                    subtype.name(),
+                    subtype.name()
+                ),
+            )));
+        }
+        result => result?,
+    };
+    match result {
+        ColumnType::Float8 => Ok(()),
+        _ => Err(ExecError::InvalidObjectDefinition(format!(
+            "range subtype_diff function {name} must return type double precision"
+        ))),
+    }
 }
 
 /// Create the shell PostgreSQL makes for an unknown `CREATE FUNCTION` return
@@ -713,6 +752,7 @@ fn composite_fields(fields: &[CompositeFieldDef]) -> Result<Vec<CompositeField>,
         out.push(CompositeField {
             name: field.name.clone(),
             ty: field.ty,
+            dropped: false,
         });
     }
     Ok(out)
@@ -890,21 +930,43 @@ pub fn alter_type(
     name: &RelationName,
     action: &AlterTypeAction,
 ) -> Result<(QueryResult, Vec<WriteOp>), ExecError> {
+    alter_type_inner(kv, name, action, None)
+}
+
+/// Execute `ALTER TYPE` from the session DDL path, where an attribute rename
+/// can cascade through its typed tables.
+pub(crate) fn alter_type_with_context(
+    kv: &dyn Kv,
+    name: &RelationName,
+    action: &AlterTypeAction,
+    fctx: crate::exec::ForeignCtx<'_>,
+) -> Result<(QueryResult, Vec<WriteOp>), ExecError> {
+    alter_type_inner(kv, name, action, Some(fctx))
+}
+
+fn alter_type_inner(
+    kv: &dyn Kv,
+    name: &RelationName,
+    action: &AlterTypeAction,
+    fctx: Option<crate::exec::ForeignCtx<'_>>,
+) -> Result<(QueryResult, Vec<WriteOp>), ExecError> {
     let lookup_name = name.to_string();
     let (mut ty, is_multirange) = require_type_or_multirange(kv, name)?;
     if is_multirange {
         return match action {
             AlterTypeAction::RenameTo(new_name) => rename_multirange(kv, ty, name, new_name),
             AlterTypeAction::OwnerTo(_) => Ok((command("ALTER TYPE"), Vec::new())),
-            AlterTypeAction::AddAttribute(_) => Err(wrong_kind(name, "a composite type")),
-            AlterTypeAction::Set(_) => Err(wrong_kind(name, "a base type")),
-            AlterTypeAction::AddValue { .. } | AlterTypeAction::RenameValue { .. } => {
-                Err(wrong_kind(name, "an enum"))
+            AlterTypeAction::AddAttribute { .. } | AlterTypeAction::DropAttribute { .. } => {
+                Err(wrong_kind(name, "a composite type"))
             }
+            AlterTypeAction::Set(_) => Err(wrong_kind(name, "a base type")),
+            AlterTypeAction::AddValue { .. }
+            | AlterTypeAction::RenameValue { .. }
+            | AlterTypeAction::RenameAttribute { .. } => Err(wrong_kind(name, "an enum")),
         };
     }
     match action {
-        AlterTypeAction::AddAttribute(field) => {
+        AlterTypeAction::AddAttribute { field, cascade } => {
             if column_type_contains_oid(field.ty, ty.oid, &mut HashSet::new()) {
                 return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
                     "42P16",
@@ -925,6 +987,111 @@ pub fn alter_type(
                     .pop()
                     .expect("one field produces one field"),
             );
+            let tables = typed_tables_using_type(kv, ty.oid)?;
+            if !tables.is_empty() && !cascade {
+                return Err(ExecError::Remote(
+                    crabka_pgwire::error::PgError::error(
+                        "2BP01",
+                        format!(
+                            "cannot alter type \"{lookup_name}\" because it is the type of a typed table"
+                        ),
+                    )
+                    .with_hint("Use ALTER ... CASCADE to alter the typed tables too."),
+                ));
+            }
+            if !tables.is_empty() {
+                let Some(fctx) = fctx else {
+                    return Err(ExecError::Unsupported(
+                        "ALTER TYPE ADD ATTRIBUTE needs a session context for typed tables".into(),
+                    ));
+                };
+                let action = crabka_pgparser::ast::AlterTableAction::AddColumn {
+                    if_not_exists: false,
+                    column: crabka_pgparser::ast::ColumnDef {
+                        name: field.name.clone(),
+                        ty: field.ty,
+                        typmod: None,
+                        serial: None,
+                        collation: field.collation.clone(),
+                        constraints: Vec::new(),
+                    },
+                    options: Vec::new(),
+                };
+                let mut ops = crabka_pgcatalog::put_user_type_ops(kv, &ty)?;
+                for table in tables {
+                    let mut state =
+                        crate::exec::ddl_alter::AlterTableState::new(table, fctx.own_xid);
+                    crate::exec::ddl_alter::alter_table_action_ops(kv, &mut state, &action, fctx)?;
+                    ops.extend(crate::exec::ddl_alter::alter_table_state_ops(
+                        kv,
+                        &state.table.name.clone(),
+                        &mut state,
+                    )?);
+                }
+                return Ok((command("ALTER TYPE"), ops));
+            }
+        }
+        AlterTypeAction::DropAttribute {
+            name: attribute,
+            if_exists,
+            cascade,
+        } => {
+            let UserTypeBody::Composite(fields) = &mut ty.body else {
+                return Err(wrong_kind(name, "a composite type"));
+            };
+            let Some(index) = fields
+                .iter()
+                .position(|field| !field.dropped && field.name == *attribute)
+            else {
+                if *if_exists {
+                    return Ok((command("ALTER TYPE"), Vec::new()));
+                }
+                return Err(ExecError::UndefinedTableColumn {
+                    column: attribute.clone(),
+                    table: lookup_name,
+                });
+            };
+            let tables = typed_tables_using_type(kv, ty.oid)?;
+            if !tables.is_empty() {
+                if !cascade {
+                    return Err(ExecError::Remote(
+                        crabka_pgwire::error::PgError::error(
+                            "2BP01",
+                            format!(
+                                "cannot alter type \"{lookup_name}\" because it is the type of a typed table"
+                            ),
+                        )
+                        .with_hint("Use ALTER TYPE ... CASCADE to alter the typed tables too."),
+                    ));
+                }
+            }
+            let field = &mut fields[index];
+            field.name = format!("........pg.dropped.{}........", index + 1);
+            field.dropped = true;
+            if !tables.is_empty() {
+                let Some(fctx) = fctx else {
+                    return Err(ExecError::Unsupported(
+                        "ALTER TYPE DROP ATTRIBUTE needs a session context for typed tables".into(),
+                    ));
+                };
+                let action = crabka_pgparser::ast::AlterTableAction::DropColumn {
+                    column: attribute.clone(),
+                    if_exists: false,
+                    cascade: true,
+                };
+                let mut ops = crabka_pgcatalog::put_user_type_ops(kv, &ty)?;
+                for table in tables {
+                    let mut state =
+                        crate::exec::ddl_alter::AlterTableState::new(table, fctx.own_xid);
+                    crate::exec::ddl_alter::alter_table_action_ops(kv, &mut state, &action, fctx)?;
+                    ops.extend(crate::exec::ddl_alter::alter_table_state_ops(
+                        kv,
+                        &state.table.name.clone(),
+                        &mut state,
+                    )?);
+                }
+                return Ok((command("ALTER TYPE"), ops));
+            }
         }
         AlterTypeAction::Set(options) => {
             if ty.is_shell() {
@@ -998,6 +1165,66 @@ pub fn alter_type(
             }
             check_label_length(to)?;
             labels[index] = to.clone();
+        }
+        AlterTypeAction::RenameAttribute { from, to, cascade } => {
+            let UserTypeBody::Composite(fields) = &mut ty.body else {
+                return Err(wrong_kind(name, "a composite type"));
+            };
+            let Some(index) = fields
+                .iter()
+                .position(|field| !field.dropped && field.name == *from)
+            else {
+                return Err(ExecError::UndefinedTableColumn {
+                    column: from.clone(),
+                    table: lookup_name,
+                });
+            };
+            if fields
+                .iter()
+                .any(|existing| !existing.dropped && existing.name == *to)
+            {
+                return Err(ExecError::DuplicateObject(format!(
+                    "column \"{to}\" of relation \"{lookup_name}\" already exists"
+                )));
+            }
+            fields[index].name = to.clone();
+            let tables = typed_tables_using_type(kv, ty.oid)?;
+            if !tables.is_empty() && !cascade {
+                return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+                    "2BP01",
+                    format!(
+                        "cannot alter type \"{lookup_name}\" because it is the type of a typed table"
+                    ),
+                )
+                .with_hint("Use ALTER TYPE ... CASCADE to alter the typed tables too.")));
+            }
+            let Some(fctx) = fctx else {
+                if !tables.is_empty() {
+                    return Err(ExecError::Unsupported(
+                        "ALTER TYPE RENAME ATTRIBUTE needs a session context for typed tables"
+                            .into(),
+                    ));
+                }
+                return Ok((
+                    command("ALTER TYPE"),
+                    crabka_pgcatalog::put_user_type_ops(kv, &ty)?,
+                ));
+            };
+            let action = crabka_pgparser::ast::AlterTableAction::RenameColumn {
+                column: from.clone(),
+                new_name: to.clone(),
+            };
+            let mut ops = crabka_pgcatalog::put_user_type_ops(kv, &ty)?;
+            for table in tables {
+                let mut state = crate::exec::ddl_alter::AlterTableState::new(table, fctx.own_xid);
+                crate::exec::ddl_alter::alter_table_action_ops(kv, &mut state, &action, fctx)?;
+                ops.extend(crate::exec::ddl_alter::alter_table_state_ops(
+                    kv,
+                    &state.table.name.clone(),
+                    &mut state,
+                )?);
+            }
+            return Ok((command("ALTER TYPE"), ops));
         }
         AlterTypeAction::RenameTo(new_name) => return rename(kv, ty, new_name, "ALTER TYPE"),
         // The engine has a single type owner, so an ownership change is a
@@ -1286,14 +1513,17 @@ pub fn drop_types(
         let dependents = dependent_user_types(kv, ty.oid)?;
         let typed_tables = typed_tables_using_type(kv, ty.oid)?;
         if !cascade && let Some(dependent) = dependents.first() {
-            return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
-                "2BP01",
-                format!(
-                    "cannot drop type {name} because other objects depend on it\nDETAIL:  \
-                     type {} depends on type {name}",
+            return Err(ExecError::Remote(
+                crabka_pgwire::error::PgError::error(
+                    "2BP01",
+                    format!("cannot drop type {name} because other objects depend on it"),
+                )
+                .with_detail(format!(
+                    "type {} depends on type {name}",
                     dependent.qualified_name()
-                ),
-            )));
+                ))
+                .with_hint("Use DROP ... CASCADE to drop the dependent objects too."),
+            ));
         }
         // A routine that names the type in its signature, and a cast that names
         // it at either end, both depend on it. Leaving either behind would be
@@ -1814,7 +2044,7 @@ fn value_scope(base: ColumnType) -> crate::scope::Scope {
 mod tests {
     use assert2::assert;
     use crabka_pgkv::MemKv;
-    use crabka_pgparser::ast::RelationRef;
+    use crabka_pgparser::ast::{RelationRef, Statement};
 
     use super::*;
 
@@ -1890,6 +2120,30 @@ mod tests {
                 "widget_out"
             )
             .is_none()
+        );
+    }
+
+    #[test]
+    fn range_subtype_diff_requires_the_subtype_signature() {
+        let statements = crabka_pgparser::parse(
+            "CREATE TYPE bogus_float8range AS RANGE (subtype = float8, subtype_diff = float4mi)",
+        )
+        .expect("parse");
+        let [Statement::CreateType { name, definition }] = statements.as_slice() else {
+            panic!("expected CREATE TYPE")
+        };
+        let error = create_type(
+            &MemKv::default(),
+            crate::relname::ResolutionScope::default_scope(),
+            &RelationName::public(&name.name),
+            definition,
+        )
+        .expect_err("float4mi has no float8 signature")
+        .into_pg();
+
+        assert!(error.code == "42883");
+        assert!(
+            error.message == "function float4mi(double precision, double precision) does not exist"
         );
     }
 
@@ -2063,6 +2317,7 @@ mod tests {
                 subtype: ColumnType::Text,
                 collation: None,
                 multirange_type_name: Some(RelationRef::bare("named_multirange_test")),
+                subtype_diff: None,
             },
         )
         .expect("explicit companion");
@@ -2083,6 +2338,7 @@ mod tests {
                 subtype: ColumnType::Text,
                 collation: None,
                 multirange_type_name: Some(RelationRef::bare("named_multirange_test")),
+                subtype_diff: None,
             },
         )
         .expect_err("existing companion collision");
@@ -2099,6 +2355,7 @@ mod tests {
                     schema: Some("pg_catalog".into()),
                     name: "int4".into(),
                 }),
+                subtype_diff: None,
             },
         )
         .expect_err("exact pg_catalog type collision");
@@ -2114,6 +2371,7 @@ mod tests {
             UserTypeBody::Composite(vec![CompositeField {
                 name: "value".into(),
                 ty: ColumnType::Int4,
+                dropped: false,
             }]),
         )
         .expect("composite");
@@ -2136,6 +2394,30 @@ mod tests {
         hydrate(&kv).expect("publish range");
 
         let composite_name = RelationName::new(&composite.schema, &composite.name);
+        let error = drop_types(
+            &kv,
+            std::slice::from_ref(&composite_name),
+            false,
+            false,
+            false,
+        )
+        .expect_err("dependent range rejects a non-cascade drop")
+        .into_pg();
+        assert!(error.code == "2BP01");
+        assert!(
+            error
+                .diagnostics
+                .as_ref()
+                .and_then(|fields| fields.detail.as_deref())
+                == Some("type cascade_composite_range_test depends on type cascade_composite_test")
+        );
+        assert!(
+            error
+                .diagnostics
+                .as_ref()
+                .and_then(|fields| fields.hint.as_deref())
+                == Some("Use DROP ... CASCADE to drop the dependent objects too.")
+        );
         let before = crabka_pgcatalog::list_user_types(&kv).expect("types before drop");
         let (_, drop_ops) = drop_types(
             &kv,
@@ -2184,13 +2466,16 @@ mod tests {
         let error = alter_type(
             &kv,
             &RelationName::new(&composite.schema, &composite.name),
-            &AlterTypeAction::AddAttribute(CompositeFieldDef {
-                name: "recursive".into(),
-                ty: range
-                    .column_type()
-                    .expect("a range always has a column type"),
-                collation: None,
-            }),
+            &AlterTypeAction::AddAttribute {
+                field: CompositeFieldDef {
+                    name: "recursive".into(),
+                    ty: range
+                        .column_type()
+                        .expect("a range always has a column type"),
+                    collation: None,
+                },
+                cascade: false,
+            },
         )
         .expect_err("recursive member");
         assert!(error.into_pg().code == "42P16");

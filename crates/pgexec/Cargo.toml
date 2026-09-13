@@ -50,6 +50,7 @@ unicode-normalization = { workspace = true }
 unicode-general-category = { workspace = true }
 encoding_rs = { workspace = true }
 zstd = { workspace = true }
+libm = "0.2.16"
 
 [dev-dependencies]
 assert2 = { workspace = true }

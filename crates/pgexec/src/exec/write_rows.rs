@@ -3,7 +3,8 @@
 use super::*;
 
 /// Resolve INSERT target column indices: explicit `(cols...)` mapped to their
-/// catalog positions (42703 on miss), or all columns in declared order.
+/// catalog positions (42703 on miss), or every visible column in declared
+/// order.
 pub(super) fn resolve_targets(
     t: &Table,
     columns: &Option<Vec<String>>,
@@ -24,7 +25,12 @@ pub(super) fn resolve_targets(
                 })
                 .collect::<Result<_, _>>()
         }
-        None => Ok((0..t.columns.len()).collect()),
+        None => Ok(t
+            .columns
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, column)| (!column.dropped).then_some(slot))
+            .collect()),
     }
 }
 
@@ -168,7 +174,7 @@ pub(super) fn unsupplied_defaults(
         .iter()
         .zip(supplied)
         .map(|(column, supplied)| {
-            if supplied {
+            if supplied || column.dropped {
                 Ok(Datum::Null)
             } else {
                 default_value(column, ctx)
@@ -243,6 +249,7 @@ pub(super) fn build_insert_row_with_subscripts(
         row[*slot] = assign_target_indirections(
             &row[*slot],
             table.columns[*slot].ty,
+            Some(&table.columns[*slot].name),
             indirections,
             &value,
             &Scope::empty(),
@@ -410,7 +417,9 @@ pub(crate) fn finish_written_row(
         std::borrow::Cow::Borrowed(&*row)
     };
     for (column, value) in table.columns.iter().zip(checked.iter()) {
-        crate::usertype::check_domain(column.ty, value, ctx)?;
+        if !column.dropped {
+            crate::usertype::check_domain(column.ty, value, ctx)?;
+        }
     }
     enforce_not_null(table, &checked, ctx)?;
     if table.checks.is_empty() {
@@ -426,7 +435,7 @@ pub(super) fn enforce_not_null(
     ctx: &crate::clock::EvalCtx,
 ) -> Result<(), ExecError> {
     for (column, value) in table.columns.iter().zip(row.iter()) {
-        if column.not_null && value.is_null() {
+        if !column.dropped && column.not_null && value.is_null() {
             return Err(ExecError::NotNullViolation {
                 column: column.name.clone(),
                 // Unqualified whatever schema the relation is in and whatever

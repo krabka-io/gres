@@ -39,6 +39,8 @@ pub(super) fn build_table_expr(
             right,
             kind,
             constraint,
+            alias,
+            columns,
         } => {
             if let Some(relation) =
                 try_distributed_inner_equi_join(read_ctx, left, right, *kind, constraint)?
@@ -64,7 +66,7 @@ pub(super) fn build_table_expr(
             let l = build_table_expr(read_ctx, left, None, None, nested_filter)?;
             // A lateral right side sees the left side's columns, so it is rebuilt
             // per left row instead of materialized once.
-            append_from_item(
+            let relation = append_from_item(
                 read_ctx,
                 l,
                 right,
@@ -74,7 +76,12 @@ pub(super) fn build_table_expr(
                 None,
                 security_free_from_item(read_ctx, left),
                 security_free_from_item(read_ctx, right),
-            )
+            )?;
+            if let Some(alias) = alias {
+                crate::values::requalify_join(relation, alias, columns)
+            } else {
+                Ok(relation)
+            }
         }
         TableExpr::Derived {
             subquery,
@@ -590,6 +597,32 @@ pub(super) fn try_scan_with_local_index(
         )
         .map(Some);
     }
+    if !crate::session::guc_enabled_runtime("enable_seqscan")
+        && crate::session::guc_enabled_runtime("enable_indexscan")
+        && let Some(index) =
+            choose_local_forced_ordered_index(read_ctx.catalog_kv, table, &plan.predicate)?
+        && let Some(rows) = lookup_local_index_ordered(
+            &MvccReadContext {
+                kv: read_ctx.kv,
+                global: read_ctx.global,
+                global_snapshot: read_ctx.gsnap,
+                snapshot: read_ctx.snapshot,
+                own: read_ctx.own,
+                command_id: read_ctx.command_id,
+            },
+            table,
+            &index,
+        )?
+    {
+        return crate::scanner::apply_executable_scan_pushdown(
+            rows,
+            &plan.predicate,
+            &plan.projection,
+            None,
+            None,
+        )
+        .map(Some);
+    }
     if let Some(predicate) = &plan.text_search
         && let Some(path) = choose_local_text_search_path(
             read_ctx.catalog_kv,
@@ -661,6 +694,32 @@ fn choose_local_ordered_index(
                         .all(|((column, option), order)| {
                             table.column_index(column) == Some(order.column)
                                 && option.descending != order.asc
+                        })
+            }),
+    )
+}
+
+fn choose_local_forced_ordered_index(
+    catalog_kv: &dyn Kv,
+    table: &Table,
+    predicate: &PredicatePushdown,
+) -> Result<Option<crabka_pgcatalog::Index>, ExecError> {
+    let PredicatePushdown::Conjunctive(predicates) = predicate else {
+        return Ok(None);
+    };
+    Ok(
+        crabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)?
+            .into_iter()
+            .find(|index| {
+                local_index_supports_ordered_scan(table, index)
+                    && index
+                        .columns
+                        .first()
+                        .and_then(|column| table.column_index(column))
+                        .is_some_and(|column| {
+                            predicates
+                                .iter()
+                                .any(|predicate| predicate.column == column)
                         })
             }),
     )

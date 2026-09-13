@@ -1351,6 +1351,8 @@ fn join_text(item: &TableExpr, ctx: Ctx<'_>) -> String {
         right,
         kind,
         constraint,
+        alias,
+        columns,
     } = item
     else {
         return from_text(item, ctx);
@@ -1383,12 +1385,27 @@ fn join_text(item: &TableExpr, ctx: Ctx<'_>) -> String {
         JoinConstraint::Natural | JoinConstraint::None => String::new(),
     };
     let natural = matches!(constraint, JoinConstraint::Natural);
-    format!(
+    let text = format!(
         "{left}{} {}{keyword} {}{tail}",
         clause_break(ctx.indent.saturating_sub(INDENT_STEP), 4),
         if natural { "NATURAL " } else { "" },
         from_text(right, ctx)
-    )
+    );
+    if let Some(alias) = alias {
+        let columns = columns.as_ref().map_or(String::new(), |columns| {
+            format!(
+                " ({})",
+                columns
+                    .iter()
+                    .map(|column| quote_identifier(column))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        });
+        format!("{text} AS {}{columns}", quote_identifier(alias))
+    } else {
+        text
+    }
 }
 
 // ------------------------------------------------------- expression rendering

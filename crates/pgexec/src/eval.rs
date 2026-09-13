@@ -710,8 +710,13 @@ fn eval_depth_inner(
         Expr::Cast { expr, ty } => {
             // `ARRAY[]::int[]`: the cast supplies the element type the empty
             // constructor cannot infer, so it never reaches the operand eval.
-            if let Some(empty) = empty_array_cast(expr, *ty) {
+            if let Some(empty) = empty_array_cast(expr, *ty)? {
                 return Ok(empty);
+            }
+            if let (Expr::ArrayLiteral(items), ColumnType::Array(elem)) = (expr.as_ref(), ty) {
+                return eval_array_constructor_with_elem(items, *elem, ctx, &mut |item| {
+                    eval_depth(item, scope, values, ctx, d)
+                });
             }
             let v = eval_depth(expr, scope, values, ctx, d)?;
             // `character → text`/`varchar` (and `name`, which shares `Text`
@@ -1577,7 +1582,7 @@ fn apply_pow(l: &Datum, r: &Datum) -> Result<Datum, ExecError> {
             "zero raised to a negative power is undefined",
         ));
     }
-    if base < 0.0 && exp.fract() != 0.0 {
+    if base < 0.0 && exp.is_finite() && exp.fract() != 0.0 {
         return Err(domain_error(
             "2201F",
             "a negative number raised to a non-integer power yields a complex result",
@@ -1585,7 +1590,7 @@ fn apply_pow(l: &Datum, r: &Datum) -> Result<Datum, ExecError> {
     }
     let result = base.powf(exp);
     if result.is_infinite() && base.is_finite() && exp.is_finite() {
-        return Err(ExecError::Type(TypeError::Overflow));
+        return Err(ExecError::Type(TypeError::float_overflow()));
     }
     Ok(Datum::Float8(result))
 }
@@ -1682,6 +1687,23 @@ pub(crate) fn apply_binary_of(
     };
     let (ol, or) = (oidvector(left, l)?, oidvector(right, r)?);
     let (l, r) = (ol.as_ref().unwrap_or(l), or.as_ref().unwrap_or(r));
+    // A stored float8 may be represented by a numeric Datum. `^` still uses
+    // the float8 operator whenever either resolved operand is float8.
+    if op == BinaryOp::Pow
+        && (infer_type(left, scope)? == ColumnType::Float8
+            || infer_type(right, scope)? == ColumnType::Float8)
+    {
+        let as_float8 = |expr: &Expr, value: &Datum| -> Result<Datum, ExecError> {
+            if matches!(expr, Expr::StringLiteral(_)) && matches!(value, Datum::Text(_)) {
+                return cast_value(value, ColumnType::Float8, &ctx.time_zone);
+            }
+            Ok(to_f64(value)
+                .map(Datum::Float8)
+                .unwrap_or_else(|| value.clone()))
+        };
+        let (l, r) = (as_float8(left, l)?, as_float8(right, r)?);
+        return apply_binary(op, &l, &r, ctx);
+    }
     let (lc, rc) = coerce_untyped_literal_operands(op, left, right, l, r, ctx)?;
     let (l, r) = (lc.as_ref().unwrap_or(l), rc.as_ref().unwrap_or(r));
     if op == BinaryOp::Concat {
@@ -1758,6 +1780,9 @@ fn coerce_untyped_literal_operands(
                 | BinaryOp::Le
                 | BinaryOp::Gt
                 | BinaryOp::Ge => other.column_type(),
+                BinaryOp::Mul | BinaryOp::Div if matches!(other, Datum::Interval(_)) => {
+                    Some(ColumnType::Float8)
+                }
                 _ => None,
             };
         }
@@ -4415,7 +4440,7 @@ fn is_collatable(ty: ColumnType) -> bool {
 pub(crate) fn select_field(value: &Datum, field: &str) -> Result<Datum, ExecError> {
     match value {
         Datum::Null => Ok(Datum::Null),
-        Datum::Record(record) => record.field(field).cloned().ok_or_else(|| {
+        Datum::Record(record) => record.field_value(field).ok_or_else(|| {
             ExecError::UndefinedColumn(format!(
                 "column \"{field}\" not found in data type {}",
                 record.column_type().name()
@@ -4455,7 +4480,7 @@ fn field_type(base: ColumnType, field: &str) -> Result<ColumnType, ExecError> {
     ty.fields()
         .unwrap_or(&[])
         .iter()
-        .find(|attribute| attribute.name == field)
+        .find(|attribute| !attribute.dropped && attribute.name == field)
         .map(|attribute| attribute.ty)
         .ok_or_else(|| {
             ExecError::UndefinedColumn(format!(
@@ -4680,7 +4705,7 @@ pub(crate) fn infer_type(expr: &Expr, scope: &Scope) -> Result<ColumnType, ExecE
             // `ARRAY[]::int[]`: the empty constructor has no element type of its
             // own — the cast supplies it (PostgreSQL pushes the type context down
             // into the constructor), so the operand is not inferred at all.
-            if empty_array_cast(expr, *ty).is_some() {
+            if empty_array_cast(expr, *ty)?.is_some() {
                 return Ok(*ty);
             }
             let from = infer_type(expr, scope)?;
@@ -5400,7 +5425,11 @@ pub(crate) fn array_literal_elem_type(
     scope: &Scope,
 ) -> Result<ElemType, ExecError> {
     if items.is_empty() {
-        return Err(indeterminate_type("cannot determine type of empty array"));
+        return Err(ExecError::Type(TypeError::CodedWithHint {
+            sqlstate: "42P18",
+            message: "cannot determine type of empty array".into(),
+            hint: "Explicitly cast to the desired type, for example ARRAY[]::integer[].",
+        }));
     }
     let mut acc: Option<ColumnType> = None;
     for item in items {
@@ -5444,6 +5473,31 @@ fn eval_array_constructor(
             Expr::ArrayLiteral(_) => value,
             _ => cast_value(&value, target, &ctx.time_zone)?,
         });
+    }
+    array_fn::build_constructor(elem, parts)
+}
+
+/// `ARRAY[…]::element[]` evaluates every element in the target element's type
+/// context. This matters for unknown literals such as `'NaN'::float8`.
+pub(crate) fn eval_array_constructor_with_elem(
+    items: &[Expr],
+    elem: ElemType,
+    ctx: &EvalCtx,
+    eval_child: &mut impl FnMut(&Expr) -> Result<Datum, ExecError>,
+) -> Result<Datum, ExecError> {
+    let target = elem.column_type();
+    let mut parts = Vec::with_capacity(items.len());
+    for item in items {
+        let value = match item {
+            Expr::ArrayLiteral(inner) => {
+                eval_array_constructor_with_elem(inner, elem, ctx, eval_child)?
+            }
+            _ => {
+                let value = eval_child(item)?;
+                cast_operand(&value, target, ctx)?
+            }
+        };
+        parts.push(value);
     }
     array_fn::build_constructor(elem, parts)
 }
@@ -5650,18 +5704,21 @@ fn eval_jsonb_subscript_chain(
 /// PostgreSQL pushes the cast's type context down into the constructor. This
 /// function returns the typed empty array when `expr`/`ty` are exactly that
 /// shape.
-pub(crate) fn empty_array_cast(expr: &Expr, ty: ColumnType) -> Option<Datum> {
+pub(crate) fn empty_array_cast(expr: &Expr, ty: ColumnType) -> Result<Option<Datum>, ExecError> {
     match (expr, ty.array_element()) {
-        (Expr::ArrayLiteral(items), Some(elem)) if items.is_empty() => {
-            Some(Datum::Array(ArrayValue::new(elem, Vec::new())))
+        (Expr::ArrayLiteral(items), _)
+            if items.is_empty() && matches!(ty, ColumnType::OidVector | ColumnType::Int2Vector) =>
+        {
+            Err(ExecError::TypeMismatch(format!(
+                "array is not a valid {}",
+                ty.name()
+            )))
         }
-        _ => None,
+        (Expr::ArrayLiteral(items), Some(elem)) if items.is_empty() => {
+            Ok(Some(Datum::Array(ArrayValue::new(elem, Vec::new()))))
+        }
+        _ => Ok(None),
     }
-}
-
-/// 42P18 (`indeterminate_datatype`).
-fn indeterminate_type(message: &str) -> ExecError {
-    ExecError::IndeterminateType(message.to_string())
 }
 
 /// Infer a `CASE`'s result type by unifying every THEN result and the ELSE. A
@@ -7293,6 +7350,19 @@ mod tests {
         }
     }
 
+    #[test]
+    fn empty_array_constructor_suggests_an_explicit_cast() {
+        let error = array_literal_elem_type(&[], &Scope::empty())
+            .expect_err("ARRAY[] needs a type")
+            .into_pg();
+        assert2::assert!(error.code == "42P18");
+        assert2::assert!(error.message == "cannot determine type of empty array");
+        assert2::assert!(
+            error.diagnostics.as_ref().and_then(|d| d.hint.as_deref())
+                == Some("Explicitly cast to the desired type, for example ARRAY[]::integer[].")
+        );
+    }
+
     /// Operand combinations no operator resolves are 42883 at PLAN time.
     #[test]
     fn unresolvable_operator_operands_are_42883() {
@@ -7729,6 +7799,16 @@ mod tests {
             eval_jt("ARRAY[]::int[]").expect("eval")
                 == Datum::Array(ArrayValue::new(ElemType::Int4, Vec::new()))
         );
+        for ty in ["oidvector", "int2vector"] {
+            let error = eval_jt(&format!("ARRAY[]::{ty}"))
+                .expect_err("vector rejects a general array")
+                .into_pg();
+            assert2::assert!(error.code == "42804", "{ty}");
+            assert2::assert!(
+                error.message == format!("array is not a valid {ty}"),
+                "{ty}"
+            );
+        }
         // A bare string is `unknown` and adopts int4 from the typed element.
         assert2::assert!(
             infer_jt("ARRAY[1, 'x']").expect("infer") == ColumnType::Array(ElemType::Int4)
@@ -7947,11 +8027,53 @@ mod tests {
         }
         // A numeric operand selects the exact numeric `^`.
         assert!(matches!(ev("5.0 ^ 2", None, &[]), Datum::Numeric(_)));
+        assert!(matches!(
+            ev("-1::float8 ^ 'NaN'::float8", None, &[]),
+            Datum::Float8(value) if value.is_nan()
+        ));
+        assert_eq!(
+            ev("-1::float8 ^ 'Infinity'::float8", None, &[]),
+            Datum::Float8(1.0)
+        );
+        assert_eq!(err_code("2::float8 ^ '1e200'", None, &[]), "22003");
+        let mut float_table = table();
+        float_table.columns[0] = Column::new("a", ColumnType::Float8);
+        assert_eq!(
+            ev(
+                "a ^ '2.5'",
+                Some(&float_table),
+                &[Datum::Numeric(
+                    crabka_pgtypes::numeric::parse("4").expect("numeric")
+                )],
+            ),
+            Datum::Float8(32.0)
+        );
         // Domain errors are 2201F; `% 0` is 22012; float8 has no `%` at all.
         assert!(err_code("0 ^ -1", None, &[]) == "2201F");
         assert!(err_code("(-2) ^ 0.5", None, &[]) == "2201F");
         assert!(err_code("5 % 0", None, &[]) == "22012");
         assert!(infer_err("1.5::float8 % 2").into_pg().code == "42883");
+    }
+
+    #[tokio::test]
+    async fn float8_column_power_coerces_an_unknown_exponent_before_evaluation() {
+        use crabka_pgwire::engine::{Engine, Session};
+
+        let engine = crate::SqlEngine::new();
+        let mut session = engine.connect();
+        session
+            .simple_query(
+                "CREATE TEMP TABLE float_power (f1 float8); INSERT INTO float_power VALUES (2)",
+            )
+            .await
+            .expect("fixture");
+        let error = session
+            .simple_query("SELECT f.f1 ^ '1e200' FROM float_power f")
+            .await
+            .expect_err("float8 power overflows");
+
+        assert_eq!(error.code, "22003");
+        assert_eq!(error.message, "value out of range: overflow");
     }
 
     #[test]

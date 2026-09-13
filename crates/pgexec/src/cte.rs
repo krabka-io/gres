@@ -1007,6 +1007,7 @@ fn scan_table_expr(
             right,
             kind,
             constraint,
+            ..
         } => {
             // Only a side that an outer join can NULL-extend is forbidden; the
             // preserved side of a LEFT/RIGHT join is fine.

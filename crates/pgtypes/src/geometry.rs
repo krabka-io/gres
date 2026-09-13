@@ -2283,6 +2283,9 @@ impl Polygon {
     /// crossing. A point *on* an edge counts as contained. O(n).
     #[must_use]
     pub fn contains_point(&self, point: Point) -> bool {
+        if point.x.is_nan() || point.y.is_nan() {
+            return false;
+        }
         point_inside(point, &self.points) != 0
     }
 
@@ -2290,6 +2293,9 @@ impl Polygon {
     /// distance to any edge. O(n).
     #[must_use]
     pub fn distance_to_point(&self, point: Point) -> f64 {
+        if point.x.is_nan() || point.y.is_nan() {
+            return 0.0;
+        }
         if self.contains_point(point) {
             return 0.0;
         }
@@ -3286,7 +3292,7 @@ mod tests {
         use assert2::assert;
 
         let far = point("(5.1,34.5)");
-        let cases: [(&str, f64, f64); 16] = [
+        let cases: [(&str, f64, f64); 17] = [
             (
                 "point-point",
                 far.distance(point("(-5,-12)")),
@@ -3322,6 +3328,11 @@ mod tests {
                 "point-polygon",
                 polygon("((2,0),(2,4),(0,0))").distance_to_point(far),
                 30.657_136_200_238_924,
+            ),
+            (
+                "nan-point-polygon",
+                polygon("((2,0),(2,4),(0,0))").distance_to_point(point("(NaN,NaN)")),
+                0.0,
             ),
             (
                 "lseg-lseg",
@@ -3522,6 +3533,11 @@ mod tests {
             (
                 "point out of polygon",
                 square.contains_point(point("(11,5)")),
+                false,
+            ),
+            (
+                "NaN point is outside polygon",
+                square.contains_point(point("(NaN,NaN)")),
                 false,
             ),
             (

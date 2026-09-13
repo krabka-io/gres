@@ -254,6 +254,34 @@ pub(crate) fn select_to_relation_with_ctes(
             &read_ctx.statement_memory,
         )?
     };
+    // The general SELECT path owns set-returning projection evaluation. Retain
+    // its two-node shape for EXPLAIN ANALYZE, just as the planned paths do.
+    if s.from.is_empty() && crate::srf::projection_contains_srf(&s.projection) {
+        let result = crate::plan::query::Plan {
+            target_list: Vec::new(),
+            quals: Vec::new(),
+            node: crate::plan::query::PlanNode::Result,
+        };
+        let mut state = crate::plan::query::PlanState::new(
+            crate::plan::query::Plan {
+                target_list: Vec::new(),
+                quals: Vec::new(),
+                node: crate::plan::query::PlanNode::ProjectSet {
+                    input: Box::new(result.clone()),
+                },
+            },
+            out_scope.clone(),
+        );
+        state.begin_loop();
+        for _ in &rows {
+            state.emit_row();
+        }
+        let mut input = crate::plan::query::PlanState::new(result, Scope::empty());
+        input.begin_loop();
+        input.emit_row();
+        state.children.push(input);
+        read_ctx.record_plan_state(state);
+    }
     Ok(Relation {
         scope: out_scope,
         rows,

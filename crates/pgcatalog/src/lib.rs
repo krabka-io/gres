@@ -173,6 +173,9 @@ pub struct GeneratedColumn {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Column {
     pub name: String,
+    /// `pg_attribute.attisdropped`. The physical slot remains in every stored
+    /// row so later columns retain their attribute numbers.
+    pub dropped: bool,
     pub ty: ColumnType,
     /// A user-defined base type's packed `typmodin` result, when explicitly set.
     pub typmod: Option<i32>,
@@ -204,6 +207,7 @@ impl Column {
     pub fn new(name: impl Into<String>, ty: ColumnType) -> Self {
         Self {
             name: name.into(),
+            dropped: false,
             ty,
             typmod: None,
             not_null: false,
@@ -992,7 +996,9 @@ impl Table {
     /// Zero-based ordinal of a column by name, or None.
     #[must_use]
     pub fn column_index(&self, name: &str) -> Option<usize> {
-        self.columns.iter().position(|c| c.name == name)
+        self.columns
+            .iter()
+            .position(|c| !c.dropped && c.name == name)
     }
 }
 
@@ -9200,6 +9206,7 @@ mod tests {
         let columns = vec![
             Column {
                 name: "id".into(),
+                dropped: false,
                 ty: ColumnType::Int4,
                 typmod: None,
                 not_null: true,
@@ -9213,6 +9220,7 @@ mod tests {
             },
             Column {
                 name: "doubled".into(),
+                dropped: false,
                 ty: ColumnType::Int4,
                 typmod: None,
                 not_null: false,

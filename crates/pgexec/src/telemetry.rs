@@ -333,12 +333,12 @@ pub fn statement_relation(stmt: &Statement) -> Option<&RelationRef> {
         | Statement::CreateTableAs { name, .. }
         | Statement::CreateView { name, .. }
         | Statement::DropView { name, .. }
-        | Statement::DropIndex { name, .. }
         | Statement::CreateForeignTable { name, .. }
         | Statement::CreateType { name, .. }
         | Statement::AlterType { name, .. }
         | Statement::CreateDomain { name, .. }
         | Statement::AlterDomain { name, .. } => Some(name),
+        Statement::DropIndex { names, .. } => names.first(),
         Statement::DropForeignTable { names, .. } => names.first(),
         Statement::Truncate { targets, .. } => targets.first().map(|t| &t.name),
         Statement::DropTable { names, .. }

@@ -137,6 +137,21 @@ pub(crate) fn requalify_derived(
     Ok(rel)
 }
 
+/// Alias a joined relation while keeping its hidden USING/NATURAL inputs hidden.
+pub(crate) fn requalify_join(
+    mut rel: crate::join::Relation,
+    alias: &str,
+    columns: &Option<Vec<String>>,
+) -> Result<crate::join::Relation, ExecError> {
+    rel = requalify_derived(rel, alias, columns)?;
+    for column in &mut rel.scope.columns {
+        if column.is_join_input() {
+            column.qualifier = None;
+        }
+    }
+    Ok(rel)
+}
+
 fn scope_from_schema(schema: &ValuesSchema, qualifier: Option<&str>) -> Scope {
     Scope {
         columns: schema
