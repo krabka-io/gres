@@ -466,6 +466,13 @@ impl UserType {
         }
     }
 
+    /// The composite attributes SQL exposes by name, preserving the storage
+    /// list separately for callers that need stable physical positions.
+    pub fn visible_fields(&self) -> Option<impl Iterator<Item = &CompositeField>> {
+        self.fields()
+            .map(|fields| fields.iter().filter(|field| !field.dropped))
+    }
+
     /// The enum's labels in sort order, or `None` when this is not an enum.
     #[must_use]
     pub fn labels(&self) -> Option<&[String]> {
