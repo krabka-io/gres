@@ -3200,7 +3200,7 @@ fn eval_eager(
                     .map(Datum::Numeric)
                     .map_err(ExecError::Type);
             }
-            finite_or_overflow(as_f64(&vals[0])?.exp())
+            exp(as_f64(&vals[0])?)
         }
         ScalarFunc::Erf => {
             require_arity(fc, vals.len() == 1)?;
@@ -5499,14 +5499,14 @@ pub(crate) fn domain(sqlstate: &'static str, message: &'static str) -> ExecError
     ExecError::Type(crabka_pgtypes::TypeError::Domain { sqlstate, message })
 }
 
-/// Wrap an f64 result and map an overflow to infinity onto 22003. This matches
-/// the engine's float8 arithmetic, which treats a finite-to-infinite overflow as
-/// out of range.
-fn finite_or_overflow(x: f64) -> Result<Datum, ExecError> {
-    if x.is_infinite() {
-        Err(ExecError::Type(crabka_pgtypes::TypeError::Overflow))
+fn exp(x: f64) -> Result<Datum, ExecError> {
+    let value = x.exp();
+    if value.is_infinite() && x.is_finite() {
+        Err(ExecError::Type(crabka_pgtypes::TypeError::float_overflow()))
+    } else if value == 0.0 && x.is_finite() {
+        Err(ExecError::Type(crabka_pgtypes::TypeError::float_underflow()))
     } else {
-        Ok(Datum::Float8(x))
+        Ok(Datum::Float8(value))
     }
 }
 
@@ -6845,6 +6845,10 @@ mod tests {
         assert_eq!(ec_eval("ln(0)"), "2201E");
         assert_eq!(ec_eval("ln(-1)"), "2201E");
         assert_eq!(ec_eval("log(0)"), "2201E");
+        assert_eq!(ec_eval("exp(1000::float8)"), "22003");
+        assert_eq!(ec_eval("exp(-1000::float8)"), "22003");
+        assert_eq!(ev("exp('Infinity'::float8)"), Datum::Float8(f64::INFINITY));
+        assert_eq!(ev("exp('-Infinity'::float8)"), Datum::Float8(0.0));
         // zero to a negative power → 2201F
         assert_eq!(ec_eval("power(0, -1)"), "2201F");
         // wrong arity → 42883
