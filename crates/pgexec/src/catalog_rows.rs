@@ -2798,7 +2798,10 @@ pub(crate) fn user_type_rows(
                     typbasetype: 0,
                     typcollation: 0,
                     domain_base: None,
-                    range_align: None,
+                    range_align: ty.range().map(|range| match range.subtype.type_size() {
+                        8 => "d",
+                        _ => "i",
+                    }),
                 },
                 &proc_oids,
                 true,
@@ -5935,6 +5938,29 @@ mod tests {
         assert!(scalar[14] == Datum::Oid(array_oid));
         assert!(array[4] == Datum::Int2(-1));
         assert!(array[13] == Datum::Oid(multirange.oid()));
+    }
+
+    #[test]
+    fn float8_range_array_uses_double_alignment() {
+        let kv = MemKv::default();
+        let (range, ops) = crabka_pgcatalog::create_user_type_ops(
+            &kv,
+            &RelationName::public("catalog_float8range"),
+            UserTypeBody::Range(RangeBody {
+                subtype: ColumnType::Float8,
+                collation: None,
+                multirange_schema: None,
+                multirange_name: None,
+            }),
+        )
+        .expect("create range operations");
+        kv.write_batch(&ops).expect("store range");
+        let rows = user_type_rows(&kv, &BTreeMap::new()).expect("user type rows");
+        let array = rows
+            .iter()
+            .find(|row| row[0] == Datum::Oid(range.array_oid))
+            .expect("range array pg_type row");
+        assert_eq!(array[22], Datum::InternalChar(b'd'));
     }
 
     #[test]
