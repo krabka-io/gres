@@ -9989,6 +9989,15 @@ impl SqlSession {
 
     async fn end_block_commit(&mut self) -> Result<QueryResult, ExecError> {
         // `WITH HOLD` cursors are the one thing that survives a commit.
+        let held_cursors: Vec<_> = self
+            .cursors
+            .iter()
+            .filter(|(_, cursor)| cursor.hold && cursor.rows.is_none())
+            .map(|(name, _)| name.clone())
+            .collect();
+        for name in held_cursors {
+            Box::pin(self.materialize_cursor(&name)).await?;
+        }
         self.finish_transaction_scoped_state(true);
         match std::mem::replace(&mut self.state, TxnState::Idle) {
             TxnState::InTransaction(ctx) => self.commit_open_block(ctx).await,
@@ -24103,6 +24112,33 @@ mod tests {
         assert!(sqlstate(&mut s, "FETCH ABSOLUTE 2 FROM n").await == "55000");
         assert!(sqlstate(&mut s, "FETCH ALL FROM p").await == "34000");
         s.simple_query("CLOSE h").await.expect("close");
+    }
+
+    #[tokio::test]
+    async fn a_with_hold_cursor_materializes_before_commit() {
+        use assert2::assert;
+
+        let engine = SqlEngine::new();
+        let mut s = engine.connect();
+        s.simple_query("CREATE TABLE t (id int4)")
+            .await
+            .expect("ddl");
+        s.simple_query("BEGIN").await.expect("begin");
+        s.simple_query("INSERT INTO t VALUES (1)")
+            .await
+            .expect("seed");
+        s.simple_query("DECLARE h CURSOR WITH HOLD FOR SELECT id FROM t ORDER BY id")
+            .await
+            .expect("declare");
+        s.simple_query("INSERT INTO t VALUES (2)")
+            .await
+            .expect("later insert");
+        s.simple_query("COMMIT").await.expect("commit");
+        s.simple_query("DELETE FROM t").await.expect("delete");
+        assert!(
+            rows_or_sqlstate(&mut s, "FETCH ALL FROM h").await
+                == Ok(vec![vec!["1".into()], vec!["2".into()]])
+        );
     }
 
     #[tokio::test]
