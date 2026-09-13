@@ -18700,7 +18700,6 @@ fn attach_type_input_literal_position(sql: &str, error: PgError) -> PgError {
             | "22009"
             | "22015"
             | "22P05"
-            | "42601"
             | "54000"
             | "55P04"
     ) || error
