@@ -1631,7 +1631,7 @@ pub(crate) fn attribute_rows_for_table(
                         .copied()
                         .unwrap_or(b'\0'),
                 ),
-                Datum::Bool(false),
+                Datum::Bool(column.dropped),
                 Datum::Bool(true),
                 Datum::Int2(0),
                 int(column_collation_oid(column)),

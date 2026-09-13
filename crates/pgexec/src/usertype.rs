@@ -1025,14 +1025,34 @@ fn alter_type_inner(
                         .with_hint("Use ALTER TYPE ... CASCADE to alter the typed tables too."),
                     ));
                 }
-                return Err(ExecError::Unsupported(
-                    "ALTER TYPE DROP ATTRIBUTE CASCADE needs dropped-column placeholders for typed tables"
-                        .into(),
-                ));
             }
             let field = &mut fields[index];
             field.name = format!("........pg.dropped.{}........", index + 1);
             field.dropped = true;
+            if !tables.is_empty() {
+                let Some(fctx) = fctx else {
+                    return Err(ExecError::Unsupported(
+                        "ALTER TYPE DROP ATTRIBUTE needs a session context for typed tables".into(),
+                    ));
+                };
+                let action = crabka_pgparser::ast::AlterTableAction::DropColumn {
+                    column: attribute.clone(),
+                    if_exists: false,
+                    cascade: true,
+                };
+                let mut ops = crabka_pgcatalog::put_user_type_ops(kv, &ty)?;
+                for table in tables {
+                    let mut state =
+                        crate::exec::ddl_alter::AlterTableState::new(table, fctx.own_xid);
+                    crate::exec::ddl_alter::alter_table_action_ops(kv, &mut state, &action, fctx)?;
+                    ops.extend(crate::exec::ddl_alter::alter_table_state_ops(
+                        kv,
+                        &state.table.name.clone(),
+                        &mut state,
+                    )?);
+                }
+                return Ok((command("ALTER TYPE"), ops));
+            }
         }
         AlterTypeAction::Set(options) => {
             if ty.is_shell() {

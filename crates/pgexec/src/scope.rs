@@ -70,6 +70,9 @@ pub(crate) enum Exposure {
     /// whole-row `SELECT a`, `pg_attribute`-driven `\d`, and
     /// `information_schema.columns` all show only the user columns.
     SystemColumn,
+    /// A physical table slot removed by `ALTER TABLE ... DROP COLUMN`. It
+    /// remains in each stored row to preserve later attribute numbers.
+    Dropped,
 }
 
 /// The oid of the relation the row itself came from, which over an inheritance
@@ -1221,7 +1224,11 @@ impl Scope {
                     qualifier: Some(qualifier.to_string()),
                     name: c.name.clone(),
                     ty: c.ty,
-                    exposure: Exposure::Output,
+                    exposure: if c.dropped {
+                        Exposure::Dropped
+                    } else {
+                        Exposure::Output
+                    },
                 })
                 .collect(),
             row_types: BTreeMap::new(),
@@ -1434,7 +1441,8 @@ impl Scope {
         // offer the name it is 42702, exactly as an ambiguous user column is.
         let mut found: Option<usize> = None;
         for (i, c) in self.columns.iter().enumerate() {
-            if c.name == name
+            if c.exposure != Exposure::Dropped
+                && c.name == name
                 && match qualifier {
                     Some(q) => c.qualifier.as_deref() == Some(q),
                     None => !c.is_join_input() || c.exposure == Exposure::SystemColumn,
@@ -1522,15 +1530,15 @@ impl Scope {
         {
             return None;
         }
-        // A system column carries the relation's own qualifier but is not one of
-        // its columns: `SELECT t FROM t` over a two-column table is `(1,x)` in
-        // PostgreSQL, never `(1,x,16385)`.
+        // System and dropped columns carry the relation's own qualifier but
+        // are not columns of its whole-row value.
         let indices: Vec<usize> = self
             .columns
             .iter()
             .enumerate()
             .filter(|(_, c)| {
-                c.qualifier.as_deref() == Some(qualifier) && c.exposure != Exposure::SystemColumn
+                c.qualifier.as_deref() == Some(qualifier)
+                    && !matches!(c.exposure, Exposure::SystemColumn | Exposure::Dropped)
             })
             .map(|(i, _)| i)
             .collect();
@@ -1552,7 +1560,7 @@ impl Scope {
         self.whole_row(qualifier)?;
         self.columns.iter().find_map(|column| {
             (column.qualifier.as_deref() == Some(qualifier)
-                && column.exposure != Exposure::SystemColumn
+                && !matches!(column.exposure, Exposure::SystemColumn | Exposure::Dropped)
                 && column.name == field)
                 .then_some(column.ty)
         })
@@ -1597,6 +1605,11 @@ impl Scope {
         }
         let mut indices: Vec<usize> = Vec::new();
         let mut invented = false;
+        // A named relation record indexes its values by the catalog descriptor's
+        // physical attributes. Keep dropped slots in that representation even
+        // though they remain invisible to SQL; otherwise a live attribute after
+        // one would read the preceding value.
+        let preserves_physical_slots = self.row_types.contains_key(qualifier);
         for (i, c) in self.columns.iter().enumerate() {
             match c.exposure {
                 Exposure::LiveMarker => invented |= c.name == qualifier && values[i].is_null(),
@@ -1605,6 +1618,12 @@ impl Scope {
                 // per-statement one. `SELECT t, tableoid FROM t` is `(1,x)` and an
                 // oid beside it in `PostgreSQL`, never `(1,x,20001)`.
                 Exposure::SystemColumn => {}
+                Exposure::Dropped
+                    if preserves_physical_slots && c.qualifier.as_deref() == Some(qualifier) =>
+                {
+                    indices.push(i);
+                }
+                Exposure::Dropped => {}
                 Exposure::Output | Exposure::JoinInput { .. } => {
                     if c.qualifier.as_deref() == Some(qualifier) {
                         indices.push(i);
@@ -1837,6 +1856,38 @@ mod tests {
             vec![Datum::Int4(7)],
         ));
         assert!(s.refs_value("t", &row) == Some(expected));
+    }
+
+    #[test]
+    fn named_whole_rows_retain_dropped_physical_slots() {
+        let mut table = tbl(
+            "t",
+            &[
+                ("id", ColumnType::Int4),
+                ("old", ColumnType::Text),
+                ("n", ColumnType::Int4),
+            ],
+        );
+        table.columns[1].dropped = true;
+        let mut scope = Scope::single(&table, "t");
+        scope.set_row_type(
+            "t",
+            UserTypeRef {
+                oid: u32::MAX,
+                array_oid: u32::MAX - 1,
+                name: crabka_pgtypes::usertype::intern("scope_slot_test"),
+            },
+        );
+
+        assert!(scope.whole_row("t") == Some(vec![0, 2]));
+        let Some(Datum::Record(record)) = scope.refs_value(
+            "t",
+            &[Datum::Int4(1), Datum::Text("gone".into()), Datum::Int4(7)],
+        ) else {
+            panic!("whole row record");
+        };
+        assert!(record.names.as_ref() == ["id", "old", "n"]);
+        assert!(record.values == vec![Datum::Int4(1), Datum::Text("gone".into()), Datum::Int4(7)]);
     }
 
     #[test]

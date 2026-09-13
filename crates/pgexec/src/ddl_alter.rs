@@ -6182,7 +6182,13 @@ pub(crate) fn add_check_constraint(
     ctx: &crate::clock::EvalCtx,
 ) -> Result<(), ExecError> {
     validate_check_predicate(&state.table, predicate)?;
-    let column_names: Vec<String> = state.table.columns.iter().map(|c| c.name.clone()).collect();
+    let column_names: Vec<String> = state
+        .table
+        .columns
+        .iter()
+        .filter(|column| !column.dropped)
+        .map(|column| column.name.clone())
+        .collect();
     let default = default_check_name(&state.table.name, predicate, &column_names);
     // A generated name takes the lowest free numeric suffix, so only an
     // explicit `CONSTRAINT <name>` can collide here.
@@ -6703,11 +6709,6 @@ pub(crate) fn drop_table_column(
             }
         }
     }
-    for (_, _, _, _, _, row) in state.rows_mut(kv)? {
-        if index < row.len() {
-            row.remove(index);
-        }
-    }
     for foreign_key in state.current_foreign_keys(kv)? {
         if foreign_key.columns.iter().any(|name| name == column) {
             drop_foreign_key_constraint(kv, state, &foreign_key.name);
@@ -6729,8 +6730,19 @@ pub(crate) fn drop_table_column(
             )?;
         }
     }
-    state.table.columns.remove(index);
-    let column_names: Vec<String> = state.table.columns.iter().map(|c| c.name.clone()).collect();
+    state.table.columns[index].dropped = true;
+    state.table.columns[index].name = format!("........pg.dropped.{}........", index + 1);
+    state.table.columns[index].not_null = false;
+    state.table.columns[index].default = None;
+    state.table.columns[index].generated = None;
+    state.table.columns[index].identity = None;
+    let column_names: Vec<String> = state
+        .table
+        .columns
+        .iter()
+        .filter(|column| !column.dropped)
+        .map(|column| column.name.clone())
+        .collect();
     state
         .table
         .checks
@@ -6747,25 +6759,13 @@ fn drop_statistics_referencing_column_ops(
     column: &str,
     index: usize,
 ) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
-    let attnum = i16::try_from(index + 1)
-        .map_err(|_| ExecError::Unsupported("statistics column number exceeds int2".into()))?;
     let mut ops = Vec::new();
-    for mut statistics in crabka_pgcatalog::statistics::list(kv)? {
+    for statistics in crabka_pgcatalog::statistics::list(kv)? {
         if statistics_references_column(&statistics, table, column, index) {
             ops.extend(crabka_pgcatalog::statistics::drop_ops(
                 kv,
                 &statistics.name,
             )?);
-        } else if statistics.table_id == table.id && statistics.keys.iter().any(|key| *key > attnum)
-        {
-            for key in &mut statistics.keys {
-                if *key > attnum {
-                    *key -= 1;
-                }
-            }
-            statistics.data = None;
-            statistics.inherited_data = None;
-            ops.push(crabka_pgcatalog::statistics::put_op(&statistics));
         }
     }
     Ok(ops)

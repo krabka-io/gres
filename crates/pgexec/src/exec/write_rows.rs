@@ -168,7 +168,7 @@ pub(super) fn unsupplied_defaults(
         .iter()
         .zip(supplied)
         .map(|(column, supplied)| {
-            if supplied {
+            if supplied || column.dropped {
                 Ok(Datum::Null)
             } else {
                 default_value(column, ctx)
@@ -410,7 +410,9 @@ pub(crate) fn finish_written_row(
         std::borrow::Cow::Borrowed(&*row)
     };
     for (column, value) in table.columns.iter().zip(checked.iter()) {
-        crate::usertype::check_domain(column.ty, value, ctx)?;
+        if !column.dropped {
+            crate::usertype::check_domain(column.ty, value, ctx)?;
+        }
     }
     enforce_not_null(table, &checked, ctx)?;
     if table.checks.is_empty() {
@@ -426,7 +428,7 @@ pub(super) fn enforce_not_null(
     ctx: &crate::clock::EvalCtx,
 ) -> Result<(), ExecError> {
     for (column, value) in table.columns.iter().zip(row.iter()) {
-        if column.not_null && value.is_null() {
+        if !column.dropped && column.not_null && value.is_null() {
             return Err(ExecError::NotNullViolation {
                 column: column.name.clone(),
                 // Unqualified whatever schema the relation is in and whatever

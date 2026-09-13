@@ -1717,6 +1717,7 @@ async fn a_dropped_column_takes_its_comment_with_it() {
         )
         .await
             == vec![
+                vec![Some("........pg.dropped.1........".to_string()), None],
                 vec![Some("a".to_string()), None],
                 text_row(&["b", "the second"]),
             ]
@@ -2091,6 +2092,35 @@ async fn alter_type_rename_attribute_cascades_to_its_typed_table() {
                 "Bea",
                 "{\"id\":2,\"display_name\":\"Bea\",\"age\":null}",
             ])]
+    );
+    assert!(
+        sqlstate_of(
+            &mut session,
+            "ALTER TYPE rename_pair DROP ATTRIBUTE display_name",
+        )
+        .await
+            == "2BP01"
+    );
+    run_s(
+        &mut session,
+        "ALTER TYPE rename_pair DROP ATTRIBUTE display_name CASCADE",
+    )
+    .await;
+    assert!(
+        text_rows_of(&mut session, "SELECT id, age::text FROM rename_people").await
+            == vec![vec![Some("1".into()), None]]
+    );
+    assert!(
+        text_rows_of(
+            &mut session,
+            "SELECT (value).id, (value).age::text, row_to_json(value)::text FROM rename_store",
+        )
+        .await
+            == vec![vec![
+                Some("2".into()),
+                None,
+                Some("{\"id\":2,\"age\":null}".into()),
+            ]]
     );
 }
 
@@ -4255,7 +4285,7 @@ async fn unnamed_check_constraints_take_postgresql_default_names() {
 }
 
 /// `ADD COLUMN` back-fills stored rows with the new column's default and
-/// `DROP COLUMN` reclaims the position, so later reads line up.
+/// `DROP COLUMN` preserves its physical slot, so later reads line up.
 #[tokio::test]
 async fn add_and_drop_column_rewrite_stored_rows() {
     use assert2::assert;
@@ -4276,6 +4306,38 @@ async fn add_and_drop_column_rewrite_stored_rows() {
             == vec![text_row(&["1", "7"]), text_row(&["2", "7"])]
     );
     assert!(sqlstate_of(&mut session, "SELECT label FROM t").await == "42703");
+    assert!(
+        text_rows_of(&mut session, "SELECT * FROM t ORDER BY id").await
+            == vec![text_row(&["1", "7"]), text_row(&["2", "7"])]
+    );
+    run_s(&mut session, "INSERT INTO t (id, n) VALUES (3, 8)").await;
+    run_s(
+        &mut session,
+        "ALTER TABLE t ADD COLUMN later text DEFAULT 'new'",
+    )
+    .await;
+    assert!(
+        text_rows_of(&mut session, "SELECT id, n, later FROM t ORDER BY id").await
+            == vec![
+                text_row(&["1", "7", "new"]),
+                text_row(&["2", "7", "new"]),
+                text_row(&["3", "8", "new"]),
+            ]
+    );
+    assert!(
+        text_rows_of(
+            &mut session,
+            "SELECT attname, attnum::text, attisdropped::text FROM pg_attribute \
+             WHERE attrelid = 't'::regclass AND attnum > 0 ORDER BY attnum",
+        )
+        .await
+            == vec![
+                text_row(&["id", "1", "false"]),
+                text_row(&["........pg.dropped.2........", "2", "true"]),
+                text_row(&["n", "3", "false"]),
+                text_row(&["later", "4", "false"]),
+            ]
+    );
 }
 
 /// `SET NOT NULL` and `ADD CONSTRAINT … CHECK` back-validate the stored

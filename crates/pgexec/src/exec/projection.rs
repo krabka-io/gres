@@ -71,7 +71,11 @@ pub(crate) fn resolve_projection(
                     .enumerate()
                     .filter(|(_, c)| {
                         c.qualifier.as_deref() == Some(q)
-                            && c.exposure != crate::scope::Exposure::SystemColumn
+                            && !matches!(
+                                c.exposure,
+                                crate::scope::Exposure::SystemColumn
+                                    | crate::scope::Exposure::Dropped
+                            )
                     })
                     .collect();
                 if cols.is_empty() {
