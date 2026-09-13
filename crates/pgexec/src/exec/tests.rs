@@ -4905,11 +4905,26 @@ async fn create_index_resolves_and_validates_operator_classes() {
         "CREATE INDEX i6 ON t (b COLLATE \"C\" text_ops)",
     )
     .await;
+    run_s(&mut session, "CREATE INDEX i_bpchar ON t (b bpchar_ops)").await;
     run_s(&mut session, "CREATE INDEX i7 ON t ((b || b) text_ops)").await;
     let index = crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("i6"))
         .expect("index metadata");
     assert!(index.key_options[0].collation.as_deref() == Some("C"));
     assert!(index.key_options[0].opclass.as_deref() == Some("text_ops"));
+    assert!(
+        text_rows_of(&mut session, "SELECT pg_get_indexdef('i_bpchar'::regclass)",).await
+            == vec![text_row(&[
+                "CREATE INDEX i_bpchar ON public.t USING btree (b bpchar_ops)"
+            ])]
+    );
+    assert!(
+        text_rows_of(
+            &mut session,
+            "SELECT indclass::text FROM pg_index WHERE indexrelid = 'i_bpchar'::regclass",
+        )
+        .await
+            == vec![text_row(&["320004"])]
+    );
     let expression_index =
         crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("i7"))
             .expect("expression index metadata");

@@ -288,9 +288,7 @@ pub(crate) fn validate_index_opclasses(
             )?,
         };
         let column_oid = ty.oid();
-        let binary_text_compatible = input_oid == crabka_pgtypes::oids::TEXT
-            && matches!(ty, ColumnType::Text | ColumnType::Varchar(_));
-        if input_oid != column_oid && input_oid != 2277 && !binary_text_compatible {
+        if input_oid != 2277 && !index_opclass_accepts_type(input_oid, ty) {
             return Err(ExecError::TypeMismatch(format!(
                 "operator class \"{written}\" does not accept data type {}",
                 crate::func::format_type(i64::from(column_oid), -1)
@@ -298,6 +296,21 @@ pub(crate) fn validate_index_opclasses(
         }
     }
     Ok(())
+}
+
+/// PostgreSQL lets the three binary-compatible character types share an
+/// operator class, including an explicitly named `bpchar_ops` over `text`.
+pub(crate) fn index_opclass_accepts_type(input_oid: u32, ty: ColumnType) -> bool {
+    input_oid == ty.oid()
+        || matches!(
+            input_oid,
+            crabka_pgtypes::oids::TEXT
+                | crabka_pgtypes::oids::BPCHAR
+                | crabka_pgtypes::oids::VARCHAR
+        ) && matches!(
+            ty,
+            ColumnType::Text | ColumnType::Varchar(_) | ColumnType::Char(_)
+        )
 }
 
 pub(crate) fn validate_default_index_opclass(

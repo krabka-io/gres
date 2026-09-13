@@ -3547,9 +3547,8 @@ fn index_opclass_oid(
         crabka_pgcatalog::IndexMethod::Spgist => crate::catalog_rel::SPGIST_AM_OID,
     };
     let compatible = |input_oid: i32| {
-        input_oid == ty.oid() as i32
-            || (input_oid == crabka_pgtypes::oids::TEXT as i32
-                && matches!(ty, ColumnType::Text | ColumnType::Varchar(_)))
+        u32::try_from(input_oid)
+            .is_ok_and(|input_oid| crate::exec::index_opclass_accepts_type(input_oid, ty))
     };
     let explicit = option
         .opclass
