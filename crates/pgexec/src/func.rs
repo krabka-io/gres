@@ -5495,13 +5495,17 @@ fn power(base: f64, exp: f64) -> Result<Datum, ExecError> {
             "zero raised to a negative power is undefined",
         ));
     }
-    if base < 0.0 && exp.fract() != 0.0 {
+    if base < 0.0 && exp.is_finite() && exp.fract() != 0.0 {
         return Err(domain(
             "2201F",
             "a negative number raised to a non-integer power yields a complex result",
         ));
     }
-    finite_or_overflow(base.powf(exp))
+    let result = base.powf(exp);
+    if result.is_infinite() && base.is_finite() && exp.is_finite() {
+        return Err(ExecError::Type(crabka_pgtypes::TypeError::Overflow));
+    }
+    Ok(Datum::Float8(result))
 }
 
 /// `sign` of a float8: −1 / 0 / 1, and `NaN` for `NaN` (PostgreSQL `dsign`).
@@ -6735,6 +6739,25 @@ mod tests {
         // wrong arity → 42883
         assert_eq!(err_code("pi(1)", Some(&t)), "42883");
         assert_eq!(err_code("power(2)", Some(&t)), "42883");
+    }
+
+    #[test]
+    fn float8_power_preserves_nonfinite_inputs() {
+        let power = |base: &str, exp: &str| match ev(&format!(
+            "power({base}::float8, {exp}::float8)"
+        )) {
+            Datum::Float8(value) => value,
+            value => panic!("expected float8, got {value:?}"),
+        };
+        assert!(power("-1", "'NaN'").is_nan());
+        assert_eq!(power("-1", "'Infinity'"), 1.0);
+        assert_eq!(power("-1", "'-Infinity'"), 1.0);
+        assert_eq!(power("-0.1", "'Infinity'"), 0.0);
+        assert!(power("1.1", "'Infinity'").is_infinite());
+        assert!(power("0.1", "'-Infinity'").is_infinite());
+        assert_eq!(power("-1.1", "'-Infinity'"), 0.0);
+        assert!(power("'Infinity'", "2").is_infinite());
+        assert!(power("'-Infinity'", "2").is_infinite());
     }
 
     #[test]
