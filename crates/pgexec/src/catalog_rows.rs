@@ -504,6 +504,15 @@ pub(crate) fn pg_class_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
         }
         rows.push(row.build()?);
     }
+    let mut aggregate_index = PgClassRow::new(
+        PG_AGGREGATE_FNOID_INDEX.oid,
+        PG_AGGREGATE_FNOID_INDEX.name,
+        "i",
+        PG_CATALOG_NAMESPACE_OID,
+    );
+    aggregate_index.relnatts = 1;
+    aggregate_index.relam = crate::catalog_rel::BTREE_AM_OID;
+    rows.push(aggregate_index.build()?);
     for index in indexes {
         // An index lives in the schema of the table it indexes, which is also
         // what makes a temporary table's index temporary.
@@ -1029,6 +1038,27 @@ pub(crate) fn pg_attribute_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, 
         let table = builtin_catalog_index_table(index);
         rows.extend(attribute_rows_for_table(index.oid, &table, &acl)?);
     }
+    let aggregate_index = Table {
+        id: 2650,
+        owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+        name: crabka_pgcatalog::RelationName::new(
+            crate::search_path::PG_CATALOG,
+            PG_AGGREGATE_FNOID_INDEX.name,
+        ),
+        columns: vec![Column::new("aggfnoid", ColumnType::Oid)],
+        sharded: false,
+        row_security: false,
+        force_row_security: false,
+        sharding: None,
+        foreign: None,
+        materialized: None,
+        checks: Vec::new(),
+    };
+    rows.extend(attribute_rows_for_table(
+        PG_AGGREGATE_FNOID_INDEX.oid,
+        &aggregate_index,
+        &acl,
+    )?);
     // A composite type's attributes hang off the relation its `pg_type.typrelid`
     // points at, which is how `\d <type>` and the driver introspection queries
     // reach them.
@@ -3060,6 +3090,12 @@ pub(crate) struct BuiltinCatalogOidIndex {
     pub(crate) oid: i32,
 }
 
+const PG_AGGREGATE_FNOID_INDEX: BuiltinCatalogOidIndex = BuiltinCatalogOidIndex {
+    table: "pg_aggregate",
+    name: "pg_aggregate_fnoid_index",
+    oid: 2650,
+};
+
 pub(crate) const BUILTIN_CATALOG_OID_INDEXES: &[BuiltinCatalogOidIndex] = &[
     BuiltinCatalogOidIndex {
         table: "pg_namespace",
@@ -3459,6 +3495,41 @@ pub(crate) fn pg_index_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
             Datum::Null,
         ]);
     }
+    rows.push(vec![
+        int(PG_AGGREGATE_FNOID_INDEX.oid),
+        int(virtual_relation_oid("pg_aggregate")),
+        Datum::Int2(1),
+        Datum::Int2(1),
+        Datum::Bool(true),
+        Datum::Bool(false),
+        Datum::Bool(true),
+        Datum::Bool(false),
+        Datum::Bool(true),
+        Datum::Bool(false),
+        Datum::Bool(true),
+        Datum::Bool(false),
+        Datum::Bool(true),
+        Datum::Bool(true),
+        Datum::Bool(false),
+        Datum::OidVector(crabka_pgtypes::ArrayValue::with_dims(
+            crabka_pgtypes::ElemType::Int4,
+            vec![Datum::Int4(1)],
+            vec![crabka_pgtypes::ArrayDim::new(0, 1)],
+        )),
+        Datum::Null,
+        Datum::OidVector(crabka_pgtypes::ArrayValue::with_dims(
+            crabka_pgtypes::ElemType::Int4,
+            vec![Datum::Int4(1981)],
+            vec![crabka_pgtypes::ArrayDim::new(0, 1)],
+        )),
+        Datum::OidVector(crabka_pgtypes::ArrayValue::with_dims(
+            crabka_pgtypes::ElemType::Int2,
+            vec![Datum::Int2(0)],
+            vec![crabka_pgtypes::ArrayDim::new(0, 1)],
+        )),
+        Datum::Null,
+        Datum::Null,
+    ]);
     Ok(rows)
 }
 
@@ -5849,6 +5920,24 @@ mod tests {
         let index = builtin_catalog_oid_index("pg_largeobject_metadata").expect("catalog index");
         assert_eq!(index.name, "pg_largeobject_metadata_oid_index");
         assert_eq!(index.oid, 2996);
+    }
+
+    #[test]
+    fn aggregate_function_index_uses_oid_ops() {
+        let kv = MemKv::default();
+        let row = pg_index_rows(&kv)
+            .expect("pg_index rows")
+            .into_iter()
+            .find(|row| row[0] == int(PG_AGGREGATE_FNOID_INDEX.oid))
+            .expect("pg_aggregate_fnoid_index");
+        assert_eq!(row[1], int(2600));
+        let oid_vector = |oid| Datum::OidVector(crabka_pgtypes::ArrayValue::with_dims(
+            crabka_pgtypes::ElemType::Int4,
+            vec![Datum::Int4(oid)],
+            vec![crabka_pgtypes::ArrayDim::new(0, 1)],
+        ));
+        assert_eq!(row[15], oid_vector(1));
+        assert_eq!(row[17], oid_vector(1981));
     }
 
     #[test]
