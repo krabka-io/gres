@@ -1,8 +1,6 @@
 //! DDL and catalog code carved out of `exec`.
 
-use super::{
-    ColumnType, ExecError, HashSet, Kv, Scope, Table, available_index_name, is_immutable_function,
-};
+use super::{ColumnType, ExecError, HashSet, Kv, Scope, Table, available_index_name};
 
 pub(crate) fn index_name_or_default(
     kv: &dyn Kv,
@@ -109,6 +107,8 @@ fn tsvector_opclass_options(options: &str) -> Result<String, ExecError> {
 }
 
 pub(crate) fn validate_index_predicate(
+    kv: &dyn Kv,
+    resolution: &crate::relname::ResolutionScope,
     table: &Table,
     predicate: Option<&str>,
 ) -> Result<(), ExecError> {
@@ -116,8 +116,10 @@ pub(crate) fn validate_index_predicate(
         return Ok(());
     };
     let expression = crabka_pgparser::parser::parse_expression(predicate)?;
+    let ctes = crate::cte::CteContext::empty();
+    let typed = crate::subquery::resolve_types_in_expr(kv, resolution, &expression, &ctes)?;
     let scope = Scope::single(table, &table.name.name);
-    crate::eval::check_predicate_resolves(&expression, &scope)?;
+    crate::eval::check_predicate_resolves(&typed, &scope)?;
     let mut invalid = crate::agg::contains_aggregate(&expression);
     crate::grouping::visit_expr(&expression, &mut |node| {
         invalid |= matches!(
@@ -126,7 +128,7 @@ pub(crate) fn validate_index_predicate(
                 | crabka_pgparser::ast::Expr::Exists(_)
                 | crabka_pgparser::ast::Expr::InSubquery { .. }
                 | crabka_pgparser::ast::Expr::Quantified { .. }
-        ) || matches!(node, crabka_pgparser::ast::Expr::Func(call) if !is_immutable_function(&call.name));
+        ) || matches!(node, crabka_pgparser::ast::Expr::Func(call) if !crate::routine::is_immutable_call(kv, &call.name));
     });
     if invalid {
         return Err(ExecError::InvalidObjectDefinition(
@@ -137,6 +139,8 @@ pub(crate) fn validate_index_predicate(
 }
 
 pub(crate) fn validate_index_expressions(
+    kv: &dyn Kv,
+    resolution: &crate::relname::ResolutionScope,
     table: &Table,
     keys: &[crabka_pgparser::ast::IndexKey],
     unique: bool,
@@ -173,7 +177,9 @@ pub(crate) fn validate_index_expressions(
     let scope = Scope::single(table, &table.name.name);
     for source in expressions {
         let expr = crabka_pgparser::parser::parse_expression(source)?;
-        crate::eval::infer_type(&expr, &scope)?;
+        let ctes = crate::cte::CteContext::empty();
+        let typed = crate::subquery::resolve_types_in_expr(kv, resolution, &expr, &ctes)?;
+        crate::eval::infer_type(&typed, &scope)?;
         let mut invalid = false;
         crate::grouping::visit_expr(&expr, &mut |node| {
             invalid |= matches!(
@@ -182,7 +188,7 @@ pub(crate) fn validate_index_expressions(
                     | Expr::Exists(_)
                     | Expr::InSubquery { .. }
                     | Expr::Quantified { .. }
-            ) || matches!(node, Expr::Func(call) if !is_immutable_function(&call.name));
+            ) || matches!(node, Expr::Func(call) if !crate::routine::is_immutable_call(kv, &call.name));
         });
         if invalid || crate::agg::contains_aggregate(&expr) {
             return Err(ExecError::InvalidObjectDefinition(
@@ -221,10 +227,13 @@ pub(crate) fn validate_index_opclasses(
                         .ok_or_else(|| ExecError::UndefinedColumn(column.into()))?
                         .ty
                 }
-                None => crate::eval::infer_type(
-                    &crabka_pgparser::parser::parse_expression(&key.text)?,
-                    &Scope::single(table, &table.name.name),
-                )?,
+                None => {
+                    let expression = crabka_pgparser::parser::parse_expression(&key.text)?;
+                    let ctes = crate::cte::CteContext::empty();
+                    let typed =
+                        crate::subquery::resolve_types_in_expr(kv, resolution, &expression, &ctes)?;
+                    crate::eval::infer_type(&typed, &Scope::single(table, &table.name.name))?
+                }
             };
             validate_default_index_opclass(ty, method)?;
             continue;
@@ -282,10 +291,13 @@ pub(crate) fn validate_index_opclasses(
                     .ok_or_else(|| ExecError::UndefinedColumn(column.into()))?
                     .ty
             }
-            None => crate::eval::infer_type(
-                &crabka_pgparser::parser::parse_expression(&key.text)?,
-                &Scope::single(table, &table.name.name),
-            )?,
+            None => {
+                let expression = crabka_pgparser::parser::parse_expression(&key.text)?;
+                let ctes = crate::cte::CteContext::empty();
+                let typed =
+                    crate::subquery::resolve_types_in_expr(kv, resolution, &expression, &ctes)?;
+                crate::eval::infer_type(&typed, &Scope::single(table, &table.name.name))?
+            }
         };
         let column_oid = ty.oid();
         if input_oid != 2277 && !index_opclass_accepts_type(input_oid, ty) {

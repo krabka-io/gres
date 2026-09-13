@@ -36,6 +36,7 @@ use crabka_pgparser::ast::{
 use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
 use crabka_pgwire::engine::QueryResult;
 
+use crate::exec::is_immutable_function;
 use crate::{error::ExecError, eval::ArgType};
 
 pub(crate) struct ScalarFunctionRequest {
@@ -2174,6 +2175,16 @@ fn shadowing_user_aggregate(kv: &dyn Kv, name: &str, arity: usize) -> bool {
 /// evaluator.
 pub(crate) fn is_user_routine(kv: &dyn Kv, name: &str) -> bool {
     routines_named(kv, name).is_ok_and(|found| found.iter().any(|routine| !routine.is_aggregate()))
+}
+
+/// Whether every user routine with this name is immutable, or the built-in
+/// routine fallback is immutable when the name has no user definition.
+pub(crate) fn is_immutable_call(kv: &dyn Kv, name: &str) -> bool {
+    match routines_named(kv, name) {
+        Ok(routines) if routines.is_empty() => is_immutable_function(name),
+        Ok(routines) => routines.iter().all(|routine| routine.volatility == 'i'),
+        Err(_) => false,
+    }
 }
 
 /// Whether `name` is a routine exposed by the immutable `pg_catalog.pg_proc`

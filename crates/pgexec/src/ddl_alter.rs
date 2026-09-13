@@ -1191,8 +1191,16 @@ pub(crate) fn execute_ddl(
             reject_index_over_virtual_generated(&table_meta, columns, None)?;
             validate_index_opclasses(kv, resolution, &table_meta, keys, index_method)?;
             let key_options = index_key_options(keys, index_method)?;
-            validate_index_expressions(&table_meta, keys, *unique, placement, index_method)?;
-            validate_index_predicate(&table_meta, predicate.as_deref())?;
+            validate_index_expressions(
+                kv,
+                resolution,
+                &table_meta,
+                keys,
+                *unique,
+                placement,
+                index_method,
+            )?;
+            validate_index_predicate(kv, resolution, &table_meta, predicate.as_deref())?;
             validate_index_method(&table_meta, columns, *unique, placement, index_method)?;
             if *nulls_not_distinct && !unique {
                 return Err(ExecError::Unsupported(

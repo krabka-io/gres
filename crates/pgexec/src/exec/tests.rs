@@ -4757,8 +4757,32 @@ async fn btree_expression_indexes_store_physical_entries() {
     let mut session = engine.connect();
     run_s(&mut session, "CREATE TABLE t (a int4)").await;
     run_s(&mut session, "INSERT INTO t VALUES (1), (2)").await;
+    run_s(&mut session, "CREATE TABLE btree_test_expr (n int)").await;
+    run_s(
+        &mut session,
+        "CREATE FUNCTION btree_test_func() RETURNS int LANGUAGE sql IMMUTABLE RETURN 0",
+    )
+    .await;
 
     run_s(&mut session, "CREATE INDEX t_expr_idx ON t ((1))").await;
+    run_s(
+        &mut session,
+        "CREATE INDEX btree_test_expr_idx ON btree_test_expr (btree_test_func())",
+    )
+    .await;
+    run_s(
+        &mut session,
+        "CREATE FUNCTION btree_volatile() RETURNS int LANGUAGE sql VOLATILE RETURN 0",
+    )
+    .await;
+    assert!(
+        sqlstate_of(
+            &mut session,
+            "CREATE INDEX btree_volatile_idx ON btree_test_expr (btree_volatile())",
+        )
+        .await
+            == "42P17"
+    );
     let index =
         crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_expr_idx"))
             .expect("expression index");
