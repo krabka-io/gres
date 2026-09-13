@@ -710,7 +710,7 @@ fn eval_depth_inner(
         Expr::Cast { expr, ty } => {
             // `ARRAY[]::int[]`: the cast supplies the element type the empty
             // constructor cannot infer, so it never reaches the operand eval.
-            if let Some(empty) = empty_array_cast(expr, *ty) {
+            if let Some(empty) = empty_array_cast(expr, *ty)? {
                 return Ok(empty);
             }
             let v = eval_depth(expr, scope, values, ctx, d)?;
@@ -4700,7 +4700,7 @@ pub(crate) fn infer_type(expr: &Expr, scope: &Scope) -> Result<ColumnType, ExecE
             // `ARRAY[]::int[]`: the empty constructor has no element type of its
             // own — the cast supplies it (PostgreSQL pushes the type context down
             // into the constructor), so the operand is not inferred at all.
-            if empty_array_cast(expr, *ty).is_some() {
+            if empty_array_cast(expr, *ty)?.is_some() {
                 return Ok(*ty);
             }
             let from = infer_type(expr, scope)?;
@@ -5670,12 +5670,20 @@ fn eval_jsonb_subscript_chain(
 /// PostgreSQL pushes the cast's type context down into the constructor. This
 /// function returns the typed empty array when `expr`/`ty` are exactly that
 /// shape.
-pub(crate) fn empty_array_cast(expr: &Expr, ty: ColumnType) -> Option<Datum> {
+pub(crate) fn empty_array_cast(expr: &Expr, ty: ColumnType) -> Result<Option<Datum>, ExecError> {
     match (expr, ty.array_element()) {
-        (Expr::ArrayLiteral(items), Some(elem)) if items.is_empty() => {
-            Some(Datum::Array(ArrayValue::new(elem, Vec::new())))
+        (Expr::ArrayLiteral(items), _)
+            if items.is_empty() && matches!(ty, ColumnType::OidVector | ColumnType::Int2Vector) =>
+        {
+            Err(ExecError::TypeMismatch(format!(
+                "array is not a valid {}",
+                ty.name()
+            )))
         }
-        _ => None,
+        (Expr::ArrayLiteral(items), Some(elem)) if items.is_empty() => {
+            Ok(Some(Datum::Array(ArrayValue::new(elem, Vec::new()))))
+        }
+        _ => Ok(None),
     }
 }
 
@@ -7749,6 +7757,16 @@ mod tests {
             eval_jt("ARRAY[]::int[]").expect("eval")
                 == Datum::Array(ArrayValue::new(ElemType::Int4, Vec::new()))
         );
+        for ty in ["oidvector", "int2vector"] {
+            let error = eval_jt(&format!("ARRAY[]::{ty}"))
+                .expect_err("vector rejects a general array")
+                .into_pg();
+            assert2::assert!(error.code == "42804", "{ty}");
+            assert2::assert!(
+                error.message == format!("array is not a valid {ty}"),
+                "{ty}"
+            );
+        }
         // A bare string is `unknown` and adopts int4 from the typed element.
         assert2::assert!(
             infer_jt("ARRAY[1, 'x']").expect("infer") == ColumnType::Array(ElemType::Int4)
