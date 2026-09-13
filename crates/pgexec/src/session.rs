@@ -29624,6 +29624,23 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn plpgsql_setof_function_expands_in_the_select_list() {
+        let engine = SqlEngine::new();
+        let mut session = engine.connect();
+        session
+            .simple_query(
+                "CREATE FUNCTION setof_int() RETURNS SETOF int LANGUAGE plpgsql AS \
+                 $$ BEGIN RETURN NEXT 1; RETURN NEXT 2; END $$",
+            )
+            .await
+            .expect("create set-returning function");
+        assert!(
+            rows_or_sqlstate(&mut session, "SELECT setof_int()").await
+                == Ok(vec![vec!["1".into()], vec!["2".into()]])
+        );
+    }
+
 }
 #[cfg(test)]
 mod compatibility_refusal_tests {
