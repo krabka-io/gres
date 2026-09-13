@@ -676,6 +676,7 @@ pub fn decode_at(
                         // cross-check them against the date.
                         have_non_date = true;
                     } else if let Some(found) = lmt_zone(word, tz)
+                        .or_else(|| mmt_zone(word, tz))
                         .or_else(|| lookup_abbrev(word))
                         .or_else(|| lookup_zone_name(word))
                     {
@@ -1613,6 +1614,18 @@ fn lmt_zone(word: &str, tz: &TimeZone) -> Option<Zone> {
     (offset.seconds() != 0).then_some(Zone::Offset(offset))
 }
 
+/// `MMT` retains the default abbreviation's fixed UTC+06:30 meaning unless
+/// the session zone itself used Montevideo mean time at the historical probe.
+fn mmt_zone(word: &str, tz: &TimeZone) -> Option<Zone> {
+    if word != "mmt" {
+        return None;
+    }
+    let civil = DateTime::constant(1912, 1, 1, 0, 0, 0, 0);
+    let instant = super::zoned_instant(civil, tz).ok()?;
+    let info = tz.to_offset_info(instant);
+    (info.abbreviation().eq_ignore_ascii_case("MMT")).then_some(Zone::Offset(info.offset()))
+}
+
 /// Resolve a lowercased timezone abbreviation to a UTC offset, for the template
 /// parser's `TZ` pattern.
 ///
@@ -1832,7 +1845,7 @@ const FIXED_ABBREVS: &[(&str, i32)] = &[
     ("met", 3600),
     ("metdst", 7200),
     ("mht", 43200),
-    ("mmt", -13_491),
+    ("mmt", 23_400),
     ("mpt", 36000),
     ("mst", -25200),
     ("mut", 14400),

@@ -8142,6 +8142,12 @@ mod io_tests {
         let mmt = parse_timestamptz("1912-01-01 00:00:00 MMT", &TimeZone::UTC).expect("MMT");
         assert_eq!(
             timestamptz_to_text(mmt, &TimeZone::UTC),
+            "1911-12-31 17:30:00+00"
+        );
+        let montevideo = TimeZone::get("America/Montevideo").expect("tzdb has Montevideo");
+        let mmt = parse_timestamptz("1912-01-01 00:00:00 MMT", &montevideo).expect("MMT");
+        assert_eq!(
+            timestamptz_to_text(mmt, &TimeZone::UTC),
             "1912-01-01 03:44:51+00"
         );
     }
