@@ -18212,6 +18212,10 @@ enum RejectedType {
     OneOf(&'static [&'static str]),
     /// `array_in` names no type, but only an array literal can reach it.
     AnyArray,
+    /// A time-zone lookup names the rejected zone itself, so that exact string
+    /// is enough to identify a literal even when a target column supplies its
+    /// temporal type.
+    TimeZone,
 }
 
 impl RejectedType {
@@ -18222,6 +18226,7 @@ impl RejectedType {
             RejectedType::Named(name) => stated == name,
             RejectedType::OneOf(keys) => keys.contains(&stated),
             RejectedType::AnyArray => stated.ends_with("[]"),
+            RejectedType::TimeZone => true,
         }
     }
 }
@@ -18311,6 +18316,16 @@ fn rejected_input(message: &str) -> Option<RejectedInput<'_>> {
     }
     if let Some(value) = tail(message, "timestamp out of range") {
         return Some(family(value, TIMESTAMP_TYPE_KEYS));
+    }
+    if let Some(zone) = message
+        .strip_prefix("time zone \"")
+        .and_then(|zone| zone.strip_suffix("\" not recognized"))
+    {
+        return Some(RejectedInput {
+            value: Some(zone),
+            expected: RejectedType::TimeZone,
+            indirect_ok: true,
+        });
     }
     // `date_in`'s own range complaint. It names one type, not a family: the two
     // `timestamp` spellings above borrow each other's wording because an offset
@@ -18600,7 +18615,13 @@ fn blamed_literal_positions(
                 return None;
             };
             let carries = match reading {
-                LiteralMatch::Whole => rejected.value.is_none_or(|value| candidate == value),
+                LiteralMatch::Whole => rejected.value.is_none_or(|value| {
+                    candidate == value
+                        || matches!(rejected.expected, RejectedType::TimeZone)
+                            && candidate
+                                .split_whitespace()
+                                .any(|part| part.eq_ignore_ascii_case(value))
+                }),
                 LiteralMatch::Component => rejected
                     .value
                     .is_some_and(|value| spells_component(candidate, value)),
@@ -18698,6 +18719,7 @@ fn attach_type_input_literal_position(sql: &str, error: PgError) -> PgError {
             | "22007"
             | "22008"
             | "22009"
+            | "22023"
             | "22015"
             | "22P05"
             | "54000"
@@ -32118,6 +32140,27 @@ mod session_conformance_tests {
                 .as_ref()
                 .and_then(|diagnostics| diagnostics.position)
                 == Some(8),
+            "{error:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn unknown_datetime_zone_points_at_the_unique_literal() {
+        let engine = SqlEngine::new();
+        let mut session = engine.connect();
+        session
+            .simple_query("CREATE TABLE zone_position (value timestamp)")
+            .await
+            .expect("create table");
+        let sql = "INSERT INTO zone_position VALUES ('19970710 173201 America/Does_not_exist')";
+        let error = session.simple_query(sql).await.expect_err("unknown zone");
+        assert!(error.code == "22023", "{error:?}");
+        assert!(
+            error
+                .diagnostics
+                .as_ref()
+                .and_then(|diagnostics| diagnostics.position)
+                == Some(sql.find('\'').expect("literal") + 1),
             "{error:?}"
         );
     }
