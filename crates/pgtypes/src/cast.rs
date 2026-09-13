@@ -1041,6 +1041,10 @@ pub fn cast_in(
         (Datum::Date(d), ColumnType::Timestamptz) => {
             match crate::datetime::date_infinite_sign(*d) {
                 0 => crate::datetime::date_to_midnight(*d)?
+                    .civil()
+                    .ok_or_else(|| TypeError::DatetimeFieldOverflow {
+                        value: crate::datetime::date_to_text(*d),
+                    })?
                     .to_zoned(tz.clone())
                     .map(|z| Datum::Timestamptz(z.timestamp()))
                     .map_err(|_| TypeError::DatetimeFieldOverflow {
@@ -1054,7 +1058,11 @@ pub fn cast_in(
         // timestamp → date: truncate to date part.
         (Datum::Timestamp(dt), ColumnType::Date) => {
             match crate::datetime::timestamp_infinite_sign(*dt) {
-                0 => Ok(Datum::Date(dt.date().into())),
+                0 => {
+                    let (year, month, day, _) = crate::datetime::timestamp_parts(*dt)
+                        .expect("finite timestamp has date parts");
+                    Ok(Datum::Date(crate::datetime::make_date(year, month, day)?))
+                }
                 sign => Ok(Datum::Date(crate::datetime::date_infinity_of_sign(sign))),
             }
         }
@@ -1064,16 +1072,25 @@ pub fn cast_in(
             if crate::datetime::timestamp_is_infinite(*dt) {
                 return Ok(Datum::Null);
             }
-            Ok(Datum::Time(dt.time().into()))
+            let (_, _, _, micros) =
+                crate::datetime::timestamp_parts(*dt).expect("finite timestamp has time parts");
+            Ok(Datum::Time(
+                crate::datetime::PgTime::from_micros_of_day(micros)
+                    .expect("timestamp time is valid"),
+            ))
         }
         // timestamp → timestamptz: interpret wall-clock as session tz → instant.
         (Datum::Timestamp(dt), ColumnType::Timestamptz) => {
             match crate::datetime::timestamp_infinite_sign(*dt) {
                 0 => dt
+                    .civil()
+                    .ok_or_else(|| TypeError::DatetimeFieldOverflow {
+                        value: crate::datetime::timestamp_to_text(*dt),
+                    })?
                     .to_zoned(tz.clone())
                     .map(|z| Datum::Timestamptz(z.timestamp()))
                     .map_err(|_| TypeError::DatetimeFieldOverflow {
-                        value: format!("{dt}"),
+                        value: crate::datetime::timestamp_to_text(*dt),
                     }),
                 sign => Ok(Datum::Timestamptz(
                     crate::datetime::timestamptz_infinity_of_sign(sign),
@@ -1083,7 +1100,7 @@ pub fn cast_in(
         // timestamptz → timestamp: render instant in session tz → wall-clock datetime.
         (Datum::Timestamptz(ts), ColumnType::Timestamp) => {
             match crate::datetime::timestamptz_infinite_sign(*ts) {
-                0 => Ok(Datum::Timestamp(tz.to_datetime(*ts))),
+                0 => Ok(Datum::Timestamp(tz.to_datetime(*ts).into())),
                 sign => Ok(Datum::Timestamp(
                     crate::datetime::timestamp_infinity_of_sign(sign),
                 )),

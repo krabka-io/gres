@@ -16,7 +16,8 @@ use crabka_pgtypes::{
         date_from_binary, date_is_infinite, date_plus_days, date_to_binary, date_to_text,
         date_to_text_in, div_interval, interval_to_time, justify_days, justify_hours,
         justify_interval, make_date, make_interval, make_time, make_timestamp_civil, mul_interval,
-        parse_date, parse_interval, parse_time, sub_interval,
+        parse_date, parse_interval, parse_time, parse_timestamp, sub_interval,
+        timestamp_from_binary, timestamp_to_binary, timestamp_to_text,
     },
 };
 
@@ -30,6 +31,16 @@ fn fields(iv: Interval) -> (i32, i32, i64) {
 
 fn interval(text: &str) -> Interval {
     parse_interval(text).unwrap_or_else(|error| panic!("interval {text:?}: {error}"))
+}
+
+#[test]
+fn timestamp_storage_reaches_postgres_full_calendar_range() {
+    let upper = parse_timestamp("294276-12-31 23:59:59.999999").expect("upper timestamp");
+    assert!(timestamp_to_text(upper) == "294276-12-31 23:59:59.999999");
+    assert!(
+        timestamp_from_binary(&timestamp_to_binary(upper)).expect("binary round trip") == upper
+    );
+    assert!(parse_timestamp("294277-01-01 00:00:00").is_err());
 }
 
 /// `PostgreSQL`'s `INTERVAL_MULDIV_TBL` and the four scalings the `interval`

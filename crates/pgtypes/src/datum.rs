@@ -2094,7 +2094,7 @@ pub enum Datum {
     /// PostgreSQL `time with time zone`: a clock reading and its UTC offset.
     Timetz(crate::datetime::TimeTz),
     /// SP37: PostgreSQL `timestamp without time zone`: date + time-of-day, no timezone.
-    Timestamp(jiff::civil::DateTime),
+    Timestamp(crate::datetime::PgTimestamp),
     /// SP37: PostgreSQL `timestamp with time zone`: an instant in UTC.
     Timestamptz(jiff::Timestamp),
     /// SP37: PostgreSQL `interval`: months + days + microseconds.
@@ -3359,7 +3359,8 @@ mod tests {
             Datum::Timestamp(
                 "2024-01-15T00:00:00"
                     .parse::<jiff::civil::DateTime>()
-                    .expect("valid datetime literal"),
+                    .expect("valid datetime literal")
+                    .into(),
             )
         );
     }

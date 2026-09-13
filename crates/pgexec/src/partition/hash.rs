@@ -672,7 +672,7 @@ mod tests {
         ];
         for (text, expected) in vectors {
             let civil: jiff::civil::DateTime = text.parse().expect("civil datetime");
-            assert!(hash_of(Datum::Timestamp(civil)) == expected.cast_unsigned());
+            assert!(hash_of(Datum::Timestamp(civil.into())) == expected.cast_unsigned());
         }
     }
 

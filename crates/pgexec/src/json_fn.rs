@@ -4517,7 +4517,7 @@ mod tests {
         // Date/time values use the JSON spelling, not the SQL one.
         assert!(
             to_jsonb(
-                &Datum::Timestamp(jiff::civil::datetime(2024, 1, 15, 13, 45, 6, 0)),
+                &Datum::Timestamp(jiff::civil::datetime(2024, 1, 15, 13, 45, 6, 0).into()),
                 &ctx
             )
             .expect("ts")

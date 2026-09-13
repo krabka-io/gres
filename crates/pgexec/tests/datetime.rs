@@ -229,6 +229,55 @@ async fn date_literals_use_postgres_full_calendar_range() {
     );
 }
 
+#[tokio::test]
+async fn timestamp_literals_use_postgres_full_calendar_range() {
+    let client = connect(spawn().await).await;
+    client
+        .batch_execute(
+            "CREATE TABLE wide_timestamps (t timestamp); \
+             INSERT INTO wide_timestamps VALUES (TIMESTAMP '294276-12-31 23:59:59.999999')",
+        )
+        .await
+        .expect("store upper timestamp");
+    assert_eq!(
+        text(&client, "SELECT TIMESTAMP '294276-12-31 23:59:59.999999'").await,
+        Some("294276-12-31 23:59:59.999999".into())
+    );
+    assert_eq!(
+        text(&client, "SELECT TIMESTAMP '294276-12-30'").await,
+        Some("294276-12-30 00:00:00".into())
+    );
+    assert_eq!(
+        text(&client, "SELECT TIMESTAMP '4714-11-24 00:00:00 BC'").await,
+        Some("4714-11-24 00:00:00 BC".into())
+    );
+    assert_eq!(
+        text(&client, "SELECT t FROM wide_timestamps").await,
+        Some("294276-12-31 23:59:59.999999".into())
+    );
+    assert_eq!(
+        err_code(&client, "SELECT TIMESTAMP '294277-01-01 00:00:00'").await,
+        "22008"
+    );
+    assert_eq!(
+        text(
+            &client,
+            "SELECT date_part('epoch', TIMESTAMP '294270-01-01 00:00:00')",
+        )
+        .await,
+        Some("9224097091200".into())
+    );
+    assert_eq!(
+        err_code(
+            &client,
+            "SELECT date_bin(\
+                 INTERVAL '15 minutes', TIMESTAMP '294276-12-30', TIMESTAMP '4000-12-20 BC')",
+        )
+        .await,
+        "22008"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Arithmetic
 // ---------------------------------------------------------------------------

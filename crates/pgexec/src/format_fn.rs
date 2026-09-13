@@ -305,13 +305,20 @@ pub(crate) fn eval_format(
             };
             // A reading on a daylight-saving boundary resolves by PostgreSQL's
             // rule, not jiff's default; see `datetime::zone_offset_for`.
-            datetime::zoned_instant(dt, &zone)
-                .map(Datum::Timestamptz)
-                .map_err(|_| {
-                    ExecError::Type(TypeError::DatetimeFieldOverflow {
-                        value: format!("{y}-{mo}-{d} {h}:{mi}:{sec}"),
+            datetime::zoned_instant(
+                dt.civil().ok_or_else(|| {
+                    map_type(crabka_pgtypes::TypeError::DatetimeOutOfRange {
+                        message: "timestamp out of range".into(),
                     })
+                })?,
+                &zone,
+            )
+            .map(Datum::Timestamptz)
+            .map_err(|_| {
+                ExecError::Type(TypeError::DatetimeFieldOverflow {
+                    value: format!("{y}-{mo}-{d} {h}:{mi}:{sec}"),
                 })
+            })
         }
         FmtFunc::MakeInterval => {
             // 0..=7 positional args; first 6 are ints (default 0), the 7th `secs` is
@@ -479,12 +486,25 @@ fn to_char(value: &Datum, template: &str, ctx: &EvalCtx, name: &str) -> Result<D
     }
     let text = match value {
         Datum::Date(d) => {
-            let fields =
-                datetime::DateTimeFields::from_civil(datetime::date_to_midnight(*d)?, None);
+            let fields = datetime::DateTimeFields::from_civil(
+                datetime::date_to_midnight(*d)?.civil().ok_or_else(|| {
+                    map_type(TypeError::DatetimeOutOfRange {
+                        message: "date out of range for timestamp".into(),
+                    })
+                })?,
+                None,
+            );
             datetime::format_datetime(template, &fields).map_err(map_type)?
         }
         Datum::Timestamp(dt) => {
-            let fields = datetime::DateTimeFields::from_civil(*dt, None);
+            let fields = datetime::DateTimeFields::from_civil(
+                dt.civil().ok_or_else(|| {
+                    map_type(TypeError::DatetimeOutOfRange {
+                        message: "timestamp out of range".into(),
+                    })
+                })?,
+                None,
+            );
             datetime::format_datetime(template, &fields).map_err(map_type)?
         }
         Datum::Time(t) => {
@@ -926,7 +946,7 @@ mod tests {
         }
         assert_eq!(
             super::to_char(
-                &Datum::Timestamp(jiff::civil::datetime(2024, 1, 1, 0, 0, 0, 0)),
+                &Datum::Timestamp(jiff::civil::datetime(2024, 1, 1, 0, 0, 0, 0).into()),
                 "YYYY",
                 &ctx,
                 "to_char"
@@ -1162,7 +1182,7 @@ mod tests {
         );
         assert_eq!(
             ev("make_timestamp(2024, 7, 4, 13, 45, 6)"),
-            Datum::Timestamp(jiff::civil::datetime(2024, 7, 4, 13, 45, 6, 0))
+            Datum::Timestamp(jiff::civil::datetime(2024, 7, 4, 13, 45, 6, 0).into())
         );
         // justify_interval rolls 27h → +1 day, 3h and 35 days → +1 month, 5 days.
         assert_eq!(

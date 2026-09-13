@@ -198,10 +198,68 @@ impl From<Date> for PgDate {
 pub const DATE_INFINITY: PgDate = PgDate::Infinity;
 /// `date '-infinity'`.
 pub const DATE_NEG_INFINITY: PgDate = PgDate::NegInfinity;
+
+/// A PostgreSQL `timestamp without time zone`.
+///
+/// PostgreSQL stores finite values as microseconds from 2000-01-01 and reserves
+/// the two `i64` extremes for infinity.  Keep that representation in memory as
+/// well: Jiff's civil range ends in year 9,999, while PostgreSQL accepts year
+/// 294,276.  Jiff remains the bridge for operations that need timezone data.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum PgTimestamp {
+    /// `timestamp '-infinity'`.
+    NegInfinity,
+    /// Finite microseconds since PostgreSQL's 2000-01-01 epoch.
+    Finite(i64),
+    /// `timestamp 'infinity'`.
+    Infinity,
+}
+
+impl PgTimestamp {
+    /// The finite PostgreSQL-epoch microseconds, if this is not infinity.
+    #[must_use]
+    pub fn epoch_micros(self) -> Option<i64> {
+        match self {
+            PgTimestamp::Finite(micros) => Some(micros),
+            PgTimestamp::NegInfinity | PgTimestamp::Infinity => None,
+        }
+    }
+
+    /// The timestamp as a Jiff civil value when Jiff can represent it.
+    #[must_use]
+    pub fn civil(self) -> Option<DateTime> {
+        let micros = self.epoch_micros()?;
+        let unix_micros = micros.checked_add(PG_EPOCH_UNIX_SECS * 1_000_000)?;
+        Timestamp::from_microsecond(unix_micros)
+            .ok()
+            .map(|timestamp| timestamp.to_zoned(TimeZone::UTC).datetime())
+    }
+
+    /// `1` for `infinity`, `-1` for `-infinity`, `0` for finite values.
+    #[must_use]
+    pub fn sign(self) -> i32 {
+        match self {
+            PgTimestamp::NegInfinity => -1,
+            PgTimestamp::Finite(_) => 0,
+            PgTimestamp::Infinity => 1,
+        }
+    }
+}
+
+impl From<DateTime> for PgTimestamp {
+    fn from(value: DateTime) -> Self {
+        let micros = value
+            .since((jiff::Unit::Microsecond, pg_epoch_datetime()))
+            .map(|span| span.get_microseconds())
+            .expect("Jiff timestamp lies inside PostgreSQL timestamp range");
+        PgTimestamp::Finite(micros)
+    }
+}
+
 /// `timestamp 'infinity'`.
-pub const TIMESTAMP_INFINITY: DateTime = DateTime::MAX;
+pub const TIMESTAMP_INFINITY: PgTimestamp = PgTimestamp::Infinity;
 /// `timestamp '-infinity'`.
-pub const TIMESTAMP_NEG_INFINITY: DateTime = DateTime::MIN;
+pub const TIMESTAMP_NEG_INFINITY: PgTimestamp = PgTimestamp::NegInfinity;
 
 /// Whether a `date` is one of the two non-finite values.
 #[must_use]
@@ -211,8 +269,8 @@ pub fn date_is_infinite(d: PgDate) -> bool {
 
 /// Whether a `timestamp` is one of the two non-finite values.
 #[must_use]
-pub fn timestamp_is_infinite(ts: DateTime) -> bool {
-    ts == TIMESTAMP_INFINITY || ts == TIMESTAMP_NEG_INFINITY
+pub fn timestamp_is_infinite(ts: PgTimestamp) -> bool {
+    ts.epoch_micros().is_none()
 }
 
 /// `timestamptz 'infinity'`.
@@ -242,14 +300,8 @@ pub fn date_infinite_sign(d: PgDate) -> i32 {
 
 /// [`date_infinite_sign`] for `timestamp`.
 #[must_use]
-pub fn timestamp_infinite_sign(ts: DateTime) -> i32 {
-    if ts == TIMESTAMP_INFINITY {
-        1
-    } else if ts == TIMESTAMP_NEG_INFINITY {
-        -1
-    } else {
-        0
-    }
+pub fn timestamp_infinite_sign(ts: PgTimestamp) -> i32 {
+    ts.sign()
 }
 
 /// [`date_infinite_sign`] for `timestamptz`.
@@ -266,7 +318,7 @@ pub fn timestamptz_infinite_sign(ts: Timestamp) -> i32 {
 
 /// The `timestamp` of the given sign: `+1` → `infinity`, `-1` → `-infinity`.
 #[must_use]
-pub fn timestamp_infinity_of_sign(sign: i32) -> DateTime {
+pub fn timestamp_infinity_of_sign(sign: i32) -> PgTimestamp {
     if sign >= 0 {
         TIMESTAMP_INFINITY
     } else {
@@ -624,11 +676,14 @@ pub fn date_diff_days(a: PgDate, b: PgDate) -> Result<i32, TypeError> {
 /// A non-finite date becomes the `timestamp` of the same sign. That is what
 /// keeps `date 'infinity' = timestamp 'infinity'` true. The two types hold the
 /// same value in different storage, and the cross-type comparisons meet here.
-pub fn date_to_midnight(d: PgDate) -> Result<DateTime, TypeError> {
+pub fn date_to_midnight(d: PgDate) -> Result<PgTimestamp, TypeError> {
     match d {
-        PgDate::Finite(days) => date_from_epoch_days(days)
-            .map(|date| date.to_datetime(Time::midnight()))
-            .ok_or_else(date_out_of_range_for_timestamp),
+        PgDate::Finite(days) => timestamp_from_epoch_micros(
+            i64::from(days)
+                .checked_mul(USECS_PER_DAY_I64)
+                .ok_or_else(date_out_of_range_for_timestamp)?,
+        )
+        .map_err(|_| date_out_of_range_for_timestamp()),
         PgDate::Infinity => Ok(TIMESTAMP_INFINITY),
         PgDate::NegInfinity => Ok(TIMESTAMP_NEG_INFINITY),
     }
@@ -637,7 +692,7 @@ pub fn date_to_midnight(d: PgDate) -> Result<DateTime, TypeError> {
 /// Compare a `date` with a timestamp without forcing a finite date outside
 /// Jiff's timezone bridge into a false timestamp value.
 #[must_use]
-pub fn date_cmp_timestamp(d: PgDate, ts: DateTime) -> std::cmp::Ordering {
+pub fn date_cmp_timestamp(d: PgDate, ts: PgTimestamp) -> std::cmp::Ordering {
     date_to_midnight(d).map_or(std::cmp::Ordering::Greater, |midnight| midnight.cmp(&ts))
 }
 
@@ -657,6 +712,8 @@ pub fn date_plus_timetz(d: PgDate, t: TimeTz) -> Result<Timestamp, TypeError> {
     // A `date` spans more years than a `timestamp` does, and the offset can push
     // the instant out of range on its own, so both steps can fail.
     date_to_midnight(d)?
+        .civil()
+        .ok_or_else(date_out_of_range_for_timestamp)?
         .to_zoned(TimeZone::UTC)
         .map_err(|_| date_out_of_range_for_timestamp())?
         .timestamp()
@@ -723,7 +780,7 @@ pub fn interval_to_time(iv: Interval) -> Result<PgTime, TypeError> {
 /// Add an `Interval` to a `Date` (PG: promotes date→midnight timestamp first)
 /// and return a `DateTime`. This function applies months, then days, then micros
 /// in order (calendar-aware, with a jiff `Span`).
-pub fn date_plus_interval(d: PgDate, iv: Interval) -> Result<DateTime, TypeError> {
+pub fn date_plus_interval(d: PgDate, iv: Interval) -> Result<PgTimestamp, TypeError> {
     // `date_to_midnight` already promotes a non-finite date to the `timestamp`
     // of the same sign, and `timestamp_plus_interval` carries that through.
     timestamp_plus_interval(date_to_midnight(d)?, iv)
@@ -732,45 +789,43 @@ pub fn date_plus_interval(d: PgDate, iv: Interval) -> Result<DateTime, TypeError
 /// Add an `Interval` to a `DateTime`. Applies months, days, and micros in
 /// sequence so that `+1 month` lands on the correct calendar date and only then
 /// the time offset is applied.
-pub fn timestamp_plus_interval(ts: DateTime, iv: Interval) -> Result<DateTime, TypeError> {
+pub fn timestamp_plus_interval(ts: PgTimestamp, iv: Interval) -> Result<PgTimestamp, TypeError> {
     if let Some(sign) = combine_infinite(timestamp_infinite_sign(ts), iv.infinite_sign()) {
         if sign == 0 {
             return Err(timestamp_out_of_range());
         }
         return Ok(timestamp_infinity_of_sign(sign));
     }
-    let overflow = |_| TypeError::DatetimeFieldOverflow {
+    let (mut year, mut month, mut day, micros_of_day) =
+        timestamp_parts(ts).expect("finite timestamp has calendar parts");
+    if iv.months != 0 {
+        let absolute_month = i64::from(year) * 12 + i64::from(month - 1) + i64::from(iv.months);
+        year =
+            i32::try_from(absolute_month.div_euclid(12)).map_err(|_| timestamp_out_of_range())?;
+        month = i32::try_from(absolute_month.rem_euclid(12) + 1).expect("month is in 1..=12");
+        day = day.min(days_in_month(year, month));
+    }
+    let days = gregorian_to_julian_day(year, month, day)
+        .checked_add(i64::from(iv.days))
+        .ok_or_else(timestamp_out_of_range)?;
+    let (year, month, day) = julian_day_to_gregorian(days);
+    let overflow = || TypeError::DatetimeFieldOverflow {
         value: "interval arithmetic".into(),
     };
-    // Apply months (calendar-aware, e.g. Jan 31 + 1 month → Feb 28/29).
-    let after_months = if iv.months != 0 {
-        ts.checked_add(iv.months.months()).map_err(overflow)?
-    } else {
-        ts
-    };
-    // Apply days (calendar-aware, skips DST ambiguity for civil datetimes).
-    let after_days = if iv.days != 0 {
-        let days = Span::new().try_days(iv.days).map_err(overflow)?;
-        after_months.checked_add(days).map_err(overflow)?
-    } else {
-        after_months
-    };
-    // Apply microseconds.
-    let result = if iv.micros != 0 {
-        after_days
-            .checked_add(iv.micros.microseconds())
-            .map_err(overflow)?
-    } else {
-        after_days
-    };
-    Ok(result)
+    let base = timestamp_from_parts(year, month, day, micros_of_day).map_err(|_| overflow())?;
+    let micros = base
+        .epoch_micros()
+        .expect("timestamp_from_parts is finite")
+        .checked_add(iv.micros)
+        .ok_or_else(timestamp_out_of_range)?;
+    timestamp_from_epoch_micros(micros).map_err(|_| overflow())
 }
 
 /// Compute `a - b` for two `DateTime` values and return an `Interval` with
 /// months = 0 (PG's `timestamp - timestamp` result: total micros, stored in
 /// the days + micros fields, days for full 86400 µs days and the remainder in
 /// micros).
-pub fn timestamp_diff(a: DateTime, b: DateTime) -> Result<Interval, TypeError> {
+pub fn timestamp_diff(a: PgTimestamp, b: PgTimestamp) -> Result<Interval, TypeError> {
     // Two infinities of the same sign cancel to nothing definable; one infinite
     // operand gives the infinite interval of the difference's sign.
     if let Some(result) =
@@ -779,9 +834,10 @@ pub fn timestamp_diff(a: DateTime, b: DateTime) -> Result<Interval, TypeError> {
         return result;
     }
     let total_micros = a
-        .since((jiff::Unit::Microsecond, b))
-        .map(|span| span.get_microseconds())
-        .expect("difference of in-range timestamp values always fits in a Span");
+        .epoch_micros()
+        .expect("finite timestamp")
+        .checked_sub(b.epoch_micros().expect("finite timestamp"))
+        .ok_or_else(interval_out_of_range)?;
     // Split into whole days + remaining micros (matching PG's interval storage).
     let days = (total_micros / USECS_PER_DAY_I64) as i32;
     let micros = total_micros % USECS_PER_DAY_I64;
@@ -825,10 +881,15 @@ pub fn time_plus_interval(t: PgTime, iv: Interval) -> PgTime {
 /// one, so `date 'infinity' + time '01:00'` is `infinity` and not a clock
 /// reading on the last representable day.
 #[must_use]
-pub fn combine_date_time(d: PgDate, t: PgTime) -> Option<DateTime> {
-    match d.finite() {
-        Some(civil) => t.on_date(civil),
-        None => Some(timestamp_infinity_of_sign(d.sign())),
+pub fn combine_date_time(d: PgDate, t: PgTime) -> Option<PgTimestamp> {
+    match d {
+        PgDate::Finite(days) => timestamp_from_epoch_micros(
+            i64::from(days)
+                .checked_mul(USECS_PER_DAY_I64)?
+                .checked_add(t.micros_of_day())?,
+        )
+        .ok(),
+        PgDate::Infinity | PgDate::NegInfinity => Some(timestamp_infinity_of_sign(d.sign())),
     }
 }
 
@@ -1004,9 +1065,9 @@ pub fn apply_timetz_typmod(value: TimeTz, precision: Option<u8>) -> Result<TimeT
 
 /// Round a `timestamp(p)` value about PostgreSQL's 2000-01-01 epoch.
 pub fn apply_timestamp_typmod(
-    value: DateTime,
+    value: PgTimestamp,
     precision: Option<u8>,
-) -> Result<DateTime, TypeError> {
+) -> Result<PgTimestamp, TypeError> {
     if timestamp_is_infinite(value) {
         return Ok(value);
     }
@@ -1098,6 +1159,46 @@ const PG_EPOCH_UNIX_SECS: i64 = 946_684_800;
 
 /// Microseconds in one calendar day (24h estimate; civil days are always 24h).
 const USECS_PER_DAY_I64: i64 = 86_400_000_000;
+const USECS_PER_HOUR: i64 = 3_600_000_000;
+const USECS_PER_MINUTE: i64 = 60_000_000;
+const USECS_PER_SEC: i64 = 1_000_000;
+
+/// PostgreSQL's finite timestamp interval, expressed in epoch microseconds.
+/// The upper bound is exclusive; `INT64_{MIN,MAX}` remain the wire encodings
+/// for the two infinities.
+const MIN_TIMESTAMP_MICROS: i64 = -211_813_488_000_000_000;
+const MAX_TIMESTAMP_MICROS_EXCLUSIVE: i64 = 9_223_371_331_200_000_000;
+
+fn timestamp_from_epoch_micros(micros: i64) -> Result<PgTimestamp, TypeError> {
+    if !(MIN_TIMESTAMP_MICROS..MAX_TIMESTAMP_MICROS_EXCLUSIVE).contains(&micros) {
+        return Err(timestamp_out_of_range());
+    }
+    Ok(PgTimestamp::Finite(micros))
+}
+
+pub(crate) fn timestamp_parts(ts: PgTimestamp) -> Option<(i32, i32, i32, i64)> {
+    let micros = ts.epoch_micros()?;
+    let days = micros.div_euclid(USECS_PER_DAY_I64);
+    let micros_of_day = micros.rem_euclid(USECS_PER_DAY_I64);
+    let (year, month, day) = date_parts(i32::try_from(days).ok()?);
+    Some((year, month, day, micros_of_day))
+}
+
+fn timestamp_from_parts(
+    year: i32,
+    month: i32,
+    day: i32,
+    micros_of_day: i64,
+) -> Result<PgTimestamp, TypeError> {
+    if !(1..=12).contains(&month) || !(1..=days_in_month(year, month)).contains(&day) {
+        return Err(timestamp_out_of_range());
+    }
+    let micros = (gregorian_to_julian_day(year, month, day) - POSTGRES_EPOCH_JULIAN_DAY)
+        .checked_mul(USECS_PER_DAY_I64)
+        .and_then(|micros| micros.checked_add(micros_of_day))
+        .ok_or_else(timestamp_out_of_range)?;
+    timestamp_from_epoch_micros(micros)
+}
 
 // ---------------------------------------------------------------------------
 // Sub-second rendering. PostgreSQL prints the fractional seconds only when
@@ -1224,8 +1325,8 @@ fn special_to_date(special: Special) -> PgDate {
 /// Resolve a whole-value reserved timestamp spelling.
 fn special_to_datetime(special: Special) -> DateTime {
     match special {
-        Special::Infinity => TIMESTAMP_INFINITY,
-        Special::NegInfinity => TIMESTAMP_NEG_INFINITY,
+        Special::Infinity => DateTime::MAX,
+        Special::NegInfinity => DateTime::MIN,
         Special::Epoch => DateTime::constant(1970, 1, 1, 0, 0, 0, 0),
     }
 }
@@ -1292,7 +1393,7 @@ fn parse_extended_iso_date(s: &str) -> Option<Result<PgDate, TypeError>> {
     else {
         return None;
     };
-    if year.len() <= 4 || !year.bytes().all(|byte| byte.is_ascii_digit()) {
+    if (!bc && year.len() <= 4) || !year.bytes().all(|byte| byte.is_ascii_digit()) {
         return None;
     }
     let parse = |field: &str| field.parse::<i32>().ok();
@@ -1469,7 +1570,7 @@ pub fn date_to_text_in(d: PgDate, style: DateStyle, order: DateOrder) -> String 
 
 /// Render a `timestamp` in the session's `DateStyle`.
 #[must_use]
-pub fn timestamp_to_text_in(ts: DateTime, style: DateStyle, order: DateOrder) -> String {
+pub fn timestamp_to_text_in(ts: PgTimestamp, style: DateStyle, order: DateOrder) -> String {
     if style == DateStyle::Iso {
         return timestamp_to_text(ts);
     }
@@ -1479,14 +1580,34 @@ pub fn timestamp_to_text_in(ts: DateTime, style: DateStyle, order: DateOrder) ->
     if ts == TIMESTAMP_NEG_INFINITY {
         return "-infinity".to_string();
     }
-    let (_, era) = era_year(ts.date().year());
+    let (year, month, day, micros_of_day) =
+        timestamp_parts(ts).expect("finite timestamp has parts");
+    let (display_year, era) = era_year_i32(year);
+    let hour = micros_of_day / USECS_PER_HOUR;
+    let minute = (micros_of_day % USECS_PER_HOUR) / USECS_PER_MINUTE;
+    let second = (micros_of_day % USECS_PER_MINUTE) / USECS_PER_SEC;
+    let clock = {
+        let mut clock = format!("{hour:02}:{minute:02}:{second:02}");
+        push_subsecond(
+            &mut clock,
+            i32::try_from(micros_of_day % USECS_PER_SEC).expect("subsecond fits") * 1_000,
+        );
+        clock
+    };
     let body = if style == DateStyle::Postgres {
-        postgres_style_datetime(ts, order)
+        let julian_day = gregorian_to_julian_day(year, month, day);
+        let weekday = (julian_day + 1).rem_euclid(7);
+        let dow = &DAY_NAMES[usize::try_from(weekday).expect("weekday fits")][..3];
+        let month_name = &MONTH_NAMES[usize::try_from(month - 1).expect("month fits")][..3];
+        if DateStyle::Postgres.day_first(order) {
+            format!("{dow} {day:02} {month_name} {clock} {display_year:04}")
+        } else {
+            format!("{dow} {month_name} {day:02} {clock} {display_year:04}")
+        }
     } else {
         format!(
-            "{} {}",
-            styled_date(ts.date(), style, order),
-            styled_clock(ts.time())
+            "{} {clock}",
+            styled_date_parts(year, month, day, style, order)
         )
     };
     format!("{body}{era}")
@@ -1674,7 +1795,7 @@ impl PgTime {
             None => date
                 .tomorrow()
                 .ok()
-                .and_then(|next| date_to_midnight(next.into()).ok()),
+                .map(|next| next.to_datetime(Time::midnight())),
         }
     }
 }
@@ -1835,7 +1956,7 @@ pub fn parse_timetz_in_at(
     // `24:00:00` is midnight on the following day.
     let instant_on = |date: Date| {
         time.on_date(date)
-            .unwrap_or_else(|| date_to_midnight(date.into()).expect("Jiff date fits timestamp"))
+            .unwrap_or_else(|| date.to_datetime(Time::midnight()))
     };
     let offset = match parts.zone {
         Some(Zone::Offset(offset)) => offset,
@@ -1980,12 +2101,16 @@ pub fn time_from_binary(b: &[u8]) -> Result<PgTime, TypeError> {
 /// Parse a `timestamp` literal in every spelling `PostgreSQL` accepts. A zone in
 /// the text is decoded (so an unresolvable one is still an error) and then
 /// discarded, because this type has no zone.
-pub fn parse_timestamp(s: &str) -> Result<DateTime, TypeError> {
+pub fn parse_timestamp(s: &str) -> Result<PgTimestamp, TypeError> {
     parse_timestamp_in(s, DateOrder::default(), &TimeZone::UTC)
 }
 
 /// [`parse_timestamp`] with the session's `DateStyle` field order and zone.
-pub fn parse_timestamp_in(s: &str, order: DateOrder, tz: &TimeZone) -> Result<DateTime, TypeError> {
+pub fn parse_timestamp_in(
+    s: &str,
+    order: DateOrder,
+    tz: &TimeZone,
+) -> Result<PgTimestamp, TypeError> {
     parse_timestamp_in_at(s, order, tz, clock_now())
 }
 
@@ -1995,13 +2120,18 @@ pub fn parse_timestamp_in_at(
     order: DateOrder,
     tz: &TimeZone,
     now: Timestamp,
-) -> Result<DateTime, TypeError> {
+) -> Result<PgTimestamp, TypeError> {
     // `timestamp_in` names the type `timestamp`, as `time_in` names `time`.
     let type_name = "timestamp";
+    if let Some(parsed) = parse_extended_iso_timestamp(s) {
+        return parsed;
+    }
     match decode_at(s.trim(), order, DecodeMode::DateTime, tz, now)
         .map_err(|e| decode_error(e, type_name, s))?
     {
-        Decoded::Special(special) => Ok(special_to_datetime(special)),
+        Decoded::Special(Special::Infinity) => Ok(TIMESTAMP_INFINITY),
+        Decoded::Special(Special::NegInfinity) => Ok(TIMESTAMP_NEG_INFINITY),
+        Decoded::Special(special) => Ok(PgTimestamp::from(special_to_datetime(special))),
         Decoded::Parts(parts) => {
             let date = parts.date.ok_or_else(|| TypeError::InvalidDatetimeFormat {
                 type_name,
@@ -2014,9 +2144,83 @@ pub fn parse_timestamp_in_at(
     }
 }
 
+/// Parse the ISO timestamp spelling outside Jiff's civil calendar range.
+///
+/// Ordinary input continues through the PostgreSQL-compatible decoder. This
+/// pre-pass only handles the unambiguous `YYYYY-MM-DD HH:MM:SS` form that the
+/// decoder cannot materialize as a Jiff `Date`.
+fn parse_extended_iso_timestamp(s: &str) -> Option<Result<PgTimestamp, TypeError>> {
+    let input = s.trim();
+    let (date_time, bc) = input
+        .strip_suffix(" BC")
+        .map_or((input, false), |date_time| (date_time, true));
+    let (date, time) = date_time.split_once(' ').unwrap_or((date_time, "00:00:00"));
+    let mut fields = date.split('-');
+    let (Some(year), Some(month), Some(day), None) =
+        (fields.next(), fields.next(), fields.next(), fields.next())
+    else {
+        return None;
+    };
+    if (!bc && year.len() <= 4) || !year.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    let (Ok(year), Ok(month), Ok(day)) = (
+        year.parse::<i32>(),
+        month.parse::<i32>(),
+        day.parse::<i32>(),
+    ) else {
+        return None;
+    };
+    if !(1..=12).contains(&month) {
+        return None;
+    }
+    Some(
+        parse_time(time)
+            .map_err(|_| TypeError::DatetimeFieldOverflow {
+                value: input.to_string(),
+            })
+            .and_then(|time| {
+                timestamp_from_parts(
+                    if bc { 1 - year } else { year },
+                    month,
+                    day,
+                    time.micros_of_day(),
+                )
+            })
+            .map_err(|_| TypeError::DatetimeOutOfRange {
+                message: format!("timestamp out of range: \"{input}\""),
+            }),
+    )
+}
+
 /// Join a date and a microsecond-of-day into a civil timestamp, carrying the
 /// `24:00:00` reading into the following day the way `PostgreSQL` does.
-fn combine_parts(date: Date, micros_of_day: i64, s: &str) -> Result<DateTime, TypeError> {
+fn combine_parts(date: Date, micros_of_day: i64, s: &str) -> Result<PgTimestamp, TypeError> {
+    let overflow = || TypeError::DatetimeFieldOverflow {
+        value: s.to_string(),
+    };
+    let (date, micros_of_day) = if micros_of_day >= MICROS_PER_DAY {
+        (
+            date.tomorrow().map_err(|_| overflow())?,
+            micros_of_day - MICROS_PER_DAY,
+        )
+    } else {
+        (date, micros_of_day)
+    };
+    let days = epoch_days_from_date(date);
+    i64::from(days)
+        .checked_mul(USECS_PER_DAY_I64)
+        .and_then(|micros| micros.checked_add(micros_of_day))
+        .and_then(|micros| timestamp_from_epoch_micros(micros).ok())
+        .ok_or_else(overflow)
+}
+
+/// The civil half of [`combine_parts`] for `timestamptz` input.
+///
+/// A wall-clock reading can be one day outside the finite timestamp range and
+/// still name the first/last valid instant after its explicit zone offset is
+/// applied. Do not apply the timestamp range check before that conversion.
+fn combine_parts_civil(date: Date, micros_of_day: i64, s: &str) -> Result<DateTime, TypeError> {
     let overflow = || TypeError::DatetimeFieldOverflow {
         value: s.to_string(),
     };
@@ -2029,13 +2233,13 @@ fn combine_parts(date: Date, micros_of_day: i64, s: &str) -> Result<DateTime, Ty
         (date, micros_of_day)
     };
     PgTime::from_micros_of_day(micros_of_day)
-        .and_then(|t| t.on_date(date))
+        .and_then(|time| time.on_date(date))
         .ok_or_else(overflow)
 }
 
 /// Reject a literal outside the finite range, the timestamp counterpart of
 /// [`check_finite_date`].
-fn check_finite_timestamp(ts: DateTime, s: &str) -> Result<(), TypeError> {
+fn check_finite_timestamp(ts: PgTimestamp, s: &str) -> Result<(), TypeError> {
     if !timestamp_is_in_range(ts) {
         return Err(TypeError::DatetimeOutOfRange {
             message: format!("timestamp out of range: \"{s}\""),
@@ -2046,53 +2250,50 @@ fn check_finite_timestamp(ts: DateTime, s: &str) -> Result<(), TypeError> {
 
 /// Whether a timestamp is a finite value in PostgreSQL's supported range.
 #[must_use]
-pub fn timestamp_is_in_range(ts: DateTime) -> bool {
-    !timestamp_is_infinite(ts) && ts.date() >= MIN_FINITE_DATE
+pub fn timestamp_is_in_range(ts: PgTimestamp) -> bool {
+    ts.epoch_micros().is_some_and(|micros| {
+        (MIN_TIMESTAMP_MICROS..MAX_TIMESTAMP_MICROS_EXCLUSIVE).contains(&micros)
+    })
 }
 
 /// Render a `timestamp` as `YYYY-MM-DD HH:MM:SS[.ffffff]` (SPACE separator,
 /// PostgreSQL `timestamp_out`, ISO datestyle), with the `BC` era suffix.
-pub fn timestamp_to_text(ts: DateTime) -> String {
+pub fn timestamp_to_text(ts: PgTimestamp) -> String {
     if ts == TIMESTAMP_INFINITY {
         return "infinity".to_string();
     }
     if ts == TIMESTAMP_NEG_INFINITY {
         return "-infinity".to_string();
     }
-    let d = ts.date();
-    let tm = ts.time();
-    let (year, era) = era_year(d.year());
-    let mut out = format!(
-        "{year:04}-{:02}-{:02} {:02}:{:02}:{:02}",
-        d.month(),
-        d.day(),
-        tm.hour(),
-        tm.minute(),
-        tm.second()
+    let (year, month, day, micros_of_day) =
+        timestamp_parts(ts).expect("finite timestamp has parts");
+    let (year, era) = era_year_i32(year);
+    let hour = micros_of_day / USECS_PER_HOUR;
+    let minute = (micros_of_day % USECS_PER_HOUR) / USECS_PER_MINUTE;
+    let second = (micros_of_day % USECS_PER_MINUTE) / USECS_PER_SEC;
+    let mut out = format!("{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}:{second:02}",);
+    push_subsecond(
+        &mut out,
+        i32::try_from(micros_of_day % USECS_PER_SEC).expect("subsecond fits") * 1_000,
     );
-    push_subsecond(&mut out, tm.subsec_nanosecond());
     out.push_str(era);
     out
 }
 
 /// `timestamp_send`: i64 big-endian microseconds since the PG epoch. The two
 /// non-finite values use PostgreSQL's reserved `INT64_MIN`/`INT64_MAX`.
-pub fn timestamp_to_binary(ts: DateTime) -> [u8; 8] {
+pub fn timestamp_to_binary(ts: PgTimestamp) -> [u8; 8] {
     if ts == TIMESTAMP_INFINITY {
         return i64::MAX.to_be_bytes();
     }
     if ts == TIMESTAMP_NEG_INFINITY {
         return i64::MIN.to_be_bytes();
     }
-    let micros = ts
-        .since((jiff::Unit::Microsecond, pg_epoch_datetime()))
-        .map(|span| span.get_microseconds())
-        .expect("difference from a valid timestamp to the PG epoch always fits");
-    micros.to_be_bytes()
+    ts.epoch_micros().expect("finite timestamp").to_be_bytes()
 }
 
 /// `timestamp_recv`: i64 big-endian microseconds since the PG epoch.
-pub fn timestamp_from_binary(b: &[u8]) -> Result<DateTime, TypeError> {
+pub fn timestamp_from_binary(b: &[u8]) -> Result<PgTimestamp, TypeError> {
     let arr: [u8; 8] = b.try_into().map_err(|_| TypeError::InvalidDatetimeFormat {
         type_name: "timestamp without time zone",
         value: format!("{b:?}"),
@@ -2104,20 +2305,7 @@ pub fn timestamp_from_binary(b: &[u8]) -> Result<DateTime, TypeError> {
     if pg_micros == i64::MIN {
         return Ok(TIMESTAMP_NEG_INFINITY);
     }
-    // Route through a non-panicking UTC `Timestamp` — `ToSpan::microseconds()`
-    // PANICS outside jiff's Span range and these bytes are arbitrary. The civil
-    // timestamp is µs since 2000-01-01 read as UTC, so the round trip is exact
-    // (UTC has no DST). Overflow on either step → 22008.
-    let unix_micros = pg_micros
-        .checked_add(PG_EPOCH_UNIX_SECS * 1_000_000)
-        .ok_or_else(|| TypeError::DatetimeFieldOverflow {
-            value: pg_micros.to_string(),
-        })?;
-    Timestamp::from_microsecond(unix_micros)
-        .map(|ts| ts.to_zoned(jiff::tz::TimeZone::UTC).datetime())
-        .map_err(|_| TypeError::DatetimeFieldOverflow {
-            value: pg_micros.to_string(),
-        })
+    timestamp_from_epoch_micros(pg_micros)
 }
 
 // ---------------------------------------------------------------------------
@@ -2167,11 +2355,11 @@ pub fn parse_timestamptz_in_at(
                 type_name,
                 value: s.to_string(),
             })?;
-            let dt = combine_parts(date, parts.micros_of_day, s)?;
+            let civil = combine_parts_civil(date, parts.micros_of_day, s)?;
             let instant = match parts.zone {
-                Some(Zone::Offset(off)) => off.to_timestamp(dt).map_err(|_| overflow())?,
-                Some(Zone::Named(zone)) => zoned_instant(dt, &zone).map_err(|_| overflow())?,
-                None => zoned_instant(dt, tz).map_err(|_| overflow())?,
+                Some(Zone::Offset(off)) => off.to_timestamp(civil).map_err(|_| overflow())?,
+                Some(Zone::Named(zone)) => zoned_instant(civil, &zone).map_err(|_| overflow())?,
+                None => zoned_instant(civil, tz).map_err(|_| overflow())?,
             };
             // The range check belongs on the INSTANT, not on the local reading:
             // `4714-11-23 16:00:00-08 BC` is a legal `timestamptz` precisely
@@ -3774,7 +3962,10 @@ impl DateTimeFields {
     #[must_use]
     pub fn from_time(t: PgTime, tz_offset_secs: Option<i32>) -> Self {
         let mut fields = Self::from_civil(
-            date_to_midnight(Date::constant(2000, 1, 1).into()).expect("epoch fits timestamp"),
+            date_to_midnight(Date::constant(2000, 1, 1).into())
+                .expect("epoch fits timestamp")
+                .civil()
+                .expect("epoch fits Jiff"),
             tz_offset_secs,
         );
         fields.hour = t.hour() as u32;
@@ -6525,47 +6716,6 @@ fn days_in_month(year: i32, month: i32) -> i32 {
     }
 }
 
-/// [`make_date`]'s calendar half, for the callers that go straight on to build a
-/// `timestamp` and so need the civil fields back.
-fn make_date_civil(year: i32, month: i32, day: i32) -> Result<Date, TypeError> {
-    let is_bc = year < 0;
-    // PostgreSQL negates in place and then reports whatever the field holds at
-    // the moment it fails, so the year in the message is the era-corrected one
-    // everywhere except on the negation itself.
-    let magnitude = if is_bc {
-        year.checked_neg()
-            .ok_or_else(|| date_field_out_of_range(year, month, day))?
-    } else {
-        year
-    };
-    if magnitude <= 0 {
-        return Err(date_field_out_of_range(magnitude, month, day));
-    }
-    // BC years are stored astronomically: 1 BC is year 0, so `n BC` is `-(n-1)`.
-    let astronomical = if is_bc { -(magnitude - 1) } else { magnitude };
-    // The coarse checks come before the month-length one, which is why
-    // `make_date(2013, 13, 1)` complains about the month and not the day.
-    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
-        return Err(date_field_out_of_range(astronomical, month, day));
-    }
-    let range = || make_date_out_of_range(astronomical, month, day);
-    let y = i16::try_from(astronomical).map_err(|_| range())?;
-    let mo = i8::try_from(month).map_err(|_| range())?;
-    let d = i8::try_from(day).map_err(|_| range())?;
-    let first = Date::new(y, mo, 1).map_err(|_| range())?;
-    if d > first.days_in_month() {
-        return Err(date_field_out_of_range(astronomical, month, day));
-    }
-    let built = Date::new(y, mo, d).map_err(|_| range())?;
-    // Nothing below PostgreSQL's own lower bound is a date a constructor may
-    // return. There is no upper case: the non-finite values are out of band, so
-    // the last civil date is an ordinary result.
-    if built < MIN_FINITE_DATE {
-        return Err(range());
-    }
-    Ok(built)
-}
-
 /// `make_time(hour, min, sec)` (`float_time_overflows` then `tm2time`); the
 /// fractional part of `sec` becomes microseconds, PostgreSQL's resolution.
 ///
@@ -6599,13 +6749,13 @@ pub fn make_timestamp_civil(
     h: i32,
     mi: i32,
     sec: f64,
-) -> Result<DateTime, TypeError> {
-    let date = make_date_civil(y, mo, d)?;
+) -> Result<PgTimestamp, TypeError> {
+    let date = make_date(y, mo, d)?;
     let time = make_time(h, mi, sec)?;
-    combine_date_time(date.into(), time).ok_or_else(|| TypeError::DatetimeOutOfRange {
+    combine_date_time(date, time).ok_or_else(|| TypeError::DatetimeOutOfRange {
         message: format!(
             "timestamp out of range: {}-{mo:02}-{d:02} {h}:{mi:02}:{}",
-            date.year(),
+            y,
             format_seconds_g(sec)
         ),
     })
@@ -8098,12 +8248,10 @@ mod mutation_tests {
     }
 
     #[test]
-    fn timestamp_plus_interval_reports_oversized_day_span() {
+    fn timestamp_plus_interval_reaches_postgres_calendar_range() {
         let base = parse_timestamp("2024-01-01 00:00:00").expect("ts");
-        assert!(matches!(
-            timestamp_plus_interval(base, iv(0, 106_000_000, 0)),
-            Err(TypeError::DatetimeFieldOverflow { .. })
-        ));
+        let got = timestamp_plus_interval(base, iv(0, 106_000_000, 0)).expect("within PG range");
+        assert!(timestamp_is_in_range(got));
     }
 
     // -- time_plus_interval ---------------------------------------------
@@ -8539,7 +8687,7 @@ mod make_justify_tests {
         assert!(make_time(24, 1, 0.0).is_err());
         assert_eq!(
             make_timestamp_civil(2024, 7, 4, 13, 45, 6.0).expect("ts"),
-            jiff::civil::datetime(2024, 7, 4, 13, 45, 6, 0)
+            jiff::civil::datetime(2024, 7, 4, 13, 45, 6, 0).into()
         );
         // make_interval positional: 1 year, 2 months, 0 weeks, 3 days.
         assert_eq!(
