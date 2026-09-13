@@ -24,11 +24,11 @@ use std::{
 use crabka_pgkv::{Kv, WriteOp};
 use crabka_pgmvcc::{clog::XidStatus, visibility::Snapshot};
 use crabka_pgparser::ast::{
-    BinaryOp, CopyDestination, CopyDirection, CopySource, CopyStmt, CopyTarget, CreateAsSource,
-    CursorTarget, DiscardTarget, ExplainOptions, Expr, FetchCount, FetchDirection, FuncArgs,
-    IsolationLevel, JoinConstraint, OnConflict, OnConflictAction, OnConflictTarget, QueryBody,
-    QueryExpr, ResetTarget, SelectItem, SetExpr, Statement, TableExpr, TableLockMode, UnaryOp,
-    UnlistenTarget, UtilityStatement,
+    BaseTypeOptionValue, BinaryOp, CopyDestination, CopyDirection, CopySource, CopyStmt,
+    CopyTarget, CreateAsSource, CreateTypeDefinition, CursorTarget, DiscardTarget, ExplainOptions,
+    Expr, FetchCount, FetchDirection, FuncArgs, IsolationLevel, JoinConstraint, OnConflict,
+    OnConflictAction, OnConflictTarget, QueryBody, QueryExpr, ResetTarget, SelectItem, SetExpr,
+    Statement, TableExpr, TableLockMode, UnaryOp, UnlistenTarget, UtilityStatement,
 };
 use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType, RangeValue};
 use crabka_pgwire::{
@@ -18012,6 +18012,7 @@ fn attach_known_runtime_diagnostics(sql: &str, stmt: &Statement, error: PgError)
     let error = attach_plpgsql_definition_return_position(sql, stmt, error);
     let error = attach_rule_action_position(sql, stmt, error);
     let error = attach_typed_table_position(sql, stmt, error);
+    let error = attach_create_type_like_position(sql, stmt, error);
     let error = attach_variadic_array_position(sql, error);
     let error = attach_reg_cast_literal_position(sql, error);
     // The date/time family first: it owns the temporal operand names, which
@@ -18024,6 +18025,49 @@ fn attach_known_runtime_diagnostics(sql: &str, stmt: &Statement, error: PgError)
         stmt,
         attach_range_literal_position(sql, attach_type_input_literal_position(sql, error)),
     )
+}
+
+/// Point at the missing source type in `CREATE TYPE ... LIKE = source`.
+fn attach_create_type_like_position(sql: &str, stmt: &Statement, error: PgError) -> PgError {
+    if error
+        .diagnostics
+        .as_ref()
+        .is_some_and(|diagnostics| diagnostics.position.is_some())
+        || error.code != "42704"
+    {
+        return error;
+    }
+    let Statement::CreateType {
+        definition: CreateTypeDefinition::Base(options),
+        ..
+    } = stmt
+    else {
+        return error;
+    };
+    let Some(BaseTypeOptionValue::Name(name)) = options
+        .iter()
+        .find(|option| option.name == "like")
+        .map(|option| &option.value)
+    else {
+        return error;
+    };
+    if error.message != format!("type \"{name}\" does not exist") {
+        return error;
+    }
+    let Ok(tokens) = crabka_pgparser::lexer::lex(sql) else {
+        return error;
+    };
+    let positions: Vec<_> = tokens
+        .iter()
+        .filter_map(|(token, offset)| {
+            matches!(token, crabka_pgparser::token::Token::Ident(found) if found == name)
+                .then(|| sql[..*offset].chars().count() + 1)
+        })
+        .collect();
+    match positions.as_slice() {
+        [position] => error.with_position(*position),
+        _ => error,
+    }
 }
 
 fn attach_plpgsql_definition_return_position(
@@ -20555,6 +20599,29 @@ mod tests {
                 .as_ref()
                 .and_then(|fields| fields.position)
                 == Some(32),
+        );
+    }
+
+    #[test]
+    fn create_type_like_error_points_at_the_missing_type() {
+        let sql =
+            "CREATE TYPE xfloat8 (input = xfloat8in, output = xfloat8out, like = no_such_type)";
+        let statement = crabka_pgparser::parse(sql)
+            .expect("parse")
+            .pop()
+            .expect("one statement");
+        let error = super::attach_create_type_like_position(
+            sql,
+            &statement,
+            crabka_pgwire::error::PgError::error("42704", "type \"no_such_type\" does not exist"),
+        );
+
+        assert!(
+            error
+                .diagnostics
+                .as_ref()
+                .and_then(|fields| fields.position)
+                == Some(sql.find("no_such_type").expect("type name") + 1),
         );
     }
 
