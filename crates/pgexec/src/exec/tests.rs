@@ -5302,6 +5302,42 @@ async fn array_target_subscripts_name_the_required_value_type() {
                 .and_then(|diagnostics| diagnostics.hint.as_deref())
                 == Some("You will need to rewrite or cast the expression.")
         );
+        assert!(
+            error
+                .diagnostics
+                .as_ref()
+                .and_then(|diagnostics| diagnostics.position)
+                == sql.find("now").map(|offset| offset + 1)
+        );
+    }
+}
+
+#[tokio::test]
+async fn quantified_array_type_errors_point_at_any_or_all() {
+    use assert2::assert;
+
+    let engine = SqlEngine::new();
+    let mut session = engine.connect();
+    for (sql, message) in [
+        (
+            "SELECT 33 * ANY ('{1,2,3}')",
+            "op ANY/ALL (array) requires operator to yield boolean",
+        ),
+        (
+            "SELECT 33 * ANY (44)",
+            "op ANY/ALL (array) requires array on right side",
+        ),
+    ] {
+        let error = session.simple_query(sql).await.expect_err(sql);
+        assert!(error.code == "42804");
+        assert!(error.message == message);
+        assert!(
+            error
+                .diagnostics
+                .as_ref()
+                .and_then(|diagnostics| diagnostics.position)
+                == sql.find("ANY").map(|offset| offset + 1)
+        );
     }
 }
 

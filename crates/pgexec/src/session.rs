@@ -18142,6 +18142,7 @@ fn attach_known_runtime_diagnostics(sql: &str, stmt: &Statement, error: PgError)
     let error = attach_create_type_like_position(sql, stmt, error);
     let error = attach_variadic_array_position(sql, error);
     let error = attach_reg_cast_literal_position(sql, error);
+    let error = attach_array_runtime_position(sql, error);
     // The date/time family first: it owns the temporal operand names, which
     // `attach_operator_resolution_position` therefore leaves out.
     let error = crate::temporal_arith::attach_operator_position(sql, error);
@@ -18152,6 +18153,59 @@ fn attach_known_runtime_diagnostics(sql: &str, stmt: &Statement, error: PgError)
         stmt,
         attach_range_literal_position(sql, attach_type_input_literal_position(sql, error)),
     )
+}
+
+/// Add the expression position PostgreSQL reports for array-target and
+/// quantified-array type errors. These reach the executor after parsing, so
+/// their parser token offsets are the only source-location information left.
+fn attach_array_runtime_position(sql: &str, error: PgError) -> PgError {
+    use crabka_pgparser::token::{Keyword, Token};
+
+    if error
+        .diagnostics
+        .as_ref()
+        .is_some_and(|diagnostics| diagnostics.position.is_some())
+        || error.code != "42804"
+    {
+        return error;
+    }
+    let Ok(tokens) = crabka_pgparser::lexer::lex(sql) else {
+        return error;
+    };
+    let position = |offset| sql[..offset].chars().count() + 1;
+    let offset = if error.message.starts_with("subscripted assignment to ") {
+        tokens
+            .iter()
+            .position(|(token, _)| *token == Token::Keyword(Keyword::Values))
+            .and_then(|values| tokens.get(values + 1..))
+            .and_then(|after_values| {
+                after_values
+                    .iter()
+                    .find(|(token, _)| !matches!(token, Token::LParen))
+                    .map(|(_, offset)| *offset)
+            })
+    } else if matches!(
+        error.message.as_str(),
+        "op ANY/ALL (array) requires operator to yield boolean"
+            | "op ANY/ALL (array) requires array on right side"
+    ) {
+        let positions: Vec<_> = tokens
+            .iter()
+            .filter_map(|(token, offset)| {
+                matches!(token, Token::Keyword(Keyword::Any | Keyword::All)).then_some(*offset)
+            })
+            .collect();
+        match positions.as_slice() {
+            [offset] => Some(*offset),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    match offset {
+        Some(offset) => error.with_position(position(offset)),
+        None => error,
+    }
 }
 
 /// Point at the missing source type in `CREATE TYPE ... LIKE = source`.
