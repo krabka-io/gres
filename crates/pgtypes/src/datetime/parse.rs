@@ -1609,7 +1609,8 @@ fn lmt_zone(word: &str, tz: &TimeZone) -> Option<Zone> {
     }
     let civil = DateTime::constant(1000, 1, 1, 0, 0, 0, 0);
     let instant = super::zoned_instant(civil, tz).ok()?;
-    Some(Zone::Offset(tz.to_offset(instant)))
+    let offset = tz.to_offset(instant);
+    (offset.seconds() != 0).then_some(Zone::Offset(offset))
 }
 
 /// Resolve a lowercased timezone abbreviation to a UTC offset, for the template

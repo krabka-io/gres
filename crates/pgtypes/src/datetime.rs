@@ -8091,6 +8091,7 @@ mod io_tests {
         let expected = parse_timestamptz("2024-01-01 00:00:00-07:52:58", &TimeZone::UTC)
             .expect("LMT offset");
         assert_eq!(lmt, expected);
+        assert!(parse_timestamptz("2024-01-01 00:00:00 LMT", &TimeZone::UTC).is_err());
     }
 
     #[test]
