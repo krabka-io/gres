@@ -5,4 +5,5 @@
 
 pub(crate) mod exec;
 pub(crate) mod query;
+pub(crate) mod rewrite;
 pub(crate) mod selfuncs;

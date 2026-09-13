@@ -2761,6 +2761,11 @@ fn plan_select(select: &SelectStmt) -> PlanNode {
 }
 
 fn plan_from(from: &[TableExpr], filter: Option<&Expr>) -> PlanNode {
+    if !from.is_empty() && crate::plan::rewrite::is_literal_false(filter) {
+        return PlanNode::new("Result")
+            .detail("One-Time Filter", "false".into())
+            .with_child(plan_from(from, None));
+    }
     match from {
         [] => {
             let mut node = PlanNode::new("Result");
@@ -3892,6 +3897,19 @@ mod tests {
             costs: false,
             ..ExplainOptions::default()
         }
+    }
+
+    #[test]
+    fn a_literal_false_table_qual_is_a_result_one_time_filter() {
+        let parsed =
+            crabka_pgparser::parse("SELECT a FROM t WHERE false").expect("statement parses");
+        let [statement] = parsed.as_slice() else {
+            panic!("expected one statement");
+        };
+        assert!(
+            render_with_rows(&plan_statement(statement), &costs_off(), 0)
+                == vec!["Result", "  One-Time Filter: false", "  ->  Seq Scan on t"]
+        );
     }
 
     #[test]

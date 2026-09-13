@@ -5246,6 +5246,30 @@ async fn select_uses_local_index_for_simple_equality_with_residual_filter() {
 }
 
 #[tokio::test]
+async fn a_literal_false_qual_does_not_scan_its_table() {
+    let mut engine = SqlEngine::new();
+    run(&engine, "CREATE TABLE false_qual (id int4)").await;
+    run(&engine, "INSERT INTO false_qual VALUES (1)").await;
+    engine.set_range_scanner(Arc::new(RejectingRangeScanner));
+
+    let result = run(&engine, "SELECT id FROM false_qual WHERE false").await;
+    assert!(rows_of(&result[0]).is_empty());
+
+    assert_eq!(
+        text_rows_of(
+            &mut engine.connect(),
+            "EXPLAIN (ANALYZE, COSTS OFF) SELECT id FROM false_qual WHERE false",
+        )
+        .await,
+        vec![
+            text_row(&["Result (actual rows=0.00 loops=1)"]),
+            text_row(&["  One-Time Filter: false"]),
+            text_row(&["  ->  Seq Scan on false_qual (never executed)"]),
+        ]
+    );
+}
+
+#[tokio::test]
 async fn ordered_local_index_stream_returns_order_by_order() {
     let engine = SqlEngine::new();
     run(&engine, "CREATE TABLE t (a int4 NOT NULL)").await;

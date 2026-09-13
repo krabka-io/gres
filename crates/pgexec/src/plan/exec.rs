@@ -69,6 +69,38 @@ pub(crate) fn try_execute_seq_scan_with_state(
     let Some(planned) = plan_seq_scan(read_ctx, select)? else {
         return Ok(None);
     };
+    if crate::plan::rewrite::is_literal_false(select.filter.as_ref())
+        && planned.aggregate.is_none()
+        && planned.project_set.is_none()
+        && planned.window.is_none()
+        && matches!(select.distinct, DistinctClause::All)
+        && select.order_by.is_empty()
+        && select.limit.is_none()
+        && select.offset.is_none()
+    {
+        let plan = Plan {
+            target_list: planned.plan.target_list,
+            quals: Vec::new(),
+            node: PlanNode::Result,
+        };
+        let mut state = PlanState::new(plan, exec::projected_scope(&planned.fields, &planned.tys));
+        state.begin_loop();
+        state.children.push(PlanState::new(
+            Plan {
+                target_list: Vec::new(),
+                quals: Vec::new(),
+                node: PlanNode::SeqScan { scanrelid: 1 },
+            },
+            Scope::empty(),
+        ));
+        return Ok(Some((
+            Relation {
+                scope: state.scope.clone(),
+                rows: Vec::new(),
+            },
+            state,
+        )));
+    }
     let mut state = PlanState::new(planned.plan.clone(), Scope::empty());
     let relation = execute_seq_scan_plan(&mut state, read_ctx, planned)?;
     Ok(Some((relation, state)))
