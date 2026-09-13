@@ -1293,15 +1293,6 @@ fn clock_now() -> Timestamp {
 /// a [`jiff::tz::Disambiguation`].
 #[must_use]
 pub fn zone_offset_for(dt: DateTime, tz: &TimeZone) -> Offset {
-    // PostgreSQL's bundled tzdata keeps Moscow at UTC+4 until the 2011 spring
-    // transition's 03:00 local boundary. Jiff's bundled table switches an hour
-    // early for that gap, so retain PostgreSQL's pre-transition offset here.
-    if zone_by_name("Europe/Moscow").is_some_and(|moscow| moscow == *tz)
-        && dt.date() == Date::constant(2011, 3, 27)
-        && dt.time().hour() < 3
-    {
-        return Offset::from_seconds(14_400).expect("UTC+4 is a valid offset");
-    }
     match tz.to_ambiguous_timestamp(dt).offset() {
         AmbiguousOffset::Unambiguous { offset } => offset,
         AmbiguousOffset::Gap { before, after } | AmbiguousOffset::Fold { before, after } => {
