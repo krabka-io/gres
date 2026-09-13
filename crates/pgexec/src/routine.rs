@@ -2187,6 +2187,22 @@ pub(crate) fn is_immutable_call(kv: &dyn Kv, name: &str) -> bool {
     }
 }
 
+/// Whether any overload of `name` can change within a scan.
+pub(crate) fn is_volatile_call(kv: &dyn Kv, name: &str) -> bool {
+    match routines_named(kv, name) {
+        Ok(routines) if !routines.is_empty() => {
+            routines.iter().any(|routine| routine.volatility == 'v')
+        }
+        Ok(_) => builtin_pg_proc_rows().is_ok_and(|rows| {
+            rows.iter().any(|row| {
+                matches!(row.get(1), Some(Datum::Text(found)) if found == name)
+                    && matches!(row.get(14), Some(Datum::Text(volatility)) if volatility == "v")
+            })
+        }),
+        Err(_) => true,
+    }
+}
+
 /// Whether `name` is a routine exposed by the immutable `pg_catalog.pg_proc`
 /// fixture.
 pub(crate) fn is_builtin_routine(name: &str) -> Result<bool, ExecError> {

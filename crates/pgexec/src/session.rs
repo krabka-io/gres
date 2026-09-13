@@ -5466,6 +5466,10 @@ impl SqlSession {
         if self.cursors.contains_key(name) {
             return Err(ExecError::DuplicateCursor(name.to_string()));
         }
+        let mut volatile = false;
+        crate::viewdeps::walk_query(query, &mut |node| {
+            volatile |= matches!(node, crate::viewdeps::Node::Expr(Expr::Func(call)) if crate::routine::is_volatile_call(&*self.catalog_kv, &call.name));
+        });
         let pinned = self.cursor_pinned_relations(query);
         self.cursors.insert(
             name.to_string(),
@@ -5480,7 +5484,7 @@ impl SqlSession {
                 position: crate::cursor::CursorPosition::new(0),
                 pinned,
                 // Locking cursors are forward-only unless explicitly declared SCROLL.
-                scrollable: scroll.unwrap_or(query.locking.is_none()),
+                scrollable: scroll.unwrap_or(query.locking.is_none() && !volatile),
                 hold,
                 // A holdable cursor declared outside a block is committed by
                 // the autocommit statement that declared it.
@@ -23958,6 +23962,24 @@ mod tests {
             .await
             .expect("update current row");
         assert!(rows_or_sqlstate(&mut s, "SELECT id FROM t").await == Ok(vec![vec!["2".into()]]));
+        assert!(sqlstate(&mut s, "FETCH RELATIVE 0 FROM c").await == "55000");
+        s.simple_query("ROLLBACK").await.expect("rollback");
+    }
+
+    #[tokio::test]
+    async fn volatile_cursor_defaults_to_no_scroll() {
+        use assert2::assert;
+
+        let engine = SqlEngine::new();
+        let mut s = engine.connect();
+        s.simple_query("CREATE FUNCTION cursor_value() RETURNS int4 LANGUAGE sql AS 'SELECT 1'")
+            .await
+            .expect("function");
+        s.simple_query("BEGIN").await.expect("begin");
+        s.simple_query("DECLARE c CURSOR FOR SELECT cursor_value()")
+            .await
+            .expect("declare");
+        assert!(rows_or_sqlstate(&mut s, "FETCH FROM c").await == Ok(vec![vec!["1".into()]]));
         assert!(sqlstate(&mut s, "FETCH RELATIVE 0 FROM c").await == "55000");
         s.simple_query("ROLLBACK").await.expect("rollback");
     }
