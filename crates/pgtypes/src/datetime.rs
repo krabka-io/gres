@@ -8092,6 +8092,12 @@ mod io_tests {
             .expect("LMT offset");
         assert_eq!(lmt, expected);
         assert!(parse_timestamptz("2024-01-01 00:00:00 LMT", &TimeZone::UTC).is_err());
+
+        let mmt = parse_timestamptz("1912-01-01 00:00:00 MMT", &TimeZone::UTC).expect("MMT");
+        assert_eq!(
+            timestamptz_to_text(mmt, &TimeZone::UTC),
+            "1912-01-01 03:44:51+00"
+        );
     }
 
     #[test]
