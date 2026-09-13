@@ -5479,9 +5479,8 @@ impl SqlSession {
                 identities: None,
                 position: crate::cursor::CursorPosition::new(0),
                 pinned,
-                // A materialized result always supports a backward scan, so only
-                // an explicit NO SCROLL forbids one.
-                scrollable: scroll != Some(false),
+                // Locking cursors are forward-only unless explicitly declared SCROLL.
+                scrollable: scroll.unwrap_or(query.locking.is_none()),
                 hold,
                 // A holdable cursor declared outside a block is committed by
                 // the autocommit statement that declared it.
@@ -5723,7 +5722,9 @@ impl SqlSession {
             .ok_or_else(|| ExecError::UndefinedCursor(name.to_string()))?;
         let mut probe = cursor.position;
         let plan = probe.walk(direction);
-        if plan.backward && !cursor.scrollable {
+        if !cursor.scrollable
+            && (plan.backward || matches!(direction, FetchDirection::RelativeOne(0)))
+        {
             return Err(ExecError::CursorCanOnlyScanForward);
         }
         cursor.position = probe;
@@ -23957,6 +23958,7 @@ mod tests {
             .await
             .expect("update current row");
         assert!(rows_or_sqlstate(&mut s, "SELECT id FROM t").await == Ok(vec![vec!["2".into()]]));
+        assert!(sqlstate(&mut s, "FETCH RELATIVE 0 FROM c").await == "55000");
         s.simple_query("ROLLBACK").await.expect("rollback");
     }
 
