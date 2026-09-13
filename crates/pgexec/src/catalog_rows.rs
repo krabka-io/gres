@@ -2040,7 +2040,7 @@ fn catalog_only_builtin_type_rows(proc_oids: &BTreeMap<String, i32>) -> Vec<Vec<
                 },
                 proc_oids,
                 true,
-                None,
+                (name == "unknown").then_some('p'),
                 routine_overrides,
                 None,
                 None,
@@ -5581,6 +5581,15 @@ mod tests {
     use crabka_pgtypes::usertype::{CompositeField, RangeBody, UserTypeBody};
 
     use super::*;
+
+    #[test]
+    fn unknown_type_uses_plain_storage() {
+        let row = catalog_only_builtin_type_rows(&BTreeMap::new())
+            .into_iter()
+            .find(|row| row[1] == Datum::Text("unknown".into()))
+            .expect("unknown pg_type row");
+        assert_eq!(row[23], Datum::InternalChar(b'p'));
+    }
 
     #[test]
     fn foreign_column_options_are_exposed_by_pg_attribute() {
