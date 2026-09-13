@@ -1030,8 +1030,8 @@ fn execute_seq_scan_plan(
     }
 }
 
-/// Execute a `VALUES` query through its `ValuesScan` node, including the query
-/// expression's ORDER BY/OFFSET/LIMIT tail.
+/// Execute a `VALUES` query through its `Result` or `ValuesScan` node,
+/// including the query expression's ORDER BY/OFFSET/LIMIT tail.
 pub(crate) fn execute_values(
     ctx: &crate::subquery::SubCtx<'_>,
     query: &QueryExpr,
@@ -1040,7 +1040,11 @@ pub(crate) fn execute_values(
     let plan = Plan {
         target_list: Vec::new(),
         quals: Vec::new(),
-        node: PlanNode::ValuesScan,
+        node: if crate::plan::rewrite::is_single_row_values(values) {
+            PlanNode::Result
+        } else {
+            PlanNode::ValuesScan
+        },
     };
     let mut state = PlanState::new(plan, Scope::empty());
     ValuesExecutor { ctx, query, values }.execute(&mut state)
@@ -1929,14 +1933,18 @@ fn plan_subquery_input(
                 Ok(plan_seq_scan(read_ctx, &inner)?.map(|planned| planned.plan))
             }
         }
-        crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Values(_)) => {
+        crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Values(values)) => {
             if subquery.with.is_some() || subquery.locking.is_some() {
                 return Ok(None);
             }
             Ok(Some(Plan {
                 target_list: Vec::new(),
                 quals: Vec::new(),
-                node: PlanNode::ValuesScan,
+                node: if crate::plan::rewrite::is_single_row_values(values) {
+                    PlanNode::Result
+                } else {
+                    PlanNode::ValuesScan
+                },
             }))
         }
         _ => Ok(None),
@@ -3496,9 +3504,15 @@ struct ValuesExecutor<'a, 'b> {
 
 impl Executor for ValuesExecutor<'_, '_> {
     fn execute(&mut self, state: &mut PlanState) -> Result<Relation, ExecError> {
-        if !matches!(state.plan.node, PlanNode::ValuesScan) {
+        if !matches!(
+            (
+                &state.plan.node,
+                crate::plan::rewrite::is_single_row_values(self.values)
+            ),
+            (PlanNode::Result, true) | (PlanNode::ValuesScan, false)
+        ) {
             return Err(ExecError::Unsupported(
-                "ValuesExecutor received a non-ValuesScan plan".into(),
+                "ValuesExecutor received an invalid VALUES plan".into(),
             ));
         }
         crate::session::check_query_canceled()?;

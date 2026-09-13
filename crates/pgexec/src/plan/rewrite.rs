@@ -1,6 +1,6 @@
 //! Rule-based rewrites that are sound before cost-based planning.
 
-use crabka_pgparser::ast::Expr;
+use crabka_pgparser::ast::{Expr, ValuesStmt};
 
 use crate::scope::Scope;
 
@@ -10,6 +10,11 @@ use crate::scope::Scope;
 /// expression, so volatile calls and errors remain on their ordinary paths.
 pub(crate) fn is_literal_false(filter: Option<&Expr>) -> bool {
     matches!(filter, Some(Expr::BoolLiteral(false)))
+}
+
+/// A one-row `VALUES` relation needs no scan node.
+pub(crate) fn is_single_row_values(values: &ValuesStmt) -> bool {
+    values.rows.len() == 1
 }
 
 /// Rewrite a typed `column = column` qual to `column IS NOT NULL`.
@@ -55,6 +60,19 @@ mod tests {
         assert!(is_literal_false(Some(&Expr::BoolLiteral(false))));
         assert!(!is_literal_false(Some(&Expr::BoolLiteral(true))));
         assert!(!is_literal_false(None));
+    }
+
+    #[test]
+    fn distinguishes_single_and_multi_row_values() {
+        assert!(is_single_row_values(&ValuesStmt {
+            rows: vec![vec![Expr::IntLiteral("1".into())]],
+        }));
+        assert!(!is_single_row_values(&ValuesStmt {
+            rows: vec![
+                vec![Expr::IntLiteral("1".into())],
+                vec![Expr::IntLiteral("2".into())],
+            ],
+        }));
     }
 
     #[test]

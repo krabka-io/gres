@@ -2664,6 +2664,9 @@ fn plan_set_expr(body: &SetExpr) -> PlanNode {
     match body {
         SetExpr::Query(QueryBody::Select(select)) => plan_select(select),
         SetExpr::Query(QueryBody::Values(values)) => {
+            if crate::plan::rewrite::is_single_row_values(values) {
+                return PlanNode::new("Result");
+            }
             let mut node = PlanNode::new("Values Scan").with_relation("*VALUES*");
             node.alias = None;
             let _ = values;
@@ -4275,6 +4278,8 @@ mod tests {
                 &["Seq Scan on d1 x", "  Filter: (id = 1)"],
             ),
             ("SELECT 1 + 1", &["Result"]),
+            ("VALUES (1)", &["Result"]),
+            ("VALUES (1), (2)", &["Values Scan on \"*VALUES*\""]),
             (
                 "UPDATE d1 SET s = 'z' WHERE id = 1",
                 &[
