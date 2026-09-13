@@ -1635,7 +1635,15 @@ fn array_fill(
         message: "dimension array or low bound array cannot be null".into(),
     });
     if matches!(dims, Datum::Array(array) if array.dims.len() > 1) {
-        return Err(wrong_number_of_subscripts());
+        return Err(wrong_number_of_subscripts_with_detail(
+            "Dimension array must be one dimensional.",
+        ));
+    }
+    if matches!(dims, Datum::Array(array) if array.elems.iter().any(Datum::is_null)) {
+        return Err(ExecError::Type(TypeError::Coded {
+            sqlstate: "22004",
+            message: "dimension values cannot be null".into(),
+        }));
     }
     let lengths = int_array_arg(dims).ok_or(null_shape)?;
     let lowers = match lower_bounds {
@@ -1648,7 +1656,9 @@ fn array_fill(
         None => vec![1; lengths.len()],
         Some(d) => {
             if matches!(d, Datum::Array(array) if array.dims.len() > 1) {
-                return Err(wrong_number_of_subscripts());
+                return Err(wrong_number_of_subscripts_with_detail(
+                    "Low bound array must be one dimensional.",
+                ));
             }
             let lowers = int_array_arg(d).ok_or_else(|| {
                 ExecError::Type(TypeError::Coded {
@@ -1657,7 +1667,9 @@ fn array_fill(
                 })
             })?;
             if lowers.len() != lengths.len() {
-                return Err(wrong_number_of_subscripts());
+                return Err(wrong_number_of_subscripts_with_detail(
+                    "Low bound array has different size than dimensions array.",
+                ));
             }
             lowers
         }
@@ -1695,6 +1707,14 @@ fn array_fill(
         vec![value.clone(); total],
         shape,
     )))
+}
+
+fn wrong_number_of_subscripts_with_detail(detail: &'static str) -> ExecError {
+    ExecError::FunctionErrorWithDetail {
+        sqlstate: "2202E",
+        message: "wrong number of array subscripts",
+        detail,
+    }
 }
 
 /// The `int[]` shape arguments of `array_fill`. Returns `None` for a NULL
@@ -3335,6 +3355,31 @@ mod tests {
         for (name, args, code) in cases {
             let error = call(name, args.clone()).expect_err(name);
             assert!(sqlstate(error) == *code, "{name} {args:?}");
+        }
+        for (args, code, message, detail) in [
+            (
+                vec![int_expr(1), ints("{2,2}"), ints("{1}")],
+                "2202E",
+                "wrong number of array subscripts",
+                Some("Low bound array has different size than dimensions array."),
+            ),
+            (
+                vec![int_expr(1), ints("{1,2,NULL}")],
+                "22004",
+                "dimension values cannot be null",
+                None,
+            ),
+            (
+                vec![int_expr(1), ints("{{1,2},{3,4}}")],
+                "2202E",
+                "wrong number of array subscripts",
+                Some("Dimension array must be one dimensional."),
+            ),
+        ] {
+            let error = call("array_fill", args).expect_err("array_fill").into_pg();
+            assert!(error.code == code);
+            assert!(error.message == message);
+            assert!(error.diagnostics.as_ref().and_then(|d| d.detail.as_deref()) == detail);
         }
         let xid = ElemType::from_column_type(ColumnType::Xid).expect("xid has an array type");
         assert!(
