@@ -1602,7 +1602,11 @@ pub(crate) fn attribute_rows_for_table(
             Ok(vec![
                 int(relid),
                 text(&column.name),
-                int(oid_i32(column.ty.oid())?),
+                int(if column.dropped {
+                    0
+                } else {
+                    oid_i32(column.ty.oid())?
+                }),
                 Datum::Int2(typlen),
                 Datum::Int2(attnum),
                 int(column.typmod.unwrap_or_else(|| catalog_typmod(column.ty))),

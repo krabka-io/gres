@@ -4327,15 +4327,15 @@ async fn add_and_drop_column_rewrite_stored_rows() {
     assert!(
         text_rows_of(
             &mut session,
-            "SELECT attname, attnum::text, attisdropped::text FROM pg_attribute \
+            "SELECT attname, atttypid::text, attnum::text, attisdropped::text FROM pg_attribute \
              WHERE attrelid = 't'::regclass AND attnum > 0 ORDER BY attnum",
         )
         .await
             == vec![
-                text_row(&["id", "1", "false"]),
-                text_row(&["........pg.dropped.2........", "2", "true"]),
-                text_row(&["n", "3", "false"]),
-                text_row(&["later", "4", "false"]),
+                text_row(&["id", "23", "1", "false"]),
+                text_row(&["........pg.dropped.2........", "0", "2", "true"]),
+                text_row(&["n", "23", "3", "false"]),
+                text_row(&["later", "25", "4", "false"]),
             ]
     );
 }
