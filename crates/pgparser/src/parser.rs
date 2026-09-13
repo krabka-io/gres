@@ -11694,7 +11694,7 @@ impl Parser {
         if *self.peek() != Token::RParen {
             loop {
                 let field_name = self.expect_col_id()?;
-                let ty = self.parse_type_name()?;
+                let (ty, _, _) = self.parse_column_type(&field_name)?;
                 let collation = if self.eat_ident_eq("collate") {
                     Some(self.expect_collation_name()?)
                 } else {
@@ -20147,6 +20147,21 @@ mod tests {
         for (sql, column, ty) in [
             ("CREATE TABLE t (u unknown)", "u", "unknown"),
             ("CREATE TABLE t (r record)", "r", "record"),
+        ] {
+            let error = parse(sql).expect_err(sql);
+            assert!(error.sqlstate() == "42P16", "{sql}");
+            assert!(
+                error.message == format!("column \"{column}\" has pseudo-type {ty}"),
+                "{sql}"
+            );
+        }
+    }
+
+    #[test]
+    fn composite_type_fields_reject_pseudo_types() {
+        for (sql, column, ty) in [
+            ("CREATE TYPE t AS (u unknown)", "u", "unknown"),
+            ("CREATE TYPE t AS (r record)", "r", "record"),
         ] {
             let error = parse(sql).expect_err(sql);
             assert!(error.sqlstate() == "42P16", "{sql}");
