@@ -1610,9 +1610,7 @@ pub(crate) fn attribute_rows_for_table(
         .enumerate()
         .map(|(idx, column)| {
             let layout = crate::usertype::declared_base_layout(column.ty);
-            let typlen = layout.map_or_else(|| column.ty.type_size(), |layout| layout.length);
-            let typbyval = layout.map_or(typlen > 0, |layout| layout.by_value);
-            let typalign = layout.map_or(b'i', |layout| layout.alignment as u8);
+            let (typlen, typbyval, typalign) = attribute_layout(column.ty, layout);
             let attnum = i16::try_from(idx + 1)
                 .map_err(|_| ExecError::Unsupported("attnum exceeds int2 range".into()))?;
             let identity = match column.identity {
@@ -1679,6 +1677,64 @@ pub(crate) fn attribute_rows_for_table(
             ])
         })
         .collect()
+}
+
+/// The physical fields that `pg_attribute` duplicates from `pg_type`.
+fn attribute_layout(
+    ty: ColumnType,
+    layout: Option<crabka_pgtypes::usertype::BaseLayout>,
+) -> (i16, bool, u8) {
+    if let Some(layout) = layout {
+        return (layout.length, layout.by_value, layout.alignment as u8);
+    }
+    use ColumnType as C;
+    let len = ty.type_size();
+    let by_value = matches!(
+        ty,
+        C::Bool
+            | C::Int2
+            | C::Int4
+            | C::Int8
+            | C::InternalChar
+            | C::Float4
+            | C::Float8
+            | C::Date
+            | C::Time
+            | C::Timetz
+            | C::Timestamp
+            | C::Timestamptz
+            | C::Interval
+            | C::IntervalTypmod(_)
+            | C::Temporal(_, _)
+            | C::Money
+            | C::Oid
+            | C::Xid
+            | C::Xid8
+            | C::Cid
+            | C::PgLsn
+            | C::Regclass
+            | C::Regtype
+            | C::Regprocedure
+            | C::Regnamespace
+            | C::Regproc
+            | C::Regoper
+            | C::Regoperator
+            | C::Regconfig
+            | C::Regdictionary
+            | C::Regrole
+            | C::Regcollation
+    );
+    let align = match ty {
+        C::Name => b'c',
+        C::Point | C::Box | C::Circle | C::Lseg | C::Line => b'd',
+        _ => match len {
+            1 => b'c',
+            2 => b's',
+            8 => b'd',
+            _ => b'i',
+        },
+    };
+    (len, by_value, align)
 }
 
 /// The columns PostgreSQL exposes for an index relation. Expression keys have
@@ -5654,6 +5710,14 @@ mod tests {
         assert_eq!(base[14], oid(3644));
         assert_eq!(array[1], Datum::Text("_gtsvector".into()));
         assert_eq!(array[13], oid(3642));
+    }
+
+    #[test]
+    fn builtin_attribute_layout_matches_pg_type_physics() {
+        assert_eq!(attribute_layout(ColumnType::Point, None), (16, false, b'd'));
+        assert_eq!(attribute_layout(ColumnType::Name, None), (64, false, b'c'));
+        assert_eq!(attribute_layout(ColumnType::Float8, None), (8, true, b'd'));
+        assert_eq!(attribute_layout(ColumnType::Int2, None), (2, true, b's'));
     }
 
     #[test]
