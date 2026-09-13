@@ -18277,6 +18277,13 @@ fn rejected_input(message: &str) -> Option<RejectedInput<'_>> {
         }
     }
 
+    if let Some(rest) = message.strip_prefix("syntax error in ") {
+        let (type_name, value) = rest.split_once(": \"")?;
+        if matches!(type_name, "tsvector" | "tsquery") {
+            return Some(named(value.strip_suffix('"')?, type_name));
+        }
+    }
+
     if let Some(rest) = message.strip_prefix("invalid input syntax for type ") {
         if let Some((type_name, quoted)) = rest.split_once(": \"") {
             let value = quoted.strip_suffix('"')?;
@@ -18686,7 +18693,16 @@ fn attach_type_input_literal_position(sql: &str, error: PgError) -> PgError {
     // of every statement that fails for another reason.
     if !matches!(
         error.code.as_str(),
-        "22P02" | "22003" | "22007" | "22008" | "22009" | "22015" | "22P05" | "54000" | "55P04"
+        "22P02"
+            | "22003"
+            | "22007"
+            | "22008"
+            | "22009"
+            | "22015"
+            | "22P05"
+            | "42601"
+            | "54000"
+            | "55P04"
     ) || error
         .diagnostics
         .as_ref()
@@ -32086,6 +32102,23 @@ mod session_conformance_tests {
         assert!(
             super::attach_type_input_literal_position("SELECT '01'::json", unshaped.clone())
                 == unshaped
+        );
+    }
+
+    #[tokio::test]
+    async fn text_search_input_errors_point_at_the_unique_literal() {
+        let engine = SqlEngine::new();
+        let mut session = engine.connect();
+        let sql = "SELECT $$'' '1' '2'$$::tsvector";
+        let error = session.simple_query(sql).await.expect_err("bad tsvector");
+        assert!(error.code == "42601", "{error:?}");
+        assert!(
+            error
+                .diagnostics
+                .as_ref()
+                .and_then(|diagnostics| diagnostics.position)
+                == Some(8),
+            "{error:?}"
         );
     }
 
