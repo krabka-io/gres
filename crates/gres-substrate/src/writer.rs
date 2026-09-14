@@ -458,6 +458,39 @@ mod pause_retirement_tests {
     }
 }
 
+/// Exit status of a compute that stops because a WAL commit outcome is unknown.
+///
+/// The WAL writer uses this status when the producer cannot learn whether the
+/// broker committed a WAL transaction. The producer first sends `EndTxn` again
+/// until the retry deadline ends, so a broker restart alone does not cause this
+/// exit. The compute must not answer the SQL client, and it must not continue
+/// with a local state that can differ from the WAL. A restart runs recovery,
+/// which fences this writer and reads the committed WAL, so the supervisor
+/// should restart the process.
+///
+/// The value is `EX_TEMPFAIL` (75) from `sysexits.h`. It is below 128, so an
+/// operator cannot mistake it for a signal.
+pub const WAL_OUTCOME_UNKNOWN_EXIT_CODE: i32 = 75;
+
+/// Exit the process with [`WAL_OUTCOME_UNKNOWN_EXIT_CODE`].
+///
+/// A new thread calls `exit`, because C `exit` runs the thread-local
+/// destructors of the calling thread, and the caller is a Tokio worker in the
+/// middle of a task poll. `Once` makes sure that only one thread calls `exit`
+/// when many writers in one process fail together. The calling thread returns
+/// and its commit future waits until the process ends.
+fn exit_for_unknown_wal_outcome() {
+    static EXIT: std::sync::Once = std::sync::Once::new();
+    EXIT.call_once(|| {
+        let spawned = std::thread::Builder::new()
+            .name("gres-wal-exit".to_owned())
+            .spawn(|| std::process::exit(WAL_OUTCOME_UNKNOWN_EXIT_CODE));
+        if spawned.is_err() {
+            std::process::exit(WAL_OUTCOME_UNKNOWN_EXIT_CODE);
+        }
+    });
+}
+
 /// Adapter from the substrate WAL seam to the transactional producer client.
 pub struct ProducerWalWriter {
     producer: Arc<Producer>,
@@ -534,8 +567,12 @@ impl ProducerWalWriter {
             commit_gate: Arc::new(Semaphore::new(1)),
             pause_state: Arc::new(Mutex::new(WriterPauseState::Idle)),
             indeterminate_handler: Arc::new(|error| {
-                tracing::error!(%error, "indeterminate WAL EndTxn outcome; terminating compute");
-                std::process::abort();
+                tracing::error!(
+                    %error,
+                    exit_code = WAL_OUTCOME_UNKNOWN_EXIT_CODE,
+                    "indeterminate WAL EndTxn outcome; exiting the compute so that recovery resolves it"
+                );
+                exit_for_unknown_wal_outcome();
             }),
             fault_injector: None,
         }
@@ -543,9 +580,9 @@ impl ProducerWalWriter {
 
     /// Override the fatal indeterminate-outcome action.
     ///
-    /// Production uses process abort so no SQL client can receive a false
-    /// failure acknowledgement. Tests install a notifier and assert that the
-    /// commit future never resolves.
+    /// Production exits the process with [`WAL_OUTCOME_UNKNOWN_EXIT_CODE`], so
+    /// no SQL client can receive a false failure acknowledgement. Tests install
+    /// a notifier and assert that the commit future never resolves.
     #[doc(hidden)]
     #[must_use]
     pub fn with_indeterminate_handler(

@@ -51,6 +51,21 @@ crabka-gres --listen 127.0.0.1:54399 \
   --cache-dir /tmp/crabka-gres-memory-cache
 ```
 
+## Substrate broker restarts and exit status
+
+A substrate broker restart does not stop the compute. The WAL producer sends a
+lost `EndTxn` request again, with the same producer id and epoch, until the
+transaction coordinator gives the outcome. Kafka's own producer does the same.
+The producer-ID initialization retry timeout limits these retries. The default
+is 30 seconds.
+
+If the retries end and the outcome is still unknown, the compute does not
+answer the SQL client. It logs `indeterminate WAL EndTxn outcome` and exits with
+status 75 (`EX_TEMPFAIL`). A restart runs recovery, which fences the old writer
+and replays only the committed WAL. Configure the supervisor to restart the
+process on this status. A status above 128 is a signal, and gres does not use
+one on this path.
+
 ## Multi-range hosting
 
 Every compute gateway must include `r0` in `--host-ranges` when `--ranges`
