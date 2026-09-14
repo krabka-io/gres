@@ -13,6 +13,7 @@ module(
 bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "rules_rs", version = "0.0.110")
 bazel_dep(name = "rules_rs_mutants", version = "0.1.1")
+bazel_dep(name = "rules_shell", version = "0.8.0")
 
 single_version_override(
     module_name = "rules_rs",
@@ -55,6 +56,26 @@ toolchains.toolchain(
 use_repo(toolchains, "default_rust_toolchains")
 
 register_toolchains("@default_rust_toolchains//...")
+
+bazel_dep(name = "rules_img", version = "0.3.20")
+bazel_dep(name = "rules_apko", version = "1.5.56")
+
+apko_toolchain = use_extension("@rules_apko//apko:extensions.bzl", "apko")
+apko_toolchain.toolchain(apko_version = "v1.2.40")
+use_repo(apko_toolchain, "apko_toolchains")
+
+register_toolchains("@apko_toolchains//:all")
+
+apk = use_extension("@rules_apko//apko:extensions.bzl", "apko")
+apk.translate_lock(
+    name = "gres_base_lock",
+    lock = "//packaging/apko:crabka-gres.lock.json",
+)
+apk.translate_lock(
+    name = "gres_base_arm64_lock",
+    lock = "//packaging/apko:crabka-gres.arm64.lock.json",
+)
+use_repo(apk, "gres_base_arm64_lock", "gres_base_lock")
 
 PLATFORM_TRIPLES = [
     "aarch64-apple-darwin",
