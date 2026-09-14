@@ -95,7 +95,7 @@ jobs:
           EXPECTED_DIGEST: ${{ steps.digest.outputs.digest }}
         run: |
           current="${GITHUB_REF#refs/tags/}"
-          newest="$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
+          newest="$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)"
           tags=("${current}" "sha-${GITHUB_SHA::12}")
           if [[ "${current}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] && [ "${newest}" = "${current}" ]; then
             tags+=(latest)
