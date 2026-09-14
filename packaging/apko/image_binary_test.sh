@@ -34,7 +34,13 @@ else
 fi
 grep -qF "sha256:${digest}" "${manifest}" || fail "image does not reference its application layer"
 
-if [[ "$(uname -s)" == "Linux" ]]; then
+host_arch="$(uname -m)"
+native=false
+case "${arch}:${host_arch}" in
+    amd64:x86_64 | amd64:amd64 | arm64:aarch64 | arm64:arm64) native=true ;;
+esac
+
+if [[ "$(uname -s)" == "Linux" && "${native}" == true ]]; then
     "${binary}" --help >/dev/null
 fi
 echo "image_binary_test: crabka-gres is a ${arch} ELF in the image"
