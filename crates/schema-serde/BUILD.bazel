@@ -22,6 +22,7 @@ rust_library(
     edition = "2024",
     visibility = ["//visibility:public"],
     deps = [
+        "//crates/units",
         "@crates//:apache-avro",
         "@crates//:bytes",
         "@crates//:prost",

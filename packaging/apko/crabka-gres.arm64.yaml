@@ -29,4 +29,4 @@ paths:
     permissions: 0o755
 
 archs:
-  - amd64
+  - arm64

@@ -1,0 +1,11 @@
+load("//bazel:defs.bzl", "crate_binary", "crate_library")
+
+exports_files(["Cargo.toml"])
+
+crate_library(name = "gres")
+
+crate_binary(
+    name = "crabka-gres",
+    crate_root = "src/main.rs",
+    lib = ":gres",
+)

@@ -2,4 +2,4 @@ load("//bazel:defs.bzl", "crate_library")
 
 exports_files(["Cargo.toml"])
 
-crate_library(name = "voters")
+crate_library(name = "gres-ranges")

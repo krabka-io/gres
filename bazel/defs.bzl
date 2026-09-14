@@ -6,6 +6,7 @@ rules_rs generates. BUILD files state only source layout and test data.
 
 load("@crates//:data.bzl", "DEP_DATA")
 load("@crates//:defs.bzl", "all_crate_deps", "crate_name", "edition")
+load("@rules_rs//rs:rust_binary.bzl", "rust_binary")
 load("@rules_rs//rs:rust_library.bzl", "rust_library")
 load("@rules_rs//rs:rust_test.bzl", "rust_test")
 load("@rules_rs_mutants//mutants:cargo_mutants_test.bzl", "cargo_mutants_test")
@@ -45,6 +46,22 @@ def crate_library(name, srcs = None, **kwargs):
         rustc_flags = WORKSPACE_RUSTC_FLAGS,
         visibility = ["//visibility:public"],
         deps = all_crate_deps(normal = True),
+        **kwargs
+    )
+
+def crate_binary(name, crate_root, lib, **kwargs):
+    """Build a Cargo binary target and link its package library."""
+    rust_binary(
+        name = name,
+        srcs = [crate_root],
+        aliases = _aliases(["deps"]),
+        crate_features = _features(),
+        crate_name = crate_name(),
+        crate_root = crate_root,
+        edition = edition(),
+        rustc_flags = WORKSPACE_RUSTC_FLAGS,
+        visibility = ["//visibility:public"],
+        deps = all_crate_deps(normal = True) + [lib],
         **kwargs
     )
 
