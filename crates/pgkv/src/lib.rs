@@ -3,7 +3,7 @@
 //!
 //! It is the permanent storage seam for Crabka Gres.
 
-#![doc(html_root_url = "https://docs.rs/crabka-pgkv/0.4.0")]
+#![doc(html_root_url = "https://docs.rs/crabka-pgkv/0.4.1")]
 
 pub mod error;
 pub mod fjall_store;
