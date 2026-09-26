@@ -1047,19 +1047,15 @@ impl Registry {
         record: &TenantRecord,
         replicas: i32,
     ) -> Result<(), ControlError> {
-        let topic = tenant_config_topic(&record.name);
-        ensure_compacted_single_partition_topic(&self.bootstrap, &topic, replicas, &self.policy)
-            .await?;
-        let value = encode_tenant_config_record(record)?;
-        let rx = self
-            .producer
-            .send(ProducerRecord {
-                topic,
-                partition: Some(0),
-                value: Some(Bytes::from(value)),
-                ..Default::default()
-            })
-            .await;
+        let producer_record = tenant_config_producer_record(record)?;
+        ensure_compacted_single_partition_topic(
+            &self.bootstrap,
+            &producer_record.topic,
+            replicas,
+            &self.policy,
+        )
+        .await?;
+        let rx = self.producer.send(producer_record).await;
         rx.await.map_err(|_| ControlError::ProducerAckDropped)??;
         Ok(())
     }
@@ -1734,6 +1730,21 @@ async fn ensure_compacted_single_partition_topic(
         .ok_or_else(|| ControlError::TopicMissing(topic.to_string()))
 }
 
+/// Builds the `__gres_cfg.<tenant>` snapshot record.
+///
+/// The topic is compacted, and Kafka rejects a keyless record on a compacted
+/// topic with `INVALID_RECORD`. The tenant registry key is stable per tenant,
+/// so compaction keeps only the latest snapshot.
+fn tenant_config_producer_record(record: &TenantRecord) -> Result<ProducerRecord, ControlError> {
+    Ok(ProducerRecord {
+        topic: tenant_config_topic(&record.name),
+        partition: Some(0),
+        key: Some(Bytes::from(tenant_registry_key(&record.name)?)),
+        value: Some(Bytes::from(encode_tenant_config_record(record)?)),
+        ..Default::default()
+    })
+}
+
 fn compacted_topic_request(
     topic: &str,
     replicas: i32,
@@ -2178,6 +2189,27 @@ mod tests {
 
     fn tenant_name(name: &str) -> TenantName {
         TenantName::try_from(name).unwrap()
+    }
+
+    #[test]
+    fn tenant_config_record_is_keyed_for_its_compacted_topic() {
+        let tenant = record("acme", 4, TenantState::Active);
+
+        let actual = tenant_config_producer_record(&tenant).unwrap();
+
+        assert!(
+            actual
+                == ProducerRecord {
+                    topic: "__gres_cfg.acme".to_string(),
+                    partition: Some(0),
+                    key: Some(Bytes::from_static(
+                        br#"{"keytype":"TENANT","name":"acme","magic":1}"#
+                    )),
+                    value: Some(Bytes::from(encode_tenant_config_record(&tenant).unwrap())),
+                    headers: Vec::new(),
+                    timestamp_ms: None,
+                }
+        );
     }
 
     fn record(name: &str, version: u64, state: TenantState) -> TenantRecord {
