@@ -2232,6 +2232,7 @@ mod harness {
             retries,
             routing_retry_budget,
             Acks::All,
+            millis(1),
         )
     }
 
@@ -2242,6 +2243,7 @@ mod harness {
         retries: i32,
         routing_retry_budget: Time,
         acks: Acks,
+        retry_backoff: Time,
     ) -> Harness {
         let accumulators: AccumulatorMap = Arc::new(DashMap::new());
         let next_seq: Arc<DashMap<(String, i32), i32>> = Arc::new(DashMap::new());
@@ -2268,7 +2270,7 @@ mod harness {
             linger,
             request_timeout_ms: 5_000,
             retries,
-            retry_backoff: millis(1),
+            retry_backoff,
             routing_retry_budget,
             max_in_flight,
             metadata_cache: Arc::clone(&metadata_cache),
@@ -3048,6 +3050,7 @@ mod harness {
             i32::MAX,
             secs(30),
             Acks::Zero,
+            millis(1),
         );
 
         let rx = produce_burst(&h, "t", 0, 1).await.pop().expect("one rx");
@@ -3696,7 +3699,17 @@ mod harness {
     async fn retry_slot_transactional_batch_is_failed_after_recovery_without_resend() {
         let transport = MockTransport::new(Duration::ZERO);
         transport.fail_once_on(0);
-        let h = spawn_sender_with(transport.clone(), 1, secs(30));
+        // The backoff keeps the failed batch parked in its retry slot while the
+        // test advances the generation; a short one races that and resends.
+        let h = spawn_sender_with_acks(
+            transport.clone(),
+            1,
+            secs(30),
+            i32::MAX,
+            secs(30),
+            Acks::All,
+            secs(30),
+        );
         let accumulator = Arc::new(Mutex::new(Accumulator::new(1024)));
         h.accumulators
             .insert(("t".to_string(), 0), Arc::clone(&accumulator));
