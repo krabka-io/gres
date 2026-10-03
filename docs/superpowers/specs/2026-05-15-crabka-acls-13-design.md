@@ -10,6 +10,7 @@ per-principal, per-resource access control via the standard JVM
 tooling.
 
 Production-shape scope:
+
 - Resources: `Topic`, `Group`, `Cluster`, `TransactionalId`.
 - Patterns: `Literal` + `Prefixed`.
 - Permissions: `Allow` + `Deny` (DENY wins).
@@ -33,7 +34,7 @@ host, resource, operation) -> Allow | Deny`.
 
 This slice ports that behavior to Crabka: one `MetadataRecord`
 variant per ACL entry (additive), one delete-by-filter variant, and a
-pure-logic `crabka_broker::authorizer::authorize` function that every
+pure-logic `krabka_broker::authorizer::authorize` function that every
 gated handler consults before doing real work.
 
 The slice also surfaces three new wire api_keys for `kafka-acls.sh`
@@ -45,12 +46,12 @@ The schemas for these messages already exist in
 
 ### Crates touched
 
-| Crate | Change |
-|-------|--------|
-| `crabka-metadata` | New `AclEntry` + `AclEntryFilter`; new enums (`ResourceType`, `PatternType`, `AclOperation`, `PermissionType`); two new `MetadataRecord` variants; image storage + accessors. |
-| `crabka-broker` | New `authorizer.rs` (pure-logic decision algorithm); 3 new wire handlers (`CreateAcls`, `DeleteAcls`, `DescribeAcls`); handler wiring across ~16 existing handlers. |
-| `crabka-cli` | Optional `--add-acl` flag on `format` to seed ACLs at bootstrap. |
-| `crabka-protocol` | No code change — the 3 ACL message types are already generated. |
+| Crate             | Change                                                                                                                                                                        |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `krabka-metadata` | New `AclEntry` + `AclEntryFilter`; new enums (`ResourceType`, `PatternType`, `AclOperation`, `PermissionType`); two new `MetadataRecord` variants; image storage + accessors. |
+| `krabka-broker`   | New `authorizer.rs` (pure-logic decision algorithm); 3 new wire handlers (`CreateAcls`, `DeleteAcls`, `DescribeAcls`); handler wiring across ~16 existing handlers.           |
+| `krabka-cli`      | Optional `--add-acl` flag on `format` to seed ACLs at bootstrap.                                                                                                              |
+| `krabka-protocol` | No code change — the 3 ACL message types are already generated.                                                                                                               |
 
 ### ACL entry shape
 
@@ -122,7 +123,7 @@ Algorithm:
    - `host` matches: `acl.host == "*"` or literal equality of the
      client's remote IP (string form).
    - `operation` matches: literal equality or `acl.operation ==
-     AclOperation::All`.
+AclOperation::All`.
 4. If any matched ACL has `permission_type = Deny` → DENY.
 5. Else if any matched ACL has `permission_type = Allow` → ALLOW.
 6. Else → DENY.
@@ -151,33 +152,33 @@ Returns LITERAL entries at `(rt, rn)` plus PREFIXED entries whose
 
 ### Handler wiring matrix
 
-| Handler | Operation | Resource | Failure code |
-|---|---|---|---|
-| `Produce` | Write | Topic (per topic) | `TOPIC_AUTHORIZATION_FAILED (29)` per-partition |
-| `Fetch` | Read | Topic (per topic) | 29 per-partition |
-| `Metadata` (per topic) | Describe | Topic | 29 (named) or silent-filter (fetch-all) |
-| `CreateTopics` | Create | Cluster or Topic | `CLUSTER_AUTHORIZATION_FAILED (31)` or 29 |
-| `DeleteTopics` | Delete | Topic | 29 per-topic |
-| `AlterConfigs` / `IncrementalAlterConfigs` | AlterConfigs | Topic or Cluster | 29 or 31 |
-| `CreatePartitions` | Alter | Topic | 29 |
-| `DeleteRecords` | Delete | Topic | 29 |
-| `ListGroups` (filter) | Describe | Group | silent filter |
-| `DescribeGroups` | Describe | Group | `GROUP_AUTHORIZATION_FAILED (30)` |
-| `DeleteGroups` | Delete | Group | 30 |
-| `JoinGroup` | Read | Group | 30 |
-| `OffsetCommit` | Read | Group + Read on Topic | 30 / 29 |
-| `OffsetFetch` | Describe | Group + Read on Topic | 30 / 29 |
-| `DescribeCluster` | Describe | Cluster | 31 |
-| `AlterUserScramCredentials` | Alter | Cluster | 31 |
-| `InitProducerId` (txn variant) | Write | TransactionalId | `TRANSACTIONAL_ID_AUTHORIZATION_FAILED (53)` |
-| `AddPartitionsToTxn` / `EndTxn` / `Produce` (txn) | Write | TransactionalId + Write on Topic | 53 / 29 |
-| `CreateAcls` | Alter | Cluster | 31 (whole-request) |
-| `DeleteAcls` | Alter | Cluster | 31 |
-| `DescribeAcls` | Describe | Cluster | 31 |
+| Handler                                           | Operation    | Resource                         | Failure code                                    |
+| ------------------------------------------------- | ------------ | -------------------------------- | ----------------------------------------------- |
+| `Produce`                                         | Write        | Topic (per topic)                | `TOPIC_AUTHORIZATION_FAILED (29)` per-partition |
+| `Fetch`                                           | Read         | Topic (per topic)                | 29 per-partition                                |
+| `Metadata` (per topic)                            | Describe     | Topic                            | 29 (named) or silent-filter (fetch-all)         |
+| `CreateTopics`                                    | Create       | Cluster or Topic                 | `CLUSTER_AUTHORIZATION_FAILED (31)` or 29       |
+| `DeleteTopics`                                    | Delete       | Topic                            | 29 per-topic                                    |
+| `AlterConfigs` / `IncrementalAlterConfigs`        | AlterConfigs | Topic or Cluster                 | 29 or 31                                        |
+| `CreatePartitions`                                | Alter        | Topic                            | 29                                              |
+| `DeleteRecords`                                   | Delete       | Topic                            | 29                                              |
+| `ListGroups` (filter)                             | Describe     | Group                            | silent filter                                   |
+| `DescribeGroups`                                  | Describe     | Group                            | `GROUP_AUTHORIZATION_FAILED (30)`               |
+| `DeleteGroups`                                    | Delete       | Group                            | 30                                              |
+| `JoinGroup`                                       | Read         | Group                            | 30                                              |
+| `OffsetCommit`                                    | Read         | Group + Read on Topic            | 30 / 29                                         |
+| `OffsetFetch`                                     | Describe     | Group + Read on Topic            | 30 / 29                                         |
+| `DescribeCluster`                                 | Describe     | Cluster                          | 31                                              |
+| `AlterUserScramCredentials`                       | Alter        | Cluster                          | 31                                              |
+| `InitProducerId` (txn variant)                    | Write        | TransactionalId                  | `TRANSACTIONAL_ID_AUTHORIZATION_FAILED (53)`    |
+| `AddPartitionsToTxn` / `EndTxn` / `Produce` (txn) | Write        | TransactionalId + Write on Topic | 53 / 29                                         |
+| `CreateAcls`                                      | Alter        | Cluster                          | 31 (whole-request)                              |
+| `DeleteAcls`                                      | Alter        | Cluster                          | 31                                              |
+| `DescribeAcls`                                    | Describe     | Cluster                          | 31                                              |
 
 ## Components
 
-### `crabka-metadata`
+### `krabka-metadata`
 
 - `src/acl.rs` (new) — enums + `AclEntry` + `AclEntryFilter`.
 - `src/records.rs` — append:
@@ -190,7 +191,7 @@ Returns LITERAL entries at `(rt, rn)` plus PREFIXED entries whose
   - `validate` returns `Ok(())` for both (no pre-conditions; idempotent under last-write semantics).
   - Accessors: `matching_acls(rt, rn)`, `all_acls()`.
 
-### `crabka-broker::authorizer` (new file, ~150 lines)
+### `krabka-broker::authorizer` (new file, ~150 lines)
 
 ```rust
 pub struct AuthorizationRequest<'a> {
@@ -221,7 +222,7 @@ pub fn authorize_topics<'a>(
 ) -> HashMap<&'a str, AuthorizationResult>;
 ```
 
-### `crabka-broker` handlers
+### `krabka-broker` handlers
 
 Three new handlers:
 
@@ -237,7 +238,7 @@ Dispatch table additions: `network/dispatch.rs::handler_body_flexible`
 gains 29/30/31 entries (all flexible from v2+). `api_versions.rs`
 `supported_apis()` adds the three api_keys.
 
-### `crabka-cli`
+### `krabka-cli`
 
 `format` subcommand gains a `--add-acl` flag, parseable as:
 
@@ -328,17 +329,17 @@ reads and submits them on first start (slice 12b T8).
 
 ### Per-request authorization failures
 
-| Scenario | Wire response |
-|---|---|
-| TOPIC op DENY | `TOPIC_AUTHORIZATION_FAILED (29)` per-partition / per-topic |
-| GROUP op DENY | `GROUP_AUTHORIZATION_FAILED (30)` per-group |
-| CLUSTER op DENY | `CLUSTER_AUTHORIZATION_FAILED (31)` whole-request |
-| TRANSACTIONAL_ID op DENY | `TRANSACTIONAL_ID_AUTHORIZATION_FAILED (53)` |
-| Anonymous on SASL listener | Cannot happen (pre-auth gate from slice 12 closes connection) |
-| No matching ACL + no super-user + ACL store non-empty | DENY (default) — same wire shape as explicit DENY |
+| Scenario                                              | Wire response                                                 |
+| ----------------------------------------------------- | ------------------------------------------------------------- |
+| TOPIC op DENY                                         | `TOPIC_AUTHORIZATION_FAILED (29)` per-partition / per-topic   |
+| GROUP op DENY                                         | `GROUP_AUTHORIZATION_FAILED (30)` per-group                   |
+| CLUSTER op DENY                                       | `CLUSTER_AUTHORIZATION_FAILED (31)` whole-request             |
+| TRANSACTIONAL_ID op DENY                              | `TRANSACTIONAL_ID_AUTHORIZATION_FAILED (53)`                  |
+| Anonymous on SASL listener                            | Cannot happen (pre-auth gate from slice 12 closes connection) |
+| No matching ACL + no super-user + ACL store non-empty | DENY (default) — same wire shape as explicit DENY             |
 
 Logged at `debug` level — auth-denies are normal traffic. Operators
-wanting an audit trail filter for `crabka_broker::authorizer=debug`.
+wanting an audit trail filter for `krabka_broker::authorizer=debug`.
 
 ### `CreateAcls` validation
 
@@ -361,7 +362,7 @@ proceeds):
 
 - `submit_change` errors → `COORDINATOR_NOT_AVAILABLE (15)` on the
   failing binding(s). Subsequent bindings get `OPERATION_NOT_ATTEMPTED
-  (55)`. Matches Kafka.
+(55)`. Matches Kafka.
 
 ### Bootstrap-file load with ACL records
 
@@ -378,7 +379,7 @@ sets `super_user_name`, deny-by-default kicks in.
 
 ## Testing
 
-### Unit tests (`crabka-broker::authorizer`)
+### Unit tests (`krabka-broker::authorizer`)
 
 The matrix lives here — pure-logic, no I/O:
 
@@ -396,7 +397,7 @@ The matrix lives here — pure-logic, no I/O:
 - `mixed_pattern_types_independent`
 - `authorize_topics_batch_returns_per_topic_decisions`
 
-### Unit tests (`crabka-metadata::acl` + `image`)
+### Unit tests (`krabka-metadata::acl` + `image`)
 
 - `acl_entry_round_trip` for each enum variant.
 - `acl_entry_filter_round_trip`.
@@ -443,11 +444,11 @@ cp-kafka:7.5.0 only (KIP-554 + ACL flag set both require it):
 
 ## Wire-protocol additions
 
-| api_key | Name | Versions |
-|---------|------|----------|
-| 29 | DescribeAcls | v0–v3 |
-| 30 | CreateAcls | v0–v3 |
-| 31 | DeleteAcls | v0–v3 |
+| api_key | Name         | Versions |
+| ------- | ------------ | -------- |
+| 29      | DescribeAcls | v0–v3    |
+| 30      | CreateAcls   | v0–v3    |
+| 31      | DeleteAcls   | v0–v3    |
 
 Schemas already generated in `crates/protocol/generated/`. Flexible-body
 table in `dispatch.rs` adds entries; `api_versions.rs::supported_apis()`

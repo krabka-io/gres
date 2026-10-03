@@ -6,7 +6,7 @@
 through the operator. Add a `Jbod` variant to `KafkaNodePool.spec.storage`
 that materializes **multiple PVCs per pod** — one persistent volume per
 JBOD disk — and wires the broker to spread partition data across them via
-the `CRABKA_EXTRA_LOG_DIRS` env var (slice 45). Phase 8, the operator
+the `KRABKA_EXTRA_LOG_DIRS` env var (slice 45). Phase 8, the operator
 surface for the core JBOD work landed in slice 45.
 
 ---
@@ -21,7 +21,7 @@ surface for the core JBOD work landed in slice 45.
   `id: i32`, a `size: String` (K8s `Quantity`), and an optional
   `class: Option<String>`.
 - Renderer materializes **one `volumeClaimTemplate` per JBOD volume** plus the
-  matching pod `volumeMounts`, and sets `CRABKA_EXTRA_LOG_DIRS` on the broker
+  matching pod `volumeMounts`, and sets `KRABKA_EXTRA_LOG_DIRS` on the broker
   container so the broker treats every disk as a log dir.
 - Static validation: volumes non-empty, ids unique, every `size` a positive
   `Quantity`.
@@ -34,13 +34,13 @@ surface for the core JBOD work landed in slice 45.
 
 ### Out (deferred)
 
-| Concern | Slice |
-|---|---|
-| Adding / removing JBOD volumes on a live pool (data rebalance across a changed disk set) | future — needs KIP-113 intra-broker moves (`AlterReplicaLogDirs`, slice 45b) |
-| Per-volume `deleteClaim` (K8s `persistentVolumeClaimRetentionPolicy` is StatefulSet-wide, not per-template) | not on roadmap — one JBOD-level `deleteClaim` instead |
-| Ephemeral volumes inside a JBOD set (Strimzi allows; niche) | future |
-| `KafkaNodePool.status.storage` PVC mirror | future (same as slice 24) |
-| Operator-driven log-dir balancing across disks | rebalancer territory |
+| Concern                                                                                                     | Slice                                                                        |
+| ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Adding / removing JBOD volumes on a live pool (data rebalance across a changed disk set)                    | future — needs KIP-113 intra-broker moves (`AlterReplicaLogDirs`, slice 45b) |
+| Per-volume `deleteClaim` (K8s `persistentVolumeClaimRetentionPolicy` is StatefulSet-wide, not per-template) | not on roadmap — one JBOD-level `deleteClaim` instead                        |
+| Ephemeral volumes inside a JBOD set (Strimzi allows; niche)                                                 | future                                                                       |
+| `KafkaNodePool.status.storage` PVC mirror                                                                   | future (same as slice 24)                                                    |
+| Operator-driven log-dir balancing across disks                                                              | rebalancer territory                                                         |
 
 ### Semantics
 
@@ -51,7 +51,7 @@ surface for the core JBOD work landed in slice 45.
   (`log_dir = "/var/lib/crabka/data"`), and main script **unchanged**.
 - **Every non-primary volume `id = N`** gets PVC template `data-{N}` mounted at
   `/var/lib/crabka/data-{N}`, and is passed to the broker via
-  `CRABKA_EXTRA_LOG_DIRS` (comma-joined, sorted by id). The broker (slice 45)
+  `KRABKA_EXTRA_LOG_DIRS` (comma-joined, sorted by id). The broker (slice 45)
   splits the env value on commas and spreads partitions across
   `[/var/lib/crabka/data] + extras` by least-loaded placement.
 - **No broker / init-script / main-script / cluster-TOML change.** JBOD is
@@ -59,7 +59,7 @@ surface for the core JBOD work landed in slice 45.
   extra `volumeMounts` on the broker container, and one extra env var. This is
   the same self-contained boundary slice 24 established.
 - **Retention is set-wide.** `persistentVolumeClaimRetentionPolicy.whenDeleted`
-  on a `StatefulSet` applies to *all* its `volumeClaimTemplates`; K8s offers no
+  on a `StatefulSet` applies to _all_ its `volumeClaimTemplates`; K8s offers no
   per-template retention. So JBOD exposes a single `deleteClaim` covering every
   disk (diverging from Strimzi's per-volume flag — Crabka is Strimzi-shaped,
   not -compatible, and delegates PVC GC to K8s rather than managing it itself).
@@ -140,10 +140,10 @@ regardless of YAML order. Let `primary = volumes_sorted[0]`,
      - primary → name `data`, mount `/var/lib/crabka/data`.
      - extra id N → name `data-{N}`, mount `/var/lib/crabka/data-{N}`.
      - each: `accessModes: [ReadWriteOnce]`, `resources.requests.storage =
-       size`, optional `storageClassName`, labels = pod labels (GC selector).
+size`, optional `storageClassName`, labels = pod labels (GC selector).
 2. **`render_broker_container`**: for each extra volume, add a
    `volumeMount {name: data-{N}, mountPath: /var/lib/crabka/data-{N}}`, and add
-   env `CRABKA_EXTRA_LOG_DIRS = "/var/lib/crabka/data-{N1},/var/lib/crabka/data-{N2},…"`
+   env `KRABKA_EXTRA_LOG_DIRS = "/var/lib/crabka/data-{N1},/var/lib/crabka/data-{N2},…"`
    (extras only, sorted by id). The init container is untouched (it only
    formats the primary metadata dir).
 3. **`render_pvc_retention_policy`** (JBOD arm): `whenDeleted = Delete` iff
@@ -158,10 +158,10 @@ The renderer stays pure.
 
 ### Static (`validate`)
 
-| Variant | Trigger |
-|---|---|
-| `JbodNoVolumes` | `volumes` empty |
-| `JbodDuplicateVolumeId(i32)` | two volumes share an `id` |
+| Variant                         | Trigger                                              |
+| ------------------------------- | ---------------------------------------------------- |
+| `JbodNoVolumes`                 | `volumes` empty                                      |
+| `JbodDuplicateVolumeId(i32)`    | two volumes share an `id`                            |
 | `StorageSizeInvalid(size, why)` | any volume `size` not a positive `Quantity` (reused) |
 
 ### Monotonic (`validate_storage_change`, one STS GET)
@@ -172,8 +172,8 @@ The pre-apply GET now hands **all** `volumeClaimTemplates` to the validator
 - **Type change** (`Ephemeral`/`PersistentClaim`/`Jbod` kind differs) →
   `StorageTypeChanged`.
 - **JBOD ↔ JBOD:**
-  - Observed identities: `data` → *primary slot*; `data-{N}` → id N.
-  - Desired identities: lowest id → *primary slot*; the rest → their id.
+  - Observed identities: `data` → _primary slot_; `data-{N}` → id N.
+  - Desired identities: lowest id → _primary slot_; the rest → their id.
   - Non-primary id set must match (`JbodVolumesImmutable` otherwise) — this also
     rejects primary reassignment (changing which id is lowest) and add/remove,
     all of which would re-point or orphan a PVC and lose data. Deferred to a
@@ -191,6 +191,7 @@ First reconcile (no live STS) accepts any spec.
 shape, `volumes` array, `deleteClaim`).
 
 **`controller::kafka_node_pool::tests`:**
+
 - `render_statefulset_jbod_renders_one_pvc_per_volume` (names `data` +
   `data-1`; sizes/classes).
 - `render_statefulset_jbod_primary_is_lowest_id` (primary keeps `data` /
@@ -207,7 +208,7 @@ shape, `volumes` array, `deleteClaim`).
 
 **`tests/reconcile_pool.rs`:** `pool_jbod_renders_multiple_volume_claim_templates`
 — apply a 2-volume JBOD pool, capture the SSA PATCH, assert two
-`volumeClaimTemplates` (`data`, `data-1`) and the `CRABKA_EXTRA_LOG_DIRS` env.
+`volumeClaimTemplates` (`data`, `data-1`) and the `KRABKA_EXTRA_LOG_DIRS` env.
 The shared `fake_sts_body_with_storage` helper grows a JBOD-aware variant for a
 shrink-rejection integration test.
 
@@ -240,9 +241,9 @@ No broker, init-script, main-script, or cluster-level ConfigMap/TOML change.
 
 ## 7. Acceptance criteria
 
-1. `cargo test -p crabka-operator` green (existing + JBOD unit/integration).
+1. `cargo test -p krabka-operator` green (existing + JBOD unit/integration).
 2. `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo fmt --check`.
 3. CRD regen stable (`tools/regen-crds.sh` leaves no diff after commit).
-4. `helm lint charts/crabka-operator` passes.
+4. `helm lint charts/krabka-operator` passes.
 5. operator-e2e (kind): JBOD pool becomes `Ready=True`; both PVCs `Bound`;
    broker reports both disks as log dirs; PVCs GC'd on cluster delete.

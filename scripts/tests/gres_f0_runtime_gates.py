@@ -62,7 +62,7 @@ def normalized_commands(text: str) -> str:
 
 e2e = normalized_commands(uncommented_shell("scripts/gres-e2e.sh"))
 conformance = next(
-    line for line in e2e.splitlines() if line.startswith("./target/debug/crabka-gres-conformance ")
+    line for line in e2e.splitlines() if line.startswith("./target/debug/krabka-gres-conformance ")
 )
 for option, value in {
     "--extended-corpus": "crates/gres-conformance/corpus-extended",
@@ -73,7 +73,7 @@ for option, value in {
     assert f"{option} {value}" in conformance, f"PgDog corpus command missing {option}"
 
 assert re.search(
-    r'^DATABASE_URL=.* timeout 30s ./target/debug/crabka-gres-driver-smoke ',
+    r'^DATABASE_URL=.* timeout 30s ./target/debug/krabka-gres-driver-smoke ',
     e2e,
     re.MULTILINE,
 ), "Rust driver smoke must have a command-level timeout"
@@ -132,7 +132,7 @@ assert "python3 scripts/tests/gres_f0_runtime_gates.py" in contract_step
 capture_contract = workflow_step("Driver capture safety contract")
 assert "python3 -m unittest tools/tests/test_gres_wire_recorder.py tools/tests/test_capture_gres_driver_goldens.py" in capture_contract
 front_door = workflow_step("Front-door PgDog e2e gate")
-assert "--skip-pgdog" not in front_door and "CRABKA_GRES_E2E_KEEP_ARTIFACTS=1" in front_door
+assert "--skip-pgdog" not in front_door and "KRABKA_GRES_E2E_KEEP_ARTIFACTS=1" in front_door
 driver_goldens = workflow_step("Captured driver startup replay")
 assert "timeout 30s ./scripts/gres-driver-goldens-gate.sh" in driver_goldens
 
@@ -163,7 +163,7 @@ substrate_leg = " ".join(
 )
 for fragment in (
     "./target/debug/crabka gres create-tenant --bootstrap 127.0.0.1:9092 --name conformance --user crab --password-stdin",
-    "./target/debug/crabka-gres --listen 127.0.0.1:54334 --substrate-bootstrap 127.0.0.1:9092 --tenant conformance --auth trust",
+    "./target/debug/krabka-gres --listen 127.0.0.1:54334 --substrate-bootstrap 127.0.0.1:9092 --tenant conformance --auth trust",
 ):
     assert fragment in substrate_leg, f"substrate conformance leg missing {fragment}"
 summary = workflow_step("Publish parity summaries")

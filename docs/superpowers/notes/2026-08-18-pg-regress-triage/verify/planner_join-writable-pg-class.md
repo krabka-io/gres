@@ -19,6 +19,7 @@ every statement after the UPDATE answers "current transaction is aborted" (215 l
 `savepoint "settings" does not exist` (25 lines). Not a cascade from anything earlier.
 
 Hunks 7-10 (oracle 1027-1165) are two later, independent transactions and are NOT this root:
+
 - hunks 7-9 (38+38+17 = 93 lines): Hash Join vs Nested Loop plan text -> planner-only.
 - hunk 10 (6 lines): wrong result. Lateral `join int4_tbl i4 on t1.fivethous = i4.f1+i8.q2`
   returns 8 rows (extra `456|457|1`, `123|124|1`) where PG returns 4. int4_tbl has no
@@ -28,10 +29,10 @@ Hunks 7-10 (oracle 1027-1165) are two later, independent transactions and are NO
 ## 2. Fix location
 
 - `crates/pgexec/src/exec.rs`, `execute_write_body`, `Statement::Update` arm (line 6453).
-  Line 6463-6464: `resolve_relation(...)` then `crabka_pgcatalog::get_table(catalog_kv, table)?`.
+  Line 6463-6464: `resolve_relation(...)` then `krabka_pgcatalog::get_table(catalog_kv, table)?`.
   `pg_class` resolves to `pg_catalog.pg_class` (virtual, `is_virtual_relation` exec.rs:19786)
   and `get_table` returns `CatalogError::UndefinedTable` -> `relation "pg_catalog.pg_class"
-  does not exist` (pgcatalog/src/lib.rs:872). Nothing today parses-and-refuses; it is a plain
+does not exist` (pgcatalog/src/lib.rs:872). Nothing today parses-and-refuses; it is a plain
   missing-table error. The dispatch branch for virtual relations must be inserted before
   `get_table` here. Correct.
 - `catalog_rel.rs` is the WRONG file for the row synthesis. `pg_class` rows are built in
@@ -46,7 +47,7 @@ Hunks 7-10 (oracle 1027-1165) are two later, independent transactions and are NO
   `catalog_relstats/pages/` key + `RelStats.relpages` + `rename_ops` move + `PgClassRow`
   field. Own keyspace, no `SCHEMA_VERSION` (pgcatalog/src/serde.rs:50) bump.
 - Also needed in the same branch: match the WHERE (`relname = '...'`, and `oid =
-  'x'::regclass` for reloptions.out) against synthesised rows -> map to `RelationName`.
+'x'::regclass` for reloptions.out) against synthesised rows -> map to `RelationName`.
   Simplest seam: run the virtual scan the SELECT path already uses with the UPDATE's filter
   and project relname/relnamespace.
 - Superuser gate: privileges.out expects `permission denied for table pg_class` (42501) for a
@@ -59,6 +60,7 @@ Whole-block rule, hunks 1-6 (the aborted transaction): 291+139+40+40+40+194 = 74
 File total 843; remainder 99 = 93 planner + 6 lateral wrong-result.
 
 Composition of the 744 (what the fix alone recovers):
+
 - 241 '+' error lines: recovered.
 - 112 '-' plain result rows (`select count(*)` x many, `length(max)`, two FULL JOIN
   outputs of hjtest_matchbits): recovered if joins run (join.rs already hash-indexes
@@ -70,8 +72,8 @@ Composition of the 744 (what the fix alone recovers):
   to carry a `"Node Type": "Hash"` node with `Original Hash Batches`/`Hash Batches` under a
   work_mem budget. explain.rs has JSON but no Hash node; `find_hash` returns null and the
   rows print blank. Planner + hash-join batch instrumentation.
-So ~353 lines recovered by this root alone; ~391 fail longer on planner_join-cost-planner-explain
-and planner_join-blocking-memory-budget.
+  So ~353 lines recovered by this root alone; ~391 fail longer on planner_join-cost-planner-explain
+  and planner_join-blocking-memory-budget.
 
 ## 4. Dependencies / hidden prerequisites
 

@@ -29,7 +29,7 @@ Joins (4c) and windowing (4d) are deferred to later slices.
 
 ### Goal
 
-A `dsl` module in `crabka-client-streams` that lets a Rust app write a fluent
+A `dsl` module in `krabka-client-streams` that lets a Rust app write a fluent
 KStream/KTable topology which **compiles to the existing Processor-API `Topology`**
 (and thus runs on the #2/#3 runtime unchanged), producing a wire `Topology`
 **byte-identical to the JVM 4.x DSL** (with `optimization=all`) for the supported
@@ -124,7 +124,7 @@ A node per JVM `GraphNode` kind needed for 4a+4b:
 
 - `StreamSource { topics, consumed }` (from `stream()`).
 - `StatelessProcessor { kind, supplier }` — `kind ∈ {MapValues, Map, SelectKey,
-  Filter{negate}, FlatMap, FlatMapValues, Peek, Foreach, Merge, Branch}`.
+Filter{negate}, FlatMap, FlatMapValues, Peek, Foreach, Merge, Branch}`.
 - `StreamSink { topic, produced }` (from `to()`).
 - `Repartition { topic_name, serdes, num_partitions }` (from `repartition()`/`groupBy`).
 - `Aggregate { kind: Count|Reduce|Aggregate, supplier, store }` (from `KGroupedStream`).
@@ -144,29 +144,29 @@ used to decide rewrites: `key_changing_operation`, `repartition_required`,
 optimizer may drop nodes but never renumbers). The prefix constants are ported
 verbatim from JVM 4.x (`KStreamImpl`/`KTableImpl`/`KGroupedStreamImpl`):
 
-| Op | Prefix |
-|---|---|
-| source | `KSTREAM-SOURCE-` |
-| sink (`to`) | `KSTREAM-SINK-` |
-| `filter`/`filterNot` | `KSTREAM-FILTER-` |
-| `mapValues` | `KSTREAM-MAPVALUES-` |
-| `map` | `KSTREAM-MAP-` |
-| `selectKey` (and `map`'s key-select) | `KSTREAM-KEY-SELECT-` |
-| `flatMap` | `KSTREAM-FLATMAP-` |
-| `flatMapValues` | `KSTREAM-FLATMAPVALUES-` |
-| `peek` | `KSTREAM-PEEK-` |
-| `foreach` | `KSTREAM-FOREACH-` |
-| `merge` | `KSTREAM-MERGE-` |
-| `split`/`branch` | `KSTREAM-BRANCH-` / `KSTREAM-BRANCHCHILD-` |
-| `count`/`aggregate` | `KSTREAM-AGGREGATE-` |
-| `reduce` | `KSTREAM-REDUCE-` |
-| aggregate store | `KSTREAM-AGGREGATE-STATE-STORE-` |
-| reduce store | `KSTREAM-REDUCE-STATE-STORE-` |
-| `table()` source | `KTABLE-SOURCE-` |
-| `KTable::toStream` | `KTABLE-TOSTREAM-` |
-| `KTable::mapValues` | `KTABLE-MAPVALUES-` |
-| `KTable::filter` | `KTABLE-FILTER-` |
-| repartition topic | `<base>-repartition` (base = `Grouped`/`Repartitioned` name or the key-select node name) |
+| Op                                   | Prefix                                                                                   |
+| ------------------------------------ | ---------------------------------------------------------------------------------------- |
+| source                               | `KSTREAM-SOURCE-`                                                                        |
+| sink (`to`)                          | `KSTREAM-SINK-`                                                                          |
+| `filter`/`filterNot`                 | `KSTREAM-FILTER-`                                                                        |
+| `mapValues`                          | `KSTREAM-MAPVALUES-`                                                                     |
+| `map`                                | `KSTREAM-MAP-`                                                                           |
+| `selectKey` (and `map`'s key-select) | `KSTREAM-KEY-SELECT-`                                                                    |
+| `flatMap`                            | `KSTREAM-FLATMAP-`                                                                       |
+| `flatMapValues`                      | `KSTREAM-FLATMAPVALUES-`                                                                 |
+| `peek`                               | `KSTREAM-PEEK-`                                                                          |
+| `foreach`                            | `KSTREAM-FOREACH-`                                                                       |
+| `merge`                              | `KSTREAM-MERGE-`                                                                         |
+| `split`/`branch`                     | `KSTREAM-BRANCH-` / `KSTREAM-BRANCHCHILD-`                                               |
+| `count`/`aggregate`                  | `KSTREAM-AGGREGATE-`                                                                     |
+| `reduce`                             | `KSTREAM-REDUCE-`                                                                        |
+| aggregate store                      | `KSTREAM-AGGREGATE-STATE-STORE-`                                                         |
+| reduce store                         | `KSTREAM-REDUCE-STATE-STORE-`                                                            |
+| `table()` source                     | `KTABLE-SOURCE-`                                                                         |
+| `KTable::toStream`                   | `KTABLE-TOSTREAM-`                                                                       |
+| `KTable::mapValues`                  | `KTABLE-MAPVALUES-`                                                                      |
+| `KTable::filter`                     | `KTABLE-FILTER-`                                                                         |
+| repartition topic                    | `<base>-repartition` (base = `Grouped`/`Repartitioned` name or the key-select node name) |
 
 The exact prefix strings + the increment order are the byte-exactness crux. The
 empirically captured JVM fixtures (§6) are what confirm each is correct — any
@@ -238,7 +238,7 @@ serdes; changelog produce/restore come free from #3.
 
 - `KStreamAggregateProcessor<K,V,VA>{ initializer, aggregator, store_name }`:
   `old = store.get(&k).unwrap_or_else(initializer); new = aggregator(&k,&v,old);
-  store.put(k.clone(), new.clone()); forward(Record::new(k, new, ts))`.
+store.put(k.clone(), new.clone()); forward(Record::new(k, new, ts))`.
   - **count** = `initializer: || 0i64`, `aggregator: |_k,_v,acc| acc + 1`.
   - **reduce** = `initializer: || first_value`, `aggregator: |_k,v,acc| reducer(&acc,&v)`.
 - `KTableSourceProcessor<K,V>`: `table()` materializes each source record into the
@@ -323,7 +323,7 @@ One fixture per representative topology; each asserts
   topologies (§6.2).
 - `count`/`reduce`/`aggregate` execute correctly via `TopologyTestDriver` and a
   broker integration test (incl. restart-restore via #3's changelog).
-- `cargo test -p crabka-client-streams` green (DSL unit + optimizer + golden +
+- `cargo test -p krabka-client-streams` green (DSL unit + optimizer + golden +
   test-driver + integration + doctests); the existing #1 Processor-API golden frame
   still green; `cargo clippy --workspace --all-targets -- -D warnings` and
   `cargo fmt --check` clean; `cargo build --workspace` builds.

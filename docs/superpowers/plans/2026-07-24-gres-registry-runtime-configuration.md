@@ -13,7 +13,7 @@
 consistent for every production creator/reader so the first caller cannot
 silently defeat later configuration.
 
-**Architecture:** `crabka-gres-control` owns one small `RegistryPolicy` value
+**Architecture:** `krabka-gres-control` owns one small `RegistryPolicy` value
 and stores it in each `Registry`. The cluster-wide Kubernetes source of truth
 is `Kafka.spec.gresRegistry`, because `__gres_tenants` belongs to a Kafka
 cluster and may be shared by several `Gres` fleets. Standalone binaries expose
@@ -50,20 +50,20 @@ Cargo nextest.
 
 ## Effective Settings
 
-| Setting | CLI/environment suffix | Kafka CRD field | Default | Constraint |
-|---|---|---|---:|---|
-| registry replication | `REGISTRY_REPLICATION_FACTOR` | `spec.gresRegistry.replicationFactor` | 1 | `1..=32767` |
-| topic-create timeout | `REGISTRY_TOPIC_CREATE_TIMEOUT_MS` | `spec.gresRegistry.topicCreateTimeoutMs` | 15000 | positive `i32` |
-| reader retry backoff | `REGISTRY_READER_RETRY_BACKOFF_MS` | `spec.gresRegistry.readerRetryBackoffMs` | 250 | positive `u64` |
-| fetch max wait | `REGISTRY_FETCH_MAX_WAIT_MS` | `spec.gresRegistry.fetchMaxWaitMs` | 500 | positive `i32` |
+| Setting               | CLI/environment suffix               | Kafka CRD field                            | Default | Constraint     |
+| --------------------- | ------------------------------------ | ------------------------------------------ | ------: | -------------- |
+| registry replication  | `REGISTRY_REPLICATION_FACTOR`        | `spec.gresRegistry.replicationFactor`      |       1 | `1..=32767`    |
+| topic-create timeout  | `REGISTRY_TOPIC_CREATE_TIMEOUT_MS`   | `spec.gresRegistry.topicCreateTimeoutMs`   |   15000 | positive `i32` |
+| reader retry backoff  | `REGISTRY_READER_RETRY_BACKOFF_MS`   | `spec.gresRegistry.readerRetryBackoffMs`   |     250 | positive `u64` |
+| fetch max wait        | `REGISTRY_FETCH_MAX_WAIT_MS`         | `spec.gresRegistry.fetchMaxWaitMs`         |     500 | positive `i32` |
 | fetch partition bytes | `REGISTRY_FETCH_PARTITION_MAX_BYTES` | `spec.gresRegistry.fetchPartitionMaxBytes` | 1048576 | positive `i32` |
 
 Every standalone binary uses the exact common names
-`CRABKA_GRES_REGISTRY_REPLICATION_FACTOR`,
-`CRABKA_GRES_REGISTRY_TOPIC_CREATE_TIMEOUT_MS`,
-`CRABKA_GRES_REGISTRY_READER_RETRY_BACKOFF_MS`,
-`CRABKA_GRES_REGISTRY_FETCH_MAX_WAIT_MS`, and
-`CRABKA_GRES_REGISTRY_FETCH_PARTITION_MAX_BYTES`. The operator renders the
+`KRABKA_GRES_REGISTRY_REPLICATION_FACTOR`,
+`KRABKA_GRES_REGISTRY_TOPIC_CREATE_TIMEOUT_MS`,
+`KRABKA_GRES_REGISTRY_READER_RETRY_BACKOFF_MS`,
+`KRABKA_GRES_REGISTRY_FETCH_MAX_WAIT_MS`, and
+`KRABKA_GRES_REGISTRY_FETCH_PARTITION_MAX_BYTES`. The operator renders the
 activator/compute process arguments explicitly from the Kafka CR.
 
 ---
@@ -170,7 +170,7 @@ Reuse the exported validated scalar wrappers from `gres-control`, with one
 thin flattened Clap struct local to each binary as its command shape requires;
 avoid four validation implementations and do not make the library depend on
 Clap. Enable Clap's `env` feature in `gres` and `cli`. Every option has one of
-the exact `CRABKA_GRES_REGISTRY_*` names above. Thread the resulting policy
+the exact `KRABKA_GRES_REGISTRY_*` names above. Thread the resulting policy
 into every production `Registry` construction:
 
 - activator startup;
@@ -180,7 +180,7 @@ into every production `Registry` construction:
 
 For loadtest, carry policy from its CLI through `RunConfig`,
 `ClusterOptions`, and every `NodeSpec`, then render the five options when
-spawning each `crabka-gres` process. Provisioning and spawned readers must use
+spawning each `krabka-gres` process. Provisioning and spawned readers must use
 the same policy. Hidden/test harness call sites may use
 `RegistryPolicy::default()`.
 

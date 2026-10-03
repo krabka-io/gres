@@ -13,11 +13,11 @@ use std::{
     time::Duration,
 };
 
-use crabka_gres_substrate::{
+use krabka_gres_substrate::{
     LiveCommittedEndSampler, LiveRecoveryConfig, ReadOnlyRange0Follower,
     checkpoint::CheckpointStore,
 };
-use crabka_pgkv::{FjallKv, FjallOptions, MemKv, RestoreKv};
+use krabka_pgkv::{FjallKv, FjallOptions, MemKv, RestoreKv};
 
 /// Directory-name prefix of every follower cache generation.
 const FOLLOWER_STORE_PREFIX: &str = "r0-follower";
@@ -156,7 +156,7 @@ impl Range0FollowerTail {
             self.consecutive_rebuilds = 0;
             return;
         }
-        match crabka_gres_substrate::read_live_committed_tail(&self.config, applied, end).await {
+        match krabka_gres_substrate::read_live_committed_tail(&self.config, applied, end).await {
             Ok(items) => {
                 self.consecutive_rebuilds = 0;
                 for item in &items {
@@ -180,9 +180,9 @@ impl Range0FollowerTail {
     async fn handle_read_failure(
         &mut self,
         applied: i64,
-        error: &crabka_gres_substrate::SubstrateError,
+        error: &krabka_gres_substrate::SubstrateError,
     ) {
-        match crabka_gres_substrate::live_wal_trimmed_past_applied(&self.config, applied).await {
+        match krabka_gres_substrate::live_wal_trimmed_past_applied(&self.config, applied).await {
             Ok(true) => self.rebuild_from_checkpoint(applied).await,
             Ok(false) => {
                 tracing::warn!(%error, applied, "range-0 follower tail read failed");
@@ -227,7 +227,7 @@ impl Range0FollowerTail {
                 return;
             }
         };
-        match crabka_gres_substrate::rebuild_live_range0_tail_from_checkpoint(
+        match krabka_gres_substrate::rebuild_live_range0_tail_from_checkpoint(
             &self.config,
             &self.follower.tail(),
             fresh_store,

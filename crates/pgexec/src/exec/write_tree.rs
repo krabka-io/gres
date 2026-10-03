@@ -14,7 +14,7 @@ pub(super) async fn partitioned_dml(
     ctes: &crate::cte::CteContext,
     stmt: &Statement,
     writes: &mut StatementWrites,
-) -> Result<(WriteOutcome, Vec<crabka_pgkv::WriteOp>), ExecError> {
+) -> Result<(WriteOutcome, Vec<krabka_pgkv::WriteOp>), ExecError> {
     let resolution = write_ctx.eval_ctx.resolution();
     let (parent, verb, returning) = match stmt {
         Statement::Update {
@@ -34,7 +34,7 @@ pub(super) async fn partitioned_dml(
     let mut ops = Vec::new();
     let mut affected: u64 = 0;
     let mut returned: Option<Relation> = None;
-    let parent_table = crabka_pgcatalog::get_table(write_ctx.catalog_kv, &parent)?;
+    let parent_table = krabka_pgcatalog::get_table(write_ctx.catalog_kv, &parent)?;
     for leaf in crate::partition::leaves_of(write_ctx.catalog_kv, &parent)? {
         // The per-leaf body resolves `RETURNING` against the leaf's own column
         // order, so a leaf whose columns are ordered differently would
@@ -44,7 +44,7 @@ pub(super) async fn partitioned_dml(
         // shape escapes the statement, so the mismatch cannot be observed and
         // the write proceeds -- which is what lets `TRUNCATE` reach such a
         // partition, since it runs as an unqualified `DELETE`.
-        let leaf_table = crabka_pgcatalog::get_table(write_ctx.catalog_kv, &leaf)?;
+        let leaf_table = krabka_pgcatalog::get_table(write_ctx.catalog_kv, &leaf)?;
         if returning.is_some()
             && column_mapping(&parent_table, &leaf_table)?
                 .iter()
@@ -123,8 +123,8 @@ fn affected_from_tag(tag: &str) -> u64 {
 /// and in `RETURNING` — resolving to the same thing it did before the rewrite.
 fn retarget_tree_dml(
     stmt: &Statement,
-    target: &crabka_pgcatalog::RelationName,
-    named: &crabka_pgcatalog::RelationName,
+    target: &krabka_pgcatalog::RelationName,
+    named: &krabka_pgcatalog::RelationName,
 ) -> Statement {
     let mut per_relation = stmt.clone();
     match &mut per_relation {
@@ -134,7 +134,7 @@ fn retarget_tree_dml(
         | Statement::Delete {
             table, only, alias, ..
         } => {
-            *table = crabka_pgparser::ast::RelationRef::qualified(&target.schema, &target.name);
+            *table = krabka_pgparser::ast::RelationRef::qualified(&target.schema, &target.name);
             *only = true;
             if alias.is_none() {
                 *alias = Some(named.name.clone());
@@ -166,7 +166,7 @@ pub(super) async fn inherited_dml(
     ctes: &crate::cte::CteContext,
     stmt: &Statement,
     writes: &mut StatementWrites,
-) -> Result<(WriteOutcome, Vec<crabka_pgkv::WriteOp>), ExecError> {
+) -> Result<(WriteOutcome, Vec<krabka_pgkv::WriteOp>), ExecError> {
     let resolution = write_ctx.eval_ctx.resolution();
     let (named, verb) = match stmt {
         Statement::Update { table, .. } => (table, "UPDATE"),
@@ -179,7 +179,7 @@ pub(super) async fn inherited_dml(
         named,
         SchemaDisposition::Reference,
     )?;
-    let parent = crabka_pgcatalog::get_table(write_ctx.catalog_kv, &named)?;
+    let parent = krabka_pgcatalog::get_table(write_ctx.catalog_kv, &named)?;
     let mut relations = vec![named.clone()];
     relations.extend(crate::inheritance::descendants(
         write_ctx.catalog_kv,
@@ -241,7 +241,7 @@ fn reshape_returning_for_tree(
     write_ctx: &WriteContext<'_>,
     stmt: &Statement,
     parent: &Table,
-    relations: &[crabka_pgcatalog::RelationName],
+    relations: &[krabka_pgcatalog::RelationName],
 ) -> Result<Statement, ExecError> {
     let (returning, from, alias) = match stmt {
         Statement::Update {
@@ -272,7 +272,7 @@ fn reshape_returning_for_tree(
     }
     let mut uniform = true;
     for relation in relations {
-        let child = crabka_pgcatalog::get_table(write_ctx.catalog_kv, relation)?;
+        let child = krabka_pgcatalog::get_table(write_ctx.catalog_kv, relation)?;
         uniform &= child.columns.len() == parent.columns.len()
             && column_mapping(parent, &child)?
                 .iter()
@@ -315,7 +315,7 @@ fn reshape_returning_for_tree(
             }
         })
         .collect();
-    let reshaped = crabka_pgparser::ast::Returning {
+    let reshaped = krabka_pgparser::ast::Returning {
         items,
         ..returning.clone()
     };
@@ -364,7 +364,7 @@ pub(super) fn may_describe_key(write_ctx: &WriteContext<'_>, table: &Table) -> b
         crate::rls::decide(
             &describer.security(kv),
             table,
-            crabka_pgcatalog::policy::PolicyCommand::Select,
+            krabka_pgcatalog::policy::PolicyCommand::Select,
         ),
         Ok(crate::rls::RowSecurity::Open)
     ) && matches!(
@@ -401,7 +401,7 @@ pub(super) fn check_partition_constraint(
     let mut current = table.clone();
     let mut current_row = row.to_vec();
     while let Some((parent, bound)) = crate::partition::parent_of(kv, &current.name)? {
-        let parent_table = crabka_pgcatalog::get_table(kv, &parent)?;
+        let parent_table = krabka_pgcatalog::get_table(kv, &parent)?;
         let Some(scheme) = crate::partition::scheme_of(kv, &parent)? else {
             return Ok(());
         };
@@ -441,7 +441,7 @@ pub(super) async fn partitioned_insert(
     ctes: &crate::cte::CteContext,
     stmt: &Statement,
     writes: &mut StatementWrites,
-) -> Result<(WriteOutcome, Vec<crabka_pgkv::WriteOp>), ExecError> {
+) -> Result<(WriteOutcome, Vec<krabka_pgkv::WriteOp>), ExecError> {
     let resolution = write_ctx.eval_ctx.resolution();
     let Statement::Insert {
         table,
@@ -465,13 +465,13 @@ pub(super) async fn partitioned_insert(
                 .into(),
         ));
     }
-    let parent = crabka_pgcatalog::get_table(
+    let parent = krabka_pgcatalog::get_table(
         catalog_kv,
         &resolve_relation(catalog_kv, resolution, table, SchemaDisposition::Reference)?,
     )?;
     let (target_idx, rows) =
         insert_source_rows(write_ctx, ctes, &parent, columns, indirections, source)?;
-    let mut ops: Vec<crabka_pgkv::WriteOp> = Vec::new();
+    let mut ops: Vec<krabka_pgkv::WriteOp> = Vec::new();
     if rows.is_empty() {
         return Ok((WriteOutcome::command("INSERT 0 0".into()), ops));
     }
@@ -498,7 +498,7 @@ pub(super) async fn partitioned_insert(
     let supplied = WriteContext::modified_columns(&parent, &target_idx);
     let check = write_ctx.row_check(
         &parent,
-        crabka_pgcatalog::policy::PolicyCommand::Insert,
+        krabka_pgcatalog::policy::PolicyCommand::Insert,
         &supplied,
     )?;
     for row_exprs in &rows {
@@ -572,12 +572,12 @@ pub(super) async fn partitioned_insert(
                 new_identity: rowid,
             });
         }
-        ops.push(crabka_pgkv::WriteOp::Put {
-            key: crabka_pgmvcc::version::version_key_xid(leaf.id, rowid, write_ctx.xid),
+        ops.push(krabka_pgkv::WriteOp::Put {
+            key: krabka_pgmvcc::version::version_key_xid(leaf.id, rowid, write_ctx.xid),
             value: encode_table_tuple(
                 &leaf,
                 write_ctx.xid,
-                crabka_pgmvcc::xid::INVALID_XID,
+                krabka_pgmvcc::xid::INVALID_XID,
                 write_ctx.command_id,
                 0,
                 &leaf_row,

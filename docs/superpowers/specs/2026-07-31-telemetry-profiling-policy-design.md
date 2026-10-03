@@ -7,7 +7,7 @@ route behavior or defaults.
 
 ## Configuration
 
-Add one shared, defaultable `ProfilingConfig` in `crabka-telemetry`, usable as
+Add one shared, defaultable `ProfilingConfig` in `krabka-telemetry`, usable as
 flattened clap arguments by each owning binary. It contains:
 
 - CPU default duration (`30s`) and maximum duration (`60s`);
@@ -20,7 +20,7 @@ finite, whole-Hz sampling validation uses `refined_type`, and related default
 durations must not exceed their maximums. Request `seconds` remains the
 compatible public query shape and is bounded by the configured policy.
 
-Use `CRABKA_PROFILING_*` environment variables with matching
+Use `KRABKA_PROFILING_*` environment variables with matching
 `--profiling-*` arguments. No CRD owns the process-local profiling admin
 server.
 

@@ -7,8 +7,8 @@
 //! types have no arithmetic whatever — `'1'::oid + 1` is 42883 — which is why
 //! this table is exhaustive rather than deferring to the numeric family.
 
-use crabka_pgparser::ast::{BinaryOp, Expr, FuncCall};
-use crabka_pgtypes::{ColumnType, Datum, sysid};
+use krabka_pgparser::ast::{BinaryOp, Expr, FuncCall};
+use krabka_pgtypes::{ColumnType, Datum, sysid};
 
 use crate::{
     clock::EvalCtx,
@@ -298,9 +298,9 @@ pub(crate) fn apply_sysid_operator(
 
 /// Re-raise a `numeric + pg_lsn` failure with the CONTEXT PostgreSQL adds for
 /// the SQL-language wrapper the reflected operator is implemented as.
-fn reflected_add_context(error: crabka_pgtypes::TypeError) -> ExecError {
+fn reflected_add_context(error: krabka_pgtypes::TypeError) -> ExecError {
     ExecError::Remote(
-        crabka_pgwire::error::PgError::error(error.sqlstate(), error.to_string())
+        krabka_pgwire::error::PgError::error(error.sqlstate(), error.to_string())
             .with_context("SQL function \"numeric_pl_pg_lsn\" statement 1"),
     )
 }
@@ -319,7 +319,7 @@ fn resolve_unknown(ty: ColumnType, expr: &Expr, op: BinaryOp, other: ColumnType)
 fn xid8_arg(fc: &FuncCall, value: &Datum) -> Result<u64, ExecError> {
     match value {
         Datum::Xid8(v) => Ok(*v),
-        Datum::Text(text) => Ok(crabka_pgtypes::sysid::uint64_in(text, "xid8")?),
+        Datum::Text(text) => Ok(krabka_pgtypes::sysid::uint64_in(text, "xid8")?),
         other => Err(wrong_arg(fc, other)),
     }
 }
@@ -327,13 +327,13 @@ fn xid8_arg(fc: &FuncCall, value: &Datum) -> Result<u64, ExecError> {
 fn lsn_arg(fc: &FuncCall, value: &Datum) -> Result<u64, ExecError> {
     match value {
         Datum::PgLsn(v) => Ok(*v),
-        Datum::Text(text) => Ok(crabka_pgtypes::sysid::lsn_in(text)?),
+        Datum::Text(text) => Ok(krabka_pgtypes::sysid::lsn_in(text)?),
         other => Err(wrong_arg(fc, other)),
     }
 }
 
 fn coerce(value: &Datum, to: ColumnType, ctx: &EvalCtx) -> Result<Datum, ExecError> {
-    Ok(crabka_pgtypes::cast::cast_in(
+    Ok(krabka_pgtypes::cast::cast_in(
         value,
         to,
         ctx.output_style(),

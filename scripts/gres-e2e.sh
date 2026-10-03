@@ -18,17 +18,17 @@ Options:
   --help         Show this help.
 
 Environment:
-  CRABKA_GRES_SKIP_BUILD=1              Reuse existing target/debug binaries.
-  CRABKA_GRES_E2E_SKIP_PGDOG=1          Same as --skip-pgdog.
-  CRABKA_GRES_E2E_KEEP_ARTIFACTS=1      Keep logs and generated configs.
-  CRABKA_GRES_PGDOG_IMAGE=<image>       Override the pinned PgDog image.
-  CRABKA_GRES_POSTGRES_IMAGE=<image>    Override the pinned Postgres oracle.
-  CRABKA_GRES_KAFKA_IMAGE=<image>       Override the pinned Kafka CLI image.
-  CRABKA_GRES_EXPECT_KAFKA_ACL=0        Disable mandatory Kafka ACL assertions.
+  KRABKA_GRES_SKIP_BUILD=1              Reuse existing target/debug binaries.
+  KRABKA_GRES_E2E_SKIP_PGDOG=1          Same as --skip-pgdog.
+  KRABKA_GRES_E2E_KEEP_ARTIFACTS=1      Keep logs and generated configs.
+  KRABKA_GRES_PGDOG_IMAGE=<image>       Override the pinned PgDog image.
+  KRABKA_GRES_POSTGRES_IMAGE=<image>    Override the pinned Postgres oracle.
+  KRABKA_GRES_KAFKA_IMAGE=<image>       Override the pinned Kafka CLI image.
+  KRABKA_GRES_EXPECT_KAFKA_ACL=0        Disable mandatory Kafka ACL assertions.
 EOF
 }
 
-SKIP_PGDOG="${CRABKA_GRES_E2E_SKIP_PGDOG:-0}"
+SKIP_PGDOG="${KRABKA_GRES_E2E_SKIP_PGDOG:-0}"
 case "${1:-}" in
     "") ;;
     --skip-pgdog) SKIP_PGDOG=1 ;;
@@ -36,15 +36,15 @@ case "${1:-}" in
     *) echo "FAIL: unknown argument $1" >&2; usage >&2; exit 2 ;;
 esac
 
-PGDOG_IMAGE="${CRABKA_GRES_PGDOG_IMAGE:-ghcr.io/pgdogdev/pgdog:0.1.47}"
-POSTGRES_IMAGE="${CRABKA_GRES_POSTGRES_IMAGE:-postgres:18.4}"
-KAFKA_IMAGE="${CRABKA_GRES_KAFKA_IMAGE:-mirror.gcr.io/apache/kafka:4.0.0}"
+PGDOG_IMAGE="${KRABKA_GRES_PGDOG_IMAGE:-ghcr.io/pgdogdev/pgdog:0.1.47}"
+POSTGRES_IMAGE="${KRABKA_GRES_POSTGRES_IMAGE:-postgres:18.4}"
+KAFKA_IMAGE="${KRABKA_GRES_KAFKA_IMAGE:-mirror.gcr.io/apache/kafka:4.0.0}"
 CLUSTER_ID="00000000-0000-0000-0000-000000000001"
-ARTIFACT_DIR="${CRABKA_GRES_E2E_ARTIFACT_DIR:-target/gres-e2e-artifacts}"
+ARTIFACT_DIR="${KRABKA_GRES_E2E_ARTIFACT_DIR:-target/gres-e2e-artifacts}"
 BROKER_PID=""
 PGDOG_CONTAINER=""
 ORACLE_CONTAINER=""
-EXPECT_KAFKA_ACL="${CRABKA_GRES_EXPECT_KAFKA_ACL:-1}"
+EXPECT_KAFKA_ACL="${KRABKA_GRES_EXPECT_KAFKA_ACL:-1}"
 PGDOG_ADMIN_PASSWORD="gres-e2e-admin"
 TENANT_A_PID=""
 TENANT_B_PID=""
@@ -71,11 +71,11 @@ is_kafka_authorization_denial() {
 
 # Shell-level contract test hook: keep denial classification deterministic and
 # prove that an empty/successful fetch cannot satisfy the ACL assertion.
-if [ -n "${CRABKA_GRES_E2E_TEST_CLASSIFY_STATUS:-}" ]; then
+if [ -n "${KRABKA_GRES_E2E_TEST_CLASSIFY_STATUS:-}" ]; then
     classifier_output=$(mktemp)
     trap 'rm -f "$classifier_output"' EXIT
-    printf '%s\n' "${CRABKA_GRES_E2E_TEST_CLASSIFY_OUTPUT:-}" >"$classifier_output"
-    if is_kafka_authorization_denial "$CRABKA_GRES_E2E_TEST_CLASSIFY_STATUS" "$classifier_output" "${CRABKA_GRES_E2E_TEST_CLASSIFY_TOPIC:-__gres_tenants}"; then
+    printf '%s\n' "${KRABKA_GRES_E2E_TEST_CLASSIFY_OUTPUT:-}" >"$classifier_output"
+    if is_kafka_authorization_denial "$KRABKA_GRES_E2E_TEST_CLASSIFY_STATUS" "$classifier_output" "${KRABKA_GRES_E2E_TEST_CLASSIFY_TOPIC:-__gres_tenants}"; then
         echo denied
         exit 0
     fi
@@ -99,7 +99,7 @@ cleanup() {
     if [ "$status" -ne 0 ]; then
         dump_diagnostics
     fi
-    if [ "${CRABKA_GRES_E2E_KEEP_ARTIFACTS:-0}" != "1" ] && [ "$status" -eq 0 ]; then
+    if [ "${KRABKA_GRES_E2E_KEEP_ARTIFACTS:-0}" != "1" ] && [ "$status" -eq 0 ]; then
         rm -rf "$ARTIFACT_DIR"
     else
         log "kept artifacts in ${ARTIFACT_DIR}"
@@ -254,7 +254,7 @@ expect_compute_denied() {
     local password="$4"
 
     if GRES_KAFKA_USERNAME="$username" GRES_KAFKA_PASSWORD="$password" timeout 20s \
-        ./target/debug/crabka-gres \
+        ./target/debug/krabka-gres \
             --listen "127.0.0.5:0" \
             --substrate-bootstrap "127.0.0.1:${SASL_PORT}" \
             --tenant "$tenant" \
@@ -302,7 +302,7 @@ expect_kafka_topic_read_denied() {
 
 assert_kafka_acl_enforcement() {
     if [ "$EXPECT_KAFKA_ACL" != "1" ]; then
-        log "SKIP: Kafka ACL assertions disabled by CRABKA_GRES_EXPECT_KAFKA_ACL=0"
+        log "SKIP: Kafka ACL assertions disabled by KRABKA_GRES_EXPECT_KAFKA_ACL=0"
         return 0
     fi
     docker_is_available || fail "Docker/Kafka CLI runtime unavailable for mandatory Kafka ACL assertions"
@@ -348,7 +348,7 @@ type = "simple"
 super_users = ["ANONYMOUS"]
 EOF
 
-    ./target/debug/crabka-broker \
+    ./target/debug/krabka-broker \
         --log-dir "${ARTIFACT_DIR}/broker-data" \
         --cluster-id "$CLUSTER_ID" \
         --broker-id 1 \
@@ -380,7 +380,7 @@ start_compute() {
     local pid_var="$4"
 
     GRES_KAFKA_USERNAME="gres-${tenant}" GRES_KAFKA_PASSWORD="${tenant_passwords[$tenant]}" \
-        ./target/debug/crabka-gres \
+        ./target/debug/krabka-gres \
         --listen "${host}:5432" \
         --substrate-bootstrap "127.0.0.1:${SASL_PORT}" \
         --tenant "$tenant" \
@@ -431,7 +431,7 @@ assert_pgdog_config_loads() {
 start_pgdog() {
     PGGDOG_RUN_ARGS=(
         run -d --network host
-        --name "crabka-gres-e2e-pgdog-${PGDOG_PORT}"
+        --name "krabka-gres-e2e-pgdog-${PGDOG_PORT}"
         --add-host "tenant-a.gres.svc:127.0.0.2"
         --add-host "tenant-b.gres.svc:127.0.0.3"
         --add-host "tenant-c.gres.svc:127.0.0.4"
@@ -473,7 +473,7 @@ mapfile -t PORTS < <(choose_ports)
 BROKER_PORT="${PORTS[0]}"
 CONTROLLER_PORT="${PORTS[1]}"
 SASL_PORT="${PORTS[2]}"
-PGDOG_PORT="${CRABKA_GRES_PGDOG_PORT:-6432}"
+PGDOG_PORT="${KRABKA_GRES_PGDOG_PORT:-6432}"
 ORACLE_PORT="${PORTS[3]}"
 
 rm -rf "$ARTIFACT_DIR"
@@ -484,8 +484,8 @@ cp crates/pgwire/tests/fixtures/test-ca.pem "${ARTIFACT_DIR}/pgdog/ca.pem"
 chmod 644 "${ARTIFACT_DIR}/pgdog/tls.crt" "${ARTIFACT_DIR}/pgdog/ca.pem"
 chmod 600 "${ARTIFACT_DIR}/pgdog/tls.key"
 
-if [ "${CRABKA_GRES_SKIP_BUILD:-}" != "1" ]; then
-    cargo build --locked -p crabka-cli -p crabka-broker -p crabka-gres -p crabka-gres-conformance
+if [ "${KRABKA_GRES_SKIP_BUILD:-}" != "1" ]; then
+    cargo build --locked -p krabka-cli -p krabka-broker -p krabka-gres -p krabka-gres-conformance
 fi
 
 start_broker
@@ -599,12 +599,12 @@ TENANT_A_PID=""
 expect_sql_equals "tenant B survives tenant A compute death" "$TENANT_B_CONN" bob-secret "SELECT name FROM e2e_marker WHERE id = 1" tenant-b
 
 start_oracle
-CRABKA_GRES_PGDOG_TEST_URL="postgresql://carol:carol-secret@localhost:${PGDOG_PORT}/tenant-c?sslmode=require&connect_timeout=5" \
-    cargo test --locked -p crabka-gres-conformance \
+KRABKA_GRES_PGDOG_TEST_URL="postgresql://carol:carol-secret@localhost:${PGDOG_PORT}/tenant-c?sslmode=require&connect_timeout=5" \
+    cargo test --locked -p krabka-gres-conformance \
     --test extended_case_lifecycle -- --nocapture \
     >"${ARTIFACT_DIR}/extended-case-lifecycle.log" 2>&1 || \
     fail "extended case lifecycle regression failed"
-./target/debug/crabka-gres-conformance \
+./target/debug/krabka-gres-conformance \
     --oracle-url "host=127.0.0.1 port=${ORACLE_PORT} user=postgres dbname=postgres" \
     --subject-url "host=localhost port=${PGDOG_PORT} dbname=tenant-c user=carol password=carol-secret sslmode=require" \
     --corpus crates/gres-conformance/corpus \
@@ -618,7 +618,7 @@ CRABKA_GRES_PGDOG_TEST_URL="postgresql://carol:carol-secret@localhost:${PGDOG_PO
     >"${ARTIFACT_DIR}/conformance-pgdog.log" 2>&1
 
 DATABASE_URL="postgresql://bob:bob-secret@localhost:${PGDOG_PORT}/tenant-b?sslmode=require&connect_timeout=5" \
-    timeout 30s ./target/debug/crabka-gres-driver-smoke \
+    timeout 30s ./target/debug/krabka-gres-driver-smoke \
     >"${ARTIFACT_DIR}/rust-driver-smoke.log" 2>&1 || fail "Rust driver smoke failed or timed out"
 
 DATABASE_URL="postgresql://bob:bob-secret@localhost:${PGDOG_PORT}/tenant-b?sslmode=verify-full&sslrootcert=${TLS_ROOT}&connect_timeout=5" \

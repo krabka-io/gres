@@ -37,7 +37,7 @@ PausedAfterStage ceiling, 3,105ms above the observed maximum.
 Command:
 
 ```text
-CRABKA_G8_PROCESS_NEMESIS=1 CRABKA_G8_SOURCE_KILL_POINT=paused_after_stage CRABKA_G8_KILL_EVIDENCE=$PWD/target/g8-topology-process-nemesis/move-paused_after_stage-kill.json timeout 120s cargo test -q -p crabka-gres --test topology_process_nemesis -- --exact real_process_move_source_phase_sigkill_with_exact_ack_ledger --nocapture
+KRABKA_G8_PROCESS_NEMESIS=1 KRABKA_G8_SOURCE_KILL_POINT=paused_after_stage KRABKA_G8_KILL_EVIDENCE=$PWD/target/g8-topology-process-nemesis/move-paused_after_stage-kill.json timeout 120s cargo test -q -p krabka-gres --test topology_process_nemesis -- --exact real_process_move_source_phase_sigkill_with_exact_ack_ledger --nocapture
 ```
 
 Observed result: `1 passed; 0 failed`, 35.36s.

@@ -12,7 +12,7 @@
 //! - **Install the propagator.** Without
 //!   `set_text_map_propagator(TraceContextPropagator::new())`,
 //!   `TraceCarrier::apply_to` silently does nothing, and every assertion below
-//!   passes vacuously with two unrelated traces. `crabka_telemetry::init`
+//!   passes vacuously with two unrelated traces. `krabka_telemetry::init`
 //!   installs it in production. A test must do it itself.
 //! - **Install with `set_global_default`, not `with_default`.** The server half
 //!   runs on a task the TLS accept loop spawned, where a thread-local
@@ -28,7 +28,7 @@ use std::{collections::BTreeSet, path::PathBuf, sync::Arc, time::Duration};
 
 use assert2::{assert, check};
 use async_trait::async_trait;
-use crabka_gres_ranges::{
+use krabka_gres_ranges::{
     FramedTcpClient, RangeId, RangeRequest, RangeResponse, RangeService, RangeTlsClientConfig,
     RangeTlsServerConfig, TxnReq, TxnResp, serve_tls, telemetry::ROUTE_TARGET,
 };
@@ -62,7 +62,7 @@ impl Traces {
             .build();
         let layer = tracing_opentelemetry::layer()
             .with_tracer(provider.tracer("transport-tracing"))
-            .with_filter(EnvFilter::new("crabka_gres_ranges::route=trace"));
+            .with_filter(EnvFilter::new("krabka_gres_ranges::route=trace"));
         tracing::subscriber::set_global_default(tracing_subscriber::registry().with(layer))
             .expect("install global subscriber; run these tests under cargo nextest");
         Self { provider, exporter }
@@ -196,25 +196,25 @@ impl MtlsFixture {
             _dir: dir,
             server: RangeTlsServerConfig {
                 tenant: tenant.to_owned(),
-                tls: crabka_security::TlsConfig {
+                tls: krabka_security::TlsConfig {
                     cert_chain_path: server_cert.clone(),
                     private_key_path: server_key,
                     trust_roots_path: Some(server_cert.clone()),
                     client_ca_path: Some(client_ca),
-                    client_auth: crabka_security::ClientAuthMode::Required,
+                    client_auth: krabka_security::ClientAuthMode::Required,
                 },
                 range_rpc_principals: authorized,
                 operator_control_principals: BTreeSet::from([CLIENT_PRINCIPAL.to_owned()]),
             },
             client: RangeTlsClientConfig {
-                tls: crabka_security::TlsConfig {
+                tls: krabka_security::TlsConfig {
                     cert_chain_path: client_cert,
                     private_key_path: client_key,
                     trust_roots_path: Some(server_cert),
                     client_ca_path: None,
-                    client_auth: crabka_security::ClientAuthMode::Disabled,
+                    client_auth: krabka_security::ClientAuthMode::Disabled,
                 },
-                server_name: "crabka-dev".to_owned(),
+                server_name: "krabka-dev".to_owned(),
             },
         }
     }
@@ -450,7 +450,7 @@ async fn an_unauthorized_peer_records_the_rejection_on_the_server_span() {
         .expect_err("unauthorized peer is rejected");
     assert!(matches!(
         error,
-        crabka_gres_ranges::TransportError::Io(_) | crabka_gres_ranges::TransportError::Json(_)
+        krabka_gres_ranges::TransportError::Io(_) | krabka_gres_ranges::TransportError::Json(_)
     ));
 
     let hop = traces.hop().await;

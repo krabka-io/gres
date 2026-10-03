@@ -28,6 +28,7 @@ it). #3 makes those stores real.
 ## 2. Goal and non-goals
 
 ### Goal
+
 - An in-memory **`KeyValueStore<K,V>`** (get/put/delete) backed by a changelog
   topic for durability.
 - **`ProcessorContext::get_state_store::<K,V>(name)`** typed, mutable store
@@ -39,6 +40,7 @@ it). #3 makes those stores real.
 - The `TopologyTestDriver` extended to instantiate stores + inspect them.
 
 ### Non-goals (deferred)
+
 - **Window/session stores** — later slice (windowed keys, retention, segments;
   mostly used by the windowed DSL #4).
 - **Persistent/RocksDB backend** — in-memory only; the changelog provides
@@ -61,6 +63,7 @@ per-task registry**, fetched per-record (mirrors #2a's record model + Rust borro
 constraints — a processor can't hold `&mut store` across `process()` calls).
 
 ### 3.1 Store traits (`store/api.rs`)
+
 ```rust
 /// Object-safe lifecycle for any store (held erased in the registry).
 pub trait StateStore: std::any::Any + Send {
@@ -76,6 +79,7 @@ pub trait KeyValueStore<K, V>: StateStore {
 ```
 
 ### 3.2 In-memory store (`store/memory.rs`)
+
 `InMemoryKeyValueStore<K, V>` holds `map: HashMap<Bytes, Bytes>` +
 `key_serde: Box<dyn Serde<K>>` + `value_serde: Box<dyn Serde<V>>` +
 `changelog_buffer: Vec<(Bytes, Option<Bytes>)>` + `name` + a `logging: bool`
@@ -83,6 +87,7 @@ flag (off during restore). **The serdes are boxed trait objects (not type
 params)** so the concrete type is `InMemoryKeyValueStore<K,V>` — which is what
 `get_state_store::<K,V>` downcasts to (it only knows `K,V`, not the serde types).
 `Serde<T>` is object-safe (`serialize(&T)->Bytes`, `deserialize(&[u8])->Result<T>`).
+
 - `put(k,v)`: `kb = ks.serialize(&k); vb = vs.serialize(&v); map.insert(kb, vb)`;
   if `logging`, `changelog_buffer.push((kb, Some(vb)))`.
 - `delete(k)`: serialize `kb`, `map.remove(&kb)`, return the deserialized prior
@@ -94,14 +99,17 @@ params)** so the concrete type is `InMemoryKeyValueStore<K,V>` — which is what
 - `take_changelog() -> Vec<(Bytes, Option<Bytes>)>`: drain the buffer for the task.
 
 ### 3.3 Registry + erased access (`store/registry.rs`)
+
 `StoreRegistry { stores: HashMap<String, Box<dyn StateStore>> }`. `get_mut(name)
 -> Option<&mut dyn StateStore>`. Downcast: `dyn StateStore: Any`, so
 `get_state_store` downcasts to the concrete `InMemoryKeyValueStore<K,V,…>` and
 coerces to `&mut dyn KeyValueStore<K,V>`. Absent/type-mismatch → `None`.
 
 ### 3.4 ProcessorContext access (`processor/api.rs`)
+
 `Dispatch` gains `stores: &mut StoreRegistry`. New method (generic over the
 **store's** `K2,V2`, independent of the processor's `KOut,VOut`):
+
 ```rust
 impl ProcessorContext<'_, '_, KOut, VOut> {
     pub fn get_state_store<K2: 'static, V2: 'static>(&mut self, name: &str)
@@ -110,11 +118,14 @@ impl ProcessorContext<'_, '_, KOut, VOut> {
 ```
 
 ### 3.5 Builder (`topology/builder.rs`)
+
 `add_state_store` evolves from #2a's untyped `(name, processors)` to typed:
+
 ```rust
 pub fn add_state_store<K, V, KS, VS>(&mut self, name, key_serde: KS, value_serde: VS, processors)
 where K: …+Clone, V: …+Clone, KS: Serde<K>+Clone, VS: Serde<V>+Clone
 ```
+
 It still calls the structural `reg.add_store(name, processors)` (UNCHANGED — feeds
 grouping + the changelog topic in the wire `Topology`, so the golden frame holds)
 **and** records a `StoreFactory` (like the node factories) that instantiates an
@@ -123,6 +134,7 @@ grouping + the changelog topic in the wire `Topology`, so the golden frame holds
 migrated to add serdes.
 
 ### 3.6 Graph (`processor/graph.rs`)
+
 `Graph` gains a `StoreRegistry`. `instantiate()` builds the stores (from the
 factories for stores whose connected processors are in this subtopology) into the
 registry. `pipe()` lends `&mut self.stores` into the `Dispatch` (a fourth disjoint
@@ -139,6 +151,7 @@ nodes no-op.
 ## 4. Runtime wiring (`runtime/task.rs`, `thread.rs`)
 
 `StreamTask` (already owns the `Graph` + producer + offset store):
+
 - **`restore(fetcher, partition)`** — for each store in `graph.stores`, read its
   changelog topic partition `0 → high-watermark` (via the #2b `RecordFetcher`,
   with `logging=false`), applying each `(key, value)` (null = delete). Called once
@@ -162,6 +175,7 @@ source records re-applies them (documented at-least-once double-count; EOS is #7
 ## 5. TopologyTestDriver (`test_driver.rs`)
 
 Extended to support stores deterministically (no broker):
+
 - `TopologyTestDriver::new` instantiates the graph's stores (already via
   `instantiate`), and calls `init_processors` before piping.
 - `pipe_input` drains changelog buffers into an in-memory per-topic collector
@@ -212,7 +226,7 @@ producer).
 
 ## 9. Success criteria
 
-- `cargo test -p crabka-client-streams` green: store units + test-driver
+- `cargo test -p krabka-client-streams` green: store units + test-driver
   stateful/count + restore unit + in-process broker stateful + restart-restore +
   doctest.
 - `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --check`

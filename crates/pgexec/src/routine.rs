@@ -19,13 +19,13 @@ use std::{
     sync::Arc,
 };
 
-use crabka_pgcatalog::routine::{
+use krabka_pgcatalog::routine::{
     BodyForm, ParamMode, Routine, RoutineKind, RoutineParam, RoutineResult, RoutineType,
     drop_routine_ops, get_routine, list_routines, put_routine_ops, routines_named,
     signature_identity,
 };
-use crabka_pgkv::{Kv, WriteOp};
-use crabka_pgparser::ast::{
+use krabka_pgkv::{Kv, WriteOp};
+use krabka_pgparser::ast::{
     AlterRoutineAction, ArraySubscript, Assignment, AssignmentValue, CreateRoutineStmt, Expr,
     FuncArgs, FuncCall, InsertOverride, MergeAction, MergeMatchKind, MergeSource, PlPgSqlBlock,
     PlPgSqlCursorArgument, PlPgSqlDeclaration, PlPgSqlLoop, PlPgSqlStatement, QueryExpr,
@@ -33,8 +33,8 @@ use crabka_pgparser::ast::{
     RoutineParallel, RoutineReturn, RoutineSignature, RoutineVolatility, SelectItem, SelectStmt,
     Statement, TableFuncCall, TableFuncColumnDef, TargetIndirection,
 };
-use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
-use crabka_pgwire::engine::QueryResult;
+use krabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
+use krabka_pgwire::engine::QueryResult;
 
 use crate::{error::ExecError, eval::ArgType, exec::is_immutable_function};
 
@@ -697,7 +697,7 @@ const MAX_PGLZ_OUTPUT_BYTES: usize = 64 * 1024 * 1024;
 
 fn is_static_regress_object(object_file: &str) -> bool {
     object_file == "regress"
-        || std::env::var_os("CRABKA_PG_REGRESS_LIBRARY")
+        || std::env::var_os("KRABKA_PG_REGRESS_LIBRARY")
             .is_some_and(|configured| configured == std::ffi::OsStr::new(object_file))
 }
 
@@ -792,7 +792,7 @@ fn ambiguous_routine(name: &str) -> ExecError {
 /// resolves the same signature vocabulary.
 pub(crate) fn resolve_routine_type(
     kv: &dyn Kv,
-    ty: &crabka_pgparser::ast::RoutineType,
+    ty: &krabka_pgparser::ast::RoutineType,
     quoted: bool,
 ) -> Result<RoutineType, ExecError> {
     resolve_type(
@@ -818,10 +818,10 @@ pub(crate) fn relation_column_type(
         &written.reference,
         crate::relname::SchemaDisposition::Reference,
     )?;
-    let columns = match crabka_pgcatalog::get_table(kv, &relation) {
+    let columns = match krabka_pgcatalog::get_table(kv, &relation) {
         Ok(table) => table.columns,
-        Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => {
-            crabka_pgcatalog::get_view(kv, &relation)?.columns
+        Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => {
+            krabka_pgcatalog::get_view(kv, &relation)?.columns
         }
         Err(error) => return Err(error.into()),
     };
@@ -840,7 +840,7 @@ pub(crate) fn relation_row_type(
     resolve_type(
         kv,
         resolution,
-        &crabka_pgparser::ast::RoutineType::named(reference.into()),
+        &krabka_pgparser::ast::RoutineType::named(reference.into()),
         false,
     )?
     .column
@@ -853,7 +853,7 @@ pub(crate) fn relation_row_type(
 fn resolve_type(
     kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
-    ty: &crabka_pgparser::ast::RoutineType,
+    ty: &krabka_pgparser::ast::RoutineType,
     quoted: bool,
 ) -> Result<RoutineType, ExecError> {
     if let Some(column) = ty.resolved {
@@ -880,9 +880,9 @@ fn resolve_type(
                 crate::relname::SchemaDisposition::Reference,
             )
         })?;
-    if crabka_pgcatalog::get_table(kv, &relation).is_ok()
-        || crabka_pgcatalog::get_view(kv, &relation).is_ok()
-        || crabka_pgcatalog::get_sequence(kv, &relation).is_ok()
+    if krabka_pgcatalog::get_table(kv, &relation).is_ok()
+        || krabka_pgcatalog::get_view(kv, &relation).is_ok()
+        || krabka_pgcatalog::get_sequence(kv, &relation).is_ok()
     {
         if !lowered.ends_with("[]") {
             crate::catalog_rel::sync_relation_rowtypes(kv)?;
@@ -896,7 +896,7 @@ fn resolve_type(
         return Ok(RoutineType::named(lowered));
     }
     if !lowered.ends_with("[]") {
-        if let Some(column) = crabka_pgtypes::usertype::lookup(&lowered)
+        if let Some(column) = krabka_pgtypes::usertype::lookup(&lowered)
             .and_then(|definition| definition.column_type())
         {
             return Ok(RoutineType {
@@ -931,9 +931,9 @@ fn resolve_type(
 pub(crate) fn shell_type_notices(
     kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
-    stmt: &crabka_pgparser::ast::Statement,
-) -> Vec<crabka_pgwire::error::PgError> {
-    use crabka_pgparser::ast::{RoutineReturn, Statement};
+    stmt: &krabka_pgparser::ast::Statement,
+) -> Vec<krabka_pgwire::error::PgError> {
+    use krabka_pgparser::ast::{RoutineReturn, Statement};
     let Statement::CreateRoutine(create) = stmt else {
         return Vec::new();
     };
@@ -941,14 +941,14 @@ pub(crate) fn shell_type_notices(
     if let RoutineReturn::Type { ty, .. } = &create.returns {
         if return_shell_to_create(kv, resolution, create).is_ok_and(|shell| shell.is_some()) {
             notices.push(
-                crabka_pgwire::error::PgError::notice(format!(
+                krabka_pgwire::error::PgError::notice(format!(
                     "type \"{}\" is not yet defined",
                     ty.name
                 ))
                 .with_detail("Creating a shell type definition."),
             );
         } else if shell_type_named(kv, &ty.name.to_ascii_lowercase()) {
-            notices.push(crabka_pgwire::error::PgError::notice(format!(
+            notices.push(krabka_pgwire::error::PgError::notice(format!(
                 "return type {} is only a shell",
                 ty.name
             )));
@@ -958,7 +958,7 @@ pub(crate) fn shell_type_notices(
         if !shell_type_named(kv, &arg.ty.name.to_ascii_lowercase()) {
             continue;
         }
-        let notice = crabka_pgwire::error::PgError::notice(format!(
+        let notice = krabka_pgwire::error::PgError::notice(format!(
             "argument type {} is only a shell",
             arg.ty.name
         ));
@@ -975,9 +975,9 @@ pub(crate) fn shell_type_notices(
 pub(crate) fn shell_type_named(kv: &dyn Kv, name: &str) -> bool {
     let (schema, bare) = match name.split_once('.') {
         Some((schema, bare)) => (schema, bare),
-        None => (crabka_pgtypes::usertype::USER_TYPE_DEFAULT_SCHEMA, name),
+        None => (krabka_pgtypes::usertype::USER_TYPE_DEFAULT_SCHEMA, name),
     };
-    crabka_pgcatalog::list_user_types(kv).is_ok_and(|types| {
+    krabka_pgcatalog::list_user_types(kv).is_ok_and(|types| {
         types
             .iter()
             .any(|ty| ty.is_shell() && ty.schema == schema && ty.name == bare)
@@ -991,7 +991,7 @@ fn return_shell_to_create(
     kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
     stmt: &CreateRoutineStmt,
-) -> Result<Option<(crabka_pgcatalog::RelationName, String)>, ExecError> {
+) -> Result<Option<(krabka_pgcatalog::RelationName, String)>, ExecError> {
     let RoutineReturn::Type { ty, .. } = &stmt.returns else {
         return Ok(None);
     };
@@ -1018,7 +1018,7 @@ fn return_shell_to_create(
 fn resolve_return_type(
     kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
-    ty: &crabka_pgparser::ast::RoutineType,
+    ty: &krabka_pgparser::ast::RoutineType,
     return_shell: Option<&str>,
 ) -> Result<RoutineType, ExecError> {
     match resolve_type(kv, resolution, ty, true) {
@@ -1326,20 +1326,20 @@ fn deparse_atomic_merge(
         crate::relname::SchemaDisposition::Reference,
     )
     .ok()?;
-    let target_columns = crabka_pgcatalog::get_table(kv, &target_name)
+    let target_columns = krabka_pgcatalog::get_table(kv, &target_name)
         .ok()?
         .columns
         .into_iter()
         .map(|column| column.name)
         .collect::<Vec<_>>();
-    let source_columns = crabka_pgcatalog::get_table(kv, &source_name)
+    let source_columns = krabka_pgcatalog::get_table(kv, &source_name)
         .ok()?
         .columns
         .into_iter()
         .map(|column| column.name)
         .collect::<Vec<_>>();
     let utc = jiff::tz::TimeZone::UTC;
-    let style = crabka_pgtypes::encoding::OutputStyle::with_zone(&utc);
+    let style = krabka_pgtypes::encoding::OutputStyle::with_zone(&utc);
     let target_alias = alias.as_deref().unwrap_or(&table.name);
     let source_alias = source_alias.as_deref().unwrap_or(&source.name);
     let mut out = format!(
@@ -1402,7 +1402,7 @@ fn merge_relation_text(relation: &RelationRef) -> String {
 
 fn merge_expression_text(
     expression: &Expr,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> String {
     crate::viewdef::expression_text_with_qualifiers(expression, style)
         .replace("merge_action()", "MERGE_ACTION()")
@@ -1412,7 +1412,7 @@ fn merge_action_text(
     out: &mut String,
     action: &MergeAction,
     target_columns: &[String],
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) {
     match action {
         MergeAction::Update(assignments) => {
@@ -1475,7 +1475,7 @@ fn merge_action_text(
 
 fn merge_assignment_text(
     assignment: &Assignment,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> String {
     let targets = assignment
         .targets
@@ -1521,7 +1521,7 @@ fn merge_assignment_text(
 fn merge_target_text(
     target: &str,
     indirections: &[TargetIndirection],
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> String {
     let mut out = crate::catalog_fn::quote_identifier(target);
     for indirection in indirections {
@@ -1553,7 +1553,7 @@ fn merge_returning_text(
     source_columns: &[String],
     target_alias: &str,
     target_columns: &[String],
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) {
     let old_alias = returning.old_alias.as_deref().unwrap_or("old");
     let new_alias = returning.new_alias.as_deref().unwrap_or("new");
@@ -1685,7 +1685,7 @@ fn validate_polymorphic_result(
                 .any(|param| param.mode.is_input() && input_names.contains(&param.ty.name.as_str()))
         {
             return Err(ExecError::Remote(
-                crabka_pgwire::error::PgError::error("42P13", "cannot determine result data type")
+                krabka_pgwire::error::PgError::error("42P13", "cannot determine result data type")
                     .with_detail(detail),
             ));
         }
@@ -1812,7 +1812,7 @@ fn check_replaceable(existing: &Routine, replacement: &Routine) -> Result<(), Ex
     );
     if existing.kind != replacement.kind || existing.window != replacement.window {
         return Err(ExecError::Remote(
-            crabka_pgwire::error::PgError::error("42809", "cannot change routine kind")
+            krabka_pgwire::error::PgError::error("42809", "cannot change routine kind")
                 .with_detail(format!(
                     "\"{}\" is a {}.",
                     existing.name,
@@ -1822,7 +1822,7 @@ fn check_replaceable(existing: &Routine, replacement: &Routine) -> Result<(), Ex
     }
     if effective_result(existing) != effective_result(replacement) {
         return Err(ExecError::Remote(
-            crabka_pgwire::error::PgError::error(
+            krabka_pgwire::error::PgError::error(
                 "42P13",
                 "cannot change return type of existing function",
             )
@@ -1837,7 +1837,7 @@ fn check_replaceable(existing: &Routine, replacement: &Routine) -> Result<(), Ex
         let _ = after;
         if let Some(name) = &before.name {
             return Err(ExecError::Remote(
-                crabka_pgwire::error::PgError::error(
+                krabka_pgwire::error::PgError::error(
                     "42P13",
                     format!("cannot change name of input parameter \"{name}\""),
                 )
@@ -1886,21 +1886,21 @@ pub(crate) fn drop_routines(
     for signature in routines {
         match resolve_signature(kv, object, signature) {
             Ok(routine) => {
-                let ordinary = crabka_pgcatalog::trigger::list_triggers(kv)?
+                let ordinary = krabka_pgcatalog::trigger::list_triggers(kv)?
                     .into_iter()
                     .filter(|trigger| trigger.function_oid == routine.oid)
                     .collect::<Vec<_>>();
-                let event = crabka_pgcatalog::trigger::list_event_triggers(kv)?
+                let event = krabka_pgcatalog::trigger::list_event_triggers(kv)?
                     .into_iter()
                     .filter(|trigger| trigger.function_oid == routine.oid)
                     .collect::<Vec<_>>();
-                let casts = crabka_pgcatalog::list_user_casts(kv)?
+                let casts = krabka_pgcatalog::list_user_casts(kv)?
                     .into_iter()
                     .filter(|cast| {
                         cast.method == 'f' && cast.function.parse::<u32>() == Ok(routine.oid)
                     })
                     .collect::<Vec<_>>();
-                let fdws = crabka_pgcatalog::list_fdws(kv)?
+                let fdws = krabka_pgcatalog::list_fdws(kv)?
                     .into_iter()
                     .filter(|fdw| {
                         [fdw.handler.as_deref(), fdw.validator.as_deref()]
@@ -1930,7 +1930,7 @@ pub(crate) fn drop_routines(
                         .collect::<Vec<_>>()
                         .join("\n");
                     return Err(ExecError::Remote(
-                        crabka_pgwire::error::PgError::error(
+                        krabka_pgwire::error::PgError::error(
                             "2BP01",
                             format!(
                                 "cannot drop function {} because other objects depend on it",
@@ -1943,31 +1943,31 @@ pub(crate) fn drop_routines(
                 }
                 if cascade {
                     for trigger in ordinary {
-                        ops.extend(crabka_pgcatalog::trigger::drop_trigger_ops(
+                        ops.extend(krabka_pgcatalog::trigger::drop_trigger_ops(
                             trigger.table_id,
                             &trigger.name,
                         ));
                     }
                     for trigger in event {
-                        ops.extend(crabka_pgcatalog::trigger::drop_event_trigger_ops(
+                        ops.extend(krabka_pgcatalog::trigger::drop_event_trigger_ops(
                             &trigger.name,
                         ));
                     }
                     for cast in casts {
-                        ops.extend(crabka_pgcatalog::drop_user_cast_ops(
+                        ops.extend(krabka_pgcatalog::drop_user_cast_ops(
                             cast.source,
                             cast.target,
                         ));
                     }
                     for fdw in fdws {
-                        ops.extend(crabka_pgcatalog::drop_fdw_with_dependents_ops(
+                        ops.extend(krabka_pgcatalog::drop_fdw_with_dependents_ops(
                             kv, &fdw.name, true,
                         )?);
                     }
                 }
-                ops.push(crabka_pgcatalog::set_comment_op(
+                ops.push(krabka_pgcatalog::set_comment_op(
                     "function",
-                    crabka_pgcatalog::CommentObject::Named(&routine.oid.to_string()),
+                    krabka_pgcatalog::CommentObject::Named(&routine.oid.to_string()),
                     None,
                 ));
                 ops.extend(drop_routine_ops(&routine.identity()));
@@ -2073,7 +2073,7 @@ pub(crate) fn alter(
 /// a superuser may assert it.
 fn require_leakproof_superuser(kv: &dyn Kv, owner: &str, leakproof: bool) -> Result<(), ExecError> {
     if leakproof && !crate::rls::role_is_superuser(kv, owner)? {
-        return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+        return Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
             "42501",
             "only superuser can define a leakproof function",
         )));
@@ -2216,7 +2216,7 @@ pub(crate) fn is_builtin_routine(name: &str) -> Result<bool, ExecError> {
 fn hydrate_user_type_signature(mut routine: Routine) -> Routine {
     let hydrate = |ty: &mut RoutineType| {
         if ty.column.is_none() {
-            ty.column = crabka_pgtypes::usertype::lookup(&ty.name)
+            ty.column = krabka_pgtypes::usertype::lookup(&ty.name)
                 .and_then(|definition| definition.column_type());
         }
     };
@@ -2414,7 +2414,7 @@ fn resolved_candidate(routine: Routine, given: &[ArgType]) -> Result<Option<Rout
             && matches!(&routine.result, RoutineResult::Type { ty, setof: false } if ty.name == "anyarray")
         {
             return Err(ExecError::Remote(
-                crabka_pgwire::error::PgError::error(
+                krabka_pgwire::error::PgError::error(
                     "0A000",
                     "PL/pgSQL functions cannot accept type anyarray",
                 )
@@ -2590,7 +2590,7 @@ fn polymorphic_base_type(name: &str, arg: ArgType) -> Option<ColumnType> {
     }
 }
 
-fn polymorphic_range_type(name: &str, arg: ArgType) -> Option<crabka_pgtypes::usertype::RangeRef> {
+fn polymorphic_range_type(name: &str, arg: ArgType) -> Option<krabka_pgtypes::usertype::RangeRef> {
     let ArgType::Known(ty) = arg else {
         return None;
     };
@@ -3180,7 +3180,7 @@ fn procedure_arguments(
             None if param.mode.is_input() => param
                 .default
                 .as_deref()
-                .map(crabka_pgparser::parser::parse_expression)
+                .map(krabka_pgparser::parser::parse_expression)
                 .transpose()
                 .map_err(|error| ExecError::Syntax(error.message))?
                 .ok_or_else(|| {
@@ -3466,9 +3466,9 @@ fn pglz_output_limit_error() -> ExecError {
 }
 
 fn interpt_pp(
-    left: &crabka_pgtypes::Path,
-    right: &crabka_pgtypes::Path,
-) -> Option<crabka_pgtypes::Point> {
+    left: &krabka_pgtypes::Path,
+    right: &krabka_pgtypes::Path,
+) -> Option<krabka_pgtypes::Point> {
     left.points.windows(2).find_map(|left| {
         right.points.windows(2).find_map(|right| {
             left[0]
@@ -4089,7 +4089,7 @@ pub(crate) fn eval_plpgsql_set_function(
                                 "PL/pgSQL function executor returned the wrong table width".into(),
                             ));
                         }
-                        Ok(Datum::Record(crabka_pgtypes::RecordValue::named(
+                        Ok(Datum::Record(krabka_pgtypes::RecordValue::named(
                             None,
                             Arc::clone(&names),
                             row,
@@ -4186,7 +4186,7 @@ pub(crate) fn parse_body(routine: &Routine) -> Result<Vec<Statement>, ExecError>
         BodyForm::Source => routine.body.clone(),
         BodyForm::Atomic => atomic_execution_source(&routine.body),
     };
-    crabka_pgparser::parse(&source).map_err(|error| ExecError::Syntax(error.message))
+    krabka_pgparser::parse(&source).map_err(|error| ExecError::Syntax(error.message))
 }
 
 /// Parse-analyze the `RETURN expression` form of a SQL routine at definition
@@ -4249,7 +4249,7 @@ fn check_sql_source_body(routine: &Routine, statements: &[Statement]) -> Result<
         // validating its projected type here would duplicate that full path.
         return Ok(());
     };
-    let crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Select(select)) =
+    let krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Select(select)) =
         &query.body
     else {
         return Ok(());
@@ -4330,7 +4330,7 @@ fn routine_argument_scope(routine: &Routine) -> Option<(crate::scope::Scope, Vec
 fn source_parameter_error(error: ExecError) -> ExecError {
     match error {
         ExecError::Syntax(message) if message.starts_with("there is no parameter $") => {
-            ExecError::Remote(crabka_pgwire::error::PgError::error("42P02", message))
+            ExecError::Remote(krabka_pgwire::error::PgError::error("42P02", message))
         }
         error => error,
     }
@@ -4340,7 +4340,7 @@ fn sql_return_mismatch(routine: &Routine, detail: impl Into<String>) -> ExecErro
     let expected = declared_scalar_result_type(routine)
         .expect("only scalar functions request SQL return validation");
     ExecError::Remote(
-        crabka_pgwire::error::PgError::error(
+        krabka_pgwire::error::PgError::error(
             "42P13",
             format!(
                 "return type mismatch in function declared to return {}",
@@ -4374,7 +4374,7 @@ pub(crate) fn sql_empty_body_error(routine: &Routine, values: &[Datum]) -> ExecE
         })
         .unwrap_or_else(|| "record".into());
     ExecError::Remote(
-        crabka_pgwire::error::PgError::error(
+        krabka_pgwire::error::PgError::error(
             "42P13",
             format!("return type mismatch in function declared to return {expected}"),
         )
@@ -4420,7 +4420,7 @@ pub(crate) fn parse_plpgsql_body(routine: &Routine) -> Result<PlPgSqlBlock, Exec
             "PL/pgSQL function body must be a string literal",
         ));
     }
-    let block = crabka_pgparser::parse_plpgsql(&routine.body).map_err(|error| {
+    let block = krabka_pgparser::parse_plpgsql(&routine.body).map_err(|error| {
         ExecError::FunctionError {
             sqlstate: error.sqlstate(),
             message: error.message,
@@ -4614,7 +4614,7 @@ pub(crate) fn plpgsql_shadowed_variables(
         return Ok(Vec::new());
     };
     let block =
-        crabka_pgparser::parse_plpgsql(body).map_err(|error| ExecError::Syntax(error.message))?;
+        krabka_pgparser::parse_plpgsql(body).map_err(|error| ExecError::Syntax(error.message))?;
     let mut names = stmt
         .args
         .iter()
@@ -4635,11 +4635,11 @@ fn collect_plpgsql_shadows(
 ) {
     for declaration in &block.declarations {
         let (name, position, cursor_args) = match declaration {
-            crabka_pgparser::ast::PlPgSqlDeclaration::Variable { name, position, .. }
-            | crabka_pgparser::ast::PlPgSqlDeclaration::Alias { name, position, .. } => {
+            krabka_pgparser::ast::PlPgSqlDeclaration::Variable { name, position, .. }
+            | krabka_pgparser::ast::PlPgSqlDeclaration::Alias { name, position, .. } => {
                 (name, *position, &[][..])
             }
-            crabka_pgparser::ast::PlPgSqlDeclaration::Cursor {
+            krabka_pgparser::ast::PlPgSqlDeclaration::Cursor {
                 name,
                 position,
                 arguments,
@@ -4984,7 +4984,7 @@ fn bound_args(
             None => param
                 .default
                 .as_deref()
-                .map(crabka_pgparser::parser::parse_expression)
+                .map(krabka_pgparser::parser::parse_expression)
                 .transpose()
                 .map_err(|error| ExecError::Syntax(error.message))?
                 .ok_or_else(|| {
@@ -5129,7 +5129,7 @@ fn bind_named_args(
             None => param
                 .default
                 .as_deref()
-                .map(crabka_pgparser::parser::parse_expression)
+                .map(krabka_pgparser::parser::parse_expression)
                 .transpose()
                 .map_err(|error| ExecError::Syntax(error.message))?
                 .ok_or_else(|| {
@@ -5146,7 +5146,7 @@ fn substitute(
     expr: &Expr,
     composite_parameter_fields: bool,
 ) -> Result<Expr, ExecError> {
-    use crabka_pgparser::ast::ArraySubscript;
+    use krabka_pgparser::ast::ArraySubscript;
 
     let sub = |e: &Expr| substitute(binding, e, composite_parameter_fields);
     let boxed = |e: &Expr| -> Result<Box<Expr>, ExecError> {
@@ -5225,7 +5225,7 @@ fn substitute(
                 .order_by
                 .iter()
                 .map(|item| {
-                    Ok(crabka_pgparser::ast::OrderItem {
+                    Ok(krabka_pgparser::ast::OrderItem {
                         expr: sub(&item.expr)?,
                         asc: item.asc,
                         nulls_first: item.nulls_first,
@@ -5349,7 +5349,7 @@ fn substitute(
 /// A SQL routine body that is a single `SELECT <expr>` over no relation. This
 /// is the shape that inlines into the caller's own expression.
 fn scalar_body(query: &QueryExpr) -> Option<&Expr> {
-    let crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Select(select)) =
+    let krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Select(select)) =
         &query.body
     else {
         return None;
@@ -5477,7 +5477,7 @@ fn strict_guard(args: &[Expr], body: Expr) -> Expr {
             negated: false,
         })
         .reduce(|left, right| Expr::Binary {
-            op: crabka_pgparser::ast::BinaryOp::Or,
+            op: krabka_pgparser::ast::BinaryOp::Or,
             left: Box::new(left),
             right: Box::new(right),
         })
@@ -5548,7 +5548,7 @@ fn called_scalar_result_type_with_catalog(
 pub(crate) fn declared_relation_rowtype(
     kv: &dyn Kv,
     routine: &Routine,
-) -> Result<Option<crabka_pgtypes::usertype::UserTypeRef>, ExecError> {
+) -> Result<Option<krabka_pgtypes::usertype::UserTypeRef>, ExecError> {
     let RoutineResult::Type { ty, .. } = &routine.result else {
         return Ok(None);
     };
@@ -5748,7 +5748,7 @@ pub(crate) fn declared_output_parameter_count(routine: &Routine) -> usize {
 /// set-returning-function registry keeps the call.
 pub(crate) fn expand_table_function(
     kv: &dyn Kv,
-    call: &crabka_pgparser::ast::TableFuncCall,
+    call: &krabka_pgparser::ast::TableFuncCall,
     given: &[ArgType],
 ) -> Result<Option<(QueryExpr, Routine)>, ExecError> {
     let Some(BoundRoutineCall { routine, args }) = bind_call(kv, &call.name, &call.args, given)?
@@ -5784,7 +5784,7 @@ pub(crate) fn expand_table_function(
 /// a body whose parameters would have to reach into a nested query, instead of
 /// silently leaving them unbound.
 fn substitute_in_query(binding: &Binding, query: &QueryExpr) -> Result<QueryExpr, ExecError> {
-    use crabka_pgparser::ast::{QueryBody, SetExpr};
+    use krabka_pgparser::ast::{QueryBody, SetExpr};
 
     let mut out = query.clone();
     let SetExpr::Query(QueryBody::Select(select)) = &mut out.body else {
@@ -5821,7 +5821,7 @@ fn substitute_in_query(binding: &Binding, query: &QueryExpr) -> Result<QueryExpr
 /// which is where a body like `SELECT … FROM generate_series(1, $1)` keeps its
 /// parameters.
 fn substitute_in_from(binding: &Binding, select: &mut SelectStmt) -> Result<(), ExecError> {
-    use crabka_pgparser::ast::TableExpr;
+    use krabka_pgparser::ast::TableExpr;
 
     for item in &mut select.from {
         if let TableExpr::Function { functions, .. } = item {
@@ -5842,7 +5842,7 @@ fn substitute_in_from(binding: &Binding, select: &mut SelectStmt) -> Result<(), 
 /// already owns, stay with `srf`.
 pub(crate) fn expands_as_table(
     kv: &dyn Kv,
-    functions: &[crabka_pgparser::ast::TableFuncCall],
+    functions: &[krabka_pgparser::ast::TableFuncCall],
 ) -> bool {
     matches!(functions, [call] if !crate::srf::is_srf(&call.name) && is_user_routine(kv, &call.name))
 }
@@ -5855,7 +5855,7 @@ pub(crate) fn expands_as_table(
 /// Propagates catalog read errors and the routine model's own refusals.
 pub(crate) fn table_function_expansion(
     kv: &dyn Kv,
-    call: &crabka_pgparser::ast::TableFuncCall,
+    call: &krabka_pgparser::ast::TableFuncCall,
 ) -> Result<(QueryExpr, Routine, Vec<String>), ExecError> {
     if call.column_defs.is_some() {
         plpgsql_table_function_schema(kv, call)?;
@@ -5873,11 +5873,11 @@ pub(crate) fn validate_inlined_record_column_defs(
     defs: &[TableFuncColumnDef],
 ) -> Result<(), ExecError> {
     for (index, (column, def)) in columns.iter().zip(defs).enumerate() {
-        if crabka_pgtypes::cast::assignment_cast_allowed(column.ty, def.ty) {
+        if krabka_pgtypes::cast::assignment_cast_allowed(column.ty, def.ty) {
             continue;
         }
         return Err(ExecError::Remote(
-            crabka_pgwire::error::PgError::error(
+            krabka_pgwire::error::PgError::error(
                 "42P13",
                 "return type mismatch in function declared to return record",
             )
@@ -5933,7 +5933,7 @@ fn is_record_type(ty: &RoutineType) -> bool {
 
 pub(crate) fn plpgsql_table_function_schema(
     kv: &dyn Kv,
-    call: &crabka_pgparser::ast::TableFuncCall,
+    call: &krabka_pgparser::ast::TableFuncCall,
 ) -> Result<Option<PlPgSqlTableSchema>, ExecError> {
     let given = best_effort_arg_types(&call.args);
     let Some(routine) = resolve_call(kv, &call.name, &given)? else {
@@ -6009,7 +6009,7 @@ pub(crate) fn plpgsql_table_function_schema(
         }
     }
     if let Some(rowtype) = rowtype {
-        let columns = crabka_pgtypes::usertype::lookup_oid(rowtype.oid)
+        let columns = krabka_pgtypes::usertype::lookup_oid(rowtype.oid)
             .and_then(|registered| {
                 registered.fields().map(|fields| {
                     fields
@@ -6088,7 +6088,7 @@ pub(crate) fn plpgsql_table_function_schema(
 }
 
 pub(crate) fn eval_plpgsql_table_function(
-    call: &crabka_pgparser::ast::TableFuncCall,
+    call: &krabka_pgparser::ast::TableFuncCall,
     ctx: &crate::clock::EvalCtx,
     allow_inlining: bool,
 ) -> Result<Option<PlPgSqlTableRows>, ExecError> {
@@ -6521,7 +6521,7 @@ pub(crate) fn pg_proc_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
 /// indexes the built-ins once -- does not pay for cloning several thousand
 /// static rows on every call.
 pub(crate) fn user_pg_proc_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    use crabka_pgtypes::{ArrayValue, ElemType};
+    use krabka_pgtypes::{ArrayValue, ElemType};
 
     let oid_array_element =
         ElemType::from_column_type(ColumnType::Oid).expect("oid has an array type");
@@ -6575,7 +6575,7 @@ pub(crate) fn user_pg_proc_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecErro
             Datum::OidVector(ArrayValue::with_dims(
                 ElemType::Int4,
                 arg_type_oids,
-                vec![crabka_pgtypes::ArrayDim::new(
+                vec![krabka_pgtypes::ArrayDim::new(
                     0,
                     i32::try_from(inputs.len()).unwrap_or(i32::MAX),
                 )],
@@ -6751,20 +6751,20 @@ fn decode_builtin_pg_proc_rows() -> Result<Vec<Vec<Datum>>, ExecError> {
                 // regular empty array normalizes to zero dimensions, but
                 // `pg_proc.proargtypes` relies on this distinction to tell
                 // `count(*)` from `count(any)`.
-                Datum::OidVector(crabka_pgtypes::ArrayValue {
-                    elem: crabka_pgtypes::ElemType::Int4,
+                Datum::OidVector(krabka_pgtypes::ArrayValue {
+                    elem: krabka_pgtypes::ElemType::Int4,
                     elems: argument_types
                         .split_whitespace()
                         .map(|value| int(value).map(Datum::Int4))
                         .collect::<Result<Vec<_>, _>>()?,
-                    dims: vec![crabka_pgtypes::ArrayDim::new(
+                    dims: vec![krabka_pgtypes::ArrayDim::new(
                         0,
                         i32::from(short(argument_count)?),
                     )],
                 }),
                 match all_argument_types {
-                    Some(types) => Datum::Array(crabka_pgtypes::ArrayValue::new(
-                        crabka_pgtypes::ElemType::from_column_type(crabka_pgtypes::ColumnType::Oid)
+                    Some(types) => Datum::Array(krabka_pgtypes::ArrayValue::new(
+                        krabka_pgtypes::ElemType::from_column_type(krabka_pgtypes::ColumnType::Oid)
                             .ok_or_else(corrupt)?,
                         types
                             .into_iter()
@@ -6782,16 +6782,16 @@ fn decode_builtin_pg_proc_rows() -> Result<Vec<Vec<Datum>>, ExecError> {
                                 _ => Err(corrupt()),
                             })
                             .collect::<Result<Vec<_>, _>>()?;
-                        Datum::Array(crabka_pgtypes::ArrayValue::new(
-                            crabka_pgtypes::ElemType::Text,
+                        Datum::Array(krabka_pgtypes::ArrayValue::new(
+                            krabka_pgtypes::ElemType::Text,
                             modes,
                         ))
                     }
                     None => Datum::Null,
                 },
                 match argument_names {
-                    Some(names) => Datum::Array(crabka_pgtypes::ArrayValue::new(
-                        crabka_pgtypes::ElemType::Text,
+                    Some(names) => Datum::Array(krabka_pgtypes::ArrayValue::new(
+                        krabka_pgtypes::ElemType::Text,
                         names.into_iter().map(Datum::Text).collect(),
                     )),
                     None => Datum::Null,
@@ -6931,7 +6931,7 @@ fn default_exprs(
         return (defaults == "-").then(Vec::new).ok_or_else(corrupt);
     }
     let Expr::ArrayLiteral(expressions) =
-        crabka_pgparser::parser::parse_expression(&format!("ARRAY[{defaults}]"))
+        krabka_pgparser::parser::parse_expression(&format!("ARRAY[{defaults}]"))
             .map_err(|_| corrupt())?
     else {
         return Err(corrupt());
@@ -7193,9 +7193,9 @@ fn catalog_return_type_oid(kv: &dyn Kv, routine: &Routine) -> Result<i32, ExecEr
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgkv::MemKv;
-    use crabka_pgparser::ast::{QueryBody, SetExpr, Statement};
-    use crabka_pgwire::engine::{Engine, Session};
+    use krabka_pgkv::MemKv;
+    use krabka_pgparser::ast::{QueryBody, SetExpr, Statement};
+    use krabka_pgwire::engine::{Engine, Session};
 
     use super::*;
 
@@ -7227,7 +7227,7 @@ mod tests {
         for reference in [
             Datum::Int4(i32::try_from(routine.oid).expect("catalog oid fits i32")),
             Datum::Int8(i64::from(routine.oid)),
-            Datum::Regclass(crabka_pgtypes::RegclassValue::unresolved(
+            Datum::Regclass(krabka_pgtypes::RegclassValue::unresolved(
                 i32::try_from(routine.oid).expect("catalog oid fits i32"),
             )),
             Datum::Text("reference_target".into()),
@@ -7378,8 +7378,8 @@ mod tests {
             .expect("concat_ws row");
         assert!(
             concat_ws[21]
-                == Datum::Array(crabka_pgtypes::ArrayValue::new(
-                    crabka_pgtypes::ElemType::Text,
+                == Datum::Array(krabka_pgtypes::ArrayValue::new(
+                    krabka_pgtypes::ElemType::Text,
                     vec![Datum::Text("i".into()), Datum::Text("v".into())],
                 ))
         );
@@ -7394,8 +7394,8 @@ mod tests {
             .expect("aclexplode row");
         assert!(
             aclexplode[20]
-                == Datum::Array(crabka_pgtypes::ArrayValue::new(
-                    crabka_pgtypes::ElemType::from_column_type(crabka_pgtypes::ColumnType::Oid)
+                == Datum::Array(krabka_pgtypes::ArrayValue::new(
+                    krabka_pgtypes::ElemType::from_column_type(krabka_pgtypes::ColumnType::Oid)
                         .expect("oid array element"),
                     vec![1034_i32, 26, 26, 25, 16]
                         .into_iter()
@@ -7405,8 +7405,8 @@ mod tests {
         );
         assert!(
             aclexplode[22]
-                == Datum::Array(crabka_pgtypes::ArrayValue::new(
-                    crabka_pgtypes::ElemType::Text,
+                == Datum::Array(krabka_pgtypes::ArrayValue::new(
+                    krabka_pgtypes::ElemType::Text,
                     [
                         "acl",
                         "grantor",
@@ -7436,8 +7436,8 @@ mod tests {
             .expect("table function row");
         assert!(
             row[22]
-                == Datum::Array(crabka_pgtypes::ArrayValue::new(
-                    crabka_pgtypes::ElemType::Text,
+                == Datum::Array(krabka_pgtypes::ArrayValue::new(
+                    krabka_pgtypes::ElemType::Text,
                     vec![
                         Datum::Text("n".into()),
                         Datum::Text("a".into()),
@@ -7449,7 +7449,7 @@ mod tests {
 
     /// Run `sql` as a definition against `kv`, returning the completion tag.
     fn define(kv: &MemKv, sql: &str) -> Result<String, ExecError> {
-        let statements = crabka_pgparser::parse(sql).expect("definition parses");
+        let statements = krabka_pgparser::parse(sql).expect("definition parses");
         let [Statement::CreateRoutine(stmt)] = statements.as_slice() else {
             panic!("{sql} is not a routine definition");
         };
@@ -7781,7 +7781,7 @@ mod tests {
              $$ BEGIN RETURN NEXT 1; END $$",
         )
         .expect("definition");
-        let catalog: std::sync::Arc<dyn crabka_pgkv::Kv> = kv;
+        let catalog: std::sync::Arc<dyn krabka_pgkv::Kv> = kv;
         let call = |name: &str, distinct| FuncCall {
             sql_syntax: false,
             name: name.into(),
@@ -7837,7 +7837,7 @@ mod tests {
              $$ BEGIN RETURN NEXT a; END $$",
         )
         .expect("definition");
-        let catalog: std::sync::Arc<dyn crabka_pgkv::Kv> = kv;
+        let catalog: std::sync::Arc<dyn krabka_pgkv::Kv> = kv;
         let call = FuncCall {
             sql_syntax: false,
             name: "strict_set".into(),
@@ -8331,9 +8331,9 @@ mod tests {
         )
         .expect("multirange overload");
         let int4range =
-            ColumnType::builtin_range(crabka_pgtypes::oids::INT4RANGE).expect("int4range");
-        let numrange = ColumnType::builtin_range(crabka_pgtypes::oids::NUMRANGE).expect("numrange");
-        let ints = ArgType::Known(ColumnType::Array(crabka_pgtypes::ElemType::Int4));
+            ColumnType::builtin_range(krabka_pgtypes::oids::INT4RANGE).expect("int4range");
+        let numrange = ColumnType::builtin_range(krabka_pgtypes::oids::NUMRANGE).expect("numrange");
+        let ints = ArgType::Known(ColumnType::Array(krabka_pgtypes::ElemType::Int4));
 
         assert!(
             resolve_call(&kv, "exact_poly", &[ints, ArgType::Known(int4range)])
@@ -8341,9 +8341,9 @@ mod tests {
                 .is_some()
         );
         assert!(resolve_call(&kv, "exact_poly", &[ints, ArgType::Known(numrange)]).is_err());
-        let int4multirange = ColumnType::builtin_multirange(crabka_pgtypes::oids::INT4MULTIRANGE)
+        let int4multirange = ColumnType::builtin_multirange(krabka_pgtypes::oids::INT4MULTIRANGE)
             .expect("int4multirange");
-        let nummultirange = ColumnType::builtin_multirange(crabka_pgtypes::oids::NUMMULTIRANGE)
+        let nummultirange = ColumnType::builtin_multirange(krabka_pgtypes::oids::NUMMULTIRANGE)
             .expect("nummultirange");
         assert!(
             resolve_call(
@@ -8384,7 +8384,7 @@ mod tests {
             .expect("smallint promotes to the range subtype")
             .is_some()
         );
-        let numerics = ArgType::Known(ColumnType::Array(crabka_pgtypes::ElemType::Numeric));
+        let numerics = ArgType::Known(ColumnType::Array(krabka_pgtypes::ElemType::Numeric));
         assert!(
             resolve_call(
                 &kv,
@@ -8808,7 +8808,7 @@ mod tests {
             args: Some(vec![RoutineArg {
                 name: None,
                 mode: RoutineArgMode::In,
-                ty: crabka_pgparser::ast::RoutineType::builtin(ColumnType::Int4, "integer".into()),
+                ty: krabka_pgparser::ast::RoutineType::builtin(ColumnType::Int4, "integer".into()),
                 default: None,
             }]),
         };
@@ -8997,7 +8997,7 @@ mod tests {
             .simple_query("CREATE TABLE merge_source (a int, b text); CREATE TABLE merge_target (id int, data text)")
             .await
             .expect("tables");
-        let statements = crabka_pgparser::parse(
+        let statements = krabka_pgparser::parse(
             "CREATE FUNCTION merge_definition() RETURNS TABLE(action text, a int, b text, id int, data text, old_id int, old_data text, new_id int, new_data text) LANGUAGE sql BEGIN ATOMIC MERGE INTO merge_target t USING merge_source s ON s.a = t.id WHEN NOT MATCHED AND s.b IS NULL THEN INSERT DEFAULT VALUES WHEN NOT MATCHED THEN INSERT OVERRIDING USER VALUE VALUES (s.a, s.b) WHEN MATCHED THEN UPDATE SET data = s.b RETURNING WITH (OLD AS o, NEW AS n) merge_action() AS action, *, o.*, n.*; END",
         )
         .expect("function parses");
@@ -9027,7 +9027,7 @@ mod tests {
         assert!(!rendered.contains("INSERT (id, data) DEFAULT VALUES"));
         assert!(rendered.contains("RETURNING WITH (OLD AS o, NEW AS n) MERGE_ACTION() AS action"));
         assert!(rendered.contains("s.a,\n     s.b,\n     t.id,\n     t.data,\n     o.id,\n     o.data,\n     n.id,\n     n.data"));
-        let statements = crabka_pgparser::parse(
+        let statements = krabka_pgparser::parse(
             "CREATE FUNCTION merge_without_return() RETURNS void LANGUAGE sql BEGIN ATOMIC MERGE INTO merge_target t USING merge_source s ON s.a = t.id WHEN NOT MATCHED THEN INSERT (data, id) VALUES (s.b, s.a); END",
         )
         .expect("second function parses");
@@ -9085,7 +9085,7 @@ mod tests {
             inlined
                 == Expr::Cast {
                     expr: Box::new(Expr::Binary {
-                        op: crabka_pgparser::ast::BinaryOp::Add,
+                        op: krabka_pgparser::ast::BinaryOp::Add,
                         left: Box::new(Expr::IntLiteral("1".into())),
                         right: Box::new(Expr::IntLiteral("2".into())),
                     }),
@@ -9118,7 +9118,7 @@ mod tests {
             inlined
                 == Expr::Cast {
                     expr: Box::new(Expr::Binary {
-                        op: crabka_pgparser::ast::BinaryOp::Add,
+                        op: krabka_pgparser::ast::BinaryOp::Add,
                         left: Box::new(Expr::IntLiteral("4".into())),
                         right: Box::new(Expr::IntLiteral("1".into())),
                     }),
@@ -9231,19 +9231,19 @@ mod tests {
             eval_regression_c_adapter(
                 RegressionCAdapter::InterptPp,
                 &[
-                    Datum::Path(crabka_pgtypes::Path::parse("[(0,0),(2,0),(2,2)]").expect("path")),
-                    Datum::Path(crabka_pgtypes::Path::parse("[(1,-1),(1,1),(3,1)]").expect("path")),
+                    Datum::Path(krabka_pgtypes::Path::parse("[(0,0),(2,0),(2,2)]").expect("path")),
+                    Datum::Path(krabka_pgtypes::Path::parse("[(1,-1),(1,1),(3,1)]").expect("path")),
                 ],
             )
             .expect("adapter input")
-                == Datum::Point(crabka_pgtypes::Point { x: 1.0, y: 0.0 })
+                == Datum::Point(krabka_pgtypes::Point { x: 1.0, y: 0.0 })
         );
         assert!(
             eval_regression_c_adapter(
                 RegressionCAdapter::InterptPp,
                 &[
-                    Datum::Path(crabka_pgtypes::Path::parse("[(0,0),(1,0)]").expect("path")),
-                    Datum::Path(crabka_pgtypes::Path::parse("[(0,1),(1,1)]").expect("path")),
+                    Datum::Path(krabka_pgtypes::Path::parse("[(0,0),(1,0)]").expect("path")),
+                    Datum::Path(krabka_pgtypes::Path::parse("[(0,1),(1,1)]").expect("path")),
                 ],
             )
             .expect("adapter input")
@@ -9253,7 +9253,7 @@ mod tests {
 
     #[test]
     fn point_in_widget_regression_c_adapter_uses_the_widget_radius() {
-        let point = crabka_pgtypes::Point { x: 1.0, y: 2.0 };
+        let point = krabka_pgtypes::Point { x: 1.0, y: 2.0 };
         assert!(
             eval_regression_c_adapter(
                 RegressionCAdapter::PointInWidget,
@@ -9274,7 +9274,7 @@ mod tests {
             eval_regression_c_adapter(
                 RegressionCAdapter::PointInWidget,
                 &[
-                    Datum::Point(crabka_pgtypes::Point { x: 2.0, y: 2.0 }),
+                    Datum::Point(krabka_pgtypes::Point { x: 2.0, y: 2.0 }),
                     Datum::Text("(1,1,1.5)".into()),
                 ],
             )
@@ -9285,7 +9285,7 @@ mod tests {
             eval_regression_c_adapter(
                 RegressionCAdapter::PointInWidget,
                 &[
-                    Datum::Point(crabka_pgtypes::Point { x: 3.0, y: 0.0 }),
+                    Datum::Point(krabka_pgtypes::Point { x: 3.0, y: 0.0 }),
                     Datum::Text("(0,0,3)".into()),
                 ],
             )
@@ -9299,7 +9299,7 @@ mod tests {
         let kv = MemKv::default();
         let ops = crate::usertype::create_routine_return_shell(
             &kv,
-            &crabka_pgcatalog::RelationName::public("widget"),
+            &krabka_pgcatalog::RelationName::public("widget"),
         )
         .expect("widget shell");
         kv.write_batch(&ops).expect("store widget shell");
@@ -9559,7 +9559,7 @@ mod tests {
                 == Datum::Bytea(Vec::new())
         );
 
-        let nested = crabka_pgparser::parser::parse_expression(
+        let nested = krabka_pgparser::parser::parse_expression(
             r"length(test_pglz_decompress('\x01'::bytea, 1024, false))",
         )
         .expect("upstream nested expression parses");
@@ -9907,10 +9907,10 @@ mod tests {
         assert!(row[17] == Datum::Int2(1));
         assert!(
             row[19]
-                == Datum::OidVector(crabka_pgtypes::ArrayValue::with_dims(
-                    crabka_pgtypes::ElemType::Int4,
+                == Datum::OidVector(krabka_pgtypes::ArrayValue::with_dims(
+                    krabka_pgtypes::ElemType::Int4,
                     vec![Datum::Int4(23), Datum::Int4(23)],
-                    vec![crabka_pgtypes::ArrayDim::new(0, 2)],
+                    vec![krabka_pgtypes::ArrayDim::new(0, 2)],
                 ))
         );
         assert!(row[25] == Datum::Text("SELECT 1".into()));
@@ -9943,7 +9943,7 @@ mod tests {
     #[test]
     fn unbound_anyarray_arguments_report_the_pseudotype_error() {
         const TEXT: ColumnType = ColumnType::Text;
-        const ANYARRAY: ColumnType = ColumnType::Base(crabka_pgtypes::usertype::BaseRef {
+        const ANYARRAY: ColumnType = ColumnType::Base(krabka_pgtypes::usertype::BaseRef {
             oid: 2277,
             name: "anyarray",
             representation: &TEXT,
@@ -9992,7 +9992,7 @@ mod tests {
             uses: std::cell::RefCell::new(vec![0]),
         };
         let statements =
-            crabka_pgparser::parse("SELECT * FROM f(named => $1)").expect("query parses");
+            krabka_pgparser::parse("SELECT * FROM f(named => $1)").expect("query parses");
         let [Statement::Query(query)] = statements.as_slice() else {
             panic!("expected query");
         };
@@ -10003,7 +10003,7 @@ mod tests {
 
         substitute_in_from(&binding, &mut select).expect("substitution");
 
-        let [crabka_pgparser::ast::TableExpr::Function { functions, .. }] = select.from.as_slice()
+        let [krabka_pgparser::ast::TableExpr::Function { functions, .. }] = select.from.as_slice()
         else {
             panic!("expected function item");
         };
@@ -10023,14 +10023,14 @@ mod tests {
              LANGUAGE sql AS 'SELECT $1, ARRAY[$1, $1]'",
         );
         let statements =
-            crabka_pgparser::parse("SELECT * FROM out_poly('x'::text)").expect("query parses");
+            krabka_pgparser::parse("SELECT * FROM out_poly('x'::text)").expect("query parses");
         let [Statement::Query(query)] = statements.as_slice() else {
             panic!("expected query");
         };
         let SetExpr::Query(QueryBody::Select(select)) = &query.body else {
             panic!("expected select");
         };
-        let [crabka_pgparser::ast::TableExpr::Function { functions, .. }] = select.from.as_slice()
+        let [krabka_pgparser::ast::TableExpr::Function { functions, .. }] = select.from.as_slice()
         else {
             panic!("expected function item");
         };

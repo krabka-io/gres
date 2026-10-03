@@ -3,7 +3,7 @@
 //! This fake records every Connect-RPC that the reconcile issues. It
 //! serves one scripted response for each method, so that a test can
 //! exercise the state machine of the controller without a live
-//! `crabka-rebalancer` process. It follows the `FakeAdminClient` pattern
+//! `krabka-rebalancer` process. It follows the `FakeAdminClient` pattern
 //! and uses `std::sync::Mutex` for interior mutability behind the `&self`
 //! trait methods.
 
@@ -11,13 +11,13 @@
 
 use std::sync::Mutex as StdMutex;
 
-use crabka_operator::{
+use krabka_operator::{
     ids::{LeaderMovementCount, MaxLeadersCount, MaxReplicasCount, ReplicaMovementCount},
     rebalancer_client::{
         ProposalStatus, ProposalSummary, RebalancerClientLike, RebalancerError, RebalancerProposal,
     },
 };
-use crabka_units::ByteRate;
+use krabka_units::ByteRate;
 
 /// One recorded Connect-RPC.
 #[derive(Debug, Clone, PartialEq)]

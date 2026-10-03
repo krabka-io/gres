@@ -78,7 +78,7 @@ The demo Stream role exposes:
 
 - CLI: `--streams-rebalance-timeout-ms`
 - environment:
-  `CRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS`
+  `KRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS`
 
 Precedence is CLI over environment over the typed 30,000 ms default. Parsing
 uses a nonzero integer millisecond value, then constructs
@@ -89,7 +89,7 @@ early role-specific error. `run_stream` accepts the typed value and forwards it
 to `StreamsApp`.
 
 Only the `demo-stream` Compose service receives
-`CRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS`, with `${...:-30000}` as its
+`KRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS`, with `${...:-30000}` as its
 deployment default.
 
 ## Error Behavior

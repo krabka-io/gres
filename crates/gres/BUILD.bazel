@@ -5,7 +5,7 @@ exports_files(["Cargo.toml"])
 crate_library(name = "gres")
 
 crate_binary(
-    name = "crabka-gres",
+    name = "krabka-gres",
     crate_root = "src/main.rs",
     lib = ":gres",
 )

@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- **Prerequisites:** G-1 landed (all waves); G-2+ only where a wave's sharded story needs it. **G-4 (the PgDog front door) is required for the M0 gate and every pooler-story leg** — the conformance-through-PgDog runs and the transaction-pooling smokes cannot execute without it *(corrected after the PR panel review — "G-1 only" was wrong for those gates)*. Verify every quoted seam against the landed tree at execution time.
+- **Prerequisites:** G-1 landed (all waves); G-2+ only where a wave's sharded story needs it. **G-4 (the PgDog front door) is required for the M0 gate and every pooler-story leg** — the conformance-through-PgDog runs and the transaction-pooling smokes cannot execute without it _(corrected after the PR panel review — "G-1 only" was wrong for those gates)_. Verify every quoted seam against the landed tree at execution time.
 - **Spec:** the program design above. The four standing per-cycle rules (oracle/ratchet, sharded story, pooler story, matrix update) bind every wave without restatement.
 - **The matrix cannot rot:** CI diffs `PG_COMPAT_MATRIX.md` against the parser's accepted-statement surface (Task 1); a wave that changes acceptance without a matrix row fails CI.
 - **Explicit dispositions are code, not prose:** stock-PG-default errors (2PC-SQL 55000, CREATE DATABASE, non-goal commands) are implemented as recognizable parse-then-error paths with the documented SQLSTATE and hint — never generic syntax errors — so client software sees PostgreSQL-shaped refusals.
@@ -38,7 +38,7 @@ Steps: harness mode TDD (per-file baseline gate; a regressed file fails, an impr
 
 ### Task 3: `Session` trait v2 + parameter execution
 
-**Files:** Modify `crates/pgwire/src/engine.rs` (the one-time widening: `parse/bind/execute(max_rows)`-shaped API with portal objects and reserved enum variants for CopyIn/CopyOut/Notification — designed once, reviewed hard), `session.rs` (Bind stores values; Execute honors `max_rows` with `PortalSuspended` (`s`) encoder in `backend.rs`; portal store with close-at-Sync semantics preserved per stock PG), `crates/pgexec` (`Expr::Param` evaluation: parameter values + type inference at bind, text/binary decode via `crabka-pgtypes` wire codecs), `crates/gres-conformance` (an extended-protocol mode re-running the corpus through prepared statements with parameters where statements permit).
+**Files:** Modify `crates/pgwire/src/engine.rs` (the one-time widening: `parse/bind/execute(max_rows)`-shaped API with portal objects and reserved enum variants for CopyIn/CopyOut/Notification — designed once, reviewed hard), `session.rs` (Bind stores values; Execute honors `max_rows` with `PortalSuspended` (`s`) encoder in `backend.rs`; portal store with close-at-Sync semantics preserved per stock PG), `crates/pgexec` (`Expr::Param` evaluation: parameter values + type inference at bind, text/binary decode via `krabka-pgtypes` wire codecs), `crates/gres-conformance` (an extended-protocol mode re-running the corpus through prepared statements with parameters where statements permit).
 
 Steps: strict TDD per layer — pgtypes param decode round-trips; executor param evaluation (typed placeholders across the expression suite); pgwire bind/execute with `max_rows` slicing + suspension (golden traces extended); the M0 gate: parameterized smokes via tokio-postgres AND sqlx AND one dynamic-driver-style trace, through PgDog transaction mode; corpus-through-extended-protocol at baseline. Commit sequence per layer; final `feat(pgwire): extended-protocol parameters and real portals (Session trait v2)`.
 
@@ -54,37 +54,37 @@ Steps: TDD the registry (SET LOCAL scoping, RESET source-default semantics, tran
 
 Order within tracks is binding; across tracks, parallelize freely once F-0/F-1 land. Each cycle produces its own spec+plan; its exit gate is listed here and is not renegotiable at cycle time without a program-level decision.
 
-| # | Wave | Gate (in addition to the four standing rules) |
-|---|---|---|
-| 5 | **F-2 pg_catalog** | **M2**: psql `\d`/`\dt`/`\di`/`\l`/`\du` golden sessions green |
-| 6 | **D1 constraints** (SP41 port + GENERATED + NULLS NOT DISTINCT) | constraint corpus incl. PG error texts; pgbench schema parses |
-| 7 | **D2 indexes** (multi-slice) | index-backed point/range reads measured; the chapter envelope's read numbers revised in the same commit |
-| 8 | **D3 sequences/SERIAL** | sharded story = block allocation; pgbench init schema complete |
-| 9 | **Q5 COPY** | **M1** with 6–8: stock pgbench initializes and runs; chunked-commit design decided in-cycle |
-| 10 | **Q1 statement completeness** | ORM write-path smokes (RETURNING, ON CONFLICT, CREATE TABLE AS) |
-| 11 | **D4 ALTER TABLE/TRUNCATE/COMMENT** | migration-tool ALTER corpus |
-| 12 | **S1 SAVEPOINT** (sub-xids as first-class) | its Stateright model; Django/Rails nested-txn smoke — **M3** with 10–11 |
-| 13 | **T1–T2 core types + uuid** | type corpus vs oracle incl. typmod truncation quirks |
-| 14 | **T3 json/jsonb + SQL/JSON** | jsonpath corpus; `JSON_TABLE` |
-| 15 | **T4 arrays** | array corpus; unnest-in-FROM lands with Q3 if sequenced earlier |
-| 16 | **Q2 windows** | window corpus (pg_regress `window.sql` adopted as its ratchet file) |
-| 17 | **Q3 SELECT completeness** | SKIP LOCKED job-queue smoke; recursive-CTE corpus |
-| 18 | **Q4 expression/aggregate completeness** | operator corpus; aggregate corpus |
-| 19 | **D5 views/matviews** → **P1b information_schema** | REFRESH CONCURRENTLY semantics; information_schema introspection smokes |
-| 20 | **D6 FK/DEFERRABLE** | referential-action corpus; sharded FK = G-9d dependency stated |
-| 21 | **S2 cursors + SQL PREPARE** | WITH HOLD semantics; driver cursor smokes |
-| 22 | **D7 schemas/TEMP/declarative partitioning** | PARTITION BY → native sharding mapping (G-8/9-coupled cycle) |
-| 23 | **S4 LISTEN/NOTIFY** | cross-gateway delivery via range-0 bus; commit-time semantics corpus |
-| 24 | **S3 LOCK TABLE + advisory locks** | multi-range lock-service design (range-0 home) |
-| 25 | **D8 RLS + roles/privileges** | RLS corpus; pooler+SET ROLE interplay stated |
-| 26 | **T5–T8 remaining types + collations** | per-family corpora; icu4x decision executed |
-| 27 | **P2 routines (SQL functions/procedures/CALL/DO)** | function corpus |
-| 28 | **S6 EXPLAIN [ANALYZE]** | stable golden plans over the planner seam |
-| 29 | **S5 SERIALIZABLE (SSI)** | SIREAD Stateright model; single-range SSI corpus; cross-range = named G-9 coupled cycle |
-| 30 | **P3 PL/pgSQL** (internally staged) | plpgsql corpus adoption; in-proc txn control |
-| 31 | **P4 triggers** | trigger corpus; INSTEAD OF with D5 |
-| 32 | **P5 utility bucket + FDW lifecycle completeness** | every remaining matrix row leaves UNDECIDED-adjacent states — **M5** |
-| 33 | **P6 stretch (CREATE CAST/AGGREGATE)** | optional; matrix rows flip from stretch |
+| #   | Wave                                                            | Gate (in addition to the four standing rules)                                                           |
+| --- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 5   | **F-2 pg_catalog**                                              | **M2**: psql `\d`/`\dt`/`\di`/`\l`/`\du` golden sessions green                                          |
+| 6   | **D1 constraints** (SP41 port + GENERATED + NULLS NOT DISTINCT) | constraint corpus incl. PG error texts; pgbench schema parses                                           |
+| 7   | **D2 indexes** (multi-slice)                                    | index-backed point/range reads measured; the chapter envelope's read numbers revised in the same commit |
+| 8   | **D3 sequences/SERIAL**                                         | sharded story = block allocation; pgbench init schema complete                                          |
+| 9   | **Q5 COPY**                                                     | **M1** with 6–8: stock pgbench initializes and runs; chunked-commit design decided in-cycle             |
+| 10  | **Q1 statement completeness**                                   | ORM write-path smokes (RETURNING, ON CONFLICT, CREATE TABLE AS)                                         |
+| 11  | **D4 ALTER TABLE/TRUNCATE/COMMENT**                             | migration-tool ALTER corpus                                                                             |
+| 12  | **S1 SAVEPOINT** (sub-xids as first-class)                      | its Stateright model; Django/Rails nested-txn smoke — **M3** with 10–11                                 |
+| 13  | **T1–T2 core types + uuid**                                     | type corpus vs oracle incl. typmod truncation quirks                                                    |
+| 14  | **T3 json/jsonb + SQL/JSON**                                    | jsonpath corpus; `JSON_TABLE`                                                                           |
+| 15  | **T4 arrays**                                                   | array corpus; unnest-in-FROM lands with Q3 if sequenced earlier                                         |
+| 16  | **Q2 windows**                                                  | window corpus (pg_regress `window.sql` adopted as its ratchet file)                                     |
+| 17  | **Q3 SELECT completeness**                                      | SKIP LOCKED job-queue smoke; recursive-CTE corpus                                                       |
+| 18  | **Q4 expression/aggregate completeness**                        | operator corpus; aggregate corpus                                                                       |
+| 19  | **D5 views/matviews** → **P1b information_schema**              | REFRESH CONCURRENTLY semantics; information_schema introspection smokes                                 |
+| 20  | **D6 FK/DEFERRABLE**                                            | referential-action corpus; sharded FK = G-9d dependency stated                                          |
+| 21  | **S2 cursors + SQL PREPARE**                                    | WITH HOLD semantics; driver cursor smokes                                                               |
+| 22  | **D7 schemas/TEMP/declarative partitioning**                    | PARTITION BY → native sharding mapping (G-8/9-coupled cycle)                                            |
+| 23  | **S4 LISTEN/NOTIFY**                                            | cross-gateway delivery via range-0 bus; commit-time semantics corpus                                    |
+| 24  | **S3 LOCK TABLE + advisory locks**                              | multi-range lock-service design (range-0 home)                                                          |
+| 25  | **D8 RLS + roles/privileges**                                   | RLS corpus; pooler+SET ROLE interplay stated                                                            |
+| 26  | **T5–T8 remaining types + collations**                          | per-family corpora; icu4x decision executed                                                             |
+| 27  | **P2 routines (SQL functions/procedures/CALL/DO)**              | function corpus                                                                                         |
+| 28  | **S6 EXPLAIN [ANALYZE]**                                        | stable golden plans over the planner seam                                                               |
+| 29  | **S5 SERIALIZABLE (SSI)**                                       | SIREAD Stateright model; single-range SSI corpus; cross-range = named G-9 coupled cycle                 |
+| 30  | **P3 PL/pgSQL** (internally staged)                             | plpgsql corpus adoption; in-proc txn control                                                            |
+| 31  | **P4 triggers**                                                 | trigger corpus; INSTEAD OF with D5                                                                      |
+| 32  | **P5 utility bucket + FDW lifecycle completeness**              | every remaining matrix row leaves UNDECIDED-adjacent states — **M5**                                    |
+| 33  | **P6 stretch (CREATE CAST/AGGREGATE)**                          | optional; matrix rows flip from stretch                                                                 |
 
 ## Completion checklist (maps to the program gates)
 

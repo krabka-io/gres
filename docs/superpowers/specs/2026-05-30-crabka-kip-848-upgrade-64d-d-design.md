@@ -4,7 +4,8 @@
 **Date:** 2026-05-30
 **Roadmap:** `2026-05-29-crabka-classic-nextgen-migration-roadmap-design.md`, Slice D.
 Builds on B (unified `GroupCoordinator`) and C (`group.consumer.migration.policy`
-+ convertibility predicate). E (downgrade) is the mirror; F is JVM acceptance.
+
+- convertibility predicate). E (downgrade) is the mirror; F is JVM acceptance.
 
 ## Goal
 
@@ -68,13 +69,13 @@ returns `None` because the actor is classic-kind). In D:
    classic / fails, per Kafka). If convertible, **convert in place**:
    - Build a `ConsumerState` from the `ClassicState`: each classic member →
      `MemberState { classic: Some(facade), subscribed_topic_names: <decoded from
-     ConsumerProtocolSubscription>, .. }`, carrying its `member_id` unchanged.
+ConsumerProtocolSubscription>, .. }`, carrying its `member_id` unchanged.
    - `group_epoch` seeds from `classic.generation_id` max; bump once.
    - Replace `group.kind` with `Consumer(state)`; **the handle keeps serving
      both** message families (see routing).
    - Persist: append k3 (`ConsumerGroupMetadata`) + k5/k6/k7/k8 for every member
      **and a tombstone for the k2 `GroupMetadata`** (so bootstrap replays the
-     group as consumer). This is the first production use of the k2 *tombstone*
+     group as consumer). This is the first production use of the k2 _tombstone_
      and the k3+ write path for a converted group.
 2. The joining consumer member is then added normally and the reconciler runs.
 
@@ -110,7 +111,7 @@ grows, reproducing Slice B's hard separation (and the 64e
   tombstone; downgrade (E) does the reverse. Committed offsets (k0/k1) are
   untouched by conversion (they already live on the kind-agnostic `Group`).
 - `ConsumerProtocolAssignment`/`ConsumerProtocolSubscription` codecs are the
-  existing `crabka_protocol::owned` types.
+  existing `krabka_protocol::owned` types.
 
 ## Tests
 

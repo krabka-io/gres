@@ -1,4 +1,4 @@
-# crabka-gres-conformance
+# krabka-gres-conformance
 
 Differential conformance harness diffing Crabka Gres against a real PostgreSQL
 oracle over the wire.
@@ -25,7 +25,7 @@ have a deliberately narrower mutation and query surface than ordinary tables,
 so their parity floor is ratcheted independently against the same corpus and
 PostgreSQL 18 oracle.
 
-The substrate-backed leg — the same corpus replayed against a `crabka-gres`
+The substrate-backed leg — the same corpus replayed against a `krabka-gres`
 whose WAL is a Kafka tenant topic — uses `substrate-baseline.json`, and
 [`substrate-baseline.md`](substrate-baseline.md) names every statement behind
 the difference. That leg runs against its own fresh oracle database, so
@@ -174,8 +174,8 @@ for the M4 milestone.
 `pg_regress` file (up to the `\.` terminator) and replays it over copy-in, and
 `COPY ... TO STDOUT` is collected over copy-out as one text column per output
 line. Sending either down the simple query path instead leaves the connection
-in copy mode, which corrupts every later statement in the run *in both
-directions* — two dead connections compare equal and score as matches — so this
+in copy mode, which corrupts every later statement in the run _in both
+directions_ — two dead connections compare equal and score as matches — so this
 routing is load-bearing for the measurement, not a convenience.
 
 Server-side `COPY table FROM 'file'` reads PostgreSQL's official fixture files
@@ -189,7 +189,7 @@ Neither engine is reset between corpus files, and the primary corpus runs before
 the adopted regress corpus on the same two connections. A relation name reused
 with a different definition therefore does not create an independent table: the
 second `CREATE TABLE` fails with `42P07` and every later statement in that file
-silently runs against the *first* file's schema. Prefix new tables with something
+silently runs against the _first_ file's schema. Prefix new tables with something
 derived from the file name (`setop_a`, `jn_t1`, `msf_m`) and check before adding:
 
 ```sh
@@ -256,7 +256,7 @@ via `tokio-postgres` typed prepared statements instead of the simple query path.
 Run it with:
 
 ```sh
-cargo run -p crabka-gres-conformance -- \
+cargo run -p krabka-gres-conformance -- \
   --oracle-url "host=127.0.0.1 port=54320 user=postgres dbname=postgres" \
   --subject-url "host=127.0.0.1 port=5433 user=crab dbname=postgres" \
   --baseline crates/gres-conformance/baseline.json \
@@ -297,7 +297,7 @@ Install the pinned Python driver and run the complete gate with:
 ```sh
 python3 -m pip install --require-hashes --no-deps \
   -r crates/gres-conformance/requirements-driver-smoke.txt
-CRABKA_GRES_E2E_KEEP_ARTIFACTS=1 ./scripts/gres-e2e.sh
+KRABKA_GRES_E2E_KEEP_ARTIFACTS=1 ./scripts/gres-e2e.sh
 ```
 
 Docker/PgDog and `psycopg` are mandatory for the complete gate. For local

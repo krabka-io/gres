@@ -32,9 +32,11 @@
 ### Task 1: Pin Role Operations HTTP Behavior
 
 **Files:**
+
 - Modify: `crates/observability/tests/http.rs`
 
 **Interfaces:**
+
 - Consumes: existing public functions `distributor_router`, `loki_router`, `build_service_router`, `QuerierState::new`, `InMemoryWalSink`, `ServiceConfig`, `ServiceDependencies`, `Role`, and `QuerierIndexSource`.
 - Produces: tests named `role_operations_routes_match_existing_behavior` and `role_ring_alias_routes_remain_available`.
 
@@ -49,8 +51,8 @@ fn minimal_service_config(target: Role) -> ServiceConfig {
         listen_addr: "127.0.0.1:0".parse().unwrap(),
         object_store_url: None,
         wal_bootstrap_server: None,
-        wal_topic: "__crabka_observability_logs_wal".to_string(),
-        wal_group_id: "crabka-observability-compactor".to_string(),
+        wal_topic: "__krabka_observability_logs_wal".to_string(),
+        wal_group_id: "krabka-observability-compactor".to_string(),
         data_root: ".".into(),
         querier_index_source: QuerierIndexSource::LocalManifest,
         tenant: None,
@@ -210,13 +212,13 @@ async fn role_ring_alias_routes_remain_available() {
     .unwrap();
 
     for (app, uri, expected) in [
-        (distributor.clone(), "/ring", "crabka-distributor"),
-        (distributor, "/distributor/ring", "crabka-distributor"),
-        (querier.clone(), "/ring", "crabka-querier"),
-        (querier.clone(), "/scheduler/ring", "crabka-scheduler"),
+        (distributor.clone(), "/ring", "krabka-distributor"),
+        (distributor, "/distributor/ring", "krabka-distributor"),
+        (querier.clone(), "/ring", "krabka-querier"),
+        (querier.clone(), "/scheduler/ring", "krabka-scheduler"),
         (querier, "/ruler/ring", "Ruler Ring"),
-        (compactor.clone(), "/ring", "crabka-compactor"),
-        (compactor, "/compactor/ring", "crabka-compactor"),
+        (compactor.clone(), "/ring", "krabka-compactor"),
+        (compactor, "/compactor/ring", "krabka-compactor"),
     ] {
         let response = get_response(app, uri).await;
         assert!(response.status() == StatusCode::OK, "{uri} status");
@@ -230,8 +232,8 @@ async fn role_ring_alias_routes_remain_available() {
 Run:
 
 ```bash
-cargo test -p crabka-observability role_operations_routes_match_existing_behavior
-cargo test -p crabka-observability role_ring_alias_routes_remain_available
+cargo test -p krabka-observability role_operations_routes_match_existing_behavior
+cargo test -p krabka-observability role_ring_alias_routes_remain_available
 ```
 
 Expected: both tests pass before the refactor. If either test fails because a pinned body differs from current behavior, inspect the current handler response and update the expected string to the current behavior before continuing.
@@ -250,9 +252,11 @@ git commit -m "test(observability): pin role ops endpoints"
 ### Task 2: Introduce Shared Role Operations Routes
 
 **Files:**
+
 - Modify: `crates/observability/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: tests from Task 1.
 - Produces:
   - `#[derive(Clone, Copy)] struct RoleOps { target: &'static str, ring_component: &'static str, role_ring_path: Option<&'static str> }`
@@ -300,19 +304,19 @@ struct RoleOps {
 
 const DISTRIBUTOR_OPS: RoleOps = RoleOps {
     target: "distributor",
-    ring_component: "crabka-distributor",
+    ring_component: "krabka-distributor",
     role_ring_path: Some("/distributor/ring"),
 };
 
 const QUERIER_OPS: RoleOps = RoleOps {
     target: "querier",
-    ring_component: "crabka-querier",
+    ring_component: "krabka-querier",
     role_ring_path: None,
 };
 
 const COMPACTOR_OPS: RoleOps = RoleOps {
     target: "compactor",
-    ring_component: "crabka-compactor",
+    ring_component: "krabka-compactor",
     role_ring_path: Some("/compactor/ring"),
 };
 
@@ -490,15 +494,15 @@ Delete these functions:
 
 ```rust
 async fn distributor_ring() -> Response {
-    ring_status_page("crabka-distributor")
+    ring_status_page("krabka-distributor")
 }
 
 async fn querier_ring() -> Response {
-    ring_status_page("crabka-querier")
+    ring_status_page("krabka-querier")
 }
 
 async fn compactor_ring() -> Response {
-    ring_status_page("crabka-compactor")
+    ring_status_page("krabka-compactor")
 }
 ```
 
@@ -514,7 +518,7 @@ Keep these specialized ring handlers unchanged:
 
 ```rust
 async fn scheduler_ring() -> Response {
-    ring_status_page("crabka-scheduler")
+    ring_status_page("krabka-scheduler")
 }
 
 async fn ruler_ring() -> Response {
@@ -527,8 +531,8 @@ async fn ruler_ring() -> Response {
 Run:
 
 ```bash
-cargo test -p crabka-observability role_operations_routes_match_existing_behavior
-cargo test -p crabka-observability role_ring_alias_routes_remain_available
+cargo test -p krabka-observability role_operations_routes_match_existing_behavior
+cargo test -p krabka-observability role_ring_alias_routes_remain_available
 ```
 
 Expected: both tests pass.
@@ -553,10 +557,12 @@ git commit -m "refactor(observability): share role ops routes"
 ### Task 3: Full Observability Verification And Cleanup
 
 **Files:**
+
 - Modify: `crates/observability/src/lib.rs` only if Task 2 left unused imports or formatting fallout.
 - Modify: `crates/observability/tests/http.rs` only if Task 1 tests need minor compile adjustments after Task 2.
 
 **Interfaces:**
+
 - Consumes: `with_role_ops_routes`, `RoleOps`, and tests from Tasks 1 and 2.
 - Produces: verified final branch with fewer maintained LOC in `crates/observability/src/lib.rs`.
 
@@ -568,13 +574,13 @@ Expected: exit code 1 with no output, meaning no deleted wrapper names remain. M
 
 - [ ] **Step 2: Run the full observability test suite**
 
-Run: `cargo test -p crabka-observability`
+Run: `cargo test -p krabka-observability`
 
 Expected: all tests pass.
 
 - [ ] **Step 3: Run crate clippy**
 
-Run: `cargo clippy -p crabka-observability --all-targets -- -D warnings`
+Run: `cargo clippy -p krabka-observability --all-targets -- -D warnings`
 
 Expected: command exits successfully with no warnings.
 

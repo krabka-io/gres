@@ -21,8 +21,8 @@ pub(crate) enum OuterReference {
 /// Only the keyword counts, not the implicit laterality of a function item: it
 /// is what `PostgreSQL` uses to decide whether the target relation's name is
 /// looked up at all, and so which of the two prohibitions reports it.
-pub(crate) fn item_is_lateral(te: &crabka_pgparser::ast::TableExpr) -> bool {
-    use crabka_pgparser::ast::TableExpr;
+pub(crate) fn item_is_lateral(te: &krabka_pgparser::ast::TableExpr) -> bool {
+    use krabka_pgparser::ast::TableExpr;
     match te {
         TableExpr::Derived { lateral, .. } | TableExpr::Function { lateral, .. } => *lateral,
         TableExpr::JsonTable(table) => table.lateral,

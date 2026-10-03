@@ -1,7 +1,7 @@
-# crabka-metadata
+# krabka-metadata
 
-[![Crates.io](https://img.shields.io/crates/v/crabka-metadata.svg)](https://crates.io/crates/crabka-metadata)
-[![Docs.rs](https://docs.rs/crabka-metadata/badge.svg)](https://docs.rs/crabka-metadata)
+[![Crates.io](https://img.shields.io/crates/v/krabka-metadata.svg)](https://crates.io/crates/krabka-metadata)
+[![Docs.rs](https://docs.rs/krabka-metadata/badge.svg)](https://docs.rs/krabka-metadata)
 [![CI](https://github.com/robot-head/crabka/actions/workflows/ci.yml/badge.svg)](https://github.com/robot-head/crabka/actions/workflows/ci.yml)
 
 Versioned metadata record types + immutable image for Crabka.
@@ -11,7 +11,7 @@ This crate is part of [Crabka](https://github.com/robot-head/crabka), a Rust imp
 ## Install
 
 ```sh
-cargo add crabka-metadata
+cargo add krabka-metadata
 ```
 
 For workspace development, use the path dependency from this repository instead.
@@ -21,7 +21,7 @@ For workspace development, use the path dependency from this repository instead.
 Apply controller records to build an immutable metadata image:
 
 ```rust
-use crabka_metadata::{MetadataImage, MetadataRecord, TopicRecord};
+use krabka_metadata::{MetadataImage, MetadataRecord, TopicRecord};
 use uuid::Uuid;
 
 let mut image = MetadataImage::new(Uuid::new_v4());
@@ -38,7 +38,7 @@ assert_eq!(image.topic("orders").unwrap().topic_id, topic_id);
 
 ## Documentation
 
-The API documentation is on [docs.rs/crabka-metadata](https://docs.rs/crabka-metadata). The repository README contains project-wide setup, development, and release notes.
+The API documentation is on [docs.rs/krabka-metadata](https://docs.rs/krabka-metadata). The repository README contains project-wide setup, development, and release notes.
 
 ## License
 

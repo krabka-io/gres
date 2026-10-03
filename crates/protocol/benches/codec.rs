@@ -1,4 +1,4 @@
-//! `CodSpeed` microbenchmarks for `crabka-protocol` codec primitives and
+//! `CodSpeed` microbenchmarks for `krabka-protocol` codec primitives and
 //! representative request/response messages.
 //!
 //! These benches cover the low-level wire primitives (varint, fixed-width
@@ -9,8 +9,9 @@
 //! signal.
 
 use bytes::{Bytes, BytesMut};
-use crabka_compression::CompressionType;
-use crabka_protocol::{
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use krabka_compression::CompressionType;
+use krabka_protocol::{
     Decode, Encode,
     owned::{
         api_versions_request::ApiVersionsRequest,
@@ -32,7 +33,6 @@ use crabka_protocol::{
         UnknownTaggedField, UnknownTaggedFields, WriteTaggedFields, tagged_fields_len,
     },
 };
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -13,7 +13,7 @@ signed by a public webpki root — the common case in private clusters
 that use an internal CA — the broker today fails to fetch the key set
 because slice 49b's reqwest client trusts only webpki-roots. Slice 49c
 adds an opt-in broker config knob that supplies a PEM bundle of CA
-certificates to use as the *exclusive* trust store for the JWKS HTTPS
+certificates to use as the _exclusive_ trust store for the JWKS HTTPS
 connection (Strimzi-shaped "replace, don't extend" semantic).
 
 This unblocks slice 50b (operator `tlsTrustedCertificates` CRD field on
@@ -28,7 +28,7 @@ from HTTP-only into a realistic HTTPS-to-IdP test.
 2. **New TOML key** `[oauthbearer].jwks_tls_trust` (a single `PathBuf`)
    in `crates/broker/src/file_config.rs::FileOAuthBearerConfig`.
 3. **New runtime field** `BrokerConfig.oauthbearer_jwks_tls_trust:
-   Option<PathBuf>`.
+Option<PathBuf>`.
 4. **`JwksRefresher::run` updated** to thread the path through, build
    the reqwest client with `use_preconfigured_tls(ClientConfig)` when
    the path is set, and hard-stop the refresher on PEM-load failure
@@ -40,16 +40,16 @@ slice, broker-only.
 
 ## Non-deliverables (out of scope)
 
-| Item | Lands in |
-|------|----------|
-| Operator CRD field `tlsTrustedCertificates` on listener OAuth config | 50b |
-| Operator Secret-mounting + path threading into broker TOML | 50b |
-| Custom TLS trust for opaque-token introspection (49d) HTTPS | reuses this helper, but the config key is `introspection_tls_trust` and lands in 49d |
-| Hot reload of the trust bundle without broker restart | future, if real demand |
-| Multiple PEM paths in one TOML key | operator concatenates; broker reads one file |
-| Pinning the IdP cert SHA / public-key fingerprint | explicit non-goal — rustls chain verification only |
-| mTLS *to* the IdP (broker authenticating itself) | not in any roadmap slice |
-| `jwks_tls_trust` set without `jwks_endpoint_uri` rejected at config-load | silently no-op (matches Strimzi permissive posture during operator rollout) |
+| Item                                                                     | Lands in                                                                             |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| Operator CRD field `tlsTrustedCertificates` on listener OAuth config     | 50b                                                                                  |
+| Operator Secret-mounting + path threading into broker TOML               | 50b                                                                                  |
+| Custom TLS trust for opaque-token introspection (49d) HTTPS              | reuses this helper, but the config key is `introspection_tls_trust` and lands in 49d |
+| Hot reload of the trust bundle without broker restart                    | future, if real demand                                                               |
+| Multiple PEM paths in one TOML key                                       | operator concatenates; broker reads one file                                         |
+| Pinning the IdP cert SHA / public-key fingerprint                        | explicit non-goal — rustls chain verification only                                   |
+| mTLS _to_ the IdP (broker authenticating itself)                         | not in any roadmap slice                                                             |
+| `jwks_tls_trust` set without `jwks_endpoint_uri` rejected at config-load | silently no-op (matches Strimzi permissive posture during operator rollout)          |
 
 ## Trust semantic — replace, not extend
 
@@ -64,7 +64,7 @@ to use reqwest's default rustls feature, which trusts webpki-roots —
 exactly slice 49b's behavior. No regression.
 
 The trade-off accepted: ops teams pointing the broker at a public IdP
-that uses a Let's Encrypt cert and *also* set `jwks_tls_trust` for an
+that uses a Let's Encrypt cert and _also_ set `jwks_tls_trust` for an
 unrelated private CA must concatenate LE roots into the PEM. The
 alternative (additive: webpki + user) was rejected for Strimzi-parity.
 
@@ -175,7 +175,7 @@ impl JwksRefresher {
     pub(crate) async fn run(self) {
         let mut builder = reqwest::Client::builder().timeout(Duration::from_secs(10));
         if let Some(path) = &self.tls_trust {
-            match crabka_security::build_client_config_from_pem(path) {
+            match krabka_security::build_client_config_from_pem(path) {
                 Ok(cfg) => {
                     builder = builder.use_preconfigured_tls((*cfg).clone());
                 }
@@ -218,14 +218,14 @@ tokio::spawn(refresher.run());
 
 ## File-level change map
 
-| File | Change |
-|------|--------|
-| `crates/security/src/jwks_trust.rs` | New file (helper + 5 unit tests) |
-| `crates/security/src/lib.rs` | `mod jwks_trust;` + re-exports |
-| `crates/broker/src/file_config.rs` | Add `jwks_tls_trust` field + apply_to threading + 1 test |
-| `crates/broker/src/config.rs` | Add `oauthbearer_jwks_tls_trust` runtime field |
-| `crates/broker/src/oauth_jwks.rs` | Add `tls_trust` field, wire reqwest builder, 2 new HTTPS integration tests |
-| `crates/broker/src/broker.rs` | Thread `tls_trust` into `JwksRefresher` literal (1 line) |
+| File                                | Change                                                                     |
+| ----------------------------------- | -------------------------------------------------------------------------- |
+| `crates/security/src/jwks_trust.rs` | New file (helper + 5 unit tests)                                           |
+| `crates/security/src/lib.rs`        | `mod jwks_trust;` + re-exports                                             |
+| `crates/broker/src/file_config.rs`  | Add `jwks_tls_trust` field + apply_to threading + 1 test                   |
+| `crates/broker/src/config.rs`       | Add `oauthbearer_jwks_tls_trust` runtime field                             |
+| `crates/broker/src/oauth_jwks.rs`   | Add `tls_trust` field, wire reqwest builder, 2 new HTTPS integration tests |
+| `crates/broker/src/broker.rs`       | Thread `tls_trust` into `JwksRefresher` literal (1 line)                   |
 
 All changes are file-disjoint enough to run as a single batch (file_config + oauth_jwks share a crate but not a function), but the dependency graph is sequential (`security` → `file_config` → `oauth_jwks` for the type to flow through). One implementer, three commits suggested below.
 
@@ -254,7 +254,7 @@ The existing tests (`fetch_jwks_parses_served_keyset`, `fetch_jwks_errors_on_dea
 
 If `axum-server` or the equivalent rustls-on-axum harness isn't already a dev-dep of the broker crate, this slice adds it as a `[dev-dependencies]` entry. (Check first; the existing serve_jwks pattern uses plain `axum`. The HTTPS variant needs `axum-server` or a hand-rolled `tokio-rustls` accept loop. Either is acceptable; the implementation plan picks one.)
 
-### What is *not* tested here
+### What is _not_ tested here
 
 - Operator-side rendering of `jwks_tls_trust` from a Secret mount — slice 50b.
 - Kind-cluster end-to-end Keycloak with HTTPS — slice 50b adds the e2e job that exercises the full path.
@@ -262,8 +262,8 @@ If `axum-server` or the equivalent rustls-on-axum harness isn't already a dev-de
 
 ## Acceptance criteria
 
-1. `cargo build -p crabka-security -p crabka-broker` succeeds.
-2. `cargo test -p crabka-security -p crabka-broker` passes.
+1. `cargo build -p krabka-security -p krabka-broker` succeeds.
+2. `cargo test -p krabka-security -p krabka-broker` passes.
 3. `cargo fmt --check` and `cargo clippy --workspace --all-targets -- -D warnings` pass.
 4. New unit tests in `crates/security` and `crates/broker/src/file_config.rs` all pass.
 5. New HTTPS integration tests in `crates/broker/src/oauth_jwks.rs` pass.

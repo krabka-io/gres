@@ -8,29 +8,29 @@ configuration while preserving existing behavior.
 
 ## Configuration boundary
 
-Add one `RebalancerRuntimePolicy` in `crabka-rebalancer` and flatten matching
+Add one `RebalancerRuntimePolicy` in `krabka-rebalancer` and flatten matching
 options into the existing binary CLI. Every option has a
-`CRABKA_REBALANCER_*` environment variable and a matching Helm value because
+`KRABKA_REBALANCER_*` environment variable and a matching Helm value because
 the rebalancer is deployed by its standalone chart, not by a workload CRD.
 
-| Setting | Default |
-|---|---:|
-| recovery load poll interval | `100ms` |
-| executor shutdown drain timeout | `10s` |
-| ingester shutdown join timeout | `5s` |
-| scraper HTTP timeout | `5s` |
-| cancellation drain timeout | `5s` |
-| cancellation poll interval | `25ms` |
-| detector snapshot-history capacity | `10` |
-| state-topic creation timeout | `10s` |
-| state-topic loader poll interval | `100ms` |
-| quiet polls before declaring state loaded | `5` |
-| state-topic fetch maximum | `1MiB` |
-| state produce retry attempts | `50` |
-| state produce retry backoff | `200ms` |
-| state produce timeout | `10s` |
-| state-topic minimum cleanable dirty ratio | `1%` |
-| state-topic segment interval | `1m` |
+| Setting                                   | Default |
+| ----------------------------------------- | ------: |
+| recovery load poll interval               | `100ms` |
+| executor shutdown drain timeout           |   `10s` |
+| ingester shutdown join timeout            |    `5s` |
+| scraper HTTP timeout                      |    `5s` |
+| cancellation drain timeout                |    `5s` |
+| cancellation poll interval                |  `25ms` |
+| detector snapshot-history capacity        |    `10` |
+| state-topic creation timeout              |   `10s` |
+| state-topic loader poll interval          | `100ms` |
+| quiet polls before declaring state loaded |     `5` |
+| state-topic fetch maximum                 |  `1MiB` |
+| state produce retry attempts              |    `50` |
+| state produce retry backoff               | `200ms` |
+| state produce timeout                     |   `10s` |
+| state-topic minimum cleanable dirty ratio |    `1%` |
+| state-topic segment interval              |    `1m` |
 
 Times, byte limits, and ratios remain dimensioned UOM values. Positive counts
 use a `refined_type`-validated newtype. Validation requires the cancellation

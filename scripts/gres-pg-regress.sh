@@ -21,7 +21,7 @@ PG_REGRESS_BIN=""
 PSQL_BIN=""
 PG_CTL_BIN=""
 PG_BINDIR=""
-GRES_BIN="${GRES_PG_REGRESS_BIN:-${ROOT_DIR}/target/debug/crabka-gres}"
+GRES_BIN="${GRES_PG_REGRESS_BIN:-${ROOT_DIR}/target/debug/krabka-gres}"
 GRES_HOST="127.0.0.1"
 GRES_PORT=""
 GRES_USER="${GRES_PG_REGRESS_USER:-crab}"
@@ -64,7 +64,7 @@ Options:
 Environment:
   GRES_PG_REGRESS_ARTIFACT_DIR  New directory for retained run artifacts.
   GRES_PG_REGRESS_CACHE_DIR     PostgreSQL archive/build cache under target/ by default.
-  GRES_PG_REGRESS_BIN           Existing crabka-gres binary; otherwise cargo builds it.
+  GRES_PG_REGRESS_BIN           Existing krabka-gres binary; otherwise cargo builds it.
   GRES_PG_REGRESS_PORT          Gres listen port; otherwise an unused port is selected.
   GRES_PG_REGRESS_TIMEOUT       Per-schedule timeout (default: 3600s).
   GRES_PG_REGRESS_LOCK          Machine-wide run lock (default: /tmp/gres-pg-regress.lock).
@@ -100,8 +100,8 @@ fetch_source() {
         mv "$download" "$ARCHIVE"
     fi
 
-    if [[ -f "${SOURCE_DIR}/.crabka-archive-sha256" ]] &&
-        [[ "$(<"${SOURCE_DIR}/.crabka-archive-sha256")" == "$POSTGRES_SHA256" ]]; then
+    if [[ -f "${SOURCE_DIR}/.krabka-archive-sha256" ]] &&
+        [[ "$(<"${SOURCE_DIR}/.krabka-archive-sha256")" == "$POSTGRES_SHA256" ]]; then
         verify_regress_inputs
         return
     fi
@@ -113,19 +113,19 @@ fetch_source() {
     local extracted="${CACHE_DIR}/source.extract.$$"
     mkdir "$extracted"
     tar --extract --bzip2 --file "$ARCHIVE" --directory "$extracted" --strip-components=1
-    printf '%s\n' "$POSTGRES_SHA256" >"${extracted}/.crabka-archive-sha256"
+    printf '%s\n' "$POSTGRES_SHA256" >"${extracted}/.krabka-archive-sha256"
     (
         cd "${extracted}/src/test/regress"
         { find data expected sql -type f -print0; printf '%s\0' parallel_schedule resultmap; } |
             sort -z | xargs -0 sha256sum
-    ) >"${extracted}/.crabka-regress-inputs.sha256"
+    ) >"${extracted}/.krabka-regress-inputs.sha256"
     chmod -R a-w "$extracted"
     mv "$extracted" "$SOURCE_DIR"
     verify_regress_inputs
 }
 
 verify_regress_inputs() {
-    local manifest="${SOURCE_DIR}/.crabka-regress-inputs.sha256"
+    local manifest="${SOURCE_DIR}/.krabka-regress-inputs.sha256"
     [[ -f "$manifest" ]] || {
         echo "error: regression input manifest is missing: ${manifest}" >&2
         return 1
@@ -260,9 +260,9 @@ start_gres() {
     GRES_PORT="${GRES_PG_REGRESS_PORT:-$(choose_port)}"
     command=(
         env
-        "CRABKA_BACKEND_PROCESS_TOKEN=${GRES_PG_REGRESS_PROCESS_TOKEN:-1}"
-        "CRABKA_RANDOM_SEED=${GRES_PG_REGRESS_RANDOM_SEED:-1}"
-        "CRABKA_PG_REGRESS_LIBRARY=${REGRESS_BUILD_DIR}/regress.so"
+        "KRABKA_BACKEND_PROCESS_TOKEN=${GRES_PG_REGRESS_PROCESS_TOKEN:-1}"
+        "KRABKA_RANDOM_SEED=${GRES_PG_REGRESS_RANDOM_SEED:-1}"
+        "KRABKA_PG_REGRESS_LIBRARY=${REGRESS_BUILD_DIR}/regress.so"
     )
     if [[ -n "${GRES_PG_REGRESS_TOKIO_WORKERS:-}" ]]; then
         command+=("TOKIO_WORKER_THREADS=${GRES_PG_REGRESS_TOKIO_WORKERS}")
@@ -498,7 +498,7 @@ main() {
         require_commands python3
         if [[ -z "${GRES_PG_REGRESS_BIN:-}" ]]; then
             require_commands cargo
-            cargo build --locked -p crabka-gres --bin crabka-gres \
+            cargo build --locked -p krabka-gres --bin krabka-gres \
                 >"${artifact_root}/gres-build.log" 2>&1
         fi
         [[ -x "$GRES_BIN" ]] || {

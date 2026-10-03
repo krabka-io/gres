@@ -16,11 +16,11 @@
 ## Global Constraints
 
 - Preserve the exact default of 1,048,576 bytes.
-- CLI `--mutation-json-body-limit-bytes` overrides `CRABKA_ADMIN_UI_MUTATION_JSON_BODY_LIMIT_BYTES`.
+- CLI `--mutation-json-body-limit-bytes` overrides `KRABKA_ADMIN_UI_MUTATION_JSON_BODY_LIMIT_BYTES`.
 - Reject zero, malformed, negative, and platform-overflowing inputs before listener or broker I/O.
 - Keep authentication before body buffering and JSON decoding.
 - Preserve HTTP 413 with `request body too large` for authenticated oversized requests.
-- Add no CRD or operator field because no checked-in Kubernetes owner deploys `crabka-admin-ui`.
+- Add no CRD or operator field because no checked-in Kubernetes owner deploys `krabka-admin-ui`.
 - Do not migrate unrelated existing admin UI environment settings.
 - Use `refined_type::rule::GreaterUsize<0>` for numeric validation.
 - Any crate in the repository may add the existing workspace-pinned
@@ -36,6 +36,7 @@
 ### Task 1: Typed runtime input and shared mutation limit
 
 **Files:**
+
 - Modify: `crates/admin-ui/Cargo.toml:27-45`
 - Modify: `crates/admin-ui/src/config.rs:3-120`
 - Modify: `crates/admin-ui/src/main.rs:1-11`
@@ -44,6 +45,7 @@
 - Test: `crates/admin-ui/tests/smoke.rs:367-386`
 
 **Interfaces:**
+
 - Produces: `DEFAULT_MUTATION_JSON_BODY_LIMIT_BYTES: usize`
 - Produces: `MutationJsonBodyLimitBytes::new(usize) -> Result<Self, String>`
 - Produces: `MutationJsonBodyLimitBytes::into_value(self) -> usize`
@@ -58,7 +60,7 @@ configuration types, then add tests equivalent to:
 
 ```rust
 use clap::Parser;
-use crabka_admin_ui::config::{
+use krabka_admin_ui::config::{
     AdminUiConfig, AdminUiRuntimeArgs, BrokerSecurityConfig, ConfigError,
     DEFAULT_MUTATION_JSON_BODY_LIMIT_BYTES, MutationJsonBodyLimitBytes,
 };
@@ -83,7 +85,7 @@ fn mutation_json_body_limit_default_and_boundaries_are_typed() {
     for invalid in ["0", "not-a-number", "-1", overflowing.as_str()] {
         assert!(
             AdminUiRuntimeArgs::try_parse_from([
-                "crabka-admin-ui",
+                "krabka-admin-ui",
                 "--mutation-json-body-limit-bytes",
                 invalid,
             ])
@@ -99,8 +101,8 @@ fn mutation_json_body_limit_environment_and_cli_precedence() {
         .arg("--exact")
         .arg("mutation_json_body_limit_precedence_child")
         .arg("--nocapture")
-        .env("CRABKA_ADMIN_UI_BODY_LIMIT_CHILD", "1")
-        .env("CRABKA_ADMIN_UI_MUTATION_JSON_BODY_LIMIT_BYTES", "32")
+        .env("KRABKA_ADMIN_UI_BODY_LIMIT_CHILD", "1")
+        .env("KRABKA_ADMIN_UI_MUTATION_JSON_BODY_LIMIT_BYTES", "32")
         .output()
         .expect("child test process runs");
 
@@ -114,16 +116,16 @@ fn mutation_json_body_limit_environment_and_cli_precedence() {
 
 #[test]
 fn mutation_json_body_limit_precedence_child() {
-    if std::env::var_os("CRABKA_ADMIN_UI_BODY_LIMIT_CHILD").is_none() {
+    if std::env::var_os("KRABKA_ADMIN_UI_BODY_LIMIT_CHILD").is_none() {
         return;
     }
 
-    let from_env = AdminUiRuntimeArgs::try_parse_from(["crabka-admin-ui"])
+    let from_env = AdminUiRuntimeArgs::try_parse_from(["krabka-admin-ui"])
         .expect("environment value is valid");
     assert_eq!(from_env.mutation_json_body_limit_bytes.into_value(), 32);
 
     let from_cli = AdminUiRuntimeArgs::try_parse_from([
-        "crabka-admin-ui",
+        "krabka-admin-ui",
         "--mutation-json-body-limit-bytes",
         "64",
     ])
@@ -186,8 +188,8 @@ Add `MutationJsonBodyLimitBytes` to the test's existing config imports.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-admin-ui --test config mutation_json_body_limit --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-admin-ui --test smoke authenticated_mutation_routes_share_the_configured_body_limit --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-admin-ui --test config mutation_json_body_limit --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-admin-ui --test smoke authenticated_mutation_routes_share_the_configured_body_limit --locked
 ```
 
 Expected: compilation fails because `AdminUiRuntimeArgs`,
@@ -249,11 +251,11 @@ impl FromStr for MutationJsonBodyLimitBytes {
 }
 
 #[derive(Debug, Clone, Parser)]
-#[command(name = "crabka-admin-ui")]
+#[command(name = "krabka-admin-ui")]
 pub struct AdminUiRuntimeArgs {
     #[arg(
         long,
-        env = "CRABKA_ADMIN_UI_MUTATION_JSON_BODY_LIMIT_BYTES",
+        env = "KRABKA_ADMIN_UI_MUTATION_JSON_BODY_LIMIT_BYTES",
         default_value_t = MutationJsonBodyLimitBytes::default()
     )]
     pub mutation_json_body_limit_bytes: MutationJsonBodyLimitBytes,
@@ -282,7 +284,7 @@ In `crates/admin-ui/src/main.rs`, import `clap::Parser`, parse
 use anyhow::Context;
 use clap::Parser;
 
-use crabka_admin_ui::config::{AdminUiConfig, AdminUiRuntimeArgs};
+use krabka_admin_ui::config::{AdminUiConfig, AdminUiRuntimeArgs};
 
 let runtime_args = AdminUiRuntimeArgs::parse();
 let mut cfg = AdminUiConfig::from_env().context("load admin UI config")?;
@@ -308,9 +310,9 @@ let body = to_bytes(
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-admin-ui --test config mutation_json_body_limit --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-admin-ui --test smoke authenticated_mutation_routes_share_the_configured_body_limit --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-admin-ui --test smoke post_mutation_routes_authenticate_before_decoding_request_body --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-admin-ui --test config mutation_json_body_limit --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-admin-ui --test smoke authenticated_mutation_routes_share_the_configured_body_limit --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-admin-ui --test smoke post_mutation_routes_authenticate_before_decoding_request_body --locked
 ```
 
 Expected: all selected tests pass; the shared-route test reports eleven HTTP
@@ -321,9 +323,9 @@ Expected: all selected tests pass; the shared-route test reports eleven HTTP
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-admin-ui --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-admin-ui --all-targets --locked -- -D warnings
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo run -p crabka-admin-ui --locked -- --help
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-admin-ui --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-admin-ui --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo run -p krabka-admin-ui --locked -- --help
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 git diff --check
 git diff -- Cargo.lock
@@ -332,7 +334,7 @@ git diff -- Cargo.lock
 Expected: tests and strict Clippy pass; help lists
 `--mutation-json-body-limit-bytes` exactly once; formatting and diff checks
 pass; the lockfile diff contains only `refined_type` in
-`crabka-admin-ui`'s dependency list.
+`krabka-admin-ui`'s dependency list.
 
 - [ ] **Step 8: Commit the implementation**
 
@@ -346,9 +348,11 @@ git commit -m "feat(admin-ui): expose mutation body limit"
 ### Task 2: Audit evidence and next owner
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md:2894-end`
 
 **Interfaces:**
+
 - Consumes: the committed Task 1 value flow and verification output
 - Produces: exact repository scanner evidence and the next unresolved admin UI owner
 
@@ -359,7 +363,7 @@ Run:
 ```bash
 tools/audit-runtime-values.sh
 tools/audit-runtime-values.sh | rg '^crates/admin-ui/'
-rg -n "mutation_json_body_limit_bytes|MutationJsonBodyLimitBytes|DEFAULT_MUTATION_JSON_BODY_LIMIT_BYTES|mutation-json-body-limit-bytes|CRABKA_ADMIN_UI_MUTATION_JSON_BODY_LIMIT_BYTES" crates/admin-ui docs/configuration-audit.md
+rg -n "mutation_json_body_limit_bytes|MutationJsonBodyLimitBytes|DEFAULT_MUTATION_JSON_BODY_LIMIT_BYTES|mutation-json-body-limit-bytes|KRABKA_ADMIN_UI_MUTATION_JSON_BODY_LIMIT_BYTES" crates/admin-ui docs/configuration-audit.md
 ```
 
 Record the exact total scanner line/file counts and focused line counts. The
@@ -397,8 +401,8 @@ Append `## Admin UI Mutation JSON Body Limit` to
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-admin-ui --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-admin-ui --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-admin-ui --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-admin-ui --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 git diff --check
 git diff -- Cargo.lock

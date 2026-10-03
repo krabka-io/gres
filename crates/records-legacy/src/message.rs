@@ -14,7 +14,7 @@
 //! inside the message except the CRC field itself.
 
 use bytes::{Buf, BufMut, Bytes};
-use crabka_compression::CompressionType;
+use krabka_compression::CompressionType;
 
 use crate::error::LegacyRecordsError;
 

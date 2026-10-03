@@ -16,10 +16,10 @@
 ## Global Constraints
 
 - Preserve the exact 28,800-second default.
-- `--session-ttl-seconds` overrides `CRABKA_ADMIN_UI_SESSION_TTL_SECONDS`.
+- `--session-ttl-seconds` overrides `KRABKA_ADMIN_UI_SESSION_TTL_SECONDS`.
 - Reject zero, malformed, negative, and platform-unrepresentable values before listener or broker I/O.
 - Keep `SessionStore`'s `Duration` API and its zero/oversized defensive behavior unchanged.
-- Add no CRD or operator field because no checked-in Kubernetes owner deploys `crabka-admin-ui`.
+- Add no CRD or operator field because no checked-in Kubernetes owner deploys `krabka-admin-ui`.
 - Do not migrate unrelated existing admin UI settings.
 - Any crate in the repository may add the existing workspace-pinned `refined_type` dependency when it owns a validated newtype.
 - This slice adds no dependency and must not change `Cargo.lock`.
@@ -40,6 +40,7 @@
 ### Task 1: Expose the validated session TTL
 
 **Files:**
+
 - Modify: `crates/admin-ui/src/config.rs`
 - Modify: `crates/admin-ui/src/main.rs`
 - Modify: `crates/admin-ui/src/server.rs`
@@ -47,6 +48,7 @@
 - Modify: `crates/admin-ui/tests/server_fns.rs`
 
 **Interfaces:**
+
 - Produces: `pub const DEFAULT_SESSION_TTL_SECONDS: u64`
 - Produces: `pub struct SessionTtlSeconds(u64)`
 - Produces: `SessionTtlSeconds::new(u64) -> Result<SessionTtlSeconds, String>`
@@ -63,7 +65,7 @@ Extend the imports in `crates/admin-ui/tests/config.rs`:
 ```rust
 use std::{net::SocketAddr, path::PathBuf, process::Command, time::Duration};
 
-use crabka_admin_ui::config::{
+use krabka_admin_ui::config::{
     AdminUiConfig, AdminUiRuntimeArgs, BrokerSecurityConfig, ConfigError,
     DEFAULT_MUTATION_JSON_BODY_LIMIT_BYTES, MutationJsonBodyLimitBytes, SessionTtlSeconds,
 };
@@ -98,7 +100,7 @@ fn session_ttl_rejects_invalid_values() {
     for invalid in ["0", "not-a-number", "-1", unrepresentable.as_str()] {
         assert!(
             AdminUiRuntimeArgs::try_parse_from([
-                "crabka-admin-ui",
+                "krabka-admin-ui",
                 "--session-ttl-seconds",
                 invalid,
             ])
@@ -114,8 +116,8 @@ fn session_ttl_environment_and_cli_precedence() {
         .arg("--exact")
         .arg("session_ttl_precedence_child")
         .arg("--nocapture")
-        .env("CRABKA_ADMIN_UI_SESSION_TTL_CHILD", "1")
-        .env("CRABKA_ADMIN_UI_SESSION_TTL_SECONDS", "32")
+        .env("KRABKA_ADMIN_UI_SESSION_TTL_CHILD", "1")
+        .env("KRABKA_ADMIN_UI_SESSION_TTL_SECONDS", "32")
         .output()
         .expect("child test process runs");
 
@@ -129,16 +131,16 @@ fn session_ttl_environment_and_cli_precedence() {
 
 #[test]
 fn session_ttl_precedence_child() {
-    if std::env::var_os("CRABKA_ADMIN_UI_SESSION_TTL_CHILD").is_none() {
+    if std::env::var_os("KRABKA_ADMIN_UI_SESSION_TTL_CHILD").is_none() {
         return;
     }
 
-    let from_env = AdminUiRuntimeArgs::try_parse_from(["crabka-admin-ui"])
+    let from_env = AdminUiRuntimeArgs::try_parse_from(["krabka-admin-ui"])
         .expect("environment value is valid");
     assert_eq!(from_env.session_ttl.duration(), Duration::from_secs(32));
 
     let from_cli = AdminUiRuntimeArgs::try_parse_from([
-        "crabka-admin-ui",
+        "krabka-admin-ui",
         "--session-ttl-seconds",
         "64",
     ])
@@ -164,7 +166,7 @@ session_ttl: SessionTtlSeconds::new(37).expect("test TTL is valid"),
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-admin-ui --test config session_ttl --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-admin-ui --test config session_ttl --locked
 ```
 
 Expected: compilation fails because `SessionTtlSeconds`,
@@ -259,7 +261,7 @@ Add this field to `AdminUiRuntimeArgs`:
 /// Server-side lifetime for an authenticated session, in seconds.
 #[arg(
     long = "session-ttl-seconds",
-    env = "CRABKA_ADMIN_UI_SESSION_TTL_SECONDS",
+    env = "KRABKA_ADMIN_UI_SESSION_TTL_SECONDS",
     default_value_t = SessionTtlSeconds::default()
 )]
 pub session_ttl: SessionTtlSeconds,
@@ -317,9 +319,9 @@ Do not change `SessionStore`, cookie handling, or session-expiry logic.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-admin-ui --test config session_ttl --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-admin-ui --test server_fns app_state_carries_config_and_sessions --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-admin-ui --test session --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-admin-ui --test config session_ttl --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-admin-ui --test server_fns app_state_carries_config_and_sessions --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-admin-ui --test session --locked
 ```
 
 Expected: all focused tests pass, including the unchanged zero-duration
@@ -330,10 +332,10 @@ immediate-expiry and oversized-duration no-panic tests.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-admin-ui --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-admin-ui --all-targets --locked -- -D warnings
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo run -p crabka-admin-ui --locked -- --help
-target/debug/crabka-admin-ui --help | rg -c -- '--session-ttl-seconds'
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-admin-ui --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-admin-ui --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo run -p krabka-admin-ui --locked -- --help
+target/debug/krabka-admin-ui --help | rg -c -- '--session-ttl-seconds'
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 git diff --check
 git diff -- Cargo.lock
@@ -371,9 +373,11 @@ git commit -m "feat(admin-ui): expose session TTL"
 ### Task 2: Close the audit slice
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: the implemented `SessionTtlSeconds` configuration flow.
 - Produces: exact audit evidence and the next unresolved admin UI owner.
 
@@ -384,7 +388,7 @@ Run:
 ```bash
 tools/audit-runtime-values.sh
 tools/audit-runtime-values.sh | rg '^crates/admin-ui/'
-rg -n "session_ttl|SessionTtlSeconds|DEFAULT_SESSION_TTL_SECONDS|session-ttl-seconds|CRABKA_ADMIN_UI_SESSION_TTL_SECONDS" crates/admin-ui docs/configuration-audit.md
+rg -n "session_ttl|SessionTtlSeconds|DEFAULT_SESSION_TTL_SECONDS|session-ttl-seconds|KRABKA_ADMIN_UI_SESSION_TTL_SECONDS" crates/admin-ui docs/configuration-audit.md
 rg -n "30_000|Duration::|_seconds|_millis" crates/admin-ui/src
 ```
 
@@ -418,8 +422,8 @@ Append `## Admin UI Session TTL` to `docs/configuration-audit.md` with:
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-admin-ui --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-admin-ui --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-admin-ui --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-admin-ui --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 git diff --check
 git diff -- Cargo.lock

@@ -5,7 +5,7 @@ timeouts, retry policy, sampling, chaos-proxy behavior, and report selection
 while preserving existing behavior.
 
 **Architecture:** Resolve one validated `LoadtestRuntimePolicy` from flattened
-CLI arguments backed by `CRABKA_GRES_LOADTEST_*` environment variables. Carry
+CLI arguments backed by `KRABKA_GRES_LOADTEST_*` environment variables. Carry
 it through internal and external runs to each runtime owner. Use UOM for every
 dimensioned value and `refined_type`-validated newtypes for positive counts.
 
@@ -27,7 +27,7 @@ dimensioned value and `refined_type`-validated newtypes for positive counts.
 ### Task 3: Workload and fault runtime
 
 - [x] Thread retry, connection, operation, startup, shutdown, reconnect,
-  histogram, pacing, read-slice, and seed-batch policy through the workload.
+      histogram, pacing, read-slice, and seed-batch policy through the workload.
 - [x] Thread the minimum flap period through fault validation/execution.
 - [x] Preserve scenario semantics and existing defaults.
 - [x] Run focused workload/fault tests and strict Clippy; commit.

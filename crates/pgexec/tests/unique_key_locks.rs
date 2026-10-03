@@ -17,9 +17,9 @@
 use std::{sync::Arc, time::Duration};
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgkv::{Kv, MemKv};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgkv::{Kv, MemKv};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 async fn run(s: &mut SqlSession, sql: &str) -> Vec<QueryResult> {
     s.simple_query(sql).await.expect("ok")

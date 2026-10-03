@@ -39,7 +39,7 @@ impl Default for SearchPath {
         Self {
             entries: vec![
                 USER_ENTRY.to_string(),
-                crabka_pgcatalog::PUBLIC_SCHEMA.to_string(),
+                krabka_pgcatalog::PUBLIC_SCHEMA.to_string(),
             ],
         }
     }
@@ -105,7 +105,7 @@ impl SearchPath {
         for entry in &self.entries {
             let name = match entry.as_str() {
                 USER_ENTRY => user,
-                crabka_pgcatalog::PG_TEMP_ALIAS => temp,
+                krabka_pgcatalog::PG_TEMP_ALIAS => temp,
                 other => other,
             };
             if name.is_empty() || out.iter().any(|seen| seen == name) {
@@ -143,7 +143,7 @@ impl SearchPath {
     pub fn names_temp_schema(&self, temp: &str) -> bool {
         self.entries
             .iter()
-            .any(|entry| entry == crabka_pgcatalog::PG_TEMP_ALIAS || entry == temp)
+            .any(|entry| entry == krabka_pgcatalog::PG_TEMP_ALIAS || entry == temp)
     }
 }
 

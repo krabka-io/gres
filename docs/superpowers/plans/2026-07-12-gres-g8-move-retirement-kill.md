@@ -6,7 +6,7 @@
 
 **Architecture:** Extend the existing topology process fixture with retirement kill points and exact predicates over the operation journal, tenant sidecar, Kafka metadata, and durable retire receipts. A test-only `AdminClientLike` wrapper delegates to real Kafka, counts and constrains deletion, and injects a one-shot post-delete error so the production retirement helper exposes the ambiguous AfterDelete window without production fault hooks.
 
-**Tech Stack:** Rust, Tokio, `crabka_client_admin::AdminClientLike`, real Kafka process harness, JSON evidence, Bash/Python CI validation.
+**Tech Stack:** Rust, Tokio, `krabka_client_admin::AdminClientLike`, real Kafka process harness, JSON evidence, Bash/Python CI validation.
 
 ## Global Constraints
 
@@ -22,9 +22,11 @@
 ### Task 1: Exact Retirement Predicates
 
 **Files:**
+
 - Modify: `crates/gres/tests/topology_process_nemesis.rs`
 
 **Interfaces:**
+
 - Consumes: `SplitOperationRecord`, `TenantRecord`, `RangeRetirementPhase`, and Kafka topic presence.
 - Produces: four retirement `SourceKillPoint` variants and an exact predicate over journal, tenant, and topic state.
 
@@ -35,7 +37,7 @@ Add table-driven tests for the exact required state and near-misses: wrong phase
 - [ ] **Step 2: Run tests and verify RED**
 
 ```bash
-cargo test -p crabka-gres --test topology_process_nemesis retirement_kill_predicate -- --nocapture
+cargo test -p krabka-gres --test topology_process_nemesis retirement_kill_predicate -- --nocapture
 ```
 
 Expected: compile failure because the retirement variants and predicate input are absent.
@@ -58,9 +60,11 @@ git commit -m "test(gres): define move retirement kill predicates"
 ### Task 2: Counting Real-Admin Ambiguity Seam
 
 **Files:**
+
 - Modify: `crates/gres/tests/topology_process_nemesis.rs`
 
 **Interfaces:**
+
 - Consumes: `AdminClientLike`, exact predecessor topic, and shared delete-ledger state.
 - Produces: a counting wrapper with a one-shot real-delete-then-error mode.
 
@@ -71,7 +75,7 @@ Use a deterministic fake delegate to prove the exact topic is deleted once, unre
 - [ ] **Step 2: Run tests and verify RED**
 
 ```bash
-cargo test -p crabka-gres --test topology_process_nemesis counting_retirement_admin -- --nocapture
+cargo test -p krabka-gres --test topology_process_nemesis counting_retirement_admin -- --nocapture
 ```
 
 Expected: compile failure because the wrapper and ledger do not exist.
@@ -94,17 +98,19 @@ git commit -m "test(gres): add retirement delete ambiguity seam"
 ### Task 3: Real-Process Driver and Evidence
 
 **Files:**
+
 - Modify: `crates/gres/tests/topology_process_nemesis.rs`
 - Create: `docs/superpowers/evidence/2026-07-12-gres-g8-retirement-kill.md`
 
 **Interfaces:**
+
 - Consumes: exact predicates and counting wrapper.
 - Produces: four executable retirement cases and complete JSON evidence.
 
 - [ ] **Step 1: Add BeforeDelete with an impossible gap bound and observe RED**
 
 ```bash
-CRABKA_G8_PROCESS_NEMESIS=1 CRABKA_G8_RETIREMENT_KILL_POINT=retiring_before_delete CRABKA_G8_KILL_EVIDENCE="$PWD/target/g8-topology-process-nemesis/retirement-before-delete.json" timeout 180s cargo test --locked -p crabka-gres --test topology_process_nemesis -- --exact real_process_move_source_phase_sigkill_with_exact_ack_ledger --nocapture
+KRABKA_G8_PROCESS_NEMESIS=1 KRABKA_G8_RETIREMENT_KILL_POINT=retiring_before_delete KRABKA_G8_KILL_EVIDENCE="$PWD/target/g8-topology-process-nemesis/retirement-before-delete.json" timeout 180s cargo test --locked -p krabka-gres --test topology_process_nemesis -- --exact real_process_move_source_phase_sigkill_with_exact_ack_ledger --nocapture
 ```
 
 Expected: the case reaches and recovers from the window, then fails only at the intentionally impossible bound.
@@ -135,10 +141,12 @@ git commit -m "test(gres): cover move retirement phase recovery"
 ### Task 4: CI Validator and Review
 
 **Files:**
+
 - Create: `scripts/tests/gres-topology-process-retirement-nemesis-ci.sh`
 - Modify: `docs/superpowers/evidence/2026-07-12-gres-g8-retirement-kill.md`
 
 **Interfaces:**
+
 - Consumes: retirement evidence JSON and measured bounds.
 - Produces: one CI entry point running four isolated processes and exact validation.
 

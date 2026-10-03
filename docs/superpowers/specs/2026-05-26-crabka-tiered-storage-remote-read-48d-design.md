@@ -10,8 +10,9 @@ of the KIP-405 umbrella
 Serve `Fetch` requests below `local_log_start_offset()` from the remote
 tier, using `RemoteLogMetadataManager::remote_log_segment_metadata` to
 locate the right finished segment and `RemoteStorageManager::fetch_index`
-+ `fetch_log_segment` to position and read. Surface remote earliest
-offsets on `ListOffsets` (EARLIEST + by-timestamp).
+
+- `fetch_log_segment` to position and read. Surface remote earliest
+  offsets on `ListOffsets` (EARLIEST + by-timestamp).
 
 After 48c, sealed segments copied to the remote tier are deleted from
 local disk, but a consumer fetching below `local_log_start_offset()`
@@ -105,7 +106,7 @@ These mirror `crates/log/src/index.rs::{OffsetIndex,TimeIndex}::lookup`
 byte-for-byte (the on-the-wire and on-disk formats are identical — the
 copy path in 48b just streams the local index files verbatim into the
 RSM). Living in `remote_reader.rs` keeps the broker from depending on
-`crabka_log`'s private index module while preserving format parity.
+`krabka_log`'s private index module while preserving format parity.
 
 ## Fetch handler integration
 
@@ -122,7 +123,7 @@ The new behavior:
    - Drop the log lock (a remote fetch can be slow; the handler must
      not hold the per-partition mutex across blocking I/O).
    - Call `remote_reader.fetch_batch(&tp, leader_epoch, fetch_offset,
-     max_bytes)`. `leader_epoch` is taken from the partition's
+max_bytes)`. `leader_epoch` is taken from the partition's
      `current_leader_epoch` atomic (the fetch already pins this for
      KIP-101). If the consumer supplied
      `current_leader_epoch` ≥ 0 (KIP-320) it's been validated above to
@@ -153,7 +154,7 @@ returns the batch unfiltered. This is safe (sealed remote segments by
 definition contain only committed or fully-aborted transactions —
 in-flight transactions live on the active local segment which is
 never tiered), but a strict read-committed consumer could see a batch
-from a transaction that was aborted *before* the segment was sealed.
+from a transaction that was aborted _before_ the segment was sealed.
 The follow-up slice closes this gap.
 
 ## ListOffsets handler integration
@@ -245,15 +246,15 @@ remote path is skipped and the existing behavior is preserved.
 ### Fetch handler — broker integration tests (`crates/broker/tests/`)
 
 - `tests/remote_fetch.rs::fetch_below_local_log_start_serves_from_remote`
-   — single broker, single-partition tiered topic, append + roll +
-   wait for copy + advance local retention so old offsets are gone
-   locally; consumer fetch at offset 0 returns a record batch.
+  — single broker, single-partition tiered topic, append + roll +
+  wait for copy + advance local retention so old offsets are gone
+  locally; consumer fetch at offset 0 returns a record batch.
 - `tests/remote_fetch.rs::fetch_below_local_start_returns_oor_when_not_tiered`
-   — same shape but `remote.storage.enable=false`; consumer fetch at
-   offset 0 returns `OFFSET_OUT_OF_RANGE` (regression guard).
+  — same shape but `remote.storage.enable=false`; consumer fetch at
+  offset 0 returns `OFFSET_OUT_OF_RANGE` (regression guard).
 - `tests/remote_fetch.rs::list_offsets_earliest_returns_remote_floor`
-   — after retention deletes local copies, `EARLIEST` returns 0 (the
-   remote tier's earliest), not `local_log_start_offset`.
+  — after retention deletes local copies, `EARLIEST` returns 0 (the
+  remote tier's earliest), not `local_log_start_offset`.
 
 ### Existing tests
 
@@ -266,6 +267,6 @@ remote path is skipped and the existing behavior is preserved.
 
 - `cargo fmt --all --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test -p crabka-broker -p crabka-remote-storage`
+- `cargo test -p krabka-broker -p krabka-remote-storage`
 - `cargo build --workspace`
 - No CRD drift (no CRDs touched).

@@ -7,10 +7,12 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use assert2::{assert, check};
-use crabka_client_admin::{
+use http::Method;
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
+use krabka_client_admin::{
     AclEntry, AclOperation, PatternType, PermissionType, QuotaOp, ResourceType,
 };
-use crabka_operator::{
+use krabka_operator::{
     controller::user::reconcile,
     crd::{
         AclOp, AclPatternType, AclPermission, AclResource, AclResourceKind, AclRule,
@@ -18,8 +20,6 @@ use crabka_operator::{
         KafkaUserSimpleAuthorization as SimpleAuthorization, KafkaUserSpec,
     },
 };
-use http::Method;
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 use serde_json::json;
 
 #[path = "shared/mod.rs"]

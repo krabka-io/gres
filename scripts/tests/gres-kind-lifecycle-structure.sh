@@ -14,10 +14,10 @@ required_patterns=(
     'sslmode=verify-full'
     'ResumeRequested'
     'wal_generation'
-    'CRABKA_GRES_COLDSTART_ITERATIONS:-10'
+    'KRABKA_GRES_COLDSTART_ITERATIONS:-10'
     'deadline_wait 360 "tenant lifecycle $expected"'
     'ghcr.io/pgdogdev/pgdog:0.1.47'
-    'kubectl logs -l app.kubernetes.io/name=crabka-pgdog,app.kubernetes.io/instance=fleet'
+    'kubectl logs -l app.kubernetes.io/name=krabka-pgdog,app.kubernetes.io/instance=fleet'
     'deployment\.kubernetes\.io/revision'
     'PgDog credential grace elapsed'
     'initial confirmed PgDog route'
@@ -50,8 +50,8 @@ test "$(grep -nF 'post-wake busy-session keeper exited' "$gate" | cut -d: -f1)" 
     -lt "$(grep -nF 'wait_lifecycle active' "$gate" | cut -d: -f1)"
 grep -Fq '.owns(deployments, watcher::Config::default())' "$controller"
 
-grep -Fq -- '-p crabka-gres -p crabka-gres-activator' packaging/melange/crabka.yaml
-test -f packaging/apko/crabka-gres.yaml
-test -f packaging/apko/crabka-gres-activator.yaml
+grep -Fq -- '-p krabka-gres -p krabka-gres-activator' packaging/melange/crabka.yaml
+test -f packaging/apko/krabka-gres.yaml
+test -f packaging/apko/krabka-gres-activator.yaml
 
 echo 'PASS: operator-backed Gres lifecycle gate is structurally wired'

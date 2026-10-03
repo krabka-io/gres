@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** `dev.crabka:crabka-sdk` — a Kotlin-core, Java-facade SDK implementing contract v1 (connect-kotlin + okhttp h2c transport, six modules, pinned stubs, `CompletableFuture`/`Iterator` surface) with a Gradle `installDist` conformance adapter, suite green in an `sdk-java` CI job reusing the existing JVM toolchain.
+**Goal:** `dev.crabka:krabka-sdk` — a Kotlin-core, Java-facade SDK implementing contract v1 (connect-kotlin + okhttp h2c transport, six modules, pinned stubs, `CompletableFuture`/`Iterator` surface) with a Gradle `installDist` conformance adapter, suite green in an `sdk-java` CI job reusing the existing JVM toolchain.
 
 **Architecture:** connect-kotlin generated clients under `sdks/java/gen`; a Kotlin `internal/` core; a Java-visible facade proven by **Java-written** tests; the umbrella harness/vectors unchanged.
 
@@ -84,7 +84,7 @@ git commit -m "feat(sdk-java): messaging module (publish, CloudEvents, subscribe
 ## Task 4: The conformance adapter + suite green
 
 - [ ] **Step 1:** `AdapterMain.kt` under the `application` plugin (`installDist` → `build/install/adapter/bin/adapter`): JSON-lines stdio loop → the SDK; `Hello{contract_major: 1, language: "java"}`; `Subscribe`/`NextMessage` bridged via the `MessageStream`; errors through the taxonomy→wire mapping.
-- [ ] **Step 2:** Run the real suite: `cargo run -p crabka-sdk-conformance --bin conformance -- --adapter sdks/java/build/install/adapter/bin/adapter …` → **all vectors PASS** (fix the SDK, never the vectors).
+- [ ] **Step 2:** Run the real suite: `cargo run -p krabka-sdk-conformance --bin conformance -- --adapter sdks/java/build/install/adapter/bin/adapter …` → **all vectors PASS** (fix the SDK, never the vectors).
 - [ ] **Step 3:** Commit.
 
 ```bash

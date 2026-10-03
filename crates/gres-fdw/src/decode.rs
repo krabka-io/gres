@@ -4,8 +4,8 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use crabka_schema_serde::{SchemaCache, SchemaSerdeError};
-use crabka_units::{Time, convert::TimeExt as _, fmt::Human as _, millis, secs};
+use krabka_schema_serde::{SchemaCache, SchemaSerdeError};
+use krabka_units::{Time, convert::TimeExt as _, fmt::Human as _, millis, secs};
 use prost_reflect::prost_types::FileDescriptorSet;
 
 use crate::error::KafkaFdwError;
@@ -61,7 +61,7 @@ async fn resolve_writer_schema(
     cache: &Arc<SchemaCache>,
     schema_id: u32,
     policy: FdwDecodePolicy,
-) -> Result<crabka_schema_serde::cache::WriterSchema, KafkaFdwError> {
+) -> Result<krabka_schema_serde::cache::WriterSchema, KafkaFdwError> {
     let deadline = tokio::time::Instant::now() + policy.schema_fetch_timeout.to_std();
     loop {
         match cache.writer_schema_with_references(schema_id) {
@@ -155,7 +155,7 @@ pub async fn decode_value_with_policy(
         Wire::Raw => Ok((DecodedValue::Raw(bytes.to_vec()), None)),
 
         Wire::Avro => {
-            let (schema_id, body) = crabka_schema_serde::wire::decode(bytes)
+            let (schema_id, body) = krabka_schema_serde::wire::decode(bytes)
                 .map_err(|e| KafkaFdwError::Other(format!("avro wire decode: {e}")))?;
 
             // Fetch (or await) the writer schema by id.
@@ -173,7 +173,7 @@ pub async fn decode_value_with_policy(
         }
 
         Wire::Json => {
-            let (_schema_id, body) = crabka_schema_serde::wire::decode(bytes)
+            let (_schema_id, body) = krabka_schema_serde::wire::decode(bytes)
                 .map_err(|e| KafkaFdwError::Other(format!("json wire decode: {e}")))?;
 
             let value: serde_json::Value = serde_json::from_slice(body)
@@ -186,7 +186,7 @@ pub async fn decode_value_with_policy(
             // Strip the Confluent protobuf envelope: magic byte + schema-id (4 BE
             // bytes) + message-index zigzag varint(s).
             let (schema_id, message_index, body) =
-                crabka_schema_serde::wire::decode_protobuf(bytes)
+                krabka_schema_serde::wire::decode_protobuf(bytes)
                     .map_err(|e| KafkaFdwError::Other(format!("protobuf wire decode: {e}")))?;
 
             // Fetch the schema text (a base64-encoded serialised FileDescriptorSet)
@@ -331,9 +331,9 @@ fn root_virtual_file_name<S: std::hash::BuildHasher>(
     let mut suffix = 0_u32;
     loop {
         let candidate = if suffix == 0 {
-            "__crabka_root__.proto".to_string()
+            "__krabka_root__.proto".to_string()
         } else {
-            format!("__crabka_root_{suffix}__.proto")
+            format!("__krabka_root_{suffix}__.proto")
         };
         if !references.contains_key(&candidate) {
             return candidate;

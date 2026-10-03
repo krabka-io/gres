@@ -1,6 +1,6 @@
 //! Crabka-private controller RPCs over Kafka TCP framing.
 //!
-//! These bodies are NOT part of `crabka-protocol`'s codegen. They are
+//! These bodies are NOT part of `krabka-protocol`'s codegen. They are
 //! controller-only and Crabka-specific, with hand-written `encode_v0` and
 //! `decode_v0` methods. The KIP-595 quorum RPCs (Fetch, Vote, Begin, End) ride
 //! the generated codecs instead. See [`crate::kraft::transport::wire`]. The two
@@ -10,7 +10,7 @@
 //! Api keys: `1003` `SubmitChange` (forward), `1004` `MetadataFetch` (observer).
 
 use bytes::{Buf, BufMut, Bytes};
-use crabka_protocol::ProtocolError;
+use krabka_protocol::ProtocolError;
 
 const I32_LEN: usize = 4;
 const SUBMIT_CHANGE_RESPONSE_FIXED_LEN: usize = 10;

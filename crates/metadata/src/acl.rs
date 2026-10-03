@@ -2,7 +2,7 @@
 //! with `MetadataRecord::V1AccessControlEntry` and
 //! `V1DeleteAccessControlEntry`. They mirror the shape that Kafka exposes on
 //! the `CreateAcls`, `DeleteAcls`, and `DescribeAcls` wire messages, but they
-//! stay pure data. The authorizer in `crabka-broker` evaluates them.
+//! stay pure data. The authorizer in `krabka-broker` evaluates them.
 
 use serde::{Deserialize, Serialize};
 

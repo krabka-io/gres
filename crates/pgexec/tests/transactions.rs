@@ -3,15 +3,15 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-use crabka_pgcatalog::RelationName;
-use crabka_pgexec::{
+use krabka_pgcatalog::RelationName;
+use krabka_pgexec::{
     CommitTimestamp, PrimaryTxnDecision, RowInterval, SqlEngine, TimestampTransactionId,
     TimestampTxnDecision, TimestampTxnDescriptor, TimestampTxnIdentity, TimestampWrite,
     timestamp_txn::ReadTimestamp,
 };
-use crabka_pgkv::{Kv, MemKv};
-use crabka_pgmvcc::{clog::XidStatus, xid::GLOBAL_XID_BASE};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session, TxStatus};
+use krabka_pgkv::{Kv, MemKv};
+use krabka_pgmvcc::{clog::XidStatus, xid::GLOBAL_XID_BASE};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session, TxStatus};
 
 struct InterleavingDescriptorCommitter {
     kv: Arc<dyn Kv>,
@@ -20,12 +20,12 @@ struct InterleavingDescriptorCommitter {
 }
 
 #[async_trait::async_trait]
-impl crabka_pgexec::Committer for InterleavingDescriptorCommitter {
-    async fn commit(&self, ops: Vec<crabka_pgkv::WriteOp>) -> Result<(), crabka_pgexec::ExecError> {
+impl krabka_pgexec::Committer for InterleavingDescriptorCommitter {
+    async fn commit(&self, ops: Vec<krabka_pgkv::WriteOp>) -> Result<(), krabka_pgexec::ExecError> {
         let is_acknowledgement = ops.iter().any(|op| {
             matches!(
                 op,
-                crabka_pgkv::WriteOp::ConditionalPut {
+                krabka_pgkv::WriteOp::ConditionalPut {
                     expected: Some(_),
                     ..
                 }
@@ -44,7 +44,7 @@ fn timestamp_write(table_id: u32, rowid: u64, value: i32) -> TimestampWrite {
         table_id,
         bucket: None,
         rowid,
-        row: vec![crabka_pgtypes::Datum::Int4(value)],
+        row: vec![krabka_pgtypes::Datum::Int4(value)],
         delete: false,
         global_index_intents: Vec::new(),
     }
@@ -53,8 +53,8 @@ fn timestamp_write(table_id: u32, rowid: u64, value: i32) -> TimestampWrite {
 fn timestamp_operation(
     range_id: u32,
     write: &TimestampWrite,
-) -> crabka_pgexec::TimestampTxnOperation {
-    crabka_pgexec::TimestampTxnOperation {
+) -> krabka_pgexec::TimestampTxnOperation {
+    krabka_pgexec::TimestampTxnOperation {
         range_id,
         table_id: write.table_id,
         bucket: write.bucket,
@@ -65,10 +65,10 @@ fn timestamp_operation(
 
 fn timestamp_visible_rows(
     engine: &SqlEngine,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     read_ts: ReadTimestamp,
-) -> Vec<Vec<crabka_pgtypes::Datum>> {
-    let snapshot = crabka_pgmvcc::visibility::Snapshot {
+) -> Vec<Vec<krabka_pgtypes::Datum>> {
+    let snapshot = krabka_pgmvcc::visibility::Snapshot {
         xmin: 1,
         xmax: u64::MAX,
         xip: Vec::new(),
@@ -92,7 +92,7 @@ fn timestamp_visible_rows(
 fn text(c: Option<&Cell>) -> Option<String> {
     c.map(|c| String::from_utf8(c.text.to_vec()).expect("utf8"))
 }
-async fn rows(s: &mut crabka_pgexec::SqlSession, sql: &str) -> Vec<Vec<Option<Cell>>> {
+async fn rows(s: &mut krabka_pgexec::SqlSession, sql: &str) -> Vec<Vec<Option<Cell>>> {
     match s.simple_query(sql).await.expect("q").remove(0) {
         QueryResult::Rows { rows, .. } => rows,
         other => panic!("expected Rows, got {other:?}"),
@@ -100,29 +100,29 @@ async fn rows(s: &mut crabka_pgexec::SqlSession, sql: &str) -> Vec<Vec<Option<Ce
 }
 
 fn only_tuple_xmin(kv: &dyn Kv, table_name: &str) -> u64 {
-    let table = crabka_pgcatalog::get_table(kv, &RelationName::public(table_name)).expect("table");
-    let prefix = crabka_pgkv::key::row_key(table.id, 1);
+    let table = krabka_pgcatalog::get_table(kv, &RelationName::public(table_name)).expect("table");
+    let prefix = krabka_pgkv::key::row_key(table.id, 1);
     let versions = kv.scan_prefix(&prefix).expect("scan versions");
     assert_eq!(versions.len(), 1, "expected exactly one tuple version");
-    let (xmin, _, _) = crabka_pgmvcc::version::decode_tuple(&versions[0].1).expect("tuple");
+    let (xmin, _, _) = krabka_pgmvcc::version::decode_tuple(&versions[0].1).expect("tuple");
     xmin
 }
 
-fn only_timestamp_version(kv: &dyn Kv, table_name: &str) -> crabka_pgmvcc::version::TsTupleVersion {
-    let table = crabka_pgcatalog::get_table(kv, &RelationName::public(table_name)).expect("table");
-    let prefix = crabka_pgkv::key::row_key(table.id, 1);
+fn only_timestamp_version(kv: &dyn Kv, table_name: &str) -> krabka_pgmvcc::version::TsTupleVersion {
+    let table = krabka_pgcatalog::get_table(kv, &RelationName::public(table_name)).expect("table");
+    let prefix = krabka_pgkv::key::row_key(table.id, 1);
     let versions = kv.scan_prefix(&prefix).expect("scan versions");
     assert_eq!(
         versions.len(),
         1,
         "expected exactly one timestamp tuple version"
     );
-    crabka_pgmvcc::version::decode_ts_tuple(&versions[0].1).expect("timestamp tuple")
+    krabka_pgmvcc::version::decode_ts_tuple(&versions[0].1).expect("timestamp tuple")
 }
 
 fn table_version_count(kv: &dyn Kv, table_name: &str) -> usize {
-    let table = crabka_pgcatalog::get_table(kv, &RelationName::public(table_name)).expect("table");
-    kv.scan_prefix(&crabka_pgkv::key::table_prefix(table.id))
+    let table = krabka_pgcatalog::get_table(kv, &RelationName::public(table_name)).expect("table");
+    kv.scan_prefix(&krabka_pgkv::key::table_prefix(table.id))
         .expect("scan table versions")
         .len()
 }
@@ -130,18 +130,18 @@ fn table_version_count(kv: &dyn Kv, table_name: &str) -> usize {
 fn table_timestamp_versions(
     kv: &dyn Kv,
     table_name: &str,
-) -> Vec<crabka_pgmvcc::version::TsTupleVersion> {
-    let table = crabka_pgcatalog::get_table(kv, &RelationName::public(table_name)).expect("table");
-    kv.scan_prefix(&crabka_pgkv::key::table_prefix(table.id))
+) -> Vec<krabka_pgmvcc::version::TsTupleVersion> {
+    let table = krabka_pgcatalog::get_table(kv, &RelationName::public(table_name)).expect("table");
+    kv.scan_prefix(&krabka_pgkv::key::table_prefix(table.id))
         .expect("scan table versions")
         .into_iter()
-        .map(|(_key, value)| crabka_pgmvcc::version::decode_ts_tuple(&value).expect("ts tuple"))
+        .map(|(_key, value)| krabka_pgmvcc::version::decode_ts_tuple(&value).expect("ts tuple"))
         .collect()
 }
 
 fn next_global_xid(kv: &dyn Kv) -> u64 {
     let Some(bytes) = kv
-        .get(&crabka_pgkv::key::meta_next_global_xid_key())
+        .get(&krabka_pgkv::key::meta_next_global_xid_key())
         .expect("next global")
     else {
         return GLOBAL_XID_BASE;
@@ -205,7 +205,7 @@ async fn sharded_autocommit_insert_uses_timestamp_metadata_not_global_xids() {
     assert_eq!(version.start_ts, 1);
     assert_eq!(
         version.state,
-        crabka_pgmvcc::version::TsVersionState::Committed { commit_ts: 2 },
+        krabka_pgmvcc::version::TsVersionState::Committed { commit_ts: 2 },
         "autocommit sharded write records a timestamp commit marker"
     );
     assert_eq!(
@@ -214,7 +214,7 @@ async fn sharded_autocommit_insert_uses_timestamp_metadata_not_global_xids() {
         "sharded timestamp writes do not allocate G-8 global xids"
     );
     assert_eq!(
-        crabka_pgmvcc::clog::get(kv.as_ref(), version.start_ts).expect("no local prepared"),
+        krabka_pgmvcc::clog::get(kv.as_ref(), version.start_ts).expect("no local prepared"),
         XidStatus::InProgress,
         "sharded timestamp writes do not create G-8 local clog metadata"
     );
@@ -238,27 +238,27 @@ async fn hash_sharded_sql_insert_uses_bucket_leading_timestamp_version_key() {
         .expect("insert");
 
     let table =
-        crabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("h")).expect("table");
+        krabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("h")).expect("table");
     let versions = kv
-        .scan_prefix(&crabka_pgkv::key::table_prefix(table.id))
+        .scan_prefix(&krabka_pgkv::key::table_prefix(table.id))
         .expect("scan physical table");
     assert_eq!(versions.len(), 1);
     assert!(matches!(
-        crabka_pgkv::key::classify_key(&versions[0].0),
-        crabka_pgkv::key::KeyClass::HashPrimaryVersion {
+        krabka_pgkv::key::classify_key(&versions[0].0),
+        krabka_pgkv::key::KeyClass::HashPrimaryVersion {
             table_id,
             bucket,
             rowid: 1,
             version: 1,
         } if table_id == table.id
-            && bucket == crabka_pgkv::key::hash_bucket(&42_i32.to_be_bytes(), 16)
+            && bucket == krabka_pgkv::key::hash_bucket(&42_i32.to_be_bytes(), 16)
                 .expect("valid bucket count")
     ));
     assert_eq!(
-        crabka_pgmvcc::version::decode_ts_tuple(&versions[0].1)
+        krabka_pgmvcc::version::decode_ts_tuple(&versions[0].1)
             .expect("timestamp tuple")
             .state,
-        crabka_pgmvcc::version::TsVersionState::Committed { commit_ts: 2 }
+        krabka_pgmvcc::version::TsVersionState::Committed { commit_ts: 2 }
     );
     assert_eq!(
         timestamp_visible_rows(&engine, &table, ReadTimestamp::MAX).len(),
@@ -282,9 +282,9 @@ async fn hash_sharded_update_moves_one_row_without_orphaning_old_bucket() {
         .simple_query("INSERT INTO hmove VALUES (42, 'before')")
         .await
         .expect("insert");
-    let old_bucket = crabka_pgkv::key::hash_bucket(&42_i32.to_be_bytes(), 16).expect("bucket");
+    let old_bucket = krabka_pgkv::key::hash_bucket(&42_i32.to_be_bytes(), 16).expect("bucket");
     let new_id = (43_i32..100)
-        .find(|id| crabka_pgkv::key::hash_bucket(&id.to_be_bytes(), 16) != Some(old_bucket))
+        .find(|id| krabka_pgkv::key::hash_bucket(&id.to_be_bytes(), 16) != Some(old_bucket))
         .expect("different bucket id");
 
     session
@@ -299,23 +299,23 @@ async fn hash_sharded_update_moves_one_row_without_orphaning_old_bucket() {
     assert_eq!(text(result[0][0].as_ref()), Some(new_id.to_string()));
     assert_eq!(text(result[0][1].as_ref()).as_deref(), Some("after"));
     let table =
-        crabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("hmove")).expect("table");
+        krabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("hmove")).expect("table");
     let keys = kv
-        .scan_prefix(&crabka_pgkv::key::table_prefix(table.id))
+        .scan_prefix(&krabka_pgkv::key::table_prefix(table.id))
         .expect("physical rows");
     assert!(keys.iter().all(|(key, _)| matches!(
-        crabka_pgkv::key::classify_key(key),
-        crabka_pgkv::key::KeyClass::HashPrimaryVersion { .. }
+        krabka_pgkv::key::classify_key(key),
+        krabka_pgkv::key::KeyClass::HashPrimaryVersion { .. }
     )));
     assert!(keys.iter().any(|(key, value)| {
         matches!(
-            crabka_pgkv::key::classify_key(key),
-            crabka_pgkv::key::KeyClass::HashPrimaryVersion { bucket, .. } if bucket == old_bucket
+            krabka_pgkv::key::classify_key(key),
+            krabka_pgkv::key::KeyClass::HashPrimaryVersion { bucket, .. } if bucket == old_bucket
         ) && matches!(
-            crabka_pgmvcc::version::decode_ts_tuple(value)
+            krabka_pgmvcc::version::decode_ts_tuple(value)
                 .expect("tuple")
                 .state,
-            crabka_pgmvcc::version::TsVersionState::Deleted { .. }
+            krabka_pgmvcc::version::TsVersionState::Deleted { .. }
         )
     }));
 
@@ -324,21 +324,21 @@ async fn hash_sharded_update_moves_one_row_without_orphaning_old_bucket() {
         .await
         .expect("delete moved row");
     assert!(rows(&mut session, "SELECT id FROM hmove").await.is_empty());
-    let new_bucket = crabka_pgkv::key::hash_bucket(&new_id.to_be_bytes(), 16).expect("bucket");
+    let new_bucket = krabka_pgkv::key::hash_bucket(&new_id.to_be_bytes(), 16).expect("bucket");
     assert!(
-        kv.scan_prefix(&crabka_pgkv::key::table_prefix(table.id))
+        kv.scan_prefix(&krabka_pgkv::key::table_prefix(table.id))
             .expect("new bucket versions")
             .iter()
             .any(|(key, value)| {
                 matches!(
-                    crabka_pgkv::key::classify_key(key),
-                    crabka_pgkv::key::KeyClass::HashPrimaryVersion { bucket, .. }
+                    krabka_pgkv::key::classify_key(key),
+                    krabka_pgkv::key::KeyClass::HashPrimaryVersion { bucket, .. }
                         if bucket == new_bucket
                 ) && matches!(
-                    crabka_pgmvcc::version::decode_ts_tuple(value)
+                    krabka_pgmvcc::version::decode_ts_tuple(value)
                         .expect("tuple")
                         .state,
-                    crabka_pgmvcc::version::TsVersionState::Deleted { .. }
+                    krabka_pgmvcc::version::TsVersionState::Deleted { .. }
                 )
             }),
         "DELETE must tombstone the update's physical successor, not assume its old rowid"
@@ -401,11 +401,11 @@ async fn committed_descriptor_recovery_resolves_put_delete_and_global_index_inte
         table_id: 99,
         bucket: None,
         rowid: 1,
-        row: vec![crabka_pgtypes::Datum::Int4(1)],
+        row: vec![krabka_pgtypes::Datum::Int4(1)],
         delete: false,
-        global_index_intents: vec![crabka_pgexec::timestamp_txn::GlobalIndexIntent {
+        global_index_intents: vec![krabka_pgexec::timestamp_txn::GlobalIndexIntent {
             index_id: 7,
-            indexed_values: vec![crabka_pgtypes::Datum::Int4(1)],
+            indexed_values: vec![krabka_pgtypes::Datum::Int4(1)],
             base_table_id: 99,
             base_rowid: 1,
             unique: false,
@@ -416,7 +416,7 @@ async fn committed_descriptor_recovery_resolves_put_delete_and_global_index_inte
         table_id: 99,
         bucket: None,
         rowid: 2,
-        row: vec![crabka_pgtypes::Datum::Int4(2)],
+        row: vec![krabka_pgtypes::Datum::Int4(2)],
         delete: true,
         global_index_intents: Vec::new(),
     };
@@ -431,7 +431,7 @@ async fn committed_descriptor_recovery_resolves_put_delete_and_global_index_inte
         .expect("prewrite");
     let operations = [put, delete]
         .iter()
-        .map(|write| crabka_pgexec::TimestampTxnOperation {
+        .map(|write| krabka_pgexec::TimestampTxnOperation {
             range_id: 1,
             table_id: write.table_id,
             bucket: write.bucket,
@@ -474,17 +474,17 @@ async fn committed_descriptor_recovery_resolves_put_delete_and_global_index_inte
         .await
         .expect("idempotent recovery replay without identity sidecars");
     assert_eq!(
-        crabka_pgexec::timestamp_txn::read_visible_ts_row(
+        krabka_pgexec::timestamp_txn::read_visible_ts_row(
             participant_kv.as_ref(),
             99,
             1,
             ReadTimestamp::new(20).expect("read timestamp"),
         )
         .expect("visible put"),
-        Some(vec![crabka_pgtypes::Datum::Int4(1)])
+        Some(vec![krabka_pgtypes::Datum::Int4(1)])
     );
     assert_eq!(
-        crabka_pgexec::timestamp_txn::read_visible_ts_row(
+        krabka_pgexec::timestamp_txn::read_visible_ts_row(
             participant_kv.as_ref(),
             99,
             2,
@@ -494,14 +494,14 @@ async fn committed_descriptor_recovery_resolves_put_delete_and_global_index_inte
         None
     );
     assert_eq!(
-        crabka_pgexec::timestamp_txn::read_visible_global_index_entries(
+        krabka_pgexec::timestamp_txn::read_visible_global_index_entries(
             participant_kv.as_ref(),
             7,
-            &[crabka_pgtypes::Datum::Int4(1)],
+            &[krabka_pgtypes::Datum::Int4(1)],
             ReadTimestamp::new(20).expect("read timestamp"),
         )
         .expect("visible index"),
-        vec![crabka_pgexec::timestamp_txn::VisibleGlobalIndexEntry {
+        vec![krabka_pgexec::timestamp_txn::VisibleGlobalIndexEntry {
             base_table_id: 99,
             base_rowid: 1,
         }]
@@ -546,14 +546,14 @@ async fn timestamp_descriptor_commit_makes_unresolved_participants_visible_at_on
     };
     let left_write = timestamp_write(table.id, 1, 10);
     let right_write = timestamp_write(table.id, 2, 20);
-    let left_operations = [crabka_pgexec::TimestampTxnOperation {
+    let left_operations = [krabka_pgexec::TimestampTxnOperation {
         range_id: 1,
         table_id: left_write.table_id,
         bucket: left_write.bucket,
         rowid: left_write.rowid,
         delete: left_write.delete,
     }];
-    let right_operations = [crabka_pgexec::TimestampTxnOperation {
+    let right_operations = [krabka_pgexec::TimestampTxnOperation {
         range_id: 2,
         table_id: right_write.table_id,
         bucket: right_write.bucket,
@@ -616,7 +616,7 @@ async fn timestamp_descriptor_commit_makes_unresolved_participants_visible_at_on
             &table,
             ReadTimestamp::new(20).expect("read at commit")
         ),
-        vec![vec![crabka_pgtypes::Datum::Int4(10)]]
+        vec![vec![krabka_pgtypes::Datum::Int4(10)]]
     );
     assert_eq!(
         timestamp_visible_rows(
@@ -624,7 +624,7 @@ async fn timestamp_descriptor_commit_makes_unresolved_participants_visible_at_on
             &table,
             ReadTimestamp::new(20).expect("read at commit")
         ),
-        vec![vec![crabka_pgtypes::Datum::Int4(20)]]
+        vec![vec![krabka_pgtypes::Datum::Int4(20)]]
     );
 
     right
@@ -777,7 +777,7 @@ async fn timestamp_descriptor_transitions_are_fenced_across_separate_engine_hand
         .into_iter()
         .next()
         .expect("descriptor");
-    let operation = crabka_pgexec::TimestampTxnOperation {
+    let operation = krabka_pgexec::TimestampTxnOperation {
         range_id: 1,
         table_id: 10,
         bucket: None,
@@ -793,7 +793,7 @@ async fn timestamp_descriptor_transitions_are_fenced_across_separate_engine_hand
         .acknowledge_operations(1, std::slice::from_ref(&operation))
         .expect("stale local transition");
     kv.write_batch(&[
-        crabka_pgexec::timestamp_txn::timestamp_txn_descriptor_cas_op(&stale_writer, Some(&stale)),
+        krabka_pgexec::timestamp_txn::timestamp_txn_descriptor_cas_op(&stale_writer, Some(&stale)),
     ])
     .expect("stale conditional apply is a no-op");
 
@@ -814,7 +814,7 @@ async fn timestamp_descriptor_transitions_are_fenced_across_separate_engine_hand
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn concurrent_timestamp_acknowledgements_preserve_every_participant_operation() {
     let kv: Arc<dyn Kv> = Arc::new(MemKv::new());
-    let committer: Arc<dyn crabka_pgexec::Committer> = Arc::new(InterleavingDescriptorCommitter {
+    let committer: Arc<dyn krabka_pgexec::Committer> = Arc::new(InterleavingDescriptorCommitter {
         kv: Arc::clone(&kv),
         acknowledgement_commits: AtomicUsize::new(0),
         acknowledgement_barrier: tokio::sync::Barrier::new(2),
@@ -823,7 +823,7 @@ async fn concurrent_timestamp_acknowledgements_preserve_every_participant_operat
         Arc::clone(&kv),
         Arc::clone(&kv),
         committer,
-        Arc::new(crabka_pgexec::LocalLinearizer),
+        Arc::new(krabka_pgexec::LocalLinearizer),
     )
     .expect("coordinator");
     let start_ts = TimestampTransactionId::new(90).expect("start timestamp");
@@ -831,14 +831,14 @@ async fn concurrent_timestamp_acknowledgements_preserve_every_participant_operat
         .begin_timestamp_transaction(&TimestampTxnDescriptor::begun(start_ts, 90, vec![1, 2]))
         .await
         .expect("descriptor");
-    let first_operation = crabka_pgexec::TimestampTxnOperation {
+    let first_operation = krabka_pgexec::TimestampTxnOperation {
         range_id: 1,
         table_id: 10,
         bucket: None,
         rowid: 11,
         delete: false,
     };
-    let second_operation = crabka_pgexec::TimestampTxnOperation {
+    let second_operation = krabka_pgexec::TimestampTxnOperation {
         range_id: 2,
         table_id: 20,
         bucket: None,
@@ -973,12 +973,12 @@ async fn descriptor_commit_does_not_expose_legacy_or_forged_local_version() {
         .expect("terminal decision");
     engine
         .kv_handle()
-        .write_batch(&[crabka_pgkv::WriteOp::Put {
-            key: crabka_pgmvcc::version::version_key_ts(table.id, 1, start_ts.get()),
-            value: crabka_pgmvcc::version::encode_ts_tuple(
+        .write_batch(&[krabka_pgkv::WriteOp::Put {
+            key: krabka_pgmvcc::version::version_key_ts(table.id, 1, start_ts.get()),
+            value: krabka_pgmvcc::version::encode_ts_tuple(
                 start_ts.get(),
-                crabka_pgmvcc::version::TsVersionState::Intent,
-                &[crabka_pgtypes::Datum::Int4(1)],
+                krabka_pgmvcc::version::TsVersionState::Intent,
+                &[krabka_pgtypes::Datum::Int4(1)],
             ),
         }])
         .expect("forged intent");
@@ -1108,7 +1108,7 @@ async fn timestamp_prewrite_failure_after_first_participant_durably_aborts() {
         .expect("first abort resolve");
 
     assert_eq!(
-        crabka_pgexec::timestamp_txn::read_visible_ts_row(
+        krabka_pgexec::timestamp_txn::read_visible_ts_row(
             first_kv.as_ref(),
             first_write.table_id,
             first_write.rowid,
@@ -1118,7 +1118,7 @@ async fn timestamp_prewrite_failure_after_first_participant_durably_aborts() {
         None
     );
     assert_eq!(
-        crabka_pgexec::timestamp_txn::read_timestamp_txn_descriptor(
+        krabka_pgexec::timestamp_txn::read_timestamp_txn_descriptor(
             coordinator.kv_handle().as_ref(),
             start_ts,
         )
@@ -1201,7 +1201,7 @@ async fn unsharded_autocommit_insert_keeps_local_commit_path() {
 
     let xmin = only_tuple_xmin(kv.as_ref(), "t");
     assert_eq!(
-        crabka_pgmvcc::clog::get(kv.as_ref(), xmin).expect("local status"),
+        krabka_pgmvcc::clog::get(kv.as_ref(), xmin).expect("local status"),
         XidStatus::Committed,
         "unsharded insert stays on the ordinary local commit path"
     );
@@ -1279,14 +1279,14 @@ async fn sharded_autocommit_update_uses_timestamp_versions() {
         ]
     );
     let table =
-        crabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("t")).expect("table");
+        krabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("t")).expect("table");
     let versions = kv
-        .scan_prefix(&crabka_pgkv::key::table_prefix(table.id))
+        .scan_prefix(&krabka_pgkv::key::table_prefix(table.id))
         .expect("physical versions");
     assert!(versions.iter().all(|(key, _)| {
         matches!(
-            crabka_pgkv::key::classify_key(key),
-            crabka_pgkv::key::KeyClass::PrimaryVersion { rowid: 1 | 2, .. }
+            krabka_pgkv::key::classify_key(key),
+            krabka_pgkv::key::KeyClass::PrimaryVersion { rowid: 1 | 2, .. }
         )
     }));
     assert!(
@@ -1295,12 +1295,12 @@ async fn sharded_autocommit_update_uses_timestamp_versions() {
             .any(|version| {
                 version.row
                     == vec![
-                        crabka_pgtypes::Datum::Int4(1),
-                        crabka_pgtypes::Datum::Text("new".into()),
+                        krabka_pgtypes::Datum::Int4(1),
+                        krabka_pgtypes::Datum::Text("new".into()),
                     ]
                     && matches!(
                         version.state,
-                        crabka_pgmvcc::version::TsVersionState::Committed { .. }
+                        krabka_pgmvcc::version::TsVersionState::Committed { .. }
                     )
             })
     );
@@ -1338,12 +1338,12 @@ async fn sharded_autocommit_delete_writes_timestamp_tombstone() {
             .any(|version| {
                 version.row
                     == vec![
-                        crabka_pgtypes::Datum::Int4(1),
-                        crabka_pgtypes::Datum::Text("gone".into()),
+                        krabka_pgtypes::Datum::Int4(1),
+                        krabka_pgtypes::Datum::Text("gone".into()),
                     ]
                     && matches!(
                         version.state,
-                        crabka_pgmvcc::version::TsVersionState::Deleted { .. }
+                        krabka_pgmvcc::version::TsVersionState::Deleted { .. }
                     )
             })
     );
@@ -1378,14 +1378,14 @@ async fn unsharded_update_and_delete_keep_local_commit_path() {
         vec![(Some("1".into()), Some("new".into()))]
     );
     assert!(
-        kv.scan_prefix(&crabka_pgkv::key::table_prefix(
-            crabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("t"))
+        kv.scan_prefix(&krabka_pgkv::key::table_prefix(
+            krabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("t"))
                 .expect("table")
                 .id,
         ))
         .expect("scan")
         .iter()
-        .all(|(_key, value)| crabka_pgmvcc::version::decode_tuple(value).is_ok()),
+        .all(|(_key, value)| krabka_pgmvcc::version::decode_tuple(value).is_ok()),
         "unsharded UPDATE/DELETE continue to write xid/clog tuples"
     );
     assert_eq!(next_global_xid(kv.as_ref()), GLOBAL_XID_BASE);
@@ -1493,7 +1493,7 @@ async fn global_participant_commit_release_exposes_rows_after_external_decision(
         .expect("prepare participant");
     assert_eq!(prepared_xid, global_xid);
     assert_eq!(
-        crabka_pgmvcc::clog::get(kv.as_ref(), local_xid).expect("local status"),
+        krabka_pgmvcc::clog::get(kv.as_ref(), local_xid).expect("local status"),
         XidStatus::Prepared(global_xid),
         "participant prepare durably records the local-to-global mapping"
     );
@@ -1524,7 +1524,7 @@ async fn global_participant_commit_release_exposes_rows_after_external_decision(
     );
     assert_eq!(participant.tx_status(), TxStatus::Idle);
     assert_eq!(
-        crabka_pgmvcc::clog::get(kv.as_ref(), local_xid).expect("local status"),
+        krabka_pgmvcc::clog::get(kv.as_ref(), local_xid).expect("local status"),
         XidStatus::Prepared(global_xid),
         "participant release must not overwrite the prepared marker"
     );
@@ -1574,7 +1574,7 @@ async fn global_participant_abort_release_keeps_rows_invisible_after_external_de
     );
     assert_eq!(participant.tx_status(), TxStatus::Idle);
     assert_eq!(
-        crabka_pgmvcc::clog::get(kv.as_ref(), local_xid).expect("local status"),
+        krabka_pgmvcc::clog::get(kv.as_ref(), local_xid).expect("local status"),
         XidStatus::Prepared(global_xid),
         "abort release must not write a unilateral local abort"
     );
@@ -1609,7 +1609,7 @@ async fn externally_prepared_participant_rejects_sql_commit_without_global_decis
         .expect_err("SQL COMMIT is not allowed after external prepare");
     assert_eq!(err.code, "55000");
     assert_eq!(
-        crabka_pgmvcc::clog::get(kv.as_ref(), global_xid).expect("global status"),
+        krabka_pgmvcc::clog::get(kv.as_ref(), global_xid).expect("global status"),
         XidStatus::InProgress,
         "SQL COMMIT must not write a unilateral global commit decision"
     );
@@ -1655,7 +1655,7 @@ async fn externally_prepared_participant_rejects_sql_rollback_without_global_dec
         .expect_err("SQL ROLLBACK is not allowed after external prepare");
     assert_eq!(err.code, "55000");
     assert_eq!(
-        crabka_pgmvcc::clog::get(kv.as_ref(), global_xid).expect("global status"),
+        krabka_pgmvcc::clog::get(kv.as_ref(), global_xid).expect("global status"),
         XidStatus::InProgress,
         "SQL ROLLBACK must not write a unilateral global abort decision"
     );
@@ -1733,13 +1733,13 @@ async fn global_participant_api_rejects_invalid_transaction_states() {
 
     assert!(matches!(
         participant.prepare_global_participant(global_xid).await,
-        Err(crabka_pgexec::ExecError::ObjectNotInPrerequisiteState(_))
+        Err(krabka_pgexec::ExecError::ObjectNotInPrerequisiteState(_))
     ));
     assert!(matches!(
         participant
             .release_global_participant_commit(global_xid)
             .await,
-        Err(crabka_pgexec::ExecError::ObjectNotInPrerequisiteState(_))
+        Err(krabka_pgexec::ExecError::ObjectNotInPrerequisiteState(_))
     ));
 
     participant.simple_query("BEGIN").await.expect("begin");
@@ -1751,7 +1751,7 @@ async fn global_participant_api_rejects_invalid_transaction_states() {
         participant
             .release_global_participant_commit(global_xid + 1)
             .await,
-        Err(crabka_pgexec::ExecError::ObjectNotInPrerequisiteState(_))
+        Err(krabka_pgexec::ExecError::ObjectNotInPrerequisiteState(_))
     ));
 }
 
@@ -1997,8 +1997,8 @@ async fn a_read_only_transaction_refuses_writes_and_reports_its_mode() {
 
 mod transactional_ddl {
     use assert2::assert;
-    use crabka_pgexec::{SqlEngine, SqlSession};
-    use crabka_pgwire::engine::{Engine, Session};
+    use krabka_pgexec::{SqlEngine, SqlSession};
+    use krabka_pgwire::engine::{Engine, Session};
 
     use super::{rows, text};
 

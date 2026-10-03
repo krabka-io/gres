@@ -1,25 +1,25 @@
-//! Cluster orchestration: a broker and `crabka-gres` nodes behind chaos
+//! Cluster orchestration: a broker and `krabka-gres` nodes behind chaos
 //! proxies.
 //!
 //! The launch sequence is adapted from
 //! `crates/gres-ranges/tests/harness/process.rs` and
 //! `scripts/gres-range-scaling.sh`:
 //!
-//! 1. Format a broker data dir and start `crabka-broker` as a child process.
+//! 1. Format a broker data dir and start `krabka-broker` as a child process.
 //!    The broker is a child, not in-process, so `/proc` CPU accounting
 //!    attributes broker cost separately from the harness.
 //! 2. Spawn one [`ChaosProxy`] for each range-RPC endpoint and one for each
 //!    node SQL front door.
-//! 3. Generate a range mTLS CA and peer cert with `crabka_security::ca`, then
-//!    provision the tenant through `crabka_gres_control::Registry`. That step
+//! 3. Generate a range mTLS CA and peer cert with `krabka_security::ca`, then
+//!    provision the tenant through `krabka_gres_control::Registry`. That step
 //!    creates the WAL topics for each range and a `TenantRecord` whose
 //!    range-layout endpoints point at the **proxy** ports, so the harness can
 //!    intercept inter-node traffic.
-//! 4. Spawn one `crabka-gres` child for each node. Each child gets
+//! 4. Spawn one `krabka-gres` child for each node. Each child gets
 //!    `--host-ranges` for its round-robin range subset, where range `r` goes
 //!    to node `r % nodes`, the timestamp-source flags for the scenario mode,
 //!    and its own `--hlc-wall-offset` skew. Parse
-//!    `CRABKA_GRES_READY <sql> <range>` from stdout for the OS-assigned ports,
+//!    `KRABKA_GRES_READY <sql> <range>` from stdout for the OS-assigned ports,
 //!    then point the proxies at them.
 //!
 //! Schema DDL needs no special phase. Any node's gateway routes DDL to every
@@ -43,12 +43,12 @@ use std::{
 };
 
 use anyhow::{Context as _, anyhow, bail, ensure};
-use crabka_client_admin::{AdminClient, CreateTopicSpec};
-use crabka_gres_control::{
+use krabka_client_admin::{AdminClient, CreateTopicSpec};
+use krabka_gres_control::{
     RangeBoundary, RangeLayoutEntry, RangeLifecycle, Registry, RegistryPolicy, SqlUser, TenantId,
     TenantName, TenantRecord, TenantState,
 };
-use crabka_units::{fmt::Human as _, prelude::*};
+use krabka_units::{fmt::Human as _, prelude::*};
 use tokio::{
     io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader},
     net::{TcpListener, TcpStream},
@@ -85,25 +85,25 @@ const RANGE_TABLE_STRIDE: u64 = 1_000_000;
 /// Fixed broker cluster id. It mirrors the scaling script.
 const BROKER_CLUSTER_ID: &str = "00000000-0000-0000-0000-000000000001";
 /// DNS identity on the range mTLS peer certificate.
-const TLS_SERVER_NAME: &str = "crabka-dev";
+const TLS_SERVER_NAME: &str = "krabka-dev";
 /// Subject DN authorized for range and operator-control RPCs.
 const TLS_PRINCIPAL: &str = "CN=loadtest-range";
 
 /// Paths to the binaries the cluster launches.
 #[derive(Debug, Clone)]
 pub struct Binaries {
-    /// `crabka-gres` server binary.
+    /// `krabka-gres` server binary.
     pub gres: PathBuf,
-    /// `crabka-broker` binary.
+    /// `krabka-broker` binary.
     pub broker: PathBuf,
     /// `crabka` CLI binary. It supplies the storage format and admin
     /// commands.
-    pub crabka_cli: PathBuf,
+    pub krabka_cli: PathBuf,
 }
 
 impl Binaries {
     /// Resolves binary paths from the
-    /// `CRABKA_GRES_LOADTEST_{GRES,BROKER,CLI}_BIN` env overrides. Without an
+    /// `KRABKA_GRES_LOADTEST_{GRES,BROKER,CLI}_BIN` env overrides. Without an
     /// override it uses `target/debug/` relative to the workspace root.
     ///
     /// # Errors
@@ -114,16 +114,16 @@ impl Binaries {
         let from_env = |key: &str| std::env::var_os(key).map(PathBuf::from);
         Ok(Self {
             gres: resolve_binary(
-                from_env("CRABKA_GRES_LOADTEST_GRES_BIN"),
+                from_env("KRABKA_GRES_LOADTEST_GRES_BIN"),
                 &root,
-                "crabka-gres",
+                "krabka-gres",
             )?,
             broker: resolve_binary(
-                from_env("CRABKA_GRES_LOADTEST_BROKER_BIN"),
+                from_env("KRABKA_GRES_LOADTEST_BROKER_BIN"),
                 &root,
-                "crabka-broker",
+                "krabka-broker",
             )?,
-            crabka_cli: resolve_binary(from_env("CRABKA_GRES_LOADTEST_CLI_BIN"), &root, "crabka")?,
+            krabka_cli: resolve_binary(from_env("KRABKA_GRES_LOADTEST_CLI_BIN"), &root, "crabka")?,
         })
     }
 }
@@ -143,7 +143,7 @@ pub struct ClusterOptions {
     pub registry_policy: RegistryPolicy,
     /// Harness-owned process and proxy policy.
     pub runtime_policy: LoadtestRuntimePolicy,
-    /// Extra environment for every `crabka-gres` child, on top of the
+    /// Extra environment for every `krabka-gres` child, on top of the
     /// harness's own environment. A restart applies it again unchanged.
     ///
     /// The nodes are separate processes. The harness therefore cannot set what
@@ -274,7 +274,7 @@ impl Cluster {
         }
 
         let (broker_port, controller_port) = pick_free_ports().await?;
-        run_crabka_format(&binaries.crabka_cli, &work_dir, &log_dir, controller_port).await?;
+        run_krabka_format(&binaries.krabka_cli, &work_dir, &log_dir, controller_port).await?;
         let broker = start_broker(
             &binaries.broker,
             &work_dir,
@@ -722,7 +722,7 @@ impl Drop for NodeProcess {
     }
 }
 
-/// Addresses parsed from a node's `CRABKA_GRES_READY` line.
+/// Addresses parsed from a node's `KRABKA_GRES_READY` line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct NodeReady {
     sql: SocketAddr,
@@ -823,12 +823,12 @@ fn timestamp_args(mode: ModeSpec, skew: Time) -> Vec<String> {
 /// Diagnostic knob for the coordinator-against-data per-write cost
 /// investigation. It selects which nodes launch with the local-checkpoint
 /// flags. The default is node 0 only, which is the shipped harness behaviour.
-/// Set `CRABKA_GRES_LOADTEST_CHECKPOINT_NODES` to `all`, so that every node
+/// Set `KRABKA_GRES_LOADTEST_CHECKPOINT_NODES` to `all`, so that every node
 /// checkpoints, or to `none`, so that no node does. That A/B shows whether the
 /// CPU asymmetry between node 0 and the data nodes tracks the checkpoint
 /// config.
 fn checkpoints_enabled_for(node: u16) -> bool {
-    match std::env::var("CRABKA_GRES_LOADTEST_CHECKPOINT_NODES")
+    match std::env::var("KRABKA_GRES_LOADTEST_CHECKPOINT_NODES")
         .ok()
         .as_deref()
     {
@@ -926,7 +926,7 @@ const SERVICE_INSTANCE_ID_ENV: &str = "OTEL_SERVICE_INSTANCE_ID";
 /// One node's environment: the caller's environment, plus a
 /// `service.instance.id` that names the node, unless the caller pinned one.
 ///
-/// `crabka-gres` derives that id from its advertised range endpoint. The
+/// `krabka-gres` derives that id from its advertised range endpoint. The
 /// harness sets that endpoint to `127.0.0.1:0` so the OS assigns the port.
 /// Every node in a harness cluster would therefore derive the same id, and
 /// their spans would collapse into one process in the trace backend. The node
@@ -964,7 +964,7 @@ fn registry_policy_args(policy: &RegistryPolicy) -> [String; 20] {
     ]
 }
 
-/// Spawns one `crabka-gres` child in its own process group. It captures
+/// Spawns one `krabka-gres` child in its own process group. It captures
 /// stdout and stderr to the spec's log file and watches for the ready line.
 fn spawn_node(gres_binary: &Path, spec: &NodeSpec) -> anyhow::Result<NodeProcess> {
     let stderr = File::create(&spec.log_path)
@@ -1000,7 +1000,7 @@ fn spawn_node(gres_binary: &Path, spec: &NodeSpec) -> anyhow::Result<NodeProcess
     })
 }
 
-/// Waits for a spawned node to print `CRABKA_GRES_READY` and records its
+/// Waits for a spawned node to print `KRABKA_GRES_READY` and records its
 /// OS-assigned SQL and range addresses on the slot.
 async fn wait_node_ready(
     slot: &mut NodeSlot,
@@ -1019,7 +1019,7 @@ async fn wait_node_ready(
         .await
         .map_err(|_| {
             anyhow!(
-                "{label} did not report CRABKA_GRES_READY within {}; log tail:\n{}",
+                "{label} did not report KRABKA_GRES_READY within {}; log tail:\n{}",
                 policy.launch_timeout.human(),
                 log_tail(&log_path, policy.log_tail_lines.get())
             )
@@ -1046,7 +1046,7 @@ async fn wait_node_ready(
 }
 
 /// Copies a node's stdout into its log file line by line. It resolves `ready`
-/// on the first `CRABKA_GRES_READY` line.
+/// on the first `KRABKA_GRES_READY` line.
 async fn pump_node_stdout(
     stdout: ChildStdout,
     log_path: PathBuf,
@@ -1064,7 +1064,7 @@ async fn pump_node_stdout(
     while let Ok(Some(line)) = lines.next_line().await {
         let _ = log.write_all(line.as_bytes()).await;
         let _ = log.write_all(b"\n").await;
-        if let Some(payload) = line.strip_prefix("CRABKA_GRES_READY ")
+        if let Some(payload) = line.strip_prefix("KRABKA_GRES_READY ")
             && let Some(event) = parse_ready_line(payload)
             && let Some(sender) = ready.take()
         {
@@ -1073,7 +1073,7 @@ async fn pump_node_stdout(
     }
 }
 
-/// Parses the payload of a `CRABKA_GRES_READY <sql> <range>` line, where
+/// Parses the payload of a `KRABKA_GRES_READY <sql> <range>` line, where
 /// `<range>` is `-` when the node has no range listener.
 fn parse_ready_line(payload: &str) -> Option<NodeReady> {
     let mut parts = payload.split_whitespace();
@@ -1108,7 +1108,7 @@ fn placeholder_addr() -> SocketAddr {
 
 /// Runs `crabka format` for a standalone single-voter broker, as
 /// `scripts/gres-range-scaling.sh` does. It logs to `logs/format.log`.
-async fn run_crabka_format(
+async fn run_krabka_format(
     cli_binary: &Path,
     work_dir: &Path,
     log_dir: &Path,
@@ -1144,7 +1144,7 @@ async fn run_crabka_format(
     Ok(())
 }
 
-/// Writes `broker.toml` and starts `crabka-broker` as a child process. It
+/// Writes `broker.toml` and starts `krabka-broker` as a child process. It
 /// waits until the broker's Kafka listener accepts connections.
 async fn start_broker(
     broker_binary: &Path,
@@ -1218,13 +1218,13 @@ async fn wait_for_broker(
         }
         if let Some(status) = child.try_wait().context("poll broker status")? {
             bail!(
-                "crabka-broker exited with {status} before listening on {addr}; log tail:\n{}",
+                "krabka-broker exited with {status} before listening on {addr}; log tail:\n{}",
                 log_tail(log_path, policy.log_tail_lines.get())
             );
         }
         if tokio::time::Instant::now() >= deadline {
             bail!(
-                "crabka-broker did not listen on {addr} within {}; log tail:\n{}",
+                "krabka-broker did not listen on {addr} within {}; log tail:\n{}",
                 policy.launch_timeout.human(),
                 log_tail(log_path, policy.log_tail_lines.get())
             );
@@ -1245,10 +1245,10 @@ async fn provision_tenant(
 ) -> anyhow::Result<()> {
     let mut admin = AdminClient::connect_with_options(
         &[bootstrap.to_owned()],
-        crabka_client_core::ConnectionOptions {
+        krabka_client_core::ConnectionOptions {
             dispatch_queue_capacity: registry_policy.dispatch_queue_capacity(),
             frame_max: registry_policy.frame_max(),
-            ..crabka_client_core::ConnectionOptions::default()
+            ..krabka_client_core::ConnectionOptions::default()
         },
     )
     .await
@@ -1289,7 +1289,7 @@ fn tenant_record(
     range_endpoints: &[SocketAddr],
     sql_password: &str,
 ) -> anyhow::Result<TenantRecord> {
-    let verifier = crabka_security::scram::PgScramVerifier::generate(sql_password, 4096)
+    let verifier = krabka_security::scram::PgScramVerifier::generate(sql_password, 4096)
         .context("generate SCRAM verifier")?;
     let record = TenantRecord::new(
         1,
@@ -1317,13 +1317,13 @@ struct TlsPaths {
 /// Generates a throwaway range mTLS CA and peer certificate, then writes the
 /// PEM files into `dir`.
 fn write_tls_fixture(dir: &Path) -> anyhow::Result<TlsPaths> {
-    let ca = crabka_security::ca::generate_cluster_ca("loadtest-range-ca", 1)
+    let ca = krabka_security::ca::generate_cluster_ca("loadtest-range-ca", 1)
         .context("generate range CA")?;
-    let peer = crabka_security::ca::issue_broker_cert(
+    let peer = krabka_security::ca::issue_broker_cert(
         &ca.cert_pem,
         &ca.key_pem,
         "loadtest-range",
-        &[crabka_security::ca::SubjectAltName::Dns(
+        &[krabka_security::ca::SubjectAltName::Dns(
             TLS_SERVER_NAME.to_owned(),
         )],
         &[],
@@ -1451,8 +1451,8 @@ fn resolve_binary(
     ensure!(
         path.is_file(),
         "binary {name} not found at {}; build it with \
-         `cargo build -p crabka-gres -p crabka-broker -p crabka-cli` \
-         or point the CRABKA_GRES_LOADTEST_*_BIN env override at it",
+         `cargo build -p krabka-gres -p krabka-broker -p krabka-cli` \
+         or point the KRABKA_GRES_LOADTEST_*_BIN env override at it",
         path.display()
     );
     Ok(path)
@@ -1498,14 +1498,14 @@ mod tests {
 
     #[test]
     fn node_environment_names_each_node_unless_pinned() {
-        let caller = BTreeMap::from([("CRABKA_OTLP_SAMPLE_RATIO".to_owned(), "1.0".to_owned())]);
+        let caller = BTreeMap::from([("KRABKA_OTLP_SAMPLE_RATIO".to_owned(), "1.0".to_owned())]);
         // Distinct ids per node, or every node's spans collapse into one
         // process in the trace backend.
         let node0 = node_environment("node0", &caller);
         let node1 = node_environment("node1", &caller);
         assert!(node0.get("OTEL_SERVICE_INSTANCE_ID").map(String::as_str) == Some("node0"));
         assert!(node1.get("OTEL_SERVICE_INSTANCE_ID").map(String::as_str) == Some("node1"));
-        assert!(node0.get("CRABKA_OTLP_SAMPLE_RATIO").map(String::as_str) == Some("1.0"));
+        assert!(node0.get("KRABKA_OTLP_SAMPLE_RATIO").map(String::as_str) == Some("1.0"));
 
         // A caller-supplied id wins: the default is a fallback, not a policy.
         let pinned = BTreeMap::from([("OTEL_SERVICE_INSTANCE_ID".to_owned(), "pinned".to_owned())]);
@@ -1682,27 +1682,27 @@ mod tests {
         let tls = test_tls();
         let policy = RegistryPolicy::new(
             3,
-            crabka_units::millis(15_002),
-            crabka_units::millis(252),
-            crabka_units::millis(502),
-            crabka_units::bytes(1_048_578),
+            krabka_units::millis(15_002),
+            krabka_units::millis(252),
+            krabka_units::millis(502),
+            krabka_units::bytes(1_048_578),
         )
         .expect("policy")
-        .with_producer_dns_timeout(crabka_units::millis(37))
+        .with_producer_dns_timeout(krabka_units::millis(37))
         .expect("DNS timeout")
-        .with_reader_admin_dns_timeout(crabka_units::millis(37))
+        .with_reader_admin_dns_timeout(krabka_units::millis(37))
         .expect("reader/admin DNS timeout")
         .with_client_resource_policy(
-            crabka_client_core::ConnectionDispatchQueueCapacity::new(7).unwrap(),
-            crabka_client_core::ClientFrameMax::try_from(crabka_units::kibibytes(32)).unwrap(),
-            crabka_client_core::FetchMinBytes::try_from(crabka_units::bytes(3)).unwrap(),
+            krabka_client_core::ConnectionDispatchQueueCapacity::new(7).unwrap(),
+            krabka_client_core::ClientFrameMax::try_from(krabka_units::kibibytes(32)).unwrap(),
+            krabka_client_core::FetchMinBytes::try_from(krabka_units::bytes(3)).unwrap(),
         );
         let node_env = BTreeMap::from([
             (
-                "CRABKA_OTLP_ENDPOINT".to_owned(),
+                "KRABKA_OTLP_ENDPOINT".to_owned(),
                 "http://127.0.0.1:4317".to_owned(),
             ),
-            ("CRABKA_OTLP_SAMPLE_RATIO".to_owned(), "1.0".to_owned()),
+            ("KRABKA_OTLP_SAMPLE_RATIO".to_owned(), "1.0".to_owned()),
         ]);
         let context = SpecContext {
             topology: &topology,
@@ -1895,25 +1895,25 @@ mod tests {
         let root = tempfile::tempdir().expect("tempdir");
         let debug_dir = root.path().join("target").join("debug");
         std::fs::create_dir_all(&debug_dir).expect("target/debug");
-        let default_path = debug_dir.join("crabka-gres");
+        let default_path = debug_dir.join("krabka-gres");
         std::fs::write(&default_path, b"stub").expect("default binary");
         let override_path = root.path().join("elsewhere-gres");
         std::fs::write(&override_path, b"stub").expect("override binary");
 
-        let resolved = resolve_binary(None, root.path(), "crabka-gres").expect("default");
+        let resolved = resolve_binary(None, root.path(), "krabka-gres").expect("default");
         assert!(resolved == default_path);
 
-        let resolved = resolve_binary(Some(override_path.clone()), root.path(), "crabka-gres")
+        let resolved = resolve_binary(Some(override_path.clone()), root.path(), "krabka-gres")
             .expect("override");
         assert!(resolved == override_path);
 
-        let missing = resolve_binary(None, root.path(), "crabka-broker")
+        let missing = resolve_binary(None, root.path(), "krabka-broker")
             .expect_err("missing binary must fail");
         assert!(missing.to_string().contains("cargo build"));
-        assert!(missing.to_string().contains("crabka-broker"));
+        assert!(missing.to_string().contains("krabka-broker"));
 
         let missing_override =
-            resolve_binary(Some(root.path().join("nope")), root.path(), "crabka-gres")
+            resolve_binary(Some(root.path().join("nope")), root.path(), "krabka-gres")
                 .expect_err("missing override must fail");
         assert!(missing_override.to_string().contains("nope"));
     }
@@ -1930,7 +1930,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "needs built crabka-broker, crabka, and crabka-gres binaries"]
+    #[ignore = "needs built krabka-broker, crabka, and krabka-gres binaries"]
     async fn live_two_node_cluster_serves_any_gateway_and_survives_kill_and_restart() {
         let binaries = Binaries::resolve().expect("resolve binaries");
         let work_dir = tempfile::tempdir().expect("work dir");

@@ -1,10 +1,10 @@
-# crabka-metrics Slice 1 — Data Layer (block schemas + native-histogram codec + symbol table)
+# krabka-metrics Slice 1 — Data Layer (block schemas + native-histogram codec + symbol table)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the metrics data layer — the Arrow/Parquet block schemas (float samples, native histograms, exemplars), the native-histogram ⇄ Arrow codec, and the remote_write v2 symbol table — as the foundation the PromQL engine and ingest path build on.
 
-**Architecture:** Pure data-model crate `crabka-metrics` (this slice adds no networking and no DataFusion). Three Arrow schemas on blockstore's signal-agnostic substrate (mandatory `series_fingerprint`+`timestamp` + payload). The hard, novel piece is the native-histogram codec: an in-memory `NativeHistogram` (absolute bucket counts) ⇄ Arrow `List<Struct>`/`List<Float64>` columns, kept absolute at rest (deltas are a wire concern decoded at ingest, a later slice).
+**Architecture:** Pure data-model crate `krabka-metrics` (this slice adds no networking and no DataFusion). Three Arrow schemas on blockstore's signal-agnostic substrate (mandatory `series_fingerprint`+`timestamp` + payload). The hard, novel piece is the native-histogram codec: an in-memory `NativeHistogram` (absolute bucket counts) ⇄ Arrow `List<Struct>`/`List<Float64>` columns, kept absolute at rest (deltas are a wire concern decoded at ingest, a later slice).
 
 **Tech Stack:** Rust 2024 · `arrow` 59 (`array`, `datatypes`, `record_batch`) · `thiserror`. Tests: `assert2`, `proptest`, `tempfile`.
 
@@ -12,22 +12,22 @@
 
 - **No backwards compatibility.** Greenfield/undeployed. Change schemas/enums freely; no shims, no migration code.
 - **`unsafe_code = "forbid"`** workspace-wide. No `unsafe`.
-- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p crabka-metrics --all-targets` before each commit.
-- **Formatting:** `cargo fmt -p crabka-metrics` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
+- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p krabka-metrics --all-targets` before each commit.
+- **Formatting:** `cargo fmt -p krabka-metrics` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
 - **Assertions:** `assert2::assert!` in tests; `prop_assert*` inside `proptest!`.
-- **Arrow version identity:** use `arrow` 59 directly (`use arrow::...`), matching `crabka-blockstore`. Both unify to one arrow instance, so the schemas this crate produces are consumable by blockstore's `BlockWriter` without conversion.
+- **Arrow version identity:** use `arrow` 59 directly (`use arrow::...`), matching `krabka-blockstore`. Both unify to one arrow instance, so the schemas this crate produces are consumable by blockstore's `BlockWriter` without conversion.
 - **Absolute counts at rest:** native-histogram bucket counts are stored as **absolute** `Float64`. Wire delta-decoding belongs to the ingest slice, not here. The codec round-trips absolute values.
 
 ---
 
 ## Dependency & slice roadmap
 
-**Depends on:** `crabka-blockstore` (the logs-wedge Phase 1 plan). This slice's *schemas* are plain Arrow `SchemaRef`s and its *codec* produces/consumes `RecordBatch`es, so it is **independently testable without blockstore implemented** — the blockstore dependency only materializes when the compactor (Slice 4) writes these batches as blocks. Note the dependency in the crate but gate nothing on it here.
+**Depends on:** `krabka-blockstore` (the logs-wedge Phase 1 plan). This slice's _schemas_ are plain Arrow `SchemaRef`s and its _codec_ produces/consumes `RecordBatch`es, so it is **independently testable without blockstore implemented** — the blockstore dependency only materializes when the compactor (Slice 4) writes these batches as blocks. Note the dependency in the crate but gate nothing on it here.
 
 **The 8 metrics slices** (this plan = Slice 1; each later slice gets its own plan):
 
-1. **Data layer** *(this plan)* — block schemas + native-histogram codec + symbol table.
-2. **`crabka-promql` core** — parser + DataFusion operator pattern (`SeriesDivide`/`Normalize`/`Instant`/`Range` + `RangeArray`) + selectors + rate-family + aggregations + binary ops + the `.test` harness.
+1. **Data layer** _(this plan)_ — block schemas + native-histogram codec + symbol table.
+2. **`krabka-promql` core** — parser + DataFusion operator pattern (`SeriesDivide`/`Normalize`/`Instant`/`Range` + `RangeArray`) + selectors + rate-family + aggregations + binary ops + the `.test` harness.
 3. **Query completeness** — `histogram_quantile` (classic + native), full function catalog, subqueries, `@`/`offset`.
 4. **Ingest service** — remote_write v1/v2 (wire→`NativeHistogram` decode lives here) + OTLP + Kafka produce + distributor + HA dedup + compactor.
 5. **Querier + Prometheus HTTP API** + hot/cold merge.
@@ -39,41 +39,43 @@
 
 ## File structure (`crates/metrics/`)
 
-| File | Responsibility |
-|---|---|
-| `Cargo.toml` | crate manifest |
-| `src/lib.rs` | module decls + public re-exports + crate docs |
-| `src/schema.rs` | column-name constants + the three Arrow schema builders |
+| File               | Responsibility                                             |
+| ------------------ | ---------------------------------------------------------- |
+| `Cargo.toml`       | crate manifest                                             |
+| `src/lib.rs`       | module decls + public re-exports + crate docs              |
+| `src/schema.rs`    | column-name constants + the three Arrow schema builders    |
 | `src/histogram.rs` | `NativeHistogram`, `BucketSpan`, `ResetHint` + Arrow codec |
-| `src/sample.rs` | float-sample codec |
-| `src/exemplar.rs` | `Exemplar` + exemplar-block codec |
-| `src/symbols.rs` | `SymbolTable` (remote_write v2 string interning) |
+| `src/sample.rs`    | float-sample codec                                         |
+| `src/exemplar.rs`  | `Exemplar` + exemplar-block codec                          |
+| `src/symbols.rs`   | `SymbolTable` (remote_write v2 string interning)           |
 
 ---
 
 ### Task 1: Crate scaffold
 
 **Files:**
+
 - Create: `crates/metrics/Cargo.toml`
 - Create: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
-- Produces: a compiling `crabka-metrics` crate with a placeholder test.
+
+- Produces: a compiling `krabka-metrics` crate with a placeholder test.
 
 - [ ] **Step 1: Create `crates/metrics/Cargo.toml`**
 
 ```toml
 [package]
-name = "crabka-metrics"
+name = "krabka-metrics"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "Prometheus/Grafana-Mimir-equivalent metrics backend for Crabka (data layer)"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-metrics"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-metrics"
 readme = "README.md"
 keywords = ["observability", "prometheus", "mimir", "metrics", "crabka"]
 categories = ["database-implementations"]
@@ -119,16 +121,16 @@ mod tests {
 
 - [ ] **Step 3: Build and test**
 
-Run: `cargo test -p crabka-metrics`
+Run: `cargo test -p krabka-metrics`
 Expected: compiles, `smoke` PASSES.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
-git commit -m "feat(metrics): scaffold crabka-metrics crate"
+git commit -m "feat(metrics): scaffold krabka-metrics crate"
 ```
 
 ---
@@ -136,10 +138,12 @@ git commit -m "feat(metrics): scaffold crabka-metrics crate"
 ### Task 2: Column constants + the three Arrow schema builders
 
 **Files:**
+
 - Create: `crates/metrics/src/schema.rs`
 - Modify: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - Mandatory column constants (matching blockstore): `COL_FINGERPRINT = "series_fingerprint"`, `COL_TIMESTAMP = "timestamp"`.
   - `pub fn float_sample_schema() -> arrow::datatypes::SchemaRef`
@@ -196,7 +200,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib schema`
+Run: `cargo test -p krabka-metrics --lib schema`
 Expected: FAIL — `cannot find function float_sample_schema`.
 
 - [ ] **Step 3: Implement `schema.rs`**
@@ -330,14 +334,14 @@ pub use schema::{
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib schema`
+Run: `cargo test -p krabka-metrics --lib schema`
 Expected: PASS (3 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): Arrow schemas for float/native-histogram/exemplar blocks"
 ```
@@ -347,10 +351,12 @@ git commit -m "feat(metrics): Arrow schemas for float/native-histogram/exemplar 
 ### Task 3: `NativeHistogram` model
 
 **Files:**
+
 - Create: `crates/metrics/src/histogram.rs`
 - Modify: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `struct BucketSpan { pub offset: i32, pub length: u32 }` (`Clone`,`Debug`,`PartialEq`,`Eq`)
   - `enum ResetHint { Unknown, Yes, No, Gauge }` (`Copy`; `as_i8()`/`from_i8(i8) -> ResetHint`)
@@ -405,7 +411,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib histogram`
+Run: `cargo test -p krabka-metrics --lib histogram`
 Expected: FAIL — `cannot find type NativeHistogram`.
 
 - [ ] **Step 3: Implement the model**
@@ -489,14 +495,14 @@ Add `mod histogram;` and `pub use histogram::{BucketSpan, NativeHistogram, Reset
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib histogram`
+Run: `cargo test -p krabka-metrics --lib histogram`
 Expected: PASS (2 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): NativeHistogram model + ResetHint + BucketSpan"
 ```
@@ -506,9 +512,11 @@ git commit -m "feat(metrics): NativeHistogram model + ResetHint + BucketSpan"
 ### Task 4: Native-histogram Arrow codec (the centerpiece)
 
 **Files:**
+
 - Modify: `crates/metrics/src/histogram.rs` (add `encode`/`decode`)
 
 **Interfaces:**
+
 - Consumes: `native_histogram_schema`, the `COL_NH_*` constants, `NativeHistogram`, `BucketSpan`, `ResetHint`.
 - Produces:
   - `pub fn encode_native_histograms(rows: &[(u64, i64, NativeHistogram)]) -> Result<arrow::record_batch::RecordBatch, HistogramCodecError>` — `(fingerprint, timestamp, hist)` rows → a `RecordBatch` matching `native_histogram_schema()`.
@@ -564,7 +572,7 @@ Append to the `tests` module in `histogram.rs`:
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib histogram::tests::encode_decode_round_trips`
+Run: `cargo test -p krabka-metrics --lib histogram::tests::encode_decode_round_trips`
 Expected: FAIL — `cannot find function encode_native_histograms`.
 
 - [ ] **Step 3: Implement the codec**
@@ -799,7 +807,7 @@ pub fn decode_native_histograms(
 }
 ```
 
-> **Arrow-builder verification (do this if compile/test fails):** `StructBuilder::field_builder::<T>(i)`, `ListBuilder::values()`, and the `append(true)` (non-null) / `append(false)` (null list) conventions are arrow-59 API. If a builder method name or the inner list field name (`"item"`) differs, align to the arrow 59 docs and the Task-2 schema — keep the *behavior* (round-trip equality) the test asserts. The `as_*` downcasts in the reader must mirror the builders' output array types.
+> **Arrow-builder verification (do this if compile/test fails):** `StructBuilder::field_builder::<T>(i)`, `ListBuilder::values()`, and the `append(true)` (non-null) / `append(false)` (null list) conventions are arrow-59 API. If a builder method name or the inner list field name (`"item"`) differs, align to the arrow 59 docs and the Task-2 schema — keep the _behavior_ (round-trip equality) the test asserts. The `as_*` downcasts in the reader must mirror the builders' output array types.
 
 - [ ] **Step 4: Add re-exports to `lib.rs`**
 
@@ -807,7 +815,7 @@ Extend the histogram re-export: `pub use histogram::{BucketSpan, HistogramCodecE
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib histogram`
+Run: `cargo test -p krabka-metrics --lib histogram`
 Expected: PASS (round-trip + validation tests).
 
 - [ ] **Step 6: Property test — random histograms round-trip**
@@ -815,7 +823,7 @@ Expected: PASS (round-trip + validation tests).
 Create `crates/metrics/tests/histogram_roundtrip.rs`:
 
 ```rust
-use crabka_metrics::{
+use krabka_metrics::{
     BucketSpan, NativeHistogram, ResetHint, decode_native_histograms, encode_native_histograms,
 };
 use proptest::prelude::*;
@@ -868,14 +876,14 @@ proptest! {
 
 - [ ] **Step 7: Run the property test**
 
-Run: `cargo test -p crabka-metrics --test histogram_roundtrip`
+Run: `cargo test -p krabka-metrics --test histogram_roundtrip`
 Expected: PASS (128 cases).
 
 - [ ] **Step 8: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): native-histogram Arrow codec with round-trip property test"
 ```
@@ -885,15 +893,17 @@ git commit -m "feat(metrics): native-histogram Arrow codec with round-trip prope
 ### Task 5: Float-sample codec
 
 **Files:**
+
 - Create: `crates/metrics/src/sample.rs`
 - Modify: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `pub fn encode_float_samples(rows: &[(u64, i64, f64)]) -> Result<arrow::record_batch::RecordBatch, crate::histogram::HistogramCodecError>`
   - `pub fn decode_float_samples(batch: &arrow::record_batch::RecordBatch) -> Result<Vec<(u64, i64, f64)>, crate::histogram::HistogramCodecError>`
 
-  *(Reuses `HistogramCodecError` as the crate's codec error — rename to `CodecError` is a valid cleanup if preferred; keep one error type.)*
+  _(Reuses `HistogramCodecError` as the crate's codec error — rename to `CodecError` is a valid cleanup if preferred; keep one error type.)_
 
 - [ ] **Step 1: Write the failing test**
 
@@ -919,7 +929,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib sample`
+Run: `cargo test -p krabka-metrics --lib sample`
 Expected: FAIL — `cannot find function encode_float_samples`.
 
 - [ ] **Step 3: Implement `sample.rs`**
@@ -981,14 +991,14 @@ Add `mod sample;` and `pub use sample::{decode_float_samples, encode_float_sampl
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib sample`
+Run: `cargo test -p krabka-metrics --lib sample`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): float-sample block codec"
 ```
@@ -998,10 +1008,12 @@ git commit -m "feat(metrics): float-sample block codec"
 ### Task 6: Symbol table (remote_write v2 interning)
 
 **Files:**
+
 - Create: `crates/metrics/src/symbols.rs`
 - Modify: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `struct SymbolTable` (`Default`) with `new()`, `intern(&mut self, s: &str) -> u32`, `resolve(&self, ref_: u32) -> Option<&str>`, `symbols(&self) -> &[String]`, and `from_symbols(Vec<String>) -> Result<SymbolTable, SymbolError>` (validates `symbols[0] == ""`).
   - `fn resolve_label_refs(&self, refs: &[u32]) -> Result<Vec<(String, String)>, SymbolError>` — even-length name/value ref pairs → label pairs.
@@ -1058,7 +1070,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib symbols`
+Run: `cargo test -p krabka-metrics --lib symbols`
 Expected: FAIL — `cannot find type SymbolTable`.
 
 - [ ] **Step 3: Implement `symbols.rs`**
@@ -1166,12 +1178,12 @@ Add `mod symbols;` and `pub use symbols::{SymbolError, SymbolTable};`.
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib symbols`
+Run: `cargo test -p krabka-metrics --lib symbols`
 Expected: PASS (4 tests).
 
 - [ ] **Step 6: Final whole-crate gate**
 
-Run: `cargo test -p crabka-metrics && cargo clippy -p crabka-metrics --all-targets && cargo fmt -p crabka-metrics --check`
+Run: `cargo test -p krabka-metrics && cargo clippy -p krabka-metrics --all-targets && cargo fmt -p krabka-metrics --check`
 Expected: all PASS, no warnings, formatting clean.
 
 - [ ] **Step 7: Commit**
@@ -1186,13 +1198,14 @@ git commit -m "feat(metrics): remote_write v2 symbol table"
 ## Self-review
 
 **Spec coverage (against §4 data model + §11 Slice 1):**
+
 - Float-sample block schema + codec → Tasks 2, 5.
 - Native-histogram block schema + codec (absolute counts, spans/counts, int/float discriminator, NHCB, reset hint, start ts) → Tasks 2, 3, 4.
-- Exemplar block schema (trace_id/span_id promoted, labels Map) → Task 2. *(Exemplar codec deferred to the ingest slice, where exemplar wire-decode lands — flagged below.)*
+- Exemplar block schema (trace_id/span_id promoted, labels Map) → Task 2. _(Exemplar codec deferred to the ingest slice, where exemplar wire-decode lands — flagged below.)_
 - Symbol table (remote_write v2 interning, `symbols[0]==""`, even-length refs) → Task 6.
-- *Deferred (correctly, to later slices):* wire (proto) decode → `NativeHistogram` (Slice 4 ingest); the PromQL engine (Slice 2); blocks-on-object-storage (uses blockstore's `BlockWriter` — Slice 4 compactor).
+- _Deferred (correctly, to later slices):_ wire (proto) decode → `NativeHistogram` (Slice 4 ingest); the PromQL engine (Slice 2); blocks-on-object-storage (uses blockstore's `BlockWriter` — Slice 4 compactor).
 
-**Deviation flagged:** the exemplar *codec* is not in this slice — only its schema. Exemplar encoding is tightly coupled to the ingest decode (wire → exemplar) and the trace_id/span_id normalization (OTLP `bytes` vs Prometheus labels), so it belongs with Slice 4. If a reviewer wants it here, add a Task mirroring Task 5's shape against `exemplar_schema()` with a `MapBuilder` for the `labels` column.
+**Deviation flagged:** the exemplar _codec_ is not in this slice — only its schema. Exemplar encoding is tightly coupled to the ingest decode (wire → exemplar) and the trace_id/span_id normalization (OTLP `bytes` vs Prometheus labels), so it belongs with Slice 4. If a reviewer wants it here, add a Task mirroring Task 5's shape against `exemplar_schema()` with a `MapBuilder` for the `labels` column.
 
 **Placeholder scan:** no "TBD"/"add error handling"/"similar to Task N". Every step has runnable code or an exact command. The one hand-wave — arrow 59 builder method names for `List<Struct>`/`Map` — is explicitly bounded with verify-against-arrow-59 notes and pinned by round-trip tests, not left vague.
 

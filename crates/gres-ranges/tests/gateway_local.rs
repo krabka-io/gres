@@ -8,10 +8,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use crabka_gres_control::{
+use krabka_gres_control::{
     RangeLayoutEntry, RangeLifecycle, SqlUser, TenantId, TenantRecord, TenantState,
 };
-use crabka_gres_ranges::{
+use krabka_gres_ranges::{
     BarrierError, CheckpointManifest, ClaimedStagedSuccessor, ClaimedStagedSuccessors,
     CommittedTailRecord, FramedTcpClient, GatewayCommitFault, HostedRangeService,
     LocalSqlSplitError, MemoryTsoHorizon, MultiRangeTenant, MultiRangeTenantConfig, Range0Barrier,
@@ -22,9 +22,9 @@ use crabka_gres_ranges::{
     TableTransferRequest, TenantName, ValidatedSplitTransferPlan, serve_tls,
     tenant::EmptyTableSplitTestHook, tso_rpc_from_horizon,
 };
-use crabka_pgexec::SqlEngine;
-use crabka_pgkv::{Kv, MemKv};
-use crabka_pgwire::engine::{Engine, QueryResult, Session};
+use krabka_pgexec::SqlEngine;
+use krabka_pgkv::{Kv, MemKv};
+use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
 struct CountingTimestampService {
     inner: HostedRangeService,
@@ -115,12 +115,12 @@ impl MtlsFixture {
             _dir: dir,
             server: RangeTlsServerConfig {
                 tenant: "tenant_gateway_remote".to_string(),
-                tls: crabka_security::TlsConfig {
+                tls: krabka_security::TlsConfig {
                     cert_chain_path: server_cert.clone(),
                     private_key_path: server_key,
                     trust_roots_path: Some(server_cert.clone()),
                     client_ca_path: Some(client_ca),
-                    client_auth: crabka_security::ClientAuthMode::Required,
+                    client_auth: krabka_security::ClientAuthMode::Required,
                 },
                 range_rpc_principals: BTreeSet::from([
                     "CN=test-client,OU=integration,O=crabka".to_string()
@@ -130,14 +130,14 @@ impl MtlsFixture {
                 ]),
             },
             client: RangeTlsClientConfig {
-                tls: crabka_security::TlsConfig {
+                tls: krabka_security::TlsConfig {
                     cert_chain_path: client_cert,
                     private_key_path: client_key,
                     trust_roots_path: Some(server_cert),
                     client_ca_path: None,
-                    client_auth: crabka_security::ClientAuthMode::Disabled,
+                    client_auth: krabka_security::ClientAuthMode::Disabled,
                 },
-                server_name: "crabka-dev".to_string(),
+                server_name: "krabka-dev".to_string(),
             },
         }
     }
@@ -411,8 +411,8 @@ impl InProcessTransfer {
                 continue;
             }
             if matches!(
-                crabka_pgkv::key::classify_key(&key),
-                crabka_pgkv::key::KeyClass::Clog { .. }
+                krabka_pgkv::key::classify_key(&key),
+                krabka_pgkv::key::KeyClass::Clog { .. }
             ) {
                 target_kv
                     .put(key, value)
@@ -444,12 +444,12 @@ impl InProcessTransfer {
 }
 
 fn storage_range_key(bytes: &[u8]) -> Option<RangeKey> {
-    match crabka_pgkv::key::classify_key(bytes) {
-        crabka_pgkv::key::KeyClass::PrimaryRow { table_id, rowid }
-        | crabka_pgkv::key::KeyClass::PrimaryVersion {
+    match krabka_pgkv::key::classify_key(bytes) {
+        krabka_pgkv::key::KeyClass::PrimaryRow { table_id, rowid }
+        | krabka_pgkv::key::KeyClass::PrimaryVersion {
             table_id, rowid, ..
         } => Some(RangeKey::new(TableId::new(u64::from(table_id)), rowid)),
-        crabka_pgkv::key::KeyClass::Sequence { table_id } => {
+        krabka_pgkv::key::KeyClass::Sequence { table_id } => {
             Some(RangeKey::table_start(TableId::new(u64::from(table_id))))
         }
         _ => None,
@@ -844,8 +844,8 @@ async fn empty_table_split_revalidates_after_a_concurrent_predecessor_insert() {
         .expect("split task completes")
         .expect_err("split must reject the no-longer-empty table");
     let rejected_table = match split_error {
-        crabka_gres_ranges::LocalSqlSplitError::NonEmptyTable(table_id)
-        | crabka_gres_ranges::LocalSqlSplitError::AllocatedRowIds(table_id) => table_id,
+        krabka_gres_ranges::LocalSqlSplitError::NonEmptyTable(table_id)
+        | krabka_gres_ranges::LocalSqlSplitError::AllocatedRowIds(table_id) => table_id,
         error => panic!("unexpected split error: {error}"),
     };
     assert_eq!(rejected_table, TableId::new(100));
@@ -859,7 +859,7 @@ async fn empty_table_split_revalidates_after_a_concurrent_predecessor_insert() {
     };
     assert_eq!(rows[0][0].as_ref().expect("cell").text, "9");
     assert!(handles.route_log().await.iter().any(|route| {
-        route.kind == crabka_gres_ranges::StatementKind::Dml
+        route.kind == krabka_gres_ranges::StatementKind::Dml
             && route.range_id == RangeId::COORDINATOR
             && route.table_id == Some(TableId::new(100))
     }));
@@ -880,9 +880,9 @@ async fn cross_range_single_statement_returns_feature_not_supported() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn gateway_forwards_remote_autocommit_over_tcp() {
-    let mut remote = crabka_pgexec::SqlEngine::new();
-    let timestamp_oracle: Arc<dyn crabka_pgexec::TimestampSource> =
-        Arc::new(crabka_pgexec::timestamp_txn::LocalTimestampSource::default());
+    let mut remote = krabka_pgexec::SqlEngine::new();
+    let timestamp_oracle: Arc<dyn krabka_pgexec::TimestampSource> =
+        Arc::new(krabka_pgexec::timestamp_txn::LocalTimestampSource::default());
     remote.set_timestamp_oracle(Arc::clone(&timestamp_oracle));
     let mut remote_session = remote.connect();
     remote_session
@@ -902,7 +902,7 @@ async fn gateway_forwards_remote_autocommit_over_tcp() {
     let record = TenantRecord::new(
         1,
         TenantId::try_from("tenant-gateway-remote").expect("tenant id"),
-        crabka_gres_control::TenantName::try_from("tenant-gateway-remote").expect("record tenant"),
+        krabka_gres_control::TenantName::try_from("tenant-gateway-remote").expect("record tenant"),
         TenantState::Active,
         SqlUser::try_from("alice").expect("user"),
         "SCRAM-SHA-256$4096:salt$stored:server".to_string(),
@@ -912,7 +912,7 @@ async fn gateway_forwards_remote_autocommit_over_tcp() {
     .with_range_layout(vec![
         RangeLayoutEntry {
             range_id: 0,
-            end_key: Some(crabka_gres_control::RangeBoundary::table_start(100)),
+            end_key: Some(krabka_gres_control::RangeBoundary::table_start(100)),
             endpoint: "unhosted-r0-is-local".to_string(),
             wal_generation: 1,
             lifecycle: RangeLifecycle::default(),
@@ -936,7 +936,7 @@ async fn gateway_forwards_remote_autocommit_over_tcp() {
         .with_range_client(FramedTcpClient::with_tls(fixture.client).expect("mTLS range client"));
     let gateway = MultiRangeTenant::start_with_engine_factory_and_timestamp_oracle(
         config,
-        |_data_dir, _range_id| Ok(crabka_pgexec::SqlEngine::new()),
+        |_data_dir, _range_id| Ok(krabka_pgexec::SqlEngine::new()),
         Some(timestamp_oracle),
     )
     .expect("gateway")
@@ -1032,7 +1032,7 @@ async fn ddl_through_rn_only_gateway_reaches_range0_and_is_locally_visible() {
     let mut record = TenantRecord::new(
         1,
         TenantId::try_from("tenant-rn-only-ddl").expect("tenant id"),
-        crabka_gres_control::TenantName::try_from("tenant-rn-only-ddl").expect("record tenant"),
+        krabka_gres_control::TenantName::try_from("tenant-rn-only-ddl").expect("record tenant"),
         TenantState::Active,
         SqlUser::try_from("alice").expect("user"),
         "SCRAM-SHA-256$4096:salt$stored:server".to_string(),
@@ -1042,7 +1042,7 @@ async fn ddl_through_rn_only_gateway_reaches_range0_and_is_locally_visible() {
     .with_range_layout(vec![
         RangeLayoutEntry {
             range_id: 0,
-            end_key: Some(crabka_gres_control::RangeBoundary::table_start(100)),
+            end_key: Some(krabka_gres_control::RangeBoundary::table_start(100)),
             endpoint: range0_address.to_string(),
             wal_generation: 1,
             lifecycle: RangeLifecycle::default(),
@@ -1144,7 +1144,7 @@ async fn ddl_through_rn_only_gateway_reaches_range0_and_is_locally_visible() {
 async fn assert_recovered_timestamp_commit(
     restarted: &MultiRangeTenant,
     remote: &mut SqlEngine,
-    descriptor: &crabka_pgexec::TimestampTxnDescriptor,
+    descriptor: &krabka_pgexec::TimestampTxnDescriptor,
 ) {
     let restarted_hosted = restarted.hosted_range_engines();
     remote.set_timestamp_oracle(
@@ -1154,7 +1154,7 @@ async fn assert_recovered_timestamp_commit(
             .timestamp_oracle_handle(),
     );
     let commit_ts = match descriptor.decision {
-        crabka_pgexec::PrimaryTxnDecision::Committed(ts) => ts,
+        krabka_pgexec::PrimaryTxnDecision::Committed(ts) => ts,
         other => panic!("expected committed descriptor, got {other:?}"),
     };
     for operation in &descriptor.operations {
@@ -1166,7 +1166,7 @@ async fn assert_recovered_timestamp_commit(
                 .expect("reopened owner")
                 .kv_handle()
         };
-        let key = crabka_pgmvcc::version::version_key_ts(
+        let key = krabka_pgmvcc::version::version_key_ts(
             operation.table_id,
             operation.rowid,
             descriptor.start_ts.get(),
@@ -1175,10 +1175,10 @@ async fn assert_recovered_timestamp_commit(
             .get(&key)
             .expect("read version")
             .expect("recovered version exists");
-        let version = crabka_pgmvcc::version::decode_ts_tuple(&bytes).expect("decode version");
+        let version = krabka_pgmvcc::version::decode_ts_tuple(&bytes).expect("decode version");
         assert_eq!(
             version.state,
-            crabka_pgmvcc::version::TsVersionState::Committed {
+            krabka_pgmvcc::version::TsVersionState::Committed {
                 commit_ts: commit_ts.get()
             }
         );
@@ -1210,12 +1210,12 @@ async fn assert_recovered_timestamp_commit(
 async fn ambiguous_remote_timestamp_commit_recovers_once_after_gateway_restart() {
     let local_dir = tempfile::tempdir().expect("local durable ranges");
     let remote_dir = tempfile::tempdir().expect("remote durable range");
-    let mut remote = crabka_pgexec::SqlEngine::open(remote_dir.path()).expect("remote engine");
+    let mut remote = krabka_pgexec::SqlEngine::open(remote_dir.path()).expect("remote engine");
     let fixture = MtlsFixture::new();
     let record = TenantRecord::new(
         1,
         TenantId::try_from("tenant-remote-scatter").expect("tenant id"),
-        crabka_gres_control::TenantName::try_from("tenant-remote-scatter").expect("record tenant"),
+        krabka_gres_control::TenantName::try_from("tenant-remote-scatter").expect("record tenant"),
         TenantState::Active,
         SqlUser::try_from("alice").expect("user"),
         "SCRAM-SHA-256$4096:salt$stored:server".to_string(),
@@ -1225,7 +1225,7 @@ async fn ambiguous_remote_timestamp_commit_recovers_once_after_gateway_restart()
     .with_range_layout(vec![
         RangeLayoutEntry {
             range_id: 0,
-            end_key: Some(crabka_gres_control::RangeBoundary::new(50, 0)),
+            end_key: Some(krabka_gres_control::RangeBoundary::new(50, 0)),
             endpoint: "local-r0".into(),
             wal_generation: 1,
             lifecycle: RangeLifecycle::default(),
@@ -1233,7 +1233,7 @@ async fn ambiguous_remote_timestamp_commit_recovers_once_after_gateway_restart()
         },
         RangeLayoutEntry {
             range_id: 1,
-            end_key: Some(crabka_gres_control::RangeBoundary::new(50, 3)),
+            end_key: Some(krabka_gres_control::RangeBoundary::new(50, 3)),
             endpoint: "local-r1".into(),
             wal_generation: 1,
             lifecycle: RangeLifecycle::default(),
@@ -1308,7 +1308,7 @@ async fn ambiguous_remote_timestamp_commit_recovers_once_after_gateway_restart()
         .simple_query("CREATE TABLE t50 (id int4) SHARDED")
         .await
         .expect("create");
-    let table = crabka_pgcatalog::list_tables(coordinator.catalog_kv())
+    let table = krabka_pgcatalog::list_tables(coordinator.catalog_kv())
         .expect("catalog")
         .into_iter()
         .find(|table| table.name.name == "t50")
@@ -1405,9 +1405,9 @@ async fn ambiguous_remote_timestamp_commit_recovers_once_after_gateway_restart()
 
 #[tokio::test]
 async fn remote_extended_statement_participates_in_cross_range_commit() {
-    use crabka_pgwire::engine::BoundParam;
+    use krabka_pgwire::engine::BoundParam;
 
-    let mut remote = crabka_pgexec::SqlEngine::new();
+    let mut remote = krabka_pgexec::SqlEngine::new();
     let mut remote_setup = remote.connect();
     remote_setup
         .simple_query("CREATE TABLE t150 (id int4)")
@@ -1417,7 +1417,7 @@ async fn remote_extended_statement_participates_in_cross_range_commit() {
     let record = TenantRecord::new(
         1,
         TenantId::try_from("tenant-gateway-explicit").expect("tenant id"),
-        crabka_gres_control::TenantName::try_from("tenant-gateway-explicit")
+        krabka_gres_control::TenantName::try_from("tenant-gateway-explicit")
             .expect("record tenant"),
         TenantState::Active,
         SqlUser::try_from("alice").expect("user"),
@@ -1428,7 +1428,7 @@ async fn remote_extended_statement_participates_in_cross_range_commit() {
     .with_range_layout(vec![
         RangeLayoutEntry {
             range_id: 0,
-            end_key: Some(crabka_gres_control::RangeBoundary::table_start(100)),
+            end_key: Some(krabka_gres_control::RangeBoundary::table_start(100)),
             endpoint: "local".to_string(),
             wal_generation: 1,
             lifecycle: RangeLifecycle::default(),
@@ -1519,7 +1519,7 @@ async fn remote_extended_statement_participates_in_cross_range_commit() {
         .simple_query("COMMIT")
         .await
         .expect("cross-range commit");
-    assert_eq!(session.tx_status(), crabka_pgwire::engine::TxStatus::Idle);
+    assert_eq!(session.tx_status(), krabka_pgwire::engine::TxStatus::Idle);
     let rows = session
         .simple_query("SELECT * FROM t50")
         .await

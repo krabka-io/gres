@@ -10,7 +10,7 @@ The policy must preserve existing client behavior: an individual lookup failure 
 
 ## Architecture Overview
 
-`crabka-client-core` owns one positive `ClientDnsTimeout` value with a 10-second default. The existing client builder accepts a raw `Duration`, validates it before the first lookup, and stores the typed value in `ConnectionOptions`.
+`krabka-client-core` owns one positive `ClientDnsTimeout` value with a 10-second default. The existing client builder accepts a raw `Duration`, validates it before the first lookup, and stores the typed value in `ConnectionOptions`.
 
 Bootstrap parsing applies the deadline independently to each non-empty `host:port` entry. `Client::reconnect_bootstrap` reuses the same stored policy. `BrokerPool` copies the policy from `ConnectionOptions` and applies it independently to each hostname learned from metadata.
 
@@ -40,7 +40,7 @@ Resolver errors and deadline expiry are logged and skipped in bootstrap resoluti
 
 ## Integration
 
-This slice exposes the policy through `Client::builder()` and `ConnectionOptions`, which are the generic ownership boundaries for `crabka-client-core`. Higher-level producer, consumer, streams, admin, and service deployment surfaces remain separate propagation owners because each constructs and sometimes clones clients differently.
+This slice exposes the policy through `Client::builder()` and `ConnectionOptions`, which are the generic ownership boundaries for `krabka-client-core`. Higher-level producer, consumer, streams, admin, and service deployment surfaces remain separate propagation owners because each constructs and sometimes clones clients differently.
 
 The next slice will carry this typed client policy through those higher-level builders and then expose it through the CLI/environment or CRD surface that owns each deployed component. This separation avoids changing unrelated public builders before the generic behavior is tested and stable.
 
@@ -48,4 +48,4 @@ The next slice will carry this typed client policy through those higher-level bu
 
 A private future seam around `tokio::time::timeout` permits paused-time tests with a permanently pending lookup. Tests pin the default, replacement, zero/fractional rejection, exact deadline, successful and failed resolution behavior, bootstrap fallback, reconnect reuse, and advertised-broker timeout behavior without relying on external DNS.
 
-Affected `crabka-client-core` tests, strict Clippy, formatting, and the runtime-value scanner must pass before the slice is published.
+Affected `krabka-client-core` tests, strict Clippy, formatting, and the runtime-value scanner must pass before the slice is published.

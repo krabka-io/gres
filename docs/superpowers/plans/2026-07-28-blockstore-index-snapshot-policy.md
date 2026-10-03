@@ -7,7 +7,7 @@
 **Goal:** Make trace/profile index-snapshot read limits and retention counts
 configurable while preserving the 256-MiB and eight-snapshot defaults.
 
-**Architecture:** Validate two scalar settings in `crabka-blockstore`, reuse
+**Architecture:** Validate two scalar settings in `krabka-blockstore`, reuse
 them directly at the traces/profiles Clap boundaries, and pass each only to the
 existing load or save seam that consumes it. Keep current public methods as
 default-preserving wrappers.
@@ -37,9 +37,9 @@ default-preserving wrappers.
 - `crates/blockstore/src/lib.rs`
 - `crates/blockstore/src/profile_index.rs`
 - `crates/blockstore/src/trace_index.rs`
-- `crates/traces/src/bin/crabka-traces.rs`
+- `crates/traces/src/bin/krabka-traces.rs`
 - `crates/traces/src/blockbuilder.rs`
-- `crates/profiles/src/bin/crabka-profiles.rs`
+- `crates/profiles/src/bin/krabka-profiles.rs`
 - `crates/profiles/src/blockbuilder.rs`
 - `demo/observability/docker-compose.yml`
 - `crates/observability-demo-app/tests/observability_demo_config.rs`
@@ -68,9 +68,9 @@ and the primitive-overflow value for each type.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-blockstore index_snapshot --locked
+  cargo test -p krabka-blockstore index_snapshot --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-blockstore snapshot_with --locked
+  cargo test -p krabka-blockstore snapshot_with --locked
 ```
 
 - [ ] Add the workspace `refined_type` dependency to blockstore and implement:
@@ -89,8 +89,8 @@ Re-export both types and defaults from `lib.rs`; retain existing public constant
 aliases for compatibility.
 
 - [ ] Change the crate-private shared snapshot writer to accept
-`IndexSnapshotRetain` and remove the defensive `.max(1)`, because validation
-now enforces that invariant.
+      `IndexSnapshotRetain` and remove the defensive `.max(1)`, because validation
+      now enforces that invariant.
 
 - [ ] Add only these public method variants to both index types:
 
@@ -102,22 +102,22 @@ save_latest_snapshot_with_retain(...)
 
 Keep existing public methods as wrappers using the typed defaults.
 
-- [ ] Route trace loads through `crabka_object_store::read_capped`, matching the
-existing profile implementation. Do not cap serialization or writes.
+- [ ] Route trace loads through `krabka_object_store::read_capped`, matching the
+      existing profile implementation. Do not cap serialization or writes.
 
 - [ ] Verify GREEN and package quality:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-blockstore --all-targets --locked
+  cargo test -p krabka-blockstore --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-blockstore --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-blockstore --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 git diff --check
 git diff -- Cargo.lock
 ```
 
-Confirm the lock diff changes only `crabka-blockstore`'s direct dependency
+Confirm the lock diff changes only `krabka-blockstore`'s direct dependency
 list.
 
 - [ ] Commit only the blockstore API and lock entry:
@@ -132,11 +132,11 @@ git commit -m "feat(blockstore): expose snapshot policy"
 ### Task 2: Thread settings through traces
 
 - [ ] Add failing CLI tests for both defaults, invalid values, environment
-values, and command-line precedence:
+      values, and command-line precedence:
 
 ```text
-CRABKA_TRACES_INDEX_SNAPSHOT_MAX_BYTES=1024
-CRABKA_TRACES_INDEX_SNAPSHOT_RETAIN=3
+KRABKA_TRACES_INDEX_SNAPSHOT_MAX_BYTES=1024
+KRABKA_TRACES_INDEX_SNAPSHOT_RETAIN=3
 --index-snapshot-max-bytes 2048
 --index-snapshot-retain 4
 ```
@@ -144,20 +144,20 @@ CRABKA_TRACES_INDEX_SNAPSHOT_RETAIN=3
 Use the existing hermetic child-process pattern for environment mutation.
 
 - [ ] Add a failing block-builder test showing the configured retention value
-reaches its snapshot save.
+      reaches its snapshot save.
 
 - [ ] Verify RED:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-traces index_snapshot --locked
+  cargo test -p krabka-traces index_snapshot --locked
 ```
 
 - [ ] Add typed fields to `Cli`:
 
 ```text
---index-snapshot-max-bytes / CRABKA_TRACES_INDEX_SNAPSHOT_MAX_BYTES
---index-snapshot-retain / CRABKA_TRACES_INDEX_SNAPSHOT_RETAIN
+--index-snapshot-max-bytes / KRABKA_TRACES_INDEX_SNAPSHOT_MAX_BYTES
+--index-snapshot-retain / KRABKA_TRACES_INDEX_SNAPSHOT_RETAIN
 ```
 
 - [ ] Use the configured maximum in every trace snapshot load:
@@ -169,7 +169,7 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   - compactor startup.
 
 - [ ] Add only `index_snapshot_retain` to `BlockBuilderConfig`, because its loop
-only saves. Use it in `flush_partition_windows`.
+      only saves. Use it in `flush_partition_windows`.
 
 - [ ] Use configured retention in the one-shot compactor save.
 
@@ -177,13 +177,13 @@ only saves. Use it in `flush_partition_windows`.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-traces --all-targets --locked
+  cargo test -p krabka-traces --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-traces --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-traces --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -p crabka-traces --bin crabka-traces --locked -- --help
-test "$(target/debug/crabka-traces --help | rg -c -- '--index-snapshot-max-bytes')" -eq 1
-test "$(target/debug/crabka-traces --help | rg -c -- '--index-snapshot-retain')" -eq 1
+  cargo run -p krabka-traces --bin krabka-traces --locked -- --help
+test "$(target/debug/krabka-traces --help | rg -c -- '--index-snapshot-max-bytes')" -eq 1
+test "$(target/debug/krabka-traces --help | rg -c -- '--index-snapshot-retain')" -eq 1
 rg -n 'load_latest_snapshot|save_latest_snapshot' \
   crates/traces/src crates/traces/tests
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
@@ -195,7 +195,7 @@ Classify every production call and confirm it uses a configurable variant.
 - [ ] Commit only traces files:
 
 ```bash
-git add crates/traces/src/bin/crabka-traces.rs crates/traces/src/blockbuilder.rs
+git add crates/traces/src/bin/krabka-traces.rs crates/traces/src/blockbuilder.rs
 git commit -m "feat(traces): configure snapshot policy"
 ```
 
@@ -204,26 +204,26 @@ git commit -m "feat(traces): configure snapshot policy"
 - [ ] Add failing CLI tests equivalent to Task 2 using:
 
 ```text
-CRABKA_PROFILES_INDEX_SNAPSHOT_MAX_BYTES
-CRABKA_PROFILES_INDEX_SNAPSHOT_RETAIN
+KRABKA_PROFILES_INDEX_SNAPSHOT_MAX_BYTES
+KRABKA_PROFILES_INDEX_SNAPSHOT_RETAIN
 ```
 
 - [ ] Add a failing `BlockBuilderConfig` test showing both configured values
-reach block-builder load/save behavior.
+      reach block-builder load/save behavior.
 
 - [ ] Verify RED:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-profiles index_snapshot --locked
+  cargo test -p krabka-profiles index_snapshot --locked
 ```
 
 - [ ] Add typed CLI fields and use the configured maximum in querier,
-query-frontend, periodic refresh, compactor, and block-builder load paths.
+      query-frontend, periodic refresh, compactor, and block-builder load paths.
 
 - [ ] Add `index_snapshot_max_bytes` and `index_snapshot_retain` to
-`BlockBuilderConfig`, preserve typed defaults in `new`, and use them in its
-load/save loop.
+      `BlockBuilderConfig`, preserve typed defaults in `new`, and use them in its
+      load/save loop.
 
 - [ ] Use configured retention in the profiles compactor save.
 
@@ -231,13 +231,13 @@ load/save loop.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-profiles --all-targets --locked
+  cargo test -p krabka-profiles --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-profiles --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-profiles --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -p crabka-profiles --bin crabka-profiles --locked -- --help
-test "$(target/debug/crabka-profiles --help | rg -c -- '--index-snapshot-max-bytes')" -eq 1
-test "$(target/debug/crabka-profiles --help | rg -c -- '--index-snapshot-retain')" -eq 1
+  cargo run -p krabka-profiles --bin krabka-profiles --locked -- --help
+test "$(target/debug/krabka-profiles --help | rg -c -- '--index-snapshot-max-bytes')" -eq 1
+test "$(target/debug/krabka-profiles --help | rg -c -- '--index-snapshot-retain')" -eq 1
 rg -n 'load_latest_snapshot|save_latest_snapshot' \
   crates/profiles/src crates/profiles/tests
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
@@ -249,7 +249,7 @@ Classify every production call and confirm it uses a configurable variant.
 - [ ] Commit only profiles files:
 
 ```bash
-git add crates/profiles/src/bin/crabka-profiles.rs crates/profiles/src/blockbuilder.rs
+git add crates/profiles/src/bin/krabka-profiles.rs crates/profiles/src/blockbuilder.rs
 git commit -m "feat(profiles): configure snapshot policy"
 ```
 
@@ -270,22 +270,22 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
 ```
 
 - [ ] Add only the relevant signal-specific environment entries to each
-Compose role. Do not pass retention to read-only queriers.
+      Compose role. Do not pass retention to read-only queriers.
 
 - [ ] Verify GREEN and rendered Compose:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo test -p observability-demo-app observability_demo_config --locked
-docker compose -f demo/observability/docker-compose.yml config > /tmp/crabka-compose-default.yml
-CRABKA_TRACES_INDEX_SNAPSHOT_MAX_BYTES=1024 \
-CRABKA_TRACES_INDEX_SNAPSHOT_RETAIN=3 \
-CRABKA_PROFILES_INDEX_SNAPSHOT_MAX_BYTES=2048 \
-CRABKA_PROFILES_INDEX_SNAPSHOT_RETAIN=4 \
+docker compose -f demo/observability/docker-compose.yml config > /tmp/krabka-compose-default.yml
+KRABKA_TRACES_INDEX_SNAPSHOT_MAX_BYTES=1024 \
+KRABKA_TRACES_INDEX_SNAPSHOT_RETAIN=3 \
+KRABKA_PROFILES_INDEX_SNAPSHOT_MAX_BYTES=2048 \
+KRABKA_PROFILES_INDEX_SNAPSHOT_RETAIN=4 \
   docker compose -f demo/observability/docker-compose.yml config \
-  > /tmp/crabka-compose-override.yml
+  > /tmp/krabka-compose-override.yml
 rg -n 'INDEX_SNAPSHOT_(MAX_BYTES|RETAIN)' \
-  /tmp/crabka-compose-default.yml /tmp/crabka-compose-override.yml
+  /tmp/krabka-compose-default.yml /tmp/krabka-compose-override.yml
 git diff --check
 ```
 
@@ -313,17 +313,17 @@ are configured defaults, compatibility aliases, propagation, deployment,
 tests, or audit evidence rather than unresolved production owners.
 
 - [ ] Append a snapshot-policy section to `docs/configuration-audit.md` with
-the defaults, validation, precedence, complete runtime/deployment flow, trace
-cap correction, exact counts, and verification evidence.
+      the defaults, validation, precedence, complete runtime/deployment flow, trace
+      cap correction, exact counts, and verification evidence.
 
 - [ ] Run final gates:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-blockstore -p crabka-traces -p crabka-profiles \
+  cargo test -p krabka-blockstore -p krabka-traces -p krabka-profiles \
     -p observability-demo-app --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-blockstore -p crabka-traces -p crabka-profiles \
+  cargo clippy -p krabka-blockstore -p krabka-traces -p krabka-profiles \
     -p observability-demo-app --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 docker compose -f demo/observability/docker-compose.yml config --quiet

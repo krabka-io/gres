@@ -37,7 +37,7 @@ impl DmlSource {
         ctes: &crate::cte::CteContext,
         table: &Table,
         qualifier: &str,
-        from: &[crabka_pgparser::ast::TableExpr],
+        from: &[krabka_pgparser::ast::TableExpr],
         refs: Option<&crate::scope::StatementRefs>,
     ) -> Result<Self, ExecError> {
         let mut scope = Scope::single(table, qualifier);
@@ -170,7 +170,7 @@ fn materialize_correlated_exists(
     filter: &Expr,
     outer: &Scope,
 ) -> Result<Expr, ExecError> {
-    use crabka_pgparser::ast::{DistinctClause, QueryBody, SetExpr};
+    use krabka_pgparser::ast::{DistinctClause, QueryBody, SetExpr};
 
     let Expr::Exists(query) = filter else {
         return Ok(filter.clone());
@@ -223,7 +223,7 @@ fn materialize_correlated_exists(
     let SetExpr::Query(QueryBody::Select(select)) = &mut keys.body else {
         unreachable!("the EXISTS query was a SELECT")
     };
-    select.projection = vec![crabka_pgparser::ast::SelectItem::Expr {
+    select.projection = vec![krabka_pgparser::ast::SelectItem::Expr {
         expr: (**inner_expr).clone(),
         alias: None,
     }];
@@ -275,9 +275,9 @@ pub(crate) fn resolve_assignments<'a>(
     write_ctx: &WriteContext<'_>,
     ctes: &crate::cte::CteContext,
     table: &Table,
-    assignments: &'a [crabka_pgparser::ast::Assignment],
+    assignments: &'a [krabka_pgparser::ast::Assignment],
 ) -> Result<Vec<(usize, AssignedValue<'a>)>, ExecError> {
-    use crabka_pgparser::ast::AssignmentValue;
+    use krabka_pgparser::ast::AssignmentValue;
 
     validate_assignment_targets(table, assignments)?;
     let mut out: Vec<(usize, AssignedValue<'a>)> = Vec::new();
@@ -376,7 +376,7 @@ pub(crate) fn resolve_assignments<'a>(
 /// source and target do not join.
 pub(crate) fn validate_assignment_targets(
     table: &Table,
-    assignments: &[crabka_pgparser::ast::Assignment],
+    assignments: &[krabka_pgparser::ast::Assignment],
 ) -> Result<(), ExecError> {
     for column in assignments
         .iter()
@@ -407,11 +407,11 @@ pub(crate) fn update_pg_class_statistics(
     write_ctx: &WriteContext<'_>,
     ctes: &crate::cte::CteContext,
     alias: Option<&str>,
-    assignments: &[crabka_pgparser::ast::Assignment],
-    from: &[crabka_pgparser::ast::TableExpr],
+    assignments: &[krabka_pgparser::ast::Assignment],
+    from: &[krabka_pgparser::ast::TableExpr],
     filter: Option<&Expr>,
-    returning: Option<&crabka_pgparser::ast::Returning>,
-) -> Result<(WriteOutcome, Vec<crabka_pgkv::WriteOp>), ExecError> {
+    returning: Option<&krabka_pgparser::ast::Returning>,
+) -> Result<(WriteOutcome, Vec<krabka_pgkv::WriteOp>), ExecError> {
     if !crate::rls::role_is_superuser(write_ctx.catalog_kv, write_ctx.fctx.effective_role())? {
         return Err(ExecError::PermissionDenied {
             kind: "table",
@@ -441,7 +441,7 @@ pub(crate) fn update_pg_class_statistics(
     }
     let filter = crate::bind::bind_optional(filter, &scope)?;
     let spec = ReturningSpec::new(&table, qualifier, returning, Some(&scope), false)?;
-    let relations = crabka_pgcatalog::list_tables(write_ctx.catalog_kv)?
+    let relations = krabka_pgcatalog::list_tables(write_ctx.catalog_kv)?
         .into_iter()
         .map(|table| {
             Ok((
@@ -458,7 +458,7 @@ pub(crate) fn update_pg_class_statistics(
         .enumerate()
     {
         let Some(Datum::Int4(oid)) = row.first() else {
-            return Err(ExecError::Kv(crabka_pgkv::KvError::CorruptRow(
+            return Err(ExecError::Kv(krabka_pgkv::KvError::CorruptRow(
                 "pg_class row has no oid".into(),
             )));
         };

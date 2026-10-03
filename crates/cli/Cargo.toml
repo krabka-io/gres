@@ -1,5 +1,5 @@
 [package]
-name = "crabka-cli"
+name = "krabka-cli"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -9,7 +9,7 @@ rust-version.workspace = true
 description = "Operator CLI for Crabka (binary: `crabka`)"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-cli"
+documentation = "https://docs.rs/krabka-cli"
 readme = "README.md"
 keywords = ["kafka", "cli", "operator", "crabka"]
 categories = ["command-line-utilities"]
@@ -24,14 +24,14 @@ workspace = true
 [dependencies]
 assert2 = { workspace = true }
 clap = { workspace = true, features = ["env"] }
-crabka-security = { workspace = true }
-crabka-client-core = { version = "0.4.1", path = "../client-core" }
-crabka-client-admin = { version = "0.4.1", path = "../client-admin" }
-crabka-gres-balancer = { version = "0.4.1", path = "../gres-balancer" }
-crabka-gres-control = { version = "0.4.1", path = "../gres-control" }
-crabka-units = { workspace = true }
-crabka-metadata = { version = "0.4.1", path = "../metadata" }
-crabka-raft = { version = "0.4.1", path = "../raft" }
+krabka-security = { workspace = true }
+krabka-client-core = { version = "0.4.2", path = "../client-core" }
+krabka-client-admin = { version = "0.4.2", path = "../client-admin" }
+krabka-gres-balancer = { version = "0.4.2", path = "../gres-balancer" }
+krabka-gres-control = { version = "0.4.2", path = "../gres-control" }
+krabka-units = { workspace = true }
+krabka-metadata = { version = "0.4.2", path = "../metadata" }
+krabka-raft = { version = "0.4.2", path = "../raft" }
 derive_more = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "fs"] }
@@ -45,5 +45,5 @@ tracing-subscriber = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
-crabka-broker = { version = "0.4.1", path = "../broker" }
+krabka-broker = { version = "0.4.2", path = "../broker" }
 tempfile = { workspace = true }

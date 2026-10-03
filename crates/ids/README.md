@@ -1,4 +1,4 @@
-# crabka-ids
+# krabka-ids
 
 Canonical newtypes for Crabka's cross-crate Kafka identifiers.
 

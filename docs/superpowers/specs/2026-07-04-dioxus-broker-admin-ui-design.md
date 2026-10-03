@@ -4,12 +4,12 @@
 
 Add a new standalone Dioxus fullstack web application for administering one configured Crabka broker cluster. The first version targets full admin-console workflows for topics/configs, consumer groups, ACLs, SCRAM users, quotas, and log dirs.
 
-The UI uses broker-backed login with SASL/SCRAM-SHA-512 credentials. The server authenticates by connecting to the broker as the submitted principal, derives UI capabilities from broker ACLs, and calls `crabka-client-admin` for all admin operations. Broker authorization remains the source of truth.
+The UI uses broker-backed login with SASL/SCRAM-SHA-512 credentials. The server authenticates by connecting to the broker as the submitted principal, derives UI capabilities from broker ACLs, and calls `krabka-client-admin` for all admin operations. Broker authorization remains the source of truth.
 
 ## Goals
 
 - Provide a browser-based operations console for one Crabka cluster per UI instance.
-- Ship as a new standalone `crabka-admin-ui` workspace binary.
+- Ship as a new standalone `krabka-admin-ui` workspace binary.
 - Use Dioxus fullstack/server-rendered app structure in one binary.
 - Authenticate UI users against the broker with SASL/SCRAM-SHA-512.
 - Derive visible and enabled UI actions from broker ACLs for the logged-in principal.
@@ -20,7 +20,7 @@ The UI uses broker-backed login with SASL/SCRAM-SHA-512 credentials. The server 
 ## Non-Goals
 
 - Multi-cluster administration.
-- Mounting the UI into the broker or `crabka-grpc-gateway` HTTP server.
+- Mounting the UI into the broker or `krabka-grpc-gateway` HTTP server.
 - A separate public REST API for non-Dioxus clients.
 - OIDC/OAuth, reverse-proxy auth, mTLS-only UI auth, or static UI user files.
 - Support for SASL/PLAIN or SCRAM-SHA-256 in the first version.
@@ -28,11 +28,11 @@ The UI uses broker-backed login with SASL/SCRAM-SHA-512 credentials. The server 
 
 ## Architecture
 
-Create a new workspace crate and binary named `crabka-admin-ui`.
+Create a new workspace crate and binary named `krabka-admin-ui`.
 
-The binary owns the HTTP server, renders the Dioxus fullstack app, manages UI login sessions, and calls `crabka-client-admin` from server functions. It is configured for exactly one cluster through local config: display name, bootstrap broker addresses, listener/security options, HTTP bind address, and session settings.
+The binary owns the HTTP server, renders the Dioxus fullstack app, manages UI login sessions, and calls `krabka-client-admin` from server functions. It is configured for exactly one cluster through local config: display name, bootstrap broker addresses, listener/security options, HTTP bind address, and session settings.
 
-The app does not introduce a separate public JSON API in the first slice. Server functions are the boundary between browser UI and server-side admin logic. This keeps the first version close to existing `crabka-client-admin` capabilities and avoids duplicating a client API contract before there is another consumer.
+The app does not introduce a separate public JSON API in the first slice. Server functions are the boundary between browser UI and server-side admin logic. This keeps the first version close to existing `krabka-client-admin` capabilities and avoids duplicating a client API contract before there is another consumer.
 
 Login uses broker-backed SASL/SCRAM-SHA-512 credentials. On login, the server attempts an admin-client connection with the submitted username and password, verifies the connection with a lightweight admin call, derives initial capabilities from ACLs, and creates a server-side session. The browser receives only session identity, not broker credentials.
 
@@ -43,7 +43,7 @@ The primary UI shape is an operations-sidebar console: Overview, Topics, Groups,
 - `src/main.rs`: starts the standalone server, loads config, and mounts the Dioxus fullstack app.
 - `src/config.rs`: defines HTTP bind address, broker bootstrap addresses, cluster display name, SCRAM-SHA-512 settings, any TLS options already supported by the admin client, and session settings.
 - `src/auth.rs`: handles login/logout, server-side sessions, and conversion from login credentials into secured admin-client connection settings.
-- `src/admin.rs`: thin adapter over `crabka-client-admin`. It exposes UI-facing async functions for topics/configs, groups, ACLs, SCRAM users, quotas, and log dirs.
+- `src/admin.rs`: thin adapter over `krabka-client-admin`. It exposes UI-facing async functions for topics/configs, groups, ACLs, SCRAM users, quotas, and log dirs.
 - `src/permissions.rs`: derives visible and disabled UI capabilities from broker ACLs for the logged-in principal. Broker authorization remains authoritative.
 - `src/views/*`: Dioxus routes and components by section. Shared table, drawer, modal, form, and error-summary components should stay minimal until reuse is real.
 
@@ -57,7 +57,7 @@ Login flow:
 
 1. User submits username and password.
 2. Server builds SCRAM-SHA-512 client security settings.
-3. Server connects through `crabka-client-admin`.
+3. Server connects through `krabka-client-admin`.
 4. Server verifies the connection with a lightweight admin call.
 5. Server describes ACLs for the principal and derives initial capabilities.
 6. Server creates a server-side session.
@@ -67,7 +67,7 @@ Read flow:
 1. Dioxus route loads call server functions.
 2. Server functions validate the session.
 3. Server functions create or borrow an admin client for that session.
-4. The admin adapter calls `crabka-client-admin`.
+4. The admin adapter calls `krabka-client-admin`.
 5. Results are mapped into UI DTOs and rendered as tables or detail views.
 
 Mutation flow:
@@ -140,7 +140,7 @@ Unit tests cover DTO/error mapping, permission derivation from ACL entries, vali
 
 Server-side integration tests use existing broker test helpers where practical to verify login, topic CRUD/config changes, group listing, ACL visibility/action gating, SCRAM user mutation, quota mutation, and log-dir reads. Tests assert behavior through the admin UI server-function seam.
 
-End-to-end tests use `playwright-rs` against a running `crabka-admin-ui` and test broker. The first E2E suite should cover login, sidebar navigation, topic create/config edit/delete, unauthorized-action hiding for an ACL-limited user, and structured error display for a broker-denied mutation. These tests should be few and high-value, not a duplicate of every server-side test.
+End-to-end tests use `playwright-rs` against a running `krabka-admin-ui` and test broker. The first E2E suite should cover login, sidebar navigation, topic create/config edit/delete, unauthorized-action hiding for an ACL-limited user, and structured error display for a broker-denied mutation. These tests should be few and high-value, not a duplicate of every server-side test.
 
 Dioxus UI/component tests stay focused on route guards, disabled/hidden actions based on capabilities, form validation, confirmation modal behavior, and display of structured per-resource outcomes.
 

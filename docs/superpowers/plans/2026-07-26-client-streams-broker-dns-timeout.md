@@ -9,7 +9,7 @@
 
 **Goal:** Apply one validated broker DNS deadline to every Client Streams broker lookup and expose it through the observability demo's Stream role.
 
-**Architecture:** Reuse `crabka_client_core::ClientDnsTimeout` as the only runtime policy value. Carry it through `StreamsApp`, `KafkaStreams`, broker I/O, and membership; centralize only the duplicated raw lookup and fetch `ConnectionOptions`. The demo parses positive milliseconds with `NonZeroU64`, validates role applicability before I/O, and forwards the typed value.
+**Architecture:** Reuse `krabka_client_core::ClientDnsTimeout` as the only runtime policy value. Carry it through `StreamsApp`, `KafkaStreams`, broker I/O, and membership; centralize only the duplicated raw lookup and fetch `ConnectionOptions`. The demo parses positive milliseconds with `NonZeroU64`, validates role applicability before I/O, and forwards the typed value.
 
 **Tech Stack:** Rust 2024, Tokio paused time, Bon builders, Clap derive/environment parsing, Docker Compose, `refined_type`-backed `ClientDnsTimeout`
 
@@ -17,7 +17,7 @@
 
 - Preserve the exact 10,000-ms default.
 - Use one `ClientDnsTimeout` for metadata, raw fetch, producer, offsets, join, and heartbeat DNS.
-- Exact demo interfaces are `--streams-broker-dns-timeout-ms` and `CRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS`.
+- Exact demo interfaces are `--streams-broker-dns-timeout-ms` and `KRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS`.
 - Precedence is CLI over environment over `ClientDnsTimeout::default()`.
 - The demo setting is valid only with `--role stream` and must fail before telemetry or external I/O otherwise.
 - Preserve bootstrap ordering, first-address selection, TCP/request defaults, ALO/EOS behavior, producer semantics, membership timing, fetch policy, TLS/SASL behavior, and schema-registry DNS behavior.
@@ -45,19 +45,22 @@
 ### Task 1: Carry One Typed Timeout Through Client Streams
 
 **Files:**
+
 - Modify: `crates/client-streams/src/runtime/io_broker.rs`
 - Modify: `crates/client-streams/src/membership/client.rs`
 - Modify: `crates/client-streams/src/runtime/app.rs`
 - Modify: `crates/client-streams/src/streams_app.rs`
 
 **Interfaces:**
+
 - Consumes:
   ```rust
-  crabka_client_core::ClientDnsTimeout
+  krabka_client_core::ClientDnsTimeout
   ClientDnsTimeout::default() // 10,000 ms
   ClientDnsTimeout::duration() -> Duration
   ```
 - Produces:
+
   ```rust
   KafkaStreams::builder().broker_dns_timeout(ClientDnsTimeout)
   StreamsApp::builder().broker_dns_timeout(ClientDnsTimeout)
@@ -144,10 +147,10 @@ fn fetch_connection_options_carry_the_typed_dns_timeout() {
     assert2::assert!(options.client_id == "streams-fetch");
     assert2::assert!(options.dns_timeout == timeout);
     assert2::assert!(
-        options.connect_timeout == crabka_client_core::DEFAULT_CLIENT_CONNECT_TIMEOUT
+        options.connect_timeout == krabka_client_core::DEFAULT_CLIENT_CONNECT_TIMEOUT
     );
     assert2::assert!(
-        options.request_timeout == crabka_client_core::DEFAULT_CLIENT_REQUEST_TIMEOUT
+        options.request_timeout == krabka_client_core::DEFAULT_CLIENT_REQUEST_TIMEOUT
     );
 }
 ```
@@ -166,10 +169,10 @@ fn broker_dns_timeout_uses_typed_default_and_override() {
         .build();
     assert_eq!(
         defaults.broker_dns_timeout,
-        crabka_client_core::ClientDnsTimeout::default()
+        krabka_client_core::ClientDnsTimeout::default()
     );
 
-    let timeout = crabka_client_core::ClientDnsTimeout::new(
+    let timeout = krabka_client_core::ClientDnsTimeout::new(
         std::time::Duration::from_millis(43),
     )
     .expect("positive timeout");
@@ -187,11 +190,11 @@ fn broker_dns_timeout_uses_typed_default_and_override() {
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-  -p crabka-client-streams --lib --locked \
+  -p krabka-client-streams --lib --locked \
   raw_lookup_stops_at_the_configured_deadline
 
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-  -p crabka-client-streams --lib --locked \
+  -p krabka-client-streams --lib --locked \
   broker_dns_timeout_uses_typed_default_and_override
 ```
 
@@ -341,7 +344,7 @@ Pass it to membership:
 In `streams_app.rs`, add:
 
 ```rust
-broker_dns_timeout: crabka_client_core::ClientDnsTimeout,
+broker_dns_timeout: krabka_client_core::ClientDnsTimeout,
 ```
 
 to `StreamsApp`, and add this parameter to `StreamsApp::new`:
@@ -349,7 +352,7 @@ to `StreamsApp`, and add this parameter to `StreamsApp::new`:
 ```rust
 /// Deadline for each Kafka broker DNS lookup owned by this process.
 #[builder(default)]
-broker_dns_timeout: crabka_client_core::ClientDnsTimeout,
+broker_dns_timeout: krabka_client_core::ClientDnsTimeout,
 ```
 
 Store it in `Self`, then add:
@@ -364,22 +367,22 @@ to `run_built`'s `KafkaStreams` builder.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-  -p crabka-client-streams --lib --locked \
+  -p krabka-client-streams --lib --locked \
   raw_lookup
 
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-  -p crabka-client-streams --lib --locked \
+  -p krabka-client-streams --lib --locked \
   fetch_connection_options_carry_the_typed_dns_timeout
 
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-  -p crabka-client-streams --lib --locked \
+  -p krabka-client-streams --lib --locked \
   broker_dns_timeout_uses_typed_default_and_override
 
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-  -p crabka-client-streams --all-targets --locked
+  -p krabka-client-streams --all-targets --locked
 
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy \
-  -p crabka-client-streams --all-targets --locked -- -D warnings
+  -p krabka-client-streams --all-targets --locked -- -D warnings
 
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo fmt --all -- --check
 git diff --check
@@ -406,20 +409,23 @@ git commit -m "feat(streams): bound broker DNS"
 ### Task 2: Expose the Demo Stream-Role Boundary
 
 **Files:**
+
 - Modify: `crates/observability-demo-app/src/main.rs`
 - Create: `crates/observability-demo-app/tests/streams_dns_config.rs`
 - Modify: `crates/observability-demo-app/tests/observability_demo_config.rs`
 - Modify: `demo/observability/docker-compose.yml`
 
 **Interfaces:**
+
 - Consumes:
   ```rust
   StreamsApp::builder().broker_dns_timeout(ClientDnsTimeout)
   ```
 - Produces:
+
   ```text
   --streams-broker-dns-timeout-ms
-  CRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS
+  KRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS
   demo-stream Compose default/pass-through: 10000
   ```
 
@@ -446,7 +452,7 @@ mod tests {
         assert_eq!(
             effective_streams_broker_dns_timeout(&defaults)
                 .expect("typed default"),
-            crabka_client_core::ClientDnsTimeout::default()
+            krabka_client_core::ClientDnsTimeout::default()
         );
 
         let overridden = Cli {
@@ -505,7 +511,7 @@ fn demo() -> Command {
 fn environment_is_used_and_cli_wins_before_external_io() {
     let environment = demo()
         .args(["--role", "produce"])
-        .env("CRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS", "37")
+        .env("KRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS", "37")
         .output()
         .expect("run demo");
     assert!(!environment.status.success());
@@ -520,7 +526,7 @@ fn environment_is_used_and_cli_wins_before_external_io() {
             "--streams-broker-dns-timeout-ms",
             "41",
         ])
-        .env("CRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS", "37")
+        .env("KRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS", "37")
         .output()
         .expect("run demo");
     assert!(!cli.status.success());
@@ -533,7 +539,7 @@ fn environment_is_used_and_cli_wins_before_external_io() {
 fn zero_environment_value_is_rejected_and_help_lists_the_flag_once() {
     let zero = demo()
         .args(["--role", "stream"])
-        .env("CRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS", "0")
+        .env("KRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS", "0")
         .output()
         .expect("run demo");
     assert!(!zero.status.success());
@@ -561,12 +567,12 @@ fn streams_dns_timeout_is_configurable_only_on_the_stream_role() {
     let compose = docker_compose();
     let stream = compose_service_block(&compose, "demo-stream");
     assert2::assert!(stream.contains(
-        "CRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS: \"${CRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS:-10000}\""
+        "KRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS: \"${KRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS:-10000}\""
     ));
     for service in ["demo-produce", "demo-consume"] {
         assert2::assert!(
             !compose_service_block(&compose, service)
-                .contains("CRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS")
+                .contains("KRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS")
         );
     }
 }
@@ -593,14 +599,14 @@ is absent.
 
 - [ ] **Step 5: Add the validated CLI/environment field**
 
-Import `std::num::NonZeroU64` and `crabka_client_core::ClientDnsTimeout`. Add to
+Import `std::num::NonZeroU64` and `krabka_client_core::ClientDnsTimeout`. Add to
 `Cli`:
 
 ```rust
 /// Kafka Streams broker DNS timeout in milliseconds.
 #[arg(
     long,
-    env = "CRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS"
+    env = "KRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS"
 )]
 streams_broker_dns_timeout_ms: Option<NonZeroU64>,
 ```
@@ -672,7 +678,7 @@ Do not apply this value to the demo's independent Produce or Consume clients.
 Under only the `demo-stream` service environment, add:
 
 ```yaml
-CRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS: "${CRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS:-10000}"
+KRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS: "${KRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS:-10000}"
 ```
 
 Do not add it to `demo-produce`, `demo-consume`, or shared environment anchors.
@@ -724,9 +730,11 @@ git commit -m "feat(demo): expose Streams DNS timeout"
 ### Task 3: Audit Evidence, Whole-Slice Review, and Publication
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: Tasks 1-2 complete process path.
 - Produces: an auditable closure record for Client Streams broker DNS and the
   next unresolved owner; it does not close the repository-wide goal.
@@ -772,12 +780,12 @@ Append `## Client Streams Broker DNS Timeout` to
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-  -p crabka-client-streams \
+  -p krabka-client-streams \
   -p observability-demo-app \
   --all-targets --locked
 
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy \
-  -p crabka-client-streams \
+  -p krabka-client-streams \
   -p observability-demo-app \
   --all-targets --locked -- -D warnings
 

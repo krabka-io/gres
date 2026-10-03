@@ -3,7 +3,7 @@
 //! There is one `NetworkPolicy` per cluster. It is named
 //! `<cluster>-broker-policy` and has an owner reference to the parent `Kafka`.
 //! The selector targets every cluster pod, that is, broker, controller, and
-//! combined, with `app.kubernetes.io/name=crabka-broker` and
+//! combined, with `app.kubernetes.io/name=krabka-broker` and
 //! `app.kubernetes.io/instance=<name>`.
 //!
 //! Ingress rules, in stable order:
@@ -45,7 +45,7 @@ use crate::{
     crd::{Kafka, Listener, NetworkPolicyPeer},
 };
 
-const OPERATOR_LABEL: &str = "crabka-operator";
+const OPERATOR_LABEL: &str = "krabka-operator";
 
 /// Render the `NetworkPolicy`. This is a pure function of the Kafka CR, the
 /// effective listeners, the inter-broker listener port, and the
@@ -60,7 +60,7 @@ pub(crate) fn render_network_policy(
     let ns = owner.meta().namespace.clone();
     let labels = common_labels(&name, &owner.spec.kafka_version, None);
 
-    // Pod selector: every cluster pod gets app.kubernetes.io/name=crabka-broker
+    // Pod selector: every cluster pod gets app.kubernetes.io/name=krabka-broker
     // and instance=<name>. A single selector covers all node-pool roles.
     let mut pod_match: BTreeMap<String, String> = BTreeMap::new();
     pod_match.insert("app.kubernetes.io/name".into(), APP_LABEL.into());

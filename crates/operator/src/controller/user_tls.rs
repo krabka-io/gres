@@ -9,12 +9,12 @@
 
 use std::collections::BTreeMap;
 
-use crabka_security::ca::{self, CaMaterial};
 use k8s_openapi::{
     ByteString,
     api::core::v1::Secret,
     apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference},
 };
+use krabka_security::ca::{self, CaMaterial};
 use kube::{
     Resource, ResourceExt as _,
     api::{Api, Patch, PatchParams},
@@ -236,10 +236,10 @@ fn render_user_cert_secret(
 ) -> Result<Secret, ReconcileError> {
     let name = obj.name_any();
     let mut labels: BTreeMap<String, String> = BTreeMap::new();
-    labels.insert("app.kubernetes.io/name".into(), "crabka-broker".into());
+    labels.insert("app.kubernetes.io/name".into(), "krabka-broker".into());
     labels.insert(
         "app.kubernetes.io/managed-by".into(),
-        "crabka-operator".into(),
+        "krabka-operator".into(),
     );
     if let Some(cluster) = obj
         .meta()

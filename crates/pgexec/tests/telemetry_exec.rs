@@ -13,8 +13,8 @@
 use std::{sync::Arc, time::Duration};
 
 use assert2::{assert, check};
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Engine as _, QueryResult, Session as _};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Engine as _, QueryResult, Session as _};
 use opentelemetry::{Value, trace::TracerProvider as _};
 use opentelemetry_sdk::trace::{InMemorySpanExporter, Sampler, SdkTracerProvider, SpanData};
 use tracing_subscriber::layer::SubscriberExt as _;

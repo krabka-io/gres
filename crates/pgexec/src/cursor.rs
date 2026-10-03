@@ -10,7 +10,7 @@
 //! A `FETCH` moves first and reports the rows it moved over. A `MOVE` is the
 //! same walk, but it discards the rows.
 
-use crabka_pgparser::ast::{FetchCount, FetchDirection};
+use krabka_pgparser::ast::{FetchCount, FetchDirection};
 
 /// A cursor's current position within a materialized result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -176,9 +176,9 @@ mod tests {
 
     fn direction(spelling: &str) -> FetchDirection {
         let statement = format!("FETCH {spelling} FROM c");
-        let parsed = crabka_pgparser::parse(&statement).expect("fetch direction parses");
+        let parsed = krabka_pgparser::parse(&statement).expect("fetch direction parses");
         match parsed.as_slice() {
-            [crabka_pgparser::ast::Statement::FetchCursor { direction, .. }] => *direction,
+            [krabka_pgparser::ast::Statement::FetchCursor { direction, .. }] => *direction,
             other => panic!("expected one FETCH statement, got {other:?}"),
         }
     }

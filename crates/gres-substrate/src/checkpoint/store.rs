@@ -3,7 +3,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use bytes::Bytes;
-use crabka_object_store::{ObjectOps, ObjectStoreError};
+use krabka_object_store::{ObjectOps, ObjectStoreError};
 use object_store::path::Path;
 use tokio::sync::RwLock;
 

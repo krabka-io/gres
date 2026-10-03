@@ -12,7 +12,7 @@ parser guard, and capped streaming read remain fixed security behavior.
 
 ## Validated Configuration
 
-`crabka-pprof` owns `DebuginfodConfig`:
+`krabka-pprof` owns `DebuginfodConfig`:
 
 ```text
 max_artifact_size: ByteSize
@@ -31,7 +31,7 @@ values, and the connect timeout must not exceed the whole-request timeout.
 ## Profiles Propagation
 
 The querier, query-frontend, and symbolizer roles all construct debuginfod
-resolvers. Existing `crabka-profiles` helpers remain default-backed wrappers;
+resolvers. Existing `krabka-profiles` helpers remain default-backed wrappers;
 config-aware variants carry one `DebuginfodConfig` through each live path.
 
 The binary validates the effective configuration once before role dispatch and
@@ -41,17 +41,17 @@ passes it to the applicable role.
 
 The standalone Profiles binary exposes optional UOM overrides:
 
-| CLI | Environment |
-|---|---|
-| `--debuginfod-max-artifact-size` | `CRABKA_PROFILES_DEBUGINFOD_MAX_ARTIFACT_SIZE` |
-| `--debuginfod-connect-timeout` | `CRABKA_PROFILES_DEBUGINFOD_CONNECT_TIMEOUT` |
-| `--debuginfod-request-timeout` | `CRABKA_PROFILES_DEBUGINFOD_REQUEST_TIMEOUT` |
+| CLI                              | Environment                                    |
+| -------------------------------- | ---------------------------------------------- |
+| `--debuginfod-max-artifact-size` | `KRABKA_PROFILES_DEBUGINFOD_MAX_ARTIFACT_SIZE` |
+| `--debuginfod-connect-timeout`   | `KRABKA_PROFILES_DEBUGINFOD_CONNECT_TIMEOUT`   |
+| `--debuginfod-request-timeout`   | `KRABKA_PROFILES_DEBUGINFOD_REQUEST_TIMEOUT`   |
 
 Absent overrides use `DebuginfodConfig::default`, avoiding duplicate default
 literals at the CLI boundary.
 
 The existing comma-delimited `--debuginfod-url` option gains
-`CRABKA_PROFILES_DEBUGINFOD_URLS` backing. An empty URL list continues to
+`KRABKA_PROFILES_DEBUGINFOD_URLS` backing. An empty URL list continues to
 disable all debuginfod network access.
 
 No CRD or Helm chart owns the standalone Profiles service.

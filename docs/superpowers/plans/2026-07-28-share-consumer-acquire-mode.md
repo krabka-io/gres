@@ -63,7 +63,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-consumer --all-targets --locked
+  cargo test -p krabka-client-consumer --all-targets --locked
 ```
 
 Expected: exit 0. Record each suite summary as Cargo reports it.
@@ -130,7 +130,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-consumer acquire_mode --lib --locked
+  cargo test -p krabka-client-consumer acquire_mode --lib --locked
 ```
 
 Expected: compilation fails because `ShareAcquireMode` and the consumer field do
@@ -209,9 +209,9 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-consumer acquire_mode --lib --locked
+  cargo test -p krabka-client-consumer acquire_mode --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-consumer --all-targets --locked
+  cargo test -p krabka-client-consumer --all-targets --locked
 ```
 
 Expected: both commands exit 0. The focused run proves the default and exact
@@ -313,7 +313,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-consumer --all-targets --locked
+  cargo test -p krabka-client-consumer --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo test --workspace --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \

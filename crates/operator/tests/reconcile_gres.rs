@@ -5,7 +5,8 @@ use std::{
 };
 
 use assert2::assert;
-use crabka_operator::{
+use http::Method;
+use krabka_operator::{
     context::{PgdogAdminError, PgdogAdminLike, PgdogExpectedRoute, PgdogReloadRequest},
     controller::{
         common::ReconcileError,
@@ -18,8 +19,7 @@ use crabka_operator::{
         PgdogSpec, SecretKeyRef, SecretRef, TenantDefaults,
     },
 };
-use crabka_units::{Time, convert::TimeExt as _};
-use http::Method;
+use krabka_units::{Time, convert::TimeExt as _};
 
 #[path = "shared/mod.rs"]
 mod shared;
@@ -399,7 +399,7 @@ async fn renders_pgdog_config_secret_and_status_hash() {
     assert!(
         activator_body["spec"]["template"]["spec"]["containers"][0]["image"]
             .as_str()
-            .is_some_and(|image| image.starts_with("ghcr.io/robot-head/crabka-gres-activator:"))
+            .is_some_and(|image| image.starts_with("ghcr.io/robot-head/krabka-gres-activator:"))
     );
     assert!(activator_body["spec"]["replicas"] == 1);
     assert!(
@@ -504,17 +504,17 @@ async fn custom_activator_policy_renders_workload_and_pgdog_timeout_budget() {
     obj.spec.activator = Some(GresActivatorSpec {
         image: Some("example.test/activator:v2".into()),
         replicas: Some(4),
-        registry_poll: Some(crabka_units::millis(600)),
-        cold_start_timeout: Some(crabka_units::secs(40)),
+        registry_poll: Some(krabka_units::millis(600)),
+        cold_start_timeout: Some(krabka_units::secs(40)),
         readiness_probe_period_seconds: Some(9),
         client_dispatch_queue_capacity: None,
         client_frame_max: None,
     });
     obj.spec.pgdog.pooler_mode = Some(PgdogPoolerModeSpec::Session);
     obj.spec.pgdog.connect_attempts = Some(4);
-    obj.spec.pgdog.idle_timeout = Some(crabka_units::secs(61));
-    obj.spec.pgdog.suspension_idle_timeout = Some(crabka_units::millis(1_500));
-    obj.spec.pgdog.server_lifetime = Some(crabka_units::millis(301_000));
+    obj.spec.pgdog.idle_timeout = Some(krabka_units::secs(61));
+    obj.spec.pgdog.suspension_idle_timeout = Some(krabka_units::millis(1_500));
+    obj.spec.pgdog.server_lifetime = Some(krabka_units::millis(301_000));
     obj.spec.pgdog.readiness_probe_period_seconds = Some(6);
 
     reconcile(Arc::new(obj), ctx).await.unwrap();
@@ -665,8 +665,8 @@ async fn matching_effective_idle_policy_selects_suspension_timeout() {
     let ctx =
         Arc::new(fixture_ctx(mock_client(&state, "ns"), "ns").with_pgdog_admin_for_test(admin));
     let mut obj = gres();
-    obj.spec.pgdog.idle_timeout = Some(crabka_units::secs(61));
-    obj.spec.pgdog.suspension_idle_timeout = Some(crabka_units::millis(1_500));
+    obj.spec.pgdog.idle_timeout = Some(krabka_units::secs(61));
+    obj.spec.pgdog.suspension_idle_timeout = Some(krabka_units::millis(1_500));
 
     reconcile(Arc::new(obj), ctx).await.unwrap();
 
@@ -739,8 +739,8 @@ async fn zero_override_and_unrelated_fleet_do_not_select_suspension_timeout() {
         checkpoint_size: None,
         suspend_max_checkpoint_size: None,
     });
-    obj.spec.pgdog.idle_timeout = Some(crabka_units::secs(61));
-    obj.spec.pgdog.suspension_idle_timeout = Some(crabka_units::millis(1_500));
+    obj.spec.pgdog.idle_timeout = Some(krabka_units::secs(61));
+    obj.spec.pgdog.suspension_idle_timeout = Some(krabka_units::millis(1_500));
 
     reconcile(Arc::new(obj), ctx).await.unwrap();
 
@@ -1209,8 +1209,8 @@ async fn stale_pgdog_admin_view_requeues_without_confirming_hash() {
         fixture_ctx(mock_client(&state, "ns"), "ns").with_pgdog_admin_for_test(admin.clone());
     let config = Arc::get_mut(&mut context.config).expect("unique config");
     config.pgdog_reload_attempts = "2".parse().expect("positive attempts");
-    config.pgdog_reload_backoff = crabka_units::millis(150);
-    config.pgdog_reload_requeue = crabka_units::millis(1234);
+    config.pgdog_reload_backoff = krabka_units::millis(150);
+    config.pgdog_reload_requeue = krabka_units::millis(1234);
     let ctx = Arc::new(context);
 
     let action = reconcile(Arc::new(gres()), ctx).await.unwrap();
@@ -1238,7 +1238,7 @@ async fn gres_error_policy_uses_configured_requeue() {
     let mut context = fixture_ctx(mock_client(&state, "ns"), "ns");
     Arc::get_mut(&mut context.config)
         .expect("unique config")
-        .controller_error_requeue = crabka_units::millis(4321);
+        .controller_error_requeue = krabka_units::millis(4321);
 
     let action = error_policy(
         Arc::new(gres()),
@@ -1259,7 +1259,7 @@ async fn pgdog_admin_reload_uses_configured_timeout() {
     let mut context = fixture_ctx(mock_client(&state, "ns"), "ns").with_pgdog_admin_for_test(admin);
     Arc::get_mut(&mut context.config)
         .expect("unique config")
-        .pgdog_admin_timeout = crabka_units::millis(1);
+        .pgdog_admin_timeout = krabka_units::millis(1);
 
     let error = reconcile(Arc::new(gres()), Arc::new(context))
         .await
@@ -1430,21 +1430,21 @@ fn tenant_watch_maps_to_referenced_gres_fleet() {
 #[test]
 fn tenant_endpoint_uses_status_lifecycle_phase_for_activator_routing() {
     let mut tenant = gres_tenant("tenant-a", "fleet");
-    tenant.status = Some(crabka_operator::crd::GresTenantStatus {
+    tenant.status = Some(krabka_operator::crd::GresTenantStatus {
         lifecycle_phase: Some("resume_requested".into()),
         ..Default::default()
     });
 
     let endpoint = tenant_endpoint(&tenant).expect("valid endpoint");
 
-    assert!(endpoint.state == crabka_gres_control::TenantState::ResumeRequested);
+    assert!(endpoint.state == krabka_gres_control::TenantState::ResumeRequested);
 }
 
 #[test]
 fn multi_range_unsupported_tenant_is_excluded_from_pgdog_endpoint_set() {
     let mut tenant = gres_tenant("tenant-a", "fleet");
-    tenant.status = Some(crabka_operator::crd::GresTenantStatus {
-        conditions: vec![crabka_operator::crd::KafkaCondition {
+    tenant.status = Some(krabka_operator::crd::GresTenantStatus {
+        conditions: vec![krabka_operator::crd::KafkaCondition {
             type_: "Ready".into(),
             status: "False".into(),
             reason: "MultiRangeUnsupported".into(),
@@ -1470,7 +1470,7 @@ fn disabled_balancer_knob_reports_no_enabled_goals() {
         plan_snapshot: None,
     });
 
-    let status = crabka_operator::controller::gres::balancer_status(&obj);
+    let status = krabka_operator::controller::gres::balancer_status(&obj);
 
     assert!(!status.enabled);
     assert!(status.enabled_goals.is_empty());

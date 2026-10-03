@@ -14,7 +14,7 @@ pub(super) async fn execute_rule_action(
     action: &Statement,
     owner: &str,
     writes: &mut StatementWrites,
-) -> Result<(WriteOutcome, Vec<crabka_pgkv::WriteOp>), ExecError> {
+) -> Result<(WriteOutcome, Vec<krabka_pgkv::WriteOp>), ExecError> {
     if let Statement::Notify { channel, payload } = action {
         let pending = write_ctx.eval_ctx.notify.as_ref().ok_or_else(|| {
             ExecError::Unsupported("NOTIFY rule actions require a SQL session".into())
@@ -97,19 +97,19 @@ pub(super) async fn fire_insert_rules(
     only_instead: Option<bool>,
     capture_returning: bool,
     writes: &mut StatementWrites,
-) -> Result<(bool, Vec<crabka_pgkv::WriteOp>, Option<Relation>), ExecError> {
+) -> Result<(bool, Vec<krabka_pgkv::WriteOp>, Option<Relation>), ExecError> {
     let mut ops = Vec::new();
     let mut instead_matched = false;
     let mut returning = None;
-    for rule in crabka_pgcatalog::rule::rules_for_table(write_ctx.catalog_kv, table.id)? {
+    for rule in krabka_pgcatalog::rule::rules_for_table(write_ctx.catalog_kv, table.id)? {
         if !rule_is_enabled(rule.enabled)
-            || rule.event != crabka_pgcatalog::rule::RuleEvent::Insert
+            || rule.event != krabka_pgcatalog::rule::RuleEvent::Insert
             || only_instead.is_some_and(|instead| rule.instead != instead)
         {
             continue;
         }
         if let Some(condition) = rule.condition.as_deref() {
-            let condition = crabka_pgparser::parser::parse_expression(condition)?;
+            let condition = krabka_pgparser::parser::parse_expression(condition)?;
             if !rule_condition_matches(
                 write_ctx,
                 ctes,
@@ -138,7 +138,7 @@ pub(super) async fn fire_insert_rules(
             .strip_prefix('(')
             .and_then(|action| action.strip_suffix(')'))
             .unwrap_or(&rule.action);
-        for (action_index, mut action) in crabka_pgparser::parse(source)?.into_iter().enumerate() {
+        for (action_index, mut action) in krabka_pgparser::parse(source)?.into_iter().enumerate() {
             if rule_action_is_statement_level(&rule)
                 && !writes.claim_statement_rule_action(rule.oid, action_index)
             {
@@ -160,12 +160,12 @@ pub(super) async fn fire_insert_rules(
 pub(super) fn matches_nothing_rule(
     catalog_kv: &dyn Kv,
     table: &Table,
-    event: crabka_pgcatalog::rule::RuleEvent,
+    event: krabka_pgcatalog::rule::RuleEvent,
     old: Option<&[Datum]>,
     new: Option<&[Datum]>,
     ctx: &crate::clock::EvalCtx,
 ) -> Result<bool, ExecError> {
-    for rule in crabka_pgcatalog::rule::rules_for_table(catalog_kv, table.id)? {
+    for rule in krabka_pgcatalog::rule::rules_for_table(catalog_kv, table.id)? {
         if !rule_is_enabled(rule.enabled)
             || rule.event != event
             || !rule.instead
@@ -189,7 +189,7 @@ pub(super) fn matches_nothing_rule(
             scope.extend(&Scope::single(table, "new"));
             row.extend_from_slice(new);
         }
-        let condition = crabka_pgparser::parser::parse_expression(&condition)?;
+        let condition = krabka_pgparser::parser::parse_expression(&condition)?;
         if row_matches(Some(&condition), &scope, &row, ctx)? {
             return Ok(true);
         }
@@ -201,17 +201,17 @@ pub(super) async fn fire_row_rules(
     write_ctx: &WriteContext<'_>,
     ctes: &crate::cte::CteContext,
     table: &Table,
-    event: crabka_pgcatalog::rule::RuleEvent,
+    event: krabka_pgcatalog::rule::RuleEvent,
     old: Option<&[Datum]>,
     new: Option<&[Datum]>,
     instead: bool,
     capture_returning: bool,
     writes: &mut StatementWrites,
-) -> Result<(bool, Vec<crabka_pgkv::WriteOp>, Option<Relation>), ExecError> {
+) -> Result<(bool, Vec<krabka_pgkv::WriteOp>, Option<Relation>), ExecError> {
     let mut ops = Vec::new();
     let mut matched = false;
     let mut returning = None;
-    for rule in crabka_pgcatalog::rule::rules_for_table(write_ctx.catalog_kv, table.id)? {
+    for rule in krabka_pgcatalog::rule::rules_for_table(write_ctx.catalog_kv, table.id)? {
         if !rule_is_enabled(rule.enabled) || rule.event != event || rule.instead != instead {
             continue;
         }
@@ -226,7 +226,7 @@ pub(super) async fn fire_row_rules(
                 scope.extend(&Scope::single(table, "new"));
                 row.extend_from_slice(new);
             }
-            let condition = crabka_pgparser::parser::parse_expression(condition)?;
+            let condition = krabka_pgparser::parser::parse_expression(condition)?;
             if !rule_condition_matches(write_ctx, ctes, &condition, &scope, &row)? {
                 continue;
             }
@@ -240,7 +240,7 @@ pub(super) async fn fire_row_rules(
             .strip_prefix('(')
             .and_then(|action| action.strip_suffix(')'))
             .unwrap_or(&rule.action);
-        for (action_index, mut action) in crabka_pgparser::parse(source)?.into_iter().enumerate() {
+        for (action_index, mut action) in krabka_pgparser::parse(source)?.into_iter().enumerate() {
             if rule_action_is_statement_level(&rule)
                 && !writes.claim_statement_rule_action(rule.oid, action_index)
             {
@@ -259,35 +259,35 @@ pub(super) async fn fire_row_rules(
     Ok((matched, ops, returning))
 }
 
-pub(super) fn rule_action_is_statement_level(rule: &crabka_pgcatalog::rule::Rule) -> bool {
+pub(super) fn rule_action_is_statement_level(rule: &krabka_pgcatalog::rule::Rule) -> bool {
     rule.condition.is_none()
         && !rule.action.to_ascii_lowercase().contains("old.")
         && !rule.action.to_ascii_lowercase().contains("new.")
 }
 
-pub(crate) fn rule_is_enabled(enabled: crabka_pgcatalog::trigger::TriggerEnabled) -> bool {
+pub(crate) fn rule_is_enabled(enabled: krabka_pgcatalog::trigger::TriggerEnabled) -> bool {
     let role = crate::session::current_setting_runtime("session_replication_role", false)
         .ok()
         .flatten()
         .unwrap_or_else(|| "origin".into());
     match enabled {
-        crabka_pgcatalog::trigger::TriggerEnabled::Disabled => false,
-        crabka_pgcatalog::trigger::TriggerEnabled::Always => true,
-        crabka_pgcatalog::trigger::TriggerEnabled::Origin => role != "replica",
-        crabka_pgcatalog::trigger::TriggerEnabled::Replica => role == "replica",
+        krabka_pgcatalog::trigger::TriggerEnabled::Disabled => false,
+        krabka_pgcatalog::trigger::TriggerEnabled::Always => true,
+        krabka_pgcatalog::trigger::TriggerEnabled::Origin => role != "replica",
+        krabka_pgcatalog::trigger::TriggerEnabled::Replica => role == "replica",
     }
 }
 
 pub(super) fn has_write_rewrite_rule(
     kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
-    reference: &crabka_pgparser::ast::RelationRef,
+    reference: &krabka_pgparser::ast::RelationRef,
 ) -> Result<bool, ExecError> {
     let name = resolve_relation(kv, resolution, reference, SchemaDisposition::Reference)?;
     let table = crate::trigger::relation_trigger_table(kv, &name)?;
-    Ok(crabka_pgcatalog::rule::rules_for_table(kv, table.id)?
+    Ok(krabka_pgcatalog::rule::rules_for_table(kv, table.id)?
         .into_iter()
         .any(|rule| {
-            rule_is_enabled(rule.enabled) && rule.event != crabka_pgcatalog::rule::RuleEvent::Select
+            rule_is_enabled(rule.enabled) && rule.event != krabka_pgcatalog::rule::RuleEvent::Select
         }))
 }

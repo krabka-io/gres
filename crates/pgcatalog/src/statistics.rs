@@ -4,7 +4,7 @@
 //! its `ANALYZE`-derived payload share one lifecycle: renames preserve both,
 //! while dropping the object or its table removes both atomically.
 
-use crabka_pgkv::{Kv, KvError, WriteOp, key::push_key_part};
+use krabka_pgkv::{Kv, KvError, WriteOp, key::push_key_part};
 
 use crate::{CatalogError, CommentObject, RelationName, TableId, set_comment_op};
 
@@ -459,7 +459,7 @@ fn corrupt(message: &'static str) -> CatalogError {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     use super::{
         ExpressionStats, McvItem, STATISTICS_OID_BASE, Statistics, StatisticsData, create_ops,

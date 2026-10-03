@@ -22,7 +22,7 @@ matching rules whose interaction is security-critical (a bug grants or denies ac
 
 Honest discovery odds: **low** — the logic is simple and already has ~20 example unit tests. The value is
 (a) **defense-in-depth on a security boundary**, (b) a **regression guard**: the oracle declares the
-precedence + implication table *independently*, so dropping/flipping an arrow, breaking deny-wins, or a
+precedence + implication table _independently_, so dropping/flipping an arrow, breaking deny-wins, or a
 matching regression is caught exhaustively rather than by spot-check. This is the quota-precedence slice
 (#535) applied to authorization — same shape, higher stakes.
 
@@ -98,7 +98,7 @@ the oracle. Expectation: GREEN (confirmation + regression guard).
 ## Verification discipline
 
 - Pure test addition in `crates/authz/` (no stateright, no watchdog needed — bounded loops + proptest).
-- `cargo +nightly fmt -p crabka-authz`; `cargo clippy -p crabka-authz --all-targets -- -D warnings` clean
+- `cargo +nightly fmt -p krabka-authz`; `cargo clippy -p krabka-authz --all-targets -- -D warnings` clean
   (watch float/precision/`doc_markdown` style lints as in prior slices).
 
 ## Success criteria

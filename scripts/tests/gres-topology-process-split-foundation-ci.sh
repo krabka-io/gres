@@ -37,10 +37,10 @@ if [[ ${1:-} == --validate-only ]]; then
   exit 0
 fi
 
-cargo build --locked -p crabka-cli -p crabka-gres
+cargo build --locked -p krabka-cli -p krabka-gres
 mkdir -p target/g8-topology-process-split-foundation
 evidence="$PWD/target/g8-topology-process-split-foundation/split-foundation.json"
-CRABKA_G8_SPLIT_FOUNDATION=1 CRABKA_G8_SPLIT_EVIDENCE="$evidence" \
-  timeout 180s cargo test --locked -p crabka-gres --test topology_process_nemesis \
+KRABKA_G8_SPLIT_FOUNDATION=1 KRABKA_G8_SPLIT_EVIDENCE="$evidence" \
+  timeout 180s cargo test --locked -p krabka-gres --test topology_process_nemesis \
   -- --exact real_process_split_two_successor_foundation --nocapture
 validate "$evidence"

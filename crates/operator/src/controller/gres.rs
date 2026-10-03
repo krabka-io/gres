@@ -4,11 +4,6 @@
 
 use std::{collections::BTreeMap, fmt::Write as _, sync::Arc};
 
-use crabka_gres_control::{
-    PgdogGeneral, PgdogRenderInput, PgdogTimeouts, PgdogUser, TenantEndpoint, TenantName,
-    TenantState, render_pgdog_toml, render_users_toml,
-};
-use crabka_units::{Time, convert::TimeExt as _, fmt::Human as _};
 use futures::StreamExt as _;
 use k8s_openapi::{
     ByteString,
@@ -17,6 +12,11 @@ use k8s_openapi::{
         core::v1::{Pod, Secret, Service},
     },
 };
+use krabka_gres_control::{
+    PgdogGeneral, PgdogRenderInput, PgdogTimeouts, PgdogUser, TenantEndpoint, TenantName,
+    TenantState, render_pgdog_toml, render_users_toml,
+};
+use krabka_units::{Time, convert::TimeExt as _, fmt::Human as _};
 use kube::{
     Resource, ResourceExt as _,
     api::{Api, ListParams, Patch, PatchParams},
@@ -42,17 +42,17 @@ use crate::{
     crd::{Gres, GresTenant, Kafka, gres::EffectivePgdogPolicy},
 };
 
-const APP_NAME: &str = "crabka-pgdog";
+const APP_NAME: &str = "krabka-pgdog";
 const DEFAULT_IMAGE: &str = "ghcr.io/pgdogdev/pgdog:0.1.47";
-const ACTIVATOR_APP_NAME: &str = "crabka-gres-activator";
+const ACTIVATOR_APP_NAME: &str = "krabka-gres-activator";
 const DEFAULT_ACTIVATOR_IMAGE: &str = concat!(
-    "ghcr.io/robot-head/crabka-gres-activator:",
+    "ghcr.io/robot-head/krabka-gres-activator:",
     env!("CARGO_PKG_VERSION")
 );
 const ACTIVATOR_PORT: i32 = 6543;
 const ACTIVATOR_PORT_U16: u16 = 6543;
-const DEFAULT_ACTIVATOR_REGISTRY_POLL: Time = crabka_units::millis(250);
-const DEFAULT_ACTIVATOR_COLD_START_TIMEOUT: Time = crabka_units::secs(30);
+const DEFAULT_ACTIVATOR_REGISTRY_POLL: Time = krabka_units::millis(250);
+const DEFAULT_ACTIVATOR_COLD_START_TIMEOUT: Time = krabka_units::secs(30);
 const DEFAULT_ACTIVATOR_READINESS_PERIOD_SECONDS: i32 = 5;
 
 /// Runs the controller forever.
@@ -127,7 +127,7 @@ async fn reconcile_inner(obj: Arc<Gres>, ctx: Arc<Context>) -> Result<Action, Re
         .gres_registry
         .as_ref()
         .map_or_else(
-            || Ok(crabka_gres_control::RegistryPolicy::default()),
+            || Ok(krabka_gres_control::RegistryPolicy::default()),
             crate::crd::GresRegistrySpec::policy,
         )
         .map_err(ReconcileError::Malformed)?;
@@ -806,7 +806,7 @@ fn meta_labels(obj: &Gres) -> BTreeMap<String, String> {
     let mut labels = selector_labels(obj);
     labels.insert(
         "app.kubernetes.io/managed-by".into(),
-        "crabka-operator".into(),
+        "krabka-operator".into(),
     );
     labels
 }
@@ -903,8 +903,8 @@ fn render_activator_deployment(
     obj: &Gres,
     bootstrap: &str,
     image: &str,
-    registry_policy: &crabka_gres_control::RegistryPolicy,
-    registry_reader_fetch_min: Option<crabka_client_core::FetchMinBytes>,
+    registry_policy: &krabka_gres_control::RegistryPolicy,
+    registry_reader_fetch_min: Option<krabka_client_core::FetchMinBytes>,
 ) -> Result<Deployment, ReconcileError> {
     let selector = activator_selector_labels(obj);
     let name = obj.name_any();
@@ -1023,7 +1023,7 @@ fn activator_meta_labels(obj: &Gres) -> BTreeMap<String, String> {
     let mut labels = activator_selector_labels(obj);
     labels.insert(
         "app.kubernetes.io/managed-by".into(),
-        "crabka-operator".into(),
+        "krabka-operator".into(),
     );
     labels
 }
@@ -1222,7 +1222,7 @@ fn all_balancer_goal_names() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_units::{millis, secs};
+    use krabka_units::{millis, secs};
 
     use super::*;
     use crate::crd::{
@@ -1389,8 +1389,8 @@ mod tests {
         let deployment = render_activator_deployment(
             &gres(),
             "registry.demo.svc:9092",
-            "crabka-gres-activator:e2e",
-            &crabka_gres_control::RegistryPolicy::default(),
+            "krabka-gres-activator:e2e",
+            &krabka_gres_control::RegistryPolicy::default(),
             None,
         )
         .expect("render activator deployment");
@@ -1442,29 +1442,29 @@ mod tests {
         obj.spec.activator = Some(GresActivatorSpec {
             image: Some("example.test/activator:v2".into()),
             replicas: Some(4),
-            registry_poll: Some(crabka_units::millis(600)),
-            cold_start_timeout: Some(crabka_units::secs(40)),
+            registry_poll: Some(krabka_units::millis(600)),
+            cold_start_timeout: Some(krabka_units::secs(40)),
             readiness_probe_period_seconds: Some(9),
             client_dispatch_queue_capacity: Some(7),
-            client_frame_max: Some(crabka_units::kibibytes(32)),
+            client_frame_max: Some(krabka_units::kibibytes(32)),
         });
 
-        let policy = crabka_gres_control::RegistryPolicy::new(
+        let policy = krabka_gres_control::RegistryPolicy::new(
             2,
-            crabka_units::millis(15_001),
-            crabka_units::millis(251),
-            crabka_units::millis(501),
-            crabka_units::bytes(1_048_577),
+            krabka_units::millis(15_001),
+            krabka_units::millis(251),
+            krabka_units::millis(501),
+            krabka_units::bytes(1_048_577),
         )
         .expect("policy")
-        .with_producer_dns_timeout(crabka_units::millis(37))
+        .with_producer_dns_timeout(krabka_units::millis(37))
         .expect("DNS timeout")
-        .with_reader_admin_dns_timeout(crabka_units::millis(37))
+        .with_reader_admin_dns_timeout(krabka_units::millis(37))
         .expect("reader/admin DNS timeout")
         .with_client_resource_policy(
-            crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-            crabka_client_core::ClientFrameMax::default(),
-            crabka_client_core::FetchMinBytes::try_from(crabka_units::bytes(4))
+            krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+            krabka_client_core::ClientFrameMax::default(),
+            krabka_client_core::FetchMinBytes::try_from(krabka_units::bytes(4))
                 .expect("reader fetch minimum"),
         );
         let deployment = render_activator_deployment(
@@ -1473,7 +1473,7 @@ mod tests {
             "activator:test",
             &policy,
             Some(
-                crabka_client_core::FetchMinBytes::try_from(crabka_units::bytes(4))
+                krabka_client_core::FetchMinBytes::try_from(krabka_units::bytes(4))
                     .expect("reader fetch minimum"),
             ),
         )

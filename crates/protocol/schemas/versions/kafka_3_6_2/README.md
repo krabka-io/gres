@@ -10,4 +10,4 @@ legacy-exclusive ranges Produce v0–2 and Fetch v0–3. The top-level
 
 Do not hand-edit these schemas. To re-sync against a different
 upstream tag, update `VERSION` and re-fetch with the commands in the
-plan `2026-05-27-crabka-records-legacy-2bc.md`.
+plan `2026-05-27-krabka-records-legacy-2bc.md`.

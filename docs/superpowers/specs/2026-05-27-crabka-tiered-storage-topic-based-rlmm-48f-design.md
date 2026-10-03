@@ -44,7 +44,7 @@ production default. The key invariants we adopt unchanged:
   applied to the local cache, before returning.
 
 This design follows that shape. Where Kafka's TBRLMM allows brokers
-to consume a *subset* of metadata partitions (limited to those that
+to consume a _subset_ of metadata partitions (limited to those that
 host their leader/follower assignments), 48f's first cut **consumes
 all metadata-topic partitions on every broker**. Partition-set
 assignment is an optimization deferred to a follow-up.
@@ -72,7 +72,7 @@ assignment is an optimization deferred to a follow-up.
 ## Crate layout
 
 A new workspace member, **`crates/remote-storage-topic`**
-(`crabka-remote-storage-topic`):
+(`krabka-remote-storage-topic`):
 
 ```
 crates/remote-storage-topic/
@@ -89,13 +89,13 @@ crates/remote-storage-topic/
 
 Dependencies:
 
-- `crabka-remote-storage` — the SPI traits + data model + the
+- `krabka-remote-storage` — the SPI traits + data model + the
   `RemoteLogMetadataCache` (slice 48a exposes it as `pub` for re-use
   by this crate; the in-memory manager keeps wrapping it).
-- `crabka-client-producer`, `crabka-client-consumer`,
-  `crabka-client-admin`, `crabka-client-core` — the runtime
+- `krabka-client-producer`, `krabka-client-consumer`,
+  `krabka-client-admin`, `krabka-client-core` — the runtime
   publish/subscribe machinery and the topic-create call.
-- `crabka-protocol` — record types (`RecordBatch`, `Record`) for
+- `krabka-protocol` — record types (`RecordBatch`, `Record`) for
   the consumer side.
 - `tokio` — the async runtime the producer/consumer require; the
   TBRLMM holds a `runtime::Handle` to bridge the sync RLMM SPI.
@@ -153,9 +153,9 @@ Two implementations ship in 48f:
   fixture see each other's writes, modeling the multi-broker case
   without bringing up a cluster.
 - **`KafkaMetadataEventLog`** (`kafka_log.rs`) — the production
-  implementation. Holds a `crabka_client_producer::Producer`, spawns
-  per-partition `crabka_client_consumer::Consumer` poll loops, and
-  uses `crabka_client_admin::AdminClient` to ensure the topic exists
+  implementation. Holds a `krabka_client_producer::Producer`, spawns
+  per-partition `krabka_client_consumer::Consumer` poll loops, and
+  uses `krabka_client_admin::AdminClient` to ensure the topic exists
   on startup with the configured partition count and replication
   factor.
 
@@ -454,7 +454,7 @@ configurable RLMM.
 
 - `cargo fmt --all --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test -p crabka-remote-storage-topic`
+- `cargo test -p krabka-remote-storage-topic`
 - `cargo test --workspace` (no regressions; the existing
   remote-storage / broker tests still pass against the in-memory
   default)

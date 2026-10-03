@@ -1,8 +1,8 @@
 //! Native `jsonpath` type plumbing: input canonicalization, OID/catalog metadata,
 //! storage, operators, and text/binary result encoding.
 
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
 async fn run(session: &mut SqlSession, sql: &str) -> Vec<QueryResult> {
     session
@@ -11,14 +11,14 @@ async fn run(session: &mut SqlSession, sql: &str) -> Vec<QueryResult> {
         .unwrap_or_else(|error| panic!("query {sql:?} failed: {error:?}"))
 }
 
-fn rows(result: &QueryResult) -> &Vec<Vec<Option<crabka_pgwire::engine::Cell>>> {
+fn rows(result: &QueryResult) -> &Vec<Vec<Option<krabka_pgwire::engine::Cell>>> {
     let QueryResult::Rows { rows, .. } = result else {
         panic!("expected rows, got {result:?}");
     };
     rows
 }
 
-fn text(cell: Option<&crabka_pgwire::engine::Cell>) -> Option<&str> {
+fn text(cell: Option<&krabka_pgwire::engine::Cell>) -> Option<&str> {
     cell.map(|cell| std::str::from_utf8(&cell.text).expect("UTF-8 result"))
 }
 

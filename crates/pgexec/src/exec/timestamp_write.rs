@@ -8,8 +8,8 @@ use super::*;
 /// [`ForeignCtx::effective_role`] applies, spelled here because this path is
 /// given an [`crate::clock::EvalCtx`] and no `ForeignCtx` at all.
 fn timestamp_write_role(ctx: &crate::clock::EvalCtx) -> String {
-    if ctx.current_user == crabka_pgcatalog::PUBLIC_ROLE {
-        crabka_pgcatalog::BOOTSTRAP_ROLE.to_string()
+    if ctx.current_user == krabka_pgcatalog::PUBLIC_ROLE {
+        krabka_pgcatalog::BOOTSTRAP_ROLE.to_string()
     } else {
         ctx.current_user.clone()
     }
@@ -75,7 +75,7 @@ pub(crate) fn execute_timestamp_write(
         table_name,
         SchemaDisposition::Reference,
     )?;
-    let table = crabka_pgcatalog::get_table(catalog_kv, table_name)?;
+    let table = krabka_pgcatalog::get_table(catalog_kv, table_name)?;
     if !table_uses_global_visibility(&table) {
         return Err(ExecError::Unsupported(
             "timestamp writes require a sharded table".into(),
@@ -87,9 +87,9 @@ pub(crate) fn execute_timestamp_write(
         &table.owner,
         crate::privilege::RelationKind::Table,
         crate::privilege::Privilege::for_written_row(match stmt {
-            Statement::Insert { .. } => crabka_pgcatalog::policy::PolicyCommand::Insert,
-            Statement::Update { .. } => crabka_pgcatalog::policy::PolicyCommand::Update,
-            _ => crabka_pgcatalog::policy::PolicyCommand::Delete,
+            Statement::Insert { .. } => krabka_pgcatalog::policy::PolicyCommand::Insert,
+            Statement::Update { .. } => krabka_pgcatalog::policy::PolicyCommand::Update,
+            _ => krabka_pgcatalog::policy::PolicyCommand::Delete,
         }),
     )?;
     if table.row_security {
@@ -98,10 +98,10 @@ pub(crate) fn execute_timestamp_write(
             table.name.name
         )));
     }
-    let indexes = crabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)?;
+    let indexes = krabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)?;
     let global_indexes: Vec<_> = indexes
         .iter()
-        .filter(|index| index.placement == crabka_pgcatalog::IndexPlacement::Global)
+        .filter(|index| index.placement == krabka_pgcatalog::IndexPlacement::Global)
         .collect();
     if global_indexes.iter().any(|index| index.unique) {
         return Err(ExecError::Unsupported(
@@ -110,7 +110,7 @@ pub(crate) fn execute_timestamp_write(
     }
     if indexes
         .iter()
-        .any(|index| index.placement == crabka_pgcatalog::IndexPlacement::Local)
+        .any(|index| index.placement == krabka_pgcatalog::IndexPlacement::Local)
     {
         return Err(ExecError::Unsupported(
             "local index maintenance for sharded timestamp writes is blocked on G-6".into(),
@@ -124,7 +124,7 @@ pub(crate) fn execute_timestamp_write(
             source,
             ..
         } => {
-            let crabka_pgparser::ast::InsertSource::Values(rows) = source else {
+            let krabka_pgparser::ast::InsertSource::Values(rows) = source else {
                 return Err(ExecError::Unsupported(
                     "INSERT ... SELECT / DEFAULT VALUES on sharded tables is not supported".into(),
                 ));
@@ -133,7 +133,7 @@ pub(crate) fn execute_timestamp_write(
                 catalog_kv,
                 &table,
                 crate::trigger::DmlEvent::Insert,
-                crabka_pgcatalog::trigger::TriggerTiming::Before,
+                krabka_pgcatalog::trigger::TriggerTiming::Before,
                 &[],
                 ctx,
             )?;
@@ -152,7 +152,7 @@ pub(crate) fn execute_timestamp_write(
                 catalog_kv,
                 &table,
                 crate::trigger::DmlEvent::Insert,
-                crabka_pgcatalog::trigger::TriggerTiming::After,
+                krabka_pgcatalog::trigger::TriggerTiming::After,
                 &[],
                 ctx,
             )?;
@@ -177,7 +177,7 @@ pub(crate) fn execute_timestamp_write(
                 catalog_kv,
                 &table,
                 crate::trigger::DmlEvent::Update,
-                crabka_pgcatalog::trigger::TriggerTiming::Before,
+                krabka_pgcatalog::trigger::TriggerTiming::Before,
                 &updated,
                 ctx,
             )?;
@@ -195,7 +195,7 @@ pub(crate) fn execute_timestamp_write(
                 catalog_kv,
                 &table,
                 crate::trigger::DmlEvent::Update,
-                crabka_pgcatalog::trigger::TriggerTiming::After,
+                krabka_pgcatalog::trigger::TriggerTiming::After,
                 &updated,
                 ctx,
             )?;
@@ -211,7 +211,7 @@ pub(crate) fn execute_timestamp_write(
                 catalog_kv,
                 &table,
                 crate::trigger::DmlEvent::Delete,
-                crabka_pgcatalog::trigger::TriggerTiming::Before,
+                krabka_pgcatalog::trigger::TriggerTiming::Before,
                 &[],
                 ctx,
             )?;
@@ -227,7 +227,7 @@ pub(crate) fn execute_timestamp_write(
                 catalog_kv,
                 &table,
                 crate::trigger::DmlEvent::Delete,
-                crabka_pgcatalog::trigger::TriggerTiming::After,
+                krabka_pgcatalog::trigger::TriggerTiming::After,
                 &[],
                 ctx,
             )?;
@@ -245,7 +245,7 @@ fn execute_timestamp_insert(
     kv: &dyn Kv,
     seq: &crate::seq::SequenceManager,
     table: &Table,
-    global_indexes: &[&crabka_pgcatalog::Index],
+    global_indexes: &[&krabka_pgcatalog::Index],
     columns: &Option<Vec<String>>,
     indirections: &Option<Vec<Vec<TargetIndirection>>>,
     rows: &[Vec<Expr>],
@@ -325,8 +325,8 @@ fn execute_timestamp_update(
     kv: &dyn Kv,
     seq: &crate::seq::SequenceManager,
     table: &Table,
-    global_indexes: &[&crabka_pgcatalog::Index],
-    assignments: &[crabka_pgparser::ast::Assignment],
+    global_indexes: &[&krabka_pgcatalog::Index],
+    assignments: &[krabka_pgparser::ast::Assignment],
     filter: Option<&Expr>,
     ctx: &crate::clock::EvalCtx,
 ) -> Result<TimestampWritePlan, ExecError> {
@@ -335,7 +335,7 @@ fn execute_timestamp_update(
         .iter()
         .map(
             |assignment| match (&assignment.targets[..], &assignment.value) {
-                ([column], crabka_pgparser::ast::AssignmentValue::Expr(expr)) => table
+                ([column], krabka_pgparser::ast::AssignmentValue::Expr(expr)) => table
                     .column_index(column)
                     .map(|index| (index, expr))
                     .ok_or_else(|| ExecError::UndefinedColumn(column.clone())),
@@ -476,7 +476,7 @@ fn execute_timestamp_delete(
     catalog_kv: &dyn Kv,
     kv: &dyn Kv,
     table: &Table,
-    global_indexes: &[&crabka_pgcatalog::Index],
+    global_indexes: &[&krabka_pgcatalog::Index],
     filter: Option<&Expr>,
     ctx: &crate::clock::EvalCtx,
 ) -> Result<TimestampWritePlan, ExecError> {
@@ -535,7 +535,7 @@ fn execute_timestamp_delete(
 }
 
 pub(super) fn hash_bucket_for_row(table: &Table, row: &[Datum]) -> Result<Option<u32>, ExecError> {
-    let Some(crabka_pgcatalog::ShardingStrategy::Hash(hash)) = &table.sharding else {
+    let Some(krabka_pgcatalog::ShardingStrategy::Hash(hash)) = &table.sharding else {
         return Ok(None);
     };
     // A row's bucket is the hash of the one shard column, which is the arity
@@ -567,14 +567,14 @@ pub(super) fn hash_bucket_for_row(table: &Table, row: &[Datum]) -> Result<Option
             ));
         }
     };
-    crabka_pgkv::key::hash_bucket(&bytes, hash.buckets)
+    krabka_pgkv::key::hash_bucket(&bytes, hash.buckets)
         .map(Some)
         .ok_or_else(|| ExecError::Unsupported("invalid hash sharding bucket count".into()))
 }
 
 pub(super) fn global_index_intents_for_row(
     table: &Table,
-    indexes: &[&crabka_pgcatalog::Index],
+    indexes: &[&krabka_pgcatalog::Index],
     rowid: u64,
     row: &[Datum],
 ) -> Result<Vec<crate::timestamp_txn::GlobalIndexIntent>, ExecError> {
@@ -605,7 +605,7 @@ pub(super) fn global_index_intents_for_row(
 
 fn global_index_delete_intents_for_row(
     table: &Table,
-    indexes: &[&crabka_pgcatalog::Index],
+    indexes: &[&krabka_pgcatalog::Index],
     rowid: u64,
     row: &[Datum],
 ) -> Result<Vec<crate::timestamp_txn::GlobalIndexIntent>, ExecError> {

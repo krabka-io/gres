@@ -6,7 +6,7 @@
 //! [`sspi::KeytabIdentity`], to drive the AS/TGS exchange with no password.
 use std::sync::Mutex;
 
-use crabka_units::{Time, convert::TimeExt as _};
+use krabka_units::{Time, convert::TimeExt as _};
 use sspi::{
     BufferType, ClientRequestFlags, CredentialUse, Credentials, CredentialsBuffers,
     DataRepresentation, EncryptionFlags, Kerberos, KerberosConfig, KeytabIdentity, Secret,
@@ -143,7 +143,7 @@ impl SspiAcceptor {
         }
 
         let server = Kerberos::new_server_from_config(
-            KerberosConfig::new(&kdc_url_from_env(), "crabka-broker".to_string()),
+            KerberosConfig::new(&kdc_url_from_env(), "krabka-broker".to_string()),
             server_properties,
         )
         .map_err(ctx_err)?;
@@ -267,7 +267,7 @@ impl SspiInitiator {
 
         let mut client = Kerberos::new_client_from_config(KerberosConfig::new(
             kdc_url,
-            "crabka-broker".to_string(),
+            "krabka-broker".to_string(),
         ))
         .map_err(ctx_err)?;
 

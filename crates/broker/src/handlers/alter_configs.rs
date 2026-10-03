@@ -8,17 +8,17 @@
 //! targets Kafka's cluster-wide default broker config.
 
 use bytes::Bytes;
-use crabka_metadata::{
+use krabka_metadata::{
     AclOperation, BrokerConfigRecord, MetadataRecord, ResourceType, TopicConfigRecord,
 };
-use crabka_protocol::{
+use krabka_protocol::{
     Decode, UnknownTaggedFields,
     owned::{
         alter_configs_request::{AlterConfigsRequest, AlterConfigsResource},
         alter_configs_response::{AlterConfigsResourceResponse, AlterConfigsResponse},
     },
 };
-use crabka_raft::RaftError;
+use krabka_raft::RaftError;
 
 use crate::{
     authorizer::{AuthorizationRequest, AuthorizationResult},
@@ -64,7 +64,7 @@ pub(crate) async fn handle(
 
 async fn process_resource(
     broker: &Broker,
-    image: &crabka_metadata::MetadataImage,
+    image: &krabka_metadata::MetadataImage,
     ctx: &crate::handlers::RequestContext<'_>,
     resource: AlterConfigsResource,
     validate_only: bool,
@@ -177,7 +177,7 @@ async fn process_resource(
 
 fn broker_config_records(
     resource: &AlterConfigsResource,
-    image: &crabka_metadata::MetadataImage,
+    image: &krabka_metadata::MetadataImage,
 ) -> Result<Vec<MetadataRecord>, (i16, String)> {
     let node_id =
         super::incremental_alter_configs::broker_config_node_id(&resource.resource_name, image)?;
@@ -189,7 +189,7 @@ fn broker_config_records(
                 format!("unknown broker config {}", config.name),
             ));
         }
-        if node_id != crabka_metadata::DEFAULT_BROKER_CONFIG_NODE_ID
+        if node_id != krabka_metadata::DEFAULT_BROKER_CONFIG_NODE_ID
             && super::incremental_alter_configs::is_cluster_default_topic_config(&config.name)
         {
             return Err((
@@ -243,10 +243,10 @@ mod tests {
     use std::{net::SocketAddr, sync::Arc};
 
     use assert2::assert;
-    use crabka_protocol::owned::alter_configs_request::{
+    use krabka_protocol::owned::alter_configs_request::{
         AlterConfigsRequest, AlterConfigsResource, AlterableConfig,
     };
-    use crabka_security::{AuthMethod, Principal};
+    use krabka_security::{AuthMethod, Principal};
 
     use super::*;
     use crate::{authorizer::Authorizer, test_support::DenyAll};
@@ -407,10 +407,10 @@ mod tests {
 
     #[test]
     fn broker_full_replacement_sets_requested_and_deletes_omitted_configs() {
-        let mut image = crabka_metadata::MetadataImage::new(uuid::Uuid::nil());
+        let mut image = krabka_metadata::MetadataImage::new(uuid::Uuid::nil());
         image.apply(&MetadataRecord::V1BrokerRegistration(
-            crabka_metadata::BrokerRegistrationRecord {
-                node_id: crabka_metadata::NodeId(1),
+            krabka_metadata::BrokerRegistrationRecord {
+                node_id: krabka_metadata::NodeId(1),
                 broker_epoch: 0,
                 incarnation_id: uuid::Uuid::nil(),
                 host: "127.0.0.1".into(),
@@ -422,12 +422,12 @@ mod tests {
             },
         ));
         image.apply(&MetadataRecord::V1BrokerConfig(BrokerConfigRecord {
-            node_id: crabka_metadata::NodeId(1),
+            node_id: krabka_metadata::NodeId(1),
             config_name: crate::throttle::LEADER_THROTTLED_RATE_KEY.into(),
             config_value: Some("1024".into()),
         }));
         image.apply(&MetadataRecord::V1BrokerConfig(BrokerConfigRecord {
-            node_id: crabka_metadata::NodeId(1),
+            node_id: krabka_metadata::NodeId(1),
             config_name: crate::throttle::FOLLOWER_THROTTLED_RATE_KEY.into(),
             config_value: Some("512".into()),
         }));
@@ -440,12 +440,12 @@ mod tests {
 
         let expected = vec![
             MetadataRecord::V1BrokerConfig(BrokerConfigRecord {
-                node_id: crabka_metadata::NodeId(1),
+                node_id: krabka_metadata::NodeId(1),
                 config_name: crate::throttle::LEADER_THROTTLED_RATE_KEY.into(),
                 config_value: Some("2048".into()),
             }),
             MetadataRecord::V1BrokerConfig(BrokerConfigRecord {
-                node_id: crabka_metadata::NodeId(1),
+                node_id: krabka_metadata::NodeId(1),
                 config_name: crate::throttle::FOLLOWER_THROTTLED_RATE_KEY.into(),
                 config_value: None,
             }),
@@ -455,7 +455,7 @@ mod tests {
 
     #[test]
     fn broker_full_replacement_accepts_cluster_default_resource() {
-        let image = crabka_metadata::MetadataImage::new(uuid::Uuid::nil());
+        let image = krabka_metadata::MetadataImage::new(uuid::Uuid::nil());
         let records = broker_config_records(
             &broker_resource(
                 "",
@@ -472,12 +472,12 @@ mod tests {
             records
                 == vec![
                     MetadataRecord::V1BrokerConfig(BrokerConfigRecord {
-                        node_id: crabka_metadata::DEFAULT_BROKER_CONFIG_NODE_ID,
+                        node_id: krabka_metadata::DEFAULT_BROKER_CONFIG_NODE_ID,
                         config_name: crate::throttle::FOLLOWER_THROTTLED_RATE_KEY.into(),
                         config_value: Some("4096".into()),
                     }),
                     MetadataRecord::V1BrokerConfig(BrokerConfigRecord {
-                        node_id: crabka_metadata::DEFAULT_BROKER_CONFIG_NODE_ID,
+                        node_id: krabka_metadata::DEFAULT_BROKER_CONFIG_NODE_ID,
                         config_name: crate::config_keys::UNCLEAN_RECOVERY_STRATEGY.into(),
                         config_value: Some("Balanced".into()),
                     }),
@@ -487,10 +487,10 @@ mod tests {
 
     #[test]
     fn broker_full_replacement_rejects_per_broker_recovery_setting() {
-        let mut image = crabka_metadata::MetadataImage::new(uuid::Uuid::nil());
+        let mut image = krabka_metadata::MetadataImage::new(uuid::Uuid::nil());
         image.apply(&MetadataRecord::V1BrokerRegistration(
-            crabka_metadata::BrokerRegistrationRecord {
-                node_id: crabka_metadata::NodeId(1),
+            krabka_metadata::BrokerRegistrationRecord {
+                node_id: krabka_metadata::NodeId(1),
                 broker_epoch: 0,
                 incarnation_id: uuid::Uuid::nil(),
                 host: "127.0.0.1".into(),

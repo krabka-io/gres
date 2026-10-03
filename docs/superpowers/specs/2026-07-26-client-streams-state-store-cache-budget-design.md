@@ -61,7 +61,7 @@ positive values retain their exact byte count.
 The demo Stream role exposes:
 
 - CLI: `--streams-state-store-cache-max-bytes`
-- environment: `CRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES`
+- environment: `KRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES`
 
 Precedence is CLI over environment over the typed default of `10_485_760`.
 Clap parses an `i64`, then the resolver constructs
@@ -73,7 +73,7 @@ early role-specific error. `run_stream` receives the validated value and passes
 its raw bytes to the compatibility-preserving `StreamsApp` builder.
 
 Only the `demo-stream` Compose service receives
-`CRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES`, with
+`KRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES`, with
 `${...:-10485760}` as its deployment default.
 
 There is no CRD field because the operator does not own or render a Client

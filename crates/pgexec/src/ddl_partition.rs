@@ -16,15 +16,15 @@ use super::{
 /// what it inherits.
 pub(crate) fn partition_definition(
     kv: &dyn Kv,
-    name: &crabka_pgcatalog::RelationName,
-    spec: &crabka_pgparser::ast::PartitionOf,
-    constraints: &[crabka_pgparser::ast::TableConstraint],
-    like: &[crabka_pgparser::ast::LikeClause],
+    name: &krabka_pgcatalog::RelationName,
+    spec: &krabka_pgparser::ast::PartitionOf,
+    constraints: &[krabka_pgparser::ast::TableConstraint],
+    like: &[krabka_pgparser::ast::LikeClause],
     ctx: &crate::clock::EvalCtx,
 ) -> Result<TableDefinition, ExecError> {
     let resolution = ctx.resolution();
     let parent_name = &resolve_relation(kv, resolution, &spec.parent, SchemaDisposition::Utility)?;
-    let parent = crabka_pgcatalog::get_table(kv, parent_name)?;
+    let parent = krabka_pgcatalog::get_table(kv, parent_name)?;
     if crate::partition::scheme_of(kv, parent_name)?.is_none() {
         return Err(ExecError::NotPartitioned(parent_name.to_string()));
     }
@@ -54,9 +54,9 @@ pub(crate) fn partition_definition(
         }
         for qualifier in &option.constraints {
             match &qualifier.kind {
-                crabka_pgparser::ast::ColumnConstraintKind::NotNull => target.not_null = true,
-                crabka_pgparser::ast::ColumnConstraintKind::Null => target.not_null = false,
-                crabka_pgparser::ast::ColumnConstraintKind::Default(expr) => {
+                krabka_pgparser::ast::ColumnConstraintKind::NotNull => target.not_null = true,
+                krabka_pgparser::ast::ColumnConstraintKind::Null => target.not_null = false,
+                krabka_pgparser::ast::ColumnConstraintKind::Default(expr) => {
                     target.default = Some(default_from_expr(expr, target.ty, ctx)?);
                 }
                 other => {
@@ -79,14 +79,14 @@ pub(crate) fn partition_definition(
 /// `DefineIndex` choose one, so the copy is named after the *partition*, not
 /// after the index it was copied from.
 pub(crate) fn cloned_index_base_name(
-    child: &crabka_pgcatalog::RelationName,
-    source: &crabka_pgcatalog::Index,
+    child: &krabka_pgcatalog::RelationName,
+    source: &krabka_pgcatalog::Index,
 ) -> String {
     let parts = source
         .columns
         .iter()
         .map(|key| {
-            if crabka_pgcatalog::index_key_expression(key).is_some() {
+            if krabka_pgcatalog::index_key_expression(key).is_some() {
                 "expr"
             } else {
                 key.as_str()
@@ -95,11 +95,11 @@ pub(crate) fn cloned_index_base_name(
         .collect::<Vec<_>>()
         .join("_");
     match &source.constraint {
-        Some(crabka_pgcatalog::IndexConstraint::PrimaryKey) => format!("{}_pkey", child.name),
-        Some(crabka_pgcatalog::IndexConstraint::Exclusion(_)) => {
+        Some(krabka_pgcatalog::IndexConstraint::PrimaryKey) => format!("{}_pkey", child.name),
+        Some(krabka_pgcatalog::IndexConstraint::Exclusion(_)) => {
             format!("{}_{parts}_excl", child.name)
         }
-        Some(crabka_pgcatalog::IndexConstraint::Unique) => format!("{}_{parts}_key", child.name),
+        Some(krabka_pgcatalog::IndexConstraint::Unique) => format!("{}_{parts}_key", child.name),
         None => format!("{}_{parts}_idx", child.name),
     }
 }
@@ -111,15 +111,15 @@ pub(crate) fn cloned_index_base_name(
 /// written, which the catalog cannot see.
 pub(crate) fn available_index_name(
     kv: &dyn Kv,
-    table: &crabka_pgcatalog::RelationName,
+    table: &krabka_pgcatalog::RelationName,
     base: &str,
     taken: &HashSet<String>,
 ) -> String {
     let occupied = |candidate: &str| {
         let sibling = table.sibling(candidate);
         taken.contains(candidate)
-            || crabka_pgcatalog::get_index(kv, &sibling).is_ok()
-            || crabka_pgcatalog::get_table(kv, &sibling).is_ok()
+            || krabka_pgcatalog::get_index(kv, &sibling).is_ok()
+            || krabka_pgcatalog::get_table(kv, &sibling).is_ok()
     };
     let mut candidate = base.to_string();
     let mut suffix = 0u32;
@@ -138,8 +138,8 @@ pub(crate) fn available_index_name(
 /// by a child index backing one too — otherwise the partition would carry the
 /// key without carrying the constraint that names it.
 pub(crate) fn matches_parent_index(
-    candidate: &crabka_pgcatalog::Index,
-    source: &crabka_pgcatalog::Index,
+    candidate: &krabka_pgcatalog::Index,
+    source: &krabka_pgcatalog::Index,
 ) -> bool {
     candidate.columns == source.columns
         && candidate.include == source.include
@@ -154,9 +154,9 @@ pub(crate) fn matches_parent_index(
 /// Copy `source` onto `child` under a freshly generated name.
 pub(crate) fn cloned_partition_index(
     name: String,
-    source: &crabka_pgcatalog::Index,
-) -> crabka_pgcatalog::NewIndex {
-    crabka_pgcatalog::NewIndex {
+    source: &krabka_pgcatalog::Index,
+) -> krabka_pgcatalog::NewIndex {
+    krabka_pgcatalog::NewIndex {
         name,
         columns: source.columns.clone(),
         key_options: source.key_options.clone(),
@@ -194,16 +194,16 @@ pub(crate) fn cloned_partition_index(
 /// already claimed their names.
 pub(crate) fn partition_index_clones(
     kv: &dyn Kv,
-    parent: &crabka_pgcatalog::RelationName,
-    child: &crabka_pgcatalog::RelationName,
-    declared: &[crabka_pgcatalog::NewIndex],
-) -> Result<Vec<crabka_pgcatalog::NewIndex>, ExecError> {
+    parent: &krabka_pgcatalog::RelationName,
+    child: &krabka_pgcatalog::RelationName,
+    declared: &[krabka_pgcatalog::NewIndex],
+) -> Result<Vec<krabka_pgcatalog::NewIndex>, ExecError> {
     let mut taken: HashSet<String> = declared.iter().map(|index| index.name.clone()).collect();
     let mut clones = Vec::new();
-    for source in crabka_pgcatalog::list_table_indexes(kv, parent)? {
+    for source in krabka_pgcatalog::list_table_indexes(kv, parent)? {
         // A global index spans the whole relation already, so it has no
         // per-partition copy to make.
-        if source.placement != crabka_pgcatalog::IndexPlacement::Local {
+        if source.placement != krabka_pgcatalog::IndexPlacement::Local {
             continue;
         }
         let name = available_index_name(kv, child, &cloned_index_base_name(child, &source), &taken);
@@ -228,11 +228,11 @@ pub(crate) fn partition_index_clones(
 pub(crate) fn attached_partition_index_ops(
     kv: &dyn Kv,
     parent: &Table,
-    child: &crabka_pgcatalog::RelationName,
+    child: &krabka_pgcatalog::RelationName,
     own_xid: Option<u64>,
     build: &IndexBuild<'_>,
-) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
-    let sources = crabka_pgcatalog::list_table_indexes(kv, &parent.name)?;
+) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
+    let sources = krabka_pgcatalog::list_table_indexes(kv, &parent.name)?;
     let mut relations = vec![child.clone()];
     relations.extend(crate::partition::descendants(kv, child)?);
     clone_indexes_onto_partitions(kv, &sources, &relations, own_xid, build)
@@ -249,25 +249,25 @@ pub(crate) fn attached_partition_index_ops(
 /// already has partitions.
 pub(crate) fn clone_indexes_onto_partitions(
     kv: &dyn Kv,
-    sources: &[crabka_pgcatalog::Index],
-    relations: &[crabka_pgcatalog::RelationName],
+    sources: &[krabka_pgcatalog::Index],
+    relations: &[krabka_pgcatalog::RelationName],
     own_xid: Option<u64>,
     build: &IndexBuild<'_>,
-) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
+) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
     // A global index spans the whole relation already, so it has no
     // per-partition copy to make.
-    let sources: Vec<&crabka_pgcatalog::Index> = sources
+    let sources: Vec<&krabka_pgcatalog::Index> = sources
         .iter()
-        .filter(|source| source.placement == crabka_pgcatalog::IndexPlacement::Local)
+        .filter(|source| source.placement == krabka_pgcatalog::IndexPlacement::Local)
         .collect();
     if sources.is_empty() || relations.is_empty() {
         return Ok(Vec::new());
     }
-    let mut ids = crabka_pgcatalog::IndexIds::default();
+    let mut ids = krabka_pgcatalog::IndexIds::default();
     let mut ops = Vec::new();
     for relation in relations {
-        let table = crabka_pgcatalog::get_table(kv, relation)?;
-        let mut present = crabka_pgcatalog::list_table_indexes(kv, relation)?;
+        let table = krabka_pgcatalog::get_table(kv, relation)?;
+        let mut present = krabka_pgcatalog::list_table_indexes(kv, relation)?;
         let mut taken: HashSet<String> = present.iter().map(|index| index.name.clone()).collect();
         for &source in &sources {
             if present
@@ -280,7 +280,7 @@ pub(crate) fn clone_indexes_onto_partitions(
             let name = available_index_name(kv, relation, &base, &taken);
             taken.insert(name.clone());
             let clone = cloned_partition_index(name, source);
-            let index = crabka_pgcatalog::Index {
+            let index = krabka_pgcatalog::Index {
                 id: ids.allocate(kv)?,
                 name: clone.name,
                 table: relation.clone(),
@@ -298,7 +298,7 @@ pub(crate) fn clone_indexes_onto_partitions(
                 clustered: false,
                 deferral: clone.deferral,
             };
-            ops.extend(crabka_pgcatalog::put_index_ops(&index));
+            ops.extend(krabka_pgcatalog::put_index_ops(&index));
             ops.extend(local_index_backfill_ops(
                 kv, &table, &index, own_xid, build,
             )?);
@@ -311,9 +311,9 @@ pub(crate) fn clone_indexes_onto_partitions(
 
 /// Resolve a written `PARTITION BY` clause into the stored partition key.
 pub(crate) fn partition_scheme_from_ast(
-    spec: &crabka_pgparser::ast::PartitionBy,
+    spec: &krabka_pgparser::ast::PartitionBy,
     columns: &[Column],
-    indexes: &[crabka_pgcatalog::NewIndex],
+    indexes: &[krabka_pgcatalog::NewIndex],
 ) -> Result<crate::partition::Scheme, ExecError> {
     use crate::partition::Strategy;
     let strategy = match spec.strategy.as_str() {
@@ -342,14 +342,14 @@ pub(crate) fn partition_scheme_from_ast(
 pub(crate) fn reject_incomplete_partitioned_key(
     partition_keys: &[String],
     columns: &[String],
-    constraint: Option<&crabka_pgcatalog::IndexConstraint>,
+    constraint: Option<&krabka_pgcatalog::IndexConstraint>,
 ) -> Result<(), ExecError> {
     let Some(missing) = partition_keys.iter().find(|key| !columns.contains(key)) else {
         return Ok(());
     };
     let kind = match constraint {
-        Some(crabka_pgcatalog::IndexConstraint::PrimaryKey) => "PRIMARY KEY",
-        Some(crabka_pgcatalog::IndexConstraint::Exclusion(_)) => "EXCLUDE",
+        Some(krabka_pgcatalog::IndexConstraint::PrimaryKey) => "PRIMARY KEY",
+        Some(krabka_pgcatalog::IndexConstraint::Exclusion(_)) => "EXCLUDE",
         _ => "UNIQUE",
     };
     Err(ExecError::Unsupported(format!(
@@ -372,14 +372,14 @@ pub(crate) fn reject_unique_index_with_foreign_partition(
         .try_fold(false, |found, relation| {
             Ok::<_, ExecError>(
                 found
-                    || crabka_pgcatalog::get_table(kv, &relation)?
+                    || krabka_pgcatalog::get_table(kv, &relation)?
                         .foreign
                         .is_some(),
             )
         })?
     {
         return Err(ExecError::Remote(
-            crabka_pgwire::error::PgError::error(
+            krabka_pgwire::error::PgError::error(
                 "0A000",
                 format!(
                     "cannot create unique index on partitioned table \"{}\"",
@@ -399,11 +399,11 @@ pub(crate) fn reject_unique_index_with_foreign_partition(
 /// parent needs to enforce its key.
 pub(crate) fn reject_foreign_partition_with_unique_index(
     kv: &dyn Kv,
-    parent: &crabka_pgcatalog::RelationName,
-    child: &crabka_pgcatalog::RelationName,
+    parent: &krabka_pgcatalog::RelationName,
+    child: &krabka_pgcatalog::RelationName,
     attaching: bool,
 ) -> Result<(), ExecError> {
-    if !crabka_pgcatalog::list_table_indexes(kv, parent)?
+    if !krabka_pgcatalog::list_table_indexes(kv, parent)?
         .into_iter()
         .any(|index| index.unique)
     {
@@ -433,7 +433,7 @@ pub(crate) fn reject_foreign_partition_with_unique_index(
         )
     };
     Err(ExecError::Remote(
-        crabka_pgwire::error::PgError::error("0A000", message).with_detail(detail),
+        krabka_pgwire::error::PgError::error("0A000", message).with_detail(detail),
     ))
 }
 
@@ -441,11 +441,11 @@ pub(crate) fn reject_foreign_partition_with_unique_index(
 /// the stored form, returning `(parent, bound)`.
 pub(crate) fn partition_attachment(
     kv: &dyn Kv,
-    name: &crabka_pgcatalog::RelationName,
-    spec: &crabka_pgparser::ast::PartitionOf,
+    name: &krabka_pgcatalog::RelationName,
+    spec: &krabka_pgparser::ast::PartitionOf,
     columns: &[Column],
     ctx: &crate::clock::EvalCtx,
-) -> Result<(crabka_pgcatalog::RelationName, crate::partition::Bound), ExecError> {
+) -> Result<(krabka_pgcatalog::RelationName, crate::partition::Bound), ExecError> {
     let resolution = ctx.resolution();
     let parent_name = resolve_relation(kv, resolution, &spec.parent, SchemaDisposition::Utility)?;
     let scheme = crate::partition::scheme_of(kv, &parent_name)?
@@ -462,16 +462,16 @@ pub(crate) fn partition_attachment(
 /// Evaluate a written bound's constant expressions and coerce each to the type
 /// of the partition-key column it bounds.
 pub(crate) fn resolve_partition_bound(
-    bound: &crabka_pgparser::ast::PartitionBound,
+    bound: &krabka_pgparser::ast::PartitionBound,
     scheme: &crate::partition::Scheme,
     columns: &[Column],
     ctx: &crate::clock::EvalCtx,
 ) -> Result<crate::partition::Bound, ExecError> {
-    use crabka_pgparser::ast::{PartitionBound as Written, RangeBoundValue};
+    use krabka_pgparser::ast::{PartitionBound as Written, RangeBoundValue};
 
     use crate::partition::{Bound, RangeDatum};
 
-    let key_type = |index: usize| -> Result<crabka_pgtypes::ColumnType, ExecError> {
+    let key_type = |index: usize| -> Result<krabka_pgtypes::ColumnType, ExecError> {
         let key = scheme.keys.get(index).ok_or_else(|| {
             ExecError::InvalidTableDefinition(format!(
                 "{} must specify exactly one value per partitioning column",
@@ -560,7 +560,7 @@ pub(crate) fn check_partition_bound_expr(expr: &Expr) -> Result<(), ExecError> {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgparser::ast::{FuncArgs, FuncCall};
+    use krabka_pgparser::ast::{FuncArgs, FuncCall};
 
     use super::*;
 
@@ -580,7 +580,7 @@ mod tests {
     fn partition_bounds_reject_aggregates_but_keep_scalar_constants() {
         assert!(check_partition_bound_expr(&call("sum")).is_err());
         assert!(check_partition_bound_expr(&call("abs")).is_ok());
-        let subquery = crabka_pgparser::parser::parse_expression("(SELECT 1)")
+        let subquery = krabka_pgparser::parser::parse_expression("(SELECT 1)")
             .expect("scalar subquery expression");
         assert!(check_partition_bound_expr(&subquery).is_err());
     }
@@ -596,11 +596,11 @@ mod tests {
 /// refused.
 pub(crate) fn apply_table_not_null_constraints(
     columns: &mut [Column],
-    constraints: &[crabka_pgparser::ast::TableConstraint],
-    table: &crabka_pgcatalog::RelationName,
+    constraints: &[krabka_pgparser::ast::TableConstraint],
+    table: &krabka_pgcatalog::RelationName,
 ) -> Result<(), ExecError> {
     for constraint in constraints {
-        let crabka_pgparser::ast::TableConstraintKind::NotNull { column, no_inherit } =
+        let krabka_pgparser::ast::TableConstraintKind::NotNull { column, no_inherit } =
             &constraint.kind
         else {
             continue;
@@ -625,10 +625,10 @@ pub(crate) fn apply_table_not_null_constraints(
 /// explicitly written ones, in clause order, exactly like `PostgreSQL`).
 pub(crate) fn create_table_definition(
     kv: &dyn Kv,
-    name: &crabka_pgcatalog::RelationName,
-    columns: &[crabka_pgparser::ast::ColumnDef],
-    constraints: &[crabka_pgparser::ast::TableConstraint],
-    like: &[crabka_pgparser::ast::LikeClause],
+    name: &krabka_pgcatalog::RelationName,
+    columns: &[krabka_pgparser::ast::ColumnDef],
+    constraints: &[krabka_pgparser::ast::TableConstraint],
+    like: &[krabka_pgparser::ast::LikeClause],
     // Columns the relation gets from an `INHERITS` parent. They are not part of
     // the definition this returns — the caller merges them — but a `CHECK`
     // written here may name one, so validation has to see them.
@@ -638,9 +638,9 @@ pub(crate) fn create_table_definition(
     let resolution = ctx.resolution();
     let mut cols: Vec<Column> = Vec::new();
     let mut copied_columns = Vec::new();
-    let mut checks: Vec<crabka_pgcatalog::CheckConstraint> = Vec::new();
-    let mut sequences: Vec<(crabka_pgcatalog::RelationName, Sequence)> = Vec::new();
-    let mut indexes: Vec<crabka_pgcatalog::NewIndex> = Vec::new();
+    let mut checks: Vec<krabka_pgcatalog::CheckConstraint> = Vec::new();
+    let mut sequences: Vec<(krabka_pgcatalog::RelationName, Sequence)> = Vec::new();
+    let mut indexes: Vec<krabka_pgcatalog::NewIndex> = Vec::new();
     let mut foreign_keys: Vec<PendingForeignKey> = Vec::new();
 
     for clause in like {
@@ -649,46 +649,46 @@ pub(crate) fn create_table_definition(
         for column in &source_columns {
             let mut copied = column.clone();
             // NOT NULL always rides along; DEFAULT and IDENTITY only when asked.
-            if !clause.includes(crabka_pgparser::ast::LikeOption::Defaults)
+            if !clause.includes(krabka_pgparser::ast::LikeOption::Defaults)
                 && copied.identity.is_none()
             {
                 copied.default = None;
             }
-            if !clause.includes(crabka_pgparser::ast::LikeOption::Identity)
+            if !clause.includes(krabka_pgparser::ast::LikeOption::Identity)
                 && copied.identity.is_some()
             {
                 copied.identity = None;
                 copied.default = None;
-            } else if clause.includes(crabka_pgparser::ast::LikeOption::Identity)
+            } else if clause.includes(krabka_pgparser::ast::LikeOption::Identity)
                 && copied.identity.is_some()
             {
                 let source_sequence =
                     source_name.sibling(format!("{}_{}_seq", source_name.name, column.name));
                 let copied_sequence = name.sibling(format!("{}_{}_seq", name.name, column.name));
-                let source_sequence = crabka_pgcatalog::get_sequence(kv, &source_sequence)?;
+                let source_sequence = krabka_pgcatalog::get_sequence(kv, &source_sequence)?;
                 sequences.push((
                     copied_sequence.clone(),
-                    crabka_pgcatalog::Sequence {
+                    krabka_pgcatalog::Sequence {
                         is_called: false,
                         ..source_sequence
                     },
                 ));
-                copied.default = Some(crabka_pgcatalog::ColumnDefault::NextVal(
+                copied.default = Some(krabka_pgcatalog::ColumnDefault::NextVal(
                     copied_sequence.to_string(),
                 ));
             }
-            if !clause.includes(crabka_pgparser::ast::LikeOption::Generated) {
+            if !clause.includes(krabka_pgparser::ast::LikeOption::Generated) {
                 copied.generated = None;
             }
             copied_columns.push((clause.position, copied));
         }
-        if clause.includes(crabka_pgparser::ast::LikeOption::Constraints)
+        if clause.includes(krabka_pgparser::ast::LikeOption::Constraints)
             && let Some(source) = &source_table
         {
             for check in &source.checks {
                 let taken: Vec<&str> = checks.iter().map(|c| c.name.as_str()).collect();
                 let name = unique_constraint_name(&taken, &check.name);
-                checks.push(crabka_pgcatalog::CheckConstraint {
+                checks.push(krabka_pgcatalog::CheckConstraint {
                     name,
                     expr: check.expr.clone(),
                     validated: check.validated,
@@ -696,10 +696,10 @@ pub(crate) fn create_table_definition(
                 });
             }
         }
-        if clause.includes(crabka_pgparser::ast::LikeOption::Indexes) && source_table.is_some() {
+        if clause.includes(krabka_pgparser::ast::LikeOption::Indexes) && source_table.is_some() {
             let mut taken: HashSet<String> =
                 indexes.iter().map(|index| index.name.clone()).collect();
-            for index in crabka_pgcatalog::list_table_indexes(kv, &source_name)? {
+            for index in krabka_pgcatalog::list_table_indexes(kv, &source_name)? {
                 let index_name =
                     available_index_name(kv, name, &cloned_index_base_name(name, &index), &taken);
                 taken.insert(index_name.clone());
@@ -740,7 +740,7 @@ pub(crate) fn create_table_definition(
     for column in columns {
         for constraint in &column.constraints {
             match &constraint.kind {
-                crabka_pgparser::ast::ColumnConstraintKind::Check(predicate) => {
+                krabka_pgparser::ast::ColumnConstraintKind::Check(predicate) => {
                     let taken = non_check_constraint_names(&indexes, &foreign_keys);
                     push_table_check(
                         &mut checks,
@@ -752,7 +752,7 @@ pub(crate) fn create_table_definition(
                         constraint.attributes.no_inherit,
                     )?;
                 }
-                crabka_pgparser::ast::ColumnConstraintKind::PrimaryKey => {
+                krabka_pgparser::ast::ColumnConstraintKind::PrimaryKey => {
                     indexes.push(named_constraint_index(
                         constraint.name.as_deref(),
                         name,
@@ -762,7 +762,7 @@ pub(crate) fn create_table_definition(
                         constraint_deferral(constraint.attributes),
                     ));
                 }
-                crabka_pgparser::ast::ColumnConstraintKind::Unique { .. } => {
+                krabka_pgparser::ast::ColumnConstraintKind::Unique { .. } => {
                     indexes.push(named_constraint_index(
                         constraint.name.as_deref(),
                         name,
@@ -774,7 +774,7 @@ pub(crate) fn create_table_definition(
                 }
                 // A column-level REFERENCES is a one-column FOREIGN KEY, named
                 // and resolved exactly as the table-level spelling is.
-                crabka_pgparser::ast::ColumnConstraintKind::References(reference) => {
+                krabka_pgparser::ast::ColumnConstraintKind::References(reference) => {
                     push_pending_foreign_key(
                         &mut foreign_keys,
                         &checks,
@@ -798,8 +798,8 @@ pub(crate) fn create_table_definition(
             // not declare — an inherited one, or a partition parent's. It is
             // applied by `apply_table_not_null_constraints` once the caller has
             // merged every source of columns together.
-            crabka_pgparser::ast::TableConstraintKind::NotNull { .. } => {}
-            crabka_pgparser::ast::TableConstraintKind::Check(predicate) => {
+            krabka_pgparser::ast::TableConstraintKind::NotNull { .. } => {}
+            krabka_pgparser::ast::TableConstraintKind::Check(predicate) => {
                 let taken = non_check_constraint_names(&indexes, &foreign_keys);
                 push_table_check(
                     &mut checks,
@@ -811,7 +811,7 @@ pub(crate) fn create_table_definition(
                     constraint.attributes.no_inherit,
                 )?;
             }
-            crabka_pgparser::ast::TableConstraintKind::PrimaryKey {
+            krabka_pgparser::ast::TableConstraintKind::PrimaryKey {
                 columns: key,
                 without_overlaps,
             } => {
@@ -827,7 +827,7 @@ pub(crate) fn create_table_definition(
                     constraint_deferral(constraint.attributes),
                 ));
             }
-            crabka_pgparser::ast::TableConstraintKind::Unique {
+            krabka_pgparser::ast::TableConstraintKind::Unique {
                 columns: key,
                 without_overlaps,
                 ..
@@ -844,7 +844,7 @@ pub(crate) fn create_table_definition(
                     constraint_deferral(constraint.attributes),
                 ));
             }
-            crabka_pgparser::ast::TableConstraintKind::ForeignKey {
+            krabka_pgparser::ast::TableConstraintKind::ForeignKey {
                 columns: key,
                 period,
                 references,
@@ -863,7 +863,7 @@ pub(crate) fn create_table_definition(
                     },
                 )?;
             }
-            crabka_pgparser::ast::TableConstraintKind::Exclude { method, elements } => {
+            krabka_pgparser::ast::TableConstraintKind::Exclude { method, elements } => {
                 indexes.push(exclusion_constraint_index(
                     constraint.name.as_deref(),
                     name,
@@ -886,7 +886,7 @@ pub(crate) fn create_table_definition(
     }
     let table_for_validation = Table {
         id: 0,
-        owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+        owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
         name: name.clone(),
         columns: visible,
         sharded: false,
@@ -929,28 +929,28 @@ pub(crate) fn create_table_definition(
 fn like_source(
     kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
-    reference: &crabka_pgparser::ast::RelationRef,
+    reference: &krabka_pgparser::ast::RelationRef,
 ) -> Result<
     (
-        crabka_pgcatalog::RelationName,
+        krabka_pgcatalog::RelationName,
         Vec<Column>,
-        Option<crabka_pgcatalog::Table>,
+        Option<krabka_pgcatalog::Table>,
     ),
     ExecError,
 > {
     let source_name = resolve_relation(kv, resolution, reference, SchemaDisposition::Utility)?;
-    match crabka_pgcatalog::get_table(kv, &source_name) {
+    match krabka_pgcatalog::get_table(kv, &source_name) {
         Ok(table) => return Ok((source_name, table.columns.clone(), Some(table))),
-        Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => {}
+        Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => {}
         Err(error) => return Err(error.into()),
     }
-    match crabka_pgcatalog::get_view(kv, &source_name) {
+    match krabka_pgcatalog::get_view(kv, &source_name) {
         Ok(view) => return Ok((source_name, view.columns, None)),
-        Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => {}
+        Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => {}
         Err(error) => return Err(error.into()),
     }
     let type_name = super::resolve_user_type(kv, resolution, reference)?;
-    if let Some(ty) = crabka_pgcatalog::get_user_type(kv, &type_name)?
+    if let Some(ty) = krabka_pgcatalog::get_user_type(kv, &type_name)?
         && let Some(fields) = ty.fields()
     {
         let columns = fields
@@ -968,7 +968,7 @@ fn like_source(
             kind,
         ));
     }
-    Err(crabka_pgcatalog::CatalogError::UndefinedTable(source_name.to_string()).into())
+    Err(krabka_pgcatalog::CatalogError::UndefinedTable(source_name.to_string()).into())
 }
 
 /// One `FOREIGN KEY` clause a `CREATE TABLE` collected, with its name already
@@ -980,15 +980,15 @@ fn like_source(
 pub(crate) struct PendingForeignKey {
     pub(crate) name: String,
     pub(crate) columns: Vec<String>,
-    pub(crate) reference: crabka_pgparser::ast::ForeignKeyRef,
-    pub(crate) attributes: crabka_pgparser::ast::ConstraintAttributes,
+    pub(crate) reference: krabka_pgparser::ast::ForeignKeyRef,
+    pub(crate) attributes: krabka_pgparser::ast::ConstraintAttributes,
 }
 
 /// The constraint names a `CREATE TABLE` has assigned to things that are not
 /// `CHECK`s. There is one namespace per relation, so a `CHECK` must step
 /// around them.
 pub(crate) fn non_check_constraint_names<'a>(
-    indexes: &'a [crabka_pgcatalog::NewIndex],
+    indexes: &'a [krabka_pgcatalog::NewIndex],
     foreign_keys: &'a [PendingForeignKey],
 ) -> Vec<&'a str> {
     indexes
@@ -1004,9 +1004,9 @@ pub(crate) fn non_check_constraint_names<'a>(
 /// lowest free numeric suffix.
 pub(crate) fn push_pending_foreign_key(
     foreign_keys: &mut Vec<PendingForeignKey>,
-    checks: &[crabka_pgcatalog::CheckConstraint],
-    indexes: &[crabka_pgcatalog::NewIndex],
-    table_name: &crabka_pgcatalog::RelationName,
+    checks: &[krabka_pgcatalog::CheckConstraint],
+    indexes: &[krabka_pgcatalog::NewIndex],
+    table_name: &krabka_pgcatalog::RelationName,
     request: &AddForeignKey<'_>,
 ) -> Result<(), ExecError> {
     let taken: Vec<&str> = checks
@@ -1043,8 +1043,8 @@ pub(crate) fn push_pending_foreign_key(
 /// this same statement is 42710, while a generated name takes the lowest free
 /// numeric suffix.
 pub(crate) fn push_table_check(
-    checks: &mut Vec<crabka_pgcatalog::CheckConstraint>,
-    table_name: &crabka_pgcatalog::RelationName,
+    checks: &mut Vec<krabka_pgcatalog::CheckConstraint>,
+    table_name: &krabka_pgcatalog::RelationName,
     explicit: Option<&str>,
     predicate: &str,
     column_names: &[String],
@@ -1074,7 +1074,7 @@ pub(crate) fn push_table_check(
             )
         }
     };
-    checks.push(crabka_pgcatalog::CheckConstraint {
+    checks.push(krabka_pgcatalog::CheckConstraint {
         name,
         expr: predicate.to_string(),
         validated: true,
@@ -1093,7 +1093,7 @@ pub(crate) fn push_table_check(
 pub(crate) fn reject_index_over_virtual_generated(
     table: &Table,
     keys: &[String],
-    constraint: Option<&crabka_pgcatalog::IndexConstraint>,
+    constraint: Option<&krabka_pgcatalog::IndexConstraint>,
 ) -> Result<(), ExecError> {
     let over_virtual = keys.iter().any(|key| {
         table
@@ -1105,13 +1105,13 @@ pub(crate) fn reject_index_over_virtual_generated(
     }
     Err(ExecError::Unsupported(
         match constraint {
-            Some(crabka_pgcatalog::IndexConstraint::PrimaryKey) => {
+            Some(krabka_pgcatalog::IndexConstraint::PrimaryKey) => {
                 "primary keys on virtual generated columns are not supported"
             }
-            Some(crabka_pgcatalog::IndexConstraint::Unique) => {
+            Some(krabka_pgcatalog::IndexConstraint::Unique) => {
                 "unique constraints on virtual generated columns are not supported"
             }
-            Some(crabka_pgcatalog::IndexConstraint::Exclusion(_)) => {
+            Some(krabka_pgcatalog::IndexConstraint::Exclusion(_)) => {
                 "exclusion constraints on virtual generated columns are not supported"
             }
             None => "indexes on virtual generated columns are not supported",
@@ -1139,9 +1139,9 @@ pub(crate) fn reject_index_over_virtual_generated(
 pub(crate) fn reject_foreign_key_over_generated(
     columns: &[Column],
     keys: &[String],
-    reference: &crabka_pgparser::ast::ForeignKeyRef,
+    reference: &krabka_pgparser::ast::ForeignKeyRef,
 ) -> Result<(), ExecError> {
-    use crabka_pgparser::ast::ReferentialAction;
+    use krabka_pgparser::ast::ReferentialAction;
 
     for column in keys
         .iter()
@@ -1185,14 +1185,14 @@ pub(crate) fn generated_column_action_refusal(clause: &str) -> ExecError {
 /// that would make it well-defined), a system column other than `tableoid` is
 /// 42P17, and a subquery or aggregate is 0A000 / 42803.
 pub(crate) fn validate_generation_expressions(table: &Table) -> Result<(), ExecError> {
-    use crabka_pgparser::ast::Expr;
+    use krabka_pgparser::ast::Expr;
 
     let scope = Scope::single(table, &table.name.name);
     for column in &table.columns {
         let Some(source) = column.generation_expr() else {
             continue;
         };
-        let expr = crabka_pgparser::parser::parse_expression(source)?;
+        let expr = krabka_pgparser::parser::parse_expression(source)?;
         let mut rejection: Option<ExecError> = None;
         crate::grouping::visit_expr(&expr, &mut |node| {
             if rejection.is_some() {
@@ -1341,7 +1341,7 @@ pub(crate) fn backfill_generated_column(
         return Ok(());
     };
     let ty = state.table.columns[index].ty;
-    let expr = crabka_pgparser::parser::parse_expression(&source)?;
+    let expr = krabka_pgparser::parser::parse_expression(&source)?;
     let table_name = state.table.name.clone();
     let scope = Scope::single(&state.table, &table_name.name);
     let computed = state
@@ -1409,7 +1409,7 @@ pub(crate) fn reject_temporal_foreign_key(
     }
 }
 
-/// The [`crabka_pgcatalog::Index`] records an index batch allocated, read back
+/// The [`krabka_pgcatalog::Index`] records an index batch allocated, read back
 /// out of the batch itself.
 ///
 /// A `CREATE TABLE` whose `FOREIGN KEY` references the relation being created
@@ -1420,15 +1420,15 @@ pub(crate) fn reject_temporal_foreign_key(
 /// (the next-id counter) simply fail to decode, and only the names this batch
 /// asked for are kept.
 pub(crate) fn staged_indexes_of(
-    ops: &[crabka_pgkv::WriteOp],
-    pending: &[crabka_pgcatalog::NewIndex],
-) -> Vec<crabka_pgcatalog::Index> {
-    let mut staged: Vec<crabka_pgcatalog::Index> = Vec::with_capacity(pending.len());
+    ops: &[krabka_pgkv::WriteOp],
+    pending: &[krabka_pgcatalog::NewIndex],
+) -> Vec<krabka_pgcatalog::Index> {
+    let mut staged: Vec<krabka_pgcatalog::Index> = Vec::with_capacity(pending.len());
     for op in ops {
-        let crabka_pgkv::WriteOp::Put { value, .. } = op else {
+        let krabka_pgkv::WriteOp::Put { value, .. } = op else {
             continue;
         };
-        let Ok(index) = crabka_pgcatalog::serde::deserialize_index(value) else {
+        let Ok(index) = krabka_pgcatalog::serde::deserialize_index(value) else {
             continue;
         };
         if pending.iter().any(|new| new.name == index.name)
@@ -1442,12 +1442,12 @@ pub(crate) fn staged_indexes_of(
 
 pub(crate) fn named_constraint_index(
     explicit: Option<&str>,
-    table_name: &crabka_pgcatalog::RelationName,
+    table_name: &krabka_pgcatalog::RelationName,
     columns: &[String],
     primary_key: bool,
     without_overlaps: bool,
-    deferral: crabka_pgcatalog::ConstraintDeferral,
-) -> crabka_pgcatalog::NewIndex {
+    deferral: krabka_pgcatalog::ConstraintDeferral,
+) -> krabka_pgcatalog::NewIndex {
     let mut index =
         create_table_constraint_index(table_name, columns, primary_key, without_overlaps, deferral);
     if let Some(name) = explicit {
@@ -1458,11 +1458,11 @@ pub(crate) fn named_constraint_index(
 
 pub(crate) fn exclusion_constraint_index(
     explicit: Option<&str>,
-    table_name: &crabka_pgcatalog::RelationName,
+    table_name: &krabka_pgcatalog::RelationName,
     table_columns: &[Column],
     method: &str,
-    elements: &[crabka_pgparser::ast::ExclusionElement],
-) -> Result<crabka_pgcatalog::NewIndex, ExecError> {
+    elements: &[krabka_pgparser::ast::ExclusionElement],
+) -> Result<krabka_pgcatalog::NewIndex, ExecError> {
     if !method.eq_ignore_ascii_case("gist") {
         return Err(ExecError::Unsupported(format!(
             "exclusion constraints using access method \"{method}\" are not supported"
@@ -1479,9 +1479,9 @@ pub(crate) fn exclusion_constraint_index(
         }
         columns.push(element.column.clone());
         operators.push(match element.operator {
-            crabka_pgparser::ast::BinaryOp::Eq => crabka_pgcatalog::ExclusionOperator::Equal,
-            crabka_pgparser::ast::BinaryOp::Overlaps => {
-                crabka_pgcatalog::ExclusionOperator::Overlaps
+            krabka_pgparser::ast::BinaryOp::Eq => krabka_pgcatalog::ExclusionOperator::Equal,
+            krabka_pgparser::ast::BinaryOp::Overlaps => {
+                krabka_pgcatalog::ExclusionOperator::Overlaps
             }
             _ => unreachable!("parser accepts only exclusion operators the executor supports"),
         });
@@ -1490,8 +1490,8 @@ pub(crate) fn exclusion_constraint_index(
         || format!("{}_{}_excl", table_name.name, columns.join("_")),
         str::to_string,
     );
-    let key_options = crabka_pgcatalog::default_index_key_options(columns.len());
-    Ok(crabka_pgcatalog::NewIndex {
+    let key_options = krabka_pgcatalog::default_index_key_options(columns.len());
+    Ok(krabka_pgcatalog::NewIndex {
         name,
         columns,
         key_options,
@@ -1499,11 +1499,11 @@ pub(crate) fn exclusion_constraint_index(
         predicate: None,
         nulls_not_distinct: false,
         unique: false,
-        placement: crabka_pgcatalog::IndexPlacement::Local,
-        method: crabka_pgcatalog::IndexMethod::Gist,
-        constraint: Some(crabka_pgcatalog::IndexConstraint::Exclusion(operators)),
+        placement: krabka_pgcatalog::IndexPlacement::Local,
+        method: krabka_pgcatalog::IndexMethod::Gist,
+        constraint: Some(krabka_pgcatalog::IndexConstraint::Exclusion(operators)),
         without_overlaps: false,
-        deferral: crabka_pgcatalog::ConstraintDeferral::Immediate,
+        deferral: krabka_pgcatalog::ConstraintDeferral::Immediate,
     })
 }
 
@@ -1512,14 +1512,14 @@ pub(crate) fn exclusion_constraint_index(
 /// otherwise. The referenced set is taken from the predicate's identifier
 /// tokens, so function names and literals never contribute.
 pub(crate) fn default_check_name(
-    table_name: &crabka_pgcatalog::RelationName,
+    table_name: &krabka_pgcatalog::RelationName,
     predicate: &str,
     columns: &[String],
 ) -> String {
     let mut referenced: Vec<&String> = Vec::new();
-    if let Ok(tokens) = crabka_pgparser::lexer::lex(predicate) {
+    if let Ok(tokens) = krabka_pgparser::lexer::lex(predicate) {
         for (token, _) in &tokens {
-            let crabka_pgparser::token::Token::Ident(word) = token else {
+            let krabka_pgparser::token::Token::Ident(word) = token else {
                 continue;
             };
             if let Some(column) = columns.iter().find(|name| *name == word)
@@ -1559,7 +1559,7 @@ pub(crate) fn unique_constraint_name(taken: &[&str], base: &str) -> String {
 /// resolved against the table's columns.
 pub(crate) struct CompiledCheck {
     pub(crate) name: String,
-    pub(crate) expr: crabka_pgparser::ast::Expr,
+    pub(crate) expr: krabka_pgparser::ast::Expr,
 }
 
 /// Re-parse every stored `CHECK` predicate and verify it resolves against the
@@ -1570,7 +1570,7 @@ pub(crate) fn compile_check_constraints(table: &Table) -> Result<Vec<CompiledChe
         .checks
         .iter()
         .map(|check| {
-            let expr = crabka_pgparser::parser::parse_expression(&check.expr)?;
+            let expr = krabka_pgparser::parser::parse_expression(&check.expr)?;
             crate::eval::infer_type(&expr, &scope)?;
             Ok(CompiledCheck {
                 name: check.name.clone(),
@@ -1646,7 +1646,7 @@ pub(crate) fn apply_generated_columns(
         let Some(source) = column.generation_expr() else {
             continue;
         };
-        let expr = crabka_pgparser::parser::parse_expression(source)?;
+        let expr = krabka_pgparser::parser::parse_expression(source)?;
         let value = eval_assignment_value(&expr, column.ty, &scope, &snapshot, ctx)?;
         row[index] = coerce(value, column.ty, ctx)?;
     }
@@ -1707,7 +1707,7 @@ pub(crate) fn stored_row<'a>(table: &Table, row: &'a [Datum]) -> std::borrow::Co
 /// Encode one MVCC row version of `table` for storage.
 ///
 /// Every write path in the executor goes through here rather than calling
-/// [`crabka_pgmvcc::version::encode_tuple`] directly, so that "a `VIRTUAL`
+/// [`krabka_pgmvcc::version::encode_tuple`] directly, so that "a `VIRTUAL`
 /// generated column is not stored" holds by construction instead of by each
 /// write path remembering to blank it. See [`stored_row`].
 pub(crate) fn encode_table_tuple(
@@ -1718,7 +1718,7 @@ pub(crate) fn encode_table_tuple(
     cmax: u32,
     row: &[Datum],
 ) -> Vec<u8> {
-    crabka_pgmvcc::version::encode_tuple_with_command_ids(
+    krabka_pgmvcc::version::encode_tuple_with_command_ids(
         xmin,
         xmax,
         cmin,
@@ -1738,7 +1738,7 @@ pub(crate) fn encode_table_tuple_with_update_target(
     next_rowid: u64,
     row: &[Datum],
 ) -> Vec<u8> {
-    crabka_pgmvcc::version::encode_tuple_with_command_ids_and_update_target(
+    krabka_pgmvcc::version::encode_tuple_with_command_ids_and_update_target(
         xmin,
         xmax,
         cmin,
@@ -1787,7 +1787,7 @@ pub(crate) fn expand_virtual_generated_row(
         if index >= row.len() {
             continue;
         }
-        let expr = crabka_pgparser::parser::parse_expression(source)?;
+        let expr = krabka_pgparser::parser::parse_expression(source)?;
         let value = eval_assignment_value(&expr, column.ty, &scope, &snapshot, ctx)?;
         row[index] = coerce(value, column.ty, ctx)?;
     }
@@ -1820,11 +1820,11 @@ pub(crate) fn scan_all_row_versions(
     kv: &dyn Kv,
     table: &Table,
 ) -> Result<Vec<RowVersion>, ExecError> {
-    kv.scan_prefix(&crabka_pgkv::key::table_prefix(table.id))?
+    kv.scan_prefix(&krabka_pgkv::key::table_prefix(table.id))?
         .into_iter()
         .map(|(key, bytes)| {
             let (xmin, xmax, cmin, cmax, row) =
-                crabka_pgmvcc::version::decode_tuple_with_command_ids(&bytes)?;
+                krabka_pgmvcc::version::decode_tuple_with_command_ids(&bytes)?;
             Ok((key, xmin, xmax, cmin, cmax, row))
         })
         .collect()
@@ -1852,10 +1852,10 @@ pub(crate) fn live_row_versions(
     let status = global_status(kv, kv, &snapshot);
     let mut live: HashMap<u64, (u64, Vec<Datum>)> = HashMap::new();
     for (key, xmin, xmax, _, _, row) in versions {
-        if !crabka_pgmvcc::visibility::satisfies_mvcc(*xmin, *xmax, &snapshot, own_xid, &status)? {
+        if !krabka_pgmvcc::visibility::satisfies_mvcc(*xmin, *xmax, &snapshot, own_xid, &status)? {
             continue;
         }
-        let rowid = physical_rowid(table, crabka_pgmvcc::version::row_prefix_of(key)?)?;
+        let rowid = physical_rowid(table, krabka_pgmvcc::version::row_prefix_of(key)?)?;
         // The MVCC at-most-one-live invariant means the greatest-xmin live
         // version wins, exactly as `scan_live_interval` selects it.
         let slot = live.entry(rowid).or_insert_with(|| (*xmin, row.clone()));
@@ -1884,7 +1884,7 @@ pub(crate) fn version_is_settled_dead(
     xmin: u64,
     xmax: u64,
 ) -> Result<bool, ExecError> {
-    use crabka_pgmvcc::clog::XidStatus;
+    use krabka_pgmvcc::clog::XidStatus;
 
     let snapshot = all_committed_snapshot();
     let status = global_status(kv, kv, &snapshot);

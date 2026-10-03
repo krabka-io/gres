@@ -3,7 +3,7 @@ use super::*;
 /// Build the relation for one FROM list (comma items folded as cross joins).
 pub(crate) fn build_from(
     read_ctx: &crate::subquery::SubCtx<'_>,
-    from: &[crabka_pgparser::ast::TableExpr],
+    from: &[krabka_pgparser::ast::TableExpr],
     bounds: Option<&ScanBounds>,
     scan_plan: Option<&crate::plan_dist::DistributedScanPlan>,
     filter: Option<&Expr>,
@@ -16,7 +16,7 @@ pub(crate) fn build_from(
     reject_from_clause_aggregates(
         read_ctx,
         first,
-        &crabka_pgparser::ast::JoinConstraint::None,
+        &krabka_pgparser::ast::JoinConstraint::None,
         &Scope::empty(),
     )?;
     let mut acc = prune_relation_columns(
@@ -30,8 +30,8 @@ pub(crate) fn build_from(
             read_ctx,
             acc,
             te,
-            crabka_pgparser::ast::JoinKind::Cross,
-            &crabka_pgparser::ast::JoinConstraint::None,
+            krabka_pgparser::ast::JoinKind::Cross,
+            &krabka_pgparser::ast::JoinConstraint::None,
             filter,
             pruned_columns,
             acc_is_security_free,
@@ -46,8 +46,8 @@ pub(crate) fn build_from(
 /// `PostgreSQL` assigns to the query level whose FROM clause `outer` describes.
 fn reject_from_clause_aggregates(
     read_ctx: &crate::subquery::SubCtx<'_>,
-    te: &crabka_pgparser::ast::TableExpr,
-    constraint: &crabka_pgparser::ast::JoinConstraint,
+    te: &krabka_pgparser::ast::TableExpr,
+    constraint: &krabka_pgparser::ast::JoinConstraint,
     outer: &Scope,
 ) -> Result<(), ExecError> {
     FromClauseAggregatePass {
@@ -63,9 +63,9 @@ fn reject_from_clause_aggregates(
 pub(crate) fn append_from_item(
     read_ctx: &crate::subquery::SubCtx<'_>,
     acc: Relation,
-    te: &crabka_pgparser::ast::TableExpr,
-    kind: crabka_pgparser::ast::JoinKind,
-    constraint: &crabka_pgparser::ast::JoinConstraint,
+    te: &krabka_pgparser::ast::TableExpr,
+    kind: krabka_pgparser::ast::JoinKind,
+    constraint: &krabka_pgparser::ast::JoinConstraint,
     filter: Option<&Expr>,
     pruned_columns: Option<&[ColumnBinding]>,
     acc_is_security_free: bool,
@@ -93,8 +93,8 @@ pub(crate) fn append_from_item(
                 next_is_security_free,
             )?;
         }
-        let pushed_constraint = if matches!(kind, crabka_pgparser::ast::JoinKind::Cross)
-            && matches!(constraint, crabka_pgparser::ast::JoinConstraint::None)
+        let pushed_constraint = if matches!(kind, krabka_pgparser::ast::JoinKind::Cross)
+            && matches!(constraint, krabka_pgparser::ast::JoinConstraint::None)
         {
             let mut scope = acc.scope.clone();
             scope.extend(&next.scope);
@@ -103,7 +103,7 @@ pub(crate) fn append_from_item(
                 &scope,
                 acc_is_security_free && next_is_security_free,
             )
-            .map(crabka_pgparser::ast::JoinConstraint::On)
+            .map(krabka_pgparser::ast::JoinConstraint::On)
         } else {
             None
         };
@@ -133,9 +133,9 @@ pub(crate) fn append_from_item(
 /// relation, which cannot have a row-security policy.
 pub(crate) fn security_free_from_item(
     read_ctx: &crate::subquery::SubCtx<'_>,
-    item: &crabka_pgparser::ast::TableExpr,
+    item: &krabka_pgparser::ast::TableExpr,
 ) -> bool {
-    use crabka_pgparser::ast::TableExpr;
+    use krabka_pgparser::ast::TableExpr;
     match item {
         TableExpr::Table { name, .. } => {
             if name.schema.is_none()

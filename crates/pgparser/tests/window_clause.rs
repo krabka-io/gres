@@ -1,7 +1,7 @@
 //! Q2: the `OVER` suffix, the `WINDOW` clause, and frame syntax.
 
 use assert2::assert;
-use crabka_pgparser::{
+use krabka_pgparser::{
     ast::{
         Expr, FrameBound, FrameExclusion, FrameMode, FuncArgs, NamedWindow, OrderItem, QueryBody,
         SelectItem, SelectStmt, SetExpr, Statement, WindowCall, WindowFrame, WindowRef, WindowSpec,
@@ -237,7 +237,7 @@ fn a_frame_offset_expression_does_not_swallow_the_between_and() {
         ) == WindowFrame {
             mode: FrameMode::Rows,
             start: FrameBound::Preceding(Expr::Binary {
-                op: crabka_pgparser::ast::BinaryOp::Add,
+                op: krabka_pgparser::ast::BinaryOp::Add,
                 left: Box::new(Expr::IntLiteral("1".into())),
                 right: Box::new(Expr::IntLiteral("1".into())),
             }),
@@ -256,7 +256,7 @@ fn filter_attaches_to_the_window_call() {
             distinct: false,
             args: FuncArgs::Star,
             filter: Some(Expr::Binary {
-                op: crabka_pgparser::ast::BinaryOp::Gt,
+                op: krabka_pgparser::ast::BinaryOp::Gt,
                 left: Box::new(column("a")),
                 right: Box::new(Expr::IntLiteral("1".into())),
             }),

@@ -31,7 +31,7 @@ Standalone Gres accepts one whole-millisecond value in
 `1..=2,147,483,647`:
 
 - `--wal-producer-flush-timeout-ms`
-- `CRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT_MS`
+- `KRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT_MS`
 
 The fleet CRD adds the corresponding optional field:
 
@@ -50,7 +50,7 @@ audited; the library no longer hides the value.
 
 ## Ownership and Data Flow
 
-`crabka-client-producer` owns the named 50-second default and validates a
+`krabka-client-producer` owns the named 50-second default and validates a
 whole-millisecond duration in `1..=i32::MAX` through `refined_type`. The
 builder stores the validated duration on `Producer`, and `flush` uses it as
 the sole deadline. No new policy abstraction is added for one scalar.

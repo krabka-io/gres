@@ -1,6 +1,6 @@
 //! End-to-end tests. They drive the real `ConnectRebalancerClient` of the
 //! operator over HTTP against the real Connect-RPC router of
-//! `crabka-rebalancer`. The router runs in-process against a real
+//! `krabka-rebalancer`. The router runs in-process against a real
 //! single-broker Crabka.
 //!
 //! This is the wire-compatibility contract of the slice. It proves that
@@ -15,13 +15,13 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use assert2::assert;
 use async_trait::async_trait;
-use crabka_broker::{Broker, BrokerConfig};
-use crabka_client_admin::{AdminClient, CreateTopicSpec};
-use crabka_client_core::Client;
-use crabka_operator::rebalancer_client::{
+use krabka_broker::{Broker, BrokerConfig};
+use krabka_client_admin::{AdminClient, CreateTopicSpec};
+use krabka_client_core::Client;
+use krabka_operator::rebalancer_client::{
     ConnectRebalancerClient, ProposalStatus, RebalancerClientLike, RebalancerError,
 };
-use crabka_rebalancer::{
+use krabka_rebalancer::{
     api::{GoalRegistry, handlers::AppState},
     capacity::BrokerCapacities,
     executor::{
@@ -36,7 +36,7 @@ use crabka_rebalancer::{
     model::{Movement, ProposalStore},
     scraper::UsageStore,
 };
-use crabka_units::{ByteRate, bytes_per_sec, millis, percent, secs};
+use krabka_units::{ByteRate, bytes_per_sec, millis, percent, secs};
 
 /// Stand-in for the client facade of the executor.
 ///
@@ -78,12 +78,12 @@ fn build_state(snapshot: SharedSnapshot) -> Arc<AppState> {
     let metrics = RebalancerMetrics::register(&mut registry);
     let store = Arc::new(ProposalStore::new(20));
     let client_facade: Arc<dyn ClientFacade> = Arc::new(NoopClient);
-    let state_topic: Arc<dyn crabka_rebalancer::state_topic::StateBackend> =
-        Arc::new(crabka_rebalancer::state_topic::fake::InMemoryBackend::new_loaded());
+    let state_topic: Arc<dyn krabka_rebalancer::state_topic::StateBackend> =
+        Arc::new(krabka_rebalancer::state_topic::fake::InMemoryBackend::new_loaded());
     let executor = ExecutorState {
         store: store.clone(),
         config: ExecutorConfig {
-            data_dir: std::env::temp_dir().join("crabka-operator-rebalance-e2e"),
+            data_dir: std::env::temp_dir().join("krabka-operator-rebalance-e2e"),
             default_throttle: bytes_per_sec(50_000_000),
             poll_interval: millis(50),
             execute_deadline: secs(30),
@@ -107,11 +107,11 @@ fn build_state(snapshot: SharedSnapshot) -> Arc<AppState> {
         metrics,
         executor,
         client_facade,
-        anomaly_store: Arc::new(crabka_rebalancer::detector::AnomalyStore::new(200)),
+        anomaly_store: Arc::new(krabka_rebalancer::detector::AnomalyStore::new(200)),
         state_topic,
-        cancel_drain_timeout: crabka_rebalancer::config::RebalancerRuntimePolicy::default()
+        cancel_drain_timeout: krabka_rebalancer::config::RebalancerRuntimePolicy::default()
             .cancel_drain_timeout,
-        cancel_drain_poll_interval: crabka_rebalancer::config::RebalancerRuntimePolicy::default()
+        cancel_drain_poll_interval: krabka_rebalancer::config::RebalancerRuntimePolicy::default()
             .cancel_drain_poll_interval,
     })
 }
@@ -136,7 +136,7 @@ async fn operator_client_round_trips_against_real_rebalancer() {
                 replicas: 1,
                 configs: BTreeMap::default(),
             }],
-            crabka_units::secs(5),
+            krabka_units::secs(5),
         )
         .await
         .unwrap();
@@ -154,7 +154,7 @@ async fn operator_client_round_trips_against_real_rebalancer() {
     shared.store(Arc::new(Some(snap)));
     let state = build_state(shared);
 
-    let app = crabka_rebalancer::api::router(state);
+    let app = krabka_rebalancer::api::router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let _server = tokio::spawn(async move { axum::serve(listener, app).await });

@@ -10,8 +10,8 @@ RecordBatch, merged); 1d (mass rollout, merged).
 
 ## Summary
 
-Final sub-plan of the coverage slice. Make `crabka-compression` and
-`crabka-protocol` publish-ready at version `0.1.0`: complete crate
+Final sub-plan of the coverage slice. Make `krabka-compression` and
+`krabka-protocol` publish-ready at version `0.1.0`: complete crate
 metadata, per-crate README + CHANGELOG, supply-chain hygiene via
 `cargo-deny`, API-shape watcher via `cargo-semver-checks`,
 docs.rs configuration, `cargo publish --dry-run` clean, and a tagged
@@ -53,23 +53,23 @@ change once you have a crates.io account.
 
 # 1. Crate metadata
 
-Both `crabka-compression` and `crabka-protocol` need their manifests
+Both `krabka-compression` and `krabka-protocol` need their manifests
 filled in for `cargo publish --dry-run` to pass cleanly.
 
 ### `crates/compression/Cargo.toml`
 
 ```toml
 [package]
-name = "crabka-compression"
+name = "krabka-compression"
 version = "0.1.0"
 edition.workspace = true
 rust-version = "1.95.0"
 license = "Apache-2.0"
 authors = ["The Crabka Authors"]
 description = "Kafka wire-protocol compression codecs for Rust"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-compression"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-compression"
 readme = "README.md"
 keywords = ["kafka", "compression", "wire-protocol", "snappy", "zstd"]
 categories = ["compression", "encoding"]
@@ -89,20 +89,21 @@ rustdoc-args = ["--cfg", "docsrs"]
 ### `crates/protocol/Cargo.toml`
 
 Same shape with:
-- `name = "crabka-protocol"`
+
+- `name = "krabka-protocol"`
 - `description = "Apache Kafka wire-protocol codec (4.2.0), with typed RecordBatch and zero-copy borrowed decode"`
 - `keywords = ["kafka", "wire-protocol", "codec", "serialization", "decoder"]` (max 5)
 - `categories = ["encoding", "parser-implementations"]`
-- Dep on `crabka-compression` becomes:
+- Dep on `krabka-compression` becomes:
   ```toml
-  crabka-compression = { version = "0.1", path = "../compression", default-features = false }
+  krabka-compression = { version = "0.1", path = "../compression", default-features = false }
   ```
 
 ### Workspace version
 
 The workspace `[workspace.package]` table currently has `version = "0.0.0"`. Bump to `0.1.0`. All workspace crates that use `version.workspace = true` follow.
 
-`crabka-protocol-codegen` keeps `publish = false` (already set) and may stay at `0.0.0` by overriding its version locally, or follow the workspace bump — either way it's never uploaded.
+`krabka-protocol-codegen` keeps `publish = false` (already set) and may stay at `0.0.0` by overriding its version locally, or follow the workspace bump — either way it's never uploaded.
 
 ### License files
 
@@ -166,13 +167,13 @@ allow-git = []
 Append to `.github/workflows/ci.yml`:
 
 ```yaml
-  cargo-deny:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: EmbarkStudios/cargo-deny-action@v2
-        with:
-          command: check advisories bans sources licenses
+cargo-deny:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v6
+    - uses: EmbarkStudios/cargo-deny-action@v2
+      with:
+        command: check advisories bans sources licenses
 ```
 
 ### Expected first-run state
@@ -181,6 +182,7 @@ Current dep graph licenses are all standard ecosystem permissive
 licenses (Apache-2.0, MIT, BSD-*, ISC, Unicode-3.0, MPL-2.0). All are
 in the allowlist. If anything surfaces unexpectedly, the resolution
 order is:
+
 1. Replace the dep with a permissive-licensed alternative.
 2. If not possible, add to `licenses.exceptions` with a rationale
    comment.
@@ -201,21 +203,21 @@ allowed. `cargo-semver-checks` runs and reports; does not gate.
 Append to `.github/workflows/ci.yml`:
 
 ```yaml
-  cargo-semver-checks:
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: obi1kenobi/cargo-semver-checks-action@v2
-        with:
-          rust-toolchain: stable
+cargo-semver-checks:
+  runs-on: ubuntu-latest
+  continue-on-error: true
+  steps:
+    - uses: actions/checkout@v6
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: obi1kenobi/cargo-semver-checks-action@v2
+      with:
+        rust-toolchain: stable
 ```
 
 ### What it covers
 
-The action auto-detects publishable crates. `crabka-compression` and
-`crabka-protocol` are the two checked. `crabka-protocol-codegen`
+The action auto-detects publishable crates. `krabka-compression` and
+`krabka-protocol` are the two checked. `krabka-protocol-codegen`
 (`publish = false`) is correctly skipped.
 
 Until 0.1.0 is actually published, the action is a no-op (nothing to
@@ -259,17 +261,17 @@ pr_branch_prefix = "release-plz-"
 pr_labels = ["release"]
 
 [[package]]
-name = "crabka-protocol-codegen"
+name = "krabka-protocol-codegen"
 publish = false
 release = false              # internal bin
 
 [[package]]
-name = "crabka-compression"
+name = "krabka-compression"
 publish = false
 release = true
 
 [[package]]
-name = "crabka-protocol"
+name = "krabka-protocol"
 publish = false
 release = true
 ```
@@ -311,7 +313,7 @@ filter_unconventional = false
 ```markdown
 # Changelog
 
-All notable changes to `crabka-protocol` are documented here.
+All notable changes to `krabka-protocol` are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -324,7 +326,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Owned + borrowed flavors for every active Kafka 4.2 message (189
   message types across 604 supported `(api_key, version)` pairs).
 - Typed `RecordBatch` v2 decoder/encoder with `zerocopy` header
-  reinterpretation and `crabka-compression` integration.
+  reinterpretation and `krabka-compression` integration.
 - Central `ApiKey` enum listing every Kafka 4.2 API.
 - Differential testing against `kafka-clients` 4.2.0 for every active
   `(api_key, version)` pair — all byte-equal.
@@ -397,6 +399,7 @@ it here.
 ### Initial 0.1.0 release: manual, then release-plz takes over
 
 Sequence after 1e merges:
+
 1. The 1e PR lands on `main` with `version = "0.1.0"`, both crate
    CHANGELOGs seeded, release-plz config in place.
 2. **Manual final task:** tag `v0.1.0` + `gh release create v0.1.0`
@@ -441,15 +444,15 @@ intra-doc link or a missing item) that needs fixing before publish.
 
 Each crates.io page renders the per-crate `README.md`. The
 workspace-level README at the repo root is not what users see when they
-land on `crates.io/crates/crabka-protocol`.
+land on `crates.io/crates/krabka-protocol`.
 
 **`crates/protocol/README.md`:**
 
 ```markdown
-# crabka-protocol
+# krabka-protocol
 
-[![Crates.io](https://img.shields.io/crates/v/crabka-protocol.svg)](https://crates.io/crates/crabka-protocol)
-[![Docs.rs](https://docs.rs/crabka-protocol/badge.svg)](https://docs.rs/crabka-protocol)
+[![Crates.io](https://img.shields.io/crates/v/krabka-protocol.svg)](https://crates.io/crates/krabka-protocol)
+[![Docs.rs](https://docs.rs/krabka-protocol/badge.svg)](https://docs.rs/krabka-protocol)
 [![CI](https://github.com/robot-head/crabka/actions/workflows/ci.yml/badge.svg)](https://github.com/robot-head/crabka/actions/workflows/ci.yml)
 
 Apache Kafka wire-protocol codec for Rust. Implements every message
@@ -461,8 +464,8 @@ pairs), with byte-level wire compatibility verified against the JVM
 
 \`\`\`rust
 use bytes::BytesMut;
-use crabka_protocol::{Decode, Encode};
-use crabka_protocol::owned::api_versions_request::ApiVersionsRequest;
+use krabka_protocol::{Decode, Encode};
+use krabka_protocol::owned::api_versions_request::ApiVersionsRequest;
 
 let req = ApiVersionsRequest::default();
 let mut buf = BytesMut::with_capacity(req.encoded_len(3));
@@ -478,7 +481,7 @@ assert_eq!(decoded, req);
 - **Two flavors per message:** owned (`crate::owned::*`) and zero-copy
   borrowed (`crate::borrowed::*`).
 - **Typed `RecordBatch` v2** via `crate::records::*`, with eager
-  decompression through `crabka-compression`.
+  decompression through `krabka-compression`.
 - **Central `ApiKey` enum** listing every Kafka 4.2 API.
 
 ## Cargo features
@@ -487,7 +490,7 @@ Default features enable all four compression codecs. Disable per-codec
 via `--no-default-features` and selective `--features`:
 
 \`\`\`toml
-crabka-protocol = { version = "0.1", default-features = false, features = ["snappy", "zstd"] }
+krabka-protocol = { version = "0.1", default-features = false, features = ["snappy", "zstd"] }
 \`\`\`
 
 ## MSRV
@@ -531,11 +534,11 @@ cargo test --workspace
 echo "==> cargo deny check"
 cargo deny check
 
-echo "==> cargo publish --dry-run for crabka-compression"
-cargo publish -p crabka-compression --dry-run --allow-dirty
+echo "==> cargo publish --dry-run for krabka-compression"
+cargo publish -p krabka-compression --dry-run --allow-dirty
 
-echo "==> cargo publish --dry-run for crabka-protocol"
-cargo publish -p crabka-protocol --dry-run --allow-dirty
+echo "==> cargo publish --dry-run for krabka-protocol"
+cargo publish -p krabka-protocol --dry-run --allow-dirty
 
 echo "==> rustdoc with --cfg docsrs"
 RUSTDOCFLAGS="--cfg docsrs -D warnings" \
@@ -553,9 +556,9 @@ job, fmt/clippy/test in the rust matrix).
 # 7. Acceptance criteria
 
 1. Workspace `version` bumped to `0.1.0`.
-2. `crabka-compression` and `crabka-protocol` carry all
+2. `krabka-compression` and `krabka-protocol` carry all
    crates.io-required + recommended fields per Section 1.
-3. `crabka-protocol`'s dep on `crabka-compression` declares both
+3. `krabka-protocol`'s dep on `krabka-compression` declares both
    `version = "0.1"` and `path = "../compression"`.
 4. Per-crate `README.md` exists with badges, quickstart, MSRV, license.
 5. Per-crate `CHANGELOG.md` seeded with the `[0.1.0]` entry per Section 4.
@@ -565,8 +568,8 @@ job, fmt/clippy/test in the rust matrix).
    `publish = false`.
 8. `.github/workflows/release-plz.yml` exists.
 9. `cargo-semver-checks` job runs in CI with `continue-on-error: true`.
-10. `cargo publish -p crabka-compression --dry-run --allow-dirty` exits 0.
-11. `cargo publish -p crabka-protocol --dry-run --allow-dirty` exits 0.
+10. `cargo publish -p krabka-compression --dry-run --allow-dirty` exits 0.
+11. `cargo publish -p krabka-protocol --dry-run --allow-dirty` exits 0.
 12. `RUSTDOCFLAGS="--cfg docsrs -D warnings" cargo doc --workspace --no-deps --all-features` builds clean.
 13. `tools/publish-dryrun.sh` runs end-to-end successfully.
 14. `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace -- --include-ignored` all green (no regression).

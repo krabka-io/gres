@@ -36,7 +36,7 @@ Crabka's first-join detection in
 if req.member_epoch == 0 && req.member_id.is_empty() {  // ← obsolete draft
 ```
 
-This reflects an **early KIP-848 draft** in which the *server* minted member
+This reflects an **early KIP-848 draft** in which the _server_ minted member
 IDs and the client sent an empty `member_id` on first join. The **finalized
 protocol** (and the GA `kafka-clients 4.0` implementation) has the **consumer
 generate its own member UUID** (`Uuid.randomUuid()`) and send it from the very
@@ -64,7 +64,7 @@ already present — work correctly once the member is registered.
   program; see the companion migration roadmap). This slice does **not** touch
   the permanent group-type lock. A classic-locked group still rejects
   heartbeats with `GROUP_ID_NOT_FOUND`; a next-gen group still rejects classic
-  `JoinGroup` — the `coexists_with_classic` test uses two *separate* groups.
+  `JoinGroup` — the `coexists_with_classic` test uses two _separate_ groups.
 - `OffsetFetch`/`OffsetCommit` next-gen member-epoch fencing changes beyond what
   the foundations already do. (`--from-beginning` with no committed offsets
   resets to earliest, which the acceptance tests exercise.)
@@ -115,14 +115,14 @@ chose the id. The id is just a string.
 
 ## Error handling & edge cases
 
-| Case | Handling |
-|------|----------|
-| First heartbeat, client UUID, epoch 0 | First-join: register under the client's id, reconcile, advance epoch, return assignment. (The fix.) |
-| First heartbeat, empty `member_id`, epoch 0 (raw-RPC / older callers) | Fallback: mint a server-side UUID. Preserves existing raw-RPC integration tests. |
-| Known member id, epoch 0 | Not first-join → existing-member branch → `STALE_MEMBER_EPOCH`. |
-| Known member id, correct epoch | Steady-state path, unchanged. |
-| `member_epoch == -1` (leave) | Leave path, unchanged. |
-| Static member (`instance_id`) re-join at epoch 0 | The existing `UNRELEASED_INSTANCE_ID` guard inside the first-join branch is unchanged and still runs. |
+| Case                                                                  | Handling                                                                                              |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| First heartbeat, client UUID, epoch 0                                 | First-join: register under the client's id, reconcile, advance epoch, return assignment. (The fix.)   |
+| First heartbeat, empty `member_id`, epoch 0 (raw-RPC / older callers) | Fallback: mint a server-side UUID. Preserves existing raw-RPC integration tests.                      |
+| Known member id, epoch 0                                              | Not first-join → existing-member branch → `STALE_MEMBER_EPOCH`.                                       |
+| Known member id, correct epoch                                        | Steady-state path, unchanged.                                                                         |
+| `member_epoch == -1` (leave)                                          | Leave path, unchanged.                                                                                |
+| Static member (`instance_id`) re-join at epoch 0                      | The existing `UNRELEASED_INSTANCE_ID` guard inside the first-join branch is unchanged and still runs. |
 
 No new wire error codes.
 
@@ -169,7 +169,7 @@ and asserts the response echoes it and carries an assignment.
 ## Acceptance gates
 
 1. `cargo test --workspace` green.
-2. `cargo test -p crabka-broker --test jvm_consumer_group_next_gen -- --ignored`
+2. `cargo test -p krabka-broker --test jvm_consumer_group_next_gen -- --ignored`
    — all four pass against `mirror.gcr.io/apache/kafka:4.0.0`.
 3. `cargo clippy --workspace --all-targets -- -D warnings` clean.
 4. `cargo fmt --check` clean.

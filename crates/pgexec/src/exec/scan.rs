@@ -7,7 +7,7 @@ use super::*;
 pub(crate) fn scan_plan_table(
     catalog_kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
-    reference: &crabka_pgparser::ast::RelationRef,
+    reference: &krabka_pgparser::ast::RelationRef,
 ) -> Result<Option<Table>, ExecError> {
     let name = resolve_relation(
         catalog_kv,
@@ -15,7 +15,7 @@ pub(crate) fn scan_plan_table(
         reference,
         SchemaDisposition::Reference,
     )?;
-    Ok(crabka_pgcatalog::get_table(catalog_kv, &name)
+    Ok(krabka_pgcatalog::get_table(catalog_kv, &name)
         .ok()
         .filter(|table| table.foreign.is_none()))
 }
@@ -26,11 +26,11 @@ pub(crate) fn scan_plan_table(
 pub(crate) fn scan_live(
     kv: &dyn Kv,
     global: &dyn Kv,
-    gsnap: &crabka_pgmvcc::visibility::Snapshot,
-    snapshot: &crabka_pgmvcc::visibility::Snapshot,
+    gsnap: &krabka_pgmvcc::visibility::Snapshot,
+    snapshot: &krabka_pgmvcc::visibility::Snapshot,
     own: Option<u64>,
-    table: &crabka_pgcatalog::Table,
-) -> Result<Vec<(u64, u64, Vec<crabka_pgtypes::Datum>)>, ExecError> {
+    table: &krabka_pgcatalog::Table,
+) -> Result<Vec<(u64, u64, Vec<krabka_pgtypes::Datum>)>, ExecError> {
     scan_live_interval(kv, global, gsnap, snapshot, own, table, RowInterval::ALL).map(|rows| {
         rows.into_iter()
             .map(|row| (row.rowid, row.xmin, row.row))
@@ -42,10 +42,10 @@ pub(crate) fn scan_live(
 pub(crate) fn scan_live_interval(
     kv: &dyn Kv,
     global: &dyn Kv,
-    gsnap: &crabka_pgmvcc::visibility::Snapshot,
-    snapshot: &crabka_pgmvcc::visibility::Snapshot,
+    gsnap: &krabka_pgmvcc::visibility::Snapshot,
+    snapshot: &krabka_pgmvcc::visibility::Snapshot,
     own: Option<u64>,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     interval: RowInterval,
 ) -> Result<Vec<ScannedRow>, ExecError> {
     scan_live_interval_at_command(kv, global, gsnap, snapshot, own, None, table, interval)
@@ -56,11 +56,11 @@ pub(crate) fn scan_live_interval(
 pub(crate) fn scan_live_interval_at_command(
     kv: &dyn Kv,
     global: &dyn Kv,
-    gsnap: &crabka_pgmvcc::visibility::Snapshot,
-    snapshot: &crabka_pgmvcc::visibility::Snapshot,
+    gsnap: &krabka_pgmvcc::visibility::Snapshot,
+    snapshot: &krabka_pgmvcc::visibility::Snapshot,
     own: Option<u64>,
     command_id: Option<u32>,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     interval: RowInterval,
 ) -> Result<Vec<ScannedRow>, ExecError> {
     let scanned = scan_table_for_catalog_interval(kv, table, interval)?;
@@ -68,23 +68,23 @@ pub(crate) fn scan_live_interval_at_command(
     let mut i = 0;
     while i < scanned.len() {
         crate::session::check_query_canceled()?;
-        let prefix = crabka_pgmvcc::version::row_prefix_of(&scanned[i].0)?.to_vec();
+        let prefix = krabka_pgmvcc::version::row_prefix_of(&scanned[i].0)?.to_vec();
         let rowid = physical_rowid(table, &prefix)?;
         if !interval.contains(rowid) {
             while i < scanned.len()
-                && crabka_pgmvcc::version::row_prefix_of(&scanned[i].0)? == prefix.as_slice()
+                && krabka_pgmvcc::version::row_prefix_of(&scanned[i].0)? == prefix.as_slice()
             {
                 i += 1;
             }
             continue;
         }
-        let mut visible: Option<(u64, u32, u32, Vec<crabka_pgtypes::Datum>)> = None;
+        let mut visible: Option<(u64, u32, u32, Vec<krabka_pgtypes::Datum>)> = None;
         let mut live_count: usize = 0;
         while i < scanned.len()
-            && crabka_pgmvcc::version::row_prefix_of(&scanned[i].0)? == prefix.as_slice()
+            && krabka_pgmvcc::version::row_prefix_of(&scanned[i].0)? == prefix.as_slice()
         {
             let (xmin, xmax, cmin, cmax, row) =
-                crabka_pgmvcc::version::decode_tuple_with_command_ids(&scanned[i].1)?;
+                krabka_pgmvcc::version::decode_tuple_with_command_ids(&scanned[i].1)?;
             if self::mvcc::satisfies_mvcc_at_command(
                 xmin,
                 xmax,
@@ -129,7 +129,7 @@ pub(crate) fn scan_live_interval_at_command(
 pub(crate) fn scan_ts_live_interval(
     kv: &dyn Kv,
     primary_kv: &dyn Kv,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     read_ts: ReadTimestamp,
     own_start_ts: Option<TimestampTransactionId>,
     interval: RowInterval,
@@ -139,23 +139,23 @@ pub(crate) fn scan_ts_live_interval(
     let mut i = 0;
     while i < scanned.len() {
         crate::session::check_query_canceled()?;
-        let prefix = crabka_pgmvcc::version::row_prefix_of(&scanned[i].0)?.to_vec();
+        let prefix = krabka_pgmvcc::version::row_prefix_of(&scanned[i].0)?.to_vec();
         let rowid = physical_rowid(table, &prefix)?;
         let bucket = physical_bucket(table, &prefix)?;
         if !interval.contains(rowid) {
             while i < scanned.len()
-                && crabka_pgmvcc::version::row_prefix_of(&scanned[i].0)? == prefix.as_slice()
+                && krabka_pgmvcc::version::row_prefix_of(&scanned[i].0)? == prefix.as_slice()
             {
                 i += 1;
             }
             continue;
         }
 
-        let mut visible: Option<(u64, u64, Option<Vec<crabka_pgtypes::Datum>>)> = None;
+        let mut visible: Option<(u64, u64, Option<Vec<krabka_pgtypes::Datum>>)> = None;
         while i < scanned.len()
-            && crabka_pgmvcc::version::row_prefix_of(&scanned[i].0)? == prefix.as_slice()
+            && krabka_pgmvcc::version::row_prefix_of(&scanned[i].0)? == prefix.as_slice()
         {
-            let version = crabka_pgmvcc::version::decode_ts_tuple(&scanned[i].1)?;
+            let version = krabka_pgmvcc::version::decode_ts_tuple(&scanned[i].1)?;
             let start_ts = TimestampTransactionId::new(version.start_ts).map_err(|error| {
                 ExecError::Unsupported(format!("invalid timestamp intent start timestamp: {error}"))
             })?;
@@ -185,7 +185,7 @@ pub(crate) fn scan_ts_live_interval(
                 .flatten();
             let candidate = match (version.state, primary_decision, verified_distributed_intent) {
                 (
-                    crabka_pgmvcc::version::TsVersionState::Intent,
+                    krabka_pgmvcc::version::TsVersionState::Intent,
                     Some(PrimaryTxnDecision::Pending),
                     true,
                 ) if own_start_ts == Some(start_ts) => Some((u64::MAX, Some(version.row))),
@@ -193,31 +193,31 @@ pub(crate) fn scan_ts_live_interval(
                 // visible, even if this particular participant has not yet completed
                 // its idempotent physical resolution.
                 (
-                    crabka_pgmvcc::version::TsVersionState::Intent,
+                    krabka_pgmvcc::version::TsVersionState::Intent,
                     Some(PrimaryTxnDecision::Committed(commit_ts)),
                     true,
                 ) if commit_ts.get() <= read_ts.get() => Some((commit_ts.get(), Some(version.row))),
                 (
-                    crabka_pgmvcc::version::TsVersionState::Committed { commit_ts },
+                    krabka_pgmvcc::version::TsVersionState::Committed { commit_ts },
                     Some(PrimaryTxnDecision::Committed(primary_commit_ts)),
                     _,
                 ) if commit_ts == primary_commit_ts.get() && commit_ts <= read_ts.get() => {
                     descriptor_operation.then_some((commit_ts, Some(version.row)))
                 }
                 (
-                    crabka_pgmvcc::version::TsVersionState::Deleted { commit_ts },
+                    krabka_pgmvcc::version::TsVersionState::Deleted { commit_ts },
                     Some(PrimaryTxnDecision::Committed(primary_commit_ts)),
                     _,
                 ) if commit_ts == primary_commit_ts.get() && commit_ts <= read_ts.get() => {
                     descriptor_operation.then_some((commit_ts, None))
                 }
                 // Legacy/single-range timestamp versions have no descriptor.
-                (crabka_pgmvcc::version::TsVersionState::Committed { commit_ts }, None, _)
+                (krabka_pgmvcc::version::TsVersionState::Committed { commit_ts }, None, _)
                     if commit_ts <= read_ts.get() =>
                 {
                     Some((commit_ts, Some(version.row)))
                 }
-                (crabka_pgmvcc::version::TsVersionState::Deleted { commit_ts }, None, _)
+                (krabka_pgmvcc::version::TsVersionState::Deleted { commit_ts }, None, _)
                     if commit_ts <= read_ts.get() =>
                 {
                     Some((commit_ts, None))
@@ -250,20 +250,20 @@ pub(crate) fn scan_ts_live_interval(
 pub(crate) fn physical_rowid(table: &Table, row_prefix: &[u8]) -> Result<u64, ExecError> {
     if matches!(
         table.sharding,
-        Some(crabka_pgcatalog::ShardingStrategy::Hash(_))
+        Some(krabka_pgcatalog::ShardingStrategy::Hash(_))
     ) {
-        return Ok(crabka_pgkv::key::bucket_rowid_of(table.id, row_prefix)?.1);
+        return Ok(krabka_pgkv::key::bucket_rowid_of(table.id, row_prefix)?.1);
     }
-    Ok(crabka_pgkv::key::rowid_of(table.id, row_prefix)?)
+    Ok(krabka_pgkv::key::rowid_of(table.id, row_prefix)?)
 }
 
 fn physical_bucket(table: &Table, row_prefix: &[u8]) -> Result<Option<u32>, ExecError> {
     if matches!(
         table.sharding,
-        Some(crabka_pgcatalog::ShardingStrategy::Hash(_))
+        Some(krabka_pgcatalog::ShardingStrategy::Hash(_))
     ) {
         return Ok(Some(
-            crabka_pgkv::key::bucket_rowid_of(table.id, row_prefix)?.0,
+            krabka_pgkv::key::bucket_rowid_of(table.id, row_prefix)?.0,
         ));
     }
     Ok(None)
@@ -273,10 +273,10 @@ fn scan_table_for_catalog_interval(
     kv: &dyn Kv,
     table: &Table,
     interval: RowInterval,
-) -> Result<crabka_pgkv::KvScan, ExecError> {
+) -> Result<krabka_pgkv::KvScan, ExecError> {
     if matches!(
         table.sharding,
-        Some(crabka_pgcatalog::ShardingStrategy::Hash(_))
+        Some(krabka_pgcatalog::ShardingStrategy::Hash(_))
     ) {
         return scan_table_interval(kv, table.id, RowInterval::ALL);
     }
@@ -287,19 +287,19 @@ pub(crate) fn scan_table_interval(
     kv: &dyn Kv,
     table_id: u32,
     interval: RowInterval,
-) -> Result<crabka_pgkv::KvScan, ExecError> {
+) -> Result<krabka_pgkv::KvScan, ExecError> {
     let start = interval.start.map_or_else(
-        || crabka_pgkv::key::table_prefix(table_id),
-        |rowid| crabka_pgkv::key::row_key(table_id, rowid),
+        || krabka_pgkv::key::table_prefix(table_id),
+        |rowid| krabka_pgkv::key::row_key(table_id, rowid),
     );
     let end = interval.end.map_or_else(
         || {
-            let mut end = crabka_pgkv::key::table_prefix(table_id);
+            let mut end = krabka_pgkv::key::table_prefix(table_id);
             let last = end.last_mut().expect("table prefix is non-empty");
             *last = last.checked_add(1).expect("primary index has a successor");
             end
         },
-        |rowid| crabka_pgkv::key::row_key(table_id, rowid),
+        |rowid| krabka_pgkv::key::row_key(table_id, rowid),
     );
     Ok(kv.scan_range(&start, &end)?)
 }
@@ -308,14 +308,14 @@ pub(crate) fn scan_table_interval(
 pub(crate) fn row_matches(
     filter: Option<&Expr>,
     scope: &Scope,
-    row: &[crabka_pgtypes::Datum],
+    row: &[krabka_pgtypes::Datum],
     ctx: &crate::clock::EvalCtx,
 ) -> Result<bool, ExecError> {
     match filter {
         None => Ok(true),
         Some(f) => match crate::eval::eval(f, scope, row, ctx)? {
-            crabka_pgtypes::Datum::Bool(b) => Ok(b),
-            crabka_pgtypes::Datum::Null => Ok(false),
+            krabka_pgtypes::Datum::Bool(b) => Ok(b),
+            krabka_pgtypes::Datum::Null => Ok(false),
             _ => Err(ExecError::TypeMismatch(
                 "argument of WHERE must be type boolean".into(),
             )),
@@ -441,7 +441,7 @@ pub(crate) fn extract_scan_bounds(filter: Option<&Expr>) -> ScanBounds {
 /// that is not an `AND` is itself one conjunct.
 pub(crate) fn collect_conjuncts<'a>(expr: &'a Expr, out: &mut Vec<&'a Expr>) {
     if let Expr::Binary {
-        op: crabka_pgparser::ast::BinaryOp::And,
+        op: krabka_pgparser::ast::BinaryOp::And,
         left,
         right,
     } = expr
@@ -470,7 +470,7 @@ fn int_literal(expr: &Expr) -> Option<i64> {
     match expr {
         Expr::IntLiteral(s) => s.parse::<i64>().ok(),
         Expr::Unary {
-            op: crabka_pgparser::ast::UnaryOp::Neg,
+            op: krabka_pgparser::ast::UnaryOp::Neg,
             expr,
         } => int_literal(expr).map(|v| -v),
         _ => None,
@@ -480,7 +480,7 @@ fn int_literal(expr: &Expr) -> Option<i64> {
 /// Match `_partition = N` (either operand order) and return `N`.
 fn match_partition_eq(expr: &Expr) -> Option<i32> {
     let Expr::Binary {
-        op: crabka_pgparser::ast::BinaryOp::Eq,
+        op: krabka_pgparser::ast::BinaryOp::Eq,
         left,
         right,
     } = expr
@@ -512,7 +512,7 @@ enum OffsetBound {
 /// comparison is recognized with the column on either side (the operator is
 /// mirrored when the column is on the right).
 fn match_offset_bound(expr: &Expr) -> Option<OffsetBound> {
-    use crabka_pgparser::ast::BinaryOp;
+    use krabka_pgparser::ast::BinaryOp;
     match expr {
         Expr::Binary { op, left, right } => {
             // Normalize to `_offset <op> literal` by mirroring when reversed.
@@ -550,8 +550,8 @@ fn match_offset_bound(expr: &Expr) -> Option<OffsetBound> {
 
 /// Mirror a comparison operator for the reversed-operand form (`5 < _offset`
 /// means `_offset > 5`). Only the inequalities used for offset bounds are mapped.
-fn mirror_op(op: crabka_pgparser::ast::BinaryOp) -> Option<crabka_pgparser::ast::BinaryOp> {
-    use crabka_pgparser::ast::BinaryOp;
+fn mirror_op(op: krabka_pgparser::ast::BinaryOp) -> Option<krabka_pgparser::ast::BinaryOp> {
+    use krabka_pgparser::ast::BinaryOp;
     match op {
         BinaryOp::Lt => Some(BinaryOp::Gt),
         BinaryOp::Le => Some(BinaryOp::Ge),

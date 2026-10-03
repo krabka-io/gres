@@ -1,5 +1,5 @@
 [package]
-name = "crabka-logfmt"
+name = "krabka-logfmt"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -9,7 +9,7 @@ rust-version.workspace = true
 description = "Structured-JSON (Cloud Logging-friendly) tracing log formatter shared across Crabka services"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-logfmt"
+documentation = "https://docs.rs/krabka-logfmt"
 readme = "README.md"
 keywords = ["kafka", "logging", "tracing", "json", "crabka"]
 categories = ["development-tools::debugging"]

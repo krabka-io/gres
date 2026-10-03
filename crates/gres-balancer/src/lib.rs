@@ -24,11 +24,11 @@ pub use planner::{
 #[cfg(test)]
 mod tests {
     use assert2::{assert, check};
-    use crabka_gres_control::{
+    use krabka_gres_control::{
         HashPlacement, InMemoryRegistryStore, RangeBoundary, RangeLayoutEntry, SqlUser, TenantId,
         TenantName, TenantRecord, TenantRegistryStore, TenantState,
     };
-    use crabka_units::{
+    use krabka_units::{
         Frequency, bytes, convert::FrequencyExt as _, gibibytes, mebibytes, minutes, percent,
     };
 
@@ -100,7 +100,7 @@ mod tests {
             end_key: Some(RangeBoundary::table_start(100)),
             endpoint: endpoint.to_string(),
             wal_generation,
-            lifecycle: crabka_gres_control::RangeLifecycle::default(),
+            lifecycle: krabka_gres_control::RangeLifecycle::default(),
             retirement: None,
         }])
         .expect("range layout")
@@ -147,11 +147,11 @@ mod tests {
     fn authoritative_snapshot(
         version: u64,
         sampled_at: std::time::SystemTime,
-    ) -> crabka_gres_substrate::RangeStatsSnapshot {
-        crabka_gres_substrate::RangeStatsSnapshot {
+    ) -> krabka_gres_substrate::RangeStatsSnapshot {
+        krabka_gres_substrate::RangeStatsSnapshot {
             version,
             sampled_at,
-            ranges: vec![crabka_gres_substrate::RangeStats {
+            ranges: vec![krabka_gres_substrate::RangeStats {
                 tenant_name: "blue".to_string(),
                 range_id: 1,
                 row_count: None,
@@ -222,12 +222,12 @@ mod tests {
     #[test]
     fn checkpoint_reset_counters_do_not_become_zero_live_metrics() {
         let fleet = vec![tenant(vec![range(1, "c1", 2_500, 800)])];
-        let checkpoint_counters = crabka_gres_substrate::CheckpointStats::default();
+        let checkpoint_counters = krabka_gres_substrate::CheckpointStats::default();
         assert!(checkpoint_counters.snapshot() == (0, 0));
-        let snapshot = crabka_gres_substrate::RangeStatsSnapshot {
+        let snapshot = krabka_gres_substrate::RangeStatsSnapshot {
             version: 1,
             sampled_at: std::time::SystemTime::UNIX_EPOCH,
-            ranges: vec![crabka_gres_substrate::RangeStats {
+            ranges: vec![krabka_gres_substrate::RangeStats {
                 tenant_name: "blue".to_string(),
                 range_id: 1,
                 row_count: None,
@@ -257,11 +257,11 @@ mod tests {
     #[test]
     fn authoritative_provider_metrics_enable_planning() {
         let fleet = vec![tenant(vec![range(1, "c1", 1, 1)])];
-        let provider = crabka_gres_substrate::InMemoryRangeStatsProvider::new(
-            crabka_gres_substrate::RangeStatsSnapshot {
+        let provider = krabka_gres_substrate::InMemoryRangeStatsProvider::new(
+            krabka_gres_substrate::RangeStatsSnapshot {
                 version: 3,
                 sampled_at: std::time::SystemTime::UNIX_EPOCH,
-                ranges: vec![crabka_gres_substrate::RangeStats {
+                ranges: vec![krabka_gres_substrate::RangeStats {
                     tenant_name: "blue".to_string(),
                     range_id: 1,
                     row_count: None,
@@ -1349,7 +1349,7 @@ mod tests {
                 end_key: Some(boundary),
                 endpoint: "c1".to_string(),
                 wal_generation: 1,
-                lifecycle: crabka_gres_control::RangeLifecycle::default(),
+                lifecycle: krabka_gres_control::RangeLifecycle::default(),
                 retirement: None,
             },
             RangeLayoutEntry {
@@ -1357,7 +1357,7 @@ mod tests {
                 end_key: None,
                 endpoint: "c2".to_string(),
                 wal_generation: 1,
-                lifecycle: crabka_gres_control::RangeLifecycle::default(),
+                lifecycle: krabka_gres_control::RangeLifecycle::default(),
                 retirement: None,
             },
         ];

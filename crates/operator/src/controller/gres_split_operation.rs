@@ -1,7 +1,7 @@
-use crabka_gres_control::{
+use krabka_gres_control::{
     RangeRetirementCheckpoint, RangeRetirementPhase, SplitOperationPhase, SplitOperationRecord,
 };
-use crabka_gres_ranges::{
+use krabka_gres_ranges::{
     AuthorizedSplitIntent, FramedTcpClient, RangeControlOperation, RangeControlReq,
     RangeControlResp, RangeId, RangeRequest, RangeResponse,
 };
@@ -223,10 +223,10 @@ pub async fn verify_target_topology_ready(
         ));
     }
     let targets = match &record.mutation {
-        crabka_gres_control::RangeMutationPlan::Split { split } => {
+        krabka_gres_control::RangeMutationPlan::Split { split } => {
             vec![&split.left, &split.right]
         }
-        crabka_gres_control::RangeMutationPlan::Move { move_range } => {
+        krabka_gres_control::RangeMutationPlan::Move { move_range } => {
             vec![&move_range.replacement]
         }
     };
@@ -481,11 +481,11 @@ mod tests {
         atomic::{AtomicBool, Ordering},
     };
 
-    use crabka_gres_control::{
+    use krabka_gres_control::{
         RangeBoundary, RangeLayoutEntry, RangeLayoutSplit, RangeLifecycle, SplitOperationPlan,
         TenantName,
     };
-    use crabka_gres_ranges::{RangeControlResp, RangeId};
+    use krabka_gres_ranges::{RangeControlResp, RangeId};
     use tokio::sync::Mutex;
 
     use super::*;
@@ -754,7 +754,7 @@ mod tests {
 
     struct CrashOnceControl {
         operation: Mutex<SplitOperationRecord>,
-        tenant: Mutex<crabka_gres_control::TenantRecord>,
+        tenant: Mutex<krabka_gres_control::TenantRecord>,
         fail_next_cas: AtomicBool,
         apply_replace_then_fail: AtomicBool,
     }
@@ -763,17 +763,17 @@ mod tests {
     impl crate::context::GresControlLike for CrashOnceControl {
         async fn get_tenant(
             &self,
-            _tenant: &crabka_gres_control::TenantName,
-        ) -> Result<Option<crabka_gres_control::TenantRecord>, crate::context::GresControlWriteError>
+            _tenant: &krabka_gres_control::TenantName,
+        ) -> Result<Option<krabka_gres_control::TenantRecord>, crate::context::GresControlWriteError>
         {
             Ok(Some(self.tenant.lock().await.clone()))
         }
 
         async fn replace_tenant_if_version(
             &self,
-            record: &crabka_gres_control::TenantRecord,
+            record: &krabka_gres_control::TenantRecord,
             expected: Option<u64>,
-        ) -> Result<crabka_gres_control::TenantRecord, crate::context::GresControlWriteError>
+        ) -> Result<krabka_gres_control::TenantRecord, crate::context::GresControlWriteError>
         {
             let mut current = self.tenant.lock().await;
             if expected != Some(current.record_version) {
@@ -788,14 +788,14 @@ mod tests {
 
         async fn delete_tenant(
             &self,
-            _tenant: &crabka_gres_control::TenantName,
+            _tenant: &krabka_gres_control::TenantName,
         ) -> Result<(), crate::context::GresControlWriteError> {
             unreachable!()
         }
 
         async fn validate_final_checkpoint_manifest(
             &self,
-            _record: &crabka_gres_control::TenantRecord,
+            _record: &krabka_gres_control::TenantRecord,
         ) -> Result<(), crate::context::GresControlWriteError> {
             unreachable!()
         }
@@ -818,7 +818,7 @@ mod tests {
     }
 
     fn test_registry_error() -> crate::context::GresControlWriteError {
-        crabka_gres_control::ControlError::UnsupportedRegistryMutation {
+        krabka_gres_control::ControlError::UnsupportedRegistryMutation {
             mutation: "test_crash",
             reason: "injected acknowledgement loss",
         }
@@ -842,14 +842,14 @@ mod tests {
         }
     }
 
-    fn tenant_for(operation: &SplitOperationRecord) -> crabka_gres_control::TenantRecord {
+    fn tenant_for(operation: &SplitOperationRecord) -> krabka_gres_control::TenantRecord {
         let plan = operation.plan.as_ref().unwrap();
-        let mut tenant = crabka_gres_control::TenantRecord::new(
+        let mut tenant = krabka_gres_control::TenantRecord::new(
             plan.source_record_version,
-            crabka_gres_control::TenantId::try_from("tenant-a").unwrap(),
-            crabka_gres_control::TenantName::try_from("tenant-a").unwrap(),
-            crabka_gres_control::TenantState::Active,
-            crabka_gres_control::SqlUser::try_from("alice").unwrap(),
+            krabka_gres_control::TenantId::try_from("tenant-a").unwrap(),
+            krabka_gres_control::TenantName::try_from("tenant-a").unwrap(),
+            krabka_gres_control::TenantState::Active,
+            krabka_gres_control::SqlUser::try_from("alice").unwrap(),
             "SCRAM-SHA-256$4096:salt$stored:server".into(),
             1,
         )

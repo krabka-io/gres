@@ -1,7 +1,7 @@
 //! Pgtypes is the value layer for crabgresql: [`Datum`], column types, wire
 //! encodings, and operator semantics that match `PostgreSQL`.
 
-#![doc(html_root_url = "https://docs.rs/crabka-pgtypes/0.4.1")]
+#![doc(html_root_url = "https://docs.rs/krabka-pgtypes/0.4.2")]
 
 pub mod array;
 pub mod bitstring;

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crabka_units::{Time, convert::TimeExt as _};
+use krabka_units::{Time, convert::TimeExt as _};
 use prometheus_client::{
     encoding::EncodeLabelSet,
     metrics::{counter::Counter, family::Family, gauge::Gauge, histogram::Histogram},
@@ -67,7 +67,7 @@ impl ReconcileResult {
 /// The operator registers the metric names WITHOUT the `_total` suffix,
 /// because `prometheus-client` appends that suffix to `Counter`s at encode
 /// time. The operator also registers them WITHOUT a crate prefix, because the
-/// shared [`Registry`] carries the `crabka_operator` prefix.
+/// shared [`Registry`] carries the `krabka_operator` prefix.
 #[derive(Clone)]
 pub struct ControllerMetrics {
     /// `reconciliations_total{kind,result}`: reconcile passes by CRD kind and
@@ -101,7 +101,7 @@ impl ControllerMetrics {
         let managed_resources = Family::<KindLabel, Gauge>::default();
 
         // Counter registered WITHOUT `_total`; encoder appends it →
-        // `crabka_operator_reconciliations_total`.
+        // `krabka_operator_reconciliations_total`.
         registry.register(
             "reconciliations",
             "Reconcile passes by CRD kind and outcome (result=ok|error|requeue)",
@@ -163,14 +163,14 @@ pub fn init_tracing(filter: &str) {
     let env = tracing_subscriber::EnvFilter::try_new(filter)
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
     let _ = tracing_subscriber::registry()
-        .with(crabka_logfmt::layer(env, std::io::stdout))
+        .with(krabka_logfmt::layer(env, std::io::stdout))
         .try_init();
 }
 
 /// Build a fresh registry. Callers wrap it in `Arc<Mutex<…>>`.
 #[must_use]
 pub fn new_registry() -> Registry {
-    Registry::with_prefix("crabka_operator")
+    Registry::with_prefix("krabka_operator")
 }
 
 /// Build a fresh registry with the controller metrics already registered.
@@ -188,7 +188,7 @@ pub fn new_registry_with_metrics() -> (Registry, ControllerMetrics) {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_units::millis;
+    use krabka_units::millis;
 
     use super::*;
 
@@ -199,7 +199,7 @@ mod tests {
         r.register("up", "operator liveness", g);
         let mut s = String::new();
         prometheus_client::encoding::text::encode(&mut s, &r).unwrap();
-        assert!(s.contains("crabka_operator_up"));
+        assert!(s.contains("krabka_operator_up"));
     }
 
     #[test]
@@ -221,9 +221,9 @@ mod tests {
         prometheus_client::encoding::text::encode(&mut s, &registry).unwrap();
 
         // Counter is registered without `_total`; the encoder appends it.
-        assert!(s.contains("crabka_operator_reconciliations_total"));
-        assert!(s.contains("crabka_operator_reconcile_duration_seconds"));
-        assert!(s.contains("crabka_operator_managed_resources"));
+        assert!(s.contains("krabka_operator_reconciliations_total"));
+        assert!(s.contains("krabka_operator_reconcile_duration_seconds"));
+        assert!(s.contains("krabka_operator_managed_resources"));
         // Label sets render on the counter.
         assert!(s.contains("kind=\"Kafka\""));
         assert!(s.contains("result=\"ok\""));
@@ -235,7 +235,7 @@ mod tests {
         metrics.set_managed_resources("Kafka", 5);
         let mut s2 = String::new();
         prometheus_client::encoding::text::encode(&mut s2, &registry).unwrap();
-        assert!(s2.contains("crabka_operator_managed_resources"));
+        assert!(s2.contains("krabka_operator_managed_resources"));
     }
 
     #[test]

@@ -1,8 +1,8 @@
 use std::{error::Error, sync::Arc, time::Duration};
 
 use bytes::BytesMut;
-use crabka_pgexec::SqlEngine;
-use crabka_pgwire::session::SessionConfig;
+use krabka_pgexec::SqlEngine;
+use krabka_pgwire::session::SessionConfig;
 use tokio::net::TcpListener;
 use tokio_postgres::{
     NoTls,
@@ -39,7 +39,7 @@ impl ToSql for TextInt4 {
 async fn spawn() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
-    tokio::spawn(crabka_pgwire::server::serve(
+    tokio::spawn(krabka_pgwire::server::serve(
         listener,
         Arc::new(SqlEngine::new()),
         Arc::new(SessionConfig::trust()),

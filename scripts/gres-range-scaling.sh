@@ -9,29 +9,29 @@ usage() {
 Usage: scripts/gres-range-scaling.sh [--help]
 
 Runs 1, 2, and 4 range-local Gres workloads plus a single SHARDED-table
-ingest workload through the existing crabka-gres multi-range CLI and writes
+ingest workload through the existing krabka-gres multi-range CLI and writes
 range-scaling.json under the artifact directory. The artifact includes the
 range-local curve, sharded ingest curve, and a decision-ceiling aggregate
 commit-rate comparison against the expected batched-decision envelope.
 
 Environment:
-  CRABKA_GRES_SKIP_BUILD=1                    Reuse existing target/debug binaries.
-  CRABKA_GRES_RANGE_SCALING_ARTIFACT_DIR=dir  Artifact directory (default: target/gres-range-scaling-artifacts).
-  CRABKA_GRES_RANGE_SCALING_FLOOR=float       Required 4-range/1-range throughput floor (default: 2.5).
-  CRABKA_GRES_SHARDED_SCALING_FLOOR=float     Required sharded 4-range/1-range ingest floor (default: same as range floor).
-  CRABKA_GRES_DECISION_CEILING_MIN_RATIO=float
+  KRABKA_GRES_SKIP_BUILD=1                    Reuse existing target/debug binaries.
+  KRABKA_GRES_RANGE_SCALING_ARTIFACT_DIR=dir  Artifact directory (default: target/gres-range-scaling-artifacts).
+  KRABKA_GRES_RANGE_SCALING_FLOOR=float       Required 4-range/1-range throughput floor (default: 2.5).
+  KRABKA_GRES_SHARDED_SCALING_FLOOR=float     Required sharded 4-range/1-range ingest floor (default: same as range floor).
+  KRABKA_GRES_DECISION_CEILING_MIN_RATIO=float
                                                Required sharded 4-range measured/envelope ratio (default: 0.70).
-  CRABKA_GRES_RANGE_SCALING_MODE=auto|live|dry-run|fast
+  KRABKA_GRES_RANGE_SCALING_MODE=auto|live|dry-run|fast
                                                auto runs live when psql is available, otherwise dry-run (default: auto).
                                                fast runs live with the small-workload defaults.
-  CRABKA_GRES_RANGE_SCALING_FAST=1            Use a small live workload.
-  CRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE=n
+  KRABKA_GRES_RANGE_SCALING_FAST=1            Use a small live workload.
+  KRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE=n
                                                Concurrent psql workers per range (default: 2; fast: 1).
-  CRABKA_GRES_RANGE_SCALING_TXNS_PER_SESSION=n
+  KRABKA_GRES_RANGE_SCALING_TXNS_PER_SESSION=n
                                                Insert transactions per worker (default: 20; fast: 2).
-  CRABKA_GRES_RANGE_SCALING_WARMUP_TXNS=n      Warmup transactions per persistent worker (fast: 5).
-  CRABKA_GRES_RANGE_SCALING_TRIALS=n           Repeated trials aggregated by median (fast: 3).
-  CRABKA_GRES_RANGE_SCALING_KEEP_ARTIFACTS=0  Accepted for parity with other Gres scripts; artifacts are always kept.
+  KRABKA_GRES_RANGE_SCALING_WARMUP_TXNS=n      Warmup transactions per persistent worker (fast: 5).
+  KRABKA_GRES_RANGE_SCALING_TRIALS=n           Repeated trials aggregated by median (fast: 3).
+  KRABKA_GRES_RANGE_SCALING_KEEP_ARTIFACTS=0  Accepted for parity with other Gres scripts; artifacts are always kept.
 EOF
 }
 
@@ -41,14 +41,14 @@ case "${1:-}" in
     *) echo "FAIL: unknown argument $1" >&2; usage >&2; exit 2 ;;
 esac
 
-readonly ARTIFACT_DIR="${CRABKA_GRES_RANGE_SCALING_ARTIFACT_DIR:-target/gres-range-scaling-artifacts}"
-readonly FLOOR="${CRABKA_GRES_RANGE_SCALING_FLOOR:-2.5}"
-readonly SHARDED_FLOOR="${CRABKA_GRES_SHARDED_SCALING_FLOOR:-$FLOOR}"
-readonly DECISION_CEILING_MIN_RATIO="${CRABKA_GRES_DECISION_CEILING_MIN_RATIO:-0.70}"
+readonly ARTIFACT_DIR="${KRABKA_GRES_RANGE_SCALING_ARTIFACT_DIR:-target/gres-range-scaling-artifacts}"
+readonly FLOOR="${KRABKA_GRES_RANGE_SCALING_FLOOR:-2.5}"
+readonly SHARDED_FLOOR="${KRABKA_GRES_SHARDED_SCALING_FLOOR:-$FLOOR}"
+readonly DECISION_CEILING_MIN_RATIO="${KRABKA_GRES_DECISION_CEILING_MIN_RATIO:-0.70}"
 readonly CLUSTER_ID="00000000-0000-0000-0000-000000000001"
 readonly SQL_USER="scaleuser"
 readonly SQL_PASSWORD="scale-secret"
-readonly MODE_REQUEST="${CRABKA_GRES_RANGE_SCALING_MODE:-auto}"
+readonly MODE_REQUEST="${KRABKA_GRES_RANGE_SCALING_MODE:-auto}"
 readonly SHARDED_TABLE_NAME="s1"
 
 BROKER_PID=""
@@ -173,7 +173,7 @@ resolve_mode() {
             ;;
         live|dry-run) printf '%s\n' "$MODE_REQUEST" ;;
         fast) printf '%s\n' live ;;
-        *) fail "CRABKA_GRES_RANGE_SCALING_MODE must be auto, live, dry-run, or fast" ;;
+        *) fail "KRABKA_GRES_RANGE_SCALING_MODE must be auto, live, dry-run, or fast" ;;
     esac
 }
 
@@ -259,7 +259,7 @@ type = "simple"
 super_users = ["ANONYMOUS"]
 EOF
 
-    ./target/debug/crabka-broker \
+    ./target/debug/krabka-broker \
         --log-dir "${ARTIFACT_DIR}/broker-data" \
         --cluster-id "$CLUSTER_ID" \
         --broker-id 1 \
@@ -304,7 +304,7 @@ start_gres() {
     local tenant="$1"
     local boundaries="$2"
 
-    ./target/debug/crabka-gres \
+    ./target/debug/krabka-gres \
         --listen "127.0.0.1:${GRES_PORT}" \
         --substrate-bootstrap "127.0.0.1:${BROKER_PORT}" \
         --tenant "$tenant" \
@@ -546,7 +546,7 @@ run_live_sharded_workload() {
     if ! wait_for_workers "${pids[@]}"; then
         if grep -R "sharded table writes require a global transaction manager" "$run_dir" >/dev/null 2>&1; then
             write_live_unsupported_artifact \
-                "live SHARDED-table writes require a global transaction manager in the current crabka-gres service configuration; dry-run remains the reliable CI artifact path"
+                "live SHARDED-table writes require a global transaction manager in the current krabka-gres service configuration; dry-run remains the reliable CI artifact path"
             fail "live SHARDED-table workload is unsupported by the current service configuration"
         fi
         fail "${range_count}-range SHARDED-table workload worker failed"
@@ -590,8 +590,8 @@ for raw_line in gres_log.read_text().splitlines():
     line = ansi_escape.sub("", raw_line)
     if "timestamp_primary_committed" not in line:
         continue
-    # gres emits structured JSON (crabka_logfmt, installed by
-    # crabka_telemetry::init), so read the field instead of scraping a
+    # gres emits structured JSON (krabka_logfmt, installed by
+    # krabka_telemetry::init), so read the field instead of scraping a
     # `primary_range=N` rendering — that spelling only ever existed in
     # tracing_subscriber's plain-text output.
     try:
@@ -815,11 +815,11 @@ payload = {
     "generated_at_unix": int(time.time()),
     "mode": mode,
     "thresholds": {
-        "monotone_scaling_floor_env": "CRABKA_GRES_RANGE_SCALING_FLOOR",
+        "monotone_scaling_floor_env": "KRABKA_GRES_RANGE_SCALING_FLOOR",
         "range4_vs_range1_min": floor,
-        "sharded_scaling_floor_env": "CRABKA_GRES_SHARDED_SCALING_FLOOR",
+        "sharded_scaling_floor_env": "KRABKA_GRES_SHARDED_SCALING_FLOOR",
         "sharded_range4_vs_range1_min": sharded_floor,
-        "decision_ceiling_min_ratio_env": "CRABKA_GRES_DECISION_CEILING_MIN_RATIO",
+        "decision_ceiling_min_ratio_env": "KRABKA_GRES_DECISION_CEILING_MIN_RATIO",
         "decision_ceiling_range4_min_ratio": decision_ceiling_min_ratio,
         "decision_ceiling_all_points_max_ratio": 1.25,
     },
@@ -830,7 +830,7 @@ payload = {
         "ci": os.environ.get("CI") == "true",
         "github_run_id": os.environ.get("GITHUB_RUN_ID"),
         "git_sha": optional_command(["git", "rev-parse", "HEAD"]),
-        "crabka_gres_skip_build": os.environ.get("CRABKA_GRES_SKIP_BUILD") == "1",
+        "krabka_gres_skip_build": os.environ.get("KRABKA_GRES_SKIP_BUILD") == "1",
         "sessions_per_range": sessions_per_range,
         "txns_per_session": txns_per_session,
         "warmup_txns_per_session": warmup_txns,
@@ -997,8 +997,8 @@ run_live() {
     local range_count
     local trial
 
-    if [ "${CRABKA_GRES_SKIP_BUILD:-}" != "1" ]; then
-        cargo build --locked -p crabka-cli -p crabka-broker -p crabka-gres
+    if [ "${KRABKA_GRES_SKIP_BUILD:-}" != "1" ]; then
+        cargo build --locked -p krabka-cli -p krabka-broker -p krabka-gres
     fi
 
     mapfile -t PORTS < <(choose_ports)
@@ -1038,13 +1038,13 @@ for prefix in ("result", "result-sharded"):
 PY
 }
 
-require_decimal CRABKA_GRES_RANGE_SCALING_FLOOR "$FLOOR"
-require_decimal CRABKA_GRES_SHARDED_SCALING_FLOOR "$SHARDED_FLOOR"
-require_decimal CRABKA_GRES_DECISION_CEILING_MIN_RATIO "$DECISION_CEILING_MIN_RATIO"
-require_positive_integer CRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE "${CRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE:-1}"
-require_positive_integer CRABKA_GRES_RANGE_SCALING_TXNS_PER_SESSION "${CRABKA_GRES_RANGE_SCALING_TXNS_PER_SESSION:-1}"
-require_positive_integer CRABKA_GRES_RANGE_SCALING_WARMUP_TXNS "${CRABKA_GRES_RANGE_SCALING_WARMUP_TXNS:-1}"
-require_positive_integer CRABKA_GRES_RANGE_SCALING_TRIALS "${CRABKA_GRES_RANGE_SCALING_TRIALS:-1}"
+require_decimal KRABKA_GRES_RANGE_SCALING_FLOOR "$FLOOR"
+require_decimal KRABKA_GRES_SHARDED_SCALING_FLOOR "$SHARDED_FLOOR"
+require_decimal KRABKA_GRES_DECISION_CEILING_MIN_RATIO "$DECISION_CEILING_MIN_RATIO"
+require_positive_integer KRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE "${KRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE:-1}"
+require_positive_integer KRABKA_GRES_RANGE_SCALING_TXNS_PER_SESSION "${KRABKA_GRES_RANGE_SCALING_TXNS_PER_SESSION:-1}"
+require_positive_integer KRABKA_GRES_RANGE_SCALING_WARMUP_TXNS "${KRABKA_GRES_RANGE_SCALING_WARMUP_TXNS:-1}"
+require_positive_integer KRABKA_GRES_RANGE_SCALING_TRIALS "${KRABKA_GRES_RANGE_SCALING_TRIALS:-1}"
 command -v python3 >/dev/null 2>&1 || fail "python3 is required"
 
 rm -rf "$ARTIFACT_DIR"
@@ -1052,27 +1052,27 @@ mkdir -p "$ARTIFACT_DIR"
 
 MODE="$(resolve_mode)"
 if [ "$MODE" = "dry-run" ]; then
-    SESSIONS_PER_RANGE="${CRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE:-1}"
-    TXNS_PER_SESSION="${CRABKA_GRES_RANGE_SCALING_TXNS_PER_SESSION:-2}"
-elif [ "${MODE_REQUEST}" = "fast" ] || [ "${CRABKA_GRES_RANGE_SCALING_FAST:-0}" = "1" ]; then
-    SESSIONS_PER_RANGE="${CRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE:-1}"
-    TXNS_PER_SESSION="${CRABKA_GRES_RANGE_SCALING_TXNS_PER_SESSION:-50}"
-    WARMUP_TXNS="${CRABKA_GRES_RANGE_SCALING_WARMUP_TXNS:-5}"
-    TRIALS="${CRABKA_GRES_RANGE_SCALING_TRIALS:-3}"
+    SESSIONS_PER_RANGE="${KRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE:-1}"
+    TXNS_PER_SESSION="${KRABKA_GRES_RANGE_SCALING_TXNS_PER_SESSION:-2}"
+elif [ "${MODE_REQUEST}" = "fast" ] || [ "${KRABKA_GRES_RANGE_SCALING_FAST:-0}" = "1" ]; then
+    SESSIONS_PER_RANGE="${KRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE:-1}"
+    TXNS_PER_SESSION="${KRABKA_GRES_RANGE_SCALING_TXNS_PER_SESSION:-50}"
+    WARMUP_TXNS="${KRABKA_GRES_RANGE_SCALING_WARMUP_TXNS:-5}"
+    TRIALS="${KRABKA_GRES_RANGE_SCALING_TRIALS:-3}"
 else
-    SESSIONS_PER_RANGE="${CRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE:-2}"
-    TXNS_PER_SESSION="${CRABKA_GRES_RANGE_SCALING_TXNS_PER_SESSION:-20}"
-    WARMUP_TXNS="${CRABKA_GRES_RANGE_SCALING_WARMUP_TXNS:-5}"
-    TRIALS="${CRABKA_GRES_RANGE_SCALING_TRIALS:-3}"
+    SESSIONS_PER_RANGE="${KRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE:-2}"
+    TXNS_PER_SESSION="${KRABKA_GRES_RANGE_SCALING_TXNS_PER_SESSION:-20}"
+    WARMUP_TXNS="${KRABKA_GRES_RANGE_SCALING_WARMUP_TXNS:-5}"
+    TRIALS="${KRABKA_GRES_RANGE_SCALING_TRIALS:-3}"
 fi
 if [ "$MODE" = "dry-run" ]; then
-    WARMUP_TXNS="${CRABKA_GRES_RANGE_SCALING_WARMUP_TXNS:-5}"
-    TRIALS="${CRABKA_GRES_RANGE_SCALING_TRIALS:-3}"
+    WARMUP_TXNS="${KRABKA_GRES_RANGE_SCALING_WARMUP_TXNS:-5}"
+    TRIALS="${KRABKA_GRES_RANGE_SCALING_TRIALS:-3}"
 fi
-require_positive_integer CRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE "$SESSIONS_PER_RANGE"
-require_positive_integer CRABKA_GRES_RANGE_SCALING_TXNS_PER_SESSION "$TXNS_PER_SESSION"
-require_positive_integer CRABKA_GRES_RANGE_SCALING_WARMUP_TXNS "$WARMUP_TXNS"
-require_positive_integer CRABKA_GRES_RANGE_SCALING_TRIALS "$TRIALS"
+require_positive_integer KRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE "$SESSIONS_PER_RANGE"
+require_positive_integer KRABKA_GRES_RANGE_SCALING_TXNS_PER_SESSION "$TXNS_PER_SESSION"
+require_positive_integer KRABKA_GRES_RANGE_SCALING_WARMUP_TXNS "$WARMUP_TXNS"
+require_positive_integer KRABKA_GRES_RANGE_SCALING_TRIALS "$TRIALS"
 
 case "$MODE" in
     dry-run)

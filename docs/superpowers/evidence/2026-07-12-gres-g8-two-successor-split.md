@@ -33,9 +33,9 @@ The validator's negative gate was also exercised against `/dev/null`; parsing fa
 Focused schema and compile gates:
 
 ```text
-cargo test -q -p crabka-gres-ranges transport::tests --lib --no-run
-cargo test -q -p crabka-operator controller::gres_split_operation --lib --no-run
-cargo test -q -p crabka-gres --test topology_process_nemesis --no-run
+cargo test -q -p krabka-gres-ranges transport::tests --lib --no-run
+cargo test -q -p krabka-operator controller::gres_split_operation --lib --no-run
+cargo test -q -p krabka-gres --test topology_process_nemesis --no-run
 ```
 
 All three completed successfully. The live JSON additionally requires target layout `[0,2,3]`, distinct r2/r3 endpoints, generation 1 on both successors, exact row counts 15 and 17, zero cross-side rows, 32-row SQL/ACK equality, the authenticated marker receipt, predecessor topic absence, successor topic presence, one predecessor deletion, sentinel-topic survival, and a bounded operation duration.

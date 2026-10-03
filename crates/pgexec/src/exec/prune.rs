@@ -8,7 +8,7 @@ pub(crate) struct ChainPrune {
     /// their orphaned local secondary-index entries, plus (for `vacuum`)
     /// `Put`s freezing surviving sub-horizon tuple headers. Empty when
     /// nothing on the chain needs work.
-    pub ops: Vec<crabka_pgkv::WriteOp>,
+    pub ops: Vec<krabka_pgkv::WriteOp>,
     /// Number of tuple versions deleted by `ops`.
     pub versions: u64,
     /// Number of secondary-index entries deleted by `ops`.
@@ -20,7 +20,7 @@ pub(crate) struct ChainPrune {
 /// Delete ops reclaiming `rowid`'s dead versions (and the local secondary-index
 /// entries no surviving version still needs), judged at `horizon`.
 ///
-/// A version is dead per [`crabka_pgmvcc::gc::version_is_dead`]: its creator
+/// A version is dead per [`krabka_pgmvcc::gc::version_is_dead`]: its creator
 /// aborted, or a transaction that committed below `horizon` deleted/superseded
 /// it. `horizon` must come from `checkpoint_garbage_horizon`, which caps it at
 /// the oldest running writer xid, the lowest registered snapshot pin, and the
@@ -51,7 +51,7 @@ pub(crate) struct ChainPrune {
 /// the caller's own commit batch. On replicated engines they replicate
 /// through the WAL and replay deterministically. Global 2PC writes are
 /// self-protecting: an undecided enlisted xid reads as `Prepared` (which
-/// [`crabka_pgmvcc::gc::version_is_dead`] never treats as dead), and global
+/// [`krabka_pgmvcc::gc::version_is_dead`] never treats as dead), and global
 /// xids sit numerically above every local horizon.
 ///
 /// One rowid-chain prune request (see [`prune_rowid_chain_ops`]).
@@ -126,7 +126,7 @@ fn log_prune_engagement(horizon: u64, pruned: u64) {
 pub(crate) fn prune_rowid_chain_ops(
     kv: &dyn Kv,
     table: &Table,
-    local_indexes: &[crabka_pgcatalog::Index],
+    local_indexes: &[krabka_pgcatalog::Index],
     request: &ChainPruneRequest<'_>,
 ) -> Result<ChainPrune, ExecError> {
     let &ChainPruneRequest {
@@ -136,24 +136,24 @@ pub(crate) fn prune_rowid_chain_ops(
         new_row,
         freeze_below,
     } = request;
-    let status = |xid| crabka_pgmvcc::clog::get(kv, xid);
+    let status = |xid| krabka_pgmvcc::clog::get(kv, xid);
     let mut dead: Vec<(Vec<u8>, Vec<Datum>)> = Vec::new();
     let mut surviving: Vec<Vec<Datum>> = Vec::new();
     let mut freeze: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
-    for (key, value) in kv.scan_prefix(&crabka_pgkv::key::row_key(table.id, rowid))? {
-        let (xmin, xmax, row) = crabka_pgmvcc::version::decode_tuple(&value)?;
-        let key_xid = crabka_pgmvcc::version::xid_of_key(&key)?;
+    for (key, value) in kv.scan_prefix(&krabka_pgkv::key::row_key(table.id, rowid))? {
+        let (xmin, xmax, row) = krabka_pgmvcc::version::decode_tuple(&value)?;
+        let key_xid = krabka_pgmvcc::version::xid_of_key(&key)?;
         if !keep_xids.contains(&key_xid)
-            && crabka_pgmvcc::gc::version_is_dead(xmin, xmax, horizon, &status)?
+            && krabka_pgmvcc::gc::version_is_dead(xmin, xmax, horizon, &status)?
         {
             dead.push((key, row));
             continue;
         }
         if let Some(floor) = freeze_below
             && !keep_xids.contains(&key_xid)
-            && xmin != crabka_pgmvcc::xid::FROZEN_XID
+            && xmin != krabka_pgmvcc::xid::FROZEN_XID
             && xmin < floor
-            && matches!(status(xmin)?, crabka_pgmvcc::clog::XidStatus::Committed)
+            && matches!(status(xmin)?, krabka_pgmvcc::clog::XidStatus::Committed)
         {
             freeze.push((key, value.clone()));
         }
@@ -168,12 +168,12 @@ pub(crate) fn prune_rowid_chain_ops(
             frozen: 0,
         });
     }
-    let mut ops: Vec<crabka_pgkv::WriteOp> = Vec::new();
+    let mut ops: Vec<krabka_pgkv::WriteOp> = Vec::new();
     let frozen = freeze.len() as u64;
     for (key, value) in freeze {
-        ops.push(crabka_pgkv::WriteOp::Put {
+        ops.push(krabka_pgkv::WriteOp::Put {
             key,
-            value: crabka_pgmvcc::version::freeze_tuple_xmin(&value)?,
+            value: krabka_pgmvcc::version::freeze_tuple_xmin(&value)?,
         });
     }
     let mut index_entries_pruned: u64 = 0;
@@ -181,7 +181,7 @@ pub(crate) fn prune_rowid_chain_ops(
     // row carrying `values`: delete it only when no surviving version — nor
     // the row this batch is writing — still carries those values. Chains are
     // short (pruning keeps them O(1)), so linear survivor probes suffice.
-    let mut removed: Vec<(crabka_pgcatalog::IndexId, Vec<Datum>)> = Vec::new();
+    let mut removed: Vec<(krabka_pgcatalog::IndexId, Vec<Datum>)> = Vec::new();
     for index in local_indexes {
         let mut survivor_entries = Vec::new();
         for row in &surviving {
@@ -199,13 +199,13 @@ pub(crate) fn prune_rowid_chain_ops(
                 {
                     continue;
                 }
-                ops.push(crabka_pgkv::WriteOp::Delete {
-                    key: crabka_pgkv::key::secondary_index_entry_key(
+                ops.push(krabka_pgkv::WriteOp::Delete {
+                    key: krabka_pgkv::key::secondary_index_entry_key(
                         table.id, index.id, &values, rowid,
                     ),
                 });
                 if let Some(key) = local_index_ordered_entry_key(table, index, &values, rowid) {
-                    ops.push(crabka_pgkv::WriteOp::Delete { key });
+                    ops.push(krabka_pgkv::WriteOp::Delete { key });
                 }
                 removed.push((index.id, values));
                 index_entries_pruned += 1;
@@ -215,7 +215,7 @@ pub(crate) fn prune_rowid_chain_ops(
     let versions = dead.len() as u64;
     ops.extend(
         dead.into_iter()
-            .map(|(key, _)| crabka_pgkv::WriteOp::Delete { key }),
+            .map(|(key, _)| krabka_pgkv::WriteOp::Delete { key }),
     );
     Ok(ChainPrune {
         ops,

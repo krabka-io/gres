@@ -6,12 +6,12 @@
 //! documentation are called out where they appear.
 
 use assert2::assert;
-use crabka_pgexec::SqlEngine;
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::SqlEngine;
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 /// One session, so a `SET` and the statements that depend on it stay together.
 struct Client {
-    session: crabka_pgexec::SqlSession,
+    session: krabka_pgexec::SqlSession,
 }
 
 impl Client {
@@ -31,7 +31,7 @@ impl Client {
             .expect("at least one result")
     }
 
-    async fn fails(&mut self, sql: &str) -> crabka_pgwire::error::PgError {
+    async fn fails(&mut self, sql: &str) -> krabka_pgwire::error::PgError {
         self.session
             .simple_query(sql)
             .await

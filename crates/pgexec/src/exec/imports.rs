@@ -5,15 +5,15 @@ pub(super) use std::{
 };
 
 pub(super) use bytes::Bytes;
-pub(super) use crabka_pgcatalog::{Column, ColumnDefault, Sequence, Table, TableId};
-pub(super) use crabka_pgkv::Kv;
-pub(super) use crabka_pgparser::ast::{
+pub(super) use krabka_pgcatalog::{Column, ColumnDefault, Sequence, Table, TableId};
+pub(super) use krabka_pgkv::Kv;
+pub(super) use krabka_pgparser::ast::{
     ArraySubscript, BinaryOp, Expr, FuncArgs, FuncCall, OrderItem, SelectItem, SelectStmt,
     Statement, TableFuncCall, TargetIndirection, UtilityStatement,
 };
-pub(super) use crabka_pgtypes::{ColumnType, Datum};
-pub(super) use crabka_pgwire::engine::{Cell, FieldDescription, QueryResult};
-pub(super) use crabka_units::prelude::ByteSizeExt as _;
+pub(super) use krabka_pgtypes::{ColumnType, Datum};
+pub(super) use krabka_pgwire::engine::{Cell, FieldDescription, QueryResult};
+pub(super) use krabka_units::prelude::ByteSizeExt as _;
 pub(super) use tracing::Instrument as _;
 pub(super) use zerocopy::{FromBytes, byteorder::big_endian::U64};
 

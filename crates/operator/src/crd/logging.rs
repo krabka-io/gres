@@ -20,7 +20,7 @@ pub struct Logging {
     /// Inline loggers, from tracing target to level. The key `root` is
     /// case-insensitive and sets the global default level as a bare
     /// env-filter directive. Any other key is a tracing target, that is, a
-    /// Rust module path such as `crabka_broker`. The levels are
+    /// Rust module path such as `krabka_broker`. The levels are
     /// `trace|debug|info|warn|error|off`, and they are case-insensitive.
     /// `fatal` is accepted as an alias for `error`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -77,14 +77,14 @@ mod tests {
             r#type: LoggingType::Inline,
             loggers: [
                 ("root".to_string(), "info".to_string()),
-                ("crabka_broker".to_string(), "debug".to_string()),
+                ("krabka_broker".to_string(), "debug".to_string()),
             ]
             .into(),
             value_from: None,
         };
         let j = serde_json::to_string(&lg).unwrap();
         assert!(j.contains("\"loggers\""), "got: {j}");
-        assert!(j.contains("\"crabka_broker\":\"debug\""), "got: {j}");
+        assert!(j.contains("\"krabka_broker\":\"debug\""), "got: {j}");
         let back: Logging = serde_json::from_str(&j).unwrap();
         assert!(back == lg);
     }

@@ -33,7 +33,7 @@ The traces binary accepts:
 
 ```text
 --block-read-max-bytes
-CRABKA_TRACES_BLOCK_READ_MAX_BYTES
+KRABKA_TRACES_BLOCK_READ_MAX_BYTES
 ```
 
 Command-line values win over environment values. The default remains
@@ -45,7 +45,7 @@ values are rejected by Clap before object-store or network I/O.
 ## Validated Type
 
 Add `BlockReadMaxBytes(u64)`, validated with
-`refined_type::rule::GreaterU64<0>`, to `crabka-blockstore`. It implements
+`refined_type::rule::GreaterU64<0>`, to `krabka-blockstore`. It implements
 `FromStr`, `Display`, and `Default`, and exposes its validated primitive value.
 
 Reuse blockstore's existing `refined_type` dependency. Do not add a policy
@@ -94,7 +94,7 @@ Existing errors and caller fallback behavior remain unchanged.
 ## Deployment Wiring
 
 The observability Docker Compose deployment adds an overrideable
-`CRABKA_TRACES_BLOCK_READ_MAX_BYTES` value to the traces querier, preserving
+`KRABKA_TRACES_BLOCK_READ_MAX_BYTES` value to the traces querier, preserving
 the one-gibibyte default. The demo does not run the traces query-frontend or
 compactor roles, so no unused deployment setting is added for them.
 

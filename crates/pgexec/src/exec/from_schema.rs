@@ -7,9 +7,9 @@ fn lateral_schema_item(
     catalog_kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
     ctes: &crate::cte::CteContext,
-    te: &crabka_pgparser::ast::TableExpr,
+    te: &krabka_pgparser::ast::TableExpr,
     outer: &Scope,
-) -> crabka_pgparser::ast::TableExpr {
+) -> krabka_pgparser::ast::TableExpr {
     if !is_lateral_item(te, outer) {
         return te.clone();
     }
@@ -22,7 +22,7 @@ fn lateral_schema_item(
 pub(crate) fn build_from_schema_with_ctes_and_context(
     catalog_kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
-    from: &[crabka_pgparser::ast::TableExpr],
+    from: &[krabka_pgparser::ast::TableExpr],
     ctes: &crate::cte::CteContext,
     ctx: Option<&crate::clock::EvalCtx>,
 ) -> Result<Relation, ExecError> {
@@ -82,7 +82,7 @@ pub(crate) fn build_from_schema_of_select_with_context(
 pub(super) fn build_from_schema_described(
     catalog_kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
-    from: &[crabka_pgparser::ast::TableExpr],
+    from: &[krabka_pgparser::ast::TableExpr],
     ctes: &crate::cte::CteContext,
     ctx: Option<&crate::clock::EvalCtx>,
     refs: Option<&crate::scope::StatementRefs>,
@@ -105,8 +105,8 @@ pub(super) fn build_from_schema_described(
         acc = join_relations(
             acc,
             next,
-            crabka_pgparser::ast::JoinKind::Cross,
-            &crabka_pgparser::ast::JoinConstraint::None,
+            krabka_pgparser::ast::JoinKind::Cross,
+            &krabka_pgparser::ast::JoinConstraint::None,
             &crate::clock::EvalCtx::test_default(),
             crate::join::JoinPolicy::default(),
         )?;
@@ -117,12 +117,12 @@ pub(super) fn build_from_schema_described(
 fn build_table_expr_schema_with_ctes(
     catalog_kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
-    te: &crabka_pgparser::ast::TableExpr,
+    te: &krabka_pgparser::ast::TableExpr,
     ctes: &crate::cte::CteContext,
     ctx: Option<&crate::clock::EvalCtx>,
     refs: Option<&crate::scope::StatementRefs>,
 ) -> Result<Relation, ExecError> {
-    use crabka_pgparser::ast::TableExpr;
+    use krabka_pgparser::ast::TableExpr;
     match te {
         TableExpr::Table {
             name,
@@ -189,7 +189,7 @@ fn build_table_expr_schema_with_ctes(
             {
                 return Ok(rel);
             }
-            match crabka_pgcatalog::get_view(catalog_kv, name) {
+            match krabka_pgcatalog::get_view(catalog_kv, name) {
                 Ok(view) => {
                     let qualifier = alias.as_deref().unwrap_or(&view.name.name);
                     let mut scope = Scope {
@@ -214,10 +214,10 @@ fn build_table_expr_schema_with_ctes(
                         rows: Vec::new(),
                     });
                 }
-                Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => {}
+                Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => {}
                 Err(error) => return Err(error.into()),
             }
-            let t = crabka_pgcatalog::get_table(catalog_kv, name).map_err(|error| {
+            let t = krabka_pgcatalog::get_table(catalog_kv, name).map_err(|error| {
                 open_wrong_kind(catalog_kv, name).unwrap_or_else(|| error.into())
             })?;
             let qualifier = alias.as_deref().unwrap_or(&t.name.name);

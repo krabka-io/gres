@@ -2,29 +2,29 @@
 //!
 //! The write path prunes the version chains of sharded tables when it can. The
 //! reclaim floor controls admission, and pinned reads stay protected. See
-//! `crabka_pgexec::ts_gc`.
+//! `krabka_pgexec::ts_gc`.
 
 use std::sync::Arc;
 
 use assert2::assert;
-use crabka_pgcatalog::RelationName;
-use crabka_pgexec::{ExecError, RowInterval, SqlEngine, TimestampWrite, timestamp_txn};
-use crabka_pgkv::{Kv, MemKv};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
-use crabka_units::{Time, convert::TimeExt as _, days};
+use krabka_pgcatalog::RelationName;
+use krabka_pgexec::{ExecError, RowInterval, SqlEngine, TimestampWrite, timestamp_txn};
+use krabka_pgkv::{Kv, MemKv};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_units::{Time, convert::TimeExt as _, days};
 
-async fn exec(session: &mut crabka_pgexec::SqlSession, sql: &str) {
+async fn exec(session: &mut krabka_pgexec::SqlSession, sql: &str) {
     session.simple_query(sql).await.expect("statement");
 }
 
-async fn rows(session: &mut crabka_pgexec::SqlSession, sql: &str) -> Vec<Vec<Option<Cell>>> {
+async fn rows(session: &mut krabka_pgexec::SqlSession, sql: &str) -> Vec<Vec<Option<Cell>>> {
     match session.simple_query(sql).await.expect("query").remove(0) {
         QueryResult::Rows { rows, .. } => rows,
         other => panic!("expected Rows, got {other:?}"),
     }
 }
 
-async fn int_cell(session: &mut crabka_pgexec::SqlSession, sql: &str) -> String {
+async fn int_cell(session: &mut krabka_pgexec::SqlSession, sql: &str) -> String {
     let rows = rows(session, sql).await;
     assert!(rows.len() == 1, "expected one row");
     let cell = rows[0][0].as_ref().expect("non-null cell");
@@ -35,15 +35,15 @@ async fn int_cell(session: &mut crabka_pgexec::SqlSession, sql: &str) -> String 
 ///
 /// This is the whole physical chain across every row.
 fn ts_version_count(kv: &dyn Kv, table_name: &str) -> usize {
-    let table = crabka_pgcatalog::get_table(kv, &RelationName::public(table_name)).expect("table");
-    kv.scan_prefix(&crabka_pgkv::key::table_prefix(table.id))
+    let table = krabka_pgcatalog::get_table(kv, &RelationName::public(table_name)).expect("table");
+    kv.scan_prefix(&krabka_pgkv::key::table_prefix(table.id))
         .expect("scan")
         .iter()
-        .filter(|(_, value)| crabka_pgmvcc::version::decode_ts_tuple(value).is_ok())
+        .filter(|(_, value)| krabka_pgmvcc::version::decode_ts_tuple(value).is_ok())
         .count()
 }
 
-async fn engine_with_hot_row() -> (Arc<MemKv>, SqlEngine, crabka_pgexec::SqlSession) {
+async fn engine_with_hot_row() -> (Arc<MemKv>, SqlEngine, krabka_pgexec::SqlSession) {
     let kv = Arc::new(MemKv::new());
     let engine = SqlEngine::with_kv(Arc::clone(&kv) as Arc<dyn Kv>).expect("engine");
     engine.ts_version_gc().set_floor_lag(Time::ZERO);
@@ -159,8 +159,8 @@ async fn reads_and_prewrites_below_the_published_floor_are_refused() {
     assert!(floor > 1);
 
     let table =
-        crabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("hot")).expect("table");
-    let snapshot = crabka_pgmvcc::visibility::Snapshot {
+        krabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("hot")).expect("table");
+    let snapshot = krabka_pgmvcc::visibility::Snapshot {
         xmin: 1,
         xmax: u64::MAX,
         xip: Vec::new(),
@@ -203,7 +203,7 @@ async fn reads_and_prewrites_below_the_published_floor_are_refused() {
         )
         .expect("fresh read");
     assert!(fresh.len() == 1);
-    assert!(fresh[0].row[1] == crabka_pgtypes::Datum::Int4(10));
+    assert!(fresh[0].row[1] == krabka_pgtypes::Datum::Int4(10));
 
     // A prewrite whose transaction started below the floor could have run its
     // conflict check over pruned history: refused as a retryable conflict.
@@ -216,8 +216,8 @@ async fn reads_and_prewrites_below_the_published_floor_are_refused() {
                 bucket: None,
                 rowid: 1,
                 row: vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(1),
                 ],
                 delete: false,
                 global_index_intents: Vec::new(),
@@ -243,8 +243,8 @@ async fn participant_commit_resolves_publish_closure_and_reclaim() {
         bucket: None,
         rowid: 7,
         row: vec![
-            crabka_pgtypes::Datum::Int4(1),
-            crabka_pgtypes::Datum::Int4(1),
+            krabka_pgtypes::Datum::Int4(1),
+            krabka_pgtypes::Datum::Int4(1),
         ],
         delete: false,
         global_index_intents: Vec::new(),
@@ -252,7 +252,7 @@ async fn participant_commit_resolves_publish_closure_and_reclaim() {
     for i in 0_u64..40 {
         let start_ts =
             timestamp_txn::TimestampTransactionId::new(1_000 + 10 * i).expect("start ts");
-        let identity = crabka_pgexec::TimestampTxnIdentity {
+        let identity = krabka_pgexec::TimestampTxnIdentity {
             start_ts,
             global_xid: start_ts.get(),
             primary_range: 3,
@@ -266,7 +266,7 @@ async fn participant_commit_resolves_publish_closure_and_reclaim() {
         participant
             .resolve_as_primary(
                 identity,
-                crabka_pgexec::TimestampTxnDecision::Committed(commit_ts),
+                krabka_pgexec::TimestampTxnDecision::Committed(commit_ts),
                 std::slice::from_ref(&write),
             )
             .await
@@ -280,10 +280,10 @@ async fn participant_commit_resolves_publish_closure_and_reclaim() {
     // chain stays bounded instead of holding all 40 versions.
     let versions = engine
         .kv_handle()
-        .scan_prefix(&crabka_pgkv::key::row_key(42, 7))
+        .scan_prefix(&krabka_pgkv::key::row_key(42, 7))
         .expect("scan")
         .into_iter()
-        .filter(|(_, value)| crabka_pgmvcc::version::decode_ts_tuple(value).is_ok())
+        .filter(|(_, value)| krabka_pgmvcc::version::decode_ts_tuple(value).is_ok())
         .count();
     assert!(versions <= 3);
 }

@@ -1,6 +1,6 @@
 use arbitrary::Arbitrary;
 use bytes::BytesMut;
-use crabka_protocol::{
+use krabka_protocol::{
     Decode, Encode,
     owned::{api_versions_request::ApiVersionsRequest, api_versions_response::ApiVersionsResponse},
 };

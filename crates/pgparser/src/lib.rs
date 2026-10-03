@@ -1,7 +1,7 @@
 //! pgparser: a hand-written lexer and recursive-descent/Pratt parser that
 //! builds the crabgresql AST for the SP2 SQL slice.
 
-#![doc(html_root_url = "https://docs.rs/crabka-pgparser/0.4.1")]
+#![doc(html_root_url = "https://docs.rs/krabka-pgparser/0.4.2")]
 
 pub mod ast;
 pub mod command;

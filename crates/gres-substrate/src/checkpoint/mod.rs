@@ -7,8 +7,8 @@ mod runtime;
 mod service;
 mod store;
 
-use crabka_gres_ranges::{RangeId, TenantName, checkpoint_prefix as range_checkpoint_prefix};
-use crabka_units::{ByteSize, mebibytes};
+use krabka_gres_ranges::{RangeId, TenantName, checkpoint_prefix as range_checkpoint_prefix};
+use krabka_units::{ByteSize, mebibytes};
 
 pub(crate) use self::runtime::restore_latest_at_or_before;
 #[cfg(feature = "checkpoint-test-hooks")]

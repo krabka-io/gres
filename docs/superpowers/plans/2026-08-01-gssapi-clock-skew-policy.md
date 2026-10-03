@@ -7,7 +7,7 @@ existing security, broker TOML, and Kafka listener CRD boundaries.
 the broker `[gssapi]` TOML block, resolve the compatible five-minute default in
 broker configuration, and lower it to `std::time::Duration` only at SSPI.
 
-**Tech Stack:** Rust, crabka-units, serde, schemars, kube CRDs, sspi.
+**Tech Stack:** Rust, krabka-units, serde, schemars, kube CRDs, sspi.
 
 ### Task 1: Security boundary
 

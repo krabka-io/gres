@@ -23,7 +23,7 @@ log/snapshots genuinely KIP-631/KIP-630 framed. After 3d-2:
 - `KraftController::open()` already loads the latest checkpoint + replays the
   committed log on top. `trigger_snapshot()` writes a checkpoint but **nothing
   prunes the log or serves snapshots over the wire**.
-- `crabka_log::Log` exposes `set_log_start_offset` + `trim_to_offset` (segment
+- `krabka_log::Log` exposes `set_log_start_offset` + `trim_to_offset` (segment
   pruning); `KraftLog` exposes `log_start_offset` but no prune/install wrapper.
 
 **The gap:** a controller follower that has fallen behind the leader's pruned
@@ -38,6 +38,7 @@ auto-snapshots on a committed-records threshold and prunes the log below the
 snapshot.
 
 **In scope:**
+
 - Leader: committed-records-threshold snapshot trigger + log prune below the
   snapshot's `end_offset`.
 - Leader: emit `FetchResponse.snapshot_id` when a fetch offset is below
@@ -49,6 +50,7 @@ snapshot.
 - Deterministic multi-node catch-up sim + unit tests.
 
 **Out of scope (follow-ups / later slices):**
+
 - **Broker-observer snapshotting** (the private `MetadataFetch` 1004 path): an
   observer that falls below the controller's pruned log-start. Voter↔voter only
   in Slice 4.
@@ -74,7 +76,7 @@ the existing Vote/Fetch sends — the loop never blocks.
 ### Offsets & naming (KIP-630)
 
 A snapshot's `SnapshotId.end_offset` is **exclusive**: the offset of the first
-record *not* contained (= the count of records included = the committed offset
+record _not_ contained (= the count of records included = the committed offset
 at snapshot time). The on-disk artifact is `<end_offset>-<epoch>.checkpoint`
 (zero-padded, lexical == numeric sort), which `write_checkpoint` /
 `load_latest_checkpoint` already implement. After snapshotting `[0, end_offset)`
@@ -84,26 +86,28 @@ the log may delete records below `end_offset`; `log_start_offset` advances to
 ## Components
 
 ### `crates/raft/src/kraft/log.rs` (`KraftLog`)
+
 - `prune_to(&mut self, end_offset: i64) -> Result<(), RaftError>`:
   `log.set_log_start_offset(end_offset)` then `log.trim_to_offset(end_offset)`.
   No-op if `end_offset <= log_start_offset()`.
 - `install_snapshot(&mut self, end_offset: i64) -> Result<(), RaftError>`: reset
   the log to an empty log whose `log_start_offset == log_end_offset ==
-  end_offset` and `hwm == end_offset`. Implemented via a `crabka_log::Log`
+end_offset` and `hwm == end_offset`. Implemented via a `krabka_log::Log`
   reset helper (see below); the follower calls this when installing a fetched
   snapshot that is ahead of its current LEO.
 
-If `crabka_log::Log` lacks a reset-to-empty-at-offset primitive, add
+If `krabka_log::Log` lacks a reset-to-empty-at-offset primitive, add
 `reset_to(&mut self, offset: i64) -> Result<(), LogError>` (drop all segments,
 start a fresh segment at `offset`, set log_start = LEO = offset, truncate the
 leader-epoch checkpoint). Mirrors how `truncate_to`/`trim_to_offset` already
 manipulate segments + the epoch checkpoint.
 
 ### `crates/raft/src/kraft/transport.rs`
+
 - `api_key::FETCH_SNAPSHOT: i16 = 59`.
 - `wire::PeerRequest::FetchSnapshot { snapshot_id: (i64, i32), position: i64,
-  max_bytes: i32 }` and `wire::PeerResponse::FetchSnapshot { snapshot_id:
-  (i64, i32), size: i64, position: i64, bytes: Bytes, error_code: i16 }`,
+max_bytes: i32 }` and `wire::PeerResponse::FetchSnapshot { snapshot_id:
+(i64, i32), size: i64, position: i64, bytes: Bytes, error_code: i16 }`,
   encoding to / decoding from the real `FetchSnapshotRequest`/`Response` for the
   single `__cluster_metadata-0` partition (`replica_directory_id`,
   `current_leader`, `cluster_id` defaulted/derived; this is the same
@@ -113,31 +117,33 @@ manipulate segments + the epoch checkpoint.
 - `Inbound::FetchSnapshot { req: Bytes, reply: oneshot::Sender<Bytes> }`.
 
 ### `crates/raft/src/server.rs` / `network.rs`
+
 - `dispatch`: `api_key::FETCH_SNAPSHOT => deliver_inbound(engine, |reply|
-  Inbound::FetchSnapshot { req: body, reply })`.
+Inbound::FetchSnapshot { req: body, reply })`.
 - `network.rs` version map: `FETCH_SNAPSHOT => 1` (FetchSnapshot v1 is current in
   4.0; v0 acceptable — pick the version the generated type encodes and that
   `kafka-dump-log`/JVM accept; validated by round-trip).
 
 ### `crates/raft/src/kraft/controller.rs`
+
 - **Engine fields:** `snapshot_interval_records: u64`,
   `last_snapshot_end_offset: i64`, `snapshot_fetch: Option<SnapshotFetchState>`.
 - **Trigger + prune** (after `advance_and_apply` mutates the image): if
   `self.core.role().is_leader()` and `hwm - last_snapshot_end_offset >=
-  snapshot_interval_records`, call `do_snapshot_and_prune(hwm)`:
+snapshot_interval_records`, call `do_snapshot_and_prune(hwm)`:
   serialize the image, `write_checkpoint(<hwm>-<epoch>)`, set
   `last_snapshot_end_offset = hwm`, `self.log.prune_to(hwm)`, then
   `retain_latest_checkpoint()`. On serialize/write error: log + **do not prune**.
 - **Leader Fetch → snapshot_id** (in the `Inbound::Fetch` arm): if
   `fetch_offset < self.log.log_start_offset()`, respond
   `PeerResponse::Fetch { snapshot_id: Some(latest_snapshot_id()), records:
-  empty, diverging: None, hwm, leader_id, leader_epoch }`. (Leader still feeds
+empty, diverging: None, hwm, leader_id, leader_epoch }`. (Leader still feeds
   the core the `ReceiveFetch` event for liveness/epoch bookkeeping.)
 - **Leader FetchSnapshot serve** (`Inbound::FetchSnapshot` arm): decode →
   resolve `<end_offset>-<epoch>.checkpoint`; if absent → `error_code =
-  SNAPSHOT_NOT_FOUND`; else read `SnapshotReader::byte_range(&bytes, position,
-  max_bytes)`, reply `PeerResponse::FetchSnapshot { snapshot_id, size:
-  bytes.len(), position, bytes: chunk, error_code: 0 }`.
+SNAPSHOT_NOT_FOUND`; else read `SnapshotReader::byte_range(&bytes, position,
+max_bytes)`, reply `PeerResponse::FetchSnapshot { snapshot_id, size:
+bytes.len(), position, bytes: chunk, error_code: 0 }`.
 - **Follower receive snapshot_id** (in `on_fetch_response`): if the response
   carries `snapshot_id` and we have no matching in-flight fetch, initialize
   `snapshot_fetch = Some(SnapshotFetchState::new(snapshot_id, leader_id))` and
@@ -148,23 +154,26 @@ manipulate segments + the epoch checkpoint.
   `retain_latest_checkpoint()` (delete all but the newest `.checkpoint`).
 
 ### `crates/raft/src/kraft/snapshot_fetch.rs` (new)
+
 `SnapshotFetchState { snapshot_id: (i64,i32), leader_id: NodeId, buf: BytesMut,
 size: Option<i64> }`. Methods:
+
 - `on_chunk(position, size, bytes) -> SnapshotFetchStep`: reject if `position !=
-  buf.len()` (out-of-order) or `snapshot_id` mismatch → `Restart`; append;
+buf.len()` (out-of-order) or `snapshot_id` mismatch → `Restart`; append;
   if `buf.len() == size` → `Complete(bytes)`, else `Continue { next_position:
-  buf.len() }`.
+buf.len() }`.
 - The engine maps the step: `Continue` → issue the next `FetchSnapshot`;
   `Complete` → `install_fetched_snapshot`; `Restart` → clear state, fall back to
   a plain `Fetch`.
 - **Install (validate-before-swap):** parse the assembled bytes with
   `SnapshotReader::read_records` into a candidate image **first**; only if it
   parses, write the checkpoint file, swap `self.image`, `self.log
-  .install_snapshot(end_offset)`, `self.last_snapshot_end_offset = end_offset`,
+.install_snapshot(end_offset)`, `self.last_snapshot_end_offset = end_offset`,
   publish the image, clear `snapshot_fetch`, and feed the core a
   `ReceiveFetchResponse` so it resumes fetching from `end_offset`.
 
 ### Config
+
 - `KraftConfig.snapshot_interval_records: u64` (default e.g. `10_000` — far
   above what any existing test commits, so steady-state replication is
   undisturbed and only the Slice-4 catch-up test forces a snapshot via a small
@@ -197,7 +206,7 @@ follower (rejoined; LEO < leader.log_start):
 - **Snapshot write fails:** log; **skip prune** (never prune without a durable
   snapshot). `last_snapshot_end_offset` unchanged → retried next threshold.
 - **`FetchSnapshot` for a deleted/unknown id:** `error_code =
-  SNAPSHOT_NOT_FOUND`; follower clears `snapshot_fetch` and falls back to a plain
+SNAPSHOT_NOT_FOUND`; follower clears `snapshot_fetch` and falls back to a plain
   `Fetch` (the leader may advertise a newer snapshot).
 - **Leader change / `snapshot_id` mismatch mid-transfer:** `on_chunk` returns
   `Restart`; follower discards the buffer. A subsequent `Fetch` to the new

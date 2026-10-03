@@ -78,13 +78,13 @@ RFC 2253 vs 4514 ordering quirks.
 - **`crates/security/src/ca.rs` — pure rcgen helpers.** No kube types,
   no `async`, no I/O. Two public functions:
   - `generate_clients_ca(cn, validity_days) -> CaMaterial { cert_pem,
-    key_pem }`. Self-signed, `CA:TRUE`, `keyCertSign + cRLSign`.
+key_pem }`. Self-signed, `CA:TRUE`, `keyCertSign + cRLSign`.
   - `issue_user_cert(ca_cert_pem, ca_key_pem, cn, validity_days) ->
-    UserCert { cert_pem, key_pem, not_after }`. Leaf with
+UserCert { cert_pem, key_pem, not_after }`. Leaf with
     `digitalSignature + keyEncipherment` and `EKU = clientAuth`.
-  Reusable verbatim by slice 30 (inter-broker CA) and slice 33's
-  test-cert generation. Keeping this in `crabka-security` keeps the
-  operator crate kube-only.
+    Reusable verbatim by slice 30 (inter-broker CA) and slice 33's
+    test-cert generation. Keeping this in `krabka-security` keeps the
+    operator crate kube-only.
 
 - **`crates/operator/src/controller/user_tls.rs` — controller-side
   helpers.** Owns the per-cluster clients-CA bootstrap, the per-user
@@ -111,7 +111,7 @@ finalizer — unchanged.
    - `Authentication::Tls(tls_auth)` —
      `user_tls::ensure_clients_ca(secret_api, kafka)` then
      `user_tls::ensure_user_cert_secret(secret_api, &obj, &ca,
-     tls_auth)`. The TLS arm makes no broker call: the broker learns
+tls_auth)`. The TLS arm makes no broker call: the broker learns
      the user identity from the certificate at mTLS handshake time.
 
 7. **ACL reconcile.** Unchanged shape; the principal is now
@@ -148,11 +148,11 @@ principal string goes through this one function.
 
 Three new fields on `KafkaUserStatus`:
 
-| Field                | Type             | Emitted when         |
-|----------------------|------------------|----------------------|
-| `tls`                | `bool` (default false) | always (`#[serde(default)]`) |
-| `tlsCertNotAfter`    | `Option<String>` | TLS user is provisioned |
-| `tlsPrincipal`       | `Option<String>` | User is provisioned (SCRAM gets `User:<name>`, TLS gets `User:CN=<name>`) |
+| Field             | Type                   | Emitted when                                                              |
+| ----------------- | ---------------------- | ------------------------------------------------------------------------- |
+| `tls`             | `bool` (default false) | always (`#[serde(default)]`)                                              |
+| `tlsCertNotAfter` | `Option<String>`       | TLS user is provisioned                                                   |
+| `tlsPrincipal`    | `Option<String>`       | User is provisioned (SCRAM gets `User:<name>`, TLS gets `User:CN=<name>`) |
 
 `tlsPrincipal` is the field operators read when debugging "why isn't
 my ACL matching?" — it's the exact string the broker compares
@@ -172,13 +172,13 @@ minute.
 ## Secret shapes
 
 Three Secret kinds, all server-side-applied with field-manager
-`crabka-operator`, owner-ref'd as noted.
+`krabka-operator`, owner-ref'd as noted.
 
-| Secret name                        | Keys                | Owner ref     | Lifetime       |
-|------------------------------------|---------------------|---------------|----------------|
-| `<cluster>-clients-ca`             | `ca.key` (PEM)      | `Kafka`       | 10y CA (slice 30 takes over rotation) |
-| `<cluster>-clients-ca-cert`        | `ca.crt` (PEM)      | `Kafka`       | same as above  |
-| `<user>` (= `KafkaUser.name`)      | `user.crt`, `user.key`, `ca.crt` (PEM) | `KafkaUser` | `validityDays`, default 365 |
+| Secret name                   | Keys                                   | Owner ref   | Lifetime                              |
+| ----------------------------- | -------------------------------------- | ----------- | ------------------------------------- |
+| `<cluster>-clients-ca`        | `ca.key` (PEM)                         | `Kafka`     | 10y CA (slice 30 takes over rotation) |
+| `<cluster>-clients-ca-cert`   | `ca.crt` (PEM)                         | `Kafka`     | same as above                         |
+| `<user>` (= `KafkaUser.name`) | `user.crt`, `user.key`, `ca.crt` (PEM) | `KafkaUser` | `validityDays`, default 365           |
 
 The clients-CA is split across two Secrets the same way Strimzi
 splits it: the cert lives in the world-readable `*-clients-ca-cert`
@@ -192,7 +192,8 @@ build a trust store without separately mounting the cluster-wide
 Secret.
 
 Labels on all three:
-- `app.kubernetes.io/managed-by: crabka-operator`
+
+- `app.kubernetes.io/managed-by: krabka-operator`
 - `crabka.io/cluster: <cluster>`
 - on the per-user Secret only: `crabka.io/user: <name>`
 
@@ -209,8 +210,8 @@ metadata:
 spec:
   authentication:
     type: tls
-    validityDays: 180        # optional, default 365
-    renewalDays: 14          # optional, default 30
+    validityDays: 180 # optional, default 365
+    renewalDays: 14 # optional, default 30
   authorization:
     type: simple
     acls:
@@ -280,7 +281,7 @@ Five tests, all working over the in-memory PEM output (no I/O):
   `Subject = CN=alice` exactly (bare RDN), assert
   `verify_signature` against the CA public key.
 - `issue_user_cert_dn_matches_extract_principal` — the leaf DN
-  observed via `crabka_security::extract_principal_from_cert` (the
+  observed via `krabka_security::extract_principal_from_cert` (the
   function the broker uses on the SSL session) must equal
   `CN=alice`. Pins the wire round-trip.
 - `extended_key_usage_is_client_auth_on_leaf` — assert leaf EKU has
@@ -326,7 +327,7 @@ Five new tests, all using `FakeAdminClient` + an in-process clients-CA:
    the per-user Secret contains `user.crt`/`user.key`/`ca.crt`, the
    fake admin sees `CreateAcls` with `principal = User:CN=alice`, and
    status reaches `Ready=True` with `tls=true`, `tlsPrincipal=
-   User:CN=alice`, and `tlsCertNotAfter` set.
+User:CN=alice`, and `tlsCertNotAfter` set.
 2. **`tls_reconcile_reuses_existing_cert_when_not_near_expiry`** —
    apply, reconcile twice. The second reconcile must observe the same
    `user.crt` bytes as the first (parse cert, compare serial).
@@ -380,7 +381,7 @@ the cert material and the Secret shape, not the listener.
 ## Acceptance criteria
 
 - `cargo build --workspace` and `cargo clippy --workspace
-  --all-targets -- -D warnings` clean.
+--all-targets -- -D warnings` clean.
 - All five `crates/security/src/ca.rs` tests green; all CRD round-trip
   tests green; reconcile tests go from 8 → 13 and all green.
 - `cargo xtask gen-crds` produces drift-clean

@@ -1,4 +1,4 @@
-# crabka-gres-balancer
+# krabka-gres-balancer
 
 Internal dry-run foundation for Chapter Gres range balancing.
 

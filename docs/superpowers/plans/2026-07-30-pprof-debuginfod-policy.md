@@ -4,9 +4,9 @@
 
 **Goal:** Make debuginfod artifact and timeout policy configurable through validated UOM values in every Profiles role.
 
-**Architecture:** `crabka-pprof` owns one validated `DebuginfodConfig`; `DebuginfodResolver::new` remains default-backed and a config-aware constructor supplies deployment values. `crabka-profiles` preserves its existing public helpers while adding explicit config paths used by the standalone binary.
+**Architecture:** `krabka-pprof` owns one validated `DebuginfodConfig`; `DebuginfodResolver::new` remains default-backed and a config-aware constructor supplies deployment values. `krabka-profiles` preserves its existing public helpers while adding explicit config paths used by the standalone binary.
 
-**Tech Stack:** Rust, `crabka-units`, `refined_type`, Reqwest blocking client, Clap environment arguments.
+**Tech Stack:** Rust, `krabka-units`, `refined_type`, Reqwest blocking client, Clap environment arguments.
 
 ## Global Constraints
 
@@ -25,11 +25,13 @@
 ### Task 1: Add validated pprof debuginfod configuration
 
 **Files:**
+
 - Modify: `crates/pprof/Cargo.toml`
 - Modify: `crates/pprof/src/symbolizer.rs`
 - Modify: `Cargo.lock`
 
 **Interfaces:**
+
 - Produces: `DEFAULT_DEBUGINFOD_MAX_ARTIFACT_SIZE: ByteSize`
 - Produces: `DEFAULT_DEBUGINFOD_CONNECT_TIMEOUT: Time`
 - Produces: `DEFAULT_DEBUGINFOD_REQUEST_TIMEOUT: Time`
@@ -79,7 +81,7 @@ Change the existing downloaded-artifact test to call the missing
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-pprof debuginfod_config --locked
+  cargo test -p krabka-pprof debuginfod_config --locked
 ```
 
 Expected: compilation fails because `DebuginfodConfig` and `with_config` do
@@ -128,9 +130,9 @@ Add `with_config`, pass its two timeouts to Reqwest, and store
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-pprof debuginfod_config --offline
+  cargo test -p krabka-pprof debuginfod_config --offline
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-pprof debuginfod_resolver_fetches_and_caches --locked
+  cargo test -p krabka-pprof debuginfod_resolver_fetches_and_caches --locked
 ```
 
 Expected: configuration and explicit-cap tests pass.
@@ -138,11 +140,13 @@ Expected: configuration and explicit-cap tests pass.
 ### Task 2: Propagate configuration through all Profiles roles
 
 **Files:**
+
 - Modify: `crates/profiles/src/cold_store.rs`
 - Modify: `crates/profiles/src/symbolizer.rs`
 
 **Interfaces:**
-- Consumes: `crabka_pprof::DebuginfodConfig`
+
+- Consumes: `krabka_pprof::DebuginfodConfig`
 - Produces: `ColdProfileStore::new_with_debuginfod_config`
 - Produces: `native_resolver_from_debuginfod_config`
 - Produces: `symbolizer::run_with_config`
@@ -170,7 +174,7 @@ unchanged to prove default compatibility.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-profiles debuginfod_config --locked
+  cargo test -p krabka-profiles debuginfod_config --locked
 ```
 
 Expected: compilation fails on the missing config-aware helpers.
@@ -188,9 +192,9 @@ Do the same for `native_resolver_from_debuginfod_urls` and `run`, adding
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-profiles debuginfod_config --locked
+  cargo test -p krabka-profiles debuginfod_config --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-profiles symbolizer --locked
+  cargo test -p krabka-profiles symbolizer --locked
 ```
 
 Expected: explicit propagation and compatibility tests pass.
@@ -198,17 +202,19 @@ Expected: explicit propagation and compatibility tests pass.
 ### Task 3: Add Profiles CLI and environment overrides
 
 **Files:**
+
 - Modify: `crates/profiles/Cargo.toml`
-- Modify: `crates/profiles/src/bin/crabka-profiles.rs`
+- Modify: `crates/profiles/src/bin/krabka-profiles.rs`
 
 **Interfaces:**
+
 - Produces: `--debuginfod-max-artifact-size`
 - Produces: `--debuginfod-connect-timeout`
 - Produces: `--debuginfod-request-timeout`
-- Produces: `CRABKA_PROFILES_DEBUGINFOD_MAX_ARTIFACT_SIZE`
-- Produces: `CRABKA_PROFILES_DEBUGINFOD_CONNECT_TIMEOUT`
-- Produces: `CRABKA_PROFILES_DEBUGINFOD_REQUEST_TIMEOUT`
-- Produces: `CRABKA_PROFILES_DEBUGINFOD_URLS`
+- Produces: `KRABKA_PROFILES_DEBUGINFOD_MAX_ARTIFACT_SIZE`
+- Produces: `KRABKA_PROFILES_DEBUGINFOD_CONNECT_TIMEOUT`
+- Produces: `KRABKA_PROFILES_DEBUGINFOD_REQUEST_TIMEOUT`
+- Produces: `KRABKA_PROFILES_DEBUGINFOD_URLS`
 
 - [x] **Step 1: Write failing CLI and environment tests**
 
@@ -217,10 +223,10 @@ lock pattern. Assert absent overrides produce `DebuginfodConfig::default`,
 explicit CLI values produce `64MiB`, `250ms`, and `3s`, and:
 
 ```text
-CRABKA_PROFILES_DEBUGINFOD_URLS=http://one.example,http://two.example
-CRABKA_PROFILES_DEBUGINFOD_MAX_ARTIFACT_SIZE=32MiB
-CRABKA_PROFILES_DEBUGINFOD_CONNECT_TIMEOUT=500ms
-CRABKA_PROFILES_DEBUGINFOD_REQUEST_TIMEOUT=4s
+KRABKA_PROFILES_DEBUGINFOD_URLS=http://one.example,http://two.example
+KRABKA_PROFILES_DEBUGINFOD_MAX_ARTIFACT_SIZE=32MiB
+KRABKA_PROFILES_DEBUGINFOD_CONNECT_TIMEOUT=500ms
+KRABKA_PROFILES_DEBUGINFOD_REQUEST_TIMEOUT=4s
 ```
 
 produce the corresponding URL vector and config. Assert connect `5s` with
@@ -230,7 +236,7 @@ request `4s` fails effective-config validation.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-profiles --bin crabka-profiles debuginfod_config --offline
+  cargo test -p krabka-profiles --bin krabka-profiles debuginfod_config --offline
 ```
 
 Expected: compilation fails because the arguments and effective-config helper
@@ -238,7 +244,7 @@ do not exist.
 
 - [x] **Step 3: Add optional UOM overrides**
 
-Add `env = "CRABKA_PROFILES_DEBUGINFOD_URLS"` to the existing URL argument.
+Add `env = "KRABKA_PROFILES_DEBUGINFOD_URLS"` to the existing URL argument.
 Add three optional arguments with `parse_positive_whole_byte_size` and
 `parse::positive_time` parsers. Implement:
 
@@ -256,7 +262,7 @@ querier, query-frontend, and symbolizer config-aware helpers.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-profiles --bin crabka-profiles debuginfod --locked
+  cargo test -p krabka-profiles --bin krabka-profiles debuginfod --locked
 ```
 
 Expected: all CLI, environment, relation, and existing URL tests pass.
@@ -264,6 +270,7 @@ Expected: all CLI, environment, relation, and existing URL tests pass.
 ### Task 4: Close the pprof audit slice and verify
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 - Modify: `docs/superpowers/plans/2026-07-30-pprof-debuginfod-policy.md`
 
@@ -277,9 +284,9 @@ invariants classified as non-configurable.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-pprof --all-targets --locked
+  cargo test -p krabka-pprof --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-profiles --all-targets --locked
+  cargo test -p krabka-profiles --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo +nightly fmt --all -- --check

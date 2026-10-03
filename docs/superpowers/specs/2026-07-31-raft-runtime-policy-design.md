@@ -5,12 +5,12 @@
 Expose four existing Raft runtime policies through the broker configuration
 path while preserving current effective behavior:
 
-| Policy | Existing effective default |
-|---|---:|
-| leader heartbeat cadence | election timeout divided by `3` |
-| consecutive fetch-miss limit | `3` |
-| command queue capacity | `256` |
-| metadata Raft fetch maximum | `8MiB` |
+| Policy                       |      Existing effective default |
+| ---------------------------- | ------------------------------: |
+| leader heartbeat cadence     | election timeout divided by `3` |
+| consecutive fetch-miss limit |                             `3` |
+| command queue capacity       |                           `256` |
+| metadata Raft fetch maximum  |                          `8MiB` |
 
 The existing broker heartbeat option currently reaches `ControllerConfig` but
 is dropped before the Raft engine. Omission must continue deriving the cadence
@@ -21,12 +21,12 @@ unchanged.
 
 The broker owns these CLI and environment pairs:
 
-| CLI | Environment |
-|---|---|
-| existing `--controller-heartbeat-interval` | `CRABKA_CONTROLLER_HEARTBEAT_INTERVAL` |
-| `--controller-fetch-miss-limit` | `CRABKA_CONTROLLER_FETCH_MISS_LIMIT` |
-| `--metadata-raft-command-queue-capacity` | `CRABKA_METADATA_RAFT_COMMAND_QUEUE_CAPACITY` |
-| `--metadata-raft-fetch-max` | `CRABKA_METADATA_RAFT_FETCH_MAX` |
+| CLI                                        | Environment                                   |
+| ------------------------------------------ | --------------------------------------------- |
+| existing `--controller-heartbeat-interval` | `KRABKA_CONTROLLER_HEARTBEAT_INTERVAL`        |
+| `--controller-fetch-miss-limit`            | `KRABKA_CONTROLLER_FETCH_MISS_LIMIT`          |
+| `--metadata-raft-command-queue-capacity`   | `KRABKA_METADATA_RAFT_COMMAND_QUEUE_CAPACITY` |
+| `--metadata-raft-fetch-max`                | `KRABKA_METADATA_RAFT_FETCH_MAX`              |
 
 Runtime TOML uses matching snake-case keys. `Kafka.spec.brokerTuning` gains:
 

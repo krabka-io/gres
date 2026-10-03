@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use crabka_pgkv::{Kv, WriteOp};
+use krabka_pgkv::{Kv, WriteOp};
 
 use crate::error::ExecError;
 

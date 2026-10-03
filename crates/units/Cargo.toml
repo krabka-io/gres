@@ -1,5 +1,5 @@
 [package]
-name = "crabka-units"
+name = "krabka-units"
 publish = true
 version.workspace = true
 edition.workspace = true
@@ -13,7 +13,7 @@ rust-version = "1.97.0"
 description = "Dimensioned quantities (byte counts, byte rates, durations) for Crabka, built on `uom`"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-units"
+documentation = "https://docs.rs/krabka-units"
 keywords = ["kafka", "units", "uom", "dimensional-analysis", "crabka"]
 categories = ["data-structures"]
 readme = "README.md"
@@ -21,7 +21,7 @@ readme = "README.md"
 [lints]
 workspace = true
 
-# A pure value-type leaf crate, like `crabka-ids`: no IO, no async, no crypto, so
+# A pure value-type leaf crate, like `krabka-ids`: no IO, no async, no crypto, so
 # every crate — including the observability stack and the WASM playground — can
 # name a byte count or a timeout without pulling in a runtime.
 [dependencies]

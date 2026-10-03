@@ -20,8 +20,8 @@
 //! assertion.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 /// Everything one statement can produce, as a single comparable value, so a
 /// case states its whole expected script instead of a chain of field

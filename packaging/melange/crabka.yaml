@@ -51,22 +51,22 @@ pipeline:
         target="target"
       fi
       cargo build --release \
-        -p crabka-gres -p crabka-gres-activator \
-        --bin crabka-gres --bin crabka-gres-activator
+        -p krabka-gres -p krabka-gres-activator \
+        --bin krabka-gres --bin krabka-gres-activator
       mkdir -p dist
-      for bin in crabka-gres crabka-gres-activator; do
+      for bin in krabka-gres krabka-gres-activator; do
         install -m 0755 "$target/release/$bin" "dist/$bin"
       done
 
 subpackages:
-  - name: crabka-gres
+  - name: krabka-gres
     description: Gres PostgreSQL-compatible tenant compute
     pipeline:
       - runs: |
-          install -D -m 0755 dist/crabka-gres "${{targets.subpkgdir}}/usr/bin/crabka-gres"
+          install -D -m 0755 dist/krabka-gres "${{targets.subpkgdir}}/usr/bin/krabka-gres"
 
-  - name: crabka-gres-activator
+  - name: krabka-gres-activator
     description: Gres scale-to-zero connection activator
     pipeline:
       - runs: |
-          install -D -m 0755 dist/crabka-gres-activator "${{targets.subpkgdir}}/usr/bin/crabka-gres-activator"
+          install -D -m 0755 dist/krabka-gres-activator "${{targets.subpkgdir}}/usr/bin/krabka-gres-activator"

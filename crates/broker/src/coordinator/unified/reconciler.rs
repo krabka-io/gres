@@ -4,7 +4,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crabka_protocol::primitives::uuid::Uuid;
+use krabka_protocol::primitives::uuid::Uuid;
 
 use super::assignor::{Assignor, MemberSubscription, TopicMetadata};
 use crate::coordinator::unified::consumer_state::{GroupState, MemberState};

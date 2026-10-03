@@ -68,9 +68,9 @@ kind: Kafka
 metadata: { name: my-cluster }
 spec:
   clusterCa:
-    generateCertificateAuthority: true   # default true
-    validityDays: 365                    # default 365
-    renewalDays: 30                      # default 30
+    generateCertificateAuthority: true # default true
+    validityDays: 365 # default 365
+    renewalDays: 30 # default 30
   clientsCa:
     generateCertificateAuthority: true
     validityDays: 365
@@ -108,13 +108,13 @@ impl Default for CertificateAuthority { /* delegates to the defaults above */ }
 
 ### Secret layout (matches Strimzi)
 
-| Secret name                       | Contents                                  | Mounted by                                  |
-|-----------------------------------|-------------------------------------------|---------------------------------------------|
-| `<cluster>-cluster-ca`            | `ca.key` (PEM)                            | Operator + CronJob only                     |
-| `<cluster>-cluster-ca-cert`       | `ca.crt` (PEM)                            | Every broker pod, every KafkaUser TLS Secret consumer |
-| `<cluster>-clients-ca`            | `ca.key` (PEM)                            | Operator + CronJob only                     |
-| `<cluster>-clients-ca-cert`       | `ca.crt` (PEM)                            | Already projected into per-user Secrets by slice 37; this slice promotes that path |
-| `<cluster>-kafka-brokers`         | `<id>.crt` + `<id>.key` per replica (PEM) | Every broker pod (broker picks its own entries by node id) |
+| Secret name                 | Contents                                  | Mounted by                                                                         |
+| --------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------- |
+| `<cluster>-cluster-ca`      | `ca.key` (PEM)                            | Operator + CronJob only                                                            |
+| `<cluster>-cluster-ca-cert` | `ca.crt` (PEM)                            | Every broker pod, every KafkaUser TLS Secret consumer                              |
+| `<cluster>-clients-ca`      | `ca.key` (PEM)                            | Operator + CronJob only                                                            |
+| `<cluster>-clients-ca-cert` | `ca.crt` (PEM)                            | Already projected into per-user Secrets by slice 37; this slice promotes that path |
+| `<cluster>-kafka-brokers`   | `<id>.crt` + `<id>.key` per replica (PEM) | Every broker pod (broker picks its own entries by node id)                         |
 
 The two `*-ca` private-key Secrets carry the
 `crabka.io/secret-type=ca-key` label and an explicit
@@ -205,7 +205,7 @@ fuller pipeline below in "Reconcile pipeline"). The constraints are:
   template mounts the Secret);
 - ConfigMap before the StatefulSet (same reason, but the ConfigMap and
   keystore step are unordered relative to each other — ConfigMap
-  references *mount paths*, which are static, not Secret contents).
+  references _mount paths_, which are static, not Secret contents).
 
 ### `crates/operator/src/controller/user_tls.rs` — diff
 
@@ -220,7 +220,8 @@ modules and gains one new behavior (BYO) in a single edit.
 ### Broker config-file additions
 
 Slice 25a's TOML config-file already supports `controller_listener_protocol`
-+ `tls_config`. The operator-rendered file for slice 30 looks like:
+
+- `tls_config`. The operator-rendered file for slice 30 looks like:
 
 ```toml
 node_id = 0
@@ -260,7 +261,7 @@ spec.template.spec.containers[0].volumeMounts:
     readOnly: true
   - name: clients-ca-cert
     mountPath: /etc/crabka/clients-ca
-    readOnly: true   # mounted but not consumed by the broker in slice 30; reserved for slice 31
+    readOnly: true # mounted but not consumed by the broker in slice 30; reserved for slice 31
 
 spec.template.spec.volumes:
   - name: cluster-ca-cert
@@ -292,12 +293,12 @@ Tests: an explicit assertion that `combined_config_hash` is **stable**
 under broker-keystore Secret changes (so leaf renewal doesn't cascade
 into a roll) and **unstable** under cluster-CA-cert Secret changes.
 
-### CronJob: `crabka-operator ca-renewal-check`
+### CronJob: `krabka-operator ca-renewal-check`
 
 New CLI subcommand in `crates/operator/src/main.rs`:
 
 ```text
-crabka-operator ca-renewal-check [--namespace <ns>]
+krabka-operator ca-renewal-check [--namespace <ns>]
 ```
 
 Without `--namespace`: cluster-scoped, requires `ClusterRole`. With
@@ -326,7 +327,7 @@ Behavior:
 The subcommand is idempotent and safe to re-run. The Helm chart ships
 the CronJob with `schedule: "0 2 * * *"` (daily, 02:00 UTC) and
 `startingDeadlineSeconds: 600`. The CronJob pod uses the same operator
-image and a dedicated `ServiceAccount` (`crabka-operator-renewal`) with
+image and a dedicated `ServiceAccount` (`krabka-operator-renewal`) with
 narrower RBAC than the main operator: read on Kafka CRs, read+patch on
 Secrets in the same namespaces, create on Events. No write access on
 `statefulsets`, no leader-Lease.
@@ -338,7 +339,7 @@ and the CronJob subcommand call it; the reconciler calls it only on
 **creation** (initial generation), not on subsequent reconciles, so
 renewal stays in the CronJob lane.
 
-### Helm chart additions (`charts/crabka-operator/templates/`)
+### Helm chart additions (`charts/krabka-operator/templates/`)
 
 - `cronjob-ca-renewal.yaml` (new) — `kind: CronJob`, schedule from
   `values.yaml`, `imagePullPolicy` matches the Deployment.
@@ -394,14 +395,14 @@ New fields on `KafkaStatus`:
 status:
   clusterCa:
     notAfter: "2027-05-21T00:00:00Z"
-    generated: true                # vs BYO
+    generated: true # vs BYO
   clientsCa:
     notAfter: "2027-05-21T00:00:00Z"
     generated: true
   conditions:
-    - type: ClusterCaReady          # True when cluster CA Secret pair exists and is parseable
+    - type: ClusterCaReady # True when cluster CA Secret pair exists and is parseable
     - type: ClientsCaReady
-    - type: CaRotationRequired      # True when CronJob has flagged a CA as expiring
+    - type: CaRotationRequired # True when CronJob has flagged a CA as expiring
 ```
 
 The existing `Ready` condition gains a precondition: `ClusterCaReady`
@@ -521,25 +522,26 @@ and `ClientsCaReady` must both be True before `Ready` flips True.
 **None.** Inter-broker mTLS doesn't surface to the JVM admin CLI; the
 existing slice-12b JVM SASL+TLS inter-broker test already covers the
 broker-side wire behavior under operator-issued certs would look
-identical to. Adding a JVM test for the *operator* rendering of broker
+identical to. Adding a JVM test for the _operator_ rendering of broker
 configs duplicates what the integration tests already do.
 
 ### kind e2e
 
 The existing slice-17 kind smoke test gets a single new assertion: after
 the default `Kafka` CR Ready, `kubectl get secret <cluster>-cluster-ca-cert`
-+ `<cluster>-clients-ca-cert` both exist and `kubectl exec broker-0 --
+
+- `<cluster>-clients-ca-cert` both exist and `kubectl exec broker-0 --
 ls /etc/crabka/cluster-ca` returns `ca.crt`. No new e2e file.
 
 ## Risks and mitigations
 
-| Risk                                                                                  | Mitigation                                                                                                                  |
-|---------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------|
-| Broker pods can't reach kube-apiserver to mount Secrets on first start (chicken/egg)  | Operator creates Secrets *before* StatefulSet (reconcile step ordering above). kube-apiserver outage during cluster bring-up surfaces as `StatefulSet Pending`, same as today. |
-| Renewal CronJob misses a window because the CronJob pod was unschedulable             | `startingDeadlineSeconds: 600`, daily schedule means worst-case lag is ~24h before the next attempt. Default `renewalDays: 30` against a 365-day cert means the CronJob has to miss ~30 consecutive daily attempts before a leaf actually expires. If it does expire, brokers fail TLS handshake and the existing `Ready` condition goes False — alertable via the standard Kubernetes mechanisms. |
-| BYO CA cert is invalid (expired, wrong EKU, etc.)                                     | `ensure_cluster_ca` parses the user-supplied PEM via x509-parser at reconcile time. Parse failure → structured `ReconcileError::ByoCaMalformed { which, reason }` → status condition. |
-| Per-broker private keys all visible inside every pod                                  | Documented tradeoff (above). Per-broker Secret would require init-container choreography; deferred until we have a real principle of least privilege story for the broker mesh. |
-| `combined_config_hash` collision causes false-negative drift detection                | sha256 truncated to 8 bytes is 2^64 space. Negligible. (Same risk class as the existing slice-21 hash.) |
+| Risk                                                                                 | Mitigation                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Broker pods can't reach kube-apiserver to mount Secrets on first start (chicken/egg) | Operator creates Secrets _before_ StatefulSet (reconcile step ordering above). kube-apiserver outage during cluster bring-up surfaces as `StatefulSet Pending`, same as today.                                                                                                                                                                                                                     |
+| Renewal CronJob misses a window because the CronJob pod was unschedulable            | `startingDeadlineSeconds: 600`, daily schedule means worst-case lag is ~24h before the next attempt. Default `renewalDays: 30` against a 365-day cert means the CronJob has to miss ~30 consecutive daily attempts before a leaf actually expires. If it does expire, brokers fail TLS handshake and the existing `Ready` condition goes False — alertable via the standard Kubernetes mechanisms. |
+| BYO CA cert is invalid (expired, wrong EKU, etc.)                                    | `ensure_cluster_ca` parses the user-supplied PEM via x509-parser at reconcile time. Parse failure → structured `ReconcileError::ByoCaMalformed { which, reason }` → status condition.                                                                                                                                                                                                              |
+| Per-broker private keys all visible inside every pod                                 | Documented tradeoff (above). Per-broker Secret would require init-container choreography; deferred until we have a real principle of least privilege story for the broker mesh.                                                                                                                                                                                                                    |
+| `combined_config_hash` collision causes false-negative drift detection               | sha256 truncated to 8 bytes is 2^64 space. Negligible. (Same risk class as the existing slice-21 hash.)                                                                                                                                                                                                                                                                                            |
 
 ## Migration / compatibility
 
@@ -570,7 +572,7 @@ code path).
    template, update status. Tests.
 7. `crates/operator/src/main.rs` — add `CaRenewalCheck` subcommand,
    wire to `controller/cluster_ca::run_renewal_check`. Tests.
-8. `charts/crabka-operator/templates/` — CronJob, ServiceAccount,
+8. `charts/krabka-operator/templates/` — CronJob, ServiceAccount,
    ClusterRole, ClusterRoleBinding for renewal. Helm-lint test in CI.
 9. Integration tests: `reconcile_ca.rs`, `reconcile_inter_broker_mtls.rs`,
    `ca_renewal_cronjob.rs`.

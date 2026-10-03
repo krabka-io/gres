@@ -7,7 +7,7 @@
 
 use std::{collections::HashMap, path::Path};
 
-use crabka_protocol::records::{Record, RecordBatch};
+use krabka_protocol::records::{Record, RecordBatch};
 
 use crate::{
     chain::{GENESIS_HEAD, chain_hash, from_hex32},
@@ -308,8 +308,8 @@ mod tests {
 
     use assert2::check;
     use bytes::Bytes;
-    use crabka_log::{Log, LogConfig};
-    use crabka_protocol::records::{Record, RecordBatch, RecordHeader};
+    use krabka_log::{Log, LogConfig};
+    use krabka_protocol::records::{Record, RecordBatch, RecordHeader};
 
     use super::*;
     use crate::{

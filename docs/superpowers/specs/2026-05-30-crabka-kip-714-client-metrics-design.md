@@ -15,7 +15,7 @@ forwards to an observability backend. The broker advertises two APIs:
 - **`PushTelemetry` (key 72)** — the client periodically ships an OTLP
   `MetricsData` protobuf payload; the broker ingests it.
 
-Operators define *subscriptions* (which clients, which metric prefixes, how
+Operators define _subscriptions_ (which clients, which metric prefixes, how
 often) as dynamic cluster configs on a `CLIENT_METRICS` config resource,
 managed via `kafka-client-metrics.sh` / `kafka-configs.sh` → standard
 `IncrementalAlterConfigs` / `DescribeConfigs` / `ListConfigResources` RPCs.
@@ -46,7 +46,7 @@ Apache Kafka `trunk` (4.x line).
   built-in receiver (the two sinks). It is always present, so APIs 71/72 are
   always advertised (matching Kafka's "receiver configured → advertise" rule
   trivially).
-- Client-side metric *emission* (Crabka is a broker, not a client).
+- Client-side metric _emission_ (Crabka is a broker, not a client).
 - Historical metric storage/query beyond the live `/metrics` scrape snapshot and
   the OTLP forward.
 
@@ -106,11 +106,11 @@ Replace-on-empty semantics, mirroring `TopicConfigRecord`
 New module `crates/broker/src/client_metrics/config.rs` (mirrors the role of
 `config_keys` for topics). The only three keys Kafka recognizes:
 
-| Key | Type | Default | Bounds / rules |
-|---|---|---|---|
-| `metrics` | list (CSV) | `[]` (no metrics) | metric-name prefixes; the single element `"*"` = all metrics |
-| `interval.ms` | int | `300000` | **100 ≤ v ≤ 3_600_000** |
-| `match` | list | `[]` (match all) | each entry `key=regex`; `key` ∈ the six selectors below; regex must compile |
+| Key           | Type       | Default           | Bounds / rules                                                              |
+| ------------- | ---------- | ----------------- | --------------------------------------------------------------------------- |
+| `metrics`     | list (CSV) | `[]` (no metrics) | metric-name prefixes; the single element `"*"` = all metrics                |
+| `interval.ms` | int        | `300000`          | **100 ≤ v ≤ 3_600_000**                                                     |
+| `match`       | list       | `[]` (match all)  | each entry `key=regex`; `key` ∈ the six selectors below; regex must compile |
 
 Allowed `match` selector keys (exact strings):
 `client_instance_id`, `client_id`, `client_software_name`,
@@ -146,7 +146,7 @@ unknown selector → `INVALID_CONFIG` with a descriptive message.
   unset `interval.ms` is reported as `300000`. Set values use config-source
   **byte `7` = `CLIENT_METRICS_CONFIG`**; defaulted values use the
   default-config source. (Without defaults/synonyms, `kafka-configs.sh
-  --describe --all` shows blanks.)
+--describe --all` shows blanks.)
 - Respect the request's `configuration_keys` filter.
 
 ### 3.6 ListConfigResources (key 74)
@@ -228,16 +228,16 @@ subscription_id = (crc as i32) XOR uuid_hashcode(client_instance_id)
 
 ### 4.4 GetTelemetrySubscriptions response
 
-| Field | Value |
-|---|---|
-| `client_instance_id` | fresh v4 UUID if request id == nil, else `nil` (echo-on-assign only) |
-| `subscription_id` | §4.3 |
+| Field                        | Value                                                                        |
+| ---------------------------- | ---------------------------------------------------------------------------- |
+| `client_instance_id`         | fresh v4 UUID if request id == nil, else `nil` (echo-on-assign only)         |
+| `subscription_id`            | §4.3                                                                         |
 | `accepted_compression_types` | **hardcoded `[4, 3, 1, 2]`** = ZSTD, LZ4, GZIP, SNAPPY (NONE not advertised) |
-| `push_interval_ms` | §4.2 |
-| `telemetry_max_bytes` | broker config `telemetry.max.bytes`, default `1048576` |
-| `delta_temporality` | **hardcoded `true`** |
-| `requested_metrics` | §4.2 |
-| `error_code` | `NONE` (or throttle, §4.6) |
+| `push_interval_ms`           | §4.2                                                                         |
+| `telemetry_max_bytes`        | broker config `telemetry.max.bytes`, default `1048576`                       |
+| `delta_temporality`          | **hardcoded `true`**                                                         |
+| `requested_metrics`          | §4.2                                                                         |
+| `error_code`                 | `NONE` (or throttle, §4.6)                                                   |
 
 A fresh instance is registered (or the existing one refreshed) and
 `last_get_timestamp` set. The client id assignment never errors on an unknown
@@ -263,10 +263,10 @@ Matches Kafka's `ClientMetricsInstance` logic:
   expected to immediately re-fetch in those cases). Throttled → `throttle_time_ms`
   set, `THROTTLING_QUOTA_EXCEEDED`.
 - **PushTelemetry** is accepted if either: (a) `last_get_timestamp >
-  last_push_timestamp` (the first push after a fresh subscription is always
+last_push_timestamp` (the first push after a fresh subscription is always
   allowed — this is how Kafka tolerates the client's 0.5×–1.5× jitter, with no
   broker-side jitter of its own), or (b) `now - last_push_timestamp >=
-  push_interval_ms`. Otherwise → `THROTTLING_QUOTA_EXCEEDED`.
+push_interval_ms`. Otherwise → `THROTTLING_QUOTA_EXCEEDED`.
 
 ## 5. PushTelemetry (key 72) handler
 
@@ -321,14 +321,14 @@ Result<ResourceMetrics-set, DecodeError>`.
 
 ### 6.1 Prometheus sink — dynamic `Collector`
 
-`crates/broker/src/client_metrics/prometheus_sink.rs`. Client metric *names* are
+`crates/broker/src/client_metrics/prometheus_sink.rs`. Client metric _names_ are
 dynamic and supplied by the client, which doesn't fit `prometheus-client`'s
 statically-registered `Family` model. Solution: a custom **`Collector`**
 (implementing `prometheus_client::collector::Collector`) registered once into the
 existing `SharedRegistry`. It holds an `Arc<Mutex<Snapshot>>` of the most recent
 decoded data points (keyed by metric name + attribute set), with per-entry
 staleness expiry. The push handler updates the snapshot; the collector renders
-the live snapshot at scrape time as `crabka_client_*` series labeled with
+the live snapshot at scrape time as `krabka_client_*` series labeled with
 `client_instance_id` / `client_id` plus the OTLP datapoint attributes. OTLP
 Sum/Gauge → counter/gauge; Histogram → a summary-style rendering (buckets). This
 keeps `/metrics` a single endpoint.
@@ -338,7 +338,7 @@ keeps `/metrics` a single endpoint.
 `crates/broker/src/client_metrics/otlp_sink.rs`. Wrap the decoded
 `ResourceMetrics` into an `ExportMetricsServiceRequest`, inject
 `client_instance_id` and the connection principal as resource attributes, and
-send to the OTLP endpoint already used for traces (`CRABKA_OTLP_ENDPOINT`,
+send to the OTLP endpoint already used for traces (`KRABKA_OTLP_ENDPOINT`,
 reusing the configured gRPC vs HTTP/protobuf transport). Implemented as a
 bounded async queue + worker so a slow collector never blocks the request path;
 overflow is dropped + counted. No-op when OTLP is not configured.
@@ -366,6 +366,7 @@ receiver still validates/acks (matching "ingest succeeds, nothing re-exported").
 ## 9. Testing strategy
 
 **Unit**
+
 - `match`-rule evaluation: each selector, multi-selector AND, empty=match-all,
   bad regex rejected.
 - metrics-prefix union + `"*"` collapse.
@@ -379,10 +380,11 @@ receiver still validates/acks (matching "ingest succeeds, nothing re-exported").
 - OTLP→Prometheus translation (Sum/Gauge/Histogram) and staleness eviction.
 
 **Integration**
+
 - Config round-trip: `IncrementalAlterConfigs` → `DescribeConfigs` (incl.
   defaults/synonyms + source byte 7) → `ListConfigResources` shows the name.
 - Full handshake: nil id → assigned id → matched subscription → push → scrape
-  `/metrics` shows `crabka_client_*` series.
+  `/metrics` shows `krabka_client_*` series.
 - Error paths over the wire: unknown sub id, too-large, throttle, bad codec.
 - Byte-exactness of both response shapes vs the schema, and a behavioral check
   against the latest cp-kafka image for `DescribeConfigs`/`ListConfigResources`
@@ -397,7 +399,7 @@ Non-overlapping clusters suitable for parallel implementation:
 - **Config handlers:** `incremental_alter_configs.rs`, `describe_configs.rs`,
   `list_config_resources.rs` (+ new `client_metrics/config.rs`).
 - **Manager + sinks (new module):** `crates/broker/src/client_metrics/{mod,otlp,
-  prometheus_sink,otlp_sink}.rs`.
+prometheus_sink,otlp_sink}.rs`.
 - **Handlers + plumbing:** `get_telemetry_subscriptions.rs`,
   `push_telemetry.rs`, dispatch context threading, `Broker` wiring.
 - **Deps:** workspace + broker `Cargo.toml` (`opentelemetry-proto`).

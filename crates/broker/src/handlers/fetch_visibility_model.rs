@@ -15,7 +15,7 @@
 //! single-source-of-truth response-field contract, the de-dup'd hazard from
 //! `do_read`. For each `Advance*` the model asserts KIP-227 monotonicity: the
 //! reported HW/LSO never regress as the log progresses. See the design spec
-//! `docs/superpowers/specs/2026-06-14-crabka-fetch-hwm-visibility-model-design.md`.
+//! `docs/superpowers/specs/2026-06-14-krabka-fetch-hwm-visibility-model-design.md`.
 
 use std::time::Duration;
 

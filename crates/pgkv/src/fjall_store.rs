@@ -14,12 +14,12 @@ use std::{
     },
 };
 
-use crabka_units::{ByteSize, convert::ByteSizeExt as _};
 use fjall::{
     Iter, KeyspaceCreateOptions, PersistMode, Readable, SingleWriterTxDatabase,
     SingleWriterTxKeyspace, Snapshot,
     config::{PartitioningPolicy, PinningPolicy},
 };
+use krabka_units::{ByteSize, convert::ByteSizeExt as _};
 use refined_type::rule::GreaterU64;
 
 use crate::{Kv, KvError, KvPair, KvSnapshot, RestoreKv, SnapshotKv, WriteOp, store::KvScan};
@@ -581,7 +581,7 @@ pub struct FjallKv {
 /// tombstones.
 const MAX_MEMTABLE_SIZE_BYTES: u64 = 8 * 1024 * 1024;
 
-fn crabka_keyspace_options(options: FjallOptions) -> KeyspaceCreateOptions {
+fn krabka_keyspace_options(options: FjallOptions) -> KeyspaceCreateOptions {
     // Filter and index blocks must never be monolithic-and-unpinned. Fjall's
     // defaults partition them only from L3 down and pin only L0 filters /
     // L0-L1 indexes, so a mid-size store keeps multi-MB monolithic filter and
@@ -624,7 +624,7 @@ impl FjallKv {
     ) -> Result<Self, KvError> {
         let db = Arc::new(SingleWriterTxDatabase::builder(path).open().map_err(io)?);
         let ks = db
-            .keyspace("data", || crabka_keyspace_options(options))
+            .keyspace("data", || krabka_keyspace_options(options))
             .map_err(io)?;
         Ok(Self {
             inner: KeyspaceKv::with_options(db, ks, LocalPersistMode::SyncAll, options),
@@ -655,7 +655,7 @@ impl FjallKv {
     ) -> Result<Self, KvError> {
         let db = Arc::new(SingleWriterTxDatabase::builder(path).open().map_err(io)?);
         let ks = db
-            .keyspace("data", || crabka_keyspace_options(options))
+            .keyspace("data", || krabka_keyspace_options(options))
             .map_err(io)?;
         Ok(Self {
             inner: KeyspaceKv::with_options(db, ks, LocalPersistMode::Buffer, options),
@@ -741,21 +741,21 @@ mod tests {
     #[test]
     fn fjall_options_preserve_defaults_and_validate_boundaries() {
         let defaults = FjallOptions::default();
-        assert_eq!(defaults.max_memtable_size(), crabka_units::mebibytes(8));
+        assert_eq!(defaults.max_memtable_size(), krabka_units::mebibytes(8));
         assert_eq!(defaults.rotate_after_ops().get(), 262_144);
 
-        let configured = FjallOptions::new(crabka_units::bytes(37), 41).expect("valid options");
-        assert_eq!(configured.max_memtable_size(), crabka_units::bytes(37));
+        let configured = FjallOptions::new(krabka_units::bytes(37), 41).expect("valid options");
+        assert_eq!(configured.max_memtable_size(), krabka_units::bytes(37));
         assert_eq!(configured.rotate_after_ops().get(), 41);
         assert!(FjallOptions::new(ByteSize::ZERO, 1).is_err());
         assert!(
             FjallOptions::new(
-                ByteSize::new::<crabka_units::uom::si::information::byte>(1.5),
+                ByteSize::new::<krabka_units::uom::si::information::byte>(1.5),
                 1,
             )
             .is_err()
         );
-        assert!(FjallOptions::new(crabka_units::bytes(1), 0).is_err());
+        assert!(FjallOptions::new(krabka_units::bytes(1), 0).is_err());
     }
 
     struct FailingSnapshot {

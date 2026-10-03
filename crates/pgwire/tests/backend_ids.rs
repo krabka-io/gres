@@ -6,7 +6,7 @@
 use std::collections::HashSet;
 
 use assert2::assert;
-use crabka_pgwire::server::next_backend_pid;
+use krabka_pgwire::server::next_backend_pid;
 
 /// How many ids a case draws. This count is enough that a shared prefix or a
 /// repeated value would show up.

@@ -9,7 +9,7 @@ pub mod server;
 
 use std::path::PathBuf;
 
-use crabka_units::{Time, minutes};
+use krabka_units::{Time, minutes};
 
 /// Compatible maximum clock skew for incoming Kerberos AP-REQ validation.
 pub const DEFAULT_GSSAPI_MAX_TIME_SKEW: Time = minutes(5);

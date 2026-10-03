@@ -216,7 +216,7 @@ fn line_comment_end(bytes: &[u8], mut index: usize) -> usize {
 /// Find the end of the block comment that opens at `index`.
 ///
 /// The search honours `PostgreSQL`'s comment nesting, which matches
-/// `crabka_pgparser`'s lexer. Returns the offset just past the comment, and
+/// `krabka_pgparser`'s lexer. Returns the offset just past the comment, and
 /// whether the comment was closed.
 fn block_comment_end(bytes: &[u8], index: usize) -> (usize, bool) {
     let mut depth = 1usize;

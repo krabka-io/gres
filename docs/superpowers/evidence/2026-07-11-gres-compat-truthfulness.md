@@ -30,11 +30,11 @@ Scope: SQL-Parity Program Task 1 metadata and executable behavior only. The clea
 The following commands were run from the repository root and passed on 2026-07-11:
 
 ```text
-cargo test -p crabka-pgparser -p crabka-pgexec -p crabka-gres-conformance --lib --no-fail-fast
-BINDGEN_EXTRA_CLANG_ARGS='-I/usr/lib/gcc/x86_64-linux-gnu/15/include' CFLAGS='-I/usr/lib/gcc/x86_64-linux-gnu/15/include' cargo test -p crabka-pgparser --features oracle --test libpg_query_oracle compatibility_refusal_representatives --no-fail-fast
-cargo test -p crabka-gres-conformance --test compatibility_behavior --no-fail-fast
+cargo test -p krabka-pgparser -p krabka-pgexec -p krabka-gres-conformance --lib --no-fail-fast
+BINDGEN_EXTRA_CLANG_ARGS='-I/usr/lib/gcc/x86_64-linux-gnu/15/include' CFLAGS='-I/usr/lib/gcc/x86_64-linux-gnu/15/include' cargo test -p krabka-pgparser --features oracle --test libpg_query_oracle compatibility_refusal_representatives --no-fail-fast
+cargo test -p krabka-gres-conformance --test compatibility_behavior --no-fail-fast
 cargo check --workspace --all-targets --locked
-cargo clippy -p crabka-pgparser -p crabka-pgexec -p crabka-gres-conformance --all-targets --locked -- -D warnings
+cargo clippy -p krabka-pgparser -p krabka-pgexec -p krabka-gres-conformance --all-targets --locked -- -D warnings
 cargo +nightly fmt --all -- --check
 python3 scripts/tests/gres_f0_runtime_gates.py
 tools/check-pg-compat-matrix.sh --self-test

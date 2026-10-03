@@ -3,7 +3,7 @@
 use std::{any::Any, collections::BTreeMap, sync::Arc};
 
 use async_trait::async_trait;
-use crabka_pgexec::SqlEngine;
+use krabka_pgexec::SqlEngine;
 
 use crate::{CheckpointManifest, RangeId, RangeMap, RangeSpec, RowInterval, SplitState, TableId};
 

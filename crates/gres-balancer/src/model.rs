@@ -1,8 +1,8 @@
 //! Registry snapshot and dry-run operation model.
 
-use crabka_gres_control::RangeBoundary;
-use crabka_gres_substrate::RangeStatsSnapshot;
-use crabka_units::{ByteSize, Frequency};
+use krabka_gres_control::RangeBoundary;
+use krabka_gres_substrate::RangeStatsSnapshot;
+use krabka_units::{ByteSize, Frequency};
 use serde::{Deserialize, Serialize};
 
 /// One compute endpoint that can host Chapter Gres ranges.
@@ -25,9 +25,9 @@ pub struct TablePolicy {
     pub is_sharded: bool,
     pub auto_shard_disabled: bool,
     /// Convert an unsharded table once its ranges together store this much.
-    #[serde(with = "crabka_units::serde_units::human::byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::byte_size")]
     pub convert_store_threshold: ByteSize,
-    #[serde(with = "crabka_units::serde_units::human::frequency")]
+    #[serde(with = "krabka_units::serde_units::human::frequency")]
     pub convert_commit_rate_threshold: Frequency,
     /// Bucket count for hash placement, present exactly for hash-sharded tables.
     pub hash_bucket_count: Option<u32>,
@@ -54,7 +54,7 @@ pub struct RangeMetrics {
     pub scan_bytes: Option<u64>,
     /// A rowid the owner observed with about half of the range's rows below it.
     /// `None` means unknown, and unknown is not a licence to guess one — see
-    /// [`crabka_gres_substrate::RangeStats::median_rowid`].
+    /// [`krabka_gres_substrate::RangeStats::median_rowid`].
     pub median_rowid: Option<u64>,
     pub is_sharded: bool,
     pub co_location_group: Option<String>,

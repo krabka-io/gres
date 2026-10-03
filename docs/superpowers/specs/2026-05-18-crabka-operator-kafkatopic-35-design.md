@@ -30,17 +30,17 @@
 
 ### Out (deferred)
 
-| Concern | Slice / why |
-|---|---|
-| SASL/SCRAM auth on admin client | Slice 36 wires SCRAM, then 31/36 thread it through |
-| TLS on admin client | Phase 4 listener TLS (slice 31) |
-| Topic adoption (bidirectional) | Future — operator does not adopt out-of-band topics |
-| Replication-factor changes | Slice 43+ (partition reassignment) |
-| Partition decreases | Kafka does not support; rejected |
-| Per-broker config overrides | Future; topic-level only this slice |
-| Topic-naming admission webhook | Future — validation happens at reconcile, surfaced via status |
-| Strimzi BTO (Bidirectional Topic Operator) compatibility | Out — unidirectional is the design choice |
-| Multi-cluster mirroring through `KafkaTopic` | Future; one topic targets one cluster |
+| Concern                                                  | Slice / why                                                   |
+| -------------------------------------------------------- | ------------------------------------------------------------- |
+| SASL/SCRAM auth on admin client                          | Slice 36 wires SCRAM, then 31/36 thread it through            |
+| TLS on admin client                                      | Phase 4 listener TLS (slice 31)                               |
+| Topic adoption (bidirectional)                           | Future — operator does not adopt out-of-band topics           |
+| Replication-factor changes                               | Slice 43+ (partition reassignment)                            |
+| Partition decreases                                      | Kafka does not support; rejected                              |
+| Per-broker config overrides                              | Future; topic-level only this slice                           |
+| Topic-naming admission webhook                           | Future — validation happens at reconcile, surfaced via status |
+| Strimzi BTO (Bidirectional Topic Operator) compatibility | Out — unidirectional is the design choice                     |
+| Multi-cluster mirroring through `KafkaTopic`             | Future; one topic targets one cluster                         |
 
 ### Constraints inherited
 
@@ -129,15 +129,15 @@ pub struct KafkaTopicStatus {
 
 ### Status conditions
 
-| `Ready.status` | `reason` | meaning |
-|---|---|---|
-| `True`  | `Ready` | Topic exists and matches spec. |
-| `False` | `Pending` | Initial reconcile; in-flight admin call. |
-| `False` | `MissingClusterLabel` | `metadata.labels["crabka.io/cluster"]` absent. |
-| `False` | `ClusterNotReady` | Target `Kafka` absent, or its `Ready` condition is not `True`. |
-| `False` | `InvalidTopicName` | Effective topic name fails Kafka name rules. |
-| `False` | `ImmutableFieldChanged` | Partition decrease, replicas change, or `topicName` change. |
-| `False` | `BrokerError` | Admin RPC returned a non-recoverable Kafka error code. `message` carries the detail. |
+| `Ready.status` | `reason`                | meaning                                                                              |
+| -------------- | ----------------------- | ------------------------------------------------------------------------------------ |
+| `True`         | `Ready`                 | Topic exists and matches spec.                                                       |
+| `False`        | `Pending`               | Initial reconcile; in-flight admin call.                                             |
+| `False`        | `MissingClusterLabel`   | `metadata.labels["crabka.io/cluster"]` absent.                                       |
+| `False`        | `ClusterNotReady`       | Target `Kafka` absent, or its `Ready` condition is not `True`.                       |
+| `False`        | `InvalidTopicName`      | Effective topic name fails Kafka name rules.                                         |
+| `False`        | `ImmutableFieldChanged` | Partition decrease, replicas change, or `topicName` change.                          |
+| `False`        | `BrokerError`           | Admin RPC returned a non-recoverable Kafka error code. `message` carries the detail. |
 
 `observedGeneration` advances only when we land a `True/Ready` patch — so a CRD that's stuck on `ImmutableFieldChanged` keeps an older `observedGeneration` until the user fixes the spec.
 
@@ -158,39 +158,40 @@ pub use topic::{KafkaTopic, KafkaTopicSpec, KafkaTopicStatus};
 
 ```toml
 [package]
-name = "crabka-client-admin"
+name = "krabka-client-admin"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-crabka-client-core = { workspace = true }
-crabka-protocol    = { workspace = true }
+krabka-client-core = { workspace = true }
+krabka-protocol    = { workspace = true }
 bytes              = { workspace = true }
 thiserror          = { workspace = true }
 tokio              = { workspace = true, features = ["sync"] }
 tracing            = { workspace = true }
 
 [dev-dependencies]
-crabka-broker      = { workspace = true }
+krabka-broker      = { workspace = true }
 tempfile           = { workspace = true }
 tokio              = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
 ```
 
 Add to workspace `Cargo.toml`:
+
 ```toml
 [workspace.members]
 # … existing …
 "crates/client-admin",
 
 [workspace.dependencies]
-crabka-client-admin = { path = "crates/client-admin", version = "0.1.1" }
+krabka-client-admin = { path = "crates/client-admin", version = "0.1.1" }
 ```
 
 ### Public API
 
 ```rust
-use crabka_client_core::Connection;
+use krabka_client_core::Connection;
 
 /// Short-lived admin client targeting one cluster's controller.
 /// Plaintext only (TLS / SASL are slice 36 work).
@@ -208,7 +209,7 @@ pub enum AdminError {
             detail = .message.as_deref().map(|m| format!(" {m:?}")).unwrap_or_default())]
     Broker { api: &'static str, code: i16, name: &'static str, message: Option<String> },
     #[error("client-core: {0}")]
-    Transport(#[from] crabka_client_core::ClientError),
+    Transport(#[from] krabka_client_core::ClientError),
     #[error("protocol: {0}")]
     Protocol(String),
 }
@@ -605,12 +606,12 @@ const FINALIZER: &str = "crabka.io/topic-finalizer";
 
 ## 5. Helm chart RBAC additions
 
-`charts/crabka-operator/templates/clusterrole.yaml` gains:
+`charts/krabka-operator/templates/clusterrole.yaml` gains:
 
 ```yaml
-  - apiGroups: ["crabka.io"]
-    resources: ["kafkatopics", "kafkatopics/status", "kafkatopics/finalizers"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["crabka.io"]
+  resources: ["kafkatopics", "kafkatopics/status", "kafkatopics/finalizers"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ```
 
 No `values.yaml` change.
@@ -622,6 +623,7 @@ No `values.yaml` change.
 ### `crates/client-admin/tests` and unit tests
 
 **Unit (`src/topics.rs::tests`, `src/configs.rs::tests`, `src/lib.rs::tests`):**
+
 - `create_topics_one_spec_round_trip` — encode + decode against a mock Connection.
 - `metadata_request_default_topics_returns_all` — `topics: &[]` triggers the protocol's "all topics" semantics.
 - `not_controller_triggers_one_retry` — mock Connection returns `NOT_CONTROLLER` then succeeds; assert the retry path.
@@ -670,6 +672,7 @@ admin.metadata(&["foo"]).await? // -> UnknownTopicOrPartition
 Mock kube client (existing harness) + a stub admin client. Approach: replace `TopicContext::admin_client_for` with a test seam — define `trait AdminClientLike` covering the 6 methods we call, and have `TopicContext` hold a boxed dyn. Production wires the real `AdminClient`; tests wire a fixture that records calls and returns canned responses.
 
 Tests:
+
 - `missing_cluster_label` — no label → status `MissingClusterLabel`, zero admin calls.
 - `cluster_not_ready` — Kafka not Ready → `ClusterNotReady`, zero admin calls.
 - `creates_topic_on_first_reconcile` — fixture admin returns "not found" then "created" → one `CreateTopics`, status `Ready=True` with `topic_id` set.
@@ -749,7 +752,7 @@ crates/operator/src/
 crates/operator/tests/
 ├── reconcile_topic.rs                            # NEW
 
-charts/crabka-operator/templates/
+charts/krabka-operator/templates/
 ├── clusterrole.yaml                              # MODIFIED — kafkatopics + finalizers + status verbs
 
 deploy/crds/
@@ -764,21 +767,21 @@ Cargo.toml (workspace)                            # MODIFIED — new member + wo
 
 ## 8. Conflict analysis (for parallel batching)
 
-| File | Tasks touching it |
-|---|---|
-| `crates/client-admin/**` | T1 |
-| `crates/operator/src/crd/topic.rs` | T2 |
-| `crates/operator/src/crd/mod.rs` | T2 |
-| `crates/operator/src/controller/topic.rs` | T3 |
-| `crates/operator/src/controller/mod.rs` | T3 |
-| `crates/operator/src/context.rs` | T3 |
-| `crates/operator/src/run.rs` | T3 |
-| `crates/operator/src/gen_crds.rs` | T3 (or T4 if regen is split) |
-| `crates/operator/tests/reconcile_topic.rs` | T3 |
-| `charts/crabka-operator/templates/clusterrole.yaml` | T4 |
-| `deploy/crds/crabka.io_kafkatopics.yaml` | T5 |
-| `Cargo.toml` (workspace) | T1 |
-| `.github/workflows/operator-e2e.yml` | T6 |
+| File                                                | Tasks touching it            |
+| --------------------------------------------------- | ---------------------------- |
+| `crates/client-admin/**`                            | T1                           |
+| `crates/operator/src/crd/topic.rs`                  | T2                           |
+| `crates/operator/src/crd/mod.rs`                    | T2                           |
+| `crates/operator/src/controller/topic.rs`           | T3                           |
+| `crates/operator/src/controller/mod.rs`             | T3                           |
+| `crates/operator/src/context.rs`                    | T3                           |
+| `crates/operator/src/run.rs`                        | T3                           |
+| `crates/operator/src/gen_crds.rs`                   | T3 (or T4 if regen is split) |
+| `crates/operator/tests/reconcile_topic.rs`          | T3                           |
+| `charts/krabka-operator/templates/clusterrole.yaml` | T4                           |
+| `deploy/crds/crabka.io_kafkatopics.yaml`            | T5                           |
+| `Cargo.toml` (workspace)                            | T1                           |
+| `.github/workflows/operator-e2e.yml`                | T6                           |
 
 Parallel batches:
 
@@ -793,11 +796,11 @@ Roughly: T1 ‖ T2 ‖ T4 → T3 → T5 ‖ T6.
 ## 9. Acceptance criteria
 
 1. `cargo build` (workspace) clean.
-2. `cargo test -p crabka-client-admin` green (~6 unit + 1 integration).
-3. `cargo test -p crabka-operator` green (existing + ~12 new tests).
+2. `cargo test -p krabka-client-admin` green (~6 unit + 1 integration).
+3. `cargo test -p krabka-operator` green (existing + ~12 new tests).
 4. `cargo clippy --workspace --all-targets -- -D warnings` clean.
 5. `./tools/regen-crds.sh` produces no diff after first run; `deploy/crds/crabka.io_kafkatopics.yaml` is generated.
-6. `helm lint charts/crabka-operator` 0 errors.
+6. `helm lint charts/krabka-operator` 0 errors.
 7. `kind-kafkatopic` e2e job passes: CRD create → partition increase → immutable-change rejected → delete cascade, all assertions through JVM `kafka-topics` / `kafka-configs`.
 
 ---

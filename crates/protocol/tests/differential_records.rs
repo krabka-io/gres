@@ -1,7 +1,7 @@
 mod support;
 use bytes::BytesMut;
-use crabka_compression::CompressionType;
-use crabka_protocol::records::{Record, RecordBatch, TimestampType};
+use krabka_compression::CompressionType;
+use krabka_protocol::records::{Record, RecordBatch, TimestampType};
 use proptest::prelude::*;
 use serde_json::{Value, json};
 use support::oracle;

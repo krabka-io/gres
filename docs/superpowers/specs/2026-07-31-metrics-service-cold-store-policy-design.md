@@ -5,10 +5,10 @@
 Expose two existing cold-store runtime policies through the standalone metrics
 service while preserving current effective behavior:
 
-| Policy | Existing effective default |
-|---|---:|
-| cold-manifest cache TTL | `30s` |
-| unbounded compatibility-query lookback | `1h` |
+| Policy                                 | Existing effective default |
+| -------------------------------------- | -------------------------: |
+| cold-manifest cache TTL                |                      `30s` |
+| unbounded compatibility-query lookback |                       `1h` |
 
 The settings apply to querier, query-frontend, and ruler instances. The
 metrics service is not owned by a CRD, so both policies belong to its CLI and
@@ -17,12 +17,12 @@ the existing defaults.
 
 ## Configuration Surface
 
-The `crabka-metrics-service` binary adds:
+The `krabka-metrics-service` binary adds:
 
-| CLI | Environment | Default |
-|---|---|---:|
-| `--cold-cache-ttl` | `CRABKA_METRICS_COLD_CACHE_TTL` | `30s` |
-| `--unbounded-compatibility-lookback` | `CRABKA_METRICS_UNBOUNDED_COMPATIBILITY_LOOKBACK` | `1h` |
+| CLI                                  | Environment                                       | Default |
+| ------------------------------------ | ------------------------------------------------- | ------: |
+| `--cold-cache-ttl`                   | `KRABKA_METRICS_COLD_CACHE_TTL`                   |   `30s` |
+| `--unbounded-compatibility-lookback` | `KRABKA_METRICS_UNBOUNDED_COMPATIBILITY_LOOKBACK` |    `1h` |
 
 Both options remain on the binary's existing flat CLI and are accepted for
 every target because every target constructs a `RefreshingMetricBlockStore`.
@@ -40,7 +40,7 @@ dimensionless duration newtypes, or alternate disable sentinel are added.
 
 ```text
 CLI / environment
-  -> crabka-metrics-service target startup
+  -> krabka-metrics-service target startup
   -> RefreshingMetricBlockStore
        -> cached cold-store freshness check
        -> unbounded compatibility-range normalization

@@ -2,7 +2,7 @@
 
 ## Goal
 
-Add the operator-facing admin handlers to `crabka-broker` so the JVM
+Add the operator-facing admin handlers to `krabka-broker` so the JVM
 `kafka-*.sh` tools work against a Rust broker without skipping or
 falling back to JVM brokers. No new crate. No Rust CLI (deferred to a
 future slice). No ACLs or quotas (deferred).
@@ -50,7 +50,7 @@ changes; the partition writer actor for log trims).
 
 ### Mutable topic config record
 
-New variant in `crabka_metadata::MetadataRecord`:
+New variant in `krabka_metadata::MetadataRecord`:
 
 ```rust
 MetadataRecord::V1TopicConfig {
@@ -76,16 +76,16 @@ unchanged because variant discrimination is by-tag.
 
 Six keys, one source of truth in `crates/broker/src/config_keys.rs`:
 
-| Key | Status |
-|---|---|
-| `retention.ms` | honored — propagates live to `Log.config.retention_ms` |
-| `retention.bytes` | honored — propagates live to `Log.config.retention_bytes` |
-| `segment.bytes` | honored — propagates live to `Log.config.segment_bytes` |
-| `cleanup.policy=delete` | accepted as no-op (default) |
-| `cleanup.policy=compact` | rejected — log compaction unimplemented |
-| `compression.type=producer` | accepted as no-op (default — broker pass-through) |
-| `compression.type=<other>` | rejected — broker-side recompression unimplemented |
-| `min.insync.replicas=N` | accepted as no-op — see below |
+| Key                         | Status                                                    |
+| --------------------------- | --------------------------------------------------------- |
+| `retention.ms`              | honored — propagates live to `Log.config.retention_ms`    |
+| `retention.bytes`           | honored — propagates live to `Log.config.retention_bytes` |
+| `segment.bytes`             | honored — propagates live to `Log.config.segment_bytes`   |
+| `cleanup.policy=delete`     | accepted as no-op (default)                               |
+| `cleanup.policy=compact`    | rejected — log compaction unimplemented                   |
+| `compression.type=producer` | accepted as no-op (default — broker pass-through)         |
+| `compression.type=<other>`  | rejected — broker-side recompression unimplemented        |
+| `min.insync.replicas=N`     | accepted as no-op — see below                             |
 
 `min.insync.replicas` is accepted but not yet enforced: today's
 `acks=-1` produce blocks on full-ISR HW (which is strictly stronger
@@ -98,14 +98,14 @@ Every other key — `INVALID_CONFIG` with the offending key in
 
 ### Live propagation
 
-`crabka_log::Log` currently owns `LogConfig` by value. Wrap in
+`krabka_log::Log` currently owns `LogConfig` by value. Wrap in
 `Arc<RwLock<LogConfig>>` so the broker can swap fields while
 retention/roll loops keep running. Retention and segment-roll checks
 already snapshot the config at the top of each iteration; the lock is
 held for trivially short windows.
 
 ```rust
-// crabka_log
+// krabka_log
 pub struct Log {
     config: Arc<RwLock<LogConfig>>,
     // ...
@@ -329,27 +329,28 @@ deletion writes a tombstone via the existing OffsetCommit-style path.
 ## Error handling
 
 Standard guardrails:
+
 - Non-controller broker on a controller-leader op → `NOT_CONTROLLER`
   (41). Java AdminClient retries against the new controller.
 - All errors are per-resource / per-topic / per-partition / per-group.
   Partial-success responses are honest about which items succeeded.
 
-| Condition | Code | Note |
-|---|---|---|
-| Non-topic resource (e.g., BROKER) | 35 `INVALID_RESOURCE_TYPE` | |
-| Topic doesn't exist | 3 `UNKNOWN_TOPIC_OR_PARTITION` | |
-| Config key not whitelisted | 40 `INVALID_CONFIG` | key in `error_message` |
-| Config value rejected | 40 `INVALID_CONFIG` | reason in `error_message` |
-| `CreatePartitions`: new ≤ existing | 37 `INVALID_PARTITIONS` | |
-| `CreatePartitions`: rf > brokers | 38 `INVALID_REPLICATION_FACTOR` | |
-| `DeleteRecords`: offset > LEO or < -1 | 1 `OFFSET_OUT_OF_RANGE` | |
-| `DeleteRecords`: not leader | 6 `NOT_LEADER_OR_FOLLOWER` | |
-| `DeleteGroups`: group not found | 69 `GROUP_ID_NOT_FOUND` | |
-| `DeleteGroups`: group not Empty/Dead | 68 `NON_EMPTY_GROUP` | |
-| `controller.submit_change` not leader | 41 `NOT_CONTROLLER` | |
-| Anything else | -1 `UNKNOWN_SERVER_ERROR` | |
+| Condition                             | Code                            | Note                      |
+| ------------------------------------- | ------------------------------- | ------------------------- |
+| Non-topic resource (e.g., BROKER)     | 35 `INVALID_RESOURCE_TYPE`      |                           |
+| Topic doesn't exist                   | 3 `UNKNOWN_TOPIC_OR_PARTITION`  |                           |
+| Config key not whitelisted            | 40 `INVALID_CONFIG`             | key in `error_message`    |
+| Config value rejected                 | 40 `INVALID_CONFIG`             | reason in `error_message` |
+| `CreatePartitions`: new ≤ existing    | 37 `INVALID_PARTITIONS`         |                           |
+| `CreatePartitions`: rf > brokers      | 38 `INVALID_REPLICATION_FACTOR` |                           |
+| `DeleteRecords`: offset > LEO or < -1 | 1 `OFFSET_OUT_OF_RANGE`         |                           |
+| `DeleteRecords`: not leader           | 6 `NOT_LEADER_OR_FOLLOWER`      |                           |
+| `DeleteGroups`: group not found       | 69 `GROUP_ID_NOT_FOUND`         |                           |
+| `DeleteGroups`: group not Empty/Dead  | 68 `NON_EMPTY_GROUP`            |                           |
+| `controller.submit_change` not leader | 41 `NOT_CONTROLLER`             |                           |
+| Anything else                         | -1 `UNKNOWN_SERVER_ERROR`       |                           |
 
-All codes already exist in `crabka_broker::codes`. No new variants.
+All codes already exist in `krabka_broker::codes`. No new variants.
 
 ## Testing
 
@@ -415,14 +416,14 @@ shape, error codes, partial-success semantics. The AdminClient on the
 JVM side can't tell whether it's talking to a Rust broker or a JVM
 broker for any of these calls.
 
-| Apache Kafka | Crabka (this slice) |
-|---|---|
-| `kafka-configs --alter` → AlterConfigs/IncrementalAlterConfigs | Same handlers, topic-only whitelist |
-| Topic config stored in `ZK /config/topics/<t>` (ZK mode) or `__cluster_metadata` (KRaft) | Stored as `V1TopicConfig` in the same raft-backed metadata log |
-| Config takes effect at next retention/roll tick | Same — `Log.config` is swappable, retention/roll re-reads each iteration |
-| `kafka-topics --alter --partitions` → CreatePartitions | Same handler, same round-robin placement |
-| `kafka-delete-records` → DeleteRecords | Same handler, same leader-only + Fetch-driven follower convergence |
-| `kafka-consumer-groups --list/--describe/--delete` | Same handlers, same state machine |
+| Apache Kafka                                                                             | Crabka (this slice)                                                      |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `kafka-configs --alter` → AlterConfigs/IncrementalAlterConfigs                           | Same handlers, topic-only whitelist                                      |
+| Topic config stored in `ZK /config/topics/<t>` (ZK mode) or `__cluster_metadata` (KRaft) | Stored as `V1TopicConfig` in the same raft-backed metadata log           |
+| Config takes effect at next retention/roll tick                                          | Same — `Log.config` is swappable, retention/roll re-reads each iteration |
+| `kafka-topics --alter --partitions` → CreatePartitions                                   | Same handler, same round-robin placement                                 |
+| `kafka-delete-records` → DeleteRecords                                                   | Same handler, same leader-only + Fetch-driven follower convergence       |
+| `kafka-consumer-groups --list/--describe/--delete`                                       | Same handlers, same state machine                                        |
 
 ## Acceptance gate
 
@@ -438,7 +439,7 @@ broker for any of these calls.
 
 ## Out of scope
 
-- Rust `crabka-cli` (kafka-*.sh-parity command-line tool). Separate
+- Rust `krabka-cli` (kafka-*.sh-parity command-line tool). Separate
   future slice.
 - ACLs (CreateAcls/DescribeAcls/DeleteAcls, api_keys 30/29/31).
   Separate slice; needs an authorizer interface first.

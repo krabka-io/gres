@@ -2,8 +2,8 @@
 
 use std::time::SystemTime;
 
-use crabka_gres_substrate::{RangeStatsProvider, RangeStatsSnapshot};
-use crabka_units::{Time, convert::StdDurationExt as _};
+use krabka_gres_substrate::{RangeStatsProvider, RangeStatsSnapshot};
+use krabka_units::{Time, convert::StdDurationExt as _};
 
 use crate::{
     goals::{

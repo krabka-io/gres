@@ -13,14 +13,14 @@ use std::{
 };
 
 use async_trait::async_trait;
-use crabka_gres_control::{
+use krabka_gres_control::{
     HashPlacement, RangeBoundary, RangeRetirementPhase, Registry, SplitOperationPhase,
     SplitOperationRecord, TenantName, TenantRecord,
 };
-use crabka_gres_ranges::{
+use krabka_gres_ranges::{
     AuthorizedSplitIntent, RangeControlOperation, RangeControlReq, RangeControlResp, RangeId,
 };
-use crabka_operator::{
+use krabka_operator::{
     context::{GresControlHandle, GresControlLike, GresControlWriteError},
     controller::{
         gres_split_operation::{
@@ -30,12 +30,12 @@ use crabka_operator::{
         gres_tenant::{RangeRetirementAdmin, reconcile_one_retiring_range_wal},
     },
 };
-use crabka_units::convert::ByteSizeExt as _;
+use krabka_units::convert::ByteSizeExt as _;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 fn durable_inspect_limits() -> (u32, u32) {
-    let policy = crabka_gres_ranges::RangeRuntimePolicy::default();
+    let policy = krabka_gres_ranges::RangeRuntimePolicy::default();
     (
         policy.durable_inspect_max_records.get(),
         u32::try_from(policy.durable_inspect_max_size.bytes_u64()).unwrap(),
@@ -282,7 +282,7 @@ const fn split_payload_workload_script() -> &'static str {
 set -u
 seq=0
 attempted_seq=-1
-while [[ ! -e "$CRABKA_G8_WORKLOAD_STOP" ]]; do
+while [[ ! -e "$KRABKA_G8_WORKLOAD_STOP" ]]; do
   if (( seq % 2 == 0 )); then
     table_id=50
     table_name=live_ledger50
@@ -297,8 +297,8 @@ while [[ ! -e "$CRABKA_G8_WORKLOAD_STOP" ]]; do
     now_raw=$(date +%s%N); now=$((now_raw / 1000000))
     kind=attempt
     printf '{"kind":"%s","provenance":"workload","table_id":%s,"rowid":null,"seq":%s,"checksum":"%s","timestamp_ms":%s}\n' \
-      "$kind" "$table_id" "$seq" "$checksum" "$now" >> "$CRABKA_G8_WORKLOAD_LEDGER"
-    sync -d "$CRABKA_G8_WORKLOAD_LEDGER"
+      "$kind" "$table_id" "$seq" "$checksum" "$now" >> "$KRABKA_G8_WORKLOAD_LEDGER"
+    sync -d "$KRABKA_G8_WORKLOAD_LEDGER"
     attempted_seq=$seq
   fi
   # The client timeout must exceed every observed-safe ack-gap bound:
@@ -306,11 +306,11 @@ while [[ ! -e "$CRABKA_G8_WORKLOAD_STOP" ]]; do
   # unresolvable ambiguity, so a statement is only abandoned once the run has
   # already blown its liveness bound. Connection-phase failures stay fast via
   # PGCONNECT_TIMEOUT.
-  if timeout "$CRABKA_G8_INSERT_TIMEOUT" psql -X -q -v ON_ERROR_STOP=1 \
+  if timeout "$KRABKA_G8_INSERT_TIMEOUT" psql -X -q -v ON_ERROR_STOP=1 \
       -c "INSERT INTO $table_name (id, seq, checksum) VALUES ($rowid, $seq, '$checksum')" \
-      >/dev/null 2>>"$CRABKA_G8_WORKLOAD_ERRORS"; then
-    if [[ "$seq" -eq 2 && ! -e "$CRABKA_G8_RESPONSE_LOSS" ]]; then
-      touch "$CRABKA_G8_RESPONSE_LOSS"
+      >/dev/null 2>>"$KRABKA_G8_WORKLOAD_ERRORS"; then
+    if [[ "$seq" -eq 2 && ! -e "$KRABKA_G8_RESPONSE_LOSS" ]]; then
+      touch "$KRABKA_G8_RESPONSE_LOSS"
       response_known=false
     else
       response_known=true
@@ -319,10 +319,10 @@ while [[ ! -e "$CRABKA_G8_WORKLOAD_STOP" ]]; do
     response_known=false
   fi
   if [[ "$seq" -eq 2 ]]; then
-    while [[ ! -e "$CRABKA_G8_RAW_RECOVERY" && ! -e "$CRABKA_G8_WORKLOAD_STOP" ]]; do
+    while [[ ! -e "$KRABKA_G8_RAW_RECOVERY" && ! -e "$KRABKA_G8_WORKLOAD_STOP" ]]; do
       sleep 0.025
     done
-    [[ -e "$CRABKA_G8_RAW_RECOVERY" ]] || continue
+    [[ -e "$KRABKA_G8_RAW_RECOVERY" ]] || continue
     kind=recovered_ack
   elif [[ "$response_known" == true ]]; then
     kind=ack
@@ -334,10 +334,10 @@ while [[ ! -e "$CRABKA_G8_WORKLOAD_STOP" ]]; do
     # before any re-INSERT.
     kind=""
     empty_streak_start=""
-    while [[ ! -e "$CRABKA_G8_WORKLOAD_STOP" ]]; do
-      if actual=$(timeout "$CRABKA_G8_RECOVERY_TIMEOUT" psql -X -A -t -q -v ON_ERROR_STOP=1 \
+    while [[ ! -e "$KRABKA_G8_WORKLOAD_STOP" ]]; do
+      if actual=$(timeout "$KRABKA_G8_RECOVERY_TIMEOUT" psql -X -A -t -q -v ON_ERROR_STOP=1 \
           -c "SELECT checksum FROM $table_name WHERE id = $rowid" \
-          2>>"$CRABKA_G8_WORKLOAD_ERRORS"); then
+          2>>"$KRABKA_G8_WORKLOAD_ERRORS"); then
         if [[ -n "$actual" ]]; then kind=recovered_ack; break; fi
         now_raw=$(date +%s%N); now=$((now_raw / 1000000))
         if [[ -z "$empty_streak_start" ]]; then empty_streak_start=$now; fi
@@ -348,20 +348,20 @@ while [[ ! -e "$CRABKA_G8_WORKLOAD_STOP" ]]; do
       sleep 0.25
     done
     if [[ -z "$kind" ]]; then
-      [[ -e "$CRABKA_G8_WORKLOAD_STOP" ]] && break
+      [[ -e "$KRABKA_G8_WORKLOAD_STOP" ]] && break
       now_raw=$(date +%s%N); now=$((now_raw / 1000000))
       printf '{"kind":"retry","provenance":"workload","table_id":%s,"rowid":null,"seq":%s,"checksum":"%s","timestamp_ms":%s}\n' \
-        "$table_id" "$seq" "$checksum" "$now" >> "$CRABKA_G8_WORKLOAD_LEDGER"
-      sync -d "$CRABKA_G8_WORKLOAD_LEDGER"
+        "$table_id" "$seq" "$checksum" "$now" >> "$KRABKA_G8_WORKLOAD_LEDGER"
+      sync -d "$KRABKA_G8_WORKLOAD_LEDGER"
       continue
     fi
   fi
   now_raw=$(date +%s%N); now=$((now_raw / 1000000))
   printf '{"kind":"%s","provenance":"workload","table_id":%s,"rowid":%s,"seq":%s,"checksum":"%s","timestamp_ms":%s}\n' \
-    "$kind" "$table_id" "$rowid" "$seq" "$checksum" "$now" >> "$CRABKA_G8_WORKLOAD_LEDGER"
-  sync -d "$CRABKA_G8_WORKLOAD_LEDGER"
+    "$kind" "$table_id" "$rowid" "$seq" "$checksum" "$now" >> "$KRABKA_G8_WORKLOAD_LEDGER"
+  sync -d "$KRABKA_G8_WORKLOAD_LEDGER"
   seq=$((seq + 1))
-  sleep "$CRABKA_G8_WORKLOAD_SLEEP"
+  sleep "$KRABKA_G8_WORKLOAD_SLEEP"
 done
 "#
 }
@@ -571,15 +571,15 @@ impl GresControlLike for BrokerControl {
     async fn get_tenant(
         &self,
         tenant: &TenantName,
-    ) -> Result<Option<crabka_gres_control::TenantRecord>, GresControlWriteError> {
+    ) -> Result<Option<krabka_gres_control::TenantRecord>, GresControlWriteError> {
         Ok(self.registry.lock().await.get(tenant.as_str()).await?)
     }
 
     async fn replace_tenant_if_version(
         &self,
-        record: &crabka_gres_control::TenantRecord,
+        record: &krabka_gres_control::TenantRecord,
         expected: Option<u64>,
-    ) -> Result<crabka_gres_control::TenantRecord, GresControlWriteError> {
+    ) -> Result<krabka_gres_control::TenantRecord, GresControlWriteError> {
         let replaced = self
             .registry
             .lock()
@@ -599,7 +599,7 @@ impl GresControlLike for BrokerControl {
 
     async fn validate_final_checkpoint_manifest(
         &self,
-        _record: &crabka_gres_control::TenantRecord,
+        _record: &krabka_gres_control::TenantRecord,
     ) -> Result<(), GresControlWriteError> {
         Ok(())
     }
@@ -622,7 +622,7 @@ impl GresControlLike for BrokerControl {
 }
 
 fn injected_registry_error() -> GresControlWriteError {
-    crabka_gres_control::ControlError::UnsupportedRegistryMutation {
+    krabka_gres_control::ControlError::UnsupportedRegistryMutation {
         mutation: "split_crash_matrix",
         reason: "injected durable acknowledgement loss",
     }
@@ -644,7 +644,7 @@ struct DeleteLedger {
 }
 
 struct CountingRetirementAdmin {
-    inner: crabka_client_admin::AdminClient,
+    inner: krabka_client_admin::AdminClient,
     expected_topic: String,
     ledger: Arc<std::sync::Mutex<DeleteLedger>>,
     fail_after_delete: bool,
@@ -655,15 +655,15 @@ impl RangeRetirementAdmin for CountingRetirementAdmin {
     async fn metadata(
         &mut self,
         topics: &[&str],
-    ) -> Result<crabka_client_admin::TopicMetadata, crabka_client_admin::AdminError> {
+    ) -> Result<krabka_client_admin::TopicMetadata, krabka_client_admin::AdminError> {
         self.inner.metadata(topics).await
     }
 
     async fn delete_topics(
         &mut self,
         names: &[&str],
-        timeout: crabka_units::Time,
-    ) -> Result<Vec<crabka_client_admin::DeleteTopicOutcome>, crabka_client_admin::AdminError> {
+        timeout: krabka_units::Time,
+    ) -> Result<Vec<krabka_client_admin::DeleteTopicOutcome>, krabka_client_admin::AdminError> {
         if names != [self.expected_topic.as_str()] {
             let mut ledger = self.ledger.lock().expect("delete ledger");
             ledger.unrelated_attempted = true;
@@ -671,7 +671,7 @@ impl RangeRetirementAdmin for CountingRetirementAdmin {
                 targets: names.iter().map(|name| (*name).to_owned()).collect(),
                 outcome: "rejected_unrelated".into(),
             });
-            return Err(crabka_client_admin::AdminError::Protocol(
+            return Err(krabka_client_admin::AdminError::Protocol(
                 "unrelated Split retirement deletion".into(),
             ));
         }
@@ -685,7 +685,7 @@ impl RangeRetirementAdmin for CountingRetirementAdmin {
                 targets: names.iter().map(|name| (*name).to_owned()).collect(),
                 outcome: "deleted_ack_lost".into(),
             });
-            return Err(crabka_client_admin::AdminError::Protocol(
+            return Err(krabka_client_admin::AdminError::Protocol(
                 "injected acknowledgement loss after predecessor delete".into(),
             ));
         }
@@ -1510,10 +1510,10 @@ fn continuous_payload_workload_records_two_tables_and_fsyncs_every_event() {
         "live_ledger50",
         "live_ledger51",
         "WHERE id = $rowid",
-        "CRABKA_G8_RECOVERY_TIMEOUT",
-        "CRABKA_G8_RAW_RECOVERY",
-        "CRABKA_G8_WORKLOAD_SLEEP",
-        "CRABKA_G8_INSERT_TIMEOUT",
+        "KRABKA_G8_RECOVERY_TIMEOUT",
+        "KRABKA_G8_RAW_RECOVERY",
+        "KRABKA_G8_WORKLOAD_SLEEP",
+        "KRABKA_G8_INSERT_TIMEOUT",
         "\"kind\":\"retry\"",
         "empty_streak_start",
     ] {
@@ -1521,7 +1521,7 @@ fn continuous_payload_workload_records_two_tables_and_fsyncs_every_event() {
     }
     assert!(script.matches("sync -d").count() >= 3);
     let raw_wait = script
-        .find("while [[ ! -e \"$CRABKA_G8_RAW_RECOVERY\"")
+        .find("while [[ ! -e \"$KRABKA_G8_RAW_RECOVERY\"")
         .expect("seq=2 waits for exact raw authorization");
     let recovered = script[raw_wait..]
         .find("kind=recovered_ack")
@@ -1885,7 +1885,7 @@ fn hash_schema_v3_pins_algorithm_corpus_and_boundary() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn real_child_hash_durable_inspection_covers_pinned_bucket_corpus() {
-    if std::env::var_os("CRABKA_G9_HASH_INSPECT").is_none() {
+    if std::env::var_os("KRABKA_G9_HASH_INSPECT").is_none() {
         return;
     }
     let tenant = format!("tg9hi-{}", std::process::id());
@@ -1911,7 +1911,7 @@ async fn real_child_hash_durable_inspection_covers_pinned_bucket_corpus() {
     drop(sql);
     system.restart_with_hosted_ranges(0, "r0,r1").await;
 
-    let start_key = crabka_pgkv::key::table_prefix(50);
+    let start_key = krabka_pgkv::key::table_prefix(50);
     let mut end_key = start_key.clone();
     *end_key.last_mut().expect("table prefix") += 1;
     let mut buckets = BTreeSet::new();
@@ -1921,7 +1921,7 @@ async fn real_child_hash_durable_inspection_covers_pinned_bucket_corpus() {
     let mut rolled_back_descriptor = None;
     for range_id in [0, 1] {
         let response = system
-            .inspect_durable_records(crabka_gres_ranges::InspectDurableRecordsReq {
+            .inspect_durable_records(krabka_gres_ranges::InspectDurableRecordsReq {
                 tenant: tenant.clone(),
                 range_id: RangeId::new(range_id),
                 generation: 0,
@@ -1939,15 +1939,15 @@ async fn real_child_hash_durable_inspection_covers_pinned_bucket_corpus() {
         for record in &response.records {
             assert!(record.source_offset.is_some());
             assert!(record.source_revision.is_some());
-            match crabka_pgkv::key::classify_key(&record.key) {
-                crabka_pgkv::key::KeyClass::HashPrimaryVersion {
+            match krabka_pgkv::key::classify_key(&record.key) {
+                krabka_pgkv::key::KeyClass::HashPrimaryVersion {
                     table_id, bucket, ..
                 } => {
                     assert_eq!(table_id, 50);
-                    let tuple = crabka_pgmvcc::version::decode_ts_tuple(&record.value)
+                    let tuple = krabka_pgmvcc::version::decode_ts_tuple(&record.value)
                         .expect("decode authoritative hash timestamp row");
-                    if matches!(tuple.state, crabka_pgmvcc::version::TsVersionState::Aborted) {
-                        let Some(crabka_pgtypes::Datum::Int4(logical_id)) = tuple.row.first()
+                    if matches!(tuple.state, krabka_pgmvcc::version::TsVersionState::Aborted) {
+                        let Some(krabka_pgtypes::Datum::Int4(logical_id)) = tuple.row.first()
                         else {
                             panic!("aborted hash tuple lacks logical int4 id")
                         };
@@ -1956,7 +1956,7 @@ async fn real_child_hash_durable_inspection_covers_pinned_bucket_corpus() {
                     }
                     assert!(matches!(
                         tuple.state,
-                        crabka_pgmvcc::version::TsVersionState::Committed { .. }
+                        krabka_pgmvcc::version::TsVersionState::Committed { .. }
                     ));
                     let row = decode_hash_physical_record(range_id, record)
                         .expect("decode authoritative hash row");
@@ -1965,7 +1965,7 @@ async fn real_child_hash_durable_inspection_covers_pinned_bucket_corpus() {
                     }
                     decoded_rows.push(row);
                 }
-                crabka_pgkv::key::KeyClass::System => {
+                krabka_pgkv::key::KeyClass::System => {
                     if record.key.starts_with(b"\0\0\0\0meta/ts_txn/") {
                         assert!(record.value.starts_with(b"TXD2"));
                         let raw_start = u64::from_be_bytes(
@@ -1974,23 +1974,23 @@ async fn real_child_hash_durable_inspection_covers_pinned_bucket_corpus() {
                                 .expect("descriptor timestamp"),
                         );
                         let descriptor =
-                            crabka_pgexec::timestamp_txn::decode_timestamp_txn_descriptor_value(
-                                crabka_pgexec::TimestampTransactionId::new(raw_start)
+                            krabka_pgexec::timestamp_txn::decode_timestamp_txn_descriptor_value(
+                                krabka_pgexec::TimestampTransactionId::new(raw_start)
                                     .expect("descriptor timestamp id"),
                                 &record.value,
                             )
                             .expect("decode TXD2 descriptor");
                         if descriptor.operations.len() == 2 {
                             match descriptor.decision {
-                                crabka_pgexec::PrimaryTxnDecision::Committed(_) => {
+                                krabka_pgexec::PrimaryTxnDecision::Committed(_) => {
                                     assert!(
                                         cross_boundary_descriptor.replace(descriptor).is_none()
                                     );
                                 }
-                                crabka_pgexec::PrimaryTxnDecision::Aborted => {
+                                krabka_pgexec::PrimaryTxnDecision::Aborted => {
                                     assert!(rolled_back_descriptor.replace(descriptor).is_none());
                                 }
-                                crabka_pgexec::PrimaryTxnDecision::Pending => {
+                                krabka_pgexec::PrimaryTxnDecision::Pending => {
                                     panic!("terminal inspection retained a pending descriptor")
                                 }
                             }
@@ -2017,7 +2017,7 @@ async fn real_child_hash_durable_inspection_covers_pinned_bucket_corpus() {
     );
     assert!(matches!(
         descriptor.decision,
-        crabka_pgexec::PrimaryTxnDecision::Committed(_)
+        krabka_pgexec::PrimaryTxnDecision::Committed(_)
     ));
     let rolled_back = rolled_back_descriptor.expect("two-operation aborted hash TXD2 descriptor");
     assert_eq!(rolled_back.participants, vec![0, 1]);
@@ -2031,7 +2031,7 @@ async fn real_child_hash_durable_inspection_covers_pinned_bucket_corpus() {
     );
     assert!(matches!(
         rolled_back.decision,
-        crabka_pgexec::PrimaryTxnDecision::Aborted
+        krabka_pgexec::PrimaryTxnDecision::Aborted
     ));
     decoded_rows.retain(|row| (0..16).contains(&row.logical_id));
     decoded_rows.sort();
@@ -2055,7 +2055,7 @@ async fn real_child_hash_durable_inspection_covers_pinned_bucket_corpus() {
     for row in decoded_rows {
         assert_eq!(
             row.bucket,
-            crabka_pgkv::key::hash_bucket(&row.logical_id.to_be_bytes(), 16).unwrap()
+            krabka_pgkv::key::hash_bucket(&row.logical_id.to_be_bytes(), 16).unwrap()
         );
         assert_eq!(row.key_class, "hash_primary_version");
     }
@@ -2334,7 +2334,7 @@ impl HashAlgorithmEvidence {
             .map(|logical_id| HashCorpusEvidence {
                 logical_id,
                 bytes_hex: hex_bytes(&logical_id.to_be_bytes()),
-                bucket: crabka_pgkv::key::hash_bucket(&logical_id.to_be_bytes(), 16)
+                bucket: krabka_pgkv::key::hash_bucket(&logical_id.to_be_bytes(), 16)
                     .expect("valid pinned hash bucket count"),
             })
             .collect();
@@ -2468,31 +2468,31 @@ struct HashEvidence {
     folds: HashFoldEvidence,
 }
 
-fn hash_raw_summary(record: &crabka_gres_ranges::DurableRecord) -> Option<HashRawSummaryEvidence> {
-    let crabka_pgkv::key::KeyClass::HashPrimaryVersion {
+fn hash_raw_summary(record: &krabka_gres_ranges::DurableRecord) -> Option<HashRawSummaryEvidence> {
+    let krabka_pgkv::key::KeyClass::HashPrimaryVersion {
         table_id,
         bucket,
         rowid,
         version,
-    } = crabka_pgkv::key::classify_key(&record.key)
+    } = krabka_pgkv::key::classify_key(&record.key)
     else {
         return None;
     };
-    let tuple = crabka_pgmvcc::version::decode_ts_tuple(&record.value).ok()?;
+    let tuple = krabka_pgmvcc::version::decode_ts_tuple(&record.value).ok()?;
     let (state, commit_ts) = match tuple.state {
-        crabka_pgmvcc::version::TsVersionState::Committed { commit_ts } => ("committed", commit_ts),
-        crabka_pgmvcc::version::TsVersionState::Aborted => ("aborted", 0),
+        krabka_pgmvcc::version::TsVersionState::Committed { commit_ts } => ("committed", commit_ts),
+        krabka_pgmvcc::version::TsVersionState::Aborted => ("aborted", 0),
         _ => return None,
     };
-    let crabka_pgtypes::Datum::Int4(logical_id) = tuple.row.first()? else {
+    let krabka_pgtypes::Datum::Int4(logical_id) = tuple.row.first()? else {
         return None;
     };
     let seq = tuple.row.get(1).and_then(|datum| match datum {
-        crabka_pgtypes::Datum::Int4(value) => Some(*value),
+        krabka_pgtypes::Datum::Int4(value) => Some(*value),
         _ => None,
     });
     let checksum = tuple.row.get(2).and_then(|datum| match datum {
-        crabka_pgtypes::Datum::Text(value) => Some(value.clone()),
+        krabka_pgtypes::Datum::Text(value) => Some(value.clone()),
         _ => None,
     });
     Some(HashRawSummaryEvidence {
@@ -2531,11 +2531,11 @@ async fn collect_hash_snapshots(
     for &(range_id, generation) in active_ranges {
         let snapshot = &mut snapshots[usize::try_from(range_id).expect("range index")];
         for table_id in [50_u32, 51] {
-            let start_key = crabka_pgkv::key::table_prefix(table_id);
+            let start_key = krabka_pgkv::key::table_prefix(table_id);
             let mut end_key = start_key.clone();
             *end_key.last_mut().expect("table prefix") += 1;
             let response = system
-                .inspect_durable_records(crabka_gres_ranges::InspectDurableRecordsReq {
+                .inspect_durable_records(krabka_gres_ranges::InspectDurableRecordsReq {
                     tenant: system.tenant().to_owned(),
                     range_id: RangeId::new(range_id),
                     generation,
@@ -2578,8 +2578,8 @@ async fn collect_hash_snapshots(
                         .expect("TXD2 key timestamp"),
                 );
                 let descriptor =
-                    crabka_pgexec::timestamp_txn::decode_timestamp_txn_descriptor_value(
-                        crabka_pgexec::TimestampTransactionId::new(start_ts)
+                    krabka_pgexec::timestamp_txn::decode_timestamp_txn_descriptor_value(
+                        krabka_pgexec::TimestampTransactionId::new(start_ts)
                             .expect("TXD2 start timestamp"),
                         &record.value,
                     )
@@ -2600,9 +2600,9 @@ async fn collect_hash_snapshots(
                     continue;
                 }
                 let (decision, terminal) = match descriptor.decision {
-                    crabka_pgexec::PrimaryTxnDecision::Pending => ("pending", false),
-                    crabka_pgexec::PrimaryTxnDecision::Aborted => ("aborted", true),
-                    crabka_pgexec::PrimaryTxnDecision::Committed(_) => ("committed", true),
+                    krabka_pgexec::PrimaryTxnDecision::Pending => ("pending", false),
+                    krabka_pgexec::PrimaryTxnDecision::Aborted => ("aborted", true),
+                    krabka_pgexec::PrimaryTxnDecision::Committed(_) => ("committed", true),
                 };
                 if !terminal {
                     continue;
@@ -2652,34 +2652,34 @@ async fn collect_hash_snapshots(
 
 fn decode_hash_physical_record(
     range_id: u32,
-    record: &crabka_gres_ranges::DurableRecord,
+    record: &krabka_gres_ranges::DurableRecord,
 ) -> Result<HashPhysicalPayloadRow, String> {
-    let crabka_pgkv::key::KeyClass::HashPrimaryVersion {
+    let krabka_pgkv::key::KeyClass::HashPrimaryVersion {
         table_id,
         bucket,
         rowid,
         version,
-    } = crabka_pgkv::key::classify_key(&record.key)
+    } = krabka_pgkv::key::classify_key(&record.key)
     else {
         return Err("durable record is not a hash primary version".into());
     };
-    let tuple = crabka_pgmvcc::version::decode_ts_tuple(&record.value)
+    let tuple = krabka_pgmvcc::version::decode_ts_tuple(&record.value)
         .map_err(|error| format!("decode timestamp tuple: {error}"))?;
-    let crabka_pgmvcc::version::TsVersionState::Committed { commit_ts } = tuple.state else {
+    let krabka_pgmvcc::version::TsVersionState::Committed { commit_ts } = tuple.state else {
         return Err(format!(
             "hash primary version is not committed: {:?}",
             tuple.state
         ));
     };
-    let Some(crabka_pgtypes::Datum::Int4(logical_id)) = tuple.row.first() else {
+    let Some(krabka_pgtypes::Datum::Int4(logical_id)) = tuple.row.first() else {
         return Err("hash tuple does not start with an int4 hash value".into());
     };
     let seq = tuple.row.get(1).and_then(|value| match value {
-        crabka_pgtypes::Datum::Int4(value) => Some(*value),
+        krabka_pgtypes::Datum::Int4(value) => Some(*value),
         _ => None,
     });
     let checksum = tuple.row.get(2).and_then(|value| match value {
-        crabka_pgtypes::Datum::Text(value) => Some(value.clone()),
+        krabka_pgtypes::Datum::Text(value) => Some(value.clone()),
         _ => None,
     });
     Ok(HashPhysicalPayloadRow {
@@ -2783,19 +2783,19 @@ async fn direct_ordinary_physical_rows(
     range_id: u32,
     routing_table_id: u64,
 ) -> Vec<OrdinaryPhysicalRow> {
-    let scan = crabka_gres_ranges::transport::ScanRangeReq {
+    let scan = krabka_gres_ranges::transport::ScanRangeReq {
         range_id: RangeId::new(range_id),
         table_name: format!("live_ledger{routing_table_id}"),
-        interval: crabka_gres_ranges::transport::WireRowInterval {
+        interval: krabka_gres_ranges::transport::WireRowInterval {
             start: None,
             end: None,
         },
-        local_snapshot: crabka_gres_ranges::transport::WireSnapshot {
+        local_snapshot: krabka_gres_ranges::transport::WireSnapshot {
             xmin: 1,
             xmax: u64::MAX,
             xip: vec![],
         },
-        global_snapshot: crabka_gres_ranges::transport::WireSnapshot {
+        global_snapshot: krabka_gres_ranges::transport::WireSnapshot {
             xmin: 1,
             xmax: u64::MAX,
             xip: vec![],
@@ -2803,8 +2803,8 @@ async fn direct_ordinary_physical_rows(
         own_xid: None,
         read_ts: Some(u64::MAX),
         own_start_ts: None,
-        predicate: crabka_gres_ranges::transport::WirePredicatePushdown::FullScan,
-        projection: crabka_gres_ranges::transport::WireProjectionPushdown::All,
+        predicate: krabka_gres_ranges::transport::WirePredicatePushdown::FullScan,
+        projection: krabka_gres_ranges::transport::WireProjectionPushdown::All,
         partial_aggregate: None,
         top_k: None,
     };
@@ -2812,23 +2812,23 @@ async fn direct_ordinary_physical_rows(
         .operator_control_client()
         .call(
             &system.range_endpoint(range_id),
-            &crabka_gres_ranges::RangeRequest::ScanRange(scan),
+            &krabka_gres_ranges::RangeRequest::ScanRange(scan),
         )
         .await
         .expect("direct terminal payload scan");
-    let crabka_gres_ranges::RangeResponse::ScanRange(response) = response else {
+    let krabka_gres_ranges::RangeResponse::ScanRange(response) = response else {
         panic!("unexpected direct payload response {response:?}");
     };
     response
         .rows
         .into_iter()
         .map(|row| {
-            let (_, _, values) = crabka_pgmvcc::version::decode_tuple(&row.tuple)
+            let (_, _, values) = krabka_pgmvcc::version::decode_tuple(&row.tuple)
                 .expect("decode terminal payload tuple");
             let [
-                crabka_pgtypes::Datum::Int4(id),
-                crabka_pgtypes::Datum::Int4(seq),
-                crabka_pgtypes::Datum::Text(checksum),
+                krabka_pgtypes::Datum::Int4(id),
+                krabka_pgtypes::Datum::Int4(seq),
+                krabka_pgtypes::Datum::Text(checksum),
             ] = values.as_slice()
             else {
                 panic!("unexpected terminal payload tuple {values:?}");
@@ -2890,19 +2890,19 @@ async fn direct_hash_payload_rows(
     range_id: u32,
     routing_table_id: u64,
 ) -> Vec<PhysicalPayloadRow> {
-    let scan = crabka_gres_ranges::transport::ScanRangeReq {
+    let scan = krabka_gres_ranges::transport::ScanRangeReq {
         range_id: RangeId::new(range_id),
         table_name: format!("live_ledger{routing_table_id}"),
-        interval: crabka_gres_ranges::transport::WireRowInterval {
+        interval: krabka_gres_ranges::transport::WireRowInterval {
             start: None,
             end: None,
         },
-        local_snapshot: crabka_gres_ranges::transport::WireSnapshot {
+        local_snapshot: krabka_gres_ranges::transport::WireSnapshot {
             xmin: 1,
             xmax: u64::MAX,
             xip: vec![],
         },
-        global_snapshot: crabka_gres_ranges::transport::WireSnapshot {
+        global_snapshot: krabka_gres_ranges::transport::WireSnapshot {
             xmin: 1,
             xmax: u64::MAX,
             xip: vec![],
@@ -2910,8 +2910,8 @@ async fn direct_hash_payload_rows(
         own_xid: None,
         read_ts: Some(u64::MAX),
         own_start_ts: None,
-        predicate: crabka_gres_ranges::transport::WirePredicatePushdown::FullScan,
-        projection: crabka_gres_ranges::transport::WireProjectionPushdown::All,
+        predicate: krabka_gres_ranges::transport::WirePredicatePushdown::FullScan,
+        projection: krabka_gres_ranges::transport::WireProjectionPushdown::All,
         partial_aggregate: None,
         top_k: None,
     };
@@ -2919,23 +2919,23 @@ async fn direct_hash_payload_rows(
         .operator_control_client()
         .call(
             &system.range_endpoint(range_id),
-            &crabka_gres_ranges::RangeRequest::ScanRange(scan),
+            &krabka_gres_ranges::RangeRequest::ScanRange(scan),
         )
         .await
         .expect("direct terminal hash payload scan");
-    let crabka_gres_ranges::RangeResponse::ScanRange(response) = response else {
+    let krabka_gres_ranges::RangeResponse::ScanRange(response) = response else {
         panic!("unexpected direct hash payload response {response:?}");
     };
     response
         .rows
         .into_iter()
         .map(|row| {
-            let (_, _, values) = crabka_pgmvcc::version::decode_tuple(&row.tuple)
+            let (_, _, values) = krabka_pgmvcc::version::decode_tuple(&row.tuple)
                 .expect("decode terminal hash payload tuple");
             let [
-                crabka_pgtypes::Datum::Int4(id),
-                crabka_pgtypes::Datum::Int4(seq),
-                crabka_pgtypes::Datum::Text(checksum),
+                krabka_pgtypes::Datum::Int4(id),
+                krabka_pgtypes::Datum::Int4(seq),
+                krabka_pgtypes::Datum::Text(checksum),
             ] = values.as_slice()
             else {
                 panic!("unexpected terminal hash payload tuple {values:?}");
@@ -3072,7 +3072,7 @@ struct TerminalOperationEvidence {
 }
 
 fn terminal_operation_evidence(
-    operation: &crabka_gres_control::SplitOperationRecord,
+    operation: &krabka_gres_control::SplitOperationRecord,
 ) -> TerminalOperationEvidence {
     TerminalOperationEvidence {
         manifest_key: operation
@@ -3315,9 +3315,9 @@ async fn verify_terminal_payload(
 }
 
 struct VerifiedMarkers {
-    markers: Vec<crabka_gres_ranges::transport::WireInDoubtMarker>,
-    left: Vec<crabka_gres_ranges::transport::WireInDoubtMarker>,
-    right: Vec<crabka_gres_ranges::transport::WireInDoubtMarker>,
+    markers: Vec<krabka_gres_ranges::transport::WireInDoubtMarker>,
+    left: Vec<krabka_gres_ranges::transport::WireInDoubtMarker>,
+    right: Vec<krabka_gres_ranges::transport::WireInDoubtMarker>,
     marker_digest: String,
 }
 
@@ -3552,7 +3552,7 @@ fn build_hash_evidence(input: HashEvidenceInput<'_>) -> Option<HashEvidence> {
 }
 
 struct VerifiedTerminalTopology {
-    operation: crabka_gres_control::SplitOperationRecord,
+    operation: krabka_gres_control::SplitOperationRecord,
     tenant: TenantRecord,
     hash_after_snapshots: Vec<HashSnapshotEvidence>,
     hash_after_transactions: Vec<HashTransactionEvidence>,
@@ -3663,7 +3663,7 @@ async fn verify_terminal_environment(
     input: &TerminalEnvironmentInput<'_>,
 ) -> VerifiedTerminalEnvironment {
     let mut admin =
-        crabka_client_admin::AdminClient::connect(&[input.system.bootstrap().to_owned()])
+        krabka_client_admin::AdminClient::connect(&[input.system.bootstrap().to_owned()])
             .await
             .expect("terminal topic admin");
     let topics = admin
@@ -3830,7 +3830,7 @@ async fn verify_completed_split_case(input: VerifyCompletedSplitCase<'_>) -> Spl
     })
     .await;
     let marker_identity =
-        |marker: &crabka_gres_ranges::transport::WireInDoubtMarker| MarkerIdentityEvidence {
+        |marker: &krabka_gres_ranges::transport::WireInDoubtMarker| MarkerIdentityEvidence {
             transaction_id: marker.transaction_id,
             table_id: marker.key.table_id,
             bucket: marker.key.bucket,
@@ -4217,17 +4217,17 @@ async fn authorize_hash_response_recovery(
         tokio::time::sleep(Duration::from_millis(25)).await;
     }
 
-    let start_key = crabka_pgkv::key::table_prefix(50);
+    let start_key = krabka_pgkv::key::table_prefix(50);
     let mut end_key = start_key.clone();
     *end_key.last_mut().expect("table prefix") += 1;
     let expected_logical_id = 17_i32;
-    let expected_bucket = crabka_pgkv::key::hash_bucket(&expected_logical_id.to_be_bytes(), 16)
+    let expected_bucket = krabka_pgkv::key::hash_bucket(&expected_logical_id.to_be_bytes(), 16)
         .expect("valid hash response-loss bucket");
     loop {
         let mut matches = Vec::new();
         for range_id in [0, 1] {
             let response = system
-                .inspect_durable_records(crabka_gres_ranges::InspectDurableRecordsReq {
+                .inspect_durable_records(krabka_gres_ranges::InspectDurableRecordsReq {
                     tenant: system.tenant().to_owned(),
                     range_id: RangeId::new(range_id),
                     generation: 0,
@@ -4450,18 +4450,18 @@ async fn prepare_split_system(
     };
     let sentinel_topic = format!("g8-sentinel-{identity}");
     let mut sentinel_admin =
-        crabka_client_admin::AdminClient::connect(&[system.bootstrap().to_owned()])
+        krabka_client_admin::AdminClient::connect(&[system.bootstrap().to_owned()])
             .await
             .expect("sentinel admin");
     let sentinel_outcomes = sentinel_admin
         .create_topics(
-            &[crabka_client_admin::CreateTopicSpec {
+            &[krabka_client_admin::CreateTopicSpec {
                 name: sentinel_topic.clone(),
                 partitions: 1,
                 replicas: 1,
                 configs: BTreeMap::new(),
             }],
-            crabka_units::secs(30),
+            krabka_units::secs(30),
         )
         .await
         .expect("create sentinel topic");
@@ -4636,23 +4636,23 @@ async fn prepare_split_workload(
     let mut command = tokio::process::Command::new("bash");
     command
         .args(["-c", split_payload_workload_script()])
-        .env("CRABKA_G8_WORKLOAD_STOP", &stop_path)
-        .env("CRABKA_G8_WORKLOAD_LEDGER", &ledger_path)
-        .env("CRABKA_G8_WORKLOAD_ERRORS", &errors_path)
-        .env("CRABKA_G8_RESPONSE_LOSS", &response_loss)
-        .env("CRABKA_G8_RAW_RECOVERY", &raw_recovery)
+        .env("KRABKA_G8_WORKLOAD_STOP", &stop_path)
+        .env("KRABKA_G8_WORKLOAD_LEDGER", &ledger_path)
+        .env("KRABKA_G8_WORKLOAD_ERRORS", &errors_path)
+        .env("KRABKA_G8_RESPONSE_LOSS", &response_loss)
+        .env("KRABKA_G8_RAW_RECOVERY", &raw_recovery)
         .env(
-            "CRABKA_G8_RECOVERY_TIMEOUT",
+            "KRABKA_G8_RECOVERY_TIMEOUT",
             if workload_mode == SplitWorkload::Ordinary {
                 "1s"
             } else {
                 "10s"
             },
         )
-        .env("CRABKA_G8_INSERT_TIMEOUT", WORKLOAD_INSERT_TIMEOUT)
+        .env("KRABKA_G8_INSERT_TIMEOUT", WORKLOAD_INSERT_TIMEOUT)
         .env("PGCONNECT_TIMEOUT", "3")
         .env(
-            "CRABKA_G8_WORKLOAD_SLEEP",
+            "KRABKA_G8_WORKLOAD_SLEEP",
             workload_mode.inter_insert_delay(),
         )
         .env("PGHOST", "127.0.0.1")
@@ -4851,7 +4851,7 @@ async fn restart_split_source(input: RestartSplitSource<'_>) -> RestartSplitOutc
     )
     .with_journal_cas_after(receipt_fault_receipt(input.point), Arc::clone(input.faults));
     input.retirement.inner =
-        crabka_client_admin::AdminClient::connect(&[input.system.bootstrap().to_owned()])
+        krabka_client_admin::AdminClient::connect(&[input.system.bootstrap().to_owned()])
             .await
             .expect("retirement admin restart");
     RestartSplitOutcome {
@@ -4900,7 +4900,7 @@ async fn prepare_split_control(
     let predecessor_topic = format!("__gres_wal.{}.r1", system.tenant());
     let delete_ledger = Arc::new(std::sync::Mutex::new(DeleteLedger::default()));
     let retirement = CountingRetirementAdmin {
-        inner: crabka_client_admin::AdminClient::connect(&[system.bootstrap().to_owned()])
+        inner: krabka_client_admin::AdminClient::connect(&[system.bootstrap().to_owned()])
             .await
             .expect("retirement admin"),
         expected_topic: predecessor_topic.clone(),
@@ -5080,7 +5080,7 @@ async fn drive_split_operation(mut input: SplitDriveInput<'_>) -> SplitDriveOutc
                     &control,
                     &mut retirement,
                     &tenant_name,
-                    crabka_units::secs(30),
+                    krabka_units::secs(30),
                 )
                 .await;
                 let current = load_operation(input.system, input.operation_id).await;
@@ -5276,7 +5276,7 @@ async fn run_real_split_crash_case(point: SplitKillPoint, workload_mode: SplitWo
             new_source_process_group_alive: false,
         }
     );
-    if let Some(path) = std::env::var_os("CRABKA_G8_SPLIT_CRASH_EVIDENCE") {
+    if let Some(path) = std::env::var_os("KRABKA_G8_SPLIT_CRASH_EVIDENCE") {
         let path = PathBuf::from(path);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).expect("evidence directory");
@@ -5288,14 +5288,14 @@ async fn run_real_split_crash_case(point: SplitKillPoint, workload_mode: SplitWo
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn real_process_split_crash_anywhere() {
-    if std::env::var_os("CRABKA_G8_SPLIT_CRASH").is_none() {
+    if std::env::var_os("KRABKA_G8_SPLIT_CRASH").is_none() {
         return;
     }
     let point = SplitKillPoint::parse(
-        &std::env::var("CRABKA_G8_SPLIT_KILL_POINT").expect("Split kill point"),
+        &std::env::var("KRABKA_G8_SPLIT_KILL_POINT").expect("Split kill point"),
     )
     .expect("known Split kill point");
-    let workload = SplitWorkload::parse(std::env::var("CRABKA_G8_SPLIT_WORKLOAD").ok().as_deref())
+    let workload = SplitWorkload::parse(std::env::var("KRABKA_G8_SPLIT_WORKLOAD").ok().as_deref())
         .expect("known Split workload");
     Box::pin(run_real_split_crash_case(point, workload)).await;
 }

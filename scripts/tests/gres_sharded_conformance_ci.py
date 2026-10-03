@@ -22,7 +22,7 @@ def validate(
         "services:",
         "postgres:",
         "postgres:18.4",
-        "CRABKA_GRES_SHARDED_CONFORMANCE_MODE: live",
+        "KRABKA_GRES_SHARDED_CONFORMANCE_MODE: live",
         "./scripts/gres-sharded-conformance.sh",
         "if: ${{ !cancelled() }}",
         "target/gres-sharded-conformance-artifacts",
@@ -33,10 +33,10 @@ def validate(
 
     required_script = [
         "cargo build --locked",
-        "crabka-gres-conformance",
+        "krabka-gres-conformance",
         "--subject-sharded-ddl",
         "--baseline crates/gres-conformance/sharded-baseline.json",
-        "if ! ./target/debug/crabka-gres-conformance",
+        "if ! ./target/debug/krabka-gres-conformance",
         "--ranges 0,0:250",
         "scripts/gres-sharded-evidence.py",
         '"mode": "live"',
@@ -48,8 +48,8 @@ def validate(
     namespace = {"__name__": "gres_sharded_evidence_test"}
     exec(compile(evidence_text, "gres-sharded-evidence.py", "exec"), namespace)
     summarize = namespace["summarize_lines"]
-    # gres emits structured JSON (crabka_logfmt, installed by
-    # crabka_telemetry::init). `table_ids` arrives as the `Debug` rendering of
+    # gres emits structured JSON (krabka_logfmt, installed by
+    # krabka_telemetry::init). `table_ids` arrives as the `Debug` rendering of
     # a `BTreeSet<u32>`, hence the braces inside the string. The first line is
     # wrapped in ANSI escapes so the normalization step stays load-bearing:
     # without it the line is not valid JSON and the range-0 evidence vanishes.
@@ -119,8 +119,8 @@ mutations = [
         "live mode",
         {
             "workflow_text": workflow.replace(
-                "CRABKA_GRES_SHARDED_CONFORMANCE_MODE: live",
-                "CRABKA_GRES_SHARDED_CONFORMANCE_MODE: static",
+                "KRABKA_GRES_SHARDED_CONFORMANCE_MODE: live",
+                "KRABKA_GRES_SHARDED_CONFORMANCE_MODE: static",
                 1,
             )
         },
@@ -157,8 +157,8 @@ mutations = [
         "parity failure propagation",
         {
             "script_text": script.replace(
-                "if ! ./target/debug/crabka-gres-conformance",
-                "./target/debug/crabka-gres-conformance",
+                "if ! ./target/debug/krabka-gres-conformance",
+                "./target/debug/krabka-gres-conformance",
                 1,
             )
         },

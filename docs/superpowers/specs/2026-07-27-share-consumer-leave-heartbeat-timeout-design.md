@@ -24,7 +24,7 @@ Zero, fractional milliseconds, and durations above `u64::MAX` milliseconds are
 rejected. Zero does not disable the leave heartbeat.
 
 The type derives `Clone`, `Copy`, `Debug`, `Eq`, and `PartialEq`.
-`crabka-client-consumer` already depends on the workspace `refined_type`
+`krabka-client-consumer` already depends on the workspace `refined_type`
 dependency. This slice adds no dependency and does not share a timeout type or
 validator with another client protocol.
 
@@ -90,7 +90,7 @@ The stalled-broker regression test gives the mocked client a request timeout
 longer than its outer guard, so replacing the configured deadline with the old
 five-second literal fails deterministically.
 
-Final gates run the complete `crabka-client-consumer` all-target suite under
+Final gates run the complete `krabka-client-consumer` all-target suite under
 the locked dependency graph, strict all-target Clippy, nightly formatting, and
 `git diff --check`. `Cargo.lock` must remain unchanged. The runtime-value
 scanner and focused ShareConsumer search are recorded in

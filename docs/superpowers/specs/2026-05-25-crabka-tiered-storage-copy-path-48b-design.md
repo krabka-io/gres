@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-25
 **Status:** Slice design. Follows slice 48a (foundation crate
-`crabka-remote-storage`). Part of the KIP-405 umbrella
+`krabka-remote-storage`). Part of the KIP-405 umbrella
 (`docs/superpowers/specs/2026-05-25-crabka-tiered-storage-roadmap-design.md`).
 
 ## Goal
@@ -21,7 +21,7 @@ read path on `Fetch` are deferred to 48c / 48d.
 The copy subsystem is a self-contained vertical: a segment is durably
 offloaded and tracked in remote metadata (`CopySegmentStarted` →
 `CopySegmentFinished`), observable and testable on its own. Deciding
-*when* a local copy is safe to delete is a separate, additive concern
+_when_ a local copy is safe to delete is a separate, additive concern
 (48c). No dead code: the per-topic `remote.storage.enable` Kafka config
 and the broker-global enablement are both consumed by the task this slice
 adds.
@@ -31,7 +31,7 @@ adds.
 - **Per-topic** `remote.storage.enable` (Kafka-standard topic config) →
   new `LogConfig.remote_storage_enable: bool` (default `false`, Kafka's
   default). Threaded through `config_keys::{validate_topic_config,
-  is_recognized, apply_to_log_config}`.
+is_recognized, apply_to_log_config}`.
 - **Broker-global** `BrokerConfig.remote_log_storage_dir: Option<PathBuf>`.
   `Some(dir)` enables tiered storage and roots the `LocalTieredStorage`;
   `None` (default) leaves it off. Collapses Kafka's
@@ -45,8 +45,8 @@ later slices). Both are constructed once at `Broker::start` when
 
 ## Log-crate surface (new)
 
-`crabka_log` learns to describe its sealed segments without depending on
-`crabka-remote-storage` (layering preserved):
+`krabka_log` learns to describe its sealed segments without depending on
+`krabka-remote-storage` (layering preserved):
 
 ```rust
 pub struct SegmentExport {
@@ -142,7 +142,7 @@ copy throttling / parallelism (one segment at a time per tick).
 
 - `cargo fmt --all --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test -p crabka-log -p crabka-remote-storage -p crabka-broker`
+- `cargo test -p krabka-log -p krabka-remote-storage -p krabka-broker`
 - `cargo build --workspace`
 - No CRD drift.
 </content>

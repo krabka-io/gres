@@ -1,5 +1,5 @@
 [package]
-name = "crabka-raft"
+name = "krabka-raft"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -9,7 +9,7 @@ rust-version.workspace = true
 description = "Metadata KRaft quorum (KIP-595 KraftController) for Crabka"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-raft"
+documentation = "https://docs.rs/krabka-raft"
 readme = "README.md"
 keywords = ["kafka", "raft", "kraft", "consensus", "crabka"]
 categories = ["algorithms", "database-implementations"]
@@ -19,21 +19,21 @@ workspace = true
 
 [features]
 # Promotes the deterministic KRaft consensus simulator into the library with
-# trace recording, so `crabka-docgen` can run it in-process and render failure
+# trace recording, so `krabka-docgen` can run it in-process and render failure
 # scenarios. Off by default — it carries no production code path. Re-exported
-# from the leaf core crate as `crabka_raft::scenarios`.
-scenarios = ["crabka-kraft-core/sim"]
+# from the leaf core crate as `krabka_raft::scenarios`.
+scenarios = ["krabka-kraft-core/sim"]
 
 [dependencies]
 assert2 = { workspace = true }
-crabka-kraft-core = { version = "0.4.1", path = "../kraft-core" }
-crabka-ids = { version = "0.4.1", path = "../ids" }
-crabka-metadata = { version = "0.4.1", path = "../metadata" }
-crabka-log = { version = "0.4.1", path = "../log" }
-crabka-protocol = { version = "0.4.1", path = "../protocol", default-features = false }
-crabka-verified = { version = "0.4.1", path = "../verified" }
-crabka-client-core = { version = "0.4.1", path = "../client-core" }
-crabka-units = { workspace = true }
+krabka-kraft-core = { version = "0.4.2", path = "../kraft-core" }
+krabka-ids = { version = "0.4.2", path = "../ids" }
+krabka-metadata = { version = "0.4.2", path = "../metadata" }
+krabka-log = { version = "0.4.2", path = "../log" }
+krabka-protocol = { version = "0.4.2", path = "../protocol", default-features = false }
+krabka-verified = { version = "0.4.2", path = "../verified" }
+krabka-client-core = { version = "0.4.2", path = "../client-core" }
+krabka-units = { workspace = true }
 refined_type = { workspace = true }
 async-trait = { workspace = true }
 wincode = { workspace = true }
@@ -48,7 +48,7 @@ tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time",
 tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
 uuid = { workspace = true }
-crabka-security = { workspace = true }
+krabka-security = { workspace = true }
 
 [dev-dependencies]
 mockall = { workspace = true }

@@ -12,11 +12,11 @@
 //! unchanged: a caller uses `RecordsPayload` methods such as `encoded_len` in
 //! place of the `RecordBatch` methods. Legacy payloads stay as raw [`Bytes`]
 //! and round-trip verbatim. The
-//! [`crabka-records-legacy`](../../records_legacy/index.html) crate supplies
+//! [`krabka-records-legacy`](../../records_legacy/index.html) crate supplies
 //! the codec when an old client appears on the wire.
 
 use bytes::{Buf, BufMut, Bytes};
-use crabka_compression::RecordDecompressionPolicy;
+use krabka_compression::RecordDecompressionPolicy;
 
 use crate::records::{
     RecordsError, borrowed::RecordBatch as RecordBatchBorrowed, owned::RecordBatch,
@@ -31,7 +31,7 @@ pub enum RecordsPayload {
     /// parsing. The fetch pass-through path produces this variant.
     Raw(Bytes),
     /// Opaque pre-v2 bytes, a v0 or v1 `MessageSet`. Decode them with
-    /// `crabka_records_legacy::decode_message_set`.
+    /// `krabka_records_legacy::decode_message_set`.
     Legacy(Bytes),
     /// Zero-copy fetch (Increments D + E): the records run stays in segment
     /// `.log` files. The broker `sendfile(2)`s it straight to a plaintext
@@ -429,8 +429,8 @@ fn looks_like_v2(bytes: &[u8]) -> bool {
 mod tests {
 
     use bytes::BytesMut;
-    use crabka_compression::{CompressionError, CompressionType, RecordDecompressionPolicy};
-    use crabka_units::{bytes, fraction};
+    use krabka_compression::{CompressionError, CompressionType, RecordDecompressionPolicy};
+    use krabka_units::{bytes, fraction};
 
     use super::*;
     use crate::records::{Record, RecordBatch};

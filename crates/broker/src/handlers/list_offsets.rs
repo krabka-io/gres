@@ -1,7 +1,7 @@
 //! `ListOffsets` (`api_key=2`). The handler resolves the EARLIEST / LATEST
 //! sentinels with each partition's log. For tiered topics (KIP-405),
 //! EARLIEST and by-timestamp lookups consult the
-//! [`RemoteLogMetadataManager`](crabka_remote_storage::RemoteLogMetadataManager).
+//! [`RemoteLogMetadataManager`](krabka_remote_storage::RemoteLogMetadataManager).
 //! Local-retention deletes some offsets locally, but they still live in the
 //! remote tier, and this keeps them visible. KIP-1005's latest-tiered (`-5`)
 //! and KIP-1023's earliest-pending-upload (`-6`) sentinels read the same
@@ -16,8 +16,8 @@
 use std::{future::Future, time::Duration};
 
 use bytes::Bytes;
-use crabka_metadata::{AclOperation, ResourceType};
-use crabka_protocol::{
+use krabka_metadata::{AclOperation, ResourceType};
+use krabka_protocol::{
     Decode,
     owned::{
         list_offsets_request::ListOffsetsRequest,
@@ -62,8 +62,8 @@ where
 
 async fn await_remote<T>(
     timeout: Duration,
-    future: impl Future<Output = Result<T, crabka_remote_storage::RemoteStorageError>>,
-) -> Option<Result<T, crabka_remote_storage::RemoteStorageError>> {
+    future: impl Future<Output = Result<T, krabka_remote_storage::RemoteStorageError>>,
+) -> Option<Result<T, krabka_remote_storage::RemoteStorageError>> {
     tokio::time::timeout(timeout, future).await.ok()
 }
 
@@ -197,7 +197,7 @@ pub(crate) async fn handle(
 async fn resolve_partition(
     broker: &Broker,
     topic_name: &str,
-    request: crabka_protocol::owned::list_offsets_request::ListOffsetsPartition,
+    request: krabka_protocol::owned::list_offsets_request::ListOffsetsPartition,
     version: i16,
     remote_timeout: Duration,
 ) -> ListOffsetsPartitionResponse {
@@ -214,7 +214,7 @@ async fn resolve_partition(
     }
     let Some(partition) = broker
         .partitions
-        .get(topic_name, crabka_ids::PartitionIndex(index))
+        .get(topic_name, krabka_ids::PartitionIndex(index))
     else {
         response.error_code = codes::UNKNOWN_TOPIC_OR_PARTITION;
         return response;
@@ -244,7 +244,7 @@ async fn resolve_partition(
             let mut earliest = local_start;
             if let (Some(reader), Some(id)) = (broker.remote_reader.as_ref(), remote_topic_id) {
                 let topic_partition =
-                    crabka_remote_storage::TopicIdPartition::new(id, topic_name.to_string(), index);
+                    krabka_remote_storage::TopicIdPartition::new(id, topic_name.to_string(), index);
                 match await_remote(remote_timeout, reader.earliest_offset(&topic_partition)).await {
                     None => return error_response(index, codes::REQUEST_TIMED_OUT),
                     Some(Ok(Some(remote_start))) => earliest = earliest.min(remote_start),
@@ -275,7 +275,7 @@ async fn resolve_partition(
         LATEST_TIERED_TIMESTAMP => {
             if let Some((reader, id)) = broker.remote_reader.as_ref().zip(remote_topic_id) {
                 let topic_partition =
-                    crabka_remote_storage::TopicIdPartition::new(id, topic_name.to_string(), index);
+                    krabka_remote_storage::TopicIdPartition::new(id, topic_name.to_string(), index);
                 match await_remote(
                     remote_timeout,
                     reader.latest_tiered_offset(&topic_partition),
@@ -301,7 +301,7 @@ async fn resolve_partition(
         EARLIEST_PENDING_UPLOAD_TIMESTAMP => {
             if let Some((reader, id)) = broker.remote_reader.as_ref().zip(remote_topic_id) {
                 let topic_partition =
-                    crabka_remote_storage::TopicIdPartition::new(id, topic_name.to_string(), index);
+                    krabka_remote_storage::TopicIdPartition::new(id, topic_name.to_string(), index);
                 match await_remote(
                     remote_timeout,
                     reader.latest_tiered_offset(&topic_partition),
@@ -368,7 +368,7 @@ async fn resolve_partition(
 fn leader_epoch_for_offset(partition: &crate::partition::Partition, offset: i64) -> i32 {
     let log = partition.log.lock().expect("log mutex poisoned");
     log.epoch_checkpoint()
-        .epoch_for_offset(crabka_log::Offset(offset))
+        .epoch_for_offset(krabka_log::Offset(offset))
         .map_or(-1, |epoch| epoch.0)
 }
 
@@ -382,7 +382,7 @@ async fn resolve_timestamp_offset(
     remote_timeout: Duration,
 ) -> Option<(i64, i64)> {
     if let (Some(reader), Some(id)) = (broker.remote_reader.as_ref(), topic_id) {
-        let topic_partition = crabka_remote_storage::TopicIdPartition::new(
+        let topic_partition = krabka_remote_storage::TopicIdPartition::new(
             id,
             topic_name.to_string(),
             partition_index,
@@ -415,7 +415,7 @@ mod tests {
 
     use assert2::assert;
     use bytes::BytesMut;
-    use crabka_protocol::{
+    use krabka_protocol::{
         Encode,
         owned::{
             create_topics_request::{CreatableTopic, CreatableTopicConfig, CreateTopicsRequest},
@@ -433,8 +433,8 @@ mod tests {
 
     use crate::test_support::start_broker_with_authorizer_no_audit as start_broker;
 
-    async fn client_for(broker: &crate::broker::BrokerHandle) -> crabka_client_core::Client {
-        crabka_client_core::Client::builder()
+    async fn client_for(broker: &crate::broker::BrokerHandle) -> krabka_client_core::Client {
+        krabka_client_core::Client::builder()
             .bootstrap(broker.listen_addr().to_string())
             .client_id("list-offsets-test")
             .build()
@@ -443,7 +443,7 @@ mod tests {
     }
 
     async fn create_topic(
-        client: &crabka_client_core::Client,
+        client: &krabka_client_core::Client,
         name: &str,
         configs: Vec<CreatableTopicConfig>,
     ) {
@@ -465,7 +465,7 @@ mod tests {
     }
 
     async fn list_one(
-        client: &crabka_client_core::Client,
+        client: &krabka_client_core::Client,
         topic: &str,
         timestamp: i64,
     ) -> ListOffsetsPartitionResponse {
@@ -574,11 +574,11 @@ mod tests {
 
     #[test]
     fn remote_timeout_resolves_dynamic_broker_over_cluster_default() {
-        use crabka_metadata::{BrokerConfigRecord, MetadataRecord, NodeId};
+        use krabka_metadata::{BrokerConfigRecord, MetadataRecord, NodeId};
 
-        let mut image = crabka_metadata::MetadataImage::new(uuid::Uuid::nil());
+        let mut image = krabka_metadata::MetadataImage::new(uuid::Uuid::nil());
         for (node_id, value) in [
-            (crabka_metadata::DEFAULT_BROKER_CONFIG_NODE_ID, "400"),
+            (krabka_metadata::DEFAULT_BROKER_CONFIG_NODE_ID, "400"),
             (NodeId(1), "250"),
         ] {
             image.apply(&MetadataRecord::V1BrokerConfig(BrokerConfigRecord {
@@ -602,7 +602,7 @@ mod tests {
     async fn remote_work_expires_at_the_request_deadline() {
         let result = await_remote(
             Duration::from_millis(1),
-            std::future::pending::<Result<(), crabka_remote_storage::RemoteStorageError>>(),
+            std::future::pending::<Result<(), krabka_remote_storage::RemoteStorageError>>(),
         )
         .await;
         assert!(result.is_none());
@@ -687,8 +687,8 @@ mod tests {
     async fn tiered_sentinels_return_finished_remote_frontier_and_pending_epoch() {
         use std::collections::BTreeMap;
 
-        use crabka_ids::LeaderEpoch;
-        use crabka_remote_storage::{
+        use krabka_ids::LeaderEpoch;
+        use krabka_remote_storage::{
             RemoteLogSegmentDetails, RemoteLogSegmentId, RemoteLogSegmentMetadata,
             RemoteLogSegmentMetadataUpdate, RemoteLogSegmentState, TopicIdPartition,
         };
@@ -842,9 +842,9 @@ mod tests {
         use std::collections::BTreeMap;
 
         use bytes::Bytes;
-        use crabka_ids::LeaderEpoch;
-        use crabka_protocol::records::{Record, RecordBatch};
-        use crabka_remote_storage::{
+        use krabka_ids::LeaderEpoch;
+        use krabka_protocol::records::{Record, RecordBatch};
+        use krabka_remote_storage::{
             LogSegmentData, RemoteLogSegmentDetails, RemoteLogSegmentId, RemoteLogSegmentMetadata,
             RemoteLogSegmentMetadataUpdate, RemoteLogSegmentState, TopicIdPartition,
         };
@@ -1013,16 +1013,16 @@ mod tests {
 
     #[test]
     fn topic_describe_denied_yields_topic_authorization_failed_rows() {
-        use crabka_protocol::owned::list_offsets_response::{
+        use krabka_protocol::owned::list_offsets_response::{
             self, ListOffsetsPartitionResponse, ListOffsetsResponse, ListOffsetsTopicResponse,
         };
 
         let authorizer =
             crate::authorizer::SimpleAclAuthorizer::new(std::collections::HashSet::new());
-        let image = crabka_metadata::MetadataImage::new(uuid::Uuid::nil());
-        let principal = crabka_security::Principal {
+        let image = krabka_metadata::MetadataImage::new(uuid::Uuid::nil());
+        let principal = krabka_security::Principal {
             name: "ANONYMOUS".into(),
-            auth_method: crabka_security::AuthMethod::Anonymous,
+            auth_method: krabka_security::AuthMethod::Anonymous,
             groups: vec![],
         };
         let peer = std::net::SocketAddr::from(([127, 0, 0, 1], 9092));
@@ -1072,7 +1072,7 @@ mod tests {
 
     #[tokio::test]
     async fn denied_handler_preserves_topic_and_partition_response_fields() {
-        let version = crabka_protocol::owned::list_offsets_response::MAX_VERSION;
+        let version = krabka_protocol::owned::list_offsets_response::MAX_VERSION;
         let (broker_handle, _dir) = start_broker(Arc::new(DenyAll)).await;
         let broker = broker_handle.broker_arc_for_test();
         let p = principal("alice");
@@ -1115,16 +1115,16 @@ mod tests {
             timestamp: -1,
             offset: -1,
             leader_epoch: -1,
-            unknown_tagged_fields: crabka_protocol::UnknownTaggedFields(vec![]),
+            unknown_tagged_fields: krabka_protocol::UnknownTaggedFields(vec![]),
         };
         let expected = ListOffsetsResponse {
             throttle_time_ms: 0,
             topics: vec![ListOffsetsTopicResponse {
                 name: "orders".to_string(),
                 partitions: vec![denied_row(0), denied_row(2)],
-                unknown_tagged_fields: crabka_protocol::UnknownTaggedFields(vec![]),
+                unknown_tagged_fields: krabka_protocol::UnknownTaggedFields(vec![]),
             }],
-            unknown_tagged_fields: crabka_protocol::UnknownTaggedFields(vec![]),
+            unknown_tagged_fields: krabka_protocol::UnknownTaggedFields(vec![]),
         };
         assert!(resp == expected, "{resp:?}");
         broker_handle.shutdown().await;

@@ -39,11 +39,11 @@ Every coverage report should follow this structure. You may omit a section that 
 ```markdown
 # <crate-name> Test Coverage Report
 
-| Document Info | Details |
-| :--- | :--- |
-| **Crate** | `crabka-<name>` |
+| Document Info     | Details                            |
+| :---------------- | :--------------------------------- |
+| **Crate**         | `krabka-<name>`                    |
 | **Kafka surface** | <wire APIs / KIPs this crate owns> |
-| **Date** | <YYYY-MM-DD of last update> |
+| **Date**          | <YYYY-MM-DD of last update>        |
 ```
 
 ### Section 1: Compatibility Coverage Summary
@@ -53,17 +53,17 @@ Lead with a one-line summary: "All owned KIPs verified (N differential, M unit)"
 Include a table that maps each KIP or wire behaviour the crate owns to its verification status and to the test that establishes it.
 
 ```markdown
-| KIP / Behaviour | Feature | Result | Test | Matrix Ref |
-| :--- | :--- | :--- | :--- | :--- |
-| **KIP-848** | Consumer group heartbeat assignment | Pass | `assignment.rs::uniform_sticky` + differential `group_protocol` | [matrix](../../docs/KIP_MATRIX.md) |
-| **Wire** | ApiVersions v3 byte exactness | Pass | `codec.rs::api_versions_roundtrip` + `kafka-clients` diff | README compat |
+| KIP / Behaviour | Feature                             | Result | Test                                                            | Matrix Ref                         |
+| :-------------- | :---------------------------------- | :----- | :-------------------------------------------------------------- | :--------------------------------- |
+| **KIP-848**     | Consumer group heartbeat assignment | Pass   | `assignment.rs::uniform_sticky` + differential `group_protocol` | [matrix](../../docs/KIP_MATRIX.md) |
+| **Wire**        | ApiVersions v3 byte exactness       | Pass   | `codec.rs::api_versions_roundtrip` + `kafka-clients` diff       | README compat                      |
 ```
 
 - **Every KIP or behaviour the crate owns must appear** — even if the result is `N/A` or `Not tested`.
 - **Result values**: `Pass` (test exists and passes), `Fail` (test exists and fails), `N/A` (not applicable to this crate), `Not tested` (no test exists).
 - **Test column**: cite specific test function names (`file::function`), not just file paths. For differential coverage, name the differential suite or scenario.
 - **Matrix Ref column**: link to the row in the [KIP matrix](../KIP_MATRIX.md) or the README compatibility matrix that this row traces to.
-- **Cross-crate or differential coverage**: when tests elsewhere verify the behaviour, say `Pass (differential)` or `Pass (crabka-broker)` and cite the specific test.
+- **Cross-crate or differential coverage**: when tests elsewhere verify the behaviour, say `Pass (differential)` or `Pass (krabka-broker)` and cite the specific test.
 
 ### Section 2: Test Inventory
 

@@ -1,5 +1,5 @@
 use assert2::assert;
-use crabka_pgparser::{
+use krabka_pgparser::{
     ast::{
         PlPgSqlCursorArgument, PlPgSqlDeclaration, PlPgSqlLoop, PlPgSqlRaiseLevel,
         PlPgSqlStatement, PlPgSqlVariableConflict, Statement,

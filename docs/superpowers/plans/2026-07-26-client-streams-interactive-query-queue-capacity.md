@@ -12,13 +12,13 @@
 
 - Preserve the exact default capacity of `64` for both interactive-query queues.
 - Use `refined_type::rule::MinMaxUsize<1, {
-  tokio::sync::Semaphore::MAX_PERMITS }>` for the new validated newtype.
+tokio::sync::Semaphore::MAX_PERMITS }>` for the new validated newtype.
 - Accept `1..=tokio::sync::Semaphore::MAX_PERMITS`; reject values outside that
   inclusive range.
 - Use one capacity for both `IqRequest` and `Iq2Request` channels.
 - Keep bounded Tokio MPSC behavior, asynchronous backpressure, shutdown behavior, query dispatch, and response handling unchanged.
 - Use typed `StreamsInteractiveQueryQueueCapacity` inputs on both public `StreamsApp` and `KafkaStreams` builders.
-- Use `--streams-interactive-query-queue-capacity` and `CRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY`.
+- Use `--streams-interactive-query-queue-capacity` and `KRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY`.
 - Preserve CLI over environment over typed-default precedence.
 - Resolve and validate demo configuration before telemetry or external I/O.
 - Expose the deployment variable only on `demo-stream`, defaulting to `64`.
@@ -34,12 +34,14 @@
 ### Task 1: Validate and route the shared queue capacity
 
 **Files:**
+
 - Modify: `crates/client-streams/src/runtime/app.rs`
 - Modify: `crates/client-streams/src/runtime/mod.rs`
 - Modify: `crates/client-streams/src/streams_app.rs`
 - Modify: `crates/client-streams/src/lib.rs`
 
 **Interfaces:**
+
 - Produces: `pub const DEFAULT_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY: usize`
 - Produces: `pub struct StreamsInteractiveQueryQueueCapacity(usize)`
 - Produces: `StreamsInteractiveQueryQueueCapacity::new(usize) -> Result<Self, String>`
@@ -133,7 +135,7 @@ fn interactive_query_queue_capacity_uses_typed_default_and_override() {
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams interactive_query_queue_capacity --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams interactive_query_queue_capacity --locked
 ```
 
 Expected for the boundary regression: the maximum-plus-one assertion fails
@@ -234,9 +236,9 @@ root.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams interactive_query_queue_capacity --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-client-streams --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams interactive_query_queue_capacity --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-client-streams --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all -- --check
 git diff --check
 git diff -- Cargo.lock
@@ -263,15 +265,17 @@ git commit -m "feat(streams): configure query queue capacity"
 ### Task 2: Expose the demo CLI, environment, and Compose setting
 
 **Files:**
+
 - Modify: `crates/observability-demo-app/src/main.rs`
 - Create: `crates/observability-demo-app/tests/streams_query_queue_config.rs`
 - Modify: `crates/observability-demo-app/tests/observability_demo_config.rs`
 - Modify: `demo/observability/docker-compose.yml`
 
 **Interfaces:**
+
 - Consumes: `StreamsInteractiveQueryQueueCapacity`
 - Produces: `--streams-interactive-query-queue-capacity`
-- Produces: `CRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY`
+- Produces: `KRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY`
 - Produces: typed `StreamsInteractiveQueryQueueCapacity` passed to `StreamsApp`
 
 - [ ] **Step 1: Add failing hermetic subprocess tests**
@@ -292,7 +296,7 @@ fn environment_is_used_and_cli_wins_before_external_io() {
     let environment = demo()
         .args(["--role", "produce"])
         .env(
-            "CRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY",
+            "KRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY",
             "37",
         )
         .output()
@@ -312,7 +316,7 @@ fn environment_is_used_and_cli_wins_before_external_io() {
             "41",
         ])
         .env(
-            "CRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY",
+            "KRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY",
             "37",
         )
         .output()
@@ -330,7 +334,7 @@ fn zero_fails_early_and_help_lists_the_flag_once() {
     let zero = demo()
         .args(["--role", "stream"])
         .env(
-            "CRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY",
+            "KRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY",
             "0",
         )
         .output()
@@ -356,12 +360,12 @@ In `streams_runtime_policy_is_configurable_only_on_the_stream_role`, require:
 
 ```rust
 assert2::assert!(stream.contains(
-    "CRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY: \"${CRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY:-64}\""
+    "KRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY: \"${KRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY:-64}\""
 ));
 ```
 
 Also assert Produce and Consume service blocks do not contain
-`CRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY`.
+`KRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY`.
 
 - [ ] **Step 3: Run Task 2 tests and record RED**
 
@@ -384,7 +388,7 @@ In `main.rs`, import `NonZeroUsize` and
 /// Capacity shared by the Client Streams interactive-query request queues.
 #[arg(
     long,
-    env = "CRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY"
+    env = "KRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY"
 )]
 streams_interactive_query_queue_capacity: Option<NonZeroUsize>,
 ```
@@ -476,7 +480,7 @@ fn streams_interactive_query_queue_capacity_uses_default_and_override() {
 In the `demo-stream` environment block, add:
 
 ```yaml
-CRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY: "${CRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY:-64}"
+KRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY: "${KRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY:-64}"
 ```
 
 Do not add it to anchors or any other service.
@@ -515,9 +519,11 @@ git commit -m "feat(demo): expose Streams query queue"
 ### Task 3: Record audit closure and verify the slice
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: Tasks 1 and 2 committed behavior
 - Produces: reproducible scanner totals, exclusive focused-reference classification, final gate evidence, and one concrete next unresolved operational owner
 
@@ -597,8 +603,8 @@ Append `## Client Streams Interactive Query Queue Capacity` to
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams -p observability-demo-app --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-client-streams -p observability-demo-app --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams -p observability-demo-app --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-client-streams -p observability-demo-app --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all -- --check
 git diff --check
 git diff -- Cargo.lock

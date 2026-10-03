@@ -29,15 +29,15 @@ use crate::{
     },
 };
 
-const APP_NAME: &str = "crabka-connect-worker";
+const APP_NAME: &str = "krabka-connect-worker";
 const HEALTH_PORT: i32 = 8080;
 const HEALTH_ADDR: &str = "0.0.0.0:8080";
 const DEFAULT_IMAGE: &str = concat!(
-    "ghcr.io/robot-head/crabka-connect-worker:",
+    "ghcr.io/robot-head/krabka-connect-worker:",
     env!("CARGO_PKG_VERSION")
 );
-const CHECKPOINT_TOPIC: &str = "__crabka_connect_offsets";
-const CHECKPOINT_READER_GROUP: &str = "crabka-replicator-reader-__crabka_connect_offsets";
+const CHECKPOINT_TOPIC: &str = "__krabka_connect_offsets";
+const CHECKPOINT_READER_GROUP: &str = "krabka-replicator-reader-__krabka_connect_offsets";
 const BROKER_CLIENT_DIR: &str = "/etc/crabka/broker-client";
 const BROKER_CA_DIR: &str = "/etc/crabka/broker-ca";
 
@@ -563,65 +563,65 @@ fn render_deployment(
         ("app.kubernetes.io/instance".into(), name.clone()),
         (
             "app.kubernetes.io/managed-by".into(),
-            "crabka-operator".into(),
+            "krabka-operator".into(),
         ),
         ("crabka.io/cluster".into(), cluster_name.into()),
     ]);
     let mut env = vec![
-        value_env("CRABKA_CONNECTOR_ID", &name),
-        value_env("CRABKA_KAFKA_BOOTSTRAP", bootstrap),
+        value_env("KRABKA_CONNECTOR_ID", &name),
+        value_env("KRABKA_KAFKA_BOOTSTRAP", bootstrap),
         value_env(
-            "CRABKA_SCHEMA_REGISTRY_URL",
+            "KRABKA_SCHEMA_REGISTRY_URL",
             &connector.spec.schema_registry_url,
         ),
         value_env(
-            "CRABKA_CONNECT_REPLICATION_FACTOR",
+            "KRABKA_CONNECT_REPLICATION_FACTOR",
             replication_factor.to_string(),
         ),
         json!({
-            "name": "CRABKA_POSTGRES_URL",
+            "name": "KRABKA_POSTGRES_URL",
             "valueFrom": { "secretKeyRef": {
                 "name": connector.spec.database_url.name,
                 "key": connector.spec.database_url.key,
             }}
         }),
-        value_env("CRABKA_POSTGRES_SLOT", &connector.spec.slot),
-        value_env("CRABKA_POSTGRES_PUBLICATION", &connector.spec.publication),
+        value_env("KRABKA_POSTGRES_SLOT", &connector.spec.slot),
+        value_env("KRABKA_POSTGRES_PUBLICATION", &connector.spec.publication),
         value_env(
-            "CRABKA_POSTGRES_SCHEMA",
+            "KRABKA_POSTGRES_SCHEMA",
             connector.spec.schema.as_deref().unwrap_or("public"),
         ),
-        value_env("CRABKA_POSTGRES_TABLES", connector.spec.tables.join(",")),
+        value_env("KRABKA_POSTGRES_TABLES", connector.spec.tables.join(",")),
         value_env(
-            "CRABKA_TOPIC_PREFIX",
+            "KRABKA_TOPIC_PREFIX",
             connector.spec.topic_prefix.as_deref().unwrap_or("db"),
         ),
-        value_env("CRABKA_CONNECT_HEALTH_LISTEN", HEALTH_ADDR),
-        value_env("CRABKA_BROKER_PROTOCOL", "SSL"),
+        value_env("KRABKA_CONNECT_HEALTH_LISTEN", HEALTH_ADDR),
+        value_env("KRABKA_BROKER_PROTOCOL", "SSL"),
         value_env(
-            "CRABKA_BROKER_CERT_PATH",
+            "KRABKA_BROKER_CERT_PATH",
             format!("{BROKER_CLIENT_DIR}/user.crt"),
         ),
         value_env(
-            "CRABKA_BROKER_KEY_PATH",
+            "KRABKA_BROKER_KEY_PATH",
             format!("{BROKER_CLIENT_DIR}/user.key"),
         ),
-        value_env("CRABKA_BROKER_CA_PATH", format!("{BROKER_CA_DIR}/ca.crt")),
-        value_env("CRABKA_BROKER_SERVER_NAME", broker_server_name),
+        value_env("KRABKA_BROKER_CA_PATH", format!("{BROKER_CA_DIR}/ca.crt")),
+        value_env("KRABKA_BROKER_SERVER_NAME", broker_server_name),
     ];
     if let Some(runtime) = &connector.spec.runtime {
         if let Some(value) = runtime.max_batch {
-            env.push(value_env("CRABKA_CONNECT_BATCH_SIZE", value.to_string()));
+            env.push(value_env("KRABKA_CONNECT_BATCH_SIZE", value.to_string()));
         }
         if let Some(value) = runtime.commit_interval_ms {
             env.push(value_env(
-                "CRABKA_CONNECT_COMMIT_INTERVAL_MS",
+                "KRABKA_CONNECT_COMMIT_INTERVAL_MS",
                 value.to_string(),
             ));
         }
         if let Some(value) = runtime.poll_backoff_ms {
             env.push(value_env(
-                "CRABKA_CONNECT_POLL_BACKOFF_MS",
+                "KRABKA_CONNECT_POLL_BACKOFF_MS",
                 value.to_string(),
             ));
         }
@@ -763,7 +763,7 @@ mod tests {
                 },
                 schema_registry_url: "http://schema-registry:8081".into(),
                 slot: "orders_crabka".into(),
-                publication: "crabka_connect".into(),
+                publication: "krabka_connect".into(),
                 schema: Some("public".into()),
                 tables: vec!["orders".into(), "customers".into()],
                 topic_prefix: Some("db".into()),
@@ -820,15 +820,15 @@ mod tests {
             );
             let env = container.env.as_ref().unwrap();
             for (name, value) in [
-                ("CRABKA_CONNECTOR_ID", "orders"),
-                ("CRABKA_KAFKA_BOOTSTRAP", "demo:9093"),
-                ("CRABKA_SCHEMA_REGISTRY_URL", "http://schema-registry:8081"),
-                ("CRABKA_CONNECT_REPLICATION_FACTOR", "3"),
-                ("CRABKA_POSTGRES_TABLES", "orders,customers"),
-                ("CRABKA_CONNECT_BATCH_SIZE", "100"),
-                ("CRABKA_CONNECT_COMMIT_INTERVAL_MS", "1000"),
-                ("CRABKA_CONNECT_POLL_BACKOFF_MS", "50"),
-                ("CRABKA_BROKER_PROTOCOL", "SSL"),
+                ("KRABKA_CONNECTOR_ID", "orders"),
+                ("KRABKA_KAFKA_BOOTSTRAP", "demo:9093"),
+                ("KRABKA_SCHEMA_REGISTRY_URL", "http://schema-registry:8081"),
+                ("KRABKA_CONNECT_REPLICATION_FACTOR", "3"),
+                ("KRABKA_POSTGRES_TABLES", "orders,customers"),
+                ("KRABKA_CONNECT_BATCH_SIZE", "100"),
+                ("KRABKA_CONNECT_COMMIT_INTERVAL_MS", "1000"),
+                ("KRABKA_CONNECT_POLL_BACKOFF_MS", "50"),
+                ("KRABKA_BROKER_PROTOCOL", "SSL"),
             ] {
                 assert!(
                     env.iter()
@@ -838,7 +838,7 @@ mod tests {
             }
             let database_url = env
                 .iter()
-                .find(|item| item.name == "CRABKA_POSTGRES_URL")
+                .find(|item| item.name == "KRABKA_POSTGRES_URL")
                 .unwrap();
             let reference = database_url
                 .value_from

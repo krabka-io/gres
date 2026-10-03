@@ -21,17 +21,17 @@ use std::{
     },
 };
 
-use crabka_pgkv::{Kv, WriteOp};
-use crabka_pgmvcc::{clog::XidStatus, visibility::Snapshot};
-use crabka_pgparser::ast::{
+use krabka_pgkv::{Kv, WriteOp};
+use krabka_pgmvcc::{clog::XidStatus, visibility::Snapshot};
+use krabka_pgparser::ast::{
     BaseTypeOptionValue, BinaryOp, CopyDestination, CopyDirection, CopySource, CopyStmt,
     CopyTarget, CreateAsSource, CreateTypeDefinition, CursorTarget, DiscardTarget, ExplainOptions,
     Expr, FetchCount, FetchDirection, FuncArgs, IsolationLevel, JoinConstraint, OnConflict,
     OnConflictAction, OnConflictTarget, QueryBody, QueryExpr, ResetTarget, SelectItem, SetExpr,
     Statement, TableExpr, TableLockMode, UnaryOp, UnlistenTarget, UtilityStatement,
 };
-use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType, RangeValue};
-use crabka_pgwire::{
+use krabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType, RangeValue};
+use krabka_pgwire::{
     engine::{
         BoundParam, Cell, CloseTarget, CopyInResponse, CopyOutResponse, CopyOutStream,
         ExecuteOutcome, FastpathCall, FieldDescription, Notification, PortalDescription,
@@ -39,7 +39,7 @@ use crabka_pgwire::{
     },
     error::{PgError, Severity, sqlstate},
 };
-use crabka_units::{ByteSize, convert::ByteSizeExt as _};
+use krabka_units::{ByteSize, convert::ByteSizeExt as _};
 use tokio::sync::{OwnedRwLockReadGuard, mpsc, watch};
 use tracing::Instrument as _;
 
@@ -72,7 +72,7 @@ pub(crate) struct TxnCtx {
     /// snapshot(s) can see is pruned while the block is open. READ COMMITTED
     /// re-snapshots per statement, but the BEGIN-time xmin is `<=` every later
     /// snapshot's xmin, so one conservative pin covers the whole block.
-    pub(crate) _snapshot_pin: crabka_pgmvcc::gc::SnapshotPin,
+    pub(crate) _snapshot_pin: krabka_pgmvcc::gc::SnapshotPin,
     pub(crate) repeatable_read: bool,
     /// The level `SHOW transaction_isolation` reports for this block, which is
     /// the requested spelling. `READ UNCOMMITTED` runs as `READ COMMITTED`
@@ -95,7 +95,7 @@ pub(crate) struct TxnCtx {
     /// [`TxnCtx::timestamp_read`] while the block is open, so write-path
     /// timestamp pruning on this engine never reclaims a sharded-table
     /// version the fixed REPEATABLE READ timestamp can still see.
-    pub(crate) _timestamp_read_pin: Option<crabka_pgmvcc::gc::SnapshotPin>,
+    pub(crate) _timestamp_read_pin: Option<krabka_pgmvcc::gc::SnapshotPin>,
     /// The `(table_id, rowid)` set this transaction's local xid has written, in
     /// write order. Deduplication is unnecessary, because the abort-atomicity
     /// fence only scans these rows' versions and a repeated entry just re-scans.
@@ -113,7 +113,7 @@ pub(crate) struct TxnCtx {
     pub(crate) txn_now: jiff::Timestamp,
     /// One SHARED gate per relation an explicit transaction has written, held
     /// until COMMIT/ROLLBACK so a backfill on that relation waits out the write.
-    pub(crate) unique_index_guards: HashMap<crabka_pgcatalog::TableId, UniqueIndexGuard>,
+    pub(crate) unique_index_guards: HashMap<krabka_pgcatalog::TableId, UniqueIndexGuard>,
     /// Held after the first ordinary write until COMMIT/ROLLBACK so conversion
     /// cannot rewrite an in-progress xid version out from under its commit.
     pub(crate) table_write_guard: Option<TableWriteGuard>,
@@ -154,7 +154,7 @@ pub(crate) enum TableWriteGuard {
 /// ones while it scans.
 pub(crate) struct UniqueIndexGuard {
     gates: Arc<RowLockManager>,
-    table: crabka_pgcatalog::TableId,
+    table: krabka_pgcatalog::TableId,
     owner: crate::lockmgr::LockOwner,
 }
 
@@ -947,9 +947,9 @@ impl GucDefinition {
     /// which is the form `SHOW` reports. A list parameter re-quotes each item
     /// the way `PostgreSQL`'s `quote_identifier` does. Every other parameter
     /// joins the items back with `", "` untouched.
-    fn flatten(&self, value: &crabka_pgparser::ast::SetValue) -> String {
+    fn flatten(&self, value: &krabka_pgparser::ast::SetValue) -> String {
         match value {
-            crabka_pgparser::ast::SetValue::Value(items) if self.list_quote => {
+            krabka_pgparser::ast::SetValue::Value(items) if self.list_quote => {
                 crate::search_path::SearchPath::from_items(items).render()
             }
             other => other.plain(),
@@ -2025,7 +2025,7 @@ fn parse_timezone(value: &str, _: Option<&GucValue>) -> Result<GucValue, ExecErr
     // plain number of hours, a database name or a POSIX specification, but no
     // abbreviations. `parse_guc_value` restates the rejection as the 22023 that
     // names the parameter.
-    if crabka_pgtypes::datetime::resolve_guc_time_zone(value).is_some() {
+    if krabka_pgtypes::datetime::resolve_guc_time_zone(value).is_some() {
         Ok(GucValue::Text(value.to_string()))
     } else {
         Err(ExecError::InvalidParameterValue(value.to_string()))
@@ -2517,7 +2517,7 @@ fn xml_uses_scalar_text(ty: ColumnType) -> bool {
         | ColumnType::Timestamp
         | ColumnType::Timestamptz
         | ColumnType::Temporal(
-            crabka_pgtypes::TemporalType::Timestamp | crabka_pgtypes::TemporalType::Timestamptz,
+            krabka_pgtypes::TemporalType::Timestamp | krabka_pgtypes::TemporalType::Timestamptz,
             _,
         ) => true,
         ColumnType::Domain(domain) => xml_uses_scalar_text(*domain.base),
@@ -2755,7 +2755,7 @@ fn establishes_transaction_activity(stmt: &Statement) -> bool {
 /// g < xmax directly. The caller must have barriered range 0's replica current
 /// first.
 pub(crate) fn durable_global_snapshot(range0: &dyn Kv) -> Result<Snapshot, ExecError> {
-    use crabka_pgmvcc::xid::GLOBAL_XID_BASE;
+    use krabka_pgmvcc::xid::GLOBAL_XID_BASE;
     Ok(Snapshot {
         xmin: GLOBAL_XID_BASE,
         xmax: crate::gtm::read_next_global(range0)?,
@@ -2899,12 +2899,12 @@ pub(crate) fn notify_queue_error(error: notify::NotifyError) -> ExecError {
 /// belongs to the relation it was written on rather than to the name that
 /// relation held.
 struct OnCommitEntry {
-    relation: crabka_pgcatalog::RelationName,
+    relation: krabka_pgcatalog::RelationName,
     /// The relation the disposition was armed for. An entry whose name now
     /// holds a different id, or no relation at all, has nothing left to
     /// dispose of.
-    table: crabka_pgcatalog::TableId,
-    action: crabka_pgparser::ast::OnCommitAction,
+    table: krabka_pgcatalog::TableId,
+    action: krabka_pgparser::ast::OnCommitAction,
 }
 
 /// One connection's view of the engine. Holds shared handles to the KV store,
@@ -2931,7 +2931,7 @@ pub struct SqlSession {
     /// statement may create more than one relation. The lock is uncontended,
     /// because a session executes one statement at a time. But the session is
     /// held across `.await` points and so must be `Sync`.
-    reserved_table_ids: Mutex<Vec<crabka_pgcatalog::TableId>>,
+    reserved_table_ids: Mutex<Vec<krabka_pgcatalog::TableId>>,
     /// Set once this session has purged and re-created its own temporary
     /// namespace, which happens on the first statement that creates a temporary
     /// relation and never again.
@@ -3021,7 +3021,7 @@ pub struct SqlSession {
     /// statement/transaction pins its snapshot xmin here so version pruning
     /// (write-path, `vacuum`, checkpoint compaction) never reclaims a version
     /// a live snapshot still sees.
-    gc_horizon: Arc<crabka_pgmvcc::gc::GcHorizon>,
+    gc_horizon: Arc<krabka_pgmvcc::gc::GcHorizon>,
     /// Timestamp-version GC state (shared from the engine): statement read
     /// timestamps over sharded tables pin here so write-path timestamp
     /// pruning never reclaims a version an in-flight read may resolve to,
@@ -3160,7 +3160,7 @@ struct SqlCursor {
     binary: bool,
     created_at: jiff::Timestamp,
     fields: Vec<FieldDescription>,
-    rows: Option<Vec<Vec<Option<crabka_pgwire::engine::Cell>>>>,
+    rows: Option<Vec<Vec<Option<krabka_pgwire::engine::Cell>>>>,
     /// The physical identity retained alongside each row of a simply updatable
     /// cursor. It stays out of the client-visible projection.
     identities: Option<Vec<CursorRowIdentity>>,
@@ -3186,12 +3186,12 @@ struct SqlCursor {
     /// `DECLARE` ran in. `PostgreSQL` keeps each of them open for as long as
     /// the portal lives, and refuses a same-session `DROP TABLE` or `TRUNCATE`
     /// on any of them; see [`SqlSession::refuse_relation_pinned_by_cursor`].
-    pinned: Vec<crabka_pgcatalog::RelationName>,
+    pinned: Vec<krabka_pgcatalog::RelationName>,
 }
 
 /// The row `WHERE CURRENT OF` targets after a cursor has materialized.
 struct CursorRowIdentity {
-    table: crabka_pgcatalog::RelationName,
+    table: krabka_pgcatalog::RelationName,
     ctid: String,
 }
 
@@ -3256,12 +3256,12 @@ pub(crate) struct SqlSessionConfig {
     pub timestamp_oracle: Arc<dyn crate::timestamp_txn::TimestampSource>,
     pub timestamp_horizon: crate::timestamp_txn::TimestampHorizonSource,
     pub local_sequence: Arc<crate::local_sequence::LocalSequence>,
-    pub gc_horizon: Arc<crabka_pgmvcc::gc::GcHorizon>,
+    pub gc_horizon: Arc<krabka_pgmvcc::gc::GcHorizon>,
     pub ts_gc: Arc<crate::ts_gc::TsVersionGc>,
     pub notify_replication: Arc<crate::NotifyReplication>,
     pub session_locks: Arc<SessionLocks>,
     /// The backend process id this connection is identified by, allocated by
-    /// [`crabka_pgwire::server::next_backend_pid`].
+    /// [`krabka_pgwire::server::next_backend_pid`].
     pub backend_pid: i32,
 }
 
@@ -3415,7 +3415,7 @@ struct SqlPortal {
 enum SqlPortalExecution {
     NotStarted,
     Rows {
-        rows: Vec<Vec<Option<crabka_pgwire::engine::Cell>>>,
+        rows: Vec<Vec<Option<krabka_pgwire::engine::Cell>>>,
         tag: String,
         position: usize,
     },
@@ -3457,7 +3457,7 @@ enum WriteActorWork {
 }
 
 struct CopyActorInput {
-    name: crabka_pgparser::ast::RelationRef,
+    name: krabka_pgparser::ast::RelationRef,
     columns: Option<Vec<String>>,
     text: String,
     format: crate::copyfmt::CopyInFormat,
@@ -3792,7 +3792,7 @@ impl SqlSession {
         if name.eq_ignore_ascii_case("UTC") {
             jiff::tz::TimeZone::UTC
         } else {
-            crabka_pgtypes::datetime::resolve_guc_time_zone(&name)
+            krabka_pgtypes::datetime::resolve_guc_time_zone(&name)
                 .unwrap_or(jiff::tz::TimeZone::UTC)
         }
     }
@@ -3811,16 +3811,16 @@ impl SqlSession {
         // format that decides how a date/time value is *spelled*.
         let setting = self.guc.effective("datestyle").ok();
         let date_order = setting.as_deref().map_or_else(
-            crabka_pgtypes::datetime::DateOrder::default,
-            crabka_pgtypes::datetime::DateOrder::from_datestyle,
+            krabka_pgtypes::datetime::DateOrder::default,
+            krabka_pgtypes::datetime::DateOrder::from_datestyle,
         );
         let date_style = setting.as_deref().map_or_else(
-            crabka_pgtypes::datetime::DateStyle::default,
-            crabka_pgtypes::datetime::DateStyle::from_datestyle,
+            krabka_pgtypes::datetime::DateStyle::default,
+            krabka_pgtypes::datetime::DateStyle::from_datestyle,
         );
         let interval_style = self.guc.effective("intervalstyle").map_or_else(
-            |_| crabka_pgtypes::datetime::IntervalStyle::default(),
-            |style| crabka_pgtypes::datetime::IntervalStyle::from_setting(&style),
+            |_| krabka_pgtypes::datetime::IntervalStyle::default(),
+            |style| krabka_pgtypes::datetime::IntervalStyle::from_setting(&style),
         );
         let extra_float_digits = self
             .guc
@@ -3831,12 +3831,12 @@ impl SqlSession {
         // `bytea_output` is validated to one of these two spellings when it is
         // set, so an unrecognised value can only mean the GUC is unset.
         let bytea_output = match self.guc.effective("bytea_output").as_deref() {
-            Ok("escape") => crabka_pgtypes::encoding::ByteaOutput::Escape,
-            _ => crabka_pgtypes::encoding::ByteaOutput::Hex,
+            Ok("escape") => krabka_pgtypes::encoding::ByteaOutput::Escape,
+            _ => krabka_pgtypes::encoding::ByteaOutput::Hex,
         };
         let xml_option = match self.guc.effective("xmloption").as_deref() {
-            Ok("document") => crabka_pgtypes::xml::XmlOption::Document,
-            _ => crabka_pgtypes::xml::XmlOption::Content,
+            Ok("document") => krabka_pgtypes::xml::XmlOption::Document,
+            _ => krabka_pgtypes::xml::XmlOption::Content,
         };
         let xml_binary = match self.guc.effective("xmlbinary").as_deref() {
             Ok("hex") => crate::clock::XmlBinary::Hex,
@@ -4165,14 +4165,14 @@ impl SqlSession {
             let statement = Statement::Query(QueryExpr {
                 with: None,
                 body: SetExpr::Query(QueryBody::Select(Box::new(
-                    crabka_pgparser::ast::SelectStmt {
+                    krabka_pgparser::ast::SelectStmt {
                         projection: vec![SelectItem::Expr {
                             expr,
                             alias: Some("plpgsql_expression".into()),
                         }],
                         from: Vec::new(),
                         filter: None,
-                        distinct: crabka_pgparser::ast::DistinctClause::All,
+                        distinct: krabka_pgparser::ast::DistinctClause::All,
                         group_by: Vec::new(),
                         grouping: None,
                         having: None,
@@ -4248,13 +4248,13 @@ impl SqlSession {
     ///
     /// NULL is `<NULL>` rather than a panic: it travels out of band on the wire,
     /// so the text output functions never see one and
-    /// [`crabka_pgtypes::encoding::encode_text`] aborts on it.
+    /// [`krabka_pgtypes::encoding::encode_text`] aborts on it.
     pub(crate) fn plpgsql_render(&self, value: &Datum) -> String {
         if value.is_null() {
             return crate::plpgsql::NULL_RAISE_PARAMETER.to_string();
         }
         let ctx = self.eval_ctx();
-        String::from_utf8_lossy(&crabka_pgtypes::encoding::encode_text(
+        String::from_utf8_lossy(&krabka_pgtypes::encoding::encode_text(
             value,
             &ctx.time_zone,
         ))
@@ -4307,7 +4307,7 @@ impl SqlSession {
             .iter()
             .map(|(value, ty)| {
                 let value = (!value.is_null())
-                    .then(|| bytes::Bytes::from(crabka_pgtypes::encoding::encode_binary(value)));
+                    .then(|| bytes::Bytes::from(krabka_pgtypes::encoding::encode_binary(value)));
                 BoundParam {
                     type_oid: Some(ty.oid()),
                     format: 1,
@@ -4367,7 +4367,7 @@ impl SqlSession {
     /// `nextval`: a rolled-back transaction leaves the gap it burned. Verified
     /// against `postgres:18.4`, where an advance, a rollback and a second
     /// advance give 1 and then 3.
-    fn take_pending_sequence_ops(&self) -> Vec<crabka_pgkv::WriteOp> {
+    fn take_pending_sequence_ops(&self) -> Vec<krabka_pgkv::WriteOp> {
         self.pending_sequences
             .lock()
             .expect("pending sequences mutex")
@@ -4389,7 +4389,7 @@ impl SqlSession {
     }
 
     /// Take this transaction's large-object writes for a successful commit.
-    fn take_pending_largeobject_ops(&self) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
+    fn take_pending_largeobject_ops(&self) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
         self.pending_largeobjects
             .lock()
             .expect("pending large objects mutex")
@@ -4422,7 +4422,7 @@ impl SqlSession {
     fn alter_large_object(
         &mut self,
         oid: u32,
-        owner: &crabka_pgparser::ast::RoleSpec,
+        owner: &krabka_pgparser::ast::RoleSpec,
     ) -> Result<QueryResult, ExecError> {
         let resolution = self.resolution_scope();
         let fctx = crate::exec::ForeignCtx {
@@ -4485,8 +4485,8 @@ impl SqlSession {
     fn change_large_object_acl(
         &mut self,
         oids: &[u32],
-        grantees: &[crabka_pgparser::ast::RoleSpec],
-        privileges: &[crabka_pgparser::ast::PrivilegeSpec],
+        grantees: &[krabka_pgparser::ast::RoleSpec],
+        privileges: &[krabka_pgparser::ast::PrivilegeSpec],
         grant: bool,
         grant_option: bool,
     ) -> Result<QueryResult, ExecError> {
@@ -4667,7 +4667,7 @@ impl SqlSession {
     /// The list is empty, and every commit batch is byte-for-byte what it was,
     /// unless an owner opted this engine into replication with
     /// `SqlEngine::set_notify_origin`. The records never reach a KV. Every apply
-    /// site drops them (`crabka_pgkv::is_notify_op`), so they are WAL bytes a
+    /// site drops them (`krabka_pgkv::is_notify_op`), so they are WAL bytes a
     /// tailing node re-injects into its own bus and nothing more.
     fn notify_wal_ops(&self, notifies: &[(String, String)], pid: i32) -> Vec<WriteOp> {
         let Some(origin) = self.notify_replication.origin() else {
@@ -4676,8 +4676,8 @@ impl SqlSession {
         notifies
             .iter()
             .map(|(channel, payload)| WriteOp::Put {
-                key: crabka_pgkv::key::notify_key(self.notify_replication.next_seq()),
-                value: crabka_pgkv::NotifyRecord {
+                key: krabka_pgkv::key::notify_key(self.notify_replication.next_seq()),
+                value: krabka_pgkv::NotifyRecord {
                     origin: origin.to_string(),
                     process_id: pid,
                     channel: channel.clone(),
@@ -4799,7 +4799,7 @@ impl SqlSession {
         &mut self,
         local: bool,
         name: &str,
-        value: &crabka_pgparser::ast::SetValue,
+        value: &krabka_pgparser::ast::SetValue,
     ) -> Result<QueryResult, ExecError> {
         // A list parameter re-quotes each written item; every other one takes
         // the items joined back. Which of the two applies is the parameter's
@@ -4807,7 +4807,7 @@ impl SqlSession {
         // parser, which does not know the name it is setting.
         let zone = guc_definition(name).map_or_else(|| value.plain(), |gd| gd.flatten(value));
         if normalize_guc_name(name) == "default_with_oids"
-            && !matches!(value, crabka_pgparser::ast::SetValue::Default)
+            && !matches!(value, krabka_pgparser::ast::SetValue::Default)
             && matches!(parse_bool(&zone, None)?, GucValue::Bool(true))
         {
             return Err(ExecError::Unsupported(
@@ -4815,7 +4815,7 @@ impl SqlSession {
             ));
         }
         if normalize_guc_name(name) == "default_table_access_method"
-            && matches!(value, crabka_pgparser::ast::SetValue::Value(_))
+            && matches!(value, krabka_pgparser::ast::SetValue::Value(_))
         {
             self.validate_default_table_access_method(&zone)?;
         }
@@ -4823,15 +4823,15 @@ impl SqlSession {
         let in_txn = matches!(self.state, TxnState::InTransaction(_));
         if in_txn {
             match value {
-                crabka_pgparser::ast::SetValue::Default => self.guc.set_default(name, local)?,
-                crabka_pgparser::ast::SetValue::Value(_) => self.guc.set(name, &zone, local)?,
+                krabka_pgparser::ast::SetValue::Default => self.guc.set_default(name, local)?,
+                krabka_pgparser::ast::SetValue::Value(_) => self.guc.set(name, &zone, local)?,
             }
         } else {
             // Autocommit: this SET is its own transaction. A plain SET persists
             // (set_session + commit); a SET LOCAL is committed too, which drops it.
             match value {
-                crabka_pgparser::ast::SetValue::Default => self.guc.set_default(name, local)?,
-                crabka_pgparser::ast::SetValue::Value(_) => self.guc.set(name, &zone, local)?,
+                krabka_pgparser::ast::SetValue::Default => self.guc.set_default(name, local)?,
+                krabka_pgparser::ast::SetValue::Value(_) => self.guc.set(name, &zone, local)?,
             }
             self.guc.commit();
             if local {
@@ -4890,13 +4890,13 @@ impl SqlSession {
 
     fn set_role(&mut self, role: Option<&str>, reset: bool) -> Result<QueryResult, ExecError> {
         let next_role = role.unwrap_or(&self.session_user);
-        if !crabka_pgcatalog::role_exists(&*self.catalog_kv, next_role)? {
+        if !krabka_pgcatalog::role_exists(&*self.catalog_kv, next_role)? {
             return Err(
-                crabka_pgcatalog::CatalogError::UndefinedObject(next_role.to_string()).into(),
+                krabka_pgcatalog::CatalogError::UndefinedObject(next_role.to_string()).into(),
             );
         }
         if self.session_user != self.authenticated_user
-            && !crabka_pgcatalog::role_can_set(&*self.catalog_kv, &self.session_user, next_role)?
+            && !krabka_pgcatalog::role_can_set(&*self.catalog_kv, &self.session_user, next_role)?
         {
             return Err(ExecError::Remote(PgError::error(
                 "42501",
@@ -4913,7 +4913,7 @@ impl SqlSession {
     /// outside the registry are unrecognized (42704); SHOW does not mutate state.
     fn show_guc(&self, name: &str) -> Result<QueryResult, ExecError> {
         use bytes::Bytes;
-        use crabka_pgwire::engine::Cell;
+        use krabka_pgwire::engine::Cell;
         if name.eq_ignore_ascii_case("all") {
             return Ok(self.show_all_gucs());
         }
@@ -4923,8 +4923,8 @@ impl SqlSession {
             name: shown_name,
             table_oid: 0,
             column_id: 0,
-            type_oid: crabka_pgtypes::ColumnType::Text.oid(),
-            type_size: crabka_pgtypes::ColumnType::Text.type_size(),
+            type_oid: krabka_pgtypes::ColumnType::Text.oid(),
+            type_size: krabka_pgtypes::ColumnType::Text.type_size(),
             type_modifier: -1,
             format: 0,
         };
@@ -4940,7 +4940,7 @@ impl SqlSession {
 
     fn show_all_gucs(&self) -> QueryResult {
         use bytes::Bytes;
-        use crabka_pgwire::engine::Cell;
+        use krabka_pgwire::engine::Cell;
         let fields = ["name", "setting", "description"]
             .into_iter()
             .map(|name| FieldDescription {
@@ -4978,11 +4978,11 @@ impl SqlSession {
 
     async fn set_transaction(
         &mut self,
-        value: &crabka_pgparser::ast::SetValue,
+        value: &krabka_pgparser::ast::SetValue,
     ) -> Result<QueryResult, ExecError> {
         let isolation = match value {
-            crabka_pgparser::ast::SetValue::Value(_) => IsolationLevel::parse(&value.plain()),
-            crabka_pgparser::ast::SetValue::Default => None,
+            krabka_pgparser::ast::SetValue::Value(_) => IsolationLevel::parse(&value.plain()),
+            krabka_pgparser::ast::SetValue::Default => None,
         };
         let Some(level) = isolation else {
             return Ok(QueryResult::Command { tag: "SET".into() });
@@ -5027,11 +5027,11 @@ impl SqlSession {
     /// the same place. `DEFAULT` means `default_transaction_isolation`.
     async fn set_transaction_isolation_guc(
         &mut self,
-        value: &crabka_pgparser::ast::SetValue,
+        value: &krabka_pgparser::ast::SetValue,
     ) -> Result<QueryResult, ExecError> {
         let level = match value {
-            crabka_pgparser::ast::SetValue::Default => self.default_transaction_isolation()?,
-            crabka_pgparser::ast::SetValue::Value(_) => {
+            krabka_pgparser::ast::SetValue::Default => self.default_transaction_isolation()?,
+            krabka_pgparser::ast::SetValue::Value(_) => {
                 let spelling = value.plain();
                 IsolationLevel::parse(&spelling).ok_or(ExecError::InvalidGucValue {
                     name: "transaction_isolation".into(),
@@ -5039,7 +5039,7 @@ impl SqlSession {
                 })?
             }
         };
-        self.set_transaction(&crabka_pgparser::ast::SetValue::Value(vec![
+        self.set_transaction(&krabka_pgparser::ast::SetValue::Value(vec![
             level.render().to_string(),
         ]))
         .await
@@ -5072,7 +5072,7 @@ impl SqlSession {
 
     fn enter_function_guc(
         &mut self,
-        routine: &crabka_pgcatalog::routine::Routine,
+        routine: &krabka_pgcatalog::routine::Routine,
     ) -> Result<FunctionGucFrame, ExecError> {
         let before = self.guc.clone();
         if routine.config.is_empty() {
@@ -5265,10 +5265,10 @@ impl SqlSession {
                 continue;
             }
             if !matches!(
-                crabka_pgkv::key::classify_key(key),
-                crabka_pgkv::key::KeyClass::PrimaryRow { .. }
-                    | crabka_pgkv::key::KeyClass::PrimaryVersion { .. }
-                    | crabka_pgkv::key::KeyClass::SecondaryIndex { .. }
+                krabka_pgkv::key::classify_key(key),
+                krabka_pgkv::key::KeyClass::PrimaryRow { .. }
+                    | krabka_pgkv::key::KeyClass::PrimaryVersion { .. }
+                    | krabka_pgkv::key::KeyClass::SecondaryIndex { .. }
             ) {
                 continue;
             }
@@ -5563,7 +5563,7 @@ impl SqlSession {
     fn cursor_identity_query(
         &self,
         query: &QueryExpr,
-    ) -> Result<Option<(QueryExpr, crabka_pgcatalog::RelationName)>, ExecError> {
+    ) -> Result<Option<(QueryExpr, krabka_pgcatalog::RelationName)>, ExecError> {
         let SetExpr::Query(QueryBody::Select(select)) = &query.body else {
             return Ok(None);
         };
@@ -5598,7 +5598,7 @@ impl SqlSession {
             name,
             crate::relname::SchemaDisposition::Reference,
         )?;
-        let Ok(definition) = crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &table) else {
+        let Ok(definition) = krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &table) else {
             return Ok(None);
         };
         if definition.foreign.is_some()
@@ -5617,7 +5617,7 @@ impl SqlSession {
                 table: Some(alias.clone().unwrap_or_else(|| name.name.clone())),
                 name: crate::scope::CTID_COLUMN.into(),
             },
-            alias: Some("__crabka_cursor_ctid".into()),
+            alias: Some("__krabka_cursor_ctid".into()),
         });
         Ok(Some((query, table)))
     }
@@ -5795,9 +5795,9 @@ impl SqlSession {
     ///
     /// A `WITH` name is not a relation, and [`crate::viewdeps::query_sources`]
     /// already drops the `FROM` items such a name shadows.
-    fn cursor_pinned_relations(&self, query: &QueryExpr) -> Vec<crabka_pgcatalog::RelationName> {
+    fn cursor_pinned_relations(&self, query: &QueryExpr) -> Vec<krabka_pgcatalog::RelationName> {
         let scope = self.resolution_scope();
-        let mut pinned: Vec<crabka_pgcatalog::RelationName> = Vec::new();
+        let mut pinned: Vec<krabka_pgcatalog::RelationName> = Vec::new();
         for source in crate::viewdeps::query_sources(query) {
             let Ok(name) = crate::relname::resolve_relation(
                 self.catalog_kv.as_ref(),
@@ -5810,7 +5810,7 @@ impl SqlSession {
             // `get_table` answers only for a relation with storage, which is
             // what leaves the views the walk also reports out of the set.
             if pinned.contains(&name)
-                || crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &name).is_err()
+                || krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &name).is_err()
             {
                 continue;
             }
@@ -5835,7 +5835,7 @@ impl SqlSession {
     /// cursor that has outlived its declaring transaction releases it as well,
     /// because that commit copied its rows out.
     fn refuse_relation_pinned_by_cursor(&self, stmt: &Statement) -> Result<(), ExecError> {
-        let (targets, command): (Vec<&crabka_pgparser::ast::RelationRef>, &str) = match stmt {
+        let (targets, command): (Vec<&krabka_pgparser::ast::RelationRef>, &str) = match stmt {
             Statement::DropTable { names, .. } => (names.iter().collect(), "DROP TABLE"),
             Statement::Truncate { targets, .. } => (
                 targets.iter().map(|target| &target.name).collect(),
@@ -6071,11 +6071,11 @@ impl SqlSession {
                 alias: None,
             })
             .collect();
-        let select = crabka_pgparser::ast::SelectStmt {
+        let select = krabka_pgparser::ast::SelectStmt {
             projection,
             from: Vec::new(),
             filter: None,
-            distinct: crabka_pgparser::ast::DistinctClause::All,
+            distinct: krabka_pgparser::ast::DistinctClause::All,
             group_by: Vec::new(),
             grouping: None,
             having: None,
@@ -6152,7 +6152,7 @@ impl SqlSession {
     /// written. Within one session every mode is granted, matching `PostgreSQL`.
     fn lock_table(
         &mut self,
-        tables: &[crabka_pgparser::ast::RelationRef],
+        tables: &[krabka_pgparser::ast::RelationRef],
         mode: TableLockMode,
         nowait: bool,
     ) -> Result<QueryResult, ExecError> {
@@ -6176,12 +6176,12 @@ impl SqlSession {
             // the whole of the observable behaviour. Every other name still goes
             // through `get_table`, so one that belongs to nothing keeps its
             // 42P01.
-            if crabka_pgcatalog::get_view(&*self.catalog_kv, &name).is_ok()
+            if krabka_pgcatalog::get_view(&*self.catalog_kv, &name).is_ok()
                 || crate::exec::is_virtual_relation(&name)
             {
                 continue;
             }
-            let table = crabka_pgcatalog::get_table(&*self.catalog_kv, &name)?;
+            let table = krabka_pgcatalog::get_table(&*self.catalog_kv, &name)?;
             ids.push((name, table.id));
         }
         for (name, id) in ids {
@@ -6214,7 +6214,7 @@ impl SqlSession {
     async fn run_cluster(
         &mut self,
         stmt: &Statement,
-        target: Option<&crabka_pgparser::ast::ClusterTarget>,
+        target: Option<&krabka_pgparser::ast::ClusterTarget>,
     ) -> Result<QueryResult, ExecError> {
         // Every relation the statement will reach, resolved before any of them
         // is locked, the way `LOCK TABLE` resolves its whole list first.
@@ -6229,7 +6229,7 @@ impl SqlSession {
                 if let Some(error) = crate::exec::cluster_wrong_kind(&*self.catalog_kv, &name) {
                     return Err(error);
                 }
-                let table = crabka_pgcatalog::get_table(&*self.catalog_kv, &name)?;
+                let table = krabka_pgcatalog::get_table(&*self.catalog_kv, &name)?;
                 vec![(name, table.id)]
             }
             None => {
@@ -6244,7 +6244,7 @@ impl SqlSession {
                 }
                 let mut relations = Vec::new();
                 for index in crate::exec::marked_clustered_indexes(&*self.catalog_kv)? {
-                    let table = crabka_pgcatalog::get_table(&*self.catalog_kv, &index.table)?;
+                    let table = krabka_pgcatalog::get_table(&*self.catalog_kv, &index.table)?;
                     relations.push((index.table, table.id));
                 }
                 relations
@@ -6333,7 +6333,7 @@ impl SqlSession {
                     crate::relname::SchemaDisposition::Creation
                 },
             )?;
-            crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &name).is_ok()
+            krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &name).is_ok()
         } else {
             false
         };
@@ -6417,7 +6417,7 @@ impl SqlSession {
             .into_iter()
             .map(|line| {
                 let bytes = bytes::Bytes::from(line.into_bytes());
-                vec![Some(crabka_pgwire::engine::Cell {
+                vec![Some(krabka_pgwire::engine::Cell {
                     text: bytes.clone(),
                     binary: bytes,
                 })]
@@ -6504,7 +6504,7 @@ impl SqlSession {
     async fn run_maintenance(
         &mut self,
         command: MaintenanceCommand,
-        stmt: &crabka_pgparser::ast::MaintenanceStmt,
+        stmt: &krabka_pgparser::ast::MaintenanceStmt,
     ) -> Result<QueryResult, ExecError> {
         if !stmt.analyze && stmt.targets.iter().any(|t| t.columns.is_some()) {
             return Err(ExecError::Unsupported(
@@ -6523,10 +6523,10 @@ impl SqlSession {
             // A synthesised catalog relation is present without being stored,
             // and `PostgreSQL` neither refuses nor skips `ANALYZE pg_class`.
             if !crate::exec::is_virtual_relation(&name)
-                && !crabka_pgcatalog::relation_exists(&*self.catalog_kv, &name)?
+                && !krabka_pgcatalog::relation_exists(&*self.catalog_kv, &name)?
             {
                 return Err(
-                    crabka_pgcatalog::CatalogError::UndefinedTable(name.to_string()).into(),
+                    krabka_pgcatalog::CatalogError::UndefinedTable(name.to_string()).into(),
                 );
             }
             resolved.push((name, target));
@@ -6540,7 +6540,7 @@ impl SqlSession {
             let table = if crate::exec::is_virtual_relation(&name) {
                 None
             } else {
-                let table = crabka_pgcatalog::get_table(&*self.catalog_kv, &name).ok();
+                let table = krabka_pgcatalog::get_table(&*self.catalog_kv, &name).ok();
                 let vacuuming_foreign = command == MaintenanceCommand::Vacuum
                     && table.as_ref().is_some_and(|t| t.foreign.is_some());
                 if table.is_none() || vacuuming_foreign {
@@ -6615,24 +6615,24 @@ impl SqlSession {
     /// right for no observable gain.
     fn database_wide_analyze_targets(
         &self,
-    ) -> Result<Vec<crabka_pgcatalog::RelationName>, ExecError> {
+    ) -> Result<Vec<krabka_pgcatalog::RelationName>, ExecError> {
         let kv = self.catalog_kv.as_ref();
         // The role a relation created now would be owned by, which is the role
         // ownership has to be compared against: a session that authenticated as
         // nobody carries `PUBLIC` and acts as the bootstrap superuser.
-        let role = if self.current_role == crabka_pgcatalog::PUBLIC_ROLE {
-            crabka_pgcatalog::BOOTSTRAP_ROLE
+        let role = if self.current_role == krabka_pgcatalog::PUBLIC_ROLE {
+            krabka_pgcatalog::BOOTSTRAP_ROLE
         } else {
             self.current_role.as_str()
         };
         let superuser = crate::rls::role_is_superuser(kv, role)?;
-        let own_temp_schema = crabka_pgcatalog::temp_schema_name(self.backend_pid);
+        let own_temp_schema = krabka_pgcatalog::temp_schema_name(self.backend_pid);
         let mut targets = Vec::new();
-        for table in crabka_pgcatalog::list_tables(kv)? {
+        for table in krabka_pgcatalog::list_tables(kv)? {
             // A foreign table has nothing local to sample, and another
             // session's temporary namespace is not this session's to read.
             if table.foreign.is_some()
-                || (crabka_pgcatalog::is_temp_schema(&table.name.schema)
+                || (krabka_pgcatalog::is_temp_schema(&table.name.schema)
                     && table.name.schema != own_temp_schema)
                 || (!superuser && table.owner != role)
             {
@@ -6664,11 +6664,11 @@ impl SqlSession {
     /// the heap directly and has no equivalent failure to report.
     async fn collect_relation_statistics(
         &mut self,
-        relations: Vec<(crabka_pgcatalog::RelationName, Option<Vec<String>>)>,
+        relations: Vec<(krabka_pgcatalog::RelationName, Option<Vec<String>>)>,
     ) -> Result<(), ExecError> {
         let mut ops = Vec::new();
         for (name, columns) in relations {
-            if let Ok(table) = crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &name) {
+            if let Ok(table) = krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &name) {
                 let attributes = table
                     .columns
                     .iter()
@@ -6698,12 +6698,12 @@ impl SqlSession {
                         ));
                     }
                 }
-                for index in crabka_pgcatalog::list_indexes(self.catalog_kv.as_ref())?
+                for index in krabka_pgcatalog::list_indexes(self.catalog_kv.as_ref())?
                     .into_iter()
                     .filter(|index| index.table == name)
                 {
                     for (position, key) in index.columns.iter().enumerate() {
-                        let Some(expression) = crabka_pgcatalog::index_key_expression(key) else {
+                        let Some(expression) = krabka_pgcatalog::index_key_expression(key) else {
                             continue;
                         };
                         if let Some(stats) = self
@@ -6740,7 +6740,7 @@ impl SqlSession {
             let kv = catalog_kv.as_ref();
             if crate::partition::is_partitioned(kv, &name)? {
                 ops.push(crate::relstats::set_relpages_op(&name, -1));
-            } else if let Ok(table) = crabka_pgcatalog::get_table(kv, &name)
+            } else if let Ok(table) = krabka_pgcatalog::get_table(kv, &name)
                 && let Some(relpages) = self.estimate_relation_pages(&name, &table).await
             {
                 ops.push(crate::relstats::set_relpages_op(&name, relpages));
@@ -6760,7 +6760,7 @@ impl SqlSession {
     /// heap scan is the physical boundary that supplies both page counts.
     async fn collect_vacuum_visibility(
         &mut self,
-        relations: &[(crabka_pgcatalog::RelationName, Option<Vec<String>>)],
+        relations: &[(krabka_pgcatalog::RelationName, Option<Vec<String>>)],
     ) -> Result<(), ExecError> {
         let mut ops = Vec::new();
         let catalog_kv = Arc::clone(&self.catalog_kv);
@@ -6768,7 +6768,7 @@ impl SqlSession {
             if crate::partition::is_partitioned(catalog_kv.as_ref(), name)? {
                 continue;
             }
-            let Ok(table) = crabka_pgcatalog::get_table(catalog_kv.as_ref(), name) else {
+            let Ok(table) = krabka_pgcatalog::get_table(catalog_kv.as_ref(), name) else {
                 continue;
             };
             let Some(relpages) = self.estimate_relation_pages(name, &table).await else {
@@ -6785,11 +6785,11 @@ impl SqlSession {
     /// so a single ordered result set is enough for all of them.
     async fn collect_extended_statistics(
         &mut self,
-        relation: &crabka_pgcatalog::RelationName,
-        table: &crabka_pgcatalog::Table,
+        relation: &krabka_pgcatalog::RelationName,
+        table: &krabka_pgcatalog::Table,
         columns: Option<&[String]>,
-    ) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
-        let Ok(objects) = crabka_pgcatalog::statistics::list(self.catalog_kv.as_ref()) else {
+    ) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
+        let Ok(objects) = krabka_pgcatalog::statistics::list(self.catalog_kv.as_ref()) else {
             return Ok(Vec::new());
         };
         let inherited = crate::inheritance::has_children(self.catalog_kv.as_ref(), relation)?
@@ -6810,16 +6810,16 @@ impl SqlSession {
                 if object.target != 0 && (columns.is_some() || disabled_column) {
                     self.plpgsql_notice(PgError::warning(format!(
                         "statistics object \"{}.{}\" could not be computed for relation \"{}.{}\"",
-                        crabka_pgcatalog::displayed_schema(&object.name.schema),
+                        krabka_pgcatalog::displayed_schema(&object.name.schema),
                         object.name.name,
-                        crabka_pgcatalog::displayed_schema(&relation.schema),
+                        krabka_pgcatalog::displayed_schema(&relation.schema),
                         relation.name,
                     )))?;
                 }
                 if columns.is_none() {
                     object.data = None;
                     object.inherited_data = None;
-                    ops.push(crabka_pgcatalog::statistics::put_op(&object));
+                    ops.push(krabka_pgcatalog::statistics::put_op(&object));
                 }
                 continue;
             }
@@ -6832,18 +6832,18 @@ impl SqlSession {
             } else {
                 None
             };
-            ops.push(crabka_pgcatalog::statistics::put_op(&object));
+            ops.push(krabka_pgcatalog::statistics::put_op(&object));
         }
         Ok(ops)
     }
 
     async fn collect_statistics_data(
         &mut self,
-        relation: &crabka_pgcatalog::RelationName,
-        table: &crabka_pgcatalog::Table,
-        object: &crabka_pgcatalog::statistics::Statistics,
+        relation: &krabka_pgcatalog::RelationName,
+        table: &krabka_pgcatalog::Table,
+        object: &krabka_pgcatalog::statistics::Statistics,
         inherited: bool,
-    ) -> Option<crabka_pgcatalog::statistics::StatisticsData> {
+    ) -> Option<krabka_pgcatalog::statistics::StatisticsData> {
         let mut expressions = object.expressions.iter();
         let selected = object
             .keys
@@ -6869,7 +6869,7 @@ impl SqlSession {
             crate::catalog_fn::quote_identifier(&relation.schema),
             crate::catalog_fn::quote_identifier(&relation.name),
         );
-        let parsed = crabka_pgparser::parse(&sql).ok()?;
+        let parsed = krabka_pgparser::parse(&sql).ok()?;
         let [statement] = parsed.as_slice() else {
             return None;
         };
@@ -6930,7 +6930,7 @@ impl SqlSession {
             .any(|kind| kind == "m")
             .then(|| Self::statistics_mcv(&rows, object.target))
             .flatten()
-            .map(|items| crabka_pgcatalog::statistics::encode_mcv(&items));
+            .map(|items| krabka_pgcatalog::statistics::encode_mcv(&items));
         let expression_stats = object
             .keys
             .iter()
@@ -6945,7 +6945,7 @@ impl SqlSession {
                 )
             })
             .collect();
-        Some(crabka_pgcatalog::statistics::StatisticsData {
+        Some(krabka_pgcatalog::statistics::StatisticsData {
             inherited,
             ndistinct,
             dependencies,
@@ -6960,9 +6960,9 @@ impl SqlSession {
         field: Option<&FieldDescription>,
         index: usize,
         statistics_target: usize,
-    ) -> crabka_pgcatalog::statistics::ExpressionStats {
+    ) -> krabka_pgcatalog::statistics::ExpressionStats {
         if rows.is_empty() {
-            return crabka_pgcatalog::statistics::ExpressionStats::default();
+            return krabka_pgcatalog::statistics::ExpressionStats::default();
         }
         let mut values = BTreeSet::new();
         let mut frequencies = BTreeMap::<Vec<u8>, usize>::new();
@@ -6995,7 +6995,7 @@ impl SqlSession {
         }
         let mut comparison_failed = ordered_values.len() != non_null;
         ordered_values.sort_by(|(_, left, _), (_, right, _)| {
-            crabka_pgtypes::ops::compare(left, right)
+            krabka_pgtypes::ops::compare(left, right)
                 .ok()
                 .flatten()
                 .unwrap_or_else(|| {
@@ -7009,7 +7009,7 @@ impl SqlSession {
             while start < ordered_values.len() {
                 let mut end = start + 1;
                 while end < ordered_values.len()
-                    && crabka_pgtypes::ops::compare(
+                    && krabka_pgtypes::ops::compare(
                         &ordered_values[start].1,
                         &ordered_values[end].1,
                     )
@@ -7038,7 +7038,7 @@ impl SqlSession {
             common
         };
         common.truncate(statistics_target);
-        crabka_pgcatalog::statistics::ExpressionStats {
+        krabka_pgcatalog::statistics::ExpressionStats {
             null_frac: Some((nulls as f32 / rows.len() as f32).to_string()),
             avg_width: (non_null > 0).then(|| i32::try_from(width / non_null).unwrap_or(i32::MAX)),
             n_distinct: Some(n_distinct.to_string()),
@@ -7070,7 +7070,7 @@ impl SqlSession {
     fn statistics_mcv(
         rows: &[Vec<Option<Cell>>],
         target: i16,
-    ) -> Option<Vec<crabka_pgcatalog::statistics::McvItem>> {
+    ) -> Option<Vec<krabka_pgcatalog::statistics::McvItem>> {
         let width = rows.first()?.len();
         if width == 0 {
             return None;
@@ -7121,7 +7121,7 @@ impl SqlSession {
                                 as f64
                                 / total
                         });
-                    crabka_pgcatalog::statistics::McvItem {
+                    krabka_pgcatalog::statistics::McvItem {
                         values,
                         frequency: (count as f64 / total).to_string(),
                         base_frequency: base_frequency.to_string(),
@@ -7198,7 +7198,7 @@ impl SqlSession {
     /// The fixed statistics `ANALYZE` can derive from one ordinary scan.
     async fn collect_attribute_statistics(
         &mut self,
-        relation: &crabka_pgcatalog::RelationName,
+        relation: &krabka_pgcatalog::RelationName,
         expression: &str,
         statistics_target: usize,
     ) -> Option<crate::attrstats::AttributeStats> {
@@ -7212,7 +7212,7 @@ impl SqlSession {
             crate::catalog_fn::quote_identifier(&relation.schema),
             crate::catalog_fn::quote_identifier(&relation.name),
         );
-        let parsed = crabka_pgparser::parse(&sql).ok()?;
+        let parsed = krabka_pgparser::parse(&sql).ok()?;
         let [statement] = parsed.as_slice() else {
             return None;
         };
@@ -7231,7 +7231,7 @@ impl SqlSession {
     /// statistic slots remain per attribute, matching PostgreSQL's catalog.
     async fn collect_table_attribute_statistics(
         &mut self,
-        relation: &crabka_pgcatalog::RelationName,
+        relation: &krabka_pgcatalog::RelationName,
         attributes: &[(usize, String, i16)],
     ) -> Vec<Option<crate::attrstats::AttributeStats>> {
         if attributes.is_empty() {
@@ -7252,7 +7252,7 @@ impl SqlSession {
             crate::catalog_fn::quote_identifier(&relation.schema),
             crate::catalog_fn::quote_identifier(&relation.name),
         );
-        let Ok(parsed) = crabka_pgparser::parse(&sql) else {
+        let Ok(parsed) = krabka_pgparser::parse(&sql) else {
             return vec![None; attributes.len()];
         };
         let [statement] = parsed.as_slice() else {
@@ -7347,7 +7347,7 @@ impl SqlSession {
         }
         let mut comparison_failed = false;
         ordered_values.sort_by(|(_, left, _), (_, right, _)| {
-            crabka_pgtypes::ops::compare(left, right)
+            krabka_pgtypes::ops::compare(left, right)
                 .ok()
                 .flatten()
                 .unwrap_or_else(|| {
@@ -7361,7 +7361,7 @@ impl SqlSession {
             while start < ordered_values.len() {
                 let mut end = start + 1;
                 while end < ordered_values.len()
-                    && crabka_pgtypes::ops::compare(
+                    && krabka_pgtypes::ops::compare(
                         &ordered_values[start].1,
                         &ordered_values[end].1,
                     )
@@ -7443,7 +7443,7 @@ impl SqlSession {
             None
         } else {
             ordered_values.dedup_by(|(_, left, _), (_, right, _)| {
-                crabka_pgtypes::ops::compare(left, right).ok() == Some(Some(CmpOrdering::Equal))
+                krabka_pgtypes::ops::compare(left, right).ok() == Some(Some(CmpOrdering::Equal))
             });
             (ordered_values.len() >= 2).then(|| {
                 let count = ordered_values
@@ -7518,7 +7518,7 @@ impl SqlSession {
         let mut elements = frequencies.into_iter().collect::<Vec<_>>();
         elements.sort_by(|(left, left_count), (right, right_count)| {
             right_count.cmp(left_count).then_with(|| {
-                crabka_pgtypes::ops::compare(left, right)
+                krabka_pgtypes::ops::compare(left, right)
                     .ok()
                     .flatten()
                     .unwrap_or(CmpOrdering::Equal)
@@ -7528,7 +7528,7 @@ impl SqlSession {
         let min_frequency = elements.iter().map(|(_, count)| *count).min();
         let max_frequency = elements.iter().map(|(_, count)| *count).max();
         elements.sort_by(|(left, _), (right, _)| {
-            crabka_pgtypes::ops::compare(left, right)
+            krabka_pgtypes::ops::compare(left, right)
                 .ok()
                 .flatten()
                 .unwrap_or(CmpOrdering::Equal)
@@ -7544,7 +7544,7 @@ impl SqlSession {
                 elements
                     .iter()
                     .map(|(value, _)| {
-                        Self::pg_stats_array_element(&crabka_pgtypes::encoding::encode_text(
+                        Self::pg_stats_array_element(&krabka_pgtypes::encoding::encode_text(
                             value, &time_zone,
                         ))
                     })
@@ -7622,7 +7622,7 @@ impl SqlSession {
                         upper_inclusive: uppers[offset].upper_inclusive,
                         empty: false,
                     };
-                    Self::pg_stats_array_element(&crabka_pgtypes::encoding::encode_text(
+                    Self::pg_stats_array_element(&krabka_pgtypes::encoding::encode_text(
                         &Datum::Range(range),
                         &time_zone,
                     ))
@@ -7651,7 +7651,7 @@ impl SqlSession {
             (None, Some(_)) => CmpOrdering::Less,
             (Some(_), None) => CmpOrdering::Greater,
             (Some(left_bound), Some(right_bound)) => {
-                crabka_pgtypes::ops::compare(left_bound, right_bound)
+                krabka_pgtypes::ops::compare(left_bound, right_bound)
                     .ok()
                     .flatten()
                     .unwrap_or(CmpOrdering::Equal)
@@ -7670,7 +7670,7 @@ impl SqlSession {
             (None, Some(_)) => CmpOrdering::Greater,
             (Some(_), None) => CmpOrdering::Less,
             (Some(left_bound), Some(right_bound)) => {
-                crabka_pgtypes::ops::compare(left_bound, right_bound)
+                krabka_pgtypes::ops::compare(left_bound, right_bound)
                     .ok()
                     .flatten()
                     .unwrap_or(CmpOrdering::Equal)
@@ -7759,7 +7759,7 @@ impl SqlSession {
                         + range.upper.as_deref().map_or(0, Self::statistics_width)
                 }
             }
-            _ => 4 + crabka_pgtypes::encoding::encode_text(value, &jiff::tz::TimeZone::UTC).len(),
+            _ => 4 + krabka_pgtypes::encoding::encode_text(value, &jiff::tz::TimeZone::UTC).len(),
         }
     }
 
@@ -7782,7 +7782,7 @@ impl SqlSession {
 
     /// The live-row count `ANALYZE` records for one relation, or `None` when
     /// the read path could not produce one.
-    async fn count_relation_rows(&mut self, name: &crabka_pgcatalog::RelationName) -> Option<f32> {
+    async fn count_relation_rows(&mut self, name: &krabka_pgcatalog::RelationName) -> Option<f32> {
         // A partitioned relation stores nothing itself, so its count is its
         // tree's; every other relation counts only what it holds, which is what
         // `ONLY` asks for even when the relation has inheritance children.
@@ -7796,7 +7796,7 @@ impl SqlSession {
             crate::catalog_fn::quote_identifier(&name.schema),
             crate::catalog_fn::quote_identifier(&name.name),
         );
-        let parsed = crabka_pgparser::parse(&sql).ok()?;
+        let parsed = krabka_pgparser::parse(&sql).ok()?;
         let [statement] = parsed.as_slice() else {
             return None;
         };
@@ -7819,15 +7819,15 @@ impl SqlSession {
     /// this is the storage boundary planner statistics can observe.
     async fn estimate_relation_pages(
         &mut self,
-        name: &crabka_pgcatalog::RelationName,
-        table: &crabka_pgcatalog::Table,
+        name: &krabka_pgcatalog::RelationName,
+        table: &krabka_pgcatalog::Table,
     ) -> Option<i32> {
         let sql = format!(
             "SELECT * FROM ONLY {}.{}",
             crate::catalog_fn::quote_identifier(&name.schema),
             crate::catalog_fn::quote_identifier(&name.name),
         );
-        let parsed = crabka_pgparser::parse(&sql).ok()?;
+        let parsed = krabka_pgparser::parse(&sql).ok()?;
         let [statement] = parsed.as_slice() else {
             return None;
         };
@@ -7845,7 +7845,7 @@ impl SqlSession {
                 if table
                     .columns
                     .get(index)
-                    .is_some_and(crabka_pgcatalog::Column::is_virtual_generated)
+                    .is_some_and(krabka_pgcatalog::Column::is_virtual_generated)
                 {
                     continue;
                 }
@@ -7861,7 +7861,7 @@ impl SqlSession {
                 if table
                     .columns
                     .get(index)
-                    .is_some_and(crabka_pgcatalog::Column::is_virtual_generated)
+                    .is_some_and(krabka_pgcatalog::Column::is_virtual_generated)
                 {
                     continue;
                 }
@@ -7920,9 +7920,9 @@ impl SqlSession {
     /// CONCURRENTLY t` reports the block.
     fn run_reindex(
         &mut self,
-        stmt: &crabka_pgparser::ast::ReindexStmt,
+        stmt: &krabka_pgparser::ast::ReindexStmt,
     ) -> Result<QueryResult, ExecError> {
-        use crabka_pgparser::ast::ReindexTarget;
+        use krabka_pgparser::ast::ReindexTarget;
         let options = crate::exec::reindex_options(stmt)?;
         if options.concurrently {
             self.prevent_in_transaction_block("REINDEX CONCURRENTLY")?;
@@ -7943,7 +7943,7 @@ impl SqlSession {
                 // for.
                 if crate::exec::relation_kind(&*self.catalog_kv, &name).is_none() {
                     return Err(
-                        crabka_pgcatalog::CatalogError::UndefinedTable(name.to_string()).into(),
+                        krabka_pgcatalog::CatalogError::UndefinedTable(name.to_string()).into(),
                     );
                 }
                 let wrong_kind = if matches!(stmt.target, ReindexTarget::Index(_)) {
@@ -7962,9 +7962,9 @@ impl SqlSession {
             }
             ReindexTarget::Schema(schema) => {
                 self.prevent_in_transaction_block("REINDEX SCHEMA")?;
-                if !crabka_pgcatalog::schema_exists(&*self.catalog_kv, schema)? {
+                if !krabka_pgcatalog::schema_exists(&*self.catalog_kv, schema)? {
                     return Err(
-                        crabka_pgcatalog::CatalogError::UndefinedSchema(schema.clone()).into(),
+                        krabka_pgcatalog::CatalogError::UndefinedSchema(schema.clone()).into(),
                     );
                 }
             }
@@ -8052,26 +8052,26 @@ impl SqlSession {
             } => {
                 if location.is_empty() {
                     if self.guc.effective("allow_in_place_tablespaces")? != "on" {
-                        return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+                        return Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
                             "42P17",
                             "tablespace location must be an absolute path",
                         )));
                     }
                 } else if !std::path::Path::new(location).is_absolute() {
-                    return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+                    return Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
                         "42P17",
                         "tablespace location must be an absolute path",
                     )));
                 }
                 validate_tablespace_options(options.iter().map(|(name, _)| name.as_str()))?;
                 let owner = owner.as_deref().unwrap_or(&self.current_role);
-                if !crabka_pgcatalog::role_exists(&*self.catalog_kv, owner)? {
+                if !krabka_pgcatalog::role_exists(&*self.catalog_kv, owner)? {
                     return Err(
-                        crabka_pgcatalog::CatalogError::UndefinedObject(owner.into()).into(),
+                        krabka_pgcatalog::CatalogError::UndefinedObject(owner.into()).into(),
                     );
                 }
                 let _catalog_guard = Arc::clone(&self.catalog_lock).lock_owned().await;
-                let ops = crabka_pgcatalog::create_tablespace_ops(
+                let ops = krabka_pgcatalog::create_tablespace_ops(
                     &*self.catalog_kv,
                     name,
                     owner,
@@ -8079,7 +8079,7 @@ impl SqlSession {
                     options.clone(),
                 )
                 .map_err(|error| match error {
-                    crabka_pgcatalog::CatalogError::DuplicateObject(_) => {
+                    krabka_pgcatalog::CatalogError::DuplicateObject(_) => {
                         tablespace_duplicate(name)
                     }
                     other => other.into(),
@@ -8091,10 +8091,10 @@ impl SqlSession {
             }
             UtilityStatement::DropTablespace { name, if_exists } => {
                 let _catalog_guard = Arc::clone(&self.catalog_lock).lock_owned().await;
-                match crabka_pgcatalog::drop_tablespace_ops(&*self.catalog_kv, name) {
+                match krabka_pgcatalog::drop_tablespace_ops(&*self.catalog_kv, name) {
                     Ok(ops) => self.commit_catalog(ops).await?,
-                    Err(crabka_pgcatalog::CatalogError::UndefinedObject(_)) if *if_exists => {}
-                    Err(crabka_pgcatalog::CatalogError::UndefinedObject(_)) => {
+                    Err(krabka_pgcatalog::CatalogError::UndefinedObject(_)) if *if_exists => {}
+                    Err(krabka_pgcatalog::CatalogError::UndefinedObject(_)) => {
                         return Err(tablespace_missing(name));
                     }
                     Err(error) => return Err(error.into()),
@@ -8104,12 +8104,12 @@ impl SqlSession {
                 })
             }
             UtilityStatement::AlterTablespace { name, action } => {
-                use crabka_pgparser::ast::TablespaceAlterAction;
+                use krabka_pgparser::ast::TablespaceAlterAction;
 
                 let _catalog_guard = Arc::clone(&self.catalog_lock).lock_owned().await;
-                let mut tablespace = crabka_pgcatalog::get_tablespace(&*self.catalog_kv, name)
+                let mut tablespace = krabka_pgcatalog::get_tablespace(&*self.catalog_kv, name)
                     .map_err(|error| match error {
-                        crabka_pgcatalog::CatalogError::UndefinedObject(_) => {
+                        krabka_pgcatalog::CatalogError::UndefinedObject(_) => {
                             tablespace_missing(name)
                         }
                         other => other.into(),
@@ -8144,8 +8144,8 @@ impl SqlSession {
                         } else {
                             owner
                         };
-                        if !crabka_pgcatalog::role_exists(&*self.catalog_kv, owner)? {
-                            return Err(crabka_pgcatalog::CatalogError::UndefinedObject(
+                        if !krabka_pgcatalog::role_exists(&*self.catalog_kv, owner)? {
+                            return Err(krabka_pgcatalog::CatalogError::UndefinedObject(
                                 owner.clone(),
                             )
                             .into());
@@ -8154,12 +8154,12 @@ impl SqlSession {
                     }
                 }
                 let ops =
-                    crabka_pgcatalog::replace_tablespace_ops(&*self.catalog_kv, name, &tablespace)
+                    krabka_pgcatalog::replace_tablespace_ops(&*self.catalog_kv, name, &tablespace)
                         .map_err(|error| match error {
-                            crabka_pgcatalog::CatalogError::DuplicateObject(_) => {
+                            krabka_pgcatalog::CatalogError::DuplicateObject(_) => {
                                 tablespace_duplicate(&tablespace.name)
                             }
-                            crabka_pgcatalog::CatalogError::UndefinedObject(_) => {
+                            krabka_pgcatalog::CatalogError::UndefinedObject(_) => {
                                 tablespace_missing(name)
                             }
                             other => other.into(),
@@ -8183,7 +8183,7 @@ impl SqlSession {
                     crate::relname::SchemaDisposition::Creation,
                 )?;
                 let _catalog_guard = Arc::clone(&self.catalog_lock).lock_owned().await;
-                let (_, ops) = crabka_pgcatalog::create_operator_family_ops(
+                let (_, ops) = krabka_pgcatalog::create_operator_family_ops(
                     self.catalog_kv.as_ref(),
                     &name,
                     &method,
@@ -8228,7 +8228,7 @@ impl SqlSession {
                     })
                     .transpose()?;
                 let _catalog_guard = Arc::clone(&self.catalog_lock).lock_owned().await;
-                let (class, mut ops) = crabka_pgcatalog::create_operator_class_ops(
+                let (class, mut ops) = krabka_pgcatalog::create_operator_class_ops(
                     self.catalog_kv.as_ref(),
                     &name,
                     &method,
@@ -8236,18 +8236,18 @@ impl SqlSession {
                     family.as_ref(),
                     input_type.oid(),
                     *default,
-                    key_type.map_or(0, crabka_pgtypes::ColumnType::oid),
+                    key_type.map_or(0, krabka_pgtypes::ColumnType::oid),
                 )?;
                 let members = members
                     .iter()
                     .map(|member| match member {
-                        crabka_pgparser::ast::OperatorFamilyMember::Operator {
+                        krabka_pgparser::ast::OperatorFamilyMember::Operator {
                             number,
                             operator,
                             left_type,
                             right_type,
                             order_family,
-                        } => Ok(crabka_pgcatalog::OperatorFamilyMember::Operator {
+                        } => Ok(krabka_pgcatalog::OperatorFamilyMember::Operator {
                             number: *number,
                             operator: operator.clone(),
                             left_type_oid: left_type.oid(),
@@ -8264,7 +8264,7 @@ impl SqlSession {
                                 .transpose()?
                                 .unwrap_or_default(),
                         }),
-                        crabka_pgparser::ast::OperatorFamilyMember::Function {
+                        krabka_pgparser::ast::OperatorFamilyMember::Function {
                             number,
                             left_type,
                             right_type,
@@ -8279,7 +8279,7 @@ impl SqlSession {
                                         "support function must have an associated data type",
                                     ))
                                 })?;
-                            Ok(crabka_pgcatalog::OperatorFamilyMember::Function {
+                            Ok(krabka_pgcatalog::OperatorFamilyMember::Function {
                                 number: *number,
                                 function: function.to_string(),
                                 left_type_oid: left.oid(),
@@ -8295,7 +8295,7 @@ impl SqlSession {
                         }
                     })
                     .collect::<Result<Vec<_>, ExecError>>()?;
-                ops.extend(crabka_pgcatalog::add_operator_family_members_ops(
+                ops.extend(krabka_pgcatalog::add_operator_family_members_ops(
                     &*self.catalog_kv,
                     class.family_oid,
                     &members,
@@ -8311,7 +8311,7 @@ impl SqlSession {
                 method,
                 action,
             } => {
-                use crabka_pgparser::ast::{OperatorObjectAlterAction, OperatorObjectKind};
+                use krabka_pgparser::ast::{OperatorObjectAlterAction, OperatorObjectKind};
 
                 let method = method.to_ascii_lowercase();
                 if crate::catalog_rel::access_method_oid(&method).is_none() {
@@ -8329,13 +8329,13 @@ impl SqlSession {
                 let (object_oid, owner) = match builtin {
                     Some(oid) => (oid, crate::catalog_fn::OBJECT_OWNER.to_string()),
                     None => match kind {
-                        OperatorObjectKind::Class => crabka_pgcatalog::get_operator_class(
+                        OperatorObjectKind::Class => krabka_pgcatalog::get_operator_class(
                             &*self.catalog_kv,
                             &old_name,
                             &method,
                         )
                         .map(|object| (object.oid, object.owner)),
-                        OperatorObjectKind::Family => crabka_pgcatalog::get_operator_family(
+                        OperatorObjectKind::Family => krabka_pgcatalog::get_operator_family(
                             &*self.catalog_kv,
                             &old_name,
                             &method,
@@ -8353,7 +8353,7 @@ impl SqlSession {
                 );
                 if member_action
                     && !superuser
-                    && !crabka_pgcatalog::has_schema_privilege(
+                    && !krabka_pgcatalog::has_schema_privilege(
                         &*self.catalog_kv,
                         &old_name.schema,
                         &self.current_role,
@@ -8368,7 +8368,7 @@ impl SqlSession {
                 if !member_action
                     && owner != self.current_role
                     && !superuser
-                    && !crabka_pgcatalog::role_can_set(
+                    && !krabka_pgcatalog::role_can_set(
                         &*self.catalog_kv,
                         &self.current_role,
                         &owner,
@@ -8387,7 +8387,7 @@ impl SqlSession {
                     let mut identities = std::collections::HashSet::new();
                     for member in members {
                         let catalog_member = match member {
-                            crabka_pgparser::ast::OperatorFamilyMember::Operator {
+                            krabka_pgparser::ast::OperatorFamilyMember::Operator {
                                 number,
                                 operator,
                                 left_type,
@@ -8409,7 +8409,7 @@ impl SqlSession {
                                         "access method \"btree\" does not support ordering operators",
                                     )));
                                 }
-                                crabka_pgcatalog::OperatorFamilyMember::Operator {
+                                krabka_pgcatalog::OperatorFamilyMember::Operator {
                                     number: *number,
                                     operator: operator.clone(),
                                     left_type_oid: left_type.oid(),
@@ -8424,7 +8424,7 @@ impl SqlSession {
                                     },
                                 }
                             }
-                            crabka_pgparser::ast::OperatorFamilyMember::Function {
+                            krabka_pgparser::ast::OperatorFamilyMember::Function {
                                 number,
                                 left_type,
                                 right_type,
@@ -8466,7 +8466,7 @@ impl SqlSession {
                                         "hash function 1 must have one argument",
                                     )));
                                 }
-                                let named = crabka_pgcatalog::routine::routines_named(
+                                let named = krabka_pgcatalog::routine::routines_named(
                                     &*self.catalog_kv,
                                     &function.name,
                                 )?;
@@ -8478,7 +8478,7 @@ impl SqlSession {
                                         )));
                                     }
                                     let valid = argument_types
-                                        == &[crabka_pgparser::ast::OperatorFamilyFunctionType::Internal]
+                                        == &[krabka_pgparser::ast::OperatorFamilyFunctionType::Internal]
                                         && named.iter().any(|routine| {
                                             routine.input_type_names() == ["internal"]
                                                 && crate::routine::declared_returns_void(routine)
@@ -8547,7 +8547,7 @@ impl SqlSession {
                                             .map(|param| param.ty.column)
                                             .eq(argument_types.iter().map(|ty| ty.column()))
                                             && crate::routine::declared_scalar_result_type(routine)
-                                                == Some(crabka_pgtypes::ColumnType::Int4)
+                                                == Some(krabka_pgtypes::ColumnType::Int4)
                                     })
                                 {
                                     let message = if method == "btree" {
@@ -8559,7 +8559,7 @@ impl SqlSession {
                                         "42P17", message,
                                     )));
                                 }
-                                crabka_pgcatalog::OperatorFamilyMember::Function {
+                                krabka_pgcatalog::OperatorFamilyMember::Function {
                                     number: *number,
                                     function: function.to_string(),
                                     left_type_oid: left.oid(),
@@ -8576,7 +8576,7 @@ impl SqlSession {
                             return Err(operator_family_member_repeated(identity));
                         }
                         if builtin_operator_family_member_exists(object_oid, identity)
-                            || crabka_pgcatalog::operator_family_member_exists(
+                            || krabka_pgcatalog::operator_family_member_exists(
                                 &*self.catalog_kv,
                                 object_oid,
                                 identity,
@@ -8586,7 +8586,7 @@ impl SqlSession {
                         }
                         catalog_members.push(catalog_member);
                     }
-                    let ops = crabka_pgcatalog::add_operator_family_members_ops(
+                    let ops = krabka_pgcatalog::add_operator_family_members_ops(
                         &*self.catalog_kv,
                         object_oid,
                         &catalog_members,
@@ -8606,20 +8606,20 @@ impl SqlSession {
                     let members = members
                         .iter()
                         .map(|member| match member {
-                            crabka_pgparser::ast::OperatorFamilyMemberKey::Operator {
+                            krabka_pgparser::ast::OperatorFamilyMemberKey::Operator {
                                 number,
                                 left_type,
                                 right_type,
-                            } => crabka_pgcatalog::OperatorFamilyMemberKey::Operator {
+                            } => krabka_pgcatalog::OperatorFamilyMemberKey::Operator {
                                 number: *number,
                                 left_type_oid: left_type.oid(),
                                 right_type_oid: right_type.oid(),
                             },
-                            crabka_pgparser::ast::OperatorFamilyMemberKey::Function {
+                            krabka_pgparser::ast::OperatorFamilyMemberKey::Function {
                                 number,
                                 left_type,
                                 right_type,
-                            } => crabka_pgcatalog::OperatorFamilyMemberKey::Function {
+                            } => krabka_pgcatalog::OperatorFamilyMemberKey::Function {
                                 number: *number,
                                 left_type_oid: left_type.oid(),
                                 right_type_oid: right_type.oid(),
@@ -8627,7 +8627,7 @@ impl SqlSession {
                         })
                         .collect::<Vec<_>>();
                     for member in &members {
-                        if !crabka_pgcatalog::operator_family_member_exists(
+                        if !krabka_pgcatalog::operator_family_member_exists(
                             &*self.catalog_kv,
                             object_oid,
                             *member,
@@ -8645,7 +8645,7 @@ impl SqlSession {
                             return Err(operator_family_member_missing(*member, &old_name.name));
                         }
                     }
-                    let ops = crabka_pgcatalog::drop_operator_family_members_ops(
+                    let ops = krabka_pgcatalog::drop_operator_family_members_ops(
                         &*self.catalog_kv,
                         object_oid,
                         &members,
@@ -8670,16 +8670,16 @@ impl SqlSession {
                 }
                 let target_name = match action {
                     OperatorObjectAlterAction::RenameTo(new_name) => {
-                        crabka_pgcatalog::RelationName::new(old_name.schema.clone(), new_name)
+                        krabka_pgcatalog::RelationName::new(old_name.schema.clone(), new_name)
                     }
                     OperatorObjectAlterAction::SetSchema(schema) => {
-                        if !crabka_pgcatalog::schema_exists(&*self.catalog_kv, schema)? {
-                            return Err(crabka_pgcatalog::CatalogError::UndefinedSchema(
+                        if !krabka_pgcatalog::schema_exists(&*self.catalog_kv, schema)? {
+                            return Err(krabka_pgcatalog::CatalogError::UndefinedSchema(
                                 schema.clone(),
                             )
                             .into());
                         }
-                        crabka_pgcatalog::RelationName::new(schema, old_name.name.clone())
+                        krabka_pgcatalog::RelationName::new(schema, old_name.name.clone())
                     }
                     OperatorObjectAlterAction::OwnerTo(_) => old_name.clone(),
                     OperatorObjectAlterAction::AddMembers(_)
@@ -8692,20 +8692,20 @@ impl SqlSession {
                         } else {
                             owner
                         };
-                        if !crabka_pgcatalog::role_exists(&*self.catalog_kv, owner)? {
-                            return Err(crabka_pgcatalog::CatalogError::UndefinedObject(
+                        if !krabka_pgcatalog::role_exists(&*self.catalog_kv, owner)? {
+                            return Err(krabka_pgcatalog::CatalogError::UndefinedObject(
                                 owner.clone(),
                             )
                             .into());
                         }
                         if !superuser
-                            && !crabka_pgcatalog::role_can_set(
+                            && !krabka_pgcatalog::role_can_set(
                                 &*self.catalog_kv,
                                 &self.current_role,
                                 owner,
                             )?
                         {
-                            return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+                            return Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
                                 "42501",
                                 format!("must be able to SET ROLE \"{owner}\""),
                             )));
@@ -8716,28 +8716,28 @@ impl SqlSession {
                 };
                 let ops = match kind {
                     OperatorObjectKind::Class => {
-                        let mut object = crabka_pgcatalog::get_operator_class(
+                        let mut object = krabka_pgcatalog::get_operator_class(
                             &*self.catalog_kv,
                             &old_name,
                             &method,
                         )?;
                         object.name = target_name.clone();
                         object.owner = new_owner;
-                        crabka_pgcatalog::replace_operator_class_ops(
+                        krabka_pgcatalog::replace_operator_class_ops(
                             &*self.catalog_kv,
                             &old_name,
                             &object,
                         )
                     }
                     OperatorObjectKind::Family => {
-                        let mut object = crabka_pgcatalog::get_operator_family(
+                        let mut object = krabka_pgcatalog::get_operator_family(
                             &*self.catalog_kv,
                             &old_name,
                             &method,
                         )?;
                         object.name = target_name.clone();
                         object.owner = new_owner;
-                        crabka_pgcatalog::replace_operator_family_ops(
+                        krabka_pgcatalog::replace_operator_family_ops(
                             &*self.catalog_kv,
                             &old_name,
                             &object,
@@ -8745,7 +8745,7 @@ impl SqlSession {
                     }
                 }
                 .map_err(|error| match error {
-                    crabka_pgcatalog::CatalogError::DuplicateObject(_) => {
+                    krabka_pgcatalog::CatalogError::DuplicateObject(_) => {
                         operator_object_duplicate(
                             *kind,
                             &target_name.name,
@@ -8771,7 +8771,7 @@ impl SqlSession {
                 if_exists,
                 cascade,
             } => {
-                use crabka_pgparser::ast::OperatorObjectKind;
+                use krabka_pgparser::ast::OperatorObjectKind;
 
                 let method = method.to_ascii_lowercase();
                 if crate::catalog_rel::access_method_oid(&method).is_none() {
@@ -8786,12 +8786,12 @@ impl SqlSession {
                     *kind,
                 )?;
                 let result = match kind {
-                    OperatorObjectKind::Class => crabka_pgcatalog::drop_operator_class_ops(
+                    OperatorObjectKind::Class => krabka_pgcatalog::drop_operator_class_ops(
                         &*self.catalog_kv,
                         &resolved,
                         &method,
                     ),
-                    OperatorObjectKind::Family => crabka_pgcatalog::drop_operator_family_ops(
+                    OperatorObjectKind::Family => krabka_pgcatalog::drop_operator_family_ops(
                         &*self.catalog_kv,
                         &resolved,
                         &method,
@@ -8800,17 +8800,17 @@ impl SqlSession {
                 };
                 match result {
                     Ok(ops) => self.commit_catalog(ops).await?,
-                    Err(crabka_pgcatalog::CatalogError::UndefinedObject(_)) if *if_exists => {
+                    Err(krabka_pgcatalog::CatalogError::UndefinedObject(_)) if *if_exists => {
                         let kind = match kind {
                             OperatorObjectKind::Class => "class",
                             OperatorObjectKind::Family => "family",
                         };
-                        self.plpgsql_notice(crabka_pgwire::error::PgError::notice(format!(
+                        self.plpgsql_notice(krabka_pgwire::error::PgError::notice(format!(
                             "operator {kind} \"{}\" does not exist for access method \"{method}\", skipping",
                             name.name
                         )))?;
                     }
-                    Err(crabka_pgcatalog::CatalogError::UndefinedObject(_)) => {
+                    Err(krabka_pgcatalog::CatalogError::UndefinedObject(_)) => {
                         return Err(operator_object_missing(*kind, &name.name, &method));
                     }
                     Err(error) => return Err(error.into()),
@@ -8881,8 +8881,8 @@ impl SqlSession {
                 let next = role
                     .clone()
                     .unwrap_or_else(|| self.authenticated_user.clone());
-                if !crabka_pgcatalog::role_exists(&*self.catalog_kv, &next)? {
-                    return Err(crabka_pgcatalog::CatalogError::UndefinedObject(next).into());
+                if !krabka_pgcatalog::role_exists(&*self.catalog_kv, &next)? {
+                    return Err(krabka_pgcatalog::CatalogError::UndefinedObject(next).into());
                 }
                 self.session_user.clone_from(&next);
                 self.current_role = next;
@@ -8923,9 +8923,9 @@ impl SqlSession {
         match names {
             None => self.deferred_constraints().modes_mut().set_all(deferred),
             Some(names) => {
-                let catalog = crabka_pgcatalog::list_foreign_keys(self.catalog_kv.as_ref())?;
-                let triggers = crabka_pgcatalog::trigger::list_triggers(self.catalog_kv.as_ref())?;
-                let indexes = crabka_pgcatalog::list_indexes(self.catalog_kv.as_ref())?;
+                let catalog = krabka_pgcatalog::list_foreign_keys(self.catalog_kv.as_ref())?;
+                let triggers = krabka_pgcatalog::trigger::list_triggers(self.catalog_kv.as_ref())?;
+                let indexes = krabka_pgcatalog::list_indexes(self.catalog_kv.as_ref())?;
                 let mut store = self.deferred_constraints();
                 for name in names {
                     let mut found = false;
@@ -9091,7 +9091,7 @@ impl SqlSession {
                 .lock()
                 .expect("relation rowtype parse lock");
             self.type_search_schemas().and_then(|schemas| {
-                crabka_pgparser::parse_with_type_schemas(sql, &schemas).map_err(ExecError::from)
+                krabka_pgparser::parse_with_type_schemas(sql, &schemas).map_err(ExecError::from)
             })
         };
         match parsed {
@@ -9285,8 +9285,8 @@ impl SqlSession {
     /// that is not a table, yields whatever part is known and never an error.
     fn resolve_traced_relation(
         &self,
-        relation: &crabka_pgparser::ast::RelationRef,
-    ) -> Option<(crabka_pgcatalog::RelationName, Option<u32>)> {
+        relation: &krabka_pgparser::ast::RelationRef,
+    ) -> Option<(krabka_pgcatalog::RelationName, Option<u32>)> {
         let name = crate::relname::resolve_relation(
             self.catalog_kv.as_ref(),
             &self.resolution_scope(),
@@ -9294,7 +9294,7 @@ impl SqlSession {
             crate::relname::SchemaDisposition::Reference,
         )
         .ok()?;
-        let table_id = crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &name)
+        let table_id = krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &name)
             .ok()
             .map(|table| table.id);
         Some((name, table_id))
@@ -9329,11 +9329,11 @@ impl SqlSession {
         }
         // Only reached when the GUC is actually set, so the common path never
         // pays even the substring search this is built around.
-        if sql.is_some_and(|sql| crabka_trace_context::extract_sqlcommenter(sql).is_some()) {
+        if sql.is_some_and(|sql| krabka_trace_context::extract_sqlcommenter(sql).is_some()) {
             return;
         }
         let tracestate = self.guc.effective(crate::telemetry::TRACESTATE_GUC).ok();
-        let Ok(carrier) = crabka_trace_context::TraceCarrier::from_w3c(
+        let Ok(carrier) = krabka_trace_context::TraceCarrier::from_w3c(
             &traceparent,
             tracestate.as_deref().filter(|state| !state.is_empty()),
         ) else {
@@ -9342,7 +9342,7 @@ impl SqlSession {
         let Some(remote) = carrier.span_context() else {
             return;
         };
-        let already_joined = crabka_trace_context::TraceCarrier::capture_current()
+        let already_joined = krabka_trace_context::TraceCarrier::capture_current()
             .span_context()
             .is_some_and(|current| current.trace_id() == remote.trace_id());
         if already_joined {
@@ -9360,7 +9360,7 @@ impl SqlSession {
             self.login_event_fired = true;
             if let Err(error) = self
                 .fire_event_triggers(
-                    crabka_pgcatalog::trigger::EventTriggerEvent::Login,
+                    krabka_pgcatalog::trigger::EventTriggerEvent::Login,
                     "LOGIN",
                     None,
                 )
@@ -9592,7 +9592,7 @@ impl SqlSession {
                 // refuses it *first*: `VACUUM nosuch` inside a block is 25001,
                 // never the 42P01 the name would earn outside one.
                 if matches!(self.state, TxnState::InTransaction(_)) {
-                    return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+                    return Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
                         "25001",
                         "VACUUM cannot run inside a transaction block",
                     )));
@@ -9607,7 +9607,7 @@ impl SqlSession {
             Statement::Query(q)
                 if q.with
                     .as_ref()
-                    .is_some_and(crabka_pgparser::ast::WithClause::has_data_modifying_cte) =>
+                    .is_some_and(krabka_pgparser::ast::WithClause::has_data_modifying_cte) =>
             {
                 self.refuse_materialized_view_write(stmt)?;
                 self.run_write(stmt).await
@@ -9800,7 +9800,7 @@ impl SqlSession {
             // `PostgreSQL` does not roll `nextval` back — advancing, rolling
             // back and advancing again yields 1 then 3 on `postgres:18.4` — so
             // the gap the aborted transaction burned has to survive it.
-            let mut ops = vec![crabka_pgmvcc::clog::put_op(xid, XidStatus::Aborted)];
+            let mut ops = vec![krabka_pgmvcc::clog::put_op(xid, XidStatus::Aborted)];
             ops.extend(self.take_pending_sequence_ops());
             let r = self.committer.commit(ops).await;
             // Deregister even if the abort record failed to write: restart
@@ -10142,7 +10142,7 @@ impl SqlSession {
             // batch, so those rows are durable before the entry that makes the
             // transaction visible.
             let mut ops = fk_ops;
-            ops.push(crabka_pgmvcc::clog::put_op(xid, XidStatus::Committed));
+            ops.push(krabka_pgmvcc::clog::put_op(xid, XidStatus::Committed));
             // In Replicated mode, fold the next_xid advance into the
             // committed batch (the state machine max-merges it). A txn
             // that allocated its xid only via a locking SELECT (FOR
@@ -10252,11 +10252,11 @@ impl SqlSession {
             .expect("global decision on a non-GTM session");
         self.committer
             .commit(vec![
-                crabka_pgmvcc::clog::put_op(g, status),
+                krabka_pgmvcc::clog::put_op(g, status),
                 gtm.next_global_xid_op(),
             ])
             .await?;
-        Ok(crabka_pgmvcc::clog::get(self.catalog_kv.as_ref(), g)?)
+        Ok(krabka_pgmvcc::clog::get(self.catalog_kv.as_ref(), g)?)
     }
 
     fn statement_targets_sharded_table(&self, stmt: &Statement) -> Result<bool, ExecError> {
@@ -10276,10 +10276,10 @@ impl SqlSession {
         if name.schema == crate::search_path::PG_CATALOG && name.name == "pg_class" {
             return Ok(false);
         }
-        let table = match crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &name) {
+        let table = match krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &name) {
             Ok(table) => table,
-            Err(crabka_pgcatalog::CatalogError::UndefinedTable(_))
-                if crabka_pgcatalog::get_view(self.catalog_kv.as_ref(), &name).is_ok() =>
+            Err(krabka_pgcatalog::CatalogError::UndefinedTable(_))
+                if krabka_pgcatalog::get_view(self.catalog_kv.as_ref(), &name).is_ok() =>
             {
                 return Ok(false);
             }
@@ -10311,8 +10311,8 @@ impl SqlSession {
     /// data-modifying CTE is part of the same command and writes through the
     /// same path, so a matview named in one is refused for the same reason.
     fn refuse_materialized_view_write(&self, stmt: &Statement) -> Result<(), ExecError> {
-        let mut targets: Vec<(&crabka_pgparser::ast::RelationRef, &'static str)> = Vec::new();
-        fn collect(stmt: &Statement) -> Option<(&crabka_pgparser::ast::RelationRef, &'static str)> {
+        let mut targets: Vec<(&krabka_pgparser::ast::RelationRef, &'static str)> = Vec::new();
+        fn collect(stmt: &Statement) -> Option<(&krabka_pgparser::ast::RelationRef, &'static str)> {
             match stmt {
                 Statement::Insert { table, .. }
                 | Statement::Update { table, .. }
@@ -10331,7 +10331,7 @@ impl SqlSession {
         }
         if let Some(with) = crate::exec::statement_with_clause(stmt) {
             for cte in &with.ctes {
-                if let crabka_pgparser::ast::CteBody::Dml(body) = &cte.body
+                if let krabka_pgparser::ast::CteBody::Dml(body) = &cte.body
                     && let Some(found) = collect(body)
                 {
                     targets.push(found);
@@ -10348,7 +10348,7 @@ impl SqlSession {
                 // A name that does not resolve is the write path's own 42P01.
                 continue;
             };
-            if !crabka_pgcatalog::is_materialized_view(self.catalog_kv.as_ref(), &name)? {
+            if !krabka_pgcatalog::is_materialized_view(self.catalog_kv.as_ref(), &name)? {
                 continue;
             }
             return Err(match verb {
@@ -10384,12 +10384,12 @@ impl SqlSession {
 
     fn locking_select_targets_sharded_table(
         &self,
-        s: &crabka_pgparser::ast::SelectStmt,
+        s: &krabka_pgparser::ast::SelectStmt,
     ) -> Result<bool, ExecError> {
         let [TableExpr::Table { name, .. }] = s.from.as_slice() else {
             return Ok(false);
         };
-        let table = crabka_pgcatalog::get_table(
+        let table = krabka_pgcatalog::get_table(
             self.catalog_kv.as_ref(),
             &crate::relname::resolve_relation(
                 self.catalog_kv.as_ref(),
@@ -10840,21 +10840,21 @@ impl SqlSession {
             &written.reference,
             crate::relname::SchemaDisposition::Reference,
         )?;
-        let table = crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &relation)?;
+        let table = krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &relation)?;
         let identifier = |part: &str| format!("\"{}\"", part.replace('"', "\"\""));
         let sql = format!(
             "SELECT * FROM {}.{}",
             identifier(&relation.schema),
             identifier(&relation.name)
         );
-        let statements = crabka_pgparser::parse(&sql)?;
+        let statements = krabka_pgparser::parse(&sql)?;
         let [statement] = statements.as_slice() else {
             return Err(ExecError::Syntax(
                 "table_to_xml query did not parse as one statement".into(),
             ));
         };
         let result = self.run_select(statement).await?;
-        let crabka_pgwire::engine::QueryResult::Rows { rows, .. } = result else {
+        let krabka_pgwire::engine::QueryResult::Rows { rows, .. } = result else {
             return Err(ExecError::ObjectNotInPrerequisiteState(
                 "table_to_xml scan returned no rows result".into(),
             ));
@@ -10874,14 +10874,14 @@ impl SqlSession {
         &mut self,
         request: crate::xmlmap::QueryXmlRequest,
     ) -> Result<Datum, ExecError> {
-        let statements = crabka_pgparser::parse(&request.query)?;
+        let statements = krabka_pgparser::parse(&request.query)?;
         let [statement @ Statement::Query(_)] = statements.as_slice() else {
             return Err(ExecError::Syntax(
                 "query_to_xml requires exactly one query statement".into(),
             ));
         };
         let result = self.run_select(statement).await?;
-        let crabka_pgwire::engine::QueryResult::Rows { fields, rows, .. } = result else {
+        let krabka_pgwire::engine::QueryResult::Rows { fields, rows, .. } = result else {
             return Err(ExecError::ObjectNotInPrerequisiteState(
                 "query_to_xml query returned no rows result".into(),
             ));
@@ -10900,14 +10900,14 @@ impl SqlSession {
         &mut self,
         request: crate::text_search_fn::TsRewriteQueryRequest,
     ) -> Result<Datum, ExecError> {
-        let statements = crabka_pgparser::parse(&request.source)?;
+        let statements = krabka_pgparser::parse(&request.source)?;
         let [statement @ Statement::Query(_)] = statements.as_slice() else {
             return Err(ExecError::Syntax(
                 "ts_rewrite query must return target and substitute".into(),
             ));
         };
         let result = self.run_select(statement).await?;
-        let crabka_pgwire::engine::QueryResult::Rows { rows, .. } = result else {
+        let krabka_pgwire::engine::QueryResult::Rows { rows, .. } = result else {
             return Err(ExecError::ObjectNotInPrerequisiteState(
                 "ts_rewrite query returned no rows result".into(),
             ));
@@ -10921,10 +10921,10 @@ impl SqlSession {
             };
             let target = std::str::from_utf8(&target.text)
                 .map_err(|_| ExecError::InvalidParameterValue("invalid tsquery result".into()))?
-                .parse::<crabka_pgtypes::TsQuery>()?;
+                .parse::<krabka_pgtypes::TsQuery>()?;
             let replacement = std::str::from_utf8(&replacement.text)
                 .map_err(|_| ExecError::InvalidParameterValue("invalid tsquery result".into()))?
-                .parse::<crabka_pgtypes::TsQuery>()?;
+                .parse::<krabka_pgtypes::TsQuery>()?;
             query = query.rewrite(&target, &replacement);
         }
         Ok(Datum::TsQuery(query))
@@ -10934,14 +10934,14 @@ impl SqlSession {
         &mut self,
         request: crate::srf::TsStatRequest,
     ) -> Result<Vec<Vec<Datum>>, ExecError> {
-        let statements = crabka_pgparser::parse(&request.source)?;
+        let statements = krabka_pgparser::parse(&request.source)?;
         let [statement @ Statement::Query(_)] = statements.as_slice() else {
             return Err(ExecError::Syntax(
                 "ts_stat query must contain exactly one query statement".into(),
             ));
         };
         let result = self.run_select(statement).await?;
-        let crabka_pgwire::engine::QueryResult::Rows { fields, rows, .. } = result else {
+        let krabka_pgwire::engine::QueryResult::Rows { fields, rows, .. } = result else {
             return Err(ExecError::ObjectNotInPrerequisiteState(
                 "ts_stat query returned no rows result".into(),
             ));
@@ -10951,7 +10951,7 @@ impl SqlSession {
                 "ts_stat query must return one tsvector column".into(),
             ));
         };
-        if field.type_oid != crabka_pgtypes::oids::TSVECTOR {
+        if field.type_oid != krabka_pgtypes::oids::TSVECTOR {
             return Err(ExecError::InvalidParameterValue(
                 "ts_stat query must return one tsvector column".into(),
             ));
@@ -10964,7 +10964,7 @@ impl SqlSession {
                     .map_err(|_| {
                         ExecError::InvalidParameterValue("invalid tsvector result".into())
                     })?
-                    .parse::<crabka_pgtypes::TsVector>()
+                    .parse::<krabka_pgtypes::TsVector>()
                     .map_err(ExecError::from)
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -10985,7 +10985,7 @@ impl SqlSession {
                 false,
             )
             .await?;
-        let crabka_pgwire::engine::QueryResult::Rows { fields, rows, .. } = result else {
+        let krabka_pgwire::engine::QueryResult::Rows { fields, rows, .. } = result else {
             return Err(ExecError::ObjectNotInPrerequisiteState(
                 "cursor_to_xml fetch returned no rows result".into(),
             ));
@@ -11012,10 +11012,10 @@ impl SqlSession {
             &written.reference,
             crate::relname::SchemaDisposition::Reference,
         )?;
-        let table = crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &relation)?;
+        let table = krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &relation)?;
         let rows = if request.include_data {
             let identifier = |part: &str| format!("\"{}\"", part.replace('\"', "\"\""));
-            let statements = crabka_pgparser::parse(&format!(
+            let statements = krabka_pgparser::parse(&format!(
                 "SELECT * FROM {}.{}",
                 identifier(&relation.schema),
                 identifier(&relation.name)
@@ -11052,7 +11052,7 @@ impl SqlSession {
         &mut self,
         request: crate::xmlmap::QueryXmlSchemaRequest,
     ) -> Result<Datum, ExecError> {
-        let statements = crabka_pgparser::parse(&request.query)?;
+        let statements = krabka_pgparser::parse(&request.query)?;
         let [statement @ Statement::Query(_)] = statements.as_slice() else {
             return Err(ExecError::Syntax(
                 "query XML schema functions require exactly one query statement".into(),
@@ -11110,12 +11110,12 @@ impl SqlSession {
         &mut self,
         request: crate::xmlmap::SchemaXmlRequest,
     ) -> Result<Datum, ExecError> {
-        if !crabka_pgcatalog::schema_exists(self.catalog_kv.as_ref(), &request.schema)? {
+        if !krabka_pgcatalog::schema_exists(self.catalog_kv.as_ref(), &request.schema)? {
             return Err(
-                crabka_pgcatalog::CatalogError::UndefinedSchema(request.schema.clone()).into(),
+                krabka_pgcatalog::CatalogError::UndefinedSchema(request.schema.clone()).into(),
             );
         }
-        let tables = crabka_pgcatalog::list_tables(self.catalog_kv.as_ref())?
+        let tables = krabka_pgcatalog::list_tables(self.catalog_kv.as_ref())?
             .into_iter()
             .filter(|table| table.name.schema == request.schema)
             .collect::<Vec<_>>();
@@ -11123,7 +11123,7 @@ impl SqlSession {
         let mut rows = Vec::with_capacity(tables.len());
         for table in &tables {
             if request.include_data {
-                let statements = crabka_pgparser::parse(&format!(
+                let statements = krabka_pgparser::parse(&format!(
                     "SELECT * FROM {}.{}",
                     identifier(&table.name.schema),
                     identifier(&table.name.name)
@@ -11218,7 +11218,7 @@ impl SqlSession {
     /// (success and error). In-txn: locks persist until COMMIT/ROLLBACK.
     async fn run_select_locking(
         &mut self,
-        s: &crabka_pgparser::ast::SelectStmt,
+        s: &krabka_pgparser::ast::SelectStmt,
     ) -> Result<QueryResult, ExecError> {
         if matches!(self.state, TxnState::Idle) {
             self.begin_implicit_transaction(Some(false)).await?;
@@ -11400,8 +11400,8 @@ impl SqlSession {
                 crate::relname::SchemaDisposition::Creation
             },
         )?;
-        let target = crabka_pgparser::ast::RelationRef::qualified(&name.schema, &name.name);
-        if *if_not_exists && crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), name).is_ok() {
+        let target = krabka_pgparser::ast::RelationRef::qualified(&name.schema, &name.name);
+        if *if_not_exists && krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), name).is_ok() {
             return Ok(QueryResult::Command {
                 tag: "CREATE TABLE AS".into(),
             });
@@ -11437,7 +11437,7 @@ impl SqlSession {
             .iter()
             .enumerate()
             .map(|(i, f)| {
-                Ok(crabka_pgparser::ast::ColumnDef {
+                Ok(krabka_pgparser::ast::ColumnDef {
                     name: columns
                         .as_ref()
                         .and_then(|names| names.get(i))
@@ -11494,14 +11494,14 @@ impl SqlSession {
         // new table's default ACL can deny its owner a later INSERT. Gres runs
         // that population through its ordinary write path, so temporarily lift
         // the one marker that represents such an owner revocation.
-        let restore_owner_insert = crabka_pgcatalog::owner_table_privilege_is_revoked(
+        let restore_owner_insert = krabka_pgcatalog::owner_table_privilege_is_revoked(
             self.catalog_kv.as_ref(),
             name,
             "INSERT",
         )?;
         if restore_owner_insert {
             self.catalog_kv
-                .write_batch(&[crabka_pgcatalog::restore_owner_table_privilege_op(
+                .write_batch(&[krabka_pgcatalog::restore_owner_table_privilege_op(
                     name, "INSERT",
                 )])?;
         }
@@ -11510,7 +11510,7 @@ impl SqlSession {
             alias: None,
             columns: None,
             indirections: None,
-            source: crabka_pgparser::ast::InsertSource::Query(Box::new(query)),
+            source: krabka_pgparser::ast::InsertSource::Query(Box::new(query)),
             on_conflict: None,
             returning: None,
             with: None,
@@ -11534,7 +11534,7 @@ impl SqlSession {
         };
         if restore_owner_insert {
             self.catalog_kv
-                .write_batch(&[crabka_pgcatalog::revoke_owner_table_privilege_op(
+                .write_batch(&[krabka_pgcatalog::revoke_owner_table_privilege_op(
                     name, "INSERT",
                 )])?;
         }
@@ -11592,7 +11592,7 @@ impl SqlSession {
             crate::relname::SchemaDisposition::Creation,
         )?;
         if *if_not_exists
-            && crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &resolved).is_ok()
+            && krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &resolved).is_ok()
         {
             return Ok(QueryResult::Command {
                 tag: "CREATE MATERIALIZED VIEW".into(),
@@ -11601,7 +11601,7 @@ impl SqlSession {
         // Every statement this synthesizes names the target schema-qualified, so
         // the fill and the undo cannot land on a different relation of the same
         // name earlier on the search path.
-        let target = crabka_pgparser::ast::RelationRef::qualified(&resolved.schema, &resolved.name);
+        let target = krabka_pgparser::ast::RelationRef::qualified(&resolved.schema, &resolved.name);
         self.run_ddl(stmt).await?;
         if !*with_data {
             return Ok(QueryResult::Command {
@@ -11706,7 +11706,7 @@ impl SqlSession {
         // Checked before anything is emptied, so a REFRESH aimed at the wrong
         // relation kind changes nothing.
         crate::exec::require_materialized_view(self.catalog_kv.as_ref(), &resolved)?;
-        let target = crabka_pgparser::ast::RelationRef::qualified(&resolved.schema, &resolved.name);
+        let target = krabka_pgparser::ast::RelationRef::qualified(&resolved.schema, &resolved.name);
         self.run_write(&Statement::Delete {
             table: target.clone(),
             alias: None,
@@ -11740,8 +11740,8 @@ impl SqlSession {
     /// relation actually has rather than one a caller supplied.
     async fn fill_materialized_view(
         &mut self,
-        resolved: &crabka_pgcatalog::RelationName,
-        target: &crabka_pgparser::ast::RelationRef,
+        resolved: &krabka_pgcatalog::RelationName,
+        target: &krabka_pgparser::ast::RelationRef,
     ) -> Result<u64, ExecError> {
         let table = crate::exec::require_materialized_view(self.catalog_kv.as_ref(), resolved)?;
         let definition = table
@@ -11750,7 +11750,7 @@ impl SqlSession {
             .expect("require_materialized_view returned a materialized view")
             .definition
             .clone();
-        let statements = crabka_pgparser::parse(&definition)?;
+        let statements = krabka_pgparser::parse(&definition)?;
         let [Statement::Query(query)] = statements.as_slice() else {
             return Err(ExecError::Unsupported(
                 "stored materialized view definition is not a query".into(),
@@ -11762,7 +11762,7 @@ impl SqlSession {
                 alias: None,
                 columns: None,
                 indirections: None,
-                source: crabka_pgparser::ast::InsertSource::Query(Box::new(query.clone())),
+                source: krabka_pgparser::ast::InsertSource::Query(Box::new(query.clone())),
                 on_conflict: None,
                 returning: None,
                 with: None,
@@ -11801,15 +11801,15 @@ impl SqlSession {
             return Ok(());
         }
         let _guard = self.table_id_lock.lock().await;
-        let first = crabka_pgcatalog::read_next_table_id(&*self.catalog_kv)?;
-        let count = crabka_pgcatalog::TableId::try_from(wanted.max(TABLE_ID_BLOCK))
-            .unwrap_or(crabka_pgcatalog::TableId::MAX);
+        let first = krabka_pgcatalog::read_next_table_id(&*self.catalog_kv)?;
+        let count = krabka_pgcatalog::TableId::try_from(wanted.max(TABLE_ID_BLOCK))
+            .unwrap_or(krabka_pgcatalog::TableId::MAX);
         // Row keys, lock identities and foreign-key referents all key on the
         // table id, so running out of them is a real limit rather than a wrap.
         let end = first
             .checked_add(count)
             .ok_or_else(|| ExecError::Unsupported("the table id space is exhausted".into()))?;
-        let ops = vec![crabka_pgcatalog::set_next_table_id_op(end)];
+        let ops = vec![krabka_pgcatalog::set_next_table_id_op(end)];
         if Arc::ptr_eq(&self.kv, &self.catalog_kv) {
             self.committer.commit(ops).await?;
         } else {
@@ -11829,7 +11829,7 @@ impl SqlSession {
 
     /// This session's temporary namespace, whether or not it exists yet.
     fn temp_schema(&self) -> String {
-        crabka_pgcatalog::temp_schema_name(self.backend_pid)
+        krabka_pgcatalog::temp_schema_name(self.backend_pid)
     }
 
     /// The catalog store this session reads and writes, as a value a claim on a
@@ -11845,7 +11845,7 @@ impl SqlSession {
     /// Apply a catalog batch through whichever seam this session's stores make
     /// authoritative: the commit seam when catalog and data share a store, and
     /// the catalog store's own batch when they do not.
-    async fn commit_catalog(&self, ops: Vec<crabka_pgkv::WriteOp>) -> Result<(), ExecError> {
+    async fn commit_catalog(&self, ops: Vec<krabka_pgkv::WriteOp>) -> Result<(), ExecError> {
         if ops.is_empty() {
             return Ok(());
         }
@@ -11863,12 +11863,12 @@ impl SqlSession {
     /// reclamation), so they need the same post-commit registry boundary here.
     async fn commit_catalog_with_user_type_sync(
         &self,
-        ops: Vec<crabka_pgkv::WriteOp>,
+        ops: Vec<krabka_pgkv::WriteOp>,
     ) -> Result<(), ExecError> {
-        let before = crabka_pgcatalog::list_user_types(&*self.catalog_kv)?;
+        let before = krabka_pgcatalog::list_user_types(&*self.catalog_kv)?;
         self.commit_catalog(ops).await?;
-        let after = crabka_pgcatalog::list_user_types(&*self.catalog_kv)?;
-        crabka_pgtypes::usertype::publish_catalog_delta(&before, &after);
+        let after = krabka_pgcatalog::list_user_types(&*self.catalog_kv)?;
+        krabka_pgtypes::usertype::publish_catalog_delta(&before, &after);
         Ok(())
     }
 
@@ -11903,7 +11903,7 @@ impl SqlSession {
             );
             Vec::new()
         };
-        ops.push(crabka_pgcatalog::create_temp_schema_op(&schema));
+        ops.push(krabka_pgcatalog::create_temp_schema_op(&schema));
         self.commit_catalog_with_user_type_sync(ops).await?;
         self.temp_namespace_claim = Some(claim);
         self.temp_schema_ready = true;
@@ -11916,7 +11916,7 @@ impl SqlSession {
     fn statement_may_create_temp(&self, stmt: &Statement) -> bool {
         crate::exec::ddl_requests_temporary(stmt)
             || crate::exec::ddl_created_qualifier(stmt).is_some_and(|schema| {
-                schema == crabka_pgcatalog::PG_TEMP_ALIAS || schema == self.temp_schema()
+                schema == krabka_pgcatalog::PG_TEMP_ALIAS || schema == self.temp_schema()
             })
             || (matches!(
                 crate::exec::ddl_table_id_demand(stmt),
@@ -11925,7 +11925,7 @@ impl SqlSession {
                 .resolution_scope()
                 .creation_schema(&*self.catalog_kv)
                 .is_ok_and(|schema| {
-                    schema.is_some_and(|name| crabka_pgcatalog::is_temp_schema(&name))
+                    schema.is_some_and(|name| krabka_pgcatalog::is_temp_schema(&name))
                 }))
     }
 
@@ -11988,7 +11988,7 @@ impl SqlSession {
         else {
             return Ok(());
         };
-        if *action == crabka_pgparser::ast::OnCommitAction::PreserveRows {
+        if *action == krabka_pgparser::ast::OnCommitAction::PreserveRows {
             return Ok(());
         }
         let disposition = if *temporary {
@@ -12005,7 +12005,7 @@ impl SqlSession {
         // Read back the id the creation just assigned: the disposition is the
         // relation's, and only the id says which relation that is once the name
         // has been given away.
-        let table = crabka_pgcatalog::get_table(&*self.catalog_kv, &resolved)?.id;
+        let table = krabka_pgcatalog::get_table(&*self.catalog_kv, &resolved)?.id;
         self.on_commit.push(OnCommitEntry {
             relation: resolved,
             table,
@@ -12023,9 +12023,9 @@ impl SqlSession {
     /// since then by a different relation carries that relation's own
     /// disposition and not this one.
     fn on_commit_relation_owner(&self, entry: &OnCommitEntry) -> Result<Option<String>, ExecError> {
-        match crabka_pgcatalog::get_table(&*self.catalog_kv, &entry.relation) {
+        match krabka_pgcatalog::get_table(&*self.catalog_kv, &entry.relation) {
             Ok(table) if table.id == entry.table => Ok(Some(table.owner)),
-            Ok(_) | Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => Ok(None),
+            Ok(_) | Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => Ok(None),
             Err(error) => Err(error.into()),
         }
     }
@@ -12058,7 +12058,7 @@ impl SqlSession {
         let mut drop = Vec::new();
         let mut failure = None;
         for entry in queued {
-            let reference = crabka_pgparser::ast::RelationRef::qualified(
+            let reference = krabka_pgparser::ast::RelationRef::qualified(
                 &entry.relation.schema,
                 &entry.relation.name,
             );
@@ -12071,9 +12071,9 @@ impl SqlSession {
                 }
             };
             match entry.action {
-                crabka_pgparser::ast::OnCommitAction::PreserveRows => {}
-                crabka_pgparser::ast::OnCommitAction::Drop => drop.push((reference, owner)),
-                crabka_pgparser::ast::OnCommitAction::DeleteRows => {
+                krabka_pgparser::ast::OnCommitAction::PreserveRows => {}
+                krabka_pgparser::ast::OnCommitAction::Drop => drop.push((reference, owner)),
+                krabka_pgparser::ast::OnCommitAction::DeleteRows => {
                     // A partitioned parent holds no rows, so there is nothing
                     // here to empty and `PostgreSQL`'s `heap_truncate` skips it
                     // for exactly that reason. Its partitions are queued in
@@ -12106,7 +12106,7 @@ impl SqlSession {
                     // other relation's.
                     let previous_role = std::mem::replace(&mut self.current_role, owner);
                     let emptied = Box::pin(self.run_write(&Statement::Truncate {
-                        targets: vec![crabka_pgparser::ast::TruncateTarget {
+                        targets: vec![krabka_pgparser::ast::TruncateTarget {
                             name: reference,
                             only: true,
                         }],
@@ -12156,7 +12156,7 @@ impl SqlSession {
     /// already-claimed block never touches it at all.
     async fn fire_event_triggers(
         &mut self,
-        event: crabka_pgcatalog::trigger::EventTriggerEvent,
+        event: krabka_pgcatalog::trigger::EventTriggerEvent,
         tag: &str,
         context: Option<Arc<crate::clock::EventTriggerContext>>,
     ) -> Result<(), ExecError> {
@@ -12221,13 +12221,13 @@ impl SqlSession {
         if undo.is_empty() {
             return Ok(());
         }
-        let user_type_prefix = crabka_pgkv::key::user_type_prefix();
+        let user_type_prefix = krabka_pgkv::key::user_type_prefix();
         let restores_user_types = undo.keys().any(|key| {
-            crabka_pgkv::key::user_type_key_parts(key).is_some()
+            krabka_pgkv::key::user_type_key_parts(key).is_some()
                 || key.starts_with(user_type_prefix.as_slice())
         });
         let user_types_before = restores_user_types
-            .then(|| crabka_pgcatalog::list_user_types(&*self.catalog_kv))
+            .then(|| krabka_pgcatalog::list_user_types(&*self.catalog_kv))
             .transpose()?;
         let undo_ops = undo
             .into_iter()
@@ -12243,8 +12243,8 @@ impl SqlSession {
             self.catalog_kv.write_batch(&undo_ops)?;
         }
         if let Some(before) = user_types_before {
-            let after = crabka_pgcatalog::list_user_types(&*self.catalog_kv)?;
-            crabka_pgtypes::usertype::publish_catalog_delta(&before, &after);
+            let after = krabka_pgcatalog::list_user_types(&*self.catalog_kv)?;
+            krabka_pgtypes::usertype::publish_catalog_delta(&before, &after);
         }
         Ok(())
     }
@@ -12347,19 +12347,19 @@ impl SqlSession {
 
         let resolution = self.resolution_scope();
         let name = crate::exec::resolve_user_type(&*self.catalog_kv, &resolution, name)?;
-        let Some(domain_type) = crabka_pgcatalog::get_user_type(&*self.catalog_kv, &name)? else {
+        let Some(domain_type) = krabka_pgcatalog::get_user_type(&*self.catalog_kv, &name)? else {
             return Ok(());
         };
         let Some(domain) = domain_type.domain() else {
             return Ok(());
         };
         let text = match action {
-            crabka_pgparser::ast::AlterDomainAction::SetNotNull(true)
-            | crabka_pgparser::ast::AlterDomainAction::AddNotNull { .. } => None,
-            crabka_pgparser::ast::AlterDomainAction::AddConstraint {
+            krabka_pgparser::ast::AlterDomainAction::SetNotNull(true)
+            | krabka_pgparser::ast::AlterDomainAction::AddNotNull { .. } => None,
+            krabka_pgparser::ast::AlterDomainAction::AddConstraint {
                 text, not_valid, ..
             } if !not_valid => Some(text),
-            crabka_pgparser::ast::AlterDomainAction::ValidateConstraint(name) => {
+            krabka_pgparser::ast::AlterDomainAction::ValidateConstraint(name) => {
                 let Some(check) = domain.checks.iter().find(|check| check.name == *name) else {
                     return Ok(());
                 };
@@ -12372,7 +12372,7 @@ impl SqlSession {
         };
         let predicate = text
             .map(|text| {
-                let expr = crabka_pgparser::parser::parse_expression(text)?;
+                let expr = krabka_pgparser::parser::parse_expression(text)?;
                 let scope = crate::scope::Scope {
                     columns: vec![crate::scope::ColumnBinding {
                         exposure: crate::scope::Exposure::Output,
@@ -12396,7 +12396,7 @@ impl SqlSession {
 
         let (snapshot, own_xid, global_snapshot) = self.read_context().await?;
         let ctx = self.eval_ctx();
-        for table in crabka_pgcatalog::list_tables(&*self.catalog_kv)? {
+        for table in krabka_pgcatalog::list_tables(&*self.catalog_kv)? {
             for (index, column) in table.columns.iter().enumerate() {
                 if column.ty.oid() != domain_type.oid {
                     continue;
@@ -12487,7 +12487,7 @@ impl SqlSession {
                 &*self.catalog_kv,
                 &self.resolution_scope(),
                 stmt,
-                crabka_pgcatalog::trigger::EventTriggerEvent::SqlDrop,
+                krabka_pgcatalog::trigger::EventTriggerEvent::SqlDrop,
                 event_tag,
             )?)
         } else {
@@ -12495,7 +12495,7 @@ impl SqlSession {
         };
         if fires_event_triggers {
             self.fire_event_triggers(
-                crabka_pgcatalog::trigger::EventTriggerEvent::DdlCommandStart,
+                krabka_pgcatalog::trigger::EventTriggerEvent::DdlCommandStart,
                 event_tag,
                 None,
             )
@@ -12543,14 +12543,14 @@ impl SqlSession {
                     table,
                     crate::relname::SchemaDisposition::Reference,
                 )?;
-                let table = match crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &relation) {
+                let table = match krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &relation) {
                     Ok(table) => Some(table.id),
-                    Err(error @ crabka_pgcatalog::CatalogError::UndefinedTable(_))
+                    Err(error @ krabka_pgcatalog::CatalogError::UndefinedTable(_))
                         if matches!(stmt, Statement::AlterTable { .. }) =>
                     {
-                        match crabka_pgcatalog::get_view(self.catalog_kv.as_ref(), &relation) {
+                        match krabka_pgcatalog::get_view(self.catalog_kv.as_ref(), &relation) {
                             Ok(_) => None,
-                            Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => {
+                            Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => {
                                 return Err(error.into());
                             }
                             Err(error) => return Err(error.into()),
@@ -12594,24 +12594,24 @@ impl SqlSession {
         };
         let _g = self.catalog_lock.lock().await;
         if let Some((relation, Some(table))) = &unique_target
-            && crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), relation)?.id != *table
+            && krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), relation)?.id != *table
         {
             return Err(ExecError::SerializationFailure);
         }
         if let Some((relation, None)) = &unique_target {
-            match crabka_pgcatalog::get_view(self.catalog_kv.as_ref(), relation) {
+            match krabka_pgcatalog::get_view(self.catalog_kv.as_ref(), relation) {
                 Ok(_) => {}
-                Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => {
+                Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => {
                     return Err(ExecError::SerializationFailure);
                 }
                 Err(error) => return Err(error.into()),
             }
         }
         let user_types_before = publishes_user_types
-            .then(|| crabka_pgcatalog::list_user_types(&*self.catalog_kv))
+            .then(|| krabka_pgcatalog::list_user_types(&*self.catalog_kv))
             .transpose()?;
         let user_casts_before = publishes_user_casts
-            .then(|| crabka_pgcatalog::list_user_casts(&*self.catalog_kv))
+            .then(|| krabka_pgcatalog::list_user_casts(&*self.catalog_kv))
             .transpose()?;
         let relation_rowtypes_before = publishes_relation_rowtypes
             .then(|| crate::catalog_rel::relation_rowtype_oids(&*self.catalog_kv))
@@ -12728,7 +12728,7 @@ impl SqlSession {
             self.catalog_kv.write_batch(&ops)?;
         }
         let committed_user_types = if user_types_before.is_some() {
-            match crabka_pgcatalog::list_user_types(&*self.catalog_kv) {
+            match krabka_pgcatalog::list_user_types(&*self.catalog_kv) {
                 Ok(types) => Some(types),
                 Err(error) => {
                     self.restore_catalog_snapshot(&catalog_before).await?;
@@ -12769,7 +12769,7 @@ impl SqlSession {
         let event_result = async {
             let ddl_end_context = if let Some(dropped) = &drop_event_context {
                 Some(Arc::new(crate::clock::EventTriggerContext {
-                    event: crabka_pgcatalog::trigger::EventTriggerEvent::DdlCommandEnd,
+                    event: krabka_pgcatalog::trigger::EventTriggerEvent::DdlCommandEnd,
                     tag: event_tag.to_string(),
                     commands: dropped.dropped.clone(),
                     dropped: Vec::new(),
@@ -12780,7 +12780,7 @@ impl SqlSession {
                     &*self.catalog_kv,
                     &self.resolution_scope(),
                     stmt,
-                    crabka_pgcatalog::trigger::EventTriggerEvent::DdlCommandEnd,
+                    krabka_pgcatalog::trigger::EventTriggerEvent::DdlCommandEnd,
                     event_tag,
                 )?)
             } else {
@@ -12788,7 +12788,7 @@ impl SqlSession {
             };
             if fires_event_triggers && crate::trigger::is_drop_ddl(stmt) {
                 self.fire_event_triggers(
-                    crabka_pgcatalog::trigger::EventTriggerEvent::SqlDrop,
+                    krabka_pgcatalog::trigger::EventTriggerEvent::SqlDrop,
                     event_tag,
                     drop_event_context.clone(),
                 )
@@ -12796,13 +12796,13 @@ impl SqlSession {
             }
             if fires_event_triggers && crate::trigger::is_table_rewrite_ddl(stmt) {
                 self.fire_event_triggers(
-                    crabka_pgcatalog::trigger::EventTriggerEvent::TableRewrite,
+                    krabka_pgcatalog::trigger::EventTriggerEvent::TableRewrite,
                     event_tag,
                     Some(crate::trigger::event_trigger_context(
                         &*self.catalog_kv,
                         &self.resolution_scope(),
                         stmt,
-                        crabka_pgcatalog::trigger::EventTriggerEvent::TableRewrite,
+                        krabka_pgcatalog::trigger::EventTriggerEvent::TableRewrite,
                         event_tag,
                     )?),
                 )
@@ -12810,7 +12810,7 @@ impl SqlSession {
             }
             if fires_event_triggers {
                 self.fire_event_triggers(
-                    crabka_pgcatalog::trigger::EventTriggerEvent::DdlCommandEnd,
+                    krabka_pgcatalog::trigger::EventTriggerEvent::DdlCommandEnd,
                     event_tag,
                     ddl_end_context.clone(),
                 )
@@ -12826,7 +12826,7 @@ impl SqlSession {
             let rejected_user_types = changed_user_type_oids
                 .as_ref()
                 .map(|changed| {
-                    crabka_pgcatalog::list_user_types(&*self.catalog_kv).map(|types| {
+                    krabka_pgcatalog::list_user_types(&*self.catalog_kv).map(|types| {
                         types
                             .into_iter()
                             .filter(|ty| changed.contains(&ty.oid))
@@ -12838,11 +12838,11 @@ impl SqlSession {
             if let (Some(rejected), Some(changed)) =
                 (rejected_user_types?, changed_user_type_oids.as_ref())
             {
-                let restored = crabka_pgcatalog::list_user_types(&*self.catalog_kv)?
+                let restored = krabka_pgcatalog::list_user_types(&*self.catalog_kv)?
                     .into_iter()
                     .filter(|ty| changed.contains(&ty.oid))
                     .collect::<Vec<_>>();
-                crabka_pgtypes::usertype::publish_catalog_delta(&rejected, &restored);
+                krabka_pgtypes::usertype::publish_catalog_delta(&rejected, &restored);
             }
             return Err(error);
         }
@@ -12892,7 +12892,7 @@ impl SqlSession {
             self.plpgsql_notice(PgError::notice(notice))?;
         }
         if let Some(before) = &user_types_before {
-            let after = crabka_pgcatalog::list_user_types(&*self.catalog_kv)?;
+            let after = krabka_pgcatalog::list_user_types(&*self.catalog_kv)?;
             self.record_enum_transaction_state(stmt, before, &after);
         }
         if let (Some(before), Some(changed)) = (&user_types_before, &changed_user_type_oids) {
@@ -12903,11 +12903,11 @@ impl SqlSession {
                 .filter(|ty| changed.contains(&ty.oid))
                 .cloned()
                 .collect::<Vec<_>>();
-            let after = crabka_pgcatalog::list_user_types(&*self.catalog_kv)?
+            let after = krabka_pgcatalog::list_user_types(&*self.catalog_kv)?
                 .into_iter()
                 .filter(|ty| changed.contains(&ty.oid))
                 .collect::<Vec<_>>();
-            crabka_pgtypes::usertype::publish_catalog_delta(&before, &after);
+            krabka_pgtypes::usertype::publish_catalog_delta(&before, &after);
         }
         if publishes_user_casts {
             crate::usercast::publish_delta(
@@ -12920,7 +12920,7 @@ impl SqlSession {
         if let Some(before) = relation_rowtypes_before {
             let after = crate::catalog_rel::relation_rowtype_oids(&*self.catalog_kv)?;
             for name in before.keys().filter(|name| !after.contains_key(*name)) {
-                crabka_pgtypes::usertype::unregister_in(&name.schema, &name.name);
+                krabka_pgtypes::usertype::unregister_in(&name.schema, &name.name);
             }
         }
         Ok(result)
@@ -12931,8 +12931,8 @@ impl SqlSession {
     fn record_enum_transaction_state(
         &mut self,
         stmt: &Statement,
-        before: &[crabka_pgtypes::usertype::UserType],
-        after: &[crabka_pgtypes::usertype::UserType],
+        before: &[krabka_pgtypes::usertype::UserType],
+        after: &[krabka_pgtypes::usertype::UserType],
     ) {
         let (TxnState::InTransaction(context) | TxnState::Failed(context)) = &mut self.state else {
             return;
@@ -12946,7 +12946,7 @@ impl SqlSession {
         if !matches!(
             stmt,
             Statement::AlterType {
-                action: crabka_pgparser::ast::AlterTypeAction::AddValue { .. },
+                action: krabka_pgparser::ast::AlterTypeAction::AddValue { .. },
                 ..
             }
         ) {
@@ -12981,7 +12981,7 @@ impl SqlSession {
         let Statement::AlterType {
             name,
             action:
-                crabka_pgparser::ast::AlterTypeAction::AddValue {
+                krabka_pgparser::ast::AlterTypeAction::AddValue {
                     label,
                     if_not_exists: true,
                     ..
@@ -12995,7 +12995,7 @@ impl SqlSession {
             &self.resolution_scope(),
             name,
         )?;
-        let exists = crabka_pgcatalog::get_user_type(self.catalog_kv.as_ref(), &name)?
+        let exists = krabka_pgcatalog::get_user_type(self.catalog_kv.as_ref(), &name)?
             .is_some_and(|ty| ty.labels().is_some_and(|labels| labels.contains(label)));
         Ok(exists
             .then(|| PgError::notice(format!("enum label \"{label}\" already exists, skipping"))))
@@ -13007,7 +13007,7 @@ impl SqlSession {
             return Ok(());
         };
         for option in &routine.options {
-            let crabka_pgparser::ast::RoutineOption::Set {
+            let krabka_pgparser::ast::RoutineOption::Set {
                 name,
                 value: Some(value),
                 ..
@@ -13057,7 +13057,7 @@ impl SqlSession {
 
     async fn acquire_unique_index_guard(
         &self,
-        table: crabka_pgcatalog::TableId,
+        table: krabka_pgcatalog::TableId,
         mode: crate::lockmgr::LockMode,
     ) -> Result<UniqueIndexGuard, ExecError> {
         let owner = self.lock_owner;
@@ -13095,7 +13095,7 @@ impl SqlSession {
 
     async fn execute_locking_select_with_scalar_actor(
         &mut self,
-        select: crabka_pgparser::ast::SelectStmt,
+        select: krabka_pgparser::ast::SelectStmt,
         statement: LockingActorContext,
     ) -> Result<QueryResult, ExecError> {
         let catalog_kv = Arc::clone(&self.catalog_kv);
@@ -13571,8 +13571,8 @@ impl SqlSession {
                 let touched: Vec<(u32, u64)> = ops
                     .iter()
                     .filter_map(|op| match op {
-                        crabka_pgkv::WriteOp::Put { key, .. } => {
-                            crabka_pgkv::key::table_rowid_of(key)
+                        krabka_pgkv::WriteOp::Put { key, .. } => {
+                            krabka_pgkv::key::table_rowid_of(key)
                         }
                         _ => None,
                     })
@@ -13597,7 +13597,7 @@ impl SqlSession {
                 if let Some(g) = self.global_xid {
                     let eff = self.effective_global_xid(g)?;
                     self.global_xid = Some(eff);
-                    ops.push(crabka_pgmvcc::clog::put_op(xid, XidStatus::Prepared(eff)));
+                    ops.push(krabka_pgmvcc::clog::put_op(xid, XidStatus::Prepared(eff)));
                 }
                 if self.persist_mode == crate::PersistMode::Replicated {
                     ops.push(self.procarray.next_xid_op());
@@ -13688,7 +13688,7 @@ impl SqlSession {
                         // record: `PostgreSQL` keeps them, so a rejected row still
                         // burns its identity value.
                         let mut abort_ops =
-                            vec![crabka_pgmvcc::clog::put_op(xid, XidStatus::Aborted)];
+                            vec![krabka_pgmvcc::clog::put_op(xid, XidStatus::Aborted)];
                         abort_ops.extend(self.take_pending_sequence_ops());
                         let _ = self.committer.commit(abort_ops).await;
                         self.procarray.finish(xid);
@@ -13697,9 +13697,9 @@ impl SqlSession {
                     }
                 };
                 if let Some(g) = sharded_global {
-                    ops.push(crabka_pgmvcc::clog::put_op(xid, XidStatus::Prepared(g)));
+                    ops.push(krabka_pgmvcc::clog::put_op(xid, XidStatus::Prepared(g)));
                 } else {
-                    ops.push(crabka_pgmvcc::clog::put_op(xid, XidStatus::Committed));
+                    ops.push(krabka_pgmvcc::clog::put_op(xid, XidStatus::Committed));
                 }
                 // In Replicated mode, fold the next_xid advance into the same
                 // batch as the rows + clog (the state machine max-merges it); in
@@ -13887,12 +13887,12 @@ impl SqlSession {
             name,
             crate::relname::SchemaDisposition::Utility,
         )?;
-        let table = match crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &resolved) {
+        let table = match krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &resolved) {
             Ok(table) => table,
             // A relation this copy cannot scan row by row. PostgreSQL names the
             // kind and, for a view, points at the spelling that does work.
             Err(error) => {
-                if crabka_pgcatalog::get_view(self.catalog_kv.as_ref(), &resolved).is_ok()
+                if krabka_pgcatalog::get_view(self.catalog_kv.as_ref(), &resolved).is_ok()
                     || crate::exec::virtual_relation_kind(&resolved) == Some("view")
                 {
                     return Err(ExecError::Remote(
@@ -13903,7 +13903,7 @@ impl SqlSession {
                         .with_hint("Try the COPY (SELECT ...) TO variant."),
                     ));
                 }
-                if crabka_pgcatalog::get_sequence(self.catalog_kv.as_ref(), &resolved).is_ok() {
+                if krabka_pgcatalog::get_sequence(self.catalog_kv.as_ref(), &resolved).is_ok() {
                     return Err(ExecError::Remote(PgError::error(
                         "42809",
                         format!("cannot copy from sequence \"{}\"", resolved.name),
@@ -13989,7 +13989,7 @@ impl SqlSession {
                     .collect::<Result<Vec<_>, _>>()?
             }
         };
-        let select = crabka_pgparser::ast::SelectStmt {
+        let select = krabka_pgparser::ast::SelectStmt {
             projection,
             from: vec![TableExpr::Table {
                 name: name.clone(),
@@ -13999,7 +13999,7 @@ impl SqlSession {
                 sample: None,
             }],
             filter: None,
-            distinct: crabka_pgparser::ast::DistinctClause::All,
+            distinct: krabka_pgparser::ast::DistinctClause::All,
             group_by: Vec::new(),
             grouping: None,
             having: None,
@@ -14135,7 +14135,7 @@ impl SqlSession {
         match &self.state {
             TxnState::InTransaction(_) => {
                 self.ensure_table_write_guard().await;
-                if crate::exec::table_uses_global_visibility(&crabka_pgcatalog::get_table(
+                if crate::exec::table_uses_global_visibility(&krabka_pgcatalog::get_table(
                     self.catalog_kv.as_ref(),
                     &crate::relname::resolve_relation(
                         self.catalog_kv.as_ref(),
@@ -14199,7 +14199,7 @@ impl SqlSession {
             TxnState::Idle => {
                 let _writer_fence_guard = Arc::clone(&self.writer_fence).writer().await;
                 let _table_write_guard = Arc::clone(&self.table_write_gate).read_owned().await;
-                let copy_table = crabka_pgcatalog::get_table(
+                let copy_table = krabka_pgcatalog::get_table(
                     self.catalog_kv.as_ref(),
                     &crate::relname::resolve_relation(
                         self.catalog_kv.as_ref(),
@@ -14287,7 +14287,7 @@ impl SqlSession {
                     Ok(value) => value,
                     Err(error) => {
                         let mut abort_ops =
-                            vec![crabka_pgmvcc::clog::put_op(xid, XidStatus::Aborted)];
+                            vec![krabka_pgmvcc::clog::put_op(xid, XidStatus::Aborted)];
                         abort_ops.extend(self.take_pending_sequence_ops());
                         let _ = self.committer.commit(abort_ops).await;
                         self.procarray.finish(xid);
@@ -14296,7 +14296,7 @@ impl SqlSession {
                         return Err(error);
                     }
                 };
-                ops.push(crabka_pgmvcc::clog::put_op(xid, XidStatus::Committed));
+                ops.push(krabka_pgmvcc::clog::put_op(xid, XidStatus::Committed));
                 if self.persist_mode == crate::PersistMode::Replicated {
                     ops.push(self.procarray.next_xid_op());
                 }
@@ -14524,19 +14524,19 @@ impl SqlSession {
         };
         let mut adopted: Option<u64> = None;
         for &(table_id, rowid) in written {
-            let prefix = crabka_pgkv::key::row_key(table_id, rowid);
+            let prefix = krabka_pgkv::key::row_key(table_id, rowid);
             for (_k, v) in self.kv.scan_prefix(&prefix)? {
-                let (xmin, _xmax, _row) = crabka_pgmvcc::version::decode_tuple(&v)?;
+                let (xmin, _xmax, _row) = krabka_pgmvcc::version::decode_tuple(&v)?;
                 if xmin == li {
                     continue; // this txn's OWN version — never fences itself
                 }
                 // A sibling version under an in-doubt `Prepared(-> g_old != g)` marker
                 // means `g_old` still governs this row; adopt it.
                 if let XidStatus::Prepared(g_old) =
-                    crabka_pgmvcc::clog::get(self.kv.as_ref(), xmin)?
+                    krabka_pgmvcc::clog::get(self.kv.as_ref(), xmin)?
                     && g_old != g
                     && !matches!(
-                        crabka_pgmvcc::clog::get(self.catalog_kv.as_ref(), g_old)?,
+                        krabka_pgmvcc::clog::get(self.catalog_kv.as_ref(), g_old)?,
                         XidStatus::Committed | XidStatus::Aborted
                     )
                 {
@@ -14559,7 +14559,7 @@ impl SqlSession {
     /// `InFailedTransaction` if the transaction block is failed, and an error if
     /// the durable prepare marker cannot be written.
     pub async fn prepare_global_participant(&mut self, global_xid: u64) -> Result<u64, ExecError> {
-        use crabka_pgmvcc::xid::GLOBAL_XID_BASE;
+        use krabka_pgmvcc::xid::GLOBAL_XID_BASE;
 
         if global_xid < GLOBAL_XID_BASE {
             return Err(ExecError::ObjectNotInPrerequisiteState(format!(
@@ -14667,7 +14667,7 @@ impl SqlSession {
         expected: XidStatus,
     ) -> Result<(), ExecError> {
         self.ensure_global_readable().await?;
-        let actual = crabka_pgmvcc::clog::get(self.catalog_kv.as_ref(), global_xid)?;
+        let actual = krabka_pgmvcc::clog::get(self.catalog_kv.as_ref(), global_xid)?;
         if actual == expected {
             return Ok(());
         }
@@ -14697,7 +14697,7 @@ impl SqlSession {
             let eff = self.effective_global_xid(g)?;
             self.global_xid = Some(eff);
             self.committer
-                .commit(vec![crabka_pgmvcc::clog::put_op(
+                .commit(vec![krabka_pgmvcc::clog::put_op(
                     local,
                     XidStatus::Prepared(eff),
                 )])
@@ -14799,7 +14799,7 @@ fn parse_single_extended_statement(
     sql: &str,
     type_schemas: &[String],
 ) -> Result<Statement, PgError> {
-    let statements = crabka_pgparser::parse_with_type_schemas(sql, type_schemas)
+    let statements = krabka_pgparser::parse_with_type_schemas(sql, type_schemas)
         .map_err(|error| parse_failure(sql, error))?;
     match statements.as_slice() {
         [] => Err(PgError::error(
@@ -14886,7 +14886,7 @@ struct ParamBinder<'a> {
     resolution: &'a crate::relname::ResolutionScope,
     params: &'a [BoundParam],
     time_zone: &'a jiff::tz::TimeZone,
-    xml_option: crabka_pgtypes::xml::XmlOption,
+    xml_option: krabka_pgtypes::xml::XmlOption,
     inferred_param_types: RefCell<Vec<Option<ColumnType>>>,
 }
 
@@ -14916,20 +14916,20 @@ impl ParamBinder<'_> {
                     crate::relname::SchemaDisposition::Reference,
                 )
                 .map_err(ExecError::into_pg)?;
-                if let crabka_pgparser::ast::InsertSource::Values(rows) = source {
+                if let krabka_pgparser::ast::InsertSource::Values(rows) = source {
                     let target_types = self.insert_target_types(&name, columns.as_ref())?;
                     for row in rows {
                         for (idx, expr) in row.iter_mut().enumerate() {
                             self.bind_expr(expr, target_types.get(idx).copied())?;
                         }
                     }
-                } else if let crabka_pgparser::ast::InsertSource::Query(query) = source {
+                } else if let krabka_pgparser::ast::InsertSource::Query(query) = source {
                     let target_types = self.insert_target_types(&name, columns.as_ref())?;
                     self.bind_untyped_query_params(query, &target_types)?;
                     self.bind_query_expr(query)?;
                 }
                 if on_conflict.is_some() || returning.is_some() {
-                    let table = crabka_pgcatalog::get_table(self.catalog_kv, &name)
+                    let table = krabka_pgcatalog::get_table(self.catalog_kv, &name)
                         .map_err(ExecError::from)
                         .map_err(ExecError::into_pg)?;
                     if let Some(on_conflict) = on_conflict {
@@ -14973,7 +14973,7 @@ impl ParamBinder<'_> {
                             .into_pg()
                     })?
                 } else {
-                    crabka_pgcatalog::get_table(self.catalog_kv, &name)
+                    krabka_pgcatalog::get_table(self.catalog_kv, &name)
                         .map_err(ExecError::from)
                         .map_err(ExecError::into_pg)?
                 };
@@ -15003,7 +15003,7 @@ impl ParamBinder<'_> {
                     crate::relname::SchemaDisposition::Reference,
                 )
                 .map_err(ExecError::into_pg)?;
-                let table = crabka_pgcatalog::get_table(self.catalog_kv, &name)
+                let table = krabka_pgcatalog::get_table(self.catalog_kv, &name)
                     .map_err(ExecError::from)
                     .map_err(ExecError::into_pg)?;
                 let qualifier = alias.clone().unwrap_or_else(|| table.name.name.clone());
@@ -15024,11 +15024,11 @@ impl ParamBinder<'_> {
     /// assigns so `SET balance = $1` infers that column's type.
     fn bind_assignment(
         &self,
-        assignment: &mut crabka_pgparser::ast::Assignment,
-        table: &crabka_pgcatalog::Table,
+        assignment: &mut krabka_pgparser::ast::Assignment,
+        table: &krabka_pgcatalog::Table,
         scope: &crate::scope::Scope,
     ) -> Result<(), PgError> {
-        use crabka_pgparser::ast::AssignmentValue;
+        use krabka_pgparser::ast::AssignmentValue;
         let slots = assignment
             .targets
             .iter()
@@ -15062,7 +15062,7 @@ impl ParamBinder<'_> {
                 // after Parse to text; ParameterDescription never reports
                 // OID 0. The resolved type also feeds Bind (`typed_params`),
                 // so execution decodes the value as text too.
-                Some(0) | None => Ok(inferred.map_or(crabka_pgtypes::oids::TEXT, ColumnType::oid)),
+                Some(0) | None => Ok(inferred.map_or(krabka_pgtypes::oids::TEXT, ColumnType::oid)),
                 Some(oid) => {
                     param_column_type(param)?;
                     Ok(oid)
@@ -15094,7 +15094,7 @@ impl ParamBinder<'_> {
     fn bind_on_conflict(
         &self,
         on_conflict: &mut OnConflict,
-        table: &crabka_pgcatalog::Table,
+        table: &krabka_pgcatalog::Table,
     ) -> Result<(), PgError> {
         if let OnConflictTarget::Columns {
             index_predicate: Some(predicate),
@@ -15145,10 +15145,10 @@ impl ParamBinder<'_> {
     /// parameter is no longer an `unknown` for this rule.
     fn bind_untyped_query_params(
         &self,
-        query: &mut crabka_pgparser::ast::QueryExpr,
+        query: &mut krabka_pgparser::ast::QueryExpr,
         target_types: &[ColumnType],
     ) -> Result<(), PgError> {
-        use crabka_pgparser::ast::{QueryBody, SelectItem, SetExpr};
+        use krabka_pgparser::ast::{QueryBody, SelectItem, SetExpr};
         let SetExpr::Query(QueryBody::Select(select)) = &mut query.body else {
             return Ok(());
         };
@@ -15176,10 +15176,10 @@ impl ParamBinder<'_> {
 
     fn insert_target_types(
         &self,
-        table: &crabka_pgcatalog::RelationName,
+        table: &krabka_pgcatalog::RelationName,
         columns: Option<&Vec<String>>,
     ) -> Result<Vec<ColumnType>, PgError> {
-        let table = crabka_pgcatalog::get_table(self.catalog_kv, table)
+        let table = krabka_pgcatalog::get_table(self.catalog_kv, table)
             .map_err(ExecError::from)
             .map_err(ExecError::into_pg)?;
         let target_idx = match columns {
@@ -15224,7 +15224,7 @@ impl ParamBinder<'_> {
 
     fn bind_with_clause(
         &self,
-        with: Option<&mut crabka_pgparser::ast::WithClause>,
+        with: Option<&mut krabka_pgparser::ast::WithClause>,
         parent_ctes: &crate::cte::CteContext,
     ) -> Result<crate::cte::CteContext, PgError> {
         let Some(with) = with else {
@@ -15249,7 +15249,7 @@ impl ParamBinder<'_> {
                 .map_err(ExecError::into_pg)?;
                 ctes.insert(cte.name.clone(), relation);
             }
-            if let crabka_pgparser::ast::CteBody::Query(query) = &mut cte.body {
+            if let krabka_pgparser::ast::CteBody::Query(query) = &mut cte.body {
                 self.bind_query_expr_with_ctes(query, &ctes)?;
             }
             if !self_referential {
@@ -15657,7 +15657,7 @@ impl ParamBinder<'_> {
                 self.bind_expr_with_scope_and_ctes(base, None, scope, ctes)?;
                 for bound in subscripts
                     .iter_mut()
-                    .flat_map(crabka_pgparser::ast::ArraySubscript::bounds_mut)
+                    .flat_map(krabka_pgparser::ast::ArraySubscript::bounds_mut)
                 {
                     self.bind_expr_with_scope_and_ctes(bound, Some(ColumnType::Int4), scope, ctes)?;
                 }
@@ -15902,17 +15902,17 @@ fn max_statement_param(stmt: &Statement) -> usize {
             ..
         } => {
             match source {
-                crabka_pgparser::ast::InsertSource::Values(rows) => {
+                krabka_pgparser::ast::InsertSource::Values(rows) => {
                     for row in rows {
                         for expr in row {
                             collect_expr_param(expr, &mut max);
                         }
                     }
                 }
-                crabka_pgparser::ast::InsertSource::Query(query) => {
+                krabka_pgparser::ast::InsertSource::Query(query) => {
                     collect_query_param(query, &mut max);
                 }
-                crabka_pgparser::ast::InsertSource::DefaultValues => {}
+                krabka_pgparser::ast::InsertSource::DefaultValues => {}
             }
             if let Some(on_conflict) = on_conflict {
                 collect_on_conflict_param(on_conflict, &mut max);
@@ -15967,7 +15967,7 @@ fn max_statement_param(stmt: &Statement) -> usize {
             returning,
             ..
         } => {
-            if let crabka_pgparser::ast::MergeSource::Query { query, .. } = source {
+            if let krabka_pgparser::ast::MergeSource::Query { query, .. } = source {
                 collect_query_param(query, &mut max);
             }
             collect_expr_param(on, &mut max);
@@ -15976,12 +15976,12 @@ fn max_statement_param(stmt: &Statement) -> usize {
                     collect_expr_param(condition, &mut max);
                 }
                 match &clause.action {
-                    crabka_pgparser::ast::MergeAction::Update(assignments) => {
+                    krabka_pgparser::ast::MergeAction::Update(assignments) => {
                         for assignment in assignments {
                             collect_assignment_param(assignment, &mut max);
                         }
                     }
-                    crabka_pgparser::ast::MergeAction::Insert {
+                    krabka_pgparser::ast::MergeAction::Insert {
                         values: Some(values),
                         ..
                     } => {
@@ -15989,9 +15989,9 @@ fn max_statement_param(stmt: &Statement) -> usize {
                             collect_expr_param(expr, &mut max);
                         }
                     }
-                    crabka_pgparser::ast::MergeAction::Insert { .. }
-                    | crabka_pgparser::ast::MergeAction::Delete
-                    | crabka_pgparser::ast::MergeAction::DoNothing => {}
+                    krabka_pgparser::ast::MergeAction::Insert { .. }
+                    | krabka_pgparser::ast::MergeAction::Delete
+                    | krabka_pgparser::ast::MergeAction::DoNothing => {}
                 }
             }
             collect_returning_param(returning.as_ref(), &mut max);
@@ -16001,15 +16001,15 @@ fn max_statement_param(stmt: &Statement) -> usize {
     max
 }
 
-fn collect_assignment_param(assignment: &crabka_pgparser::ast::Assignment, max: &mut usize) {
+fn collect_assignment_param(assignment: &krabka_pgparser::ast::Assignment, max: &mut usize) {
     match &assignment.value {
-        crabka_pgparser::ast::AssignmentValue::Expr(expr) => collect_expr_param(expr, max),
-        crabka_pgparser::ast::AssignmentValue::Row(items) => {
+        krabka_pgparser::ast::AssignmentValue::Expr(expr) => collect_expr_param(expr, max),
+        krabka_pgparser::ast::AssignmentValue::Row(items) => {
             for expr in items {
                 collect_expr_param(expr, max);
             }
         }
-        crabka_pgparser::ast::AssignmentValue::Subquery(query) => collect_query_param(query, max),
+        krabka_pgparser::ast::AssignmentValue::Subquery(query) => collect_query_param(query, max),
     }
 }
 
@@ -16037,7 +16037,7 @@ fn collect_on_conflict_param(on_conflict: &OnConflict, max: &mut usize) {
     }
 }
 
-fn collect_returning_param(returning: Option<&crabka_pgparser::ast::Returning>, max: &mut usize) {
+fn collect_returning_param(returning: Option<&krabka_pgparser::ast::Returning>, max: &mut usize) {
     let Some(returning) = returning else {
         return;
     };
@@ -16053,8 +16053,8 @@ fn collect_query_param(q: &QueryExpr, max: &mut usize) {
     if let Some(with) = &q.with {
         for cte in &with.ctes {
             match &cte.body {
-                crabka_pgparser::ast::CteBody::Query(query) => collect_query_param(query, max),
-                crabka_pgparser::ast::CteBody::Dml(dml) => {
+                krabka_pgparser::ast::CteBody::Query(query) => collect_query_param(query, max),
+                krabka_pgparser::ast::CteBody::Dml(dml) => {
                     let mut nested = max_statement_param(dml);
                     std::mem::swap(&mut nested, max);
                     *max = (*max).max(nested);
@@ -16238,7 +16238,7 @@ fn collect_expr_param(expr: &Expr, max: &mut usize) {
             collect_expr_param(base, max);
             for bound in subscripts
                 .iter()
-                .flat_map(crabka_pgparser::ast::ArraySubscript::bounds)
+                .flat_map(krabka_pgparser::ast::ArraySubscript::bounds)
             {
                 collect_expr_param(bound, max);
             }
@@ -16260,7 +16260,7 @@ fn bound_param_expr(
     param: &BoundParam,
     expected: Option<ColumnType>,
     time_zone: &jiff::tz::TimeZone,
-    xml_option: crabka_pgtypes::xml::XmlOption,
+    xml_option: krabka_pgtypes::xml::XmlOption,
 ) -> Result<Expr, PgError> {
     let ty = param_column_type(param)?
         .or(expected)
@@ -16277,52 +16277,52 @@ fn bound_param_expr(
 
 fn param_column_type(param: &BoundParam) -> Result<Option<ColumnType>, PgError> {
     match param.type_oid {
-        Some(crabka_pgtypes::oids::INT2) => Ok(Some(ColumnType::Int2)),
-        Some(crabka_pgtypes::oids::INT4) => Ok(Some(ColumnType::Int4)),
-        Some(crabka_pgtypes::oids::REGCLASS) => Ok(Some(ColumnType::Regclass)),
-        Some(crabka_pgtypes::oids::REGTYPE) => Ok(Some(ColumnType::Regtype)),
-        Some(crabka_pgtypes::oids::REGPROCEDURE) => Ok(Some(ColumnType::Regprocedure)),
-        Some(crabka_pgtypes::oids::REGNAMESPACE) => Ok(Some(ColumnType::Regnamespace)),
-        Some(crabka_pgtypes::oids::OIDVECTOR) => Ok(Some(ColumnType::OidVector)),
-        Some(crabka_pgtypes::oids::INT2VECTOR) => Ok(Some(ColumnType::Int2Vector)),
-        Some(crabka_pgtypes::oids::INT8) => Ok(Some(ColumnType::Int8)),
-        Some(crabka_pgtypes::oids::TEXT) => Ok(Some(ColumnType::Text)),
-        Some(crabka_pgtypes::oids::NAME) => Ok(Some(ColumnType::Name)),
-        Some(crabka_pgtypes::oids::VARCHAR) => Ok(Some(ColumnType::Varchar(None))),
-        Some(crabka_pgtypes::oids::BPCHAR) => Ok(Some(ColumnType::Char(None))),
-        Some(crabka_pgtypes::oids::BOOL) => Ok(Some(ColumnType::Bool)),
-        Some(crabka_pgtypes::oids::FLOAT4) => Ok(Some(ColumnType::Float4)),
-        Some(crabka_pgtypes::oids::FLOAT8) => Ok(Some(ColumnType::Float8)),
-        Some(crabka_pgtypes::oids::POINT) => Ok(Some(ColumnType::Point)),
-        Some(crabka_pgtypes::oids::PATH) => Ok(Some(ColumnType::Path)),
-        Some(crabka_pgtypes::oids::NUMERIC) => Ok(Some(ColumnType::Numeric(None))),
-        Some(crabka_pgtypes::oids::BYTEA) => Ok(Some(ColumnType::Bytea)),
-        Some(crabka_pgtypes::oids::UUID) => Ok(Some(ColumnType::Uuid)),
-        Some(crabka_pgtypes::oids::DATE) => Ok(Some(ColumnType::Date)),
-        Some(crabka_pgtypes::oids::TIME) => Ok(Some(ColumnType::Time)),
-        Some(crabka_pgtypes::oids::TIMESTAMP) => Ok(Some(ColumnType::Timestamp)),
-        Some(crabka_pgtypes::oids::TIMESTAMPTZ) => Ok(Some(ColumnType::Timestamptz)),
-        Some(crabka_pgtypes::oids::INTERVAL) => Ok(Some(ColumnType::Interval)),
-        Some(crabka_pgtypes::oids::XML) => Ok(Some(ColumnType::Xml)),
-        Some(crabka_pgtypes::oids::JSON) => Ok(Some(ColumnType::Json)),
-        Some(crabka_pgtypes::oids::JSONB) => Ok(Some(ColumnType::Jsonb)),
-        Some(crabka_pgtypes::oids::JSONPATH) => Ok(Some(ColumnType::JsonPath)),
-        Some(crabka_pgtypes::oids::TSVECTOR) => Ok(Some(ColumnType::TsVector)),
-        Some(crabka_pgtypes::oids::TSQUERY) => Ok(Some(ColumnType::TsQuery)),
-        Some(crabka_pgtypes::oids::INET) => Ok(Some(ColumnType::Inet)),
-        Some(crabka_pgtypes::oids::CIDR) => Ok(Some(ColumnType::Cidr)),
-        Some(crabka_pgtypes::oids::MACADDR) => Ok(Some(ColumnType::MacAddr)),
-        Some(crabka_pgtypes::oids::MACADDR8) => Ok(Some(ColumnType::MacAddr8)),
+        Some(krabka_pgtypes::oids::INT2) => Ok(Some(ColumnType::Int2)),
+        Some(krabka_pgtypes::oids::INT4) => Ok(Some(ColumnType::Int4)),
+        Some(krabka_pgtypes::oids::REGCLASS) => Ok(Some(ColumnType::Regclass)),
+        Some(krabka_pgtypes::oids::REGTYPE) => Ok(Some(ColumnType::Regtype)),
+        Some(krabka_pgtypes::oids::REGPROCEDURE) => Ok(Some(ColumnType::Regprocedure)),
+        Some(krabka_pgtypes::oids::REGNAMESPACE) => Ok(Some(ColumnType::Regnamespace)),
+        Some(krabka_pgtypes::oids::OIDVECTOR) => Ok(Some(ColumnType::OidVector)),
+        Some(krabka_pgtypes::oids::INT2VECTOR) => Ok(Some(ColumnType::Int2Vector)),
+        Some(krabka_pgtypes::oids::INT8) => Ok(Some(ColumnType::Int8)),
+        Some(krabka_pgtypes::oids::TEXT) => Ok(Some(ColumnType::Text)),
+        Some(krabka_pgtypes::oids::NAME) => Ok(Some(ColumnType::Name)),
+        Some(krabka_pgtypes::oids::VARCHAR) => Ok(Some(ColumnType::Varchar(None))),
+        Some(krabka_pgtypes::oids::BPCHAR) => Ok(Some(ColumnType::Char(None))),
+        Some(krabka_pgtypes::oids::BOOL) => Ok(Some(ColumnType::Bool)),
+        Some(krabka_pgtypes::oids::FLOAT4) => Ok(Some(ColumnType::Float4)),
+        Some(krabka_pgtypes::oids::FLOAT8) => Ok(Some(ColumnType::Float8)),
+        Some(krabka_pgtypes::oids::POINT) => Ok(Some(ColumnType::Point)),
+        Some(krabka_pgtypes::oids::PATH) => Ok(Some(ColumnType::Path)),
+        Some(krabka_pgtypes::oids::NUMERIC) => Ok(Some(ColumnType::Numeric(None))),
+        Some(krabka_pgtypes::oids::BYTEA) => Ok(Some(ColumnType::Bytea)),
+        Some(krabka_pgtypes::oids::UUID) => Ok(Some(ColumnType::Uuid)),
+        Some(krabka_pgtypes::oids::DATE) => Ok(Some(ColumnType::Date)),
+        Some(krabka_pgtypes::oids::TIME) => Ok(Some(ColumnType::Time)),
+        Some(krabka_pgtypes::oids::TIMESTAMP) => Ok(Some(ColumnType::Timestamp)),
+        Some(krabka_pgtypes::oids::TIMESTAMPTZ) => Ok(Some(ColumnType::Timestamptz)),
+        Some(krabka_pgtypes::oids::INTERVAL) => Ok(Some(ColumnType::Interval)),
+        Some(krabka_pgtypes::oids::XML) => Ok(Some(ColumnType::Xml)),
+        Some(krabka_pgtypes::oids::JSON) => Ok(Some(ColumnType::Json)),
+        Some(krabka_pgtypes::oids::JSONB) => Ok(Some(ColumnType::Jsonb)),
+        Some(krabka_pgtypes::oids::JSONPATH) => Ok(Some(ColumnType::JsonPath)),
+        Some(krabka_pgtypes::oids::TSVECTOR) => Ok(Some(ColumnType::TsVector)),
+        Some(krabka_pgtypes::oids::TSQUERY) => Ok(Some(ColumnType::TsQuery)),
+        Some(krabka_pgtypes::oids::INET) => Ok(Some(ColumnType::Inet)),
+        Some(krabka_pgtypes::oids::CIDR) => Ok(Some(ColumnType::Cidr)),
+        Some(krabka_pgtypes::oids::MACADDR) => Ok(Some(ColumnType::MacAddr)),
+        Some(krabka_pgtypes::oids::MACADDR8) => Ok(Some(ColumnType::MacAddr8)),
         // Drivers declare OID parameters in their pg_catalog typeinfo lookups
         // (`WHERE t.oid = $1`), so this is a live path, not a formality.
-        Some(crabka_pgtypes::oids::OID) => Ok(Some(ColumnType::Oid)),
-        Some(crabka_pgtypes::oids::XID) => Ok(Some(ColumnType::Xid)),
-        Some(crabka_pgtypes::oids::XID8) => Ok(Some(ColumnType::Xid8)),
-        Some(crabka_pgtypes::oids::CID) => Ok(Some(ColumnType::Cid)),
-        Some(crabka_pgtypes::oids::TID) => Ok(Some(ColumnType::Tid)),
-        Some(crabka_pgtypes::oids::PG_LSN) => Ok(Some(ColumnType::PgLsn)),
-        Some(crabka_pgtypes::oids::PG_SNAPSHOT) => Ok(Some(ColumnType::PgSnapshot)),
-        Some(crabka_pgtypes::oids::TXID_SNAPSHOT) => Ok(Some(ColumnType::TxidSnapshot)),
+        Some(krabka_pgtypes::oids::OID) => Ok(Some(ColumnType::Oid)),
+        Some(krabka_pgtypes::oids::XID) => Ok(Some(ColumnType::Xid)),
+        Some(krabka_pgtypes::oids::XID8) => Ok(Some(ColumnType::Xid8)),
+        Some(krabka_pgtypes::oids::CID) => Ok(Some(ColumnType::Cid)),
+        Some(krabka_pgtypes::oids::TID) => Ok(Some(ColumnType::Tid)),
+        Some(krabka_pgtypes::oids::PG_LSN) => Ok(Some(ColumnType::PgLsn)),
+        Some(krabka_pgtypes::oids::PG_SNAPSHOT) => Ok(Some(ColumnType::PgSnapshot)),
+        Some(krabka_pgtypes::oids::TXID_SNAPSHOT) => Ok(Some(ColumnType::TxidSnapshot)),
         Some(0) | None => Ok(None),
         // Every array OID crabka has an element type for (`_int4`, `_text`, …).
         Some(oid) => match ElemType::from_array_oid(oid) {
@@ -16340,13 +16340,13 @@ fn decode_bound_param(
     param: &BoundParam,
     ty: ColumnType,
     time_zone: &jiff::tz::TimeZone,
-    xml_option: crabka_pgtypes::xml::XmlOption,
+    xml_option: krabka_pgtypes::xml::XmlOption,
 ) -> Result<Datum, PgError> {
     match param.format {
         0 => {
             let text = std::str::from_utf8(value).map_err(invalid_parameter_encoding)?;
             if ty == ColumnType::Xml {
-                return crabka_pgtypes::xml::validate(text, xml_option)
+                return krabka_pgtypes::xml::validate(text, xml_option)
                     .map(|()| Datum::Xml(text.to_string()))
                     .map_err(ExecError::from)
                     .map_err(ExecError::into_pg);
@@ -16364,7 +16364,7 @@ fn decode_bound_param(
         }
         1 if ty == ColumnType::Xml => {
             let text = std::str::from_utf8(value).map_err(invalid_parameter_encoding)?;
-            crabka_pgtypes::xml::validate(text, xml_option)
+            krabka_pgtypes::xml::validate(text, xml_option)
                 .map(|()| Datum::Xml(text.to_string()))
                 .map_err(ExecError::from)
                 .map_err(ExecError::into_pg)
@@ -16423,7 +16423,7 @@ pub(crate) fn decode_binary_value(
         ColumnType::Float8 => Ok(Datum::Float8(f64::from_be_bytes(binary_array(value)?))),
         ColumnType::Point => {
             let bytes: [u8; 16] = binary_array(value)?;
-            Ok(Datum::Point(crabka_pgtypes::Point {
+            Ok(Datum::Point(krabka_pgtypes::Point {
                 x: f64::from_be_bytes(bytes[..8].try_into().expect("8 bytes")),
                 y: f64::from_be_bytes(bytes[8..].try_into().expect("8 bytes")),
             }))
@@ -16434,9 +16434,9 @@ pub(crate) fn decode_binary_value(
             let at = |index: usize| {
                 f64::from_be_bytes(bytes[index * 8..index * 8 + 8].try_into().expect("8 bytes"))
             };
-            Ok(Datum::Box(crabka_pgtypes::geometry::Box2 {
-                high: crabka_pgtypes::Point { x: at(0), y: at(1) },
-                low: crabka_pgtypes::Point { x: at(2), y: at(3) },
+            Ok(Datum::Box(krabka_pgtypes::geometry::Box2 {
+                high: krabka_pgtypes::Point { x: at(0), y: at(1) },
+                low: krabka_pgtypes::Point { x: at(2), y: at(3) },
             }))
         }
         // `circle_recv`: centre x, centre y, radius.
@@ -16445,8 +16445,8 @@ pub(crate) fn decode_binary_value(
             let at = |index: usize| {
                 f64::from_be_bytes(bytes[index * 8..index * 8 + 8].try_into().expect("8 bytes"))
             };
-            Ok(Datum::Circle(crabka_pgtypes::geometry::Circle {
-                center: crabka_pgtypes::Point { x: at(0), y: at(1) },
+            Ok(Datum::Circle(krabka_pgtypes::geometry::Circle {
+                center: krabka_pgtypes::Point { x: at(0), y: at(1) },
                 radius: at(2),
             }))
         }
@@ -16461,7 +16461,7 @@ pub(crate) fn decode_binary_value(
                         .expect("8 bytes"),
                 )
             };
-            Ok(Datum::Line(crabka_pgtypes::geometry::Line {
+            Ok(Datum::Line(krabka_pgtypes::geometry::Line {
                 a: at(0),
                 b: at(1),
                 c: at(2),
@@ -16478,9 +16478,9 @@ pub(crate) fn decode_binary_value(
                         .expect("8 bytes"),
                 )
             };
-            Ok(Datum::Lseg(crabka_pgtypes::geometry::Lseg {
-                start: crabka_pgtypes::Point { x: at(0), y: at(1) },
-                end: crabka_pgtypes::Point { x: at(2), y: at(3) },
+            Ok(Datum::Lseg(krabka_pgtypes::geometry::Lseg {
+                start: krabka_pgtypes::Point { x: at(0), y: at(1) },
+                end: krabka_pgtypes::Point { x: at(2), y: at(3) },
             }))
         }
         ColumnType::Path => {
@@ -16497,12 +16497,12 @@ pub(crate) fn decode_binary_value(
             }
             let points = body[4..]
                 .chunks_exact(16)
-                .map(|bytes| crabka_pgtypes::Point {
+                .map(|bytes| krabka_pgtypes::Point {
                     x: f64::from_be_bytes(bytes[..8].try_into().expect("8 bytes")),
                     y: f64::from_be_bytes(bytes[8..].try_into().expect("8 bytes")),
                 })
                 .collect();
-            Ok(Datum::Path(crabka_pgtypes::Path {
+            Ok(Datum::Path(krabka_pgtypes::Path {
                 closed: closed == 1,
                 points,
             }))
@@ -16522,21 +16522,21 @@ pub(crate) fn decode_binary_value(
             }
             let points = value[4..]
                 .chunks_exact(16)
-                .map(|bytes| crabka_pgtypes::Point {
+                .map(|bytes| krabka_pgtypes::Point {
                     x: f64::from_be_bytes(bytes[..8].try_into().expect("8 bytes")),
                     y: f64::from_be_bytes(bytes[8..].try_into().expect("8 bytes")),
                 })
                 .collect();
-            Ok(Datum::Polygon(crabka_pgtypes::Polygon { points }))
+            Ok(Datum::Polygon(krabka_pgtypes::Polygon { points }))
         }
-        ColumnType::Numeric(_) => crabka_pgtypes::numeric::from_binary(value)
+        ColumnType::Numeric(_) => krabka_pgtypes::numeric::from_binary(value)
             .map(Datum::Numeric)
             .ok_or_else(malformed_binary_parameter),
         ColumnType::Bytea => Ok(Datum::Bytea(value.to_vec())),
         // `inet_recv` / `cidr_recv`: family, netmask, an ignored is_cidr byte,
         // the address length, then the address.
         ColumnType::Inet | ColumnType::Cidr => {
-            crabka_pgtypes::Inet::from_binary(value, ty == ColumnType::Cidr)
+            krabka_pgtypes::Inet::from_binary(value, ty == ColumnType::Cidr)
                 .map(Datum::Inet)
                 .map_err(ExecError::from)
                 .map_err(ExecError::into_pg)
@@ -16562,13 +16562,13 @@ pub(crate) fn decode_binary_value(
         // `tidrecv`: the block number then the offset, each big-endian.
         ColumnType::Tid => {
             let bytes: [u8; 6] = value.try_into().map_err(|_| malformed_binary_parameter())?;
-            Ok(Datum::Tid(crabka_pgtypes::Tid {
+            Ok(Datum::Tid(krabka_pgtypes::Tid {
                 block: u32::from_be_bytes(bytes[..4].try_into().expect("4 bytes")),
                 offset: u16::from_be_bytes(bytes[4..].try_into().expect("2 bytes")),
             }))
         }
         // `cash_recv`: a big-endian int64 count of minor currency units.
-        ColumnType::Money => crabka_pgtypes::money::from_binary(value)
+        ColumnType::Money => krabka_pgtypes::money::from_binary(value)
             .map(Datum::Money)
             .map_err(ExecError::from)
             .map_err(ExecError::into_pg),
@@ -16580,79 +16580,79 @@ pub(crate) fn decode_binary_value(
         // `bit_recv` / `varbit_recv`: an int32 bit count, then the packed
         // bytes, whose count the receiver checks against it.
         ColumnType::Bit(_) | ColumnType::VarBit(_) => {
-            crabka_pgtypes::BitString::from_binary(value, matches!(ty, ColumnType::VarBit(_)))
+            krabka_pgtypes::BitString::from_binary(value, matches!(ty, ColumnType::VarBit(_)))
                 .map(Datum::BitString)
                 .map_err(ExecError::from)
                 .map_err(ExecError::into_pg)
         }
         // `macaddr_recv` / `macaddr8_recv`: the raw bytes. A six-byte
         // `macaddr8` widens to EUI-64, as PostgreSQL's `macaddr8_recv` does.
-        ColumnType::MacAddr => Ok(Datum::MacAddr(crabka_pgtypes::MacAddr(binary_array(
+        ColumnType::MacAddr => Ok(Datum::MacAddr(krabka_pgtypes::MacAddr(binary_array(
             value,
         )?))),
         ColumnType::MacAddr8 => match value.len() {
             6 => {
                 let bytes: [u8; 6] = binary_array(value)?;
                 Ok(Datum::MacAddr8(
-                    crabka_pgtypes::MacAddr(bytes).to_macaddr8(),
+                    krabka_pgtypes::MacAddr(bytes).to_macaddr8(),
                 ))
             }
-            _ => Ok(Datum::MacAddr8(crabka_pgtypes::MacAddr8(binary_array(
+            _ => Ok(Datum::MacAddr8(krabka_pgtypes::MacAddr8(binary_array(
                 value,
             )?))),
         },
         ColumnType::Uuid => {
             let bytes: [u8; 16] = binary_array(value)?;
             Ok(Datum::Text(
-                crabka_pgtypes::uuid::UuidBytes(bytes).to_canonical_text(),
+                krabka_pgtypes::uuid::UuidBytes(bytes).to_canonical_text(),
             ))
         }
         ColumnType::Date => {
             let _: [u8; 4] = binary_array(value)?;
-            crabka_pgtypes::datetime::date_from_binary(value)
+            krabka_pgtypes::datetime::date_from_binary(value)
                 .map(Datum::Date)
                 .map_err(ExecError::from)
                 .map_err(ExecError::into_pg)
         }
-        ColumnType::Timetz => crabka_pgtypes::datetime::timetz_from_binary(value)
+        ColumnType::Timetz => krabka_pgtypes::datetime::timetz_from_binary(value)
             .map(Datum::Timetz)
             .map_err(ExecError::from)
             .map_err(ExecError::into_pg),
         ColumnType::Time => {
             let _: [u8; 8] = binary_array(value)?;
-            crabka_pgtypes::datetime::time_from_binary(value)
+            krabka_pgtypes::datetime::time_from_binary(value)
                 .map(Datum::Time)
                 .map_err(ExecError::from)
                 .map_err(ExecError::into_pg)
         }
         ColumnType::Timestamp => {
             let _: [u8; 8] = binary_array(value)?;
-            crabka_pgtypes::datetime::timestamp_from_binary(value)
+            krabka_pgtypes::datetime::timestamp_from_binary(value)
                 .map(Datum::Timestamp)
                 .map_err(ExecError::from)
                 .map_err(ExecError::into_pg)
         }
         ColumnType::Timestamptz => {
             let _: [u8; 8] = binary_array(value)?;
-            crabka_pgtypes::datetime::timestamptz_from_binary(value)
+            krabka_pgtypes::datetime::timestamptz_from_binary(value)
                 .map(Datum::Timestamptz)
                 .map_err(ExecError::from)
                 .map_err(ExecError::into_pg)
         }
         ColumnType::Interval => {
             let _: [u8; 16] = binary_array(value)?;
-            crabka_pgtypes::datetime::interval_from_binary(value)
+            krabka_pgtypes::datetime::interval_from_binary(value)
                 .map(Datum::Interval)
                 .map_err(ExecError::from)
                 .map_err(ExecError::into_pg)
         }
         ColumnType::IntervalTypmod(typmod) => {
             let _: [u8; 16] = binary_array(value)?;
-            let decoded = crabka_pgtypes::datetime::interval_from_binary(value)
+            let decoded = krabka_pgtypes::datetime::interval_from_binary(value)
                 .map(Datum::Interval)
                 .map_err(ExecError::from)
                 .map_err(ExecError::into_pg)?;
-            crabka_pgtypes::cast::cast_assign(
+            krabka_pgtypes::cast::cast_assign(
                 &decoded,
                 ColumnType::IntervalTypmod(typmod),
                 time_zone,
@@ -16664,15 +16664,15 @@ pub(crate) fn decode_binary_value(
             let decoded = decode_binary_value(
                 value,
                 match kind {
-                    crabka_pgtypes::TemporalType::Time => ColumnType::Time,
-                    crabka_pgtypes::TemporalType::Timetz => ColumnType::Timetz,
-                    crabka_pgtypes::TemporalType::Timestamp => ColumnType::Timestamp,
-                    crabka_pgtypes::TemporalType::Timestamptz => ColumnType::Timestamptz,
-                    crabka_pgtypes::TemporalType::Interval => ColumnType::Interval,
+                    krabka_pgtypes::TemporalType::Time => ColumnType::Time,
+                    krabka_pgtypes::TemporalType::Timetz => ColumnType::Timetz,
+                    krabka_pgtypes::TemporalType::Timestamp => ColumnType::Timestamp,
+                    krabka_pgtypes::TemporalType::Timestamptz => ColumnType::Timestamptz,
+                    krabka_pgtypes::TemporalType::Interval => ColumnType::Interval,
                 },
                 time_zone,
             )?;
-            crabka_pgtypes::cast::cast_assign(
+            krabka_pgtypes::cast::cast_assign(
                 &decoded,
                 ColumnType::Temporal(kind, precision),
                 time_zone,
@@ -16685,7 +16685,7 @@ pub(crate) fn decode_binary_value(
         // the bytes are kept as sent.
         ColumnType::Json => {
             let text = std::str::from_utf8(value).map_err(invalid_parameter_encoding)?;
-            crabka_pgtypes::json::validate(text)
+            krabka_pgtypes::json::validate(text)
                 .map(|()| Datum::Json(text.to_string()))
                 .map_err(ExecError::from)
                 .map_err(ExecError::into_pg)
@@ -16694,7 +16694,7 @@ pub(crate) fn decode_binary_value(
         // `json_recv` it is `textrecv` with a check bolted on.
         ColumnType::Xml => {
             let text = std::str::from_utf8(value).map_err(invalid_parameter_encoding)?;
-            crabka_pgtypes::xml::validate(text, crabka_pgtypes::xml::XmlOption::Content)
+            krabka_pgtypes::xml::validate(text, krabka_pgtypes::xml::XmlOption::Content)
                 .map(|()| Datum::Xml(text.to_string()))
                 .map_err(ExecError::from)
                 .map_err(ExecError::into_pg)
@@ -16705,7 +16705,7 @@ pub(crate) fn decode_binary_value(
         // form it is not a re-read of the output function, so it has a reader
         // of its own.
         ColumnType::PgSnapshot | ColumnType::TxidSnapshot => {
-            crabka_pgtypes::snapshot::PgSnapshot::from_binary(value)
+            krabka_pgtypes::snapshot::PgSnapshot::from_binary(value)
                 .map(|snapshot| Datum::PgSnapshot(Box::new(snapshot)))
                 .map_err(ExecError::from)
                 .map_err(ExecError::into_pg)
@@ -16719,9 +16719,9 @@ pub(crate) fn decode_binary_value(
         ColumnType::Array(elem) => decode_array_binary(value, elem, elem.oid(), time_zone),
         ColumnType::OidVector | ColumnType::Int2Vector => {
             let (elem, elem_oid) = if ty == ColumnType::Int2Vector {
-                (ElemType::Int2, crabka_pgtypes::oids::INT2)
+                (ElemType::Int2, krabka_pgtypes::oids::INT2)
             } else {
-                (ElemType::Int4, crabka_pgtypes::oids::OID)
+                (ElemType::Int4, krabka_pgtypes::oids::OID)
             };
             decode_array_binary(value, elem, elem_oid, time_zone).map(|value| {
                 let Datum::Array(array) = value else {
@@ -16755,7 +16755,7 @@ pub(crate) fn decode_binary_value(
 
 fn decode_range_binary(
     value: &[u8],
-    ty: crabka_pgtypes::usertype::RangeRef,
+    ty: krabka_pgtypes::usertype::RangeRef,
     time_zone: &jiff::tz::TimeZone,
 ) -> Result<Datum, PgError> {
     let Some((&flags, mut cur)) = value.split_first() else {
@@ -16789,7 +16789,7 @@ fn decode_range_binary(
     if !cur.is_empty() {
         return Err(malformed_binary_parameter());
     }
-    Ok(Datum::Range(crabka_pgtypes::RangeValue {
+    Ok(Datum::Range(krabka_pgtypes::RangeValue {
         ty,
         lower,
         upper,
@@ -16801,7 +16801,7 @@ fn decode_range_binary(
 
 fn decode_multirange_binary(
     mut value: &[u8],
-    ty: crabka_pgtypes::usertype::MultirangeRef,
+    ty: krabka_pgtypes::usertype::MultirangeRef,
     time_zone: &jiff::tz::TimeZone,
 ) -> Result<Datum, PgError> {
     if value.len() < 4 {
@@ -16831,7 +16831,7 @@ fn decode_multirange_binary(
     if !value.is_empty() {
         return Err(malformed_binary_parameter());
     }
-    Ok(Datum::Multirange(crabka_pgtypes::MultirangeValue {
+    Ok(Datum::Multirange(krabka_pgtypes::MultirangeValue {
         ty,
         ranges,
     }))
@@ -16849,7 +16849,7 @@ const JSON_TEXT_MIN_FIRST_BYTE: u8 = b'\t';
 /// forms are unambiguous, because no JSON document can begin with byte 0x01.
 fn decode_jsonb_binary(value: &[u8]) -> Result<Datum, PgError> {
     let json = match value.first() {
-        Some(&crabka_pgtypes::encoding::JSONB_BINARY_VERSION) => &value[1..],
+        Some(&krabka_pgtypes::encoding::JSONB_BINARY_VERSION) => &value[1..],
         Some(&version) if version < JSON_TEXT_MIN_FIRST_BYTE => {
             return Err(PgError::protocol(format!(
                 "unsupported jsonb version number {version}"
@@ -16859,7 +16859,7 @@ fn decode_jsonb_binary(value: &[u8]) -> Result<Datum, PgError> {
         _ => value,
     };
     let text = std::str::from_utf8(json).map_err(invalid_parameter_encoding)?;
-    crabka_pgtypes::jsonb::parse(text)
+    krabka_pgtypes::jsonb::parse(text)
         .map(Datum::Jsonb)
         .map_err(ExecError::from)
         .map_err(ExecError::into_pg)
@@ -16870,7 +16870,7 @@ fn decode_jsonpath_binary(value: &[u8]) -> Result<Datum, PgError> {
     let Some((&version, text)) = value.split_first() else {
         return Err(PgError::protocol("invalid jsonpath binary representation"));
     };
-    if version != crabka_pgtypes::encoding::JSONPATH_BINARY_VERSION {
+    if version != krabka_pgtypes::encoding::JSONPATH_BINARY_VERSION {
         return Err(PgError::error(
             "XX000",
             format!("unsupported jsonpath version number: {version}"),
@@ -16881,7 +16881,7 @@ fn decode_jsonpath_binary(value: &[u8]) -> Result<Datum, PgError> {
 }
 
 /// `array_recv` for a one-dimensional array — the layout
-/// `crabka_pgtypes::encoding` writes, read back exactly.
+/// `krabka_pgtypes::encoding` writes, read back exactly.
 ///
 /// Both spellings of the empty array must land on the zero-dimensional value:
 /// the 12-byte `ndim = 0` header (no dimension block, no elements), and the
@@ -16910,7 +16910,7 @@ fn decode_array_binary(
             ),
         ));
     }
-    if ndim < 0 || ndim > i32::try_from(crabka_pgtypes::MAX_ARRAY_DIM).unwrap_or(i32::MAX) {
+    if ndim < 0 || ndim > i32::try_from(krabka_pgtypes::MAX_ARRAY_DIM).unwrap_or(i32::MAX) {
         return Err(malformed_binary_parameter());
     }
     let mut dims = Vec::with_capacity(usize::try_from(ndim).unwrap_or(0));
@@ -16920,7 +16920,7 @@ fn decode_array_binary(
         if len < 0 {
             return Err(malformed_binary_parameter());
         }
-        dims.push(crabka_pgtypes::ArrayDim::new(lower, len));
+        dims.push(krabka_pgtypes::ArrayDim::new(lower, len));
     }
     let mut count = usize::from(!dims.is_empty());
     for dim in &dims {
@@ -16948,7 +16948,7 @@ fn decode_array_binary(
     if !reader.is_empty() {
         return Err(malformed_binary_parameter());
     }
-    Ok(Datum::Array(crabka_pgtypes::ArrayValue::with_dims(
+    Ok(Datum::Array(krabka_pgtypes::ArrayValue::with_dims(
         elem, elems, dims,
     )))
 }
@@ -16994,23 +16994,23 @@ fn decode_text_bound_param(
     text: &str,
     ty: ColumnType,
     time_zone: &jiff::tz::TimeZone,
-) -> Result<Datum, crabka_pgtypes::TypeError> {
+) -> Result<Datum, krabka_pgtypes::TypeError> {
     if ty == ColumnType::Bytea {
         return decode_bytea_text(text).map(Datum::Bytea);
     }
-    crabka_pgtypes::cast::cast(&Datum::Text(text.to_string()), ty, time_zone)
+    krabka_pgtypes::cast::cast(&Datum::Text(text.to_string()), ty, time_zone)
 }
 
-pub(crate) fn decode_bytea_text(text: &str) -> Result<Vec<u8>, crabka_pgtypes::TypeError> {
+pub(crate) fn decode_bytea_text(text: &str) -> Result<Vec<u8>, krabka_pgtypes::TypeError> {
     if let Some(hex) = text.strip_prefix("\\x") {
         return decode_bytea_hex(hex, text);
     }
     decode_bytea_escape(text)
 }
 
-fn decode_bytea_hex(hex: &str, original: &str) -> Result<Vec<u8>, crabka_pgtypes::TypeError> {
+fn decode_bytea_hex(hex: &str, original: &str) -> Result<Vec<u8>, krabka_pgtypes::TypeError> {
     if !hex.len().is_multiple_of(2) {
-        return Err(crabka_pgtypes::TypeError::InvalidText {
+        return Err(krabka_pgtypes::TypeError::InvalidText {
             type_name: "bytea",
             value: original.to_string(),
         });
@@ -17025,7 +17025,7 @@ fn decode_bytea_hex(hex: &str, original: &str) -> Result<Vec<u8>, crabka_pgtypes
         .collect()
 }
 
-fn decode_bytea_escape(text: &str) -> Result<Vec<u8>, crabka_pgtypes::TypeError> {
+fn decode_bytea_escape(text: &str) -> Result<Vec<u8>, krabka_pgtypes::TypeError> {
     let bytes = text.as_bytes();
     let mut decoded = Vec::with_capacity(bytes.len());
     let mut index = 0;
@@ -17057,19 +17057,19 @@ fn decode_bytea_escape(text: &str) -> Result<Vec<u8>, crabka_pgtypes::TypeError>
     Ok(decoded)
 }
 
-fn invalid_bytea_text(text: &str) -> crabka_pgtypes::TypeError {
-    crabka_pgtypes::TypeError::InvalidText {
+fn invalid_bytea_text(text: &str) -> krabka_pgtypes::TypeError {
+    krabka_pgtypes::TypeError::InvalidText {
         type_name: "bytea",
         value: text.to_string(),
     }
 }
 
-fn hex_digit(byte: u8) -> Result<u8, crabka_pgtypes::TypeError> {
+fn hex_digit(byte: u8) -> Result<u8, krabka_pgtypes::TypeError> {
     match byte {
         b'0'..=b'9' => Ok(byte - b'0'),
         b'a'..=b'f' => Ok(byte - b'a' + 10),
         b'A'..=b'F' => Ok(byte - b'A' + 10),
-        _ => Err(crabka_pgtypes::TypeError::InvalidText {
+        _ => Err(krabka_pgtypes::TypeError::InvalidText {
             type_name: "bytea",
             value: char::from(byte).to_string(),
         }),
@@ -17137,7 +17137,7 @@ impl SqlSession {
         // kind, and for a view points at what would make it work — a refusal
         // that has to arrive before `CopyInResponse` for the same reason the
         // privilege test does.
-        if crabka_pgcatalog::get_view(self.catalog_kv.as_ref(), &resolved).is_ok()
+        if krabka_pgcatalog::get_view(self.catalog_kv.as_ref(), &resolved).is_ok()
             || crate::exec::virtual_relation_kind(&resolved) == Some("view")
         {
             return Err(ExecError::Remote(
@@ -17148,7 +17148,7 @@ impl SqlSession {
                 .with_hint("To enable copying to a view, provide an INSTEAD OF INSERT trigger."),
             ));
         }
-        if crabka_pgcatalog::get_sequence(self.catalog_kv.as_ref(), &resolved).is_ok() {
+        if krabka_pgcatalog::get_sequence(self.catalog_kv.as_ref(), &resolved).is_ok() {
             return Err(ExecError::Remote(PgError::error(
                 "42809",
                 format!("cannot copy to sequence \"{}\"", resolved.name),
@@ -17157,7 +17157,7 @@ impl SqlSession {
         if let Some(error) = crate::exec::open_wrong_kind(self.catalog_kv.as_ref(), &resolved) {
             return Err(error);
         }
-        let table = crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &resolved)?;
+        let table = krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &resolved)?;
         // A materialized view holds rows but takes none: PostgreSQL words this
         // refusal for `COPY` specifically rather than reusing the DML one, and
         // it belongs in the precheck for the same reason the privilege test
@@ -17185,7 +17185,7 @@ impl SqlSession {
         match crate::rls::decide(
             &rls,
             &table,
-            crabka_pgcatalog::policy::PolicyCommand::Insert,
+            krabka_pgcatalog::policy::PolicyCommand::Insert,
         )? {
             crate::rls::RowSecurity::Open => Ok(()),
             crate::rls::RowSecurity::Refuse { relation } => {
@@ -17237,7 +17237,7 @@ impl SqlSession {
             target.name,
             crate::relname::SchemaDisposition::Utility,
         )?;
-        let Ok(table) = crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &resolved) else {
+        let Ok(table) = krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &resolved) else {
             // Every kind with no table record of its own was refused for its
             // kind before this ran.
             return Ok(());
@@ -17263,8 +17263,8 @@ impl SqlSession {
     /// `ForeignCtx` is what lets the COPY pre-check run before any statement
     /// context exists.
     fn current_role_for_row_security(&self) -> String {
-        if self.current_role == crabka_pgcatalog::PUBLIC_ROLE {
-            crabka_pgcatalog::BOOTSTRAP_ROLE.to_string()
+        if self.current_role == krabka_pgcatalog::PUBLIC_ROLE {
+            krabka_pgcatalog::BOOTSTRAP_ROLE.to_string()
         } else {
             self.current_role.clone()
         }
@@ -17282,7 +17282,7 @@ impl SqlSession {
         &self,
         target: crate::exec::CopyIntoTarget<'_>,
     ) -> Result<CopyColumnLists, ExecError> {
-        let table = crabka_pgcatalog::get_table(
+        let table = krabka_pgcatalog::get_table(
             self.catalog_kv.as_ref(),
             &crate::relname::resolve_relation(
                 self.catalog_kv.as_ref(),
@@ -17374,7 +17374,7 @@ impl SqlSession {
                     .map(|row| {
                         row.into_iter()
                             .map(|value| {
-                                value.map(|bytes| crabka_pgwire::engine::Cell {
+                                value.map(|bytes| krabka_pgwire::engine::Cell {
                                     text: bytes.clone(),
                                     binary: bytes,
                                 })
@@ -17401,7 +17401,7 @@ impl SqlSession {
     /// `sql` is the whole query string the statement was parsed from, which the
     /// statement span needs both for `db.query.text` and to decide sqlcommenter
     /// precedence over the `crabka.traceparent` GUC.
-    async fn stream_eligible_select<S: crabka_pgwire::engine::ResultSink>(
+    async fn stream_eligible_select<S: krabka_pgwire::engine::ResultSink>(
         &mut self,
         stmt: &Statement,
         sql: &str,
@@ -17501,7 +17501,7 @@ impl SqlSession {
             Ok(name) => name,
             Err(error) => return Some(Err(error)),
         };
-        let table = match crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &name) {
+        let table = match krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), &name) {
             // A materialized view whose contents have never been computed is an
             // error to read, not an empty relation. `exec::require_populated`
             // refuses it at the one place every stored-relation read passes,
@@ -17518,7 +17518,7 @@ impl SqlSession {
                 table
             }
             Ok(_) => return None,
-            Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => return None,
+            Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => return None,
             Err(error) => return Some(Err(error.into())),
         };
         // This cursor opens a raw range scan itself. It cannot honor an
@@ -17734,7 +17734,7 @@ impl SqlSession {
                     into_bounded_row_pages(encoded, page_rows, self.result_page_max.bytes_usize())
                         .peekable();
                 if chunks.peek().is_none() && is_last {
-                    sink.send(crabka_pgwire::engine::ResultPage::Rows {
+                    sink.send(krabka_pgwire::engine::ResultPage::Rows {
                         result_index,
                         fields: fields.take(),
                         rows: Vec::new(),
@@ -17746,7 +17746,7 @@ impl SqlSession {
                 while let Some(rows) = chunks.next() {
                     let rows = rows.map_err(ExecError::Remote)?;
                     let final_chunk = is_last && chunks.peek().is_none();
-                    sink.send(crabka_pgwire::engine::ResultPage::Rows {
+                    sink.send(krabka_pgwire::engine::ResultPage::Rows {
                         result_index,
                         fields: fields.take(),
                         rows,
@@ -17797,7 +17797,7 @@ fn validate_tablespace_options<'a>(
                 | "effective_io_concurrency"
                 | "maintenance_io_concurrency"
         ) {
-            return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+            return Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
                 "22023",
                 format!("unrecognized parameter \"{option}\""),
             )));
@@ -17807,45 +17807,45 @@ fn validate_tablespace_options<'a>(
 }
 
 fn tablespace_missing(name: &str) -> ExecError {
-    ExecError::Remote(crabka_pgwire::error::PgError::error(
+    ExecError::Remote(krabka_pgwire::error::PgError::error(
         "42704",
         format!("tablespace \"{name}\" does not exist"),
     ))
 }
 
 fn tablespace_duplicate(name: &str) -> ExecError {
-    ExecError::Remote(crabka_pgwire::error::PgError::error(
+    ExecError::Remote(krabka_pgwire::error::PgError::error(
         "42710",
         format!("tablespace \"{name}\" already exists"),
     ))
 }
 
 fn operator_object_missing(
-    kind: crabka_pgparser::ast::OperatorObjectKind,
+    kind: krabka_pgparser::ast::OperatorObjectKind,
     name: &str,
     method: &str,
 ) -> ExecError {
     let kind = match kind {
-        crabka_pgparser::ast::OperatorObjectKind::Class => "class",
-        crabka_pgparser::ast::OperatorObjectKind::Family => "family",
+        krabka_pgparser::ast::OperatorObjectKind::Class => "class",
+        krabka_pgparser::ast::OperatorObjectKind::Family => "family",
     };
-    ExecError::Remote(crabka_pgwire::error::PgError::error(
+    ExecError::Remote(krabka_pgwire::error::PgError::error(
         "42704",
         format!("operator {kind} \"{name}\" does not exist for access method \"{method}\""),
     ))
 }
 
 fn operator_object_duplicate(
-    kind: crabka_pgparser::ast::OperatorObjectKind,
+    kind: krabka_pgparser::ast::OperatorObjectKind,
     name: &str,
     method: &str,
     schema: &str,
 ) -> ExecError {
     let kind = match kind {
-        crabka_pgparser::ast::OperatorObjectKind::Class => "class",
-        crabka_pgparser::ast::OperatorObjectKind::Family => "family",
+        krabka_pgparser::ast::OperatorObjectKind::Class => "class",
+        krabka_pgparser::ast::OperatorObjectKind::Family => "family",
     };
-    ExecError::Remote(crabka_pgwire::error::PgError::error(
+    ExecError::Remote(krabka_pgwire::error::PgError::error(
         "42710",
         format!(
             "operator {kind} \"{name}\" for access method \"{method}\" already exists in schema \"{schema}\""
@@ -17854,46 +17854,46 @@ fn operator_object_duplicate(
 }
 
 fn operator_object_not_owner(
-    kind: crabka_pgparser::ast::OperatorObjectKind,
+    kind: krabka_pgparser::ast::OperatorObjectKind,
     name: &str,
 ) -> ExecError {
     let kind = match kind {
-        crabka_pgparser::ast::OperatorObjectKind::Class => "class",
-        crabka_pgparser::ast::OperatorObjectKind::Family => "family",
+        krabka_pgparser::ast::OperatorObjectKind::Class => "class",
+        krabka_pgparser::ast::OperatorObjectKind::Family => "family",
     };
-    ExecError::Remote(crabka_pgwire::error::PgError::error(
+    ExecError::Remote(krabka_pgwire::error::PgError::error(
         "42501",
         format!("must be owner of operator {kind} {name}"),
     ))
 }
 
 fn operator_access_method_missing(method: &str) -> ExecError {
-    ExecError::Remote(crabka_pgwire::error::PgError::error(
+    ExecError::Remote(krabka_pgwire::error::PgError::error(
         "42704",
         format!("access method \"{method}\" does not exist"),
     ))
 }
 
 fn operator_family_member_identity(
-    member: &crabka_pgcatalog::OperatorFamilyMember,
-) -> crabka_pgcatalog::OperatorFamilyMemberKey {
+    member: &krabka_pgcatalog::OperatorFamilyMember,
+) -> krabka_pgcatalog::OperatorFamilyMemberKey {
     match member {
-        crabka_pgcatalog::OperatorFamilyMember::Operator {
+        krabka_pgcatalog::OperatorFamilyMember::Operator {
             number,
             left_type_oid,
             right_type_oid,
             ..
-        } => crabka_pgcatalog::OperatorFamilyMemberKey::Operator {
+        } => krabka_pgcatalog::OperatorFamilyMemberKey::Operator {
             number: *number,
             left_type_oid: *left_type_oid,
             right_type_oid: *right_type_oid,
         },
-        crabka_pgcatalog::OperatorFamilyMember::Function {
+        krabka_pgcatalog::OperatorFamilyMember::Function {
             number,
             left_type_oid,
             right_type_oid,
             ..
-        } => crabka_pgcatalog::OperatorFamilyMemberKey::Function {
+        } => krabka_pgcatalog::OperatorFamilyMemberKey::Function {
             number: *number,
             left_type_oid: *left_type_oid,
             right_type_oid: *right_type_oid,
@@ -17902,15 +17902,15 @@ fn operator_family_member_identity(
 }
 
 fn operator_family_member_parts(
-    member: crabka_pgcatalog::OperatorFamilyMemberKey,
+    member: krabka_pgcatalog::OperatorFamilyMemberKey,
 ) -> (&'static str, u16, String) {
     let (kind, number, left, right) = match member {
-        crabka_pgcatalog::OperatorFamilyMemberKey::Operator {
+        krabka_pgcatalog::OperatorFamilyMemberKey::Operator {
             number,
             left_type_oid,
             right_type_oid,
         } => ("operator", number, left_type_oid, right_type_oid),
-        crabka_pgcatalog::OperatorFamilyMemberKey::Function {
+        krabka_pgcatalog::OperatorFamilyMemberKey::Function {
             number,
             left_type_oid,
             right_type_oid,
@@ -17928,7 +17928,7 @@ fn operator_family_member_parts(
 }
 
 fn operator_family_type_name(oid: u32) -> String {
-    use crabka_pgtypes::ColumnType;
+    use krabka_pgtypes::ColumnType;
     [
         ColumnType::Int2,
         ColumnType::Int4,
@@ -17941,7 +17941,7 @@ fn operator_family_type_name(oid: u32) -> String {
     .map_or_else(|| oid.to_string(), |ty| ty.name().to_string())
 }
 
-fn operator_family_member_repeated(member: crabka_pgcatalog::OperatorFamilyMemberKey) -> ExecError {
+fn operator_family_member_repeated(member: krabka_pgcatalog::OperatorFamilyMemberKey) -> ExecError {
     let (kind, number, types) = operator_family_member_parts(member);
     ExecError::Remote(PgError::error(
         "42710",
@@ -17950,7 +17950,7 @@ fn operator_family_member_repeated(member: crabka_pgcatalog::OperatorFamilyMembe
 }
 
 fn operator_family_member_duplicate(
-    member: crabka_pgcatalog::OperatorFamilyMemberKey,
+    member: krabka_pgcatalog::OperatorFamilyMemberKey,
     family: &str,
 ) -> ExecError {
     let (kind, number, types) = operator_family_member_parts(member);
@@ -17961,7 +17961,7 @@ fn operator_family_member_duplicate(
 }
 
 fn operator_family_member_missing(
-    member: crabka_pgcatalog::OperatorFamilyMemberKey,
+    member: krabka_pgcatalog::OperatorFamilyMemberKey,
     family: &str,
 ) -> ExecError {
     let (kind, number, types) = operator_family_member_parts(member);
@@ -17972,27 +17972,27 @@ fn operator_family_member_missing(
 }
 
 fn resolve_operator_object_name(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     scope: &crate::relname::ResolutionScope,
-    reference: &crabka_pgparser::ast::RelationRef,
+    reference: &krabka_pgparser::ast::RelationRef,
     method: &str,
-    kind: crabka_pgparser::ast::OperatorObjectKind,
-) -> Result<crabka_pgcatalog::RelationName, ExecError> {
+    kind: krabka_pgparser::ast::OperatorObjectKind,
+) -> Result<krabka_pgcatalog::RelationName, ExecError> {
     if let Some(schema) = &reference.schema {
-        return Ok(crabka_pgcatalog::RelationName::new(
+        return Ok(krabka_pgcatalog::RelationName::new(
             schema,
             reference.name.clone(),
         ));
     }
     let objects = match kind {
-        crabka_pgparser::ast::OperatorObjectKind::Class => {
-            crabka_pgcatalog::list_operator_classes(kv)?
+        krabka_pgparser::ast::OperatorObjectKind::Class => {
+            krabka_pgcatalog::list_operator_classes(kv)?
                 .into_iter()
                 .map(|object| (object.name, object.method))
                 .collect::<Vec<_>>()
         }
-        crabka_pgparser::ast::OperatorObjectKind::Family => {
-            crabka_pgcatalog::list_operator_families(kv)?
+        krabka_pgparser::ast::OperatorObjectKind::Family => {
+            krabka_pgcatalog::list_operator_families(kv)?
                 .into_iter()
                 .map(|object| (object.name, object.method))
                 .collect::<Vec<_>>()
@@ -18008,13 +18008,13 @@ fn resolve_operator_object_name(
         // have no row of their own, so the search path has to reach them from
         // the built-in fixture instead of from the listing above.
         if schema == crate::search_path::PG_CATALOG {
-            let builtin = crabka_pgcatalog::RelationName::new(schema, reference.name.clone());
+            let builtin = krabka_pgcatalog::RelationName::new(schema, reference.name.clone());
             if builtin_operator_object_oid(&builtin, method, kind).is_some() {
                 return Ok(builtin);
             }
         }
     }
-    Ok(crabka_pgcatalog::RelationName::public(
+    Ok(krabka_pgcatalog::RelationName::public(
         reference.name.clone(),
     ))
 }
@@ -18029,7 +18029,7 @@ fn resolve_operator_object_name(
 /// has one, and the catalog reports both.
 fn builtin_operator_family_member_exists(
     family_oid: u32,
-    member: crabka_pgcatalog::OperatorFamilyMemberKey,
+    member: krabka_pgcatalog::OperatorFamilyMemberKey,
 ) -> bool {
     let Ok(family) = i32::try_from(family_oid) else {
         return false;
@@ -18045,7 +18045,7 @@ fn builtin_operator_family_member_exists(
             && i16::try_from(number) == Ok(candidate_number)
     };
     match member {
-        crabka_pgcatalog::OperatorFamilyMemberKey::Operator {
+        krabka_pgcatalog::OperatorFamilyMemberKey::Operator {
             number,
             left_type_oid,
             right_type_oid,
@@ -18069,7 +18069,7 @@ fn builtin_operator_family_member_exists(
                 },
             )
         }
-        crabka_pgcatalog::OperatorFamilyMemberKey::Function {
+        krabka_pgcatalog::OperatorFamilyMemberKey::Function {
             number,
             left_type_oid,
             right_type_oid,
@@ -18104,18 +18104,18 @@ fn builtin_operator_family_member_exists(
 /// `integer_ops`, and refusing that is the difference between "the family does
 /// not exist" and the truth, which is that it exists and is not writable here.
 fn builtin_operator_object_oid(
-    name: &crabka_pgcatalog::RelationName,
+    name: &krabka_pgcatalog::RelationName,
     method: &str,
-    kind: crabka_pgparser::ast::OperatorObjectKind,
+    kind: krabka_pgparser::ast::OperatorObjectKind,
 ) -> Option<u32> {
     if name.schema != crate::search_path::PG_CATALOG {
         return None;
     }
     let oid = match kind {
-        crabka_pgparser::ast::OperatorObjectKind::Family => {
+        krabka_pgparser::ast::OperatorObjectKind::Family => {
             crate::catalog_rel::builtin_operator_family_oid(method, &name.name)?
         }
-        crabka_pgparser::ast::OperatorObjectKind::Class => {
+        krabka_pgparser::ast::OperatorObjectKind::Class => {
             let method_oid = crate::catalog_rel::access_method_oid(method)?;
             crate::builtin_opclasses::BUILTIN_OPERATOR_CLASSES
                 .iter()
@@ -18127,9 +18127,9 @@ fn builtin_operator_object_oid(
 }
 
 fn resolve_ordering_family_oid(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     scope: &crate::relname::ResolutionScope,
-    reference: &crabka_pgparser::ast::RelationRef,
+    reference: &krabka_pgparser::ast::RelationRef,
 ) -> Result<u32, ExecError> {
     if reference
         .schema
@@ -18145,13 +18145,13 @@ fn resolve_ordering_family_oid(
         scope,
         reference,
         "btree",
-        crabka_pgparser::ast::OperatorObjectKind::Family,
+        krabka_pgparser::ast::OperatorObjectKind::Family,
     )?;
-    crabka_pgcatalog::get_operator_family(kv, &name, "btree")
+    krabka_pgcatalog::get_operator_family(kv, &name, "btree")
         .map(|family| family.oid)
         .map_err(|_| {
             operator_object_missing(
-                crabka_pgparser::ast::OperatorObjectKind::Family,
+                krabka_pgparser::ast::OperatorObjectKind::Family,
                 &reference.name,
                 "btree",
             )
@@ -18186,7 +18186,7 @@ fn attach_known_runtime_diagnostics(sql: &str, stmt: &Statement, error: PgError)
 /// quantified-array type errors. These reach the executor after parsing, so
 /// their parser token offsets are the only source-location information left.
 fn attach_array_runtime_position(sql: &str, error: PgError) -> PgError {
-    use crabka_pgparser::token::{Keyword, Token};
+    use krabka_pgparser::token::{Keyword, Token};
 
     let empty_array =
         error.code == "42P18" && error.message == "cannot determine type of empty array";
@@ -18198,7 +18198,7 @@ fn attach_array_runtime_position(sql: &str, error: PgError) -> PgError {
     {
         return error;
     }
-    let Ok(tokens) = crabka_pgparser::lexer::lex(sql) else {
+    let Ok(tokens) = krabka_pgparser::lexer::lex(sql) else {
         return error;
     };
     let position = |offset| sql[..offset].chars().count() + 1;
@@ -18293,13 +18293,13 @@ fn attach_create_type_like_position(sql: &str, stmt: &Statement, error: PgError)
     if error.message != format!("type \"{name}\" does not exist") {
         return error;
     }
-    let Ok(tokens) = crabka_pgparser::lexer::lex(sql) else {
+    let Ok(tokens) = krabka_pgparser::lexer::lex(sql) else {
         return error;
     };
     let positions: Vec<_> = tokens
         .iter()
         .filter_map(|(token, offset)| {
-            matches!(token, crabka_pgparser::token::Token::Ident(found) if found == name)
+            matches!(token, krabka_pgparser::token::Token::Ident(found) if found == name)
                 .then(|| sql[..*offset].chars().count() + 1)
         })
         .collect();
@@ -18329,8 +18329,8 @@ fn attach_plpgsql_definition_return_position(
     let body = match stmt {
         Statement::CreateRoutine(routine) => {
             routine.options.iter().find_map(|option| match option {
-                crabka_pgparser::ast::RoutineOption::Body(
-                    crabka_pgparser::ast::RoutineBody::Source(body),
+                krabka_pgparser::ast::RoutineOption::Body(
+                    krabka_pgparser::ast::RoutineBody::Source(body),
                 ) => Some(body.as_str()),
                 _ => None,
             })
@@ -18341,7 +18341,7 @@ fn attach_plpgsql_definition_return_position(
     let Some(body) = body else {
         return error;
     };
-    let Ok(block) = crabka_pgparser::parse_plpgsql(body) else {
+    let Ok(block) = krabka_pgparser::parse_plpgsql(body) else {
         return error;
     };
     let Some((source, line)) = crate::routine::plpgsql_return_source(&block, has_value) else {
@@ -18368,8 +18368,8 @@ fn plpgsql_body_source_position(sql: &str, stmt: &Statement, offset: usize) -> O
     let body = match stmt {
         Statement::CreateRoutine(routine) => {
             routine.options.iter().find_map(|option| match option {
-                crabka_pgparser::ast::RoutineOption::Body(
-                    crabka_pgparser::ast::RoutineBody::Source(body),
+                krabka_pgparser::ast::RoutineOption::Body(
+                    krabka_pgparser::ast::RoutineBody::Source(body),
                 ) => Some(body.as_str()),
                 _ => None,
             })
@@ -18382,7 +18382,7 @@ fn plpgsql_body_source_position(sql: &str, stmt: &Statement, offset: usize) -> O
 }
 
 fn attach_typed_table_position(sql: &str, stmt: &Statement, error: PgError) -> PgError {
-    use crabka_pgparser::{ast::AlterTableAction, token::Token};
+    use krabka_pgparser::{ast::AlterTableAction, token::Token};
 
     if error
         .diagnostics
@@ -18391,7 +18391,7 @@ fn attach_typed_table_position(sql: &str, stmt: &Statement, error: PgError) -> P
     {
         return error;
     }
-    let Ok(tokens) = crabka_pgparser::lexer::lex(sql) else {
+    let Ok(tokens) = krabka_pgparser::lexer::lex(sql) else {
         return error;
     };
     let is_word = |token: &Token, word| matches!(token, Token::Ident(found) if found == word);
@@ -18758,10 +18758,10 @@ fn collapse_words(text: &str) -> String {
 /// an array.
 fn stated_type_after(
     sql: &str,
-    tokens: &[(crabka_pgparser::token::Token, usize)],
+    tokens: &[(krabka_pgparser::token::Token, usize)],
     start: usize,
 ) -> Option<String> {
-    use crabka_pgparser::token::Token;
+    use krabka_pgparser::token::Token;
 
     let Some((Token::Ident(head), _)) = tokens.get(start) else {
         return None;
@@ -18791,10 +18791,10 @@ fn stated_type_after(
 /// as the legacy `type 'literal'` spelling puts it.
 fn stated_type_before(
     sql: &str,
-    tokens: &[(crabka_pgparser::token::Token, usize)],
+    tokens: &[(krabka_pgparser::token::Token, usize)],
     index: usize,
 ) -> Option<String> {
-    use crabka_pgparser::token::Token;
+    use krabka_pgparser::token::Token;
 
     let literal = tokens[index].1;
     for words in (2..=4).rev() {
@@ -18818,10 +18818,10 @@ fn stated_type_before(
 /// takes its type from the target column instead.
 fn stated_literal_type(
     sql: &str,
-    tokens: &[(crabka_pgparser::token::Token, usize)],
+    tokens: &[(krabka_pgparser::token::Token, usize)],
     index: usize,
 ) -> Option<String> {
-    use crabka_pgparser::token::{Keyword, Token};
+    use krabka_pgparser::token::{Keyword, Token};
 
     // `'x'::type` binds tighter than an enclosing call, so
     // `to_timestamp('x'::date, …)` is still a coercion of the literal.
@@ -18870,8 +18870,8 @@ fn stated_literal_type(
 /// stay undecorated. A `VALUES` row is not a call: its parenthesis follows the
 /// `VALUES` keyword rather than a function name, and PostgreSQL does position
 /// the coercion of each item to its target column.
-fn encloses_function_call(tokens: &[(crabka_pgparser::token::Token, usize)], index: usize) -> bool {
-    use crabka_pgparser::token::Token;
+fn encloses_function_call(tokens: &[(krabka_pgparser::token::Token, usize)], index: usize) -> bool {
+    use krabka_pgparser::token::Token;
 
     let mut depth = 0_usize;
     for cursor in (0..index).rev() {
@@ -18934,11 +18934,11 @@ fn spells_component(literal: &str, value: &str) -> bool {
 /// blamed on, under one reading of how a literal carries the rejected value.
 fn blamed_literal_positions(
     sql: &str,
-    tokens: &[(crabka_pgparser::token::Token, usize)],
+    tokens: &[(krabka_pgparser::token::Token, usize)],
     rejected: &RejectedInput<'_>,
     reading: LiteralMatch,
 ) -> Vec<usize> {
-    use crabka_pgparser::token::Token;
+    use krabka_pgparser::token::Token;
 
     tokens
         .iter()
@@ -18997,7 +18997,7 @@ fn blamed_literal_positions(
 /// Only the JSON types can be told apart from the literal alone, so only they
 /// are tested; every other type keeps the reading it had.
 fn stated_input_function_could_have_raised(stated: &str, candidate: &str) -> bool {
-    stated != "json" || crabka_pgtypes::json::validate(candidate).is_err()
+    stated != "json" || krabka_pgtypes::json::validate(candidate).is_err()
 }
 
 /// PostgreSQL's input functions run during parse analysis for a *constant*, so
@@ -19071,7 +19071,7 @@ fn attach_type_input_literal_position(sql: &str, error: PgError) -> PgError {
     let Some(rejected) = rejected_input(&error.message) else {
         return error;
     };
-    let Ok(tokens) = crabka_pgparser::lexer::lex(sql) else {
+    let Ok(tokens) = krabka_pgparser::lexer::lex(sql) else {
         return error;
     };
     let whole = blamed_literal_positions(sql, &tokens, &rejected, LiteralMatch::Whole);
@@ -19096,7 +19096,7 @@ fn attach_hidden_target_alias_diagnostic(
     stmt: &Statement,
     mut error: PgError,
 ) -> PgError {
-    use crabka_pgparser::{ast::Expr, token::Token};
+    use krabka_pgparser::{ast::Expr, token::Token};
 
     if error.code != "42P01" || error.diagnostics.is_some() {
         return error;
@@ -19140,7 +19140,7 @@ fn attach_hidden_target_alias_diagnostic(
         return error;
     }
 
-    let Ok(tokens) = crabka_pgparser::lexer::lex(sql) else {
+    let Ok(tokens) = krabka_pgparser::lexer::lex(sql) else {
         return error;
     };
     let positions: Vec<usize> = tokens
@@ -19175,7 +19175,7 @@ fn attach_hidden_target_alias_diagnostic(
 /// nosuch()` are all bare, while `SELECT nosuch(1)`, `CREATE TABLE t (a int
 /// DEFAULT nosuch())` and even `CREATE INDEX ON t ((nosuch(a)))` carry a caret.
 fn attach_undefined_function_position(sql: &str, stmt: &Statement, error: PgError) -> PgError {
-    use crabka_pgparser::token::Token;
+    use krabka_pgparser::token::Token;
 
     if sql
         .trim_start()
@@ -19208,7 +19208,7 @@ fn attach_undefined_function_position(sql: &str, stmt: &Statement, error: PgErro
         return error;
     };
     let name = name.rsplit('.').next().unwrap_or(name);
-    let Ok(tokens) = crabka_pgparser::lexer::lex(sql) else {
+    let Ok(tokens) = krabka_pgparser::lexer::lex(sql) else {
         return error;
     };
     let positions: Vec<usize> = tokens
@@ -19253,7 +19253,7 @@ fn attach_declared_parse_position(sql: &str, parsed: &ExecError, error: PgError)
 /// under one spelling and not the other would be a difference the client cannot
 /// explain. `SqlSession::parse_for_session` runs the same three attachments
 /// inline, because it needs the [`ExecError`] for telemetry before it reports.
-fn parse_failure(sql: &str, error: crabka_pgparser::ParseError) -> PgError {
+fn parse_failure(sql: &str, error: krabka_pgparser::ParseError) -> PgError {
     let error = ExecError::from(error);
     let reported = attach_type_input_literal_position(sql, error.clone().into_pg());
     let reported = attach_parsed_bit_string_position(sql, &error, reported);
@@ -19310,7 +19310,7 @@ fn attach_parsed_bit_string_position(sql: &str, parsed: &ExecError, error: PgErr
 /// PostgreSQL raises nothing at all, against 14 places gained; the call spelling
 /// alone gains the same 14 and costs none.
 fn attach_reg_cast_literal_position(sql: &str, error: PgError) -> PgError {
-    use crabka_pgparser::token::Token;
+    use krabka_pgparser::token::Token;
 
     /// The `reg*` types whose input function resolves a name in the catalog.
     const REG_TYPES: &[&str] = &[
@@ -19341,7 +19341,7 @@ fn attach_reg_cast_literal_position(sql: &str, error: PgError) -> PgError {
     {
         return error;
     }
-    let Ok(tokens) = crabka_pgparser::lexer::lex(sql) else {
+    let Ok(tokens) = krabka_pgparser::lexer::lex(sql) else {
         return error;
     };
     let is_reg =
@@ -19465,7 +19465,7 @@ const RESOLVED_OPERAND_TYPES: &[&str] = &[
 /// keyword for that form. Neither shape occurs in the corpus with an operand
 /// type this admits.
 fn attach_operator_resolution_position(sql: &str, stmt: &Statement, error: PgError) -> PgError {
-    use crabka_pgparser::token::{Keyword, Token};
+    use krabka_pgparser::token::{Keyword, Token};
 
     if !matches!(
         stmt,
@@ -19503,7 +19503,7 @@ fn attach_operator_resolution_position(sql: &str, stmt: &Statement, error: PgErr
     {
         return error;
     }
-    let Ok(tokens) = crabka_pgparser::lexer::lex(sql) else {
+    let Ok(tokens) = krabka_pgparser::lexer::lex(sql) else {
         return error;
     };
     let position = |offset: usize| sql[..offset].chars().count() + 1;
@@ -19535,28 +19535,28 @@ fn attach_operator_resolution_position(sql: &str, stmt: &Statement, error: PgErr
 /// crabka and `PostgreSQL` tokenise differently: crabka reads `#-` as `#` then
 /// `-` and reports the operator as `#`, and a caret drawn from half an operator
 /// points at the wrong column.
-fn sole_operator_token(spelling: &str) -> Option<crabka_pgparser::token::Token> {
+fn sole_operator_token(spelling: &str) -> Option<krabka_pgparser::token::Token> {
     /// `PostgreSQL`'s operator character set, from its `op_chars` lexer rule.
     const OPERATOR_CHARACTERS: &str = "+-*/<>=~!@#%^&|?";
 
     if spelling.is_empty() || !spelling.chars().all(|c| OPERATOR_CHARACTERS.contains(c)) {
         return None;
     }
-    match crabka_pgparser::lexer::lex(spelling).ok()?.as_slice() {
-        [(token, 0), (crabka_pgparser::token::Token::Eof, _)] => Some(token.clone()),
+    match krabka_pgparser::lexer::lex(spelling).ok()?.as_slice() {
+        [(token, 0), (krabka_pgparser::token::Token::Eof, _)] => Some(token.clone()),
         _ => None,
     }
 }
 
 /// Where `keyword` is written, when the statement writes it exactly once.
 fn sole_keyword_position(
-    tokens: &[(crabka_pgparser::token::Token, usize)],
-    keyword: crabka_pgparser::token::Keyword,
+    tokens: &[(krabka_pgparser::token::Token, usize)],
+    keyword: krabka_pgparser::token::Keyword,
     position: impl Fn(usize) -> usize,
 ) -> Option<usize> {
     let written: Vec<usize> = tokens
         .iter()
-        .filter(|(token, _)| *token == crabka_pgparser::token::Token::Keyword(keyword))
+        .filter(|(token, _)| *token == krabka_pgparser::token::Token::Keyword(keyword))
         .map(|(_, offset)| position(*offset))
         .collect();
     match written.as_slice() {
@@ -19589,8 +19589,8 @@ enum QueryClause {
 }
 
 /// Label every token with the top-level clause it belongs to.
-fn query_clauses(tokens: &[(crabka_pgparser::token::Token, usize)]) -> Vec<QueryClause> {
-    use crabka_pgparser::token::{Keyword, Token};
+fn query_clauses(tokens: &[(krabka_pgparser::token::Token, usize)]) -> Vec<QueryClause> {
+    use krabka_pgparser::token::{Keyword, Token};
 
     let mut clause = QueryClause::Other;
     let mut depth = 0_usize;
@@ -19639,12 +19639,12 @@ fn query_clauses(tokens: &[(crabka_pgparser::token::Token, usize)]) -> Vec<Query
 /// answers for a bare name.
 fn column_reference_position(
     sql: &str,
-    tokens: &[(crabka_pgparser::token::Token, usize)],
+    tokens: &[(krabka_pgparser::token::Token, usize)],
     labels: &[QueryClause],
     (qualifier, column): (Option<&str>, &str),
     clauses: &[QueryClause],
 ) -> Option<usize> {
-    use crabka_pgparser::token::Token;
+    use krabka_pgparser::token::Token;
 
     let is_ident = |index: usize, want: &str| matches!(tokens.get(index).map(|entry| &entry.0), Some(Token::Ident(name)) if name == want);
     let is_dot = |index: usize| matches!(tokens.get(index).map(|e| &e.0), Some(Token::Dot));
@@ -19712,7 +19712,7 @@ fn attach_query_analysis_position(sql: &str, stmt: &Statement, error: PgError) -
     {
         return error;
     }
-    let Ok(tokens) = crabka_pgparser::lexer::lex(sql) else {
+    let Ok(tokens) = krabka_pgparser::lexer::lex(sql) else {
         return error;
     };
     let labels = query_clauses(&tokens);
@@ -19736,7 +19736,7 @@ fn attach_query_analysis_position(sql: &str, stmt: &Statement, error: PgError) -
 /// carries `ORDER BY` by then) and then the `HAVING` qualification.
 fn ungrouped_column_position(
     sql: &str,
-    tokens: &[(crabka_pgparser::token::Token, usize)],
+    tokens: &[(krabka_pgparser::token::Token, usize)],
     labels: &[QueryClause],
     message: &str,
 ) -> Option<usize> {
@@ -19764,7 +19764,7 @@ fn ungrouped_column_position(
 /// `transformSelectStmt` resolves it in.
 fn ambiguous_column_position(
     sql: &str,
-    tokens: &[(crabka_pgparser::token::Token, usize)],
+    tokens: &[(krabka_pgparser::token::Token, usize)],
     labels: &[QueryClause],
     message: &str,
 ) -> Option<usize> {
@@ -19794,11 +19794,11 @@ fn ambiguous_column_position(
 /// the clause wrote, not on the clause keyword.
 fn group_by_position(
     sql: &str,
-    tokens: &[(crabka_pgparser::token::Token, usize)],
+    tokens: &[(krabka_pgparser::token::Token, usize)],
     labels: &[QueryClause],
     message: &str,
 ) -> Option<usize> {
-    use crabka_pgparser::token::Token;
+    use krabka_pgparser::token::Token;
 
     let rest = message.strip_suffix(" is not in select list")?;
     let (clause, wanted) = if let Some(digits) = rest.strip_prefix("GROUP BY position ") {
@@ -19826,10 +19826,10 @@ fn group_by_position(
 /// no column to find it by. Those stay undecorated rather than guessing.
 fn from_clause_entry_position(
     sql: &str,
-    tokens: &[(crabka_pgparser::token::Token, usize)],
+    tokens: &[(krabka_pgparser::token::Token, usize)],
     message: &str,
 ) -> Option<usize> {
-    use crabka_pgparser::token::Token;
+    use krabka_pgparser::token::Token;
 
     let table = message
         .strip_prefix("invalid reference to FROM-clause entry for table \"")?
@@ -19850,7 +19850,7 @@ fn from_clause_entry_position(
 /// cast — `'{(a,])}'::textmultirange` — and its type name ends in `range` too,
 /// so it needs only its own message prefix.
 fn attach_range_literal_position(sql: &str, error: PgError) -> PgError {
-    use crabka_pgparser::token::Token;
+    use krabka_pgparser::token::Token;
 
     if error
         .diagnostics
@@ -19862,7 +19862,7 @@ fn attach_range_literal_position(sql: &str, error: PgError) -> PgError {
     {
         return error;
     }
-    let Ok(tokens) = crabka_pgparser::lexer::lex(sql) else {
+    let Ok(tokens) = krabka_pgparser::lexer::lex(sql) else {
         return error;
     };
     let positions: Vec<usize> = tokens
@@ -20074,7 +20074,7 @@ impl Session for SqlSession {
             self.login_event_fired = true;
             if let Err(error) = self
                 .fire_event_triggers(
-                    crabka_pgcatalog::trigger::EventTriggerEvent::Login,
+                    krabka_pgcatalog::trigger::EventTriggerEvent::Login,
                     "LOGIN",
                     None,
                 )
@@ -20146,7 +20146,7 @@ impl Session for SqlSession {
         }))
     }
 
-    async fn simple_query_into<S: crabka_pgwire::engine::ResultSink>(
+    async fn simple_query_into<S: krabka_pgwire::engine::ResultSink>(
         &mut self,
         sql: &str,
         page_rows: usize,
@@ -20168,14 +20168,14 @@ impl Session for SqlSession {
         }
     }
 
-    async fn simple_query_batch_into<S: crabka_pgwire::engine::ResultSink>(
+    async fn simple_query_batch_into<S: krabka_pgwire::engine::ResultSink>(
         &mut self,
         sql: &str,
         from_statement: usize,
         page_rows: usize,
         sink: &mut S,
     ) -> Result<SimpleQueryStop, PgError> {
-        use crabka_pgwire::engine::ResultPage;
+        use krabka_pgwire::engine::ResultPage;
 
         if page_rows == 0 {
             return Err(PgError::protocol(
@@ -20621,7 +20621,7 @@ impl Session for SqlSession {
                 .lock()
                 .expect("relation rowtype parse lock");
             let type_schemas = self.type_search_schemas().map_err(ExecError::into_pg)?;
-            crabka_pgparser::parse_with_type_schemas(sql, &type_schemas).map_err(|error| {
+            krabka_pgparser::parse_with_type_schemas(sql, &type_schemas).map_err(|error| {
                 self.mark_transaction_failed();
                 parse_failure(sql, error)
             })?
@@ -20646,7 +20646,7 @@ impl Session for SqlSession {
                     .lock()
                     .expect("relation rowtype parse lock");
                 let type_schemas = self.type_search_schemas().map_err(ExecError::into_pg)?;
-                crabka_pgparser::parse_with_type_schemas(sql, &type_schemas).map_err(|error| {
+                krabka_pgparser::parse_with_type_schemas(sql, &type_schemas).map_err(|error| {
                     self.mark_transaction_failed();
                     parse_failure(sql, error)
                 })?
@@ -20681,7 +20681,7 @@ impl Session for SqlSession {
                 .lock()
                 .expect("relation rowtype parse lock");
             let type_schemas = self.type_search_schemas().map_err(ExecError::into_pg)?;
-            crabka_pgparser::parse_with_type_schemas(sql, &type_schemas)
+            krabka_pgparser::parse_with_type_schemas(sql, &type_schemas)
                 .map_err(|error| parse_failure(sql, error))?
         };
         let Some(copy) = statements
@@ -20765,13 +20765,13 @@ impl Session for SqlSession {
     }
 }
 
-pub(crate) const RESULT_PAGE_MAX: crabka_units::ByteSize = crabka_units::mebibytes(1);
+pub(crate) const RESULT_PAGE_MAX: krabka_units::ByteSize = krabka_units::mebibytes(1);
 
 fn into_bounded_row_pages(
-    rows: Vec<Vec<Option<crabka_pgwire::engine::Cell>>>,
+    rows: Vec<Vec<Option<krabka_pgwire::engine::Cell>>>,
     page_rows: usize,
     page_bytes: usize,
-) -> impl Iterator<Item = Result<Vec<Vec<Option<crabka_pgwire::engine::Cell>>>, PgError>> {
+) -> impl Iterator<Item = Result<Vec<Vec<Option<krabka_pgwire::engine::Cell>>>, PgError>> {
     debug_assert!(page_rows > 0);
     debug_assert!(page_bytes > 0);
     let mut rows = rows.into_iter().peekable();
@@ -20807,7 +20807,7 @@ fn into_bounded_row_pages(
     })
 }
 
-fn row_result_bytes(row: &[Option<crabka_pgwire::engine::Cell>]) -> Result<usize, PgError> {
+fn row_result_bytes(row: &[Option<krabka_pgwire::engine::Cell>]) -> Result<usize, PgError> {
     row.iter().try_fold(0usize, |bytes, cell| {
         let cell_bytes = cell
             .as_ref()
@@ -20829,8 +20829,8 @@ mod tests {
     };
 
     use assert2::assert;
-    use crabka_pgkv::{Kv, MemKv};
-    use crabka_pgwire::engine::{Engine, QueryResult, Session, TxStatus};
+    use krabka_pgkv::{Kv, MemKv};
+    use krabka_pgwire::engine::{Engine, QueryResult, Session, TxStatus};
 
     use super::{
         ColumnType, GucState, RowLockManager, SqlSession, canonical_guc_value, decode_bound_param,
@@ -20842,7 +20842,7 @@ mod tests {
     fn variadic_array_error_points_at_the_argument() {
         let error = super::attach_variadic_array_position(
             "select concat_ws(',', variadic 10)",
-            crabka_pgwire::error::PgError::error("42804", "VARIADIC argument must be an array"),
+            krabka_pgwire::error::PgError::error("42804", "VARIADIC argument must be an array"),
         );
         assert!(
             error
@@ -20857,14 +20857,14 @@ mod tests {
     fn create_type_like_error_points_at_the_missing_type() {
         let sql =
             "CREATE TYPE xfloat8 (input = xfloat8in, output = xfloat8out, like = no_such_type)";
-        let statement = crabka_pgparser::parse(sql)
+        let statement = krabka_pgparser::parse(sql)
             .expect("parse")
             .pop()
             .expect("one statement");
         let error = super::attach_create_type_like_position(
             sql,
             &statement,
-            crabka_pgwire::error::PgError::error("42704", "type \"no_such_type\" does not exist"),
+            krabka_pgwire::error::PgError::error("42704", "type \"no_such_type\" does not exist"),
         );
 
         assert!(
@@ -20892,14 +20892,14 @@ mod tests {
                 34,
             ),
         ] {
-            let statement = crabka_pgparser::parse(sql)
+            let statement = krabka_pgparser::parse(sql)
                 .expect("valid statement")
                 .pop()
                 .expect("one statement");
             let error = super::attach_typed_table_position(
                 sql,
                 &statement,
-                crabka_pgwire::error::PgError::error(code, message),
+                krabka_pgwire::error::PgError::error(code, message),
             );
             assert!(
                 error
@@ -20952,7 +20952,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl crate::commit::Committer for FailOnCommitter {
-        async fn commit(&self, ops: Vec<crabka_pgkv::WriteOp>) -> Result<(), ExecError> {
+        async fn commit(&self, ops: Vec<krabka_pgkv::WriteOp>) -> Result<(), ExecError> {
             let call = self.calls.fetch_add(1, Ordering::SeqCst) + 1;
             if call == self.fail_on {
                 return Err(ExecError::Unsupported(format!(
@@ -20989,7 +20989,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl crate::commit::Committer for ArmedFailCommitter {
-        async fn commit(&self, ops: Vec<crabka_pgkv::WriteOp>) -> Result<(), ExecError> {
+        async fn commit(&self, ops: Vec<krabka_pgkv::WriteOp>) -> Result<(), ExecError> {
             if self.armed.load(Ordering::SeqCst) {
                 return Err(ExecError::Unsupported("injected commit failure".into()));
             }
@@ -21055,12 +21055,12 @@ mod tests {
             "1"
         );
 
-        let statements = crabka_pgparser::parse("SELECT a FROM seq_scan_test WHERE a > 1")
+        let statements = krabka_pgparser::parse("SELECT a FROM seq_scan_test WHERE a > 1")
             .expect("query parses");
-        let [crabka_pgparser::ast::Statement::Query(query)] = statements.as_slice() else {
+        let [krabka_pgparser::ast::Statement::Query(query)] = statements.as_slice() else {
             panic!("expected query")
         };
-        let crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Select(select)) =
+        let krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Select(select)) =
             &query.body
         else {
             panic!("expected select")
@@ -21083,14 +21083,14 @@ mod tests {
                         exposure: crate::scope::Exposure::Output,
                         qualifier: None,
                         name: "n".into(),
-                        ty: crabka_pgtypes::ColumnType::Int4,
+                        ty: krabka_pgtypes::ColumnType::Int4,
                     }],
                     ..Default::default()
                 },
                 rows: vec![
-                    vec![crabka_pgtypes::Datum::Int4(1)],
-                    vec![crabka_pgtypes::Datum::Int4(2)],
-                    vec![crabka_pgtypes::Datum::Int4(3)],
+                    vec![krabka_pgtypes::Datum::Int4(1)],
+                    vec![krabka_pgtypes::Datum::Int4(2)],
+                    vec![krabka_pgtypes::Datum::Int4(3)],
                 ],
             },
         );
@@ -21098,11 +21098,11 @@ mod tests {
             std::collections::HashMap::from([(
                 "planned_transition".into(),
                 crate::clock::TransitionRelation {
-                    columns: vec![("n".into(), crabka_pgtypes::ColumnType::Int4)],
+                    columns: vec![("n".into(), krabka_pgtypes::ColumnType::Int4)],
                     rows: vec![
-                        vec![crabka_pgtypes::Datum::Int4(1)],
-                        vec![crabka_pgtypes::Datum::Int4(2)],
-                        vec![crabka_pgtypes::Datum::Int4(3)],
+                        vec![krabka_pgtypes::Datum::Int4(1)],
+                        vec![krabka_pgtypes::Datum::Int4(2)],
+                        vec![krabka_pgtypes::Datum::Int4(3)],
                     ],
                 },
             )]),
@@ -21141,11 +21141,11 @@ mod tests {
         };
 
         let select_of = |sql: &str| {
-            let statements = crabka_pgparser::parse(sql).expect(sql);
-            let [crabka_pgparser::ast::Statement::Query(query)] = statements.as_slice() else {
+            let statements = krabka_pgparser::parse(sql).expect(sql);
+            let [krabka_pgparser::ast::Statement::Query(query)] = statements.as_slice() else {
                 panic!("expected query")
             };
-            let crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Select(
+            let krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Select(
                 select,
             )) = &query.body
             else {
@@ -21166,8 +21166,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(2)],
-                vec![crabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
             ]
         );
         let (_, state) = crate::plan::exec::try_execute_seq_scan_with_state(&read_ctx, &select)
@@ -21193,7 +21193,7 @@ mod tests {
         )
         .expect("aliased SeqScan plan executes")
         .expect("stored table column aliases use SeqScan");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int4(1)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int4(1)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of(
@@ -21206,8 +21206,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![vec![
-                crabka_pgtypes::Datum::Int4(1),
-                crabka_pgtypes::Datum::Int8(2),
+                krabka_pgtypes::Datum::Int4(1),
+                krabka_pgtypes::Datum::Int8(2),
             ]]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21223,12 +21223,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int4(2)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int4(2)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int4(1)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int4(1)
                 ],
             ]
         );
@@ -21245,12 +21245,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int4(2)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int4(2)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int4(1)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int4(1)
                 ],
             ]
         );
@@ -21266,8 +21266,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![vec![
-                crabka_pgtypes::Datum::Int4(1),
-                crabka_pgtypes::Datum::Int8(1),
+                krabka_pgtypes::Datum::Int4(1),
+                krabka_pgtypes::Datum::Int8(1),
             ]]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21283,20 +21283,20 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(0),
-                    crabka_pgtypes::Datum::Int8(1)
+                    krabka_pgtypes::Datum::Int4(0),
+                    krabka_pgtypes::Datum::Int8(1)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(0),
-                    crabka_pgtypes::Datum::Int8(1)
+                    krabka_pgtypes::Datum::Int4(0),
+                    krabka_pgtypes::Datum::Int8(1)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(0),
-                    crabka_pgtypes::Datum::Int8(1)
+                    krabka_pgtypes::Datum::Int4(0),
+                    krabka_pgtypes::Datum::Int8(1)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int8(3)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int8(3)
                 ],
             ]
         );
@@ -21312,8 +21312,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![vec![
-                crabka_pgtypes::Datum::Int4(1),
-                crabka_pgtypes::Datum::Int8(1),
+                krabka_pgtypes::Datum::Int4(1),
+                krabka_pgtypes::Datum::Int8(1),
             ]]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21322,7 +21322,7 @@ mod tests {
         )
         .expect("function Aggregate distinct plan executes")
         .expect("function aggregate distinct uses Aggregate");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int8(3)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int8(3)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of("SELECT a % 2, count(*) FROM seq_scan_test GROUP BY a % 2"),
@@ -21333,12 +21333,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int8(1)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int8(1)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(0),
-                    crabka_pgtypes::Datum::Int8(2)
+                    krabka_pgtypes::Datum::Int4(0),
+                    krabka_pgtypes::Datum::Int8(2)
                 ],
             ]
         );
@@ -21362,8 +21362,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![vec![
-                crabka_pgtypes::Datum::Int4(2),
-                crabka_pgtypes::Datum::Int8(2),
+                krabka_pgtypes::Datum::Int4(2),
+                krabka_pgtypes::Datum::Int8(2),
             ]]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21379,14 +21379,14 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int8(1)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int8(1)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int8(2)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int8(2)
                 ],
-                vec![crabka_pgtypes::Datum::Null, crabka_pgtypes::Datum::Int8(3)],
+                vec![krabka_pgtypes::Datum::Null, krabka_pgtypes::Datum::Int8(3)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21402,16 +21402,16 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int4(2)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int4(2)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int4(2)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int4(2)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int4(1)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int4(1)
                 ],
             ]
         );
@@ -21428,12 +21428,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int8(3)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int8(3)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int8(2)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int8(2)
                 ],
             ]
         );
@@ -21459,8 +21459,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(2)],
-                vec![crabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21476,16 +21476,16 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(0),
-                    crabka_pgtypes::Datum::Int8(1)
+                    krabka_pgtypes::Datum::Int4(0),
+                    krabka_pgtypes::Datum::Int8(1)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int8(3)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int8(3)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(0),
-                    crabka_pgtypes::Datum::Int8(2)
+                    krabka_pgtypes::Datum::Int4(0),
+                    krabka_pgtypes::Datum::Int8(2)
                 ],
             ]
         );
@@ -21501,8 +21501,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![vec![
-                crabka_pgtypes::Datum::Int4(2),
-                crabka_pgtypes::Datum::Int8(2),
+                krabka_pgtypes::Datum::Int4(2),
+                krabka_pgtypes::Datum::Int8(2),
             ]]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21516,9 +21516,9 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(1)],
-                vec![crabka_pgtypes::Datum::Int4(2)],
-                vec![crabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(1)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21527,7 +21527,7 @@ mod tests {
         )
         .expect("derived ValuesScan tail plan executes")
         .expect("derived VALUES ORDER BY and LIMIT use SubqueryScan");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int4(1)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int4(1)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of(
@@ -21539,8 +21539,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(1)],
-                vec![crabka_pgtypes::Datum::Int4(1)],
+                vec![krabka_pgtypes::Datum::Int4(1)],
+                vec![krabka_pgtypes::Datum::Int4(1)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21549,7 +21549,7 @@ mod tests {
         )
         .expect("standalone LATERAL SubqueryScan plan executes")
         .expect("standalone LATERAL derived table uses SubqueryScan");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int4(1)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int4(1)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of("SELECT a FROM seq_scan_test TABLESAMPLE BERNOULLI (100) WHERE a = 2"),
@@ -21559,8 +21559,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(2)],
-                vec![crabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21569,21 +21569,21 @@ mod tests {
         )
         .expect("sampled aggregate SeqScan plan executes")
         .expect("stored table TABLESAMPLE aggregate uses SeqScan");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int8(0)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int8(0)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of("SELECT p FROM planned_cte AS c(p) WHERE p = 2"),
         )
         .expect("aliased CteScan plan executes")
         .expect("CTE column aliases use CteScan");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int4(2)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int4(2)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of("SELECT p FROM planned_transition AS t(p) WHERE p = 3"),
         )
         .expect("aliased NamedTuplestoreScan plan executes")
         .expect("transition column aliases use NamedTuplestoreScan");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int4(3)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int4(3)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of("SELECT a FROM seq_scan_test ORDER BY a FETCH FIRST 2 ROWS WITH TIES"),
@@ -21593,9 +21593,9 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(1)],
-                vec![crabka_pgtypes::Datum::Int4(2)],
-                vec![crabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(1)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21611,16 +21611,16 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(3)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(3)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int4(3)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int4(3)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int4(3)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int4(3)
                 ],
             ]
         );
@@ -21633,8 +21633,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![vec![
-                crabka_pgtypes::Datum::Int4(1),
-                crabka_pgtypes::Datum::Int4(2),
+                krabka_pgtypes::Datum::Int4(1),
+                krabka_pgtypes::Datum::Int4(2),
             ]]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21653,9 +21653,9 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(1)],
-                vec![crabka_pgtypes::Datum::Int4(2)],
-                vec![crabka_pgtypes::Datum::Int4(3)],
+                vec![krabka_pgtypes::Datum::Int4(1)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(3)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21666,21 +21666,21 @@ mod tests {
         )
         .expect("standalone LATERAL JSON_TABLE plan executes")
         .expect("standalone LATERAL JSON_TABLE uses TableFunctionScan");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int4(1)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int4(1)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of("SELECT count(*) FROM planned_cte TABLESAMPLE SYSTEM (0)"),
         )
         .expect("sampled CteScan plan executes")
         .expect("CTE TABLESAMPLE uses CteScan");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int8(0)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int8(0)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of("SELECT n FROM planned_transition TABLESAMPLE BERNOULLI (100) WHERE n = 3"),
         )
         .expect("sampled NamedTuplestoreScan plan executes")
         .expect("transition TABLESAMPLE uses NamedTuplestoreScan");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int4(3)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int4(3)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of(
@@ -21690,7 +21690,7 @@ mod tests {
         )
         .expect("NestedLoop plan executes")
         .expect("joined aggregate uses Aggregate");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int8(1)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int8(1)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of("SELECT l.a FROM seq_scan_test AS l, seq_scan_third AS r GROUP BY l.a"),
@@ -21700,8 +21700,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(1)],
-                vec![crabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(1)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21717,12 +21717,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(1),
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(2),
                 ],
             ]
         );
@@ -21738,8 +21738,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![vec![
-                crabka_pgtypes::Datum::Int4(1),
-                crabka_pgtypes::Datum::Int4(3)
+                krabka_pgtypes::Datum::Int4(1),
+                krabka_pgtypes::Datum::Int4(3)
             ]]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21755,16 +21755,16 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int8(1),
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int8(1),
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int8(2),
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int8(2),
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int8(3),
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int8(3),
                 ],
             ]
         );
@@ -21780,8 +21780,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(1)],
-                vec![crabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(1)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21796,8 +21796,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(2)],
-                vec![crabka_pgtypes::Datum::Int4(1)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(1)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21813,12 +21813,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(1)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(1)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(2)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(2)
                 ],
             ]
         );
@@ -21831,8 +21831,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![vec![
-                crabka_pgtypes::Datum::Int4(1),
-                crabka_pgtypes::Datum::Int4(2)
+                krabka_pgtypes::Datum::Int4(1),
+                krabka_pgtypes::Datum::Int4(2)
             ]]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21845,12 +21845,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(2)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(2)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(3)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(3)
                 ],
             ]
         );
@@ -21863,7 +21863,7 @@ mod tests {
         )
         .expect("TableFunctionScan JSON_TABLE plan executes")
         .expect("non-correlated JSON_TABLE uses TableFunctionScan");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int4(2)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int4(2)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of(
@@ -21877,8 +21877,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![vec![
-                crabka_pgtypes::Datum::Int4(1),
-                crabka_pgtypes::Datum::Int4(2)
+                krabka_pgtypes::Datum::Int4(1),
+                krabka_pgtypes::Datum::Int4(2)
             ]]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21894,12 +21894,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(1)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(1)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(2)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(2)
                 ],
             ]
         );
@@ -21912,7 +21912,7 @@ mod tests {
         )
         .expect("NestedLoop SubqueryScan select plan executes")
         .expect("stored table and derived select source use NestedLoop");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int4(1)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int4(1)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of(
@@ -21923,7 +21923,7 @@ mod tests {
         )
         .expect("NestedLoop derived SelectSort and Limit plan executes")
         .expect("nested derived SELECT tail uses SubqueryScan");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int4(1)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int4(1)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of(
@@ -21937,8 +21937,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![vec![
-                crabka_pgtypes::Datum::Int4(1),
-                crabka_pgtypes::Datum::Int8(2)
+                krabka_pgtypes::Datum::Int4(1),
+                krabka_pgtypes::Datum::Int8(2)
             ]]
         );
         for sql in [
@@ -21962,8 +21962,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(2)],
-                vec![crabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21978,8 +21978,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![vec![
-                crabka_pgtypes::Datum::Int4(1),
-                crabka_pgtypes::Datum::Int4(3),
+                krabka_pgtypes::Datum::Int4(1),
+                krabka_pgtypes::Datum::Int4(3),
             ]]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -21994,9 +21994,9 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(1), crabka_pgtypes::Datum::Null],
-                vec![crabka_pgtypes::Datum::Int4(2), crabka_pgtypes::Datum::Null],
-                vec![crabka_pgtypes::Datum::Int4(2), crabka_pgtypes::Datum::Null],
+                vec![krabka_pgtypes::Datum::Int4(1), krabka_pgtypes::Datum::Null],
+                vec![krabka_pgtypes::Datum::Int4(2), krabka_pgtypes::Datum::Null],
+                vec![krabka_pgtypes::Datum::Int4(2), krabka_pgtypes::Datum::Null],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -22010,8 +22010,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(1)],
-                vec![crabka_pgtypes::Datum::Int4(1)],
+                vec![krabka_pgtypes::Datum::Int4(1)],
+                vec![krabka_pgtypes::Datum::Int4(1)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -22027,14 +22027,14 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int4(3),
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int4(3),
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int4(3),
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int4(3),
                 ],
             ]
         );
@@ -22047,8 +22047,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(2)],
-                vec![crabka_pgtypes::Datum::Int4(3)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(3)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -22061,16 +22061,16 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int8(3)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int8(3)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int8(2)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int8(2)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(3),
-                    crabka_pgtypes::Datum::Int8(1)
+                    krabka_pgtypes::Datum::Int4(3),
+                    krabka_pgtypes::Datum::Int8(1)
                 ],
             ]
         );
@@ -22087,12 +22087,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int8(3)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int8(3)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int8(2)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int8(2)
                 ],
             ]
         );
@@ -22109,12 +22109,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int8(3)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int8(3)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int8(2)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int8(2)
                 ],
             ]
         );
@@ -22122,7 +22122,7 @@ mod tests {
         let relation = crate::plan::exec::try_execute_seq_scan(&read_ctx, &named_aggregate_select)
             .expect("NamedTuplestoreScan Aggregate plan executes")
             .expect("transition source aggregate uses Aggregate");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int8(3)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int8(3)]]);
         let planned = crate::plan::exec::named_tuplestore_scan_plan_for_test(
             &read_ctx,
             &named_aggregate_select,
@@ -22146,8 +22146,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(1)],
-                vec![crabka_pgtypes::Datum::Int4(0)],
+                vec![krabka_pgtypes::Datum::Int4(1)],
+                vec![krabka_pgtypes::Datum::Int4(0)],
             ]
         );
         let named_limit_select =
@@ -22158,8 +22158,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(3)],
-                vec![crabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(3)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
             ]
         );
         let planned = crate::plan::exec::named_tuplestore_scan_plan_for_test(
@@ -22183,12 +22183,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(1)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(1)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(2)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(2)
                 ],
             ]
         );
@@ -22219,12 +22219,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(3),
-                    crabka_pgtypes::Datum::Int4(2)
+                    krabka_pgtypes::Datum::Int4(3),
+                    krabka_pgtypes::Datum::Int4(2)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(3),
-                    crabka_pgtypes::Datum::Int4(1)
+                    krabka_pgtypes::Datum::Int4(3),
+                    krabka_pgtypes::Datum::Int4(1)
                 ],
             ]
         );
@@ -22241,12 +22241,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(3),
-                    crabka_pgtypes::Datum::Int4(2)
+                    krabka_pgtypes::Datum::Int4(3),
+                    krabka_pgtypes::Datum::Int4(2)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(3),
-                    crabka_pgtypes::Datum::Int4(1)
+                    krabka_pgtypes::Datum::Int4(3),
+                    krabka_pgtypes::Datum::Int4(1)
                 ],
             ]
         );
@@ -22256,7 +22256,7 @@ mod tests {
         )
         .expect("CteScan Aggregate plan executes")
         .expect("CTE aggregate uses Aggregate");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int8(2)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int8(2)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of(
@@ -22269,8 +22269,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![vec![
-                crabka_pgtypes::Datum::Int4(1),
-                crabka_pgtypes::Datum::Int8(2),
+                krabka_pgtypes::Datum::Int4(1),
+                krabka_pgtypes::Datum::Int8(2),
             ]]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -22283,16 +22283,16 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int8(1)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int8(1)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int8(1)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int8(1)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(3),
-                    crabka_pgtypes::Datum::Int8(1)
+                    krabka_pgtypes::Datum::Int4(3),
+                    krabka_pgtypes::Datum::Int8(1)
                 ],
             ]
         );
@@ -22305,8 +22305,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(1)],
-                vec![crabka_pgtypes::Datum::Int4(0)],
+                vec![krabka_pgtypes::Datum::Int4(1)],
+                vec![krabka_pgtypes::Datum::Int4(0)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -22318,8 +22318,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(2)],
-                vec![crabka_pgtypes::Datum::Int4(1)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(1)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -22328,7 +22328,7 @@ mod tests {
         )
         .expect("CteScan Limit plan executes")
         .expect("CTE limit uses Limit");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int4(3)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int4(3)]]);
         let cte_project_set_select =
             select_of("SELECT n, generate_series(1, 2) FROM planned_cte WHERE n = 1");
         let relation = crate::plan::exec::try_execute_seq_scan(&read_ctx, &cte_project_set_select)
@@ -22338,12 +22338,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(1)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(1)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(2)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(2)
                 ],
             ]
         );
@@ -22371,16 +22371,16 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int8(3)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int8(3)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int8(2)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int8(2)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(3),
-                    crabka_pgtypes::Datum::Int8(1)
+                    krabka_pgtypes::Datum::Int4(3),
+                    krabka_pgtypes::Datum::Int8(1)
                 ],
             ]
         );
@@ -22390,21 +22390,21 @@ mod tests {
         )
         .expect("SubqueryScan plan executes")
         .expect("derived Result source uses SubqueryScan");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int4(1)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int4(1)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of("SELECT n FROM (VALUES (1), (2)) AS derived(n) WHERE n > 1"),
         )
         .expect("SubqueryScan Values plan executes")
         .expect("derived Values source uses SubqueryScan");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int4(2)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int4(2)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of("SELECT count(*) FROM (VALUES (1), (2), (2)) AS derived(n)"),
         )
         .expect("SubqueryScan Aggregate plan executes")
         .expect("derived aggregate uses Aggregate");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int8(3)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int8(3)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of("SELECT DISTINCT n FROM (VALUES (1), (2), (2)) AS derived(n)"),
@@ -22414,8 +22414,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(1)],
-                vec![crabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(1)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -22427,7 +22427,7 @@ mod tests {
         )
         .expect("SubqueryScan Sort/Limit plan executes")
         .expect("derived sort and limit use Sort and Limit");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int4(2)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int4(2)]]);
         let derived_project_set_select = select_of(
             "SELECT n, generate_series(1, 2) \
              FROM (VALUES (1)) AS derived(n)",
@@ -22440,12 +22440,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(1)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(1)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(2)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(2)
                 ],
             ]
         );
@@ -22476,12 +22476,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int8(2)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int8(2)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int8(1)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int8(1)
                 ],
             ]
         );
@@ -22497,8 +22497,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![vec![
-                crabka_pgtypes::Datum::Int4(1),
-                crabka_pgtypes::Datum::Int8(2)
+                krabka_pgtypes::Datum::Int4(1),
+                krabka_pgtypes::Datum::Int8(2)
             ]]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -22510,8 +22510,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(2)],
-                vec![crabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -22523,8 +22523,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(2)],
-                vec![crabka_pgtypes::Datum::Int4(3)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(3)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -22533,14 +22533,14 @@ mod tests {
         )
         .expect("TableFunctionScan plan executes")
         .expect("table function source uses TableFunctionScan");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int4(1)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int4(1)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of("SELECT n FROM planned_values_function() WHERE n > 1"),
         )
         .expect("TableFunctionScan Values plan executes")
         .expect("values table function source uses TableFunctionScan");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int4(2)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int4(2)]]);
         let plpgsql_function_select = select_of("SELECT n FROM planned_plpgsql_function()");
         let planned = crate::plan::exec::function_scan_plan_for_test(
             &read_ctx,
@@ -22609,7 +22609,7 @@ mod tests {
                 relation.rows,
                 expected
                     .into_iter()
-                    .map(|value| vec![crabka_pgtypes::Datum::Int4(value)])
+                    .map(|value| vec![krabka_pgtypes::Datum::Int4(value)])
                     .collect::<Vec<_>>()
             );
         }
@@ -22623,12 +22623,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int8(1),
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int8(1),
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int8(2),
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int8(2),
                 ],
             ]
         );
@@ -22641,8 +22641,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(2)],
-                vec![crabka_pgtypes::Datum::Int4(3)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(3)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -22654,8 +22654,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(1)],
-                vec![crabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(1)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -22670,8 +22670,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(1)],
-                vec![crabka_pgtypes::Datum::Int4(1)],
+                vec![krabka_pgtypes::Datum::Int4(1)],
+                vec![krabka_pgtypes::Datum::Int4(1)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -22680,7 +22680,7 @@ mod tests {
         )
         .expect("FunctionScan Limit plan executes")
         .expect("FROM SRF LIMIT uses Limit");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int4(2)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int4(2)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of(
@@ -22694,12 +22694,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int8(2)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int8(2)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int8(1)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int8(1)
                 ],
             ]
         );
@@ -22715,8 +22715,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![vec![
-                crabka_pgtypes::Datum::Int4(2),
-                crabka_pgtypes::Datum::Int8(2)
+                krabka_pgtypes::Datum::Int4(2),
+                krabka_pgtypes::Datum::Int8(2)
             ]]
         );
         let project_set_select = select_of(
@@ -22730,12 +22730,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(1)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(1)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(2)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(2)
                 ],
             ]
         );
@@ -22759,7 +22759,7 @@ mod tests {
         )
         .expect("FunctionScan Aggregate plan executes")
         .expect("FROM SRF aggregate uses Aggregate");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int8(2)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int8(2)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of("SELECT n, count(*) FROM unnest(ARRAY[1, 1, 2]) AS g(n) GROUP BY n"),
@@ -22770,12 +22770,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int8(2)
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int8(2)
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int8(1)
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int8(1)
                 ],
             ]
         );
@@ -22821,14 +22821,14 @@ mod tests {
         )
         .expect("aggregate plan executes")
         .expect("stored-table aggregate uses Aggregate");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int8(3)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int8(3)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of("SELECT 1 FROM seq_scan_test HAVING count(*) > 0"),
         )
         .expect("aggregate plan executes")
         .expect("stored-table aggregate uses Aggregate");
-        assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int4(1)]]);
+        assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int4(1)]]);
         let relation = crate::plan::exec::try_execute_seq_scan(
             &read_ctx,
             &select_of("SELECT a FROM seq_scan_test GROUP BY a"),
@@ -22838,8 +22838,8 @@ mod tests {
         assert_eq!(
             relation.rows,
             vec![
-                vec![crabka_pgtypes::Datum::Int4(1)],
-                vec![crabka_pgtypes::Datum::Int4(2)],
+                vec![krabka_pgtypes::Datum::Int4(1)],
+                vec![krabka_pgtypes::Datum::Int4(2)],
             ]
         );
         let relation = crate::plan::exec::try_execute_seq_scan(
@@ -22852,12 +22852,12 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(1),
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int4(2),
                 ],
             ]
         );
@@ -22871,16 +22871,16 @@ mod tests {
             relation.rows,
             vec![
                 vec![
-                    crabka_pgtypes::Datum::Int4(1),
-                    crabka_pgtypes::Datum::Int8(1),
+                    krabka_pgtypes::Datum::Int4(1),
+                    krabka_pgtypes::Datum::Int8(1),
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int8(2),
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int8(2),
                 ],
                 vec![
-                    crabka_pgtypes::Datum::Int4(2),
-                    crabka_pgtypes::Datum::Int8(3),
+                    krabka_pgtypes::Datum::Int4(2),
+                    krabka_pgtypes::Datum::Int8(3),
                 ],
             ]
         );
@@ -22910,7 +22910,7 @@ mod tests {
         );
 
         let mut constrained = SqlEngine::new_with_policy(crate::RuntimePolicy {
-            blocking_query_memory: crabka_units::bytes(1),
+            blocking_query_memory: krabka_units::bytes(1),
             ..Default::default()
         })
         .expect("policy")
@@ -22928,7 +22928,7 @@ mod tests {
 
     #[tokio::test]
     async fn bounded_result_sink_matches_collecting_simple_query() {
-        use crabka_pgwire::engine::{CollectingResultSink, ResultPage};
+        use krabka_pgwire::engine::{CollectingResultSink, ResultPage};
 
         let engine = SqlEngine::new();
         let mut setup = engine.connect();
@@ -22970,7 +22970,7 @@ mod tests {
         let rows = rows
             .into_iter()
             .map(|value| {
-                vec![Some(crabka_pgwire::engine::Cell {
+                vec![Some(krabka_pgwire::engine::Cell {
                     text: bytes::Bytes::from(value.to_string()),
                     binary: bytes::Bytes::copy_from_slice(&i32::to_be_bytes(value)),
                 })]
@@ -22994,7 +22994,7 @@ mod tests {
     #[test]
     fn row_pages_reject_a_single_oversized_row() {
         use bytes::Bytes;
-        use crabka_pgwire::engine::Cell;
+        use krabka_pgwire::engine::Cell;
 
         let rows = vec![vec![Some(Cell {
             text: Bytes::from_static(b"12345"),
@@ -23010,7 +23010,7 @@ mod tests {
 
     #[tokio::test]
     async fn bounded_result_sink_propagates_backpressure_failure_before_next_statement() {
-        use crabka_pgwire::{
+        use krabka_pgwire::{
             engine::{ResultPage, ResultSink},
             error::PgError,
         };
@@ -23068,15 +23068,15 @@ mod tests {
             .await
             .expect("rename through catalog authority");
 
-        let renamed = crabka_pgcatalog::RelationName::public("archived_orders");
-        let table = crabka_pgcatalog::get_table(catalog_kv.as_ref(), &renamed)
+        let renamed = krabka_pgcatalog::RelationName::public("archived_orders");
+        let table = krabka_pgcatalog::get_table(catalog_kv.as_ref(), &renamed)
             .expect("renamed catalog table");
-        let privileges = crabka_pgcatalog::list_table_privileges(catalog_kv.as_ref())
+        let privileges = krabka_pgcatalog::list_table_privileges(catalog_kv.as_ref())
             .expect("renamed table privileges");
         assert!(table.sharded);
         assert!(
             privileges
-                == vec![crabka_pgcatalog::TablePrivilege {
+                == vec![krabka_pgcatalog::TablePrivilege {
                     table: renamed,
                     grantee: "reader".into(),
                     privilege: "SELECT".into(),
@@ -23085,8 +23085,8 @@ mod tests {
         for name in ["orders", "archived_orders"] {
             assert!(
                 data_kv
-                    .get(&crabka_pgkv::key::catalog_key(
-                        crabka_pgcatalog::PUBLIC_SCHEMA,
+                    .get(&krabka_pgkv::key::catalog_key(
+                        krabka_pgcatalog::PUBLIC_SCHEMA,
                         name
                     ))
                     .expect("read local data range")
@@ -23108,7 +23108,7 @@ mod tests {
             .await
             .expect("schema privilege syntax and targets");
         assert!(
-            crabka_pgcatalog::has_schema_privilege(
+            krabka_pgcatalog::has_schema_privilege(
                 &*session.catalog_kv,
                 "app",
                 "reader",
@@ -23117,7 +23117,7 @@ mod tests {
             .expect("read schema grant")
         );
         assert!(
-            !crabka_pgcatalog::has_schema_privilege(
+            !krabka_pgcatalog::has_schema_privilege(
                 &*session.catalog_kv,
                 "app",
                 "reader",
@@ -23657,7 +23657,7 @@ mod tests {
     #[tokio::test]
     async fn client_min_messages_filters_plpgsql_raise_output() {
         use assert2::assert;
-        use crabka_pgwire::error::Severity;
+        use krabka_pgwire::error::Severity;
         use tokio::sync::mpsc::error::TryRecvError;
 
         let engine = SqlEngine::new();
@@ -23691,7 +23691,7 @@ mod tests {
 
     #[tokio::test]
     async fn jsonpath_temporal_precision_warnings_reach_the_session_notice_sink() {
-        use crabka_pgwire::error::Severity;
+        use krabka_pgwire::error::Severity;
         use tokio::sync::mpsc::error::TryRecvError;
 
         let engine = SqlEngine::new();
@@ -23725,7 +23725,7 @@ mod tests {
 
     #[tokio::test]
     async fn set_local_outside_a_transaction_warns_and_does_not_persist() {
-        use crabka_pgwire::error::Severity;
+        use krabka_pgwire::error::Severity;
         use tokio::sync::mpsc::error::TryRecvError;
 
         let engine = SqlEngine::new();
@@ -24037,7 +24037,7 @@ mod tests {
         use assert2::assert;
 
         let engine = SqlEngine::new_with_policy(crate::RuntimePolicy {
-            blocking_query_memory: crabka_units::bytes(1),
+            blocking_query_memory: krabka_units::bytes(1),
             ..Default::default()
         })
         .expect("policy");
@@ -24391,7 +24391,7 @@ mod tests {
             ("bytea_output", "'escape'", "escape"),
             ("max_parallel_workers_per_gather", "0", "0"),
             ("allow_in_place_tablespaces", "true", "on"),
-            ("crabka_test.option", "'value'", "value"),
+            ("krabka_test.option", "'value'", "value"),
             ("custom.my.qualified.guc", "'value'", "value"),
         ];
         for (name, value, shown) in cases {
@@ -24523,7 +24523,7 @@ mod tests {
             .simple_query("SET intervalstyle = 'asd'")
             .await
             .expect_err("interval style should be rejected");
-        let mut expected = crabka_pgwire::error::PgError::error(
+        let mut expected = krabka_pgwire::error::PgError::error(
             "22023",
             "invalid value for parameter \"IntervalStyle\": \"asd\"",
         );
@@ -24534,7 +24534,7 @@ mod tests {
             .simple_query("SET password_encryption = 'novalue'")
             .await
             .expect_err("password encryption should be rejected");
-        let mut expected = crabka_pgwire::error::PgError::error(
+        let mut expected = krabka_pgwire::error::PgError::error(
             "22023",
             "invalid value for parameter \"password_encryption\": \"novalue\"",
         );
@@ -25919,8 +25919,8 @@ mod tests {
     }
 
     /// Extract the single text cell of a one-row, one-column result.
-    fn single_text(results: &[crabka_pgwire::engine::QueryResult]) -> String {
-        use crabka_pgwire::engine::QueryResult;
+    fn single_text(results: &[krabka_pgwire::engine::QueryResult]) -> String {
+        use krabka_pgwire::engine::QueryResult;
         match results {
             [QueryResult::Rows { rows, .. }] => {
                 let cell = rows[0][0].as_ref().expect("non-null cell");
@@ -25930,32 +25930,32 @@ mod tests {
         }
     }
 
-    fn text_param(value: Option<&str>, type_oid: Option<u32>) -> crabka_pgwire::engine::BoundParam {
-        crabka_pgwire::engine::BoundParam {
+    fn text_param(value: Option<&str>, type_oid: Option<u32>) -> krabka_pgwire::engine::BoundParam {
+        krabka_pgwire::engine::BoundParam {
             type_oid,
             format: 0,
             value: value.map(|v| bytes::Bytes::copy_from_slice(v.as_bytes())),
         }
     }
 
-    fn binary_int4_param(value: i32) -> crabka_pgwire::engine::BoundParam {
-        crabka_pgwire::engine::BoundParam {
-            type_oid: Some(crabka_pgtypes::oids::INT4),
+    fn binary_int4_param(value: i32) -> krabka_pgwire::engine::BoundParam {
+        krabka_pgwire::engine::BoundParam {
+            type_oid: Some(krabka_pgtypes::oids::INT4),
             format: 1,
             value: Some(bytes::Bytes::copy_from_slice(&value.to_be_bytes())),
         }
     }
 
-    fn binary_bool_param(value: bool) -> crabka_pgwire::engine::BoundParam {
-        crabka_pgwire::engine::BoundParam {
-            type_oid: Some(crabka_pgtypes::oids::BOOL),
+    fn binary_bool_param(value: bool) -> krabka_pgwire::engine::BoundParam {
+        krabka_pgwire::engine::BoundParam {
+            type_oid: Some(krabka_pgtypes::oids::BOOL),
             format: 1,
             value: Some(bytes::Bytes::copy_from_slice(&[u8::from(value)])),
         }
     }
 
-    fn binary_param(value: &[u8], type_oid: u32) -> crabka_pgwire::engine::BoundParam {
-        crabka_pgwire::engine::BoundParam {
+    fn binary_param(value: &[u8], type_oid: u32) -> krabka_pgwire::engine::BoundParam {
+        krabka_pgwire::engine::BoundParam {
             type_oid: Some(type_oid),
             format: 1,
             value: Some(bytes::Bytes::copy_from_slice(value)),
@@ -26426,28 +26426,28 @@ mod tests {
     }
 
     fn unresolved_timestamp_intents(engine: &SqlEngine, table_name: &str) -> usize {
-        let table = crabka_pgcatalog::get_table(
+        let table = krabka_pgcatalog::get_table(
             engine.kv_handle().as_ref(),
-            &crabka_pgcatalog::RelationName::public(table_name),
+            &krabka_pgcatalog::RelationName::public(table_name),
         )
         .expect("table exists");
         engine
             .kv_handle()
-            .scan_prefix(&crabka_pgkv::key::table_prefix(table.id))
+            .scan_prefix(&krabka_pgkv::key::table_prefix(table.id))
             .expect("scan table")
             .into_iter()
             .filter(|(_key, value)| {
-                crabka_pgmvcc::version::decode_ts_tuple(value).is_ok_and(|version| {
-                    version.state == crabka_pgmvcc::version::TsVersionState::Intent
+                krabka_pgmvcc::version::decode_ts_tuple(value).is_ok_and(|version| {
+                    version.state == krabka_pgmvcc::version::TsVersionState::Intent
                 })
             })
             .count()
     }
 
     fn index_id(engine: &SqlEngine, table_name: &str, index_name: &str) -> u32 {
-        crabka_pgcatalog::list_table_indexes(
+        krabka_pgcatalog::list_table_indexes(
             engine.kv_handle().as_ref(),
-            &crabka_pgcatalog::RelationName::public(table_name),
+            &krabka_pgcatalog::RelationName::public(table_name),
         )
         .expect("list indexes")
         .into_iter()
@@ -26460,7 +26460,7 @@ mod tests {
         crate::timestamp_txn::read_visible_global_index_entries(
             engine.kv_handle().as_ref(),
             index_id,
-            &[crabka_pgtypes::Datum::Text(name.into())],
+            &[krabka_pgtypes::Datum::Text(name.into())],
             crate::timestamp_txn::ReadTimestamp::MAX,
         )
         .expect("read visible global index entries")
@@ -26468,14 +26468,14 @@ mod tests {
     }
 
     fn sequence_next_rowid(engine: &SqlEngine, table_name: &str) -> Option<u64> {
-        let table = crabka_pgcatalog::get_table(
+        let table = krabka_pgcatalog::get_table(
             engine.kv_handle().as_ref(),
-            &crabka_pgcatalog::RelationName::public(table_name),
+            &krabka_pgcatalog::RelationName::public(table_name),
         )
         .expect("table exists");
         let bytes = engine
             .kv_handle()
-            .get(&crabka_pgkv::key::seq_key(table.id))
+            .get(&krabka_pgkv::key::seq_key(table.id))
             .expect("read sequence key")?;
         let value = <[u8; 8]>::try_from(bytes.as_slice()).expect("sequence value is u64");
         Some(u64::from_be_bytes(value))
@@ -26539,7 +26539,7 @@ mod tests {
             .simple_query("SELECT id, name, note FROM t ORDER BY id")
             .await
             .expect("select");
-        let crabka_pgwire::engine::QueryResult::Rows { rows, .. } = &rows[0] else {
+        let krabka_pgwire::engine::QueryResult::Rows { rows, .. } = &rows[0] else {
             panic!("expected rows");
         };
         assert_eq!(rows.len(), 2);
@@ -26561,7 +26561,7 @@ mod tests {
     #[tokio::test]
     async fn a_simple_query_stops_at_each_copy_and_resumes_after_it() {
         use assert2::assert;
-        use crabka_pgwire::engine::{CollectingResultSink, SimpleQueryStop};
+        use krabka_pgwire::engine::{CollectingResultSink, SimpleQueryStop};
 
         let engine = SqlEngine::new();
         let mut session = engine.connect();
@@ -26672,7 +26672,7 @@ mod tests {
 
         for (relation, kind) in [("p", "partitioned table"), ("f", "foreign table")] {
             let sql = format!("COPY {relation} FROM STDIN (FREEZE)");
-            let statement = crabka_pgparser::parse(&sql).expect("parse");
+            let statement = krabka_pgparser::parse(&sql).expect("parse");
             let copy = statement
                 .first()
                 .and_then(crate::session::copy_from_stdin_stmt)
@@ -26923,7 +26923,7 @@ mod tests {
             .simple_query("SELECT id FROM t")
             .await
             .expect("select");
-        let crabka_pgwire::engine::QueryResult::Rows { rows, .. } = &rows[0] else {
+        let krabka_pgwire::engine::QueryResult::Rows { rows, .. } = &rows[0] else {
             panic!("expected rows");
         };
         assert!(rows.is_empty());
@@ -26931,9 +26931,9 @@ mod tests {
 
     #[tokio::test]
     async fn copy_from_stdin_hash_table_uses_timestamp_bucket_keys_atomically() {
-        let kv = Arc::new(crabka_pgkv::MemKv::new());
+        let kv = Arc::new(krabka_pgkv::MemKv::new());
         let mut engine =
-            SqlEngine::with_kv(Arc::clone(&kv) as Arc<dyn crabka_pgkv::Kv>).expect("engine");
+            SqlEngine::with_kv(Arc::clone(&kv) as Arc<dyn krabka_pgkv::Kv>).expect("engine");
         engine.init_gtm_coordinator().expect("gtm");
         let mut session = engine.connect();
         session
@@ -26958,15 +26958,15 @@ mod tests {
             .expect("copy hash rows");
 
         let table =
-            crabka_pgcatalog::get_table(kv.as_ref(), &crabka_pgcatalog::RelationName::public("hc"))
+            krabka_pgcatalog::get_table(kv.as_ref(), &krabka_pgcatalog::RelationName::public("hc"))
                 .expect("table");
         let physical = kv
-            .scan_prefix(&crabka_pgkv::key::table_prefix(table.id))
+            .scan_prefix(&krabka_pgkv::key::table_prefix(table.id))
             .expect("physical rows");
         assert_eq!(physical.len(), 16);
         assert!(physical.iter().all(|(key, _)| matches!(
-            crabka_pgkv::key::classify_key(key),
-            crabka_pgkv::key::KeyClass::HashPrimaryVersion { .. }
+            krabka_pgkv::key::classify_key(key),
+            krabka_pgkv::key::KeyClass::HashPrimaryVersion { .. }
         )));
         let results = session
             .simple_query("SELECT id FROM hc ORDER BY id")
@@ -26987,7 +26987,7 @@ mod tests {
             .expect_err("malformed batch aborts");
         assert_eq!(error.code, "23502");
         assert_eq!(
-            kv.scan_prefix(&crabka_pgkv::key::table_prefix(table.id))
+            kv.scan_prefix(&krabka_pgkv::key::table_prefix(table.id))
                 .expect("physical rows after abort")
                 .len(),
             16
@@ -27030,7 +27030,7 @@ mod tests {
             .simple_query("SELECT id, name FROM t ORDER BY id")
             .await
             .expect("select");
-        let crabka_pgwire::engine::QueryResult::Rows { rows, .. } = &rows[0] else {
+        let krabka_pgwire::engine::QueryResult::Rows { rows, .. } = &rows[0] else {
             panic!("expected rows");
         };
         assert_eq!(rows.len(), 1);
@@ -27114,7 +27114,7 @@ mod tests {
                 .await
                 .expect("describe arithmetic update");
             assert!(
-                parameter_types == vec![crabka_pgtypes::oids::INT8, crabka_pgtypes::oids::INT8],
+                parameter_types == vec![krabka_pgtypes::oids::INT8, krabka_pgtypes::oids::INT8],
                 "sql: {sql}"
             );
         }
@@ -27131,7 +27131,7 @@ mod tests {
             .await
             .expect("describe bare parameter select");
 
-        assert!(parameter_types == vec![crabka_pgtypes::oids::TEXT]);
+        assert!(parameter_types == vec![krabka_pgtypes::oids::TEXT]);
     }
 
     #[tokio::test]
@@ -27142,37 +27142,37 @@ mod tests {
         for (sql, expected) in [
             (
                 "SELECT $1 @? $2",
-                vec![crabka_pgtypes::oids::JSONB, crabka_pgtypes::oids::JSONPATH],
+                vec![krabka_pgtypes::oids::JSONB, krabka_pgtypes::oids::JSONPATH],
             ),
             (
                 "SELECT $1 @@ $2",
-                vec![crabka_pgtypes::oids::TEXT, crabka_pgtypes::oids::TEXT],
+                vec![krabka_pgtypes::oids::TEXT, krabka_pgtypes::oids::TEXT],
             ),
             (
                 "SELECT $1::jsonb @@ $2",
-                vec![crabka_pgtypes::oids::JSONB, crabka_pgtypes::oids::JSONPATH],
+                vec![krabka_pgtypes::oids::JSONB, krabka_pgtypes::oids::JSONPATH],
             ),
             (
                 "SELECT $1 @@ $2::jsonpath",
-                vec![crabka_pgtypes::oids::JSONB, crabka_pgtypes::oids::JSONPATH],
+                vec![krabka_pgtypes::oids::JSONB, krabka_pgtypes::oids::JSONPATH],
             ),
             (
                 "SELECT $1::tsquery @@ $2",
                 vec![
-                    crabka_pgtypes::oids::TSQUERY,
-                    crabka_pgtypes::oids::TSVECTOR,
+                    krabka_pgtypes::oids::TSQUERY,
+                    krabka_pgtypes::oids::TSVECTOR,
                 ],
             ),
             (
                 "SELECT $1 @@ $2::tsvector",
                 vec![
-                    crabka_pgtypes::oids::TSQUERY,
-                    crabka_pgtypes::oids::TSVECTOR,
+                    krabka_pgtypes::oids::TSQUERY,
+                    krabka_pgtypes::oids::TSVECTOR,
                 ],
             ),
             (
                 "SELECT $1::text @@ $2",
-                vec![crabka_pgtypes::oids::TEXT, crabka_pgtypes::oids::TEXT],
+                vec![krabka_pgtypes::oids::TEXT, krabka_pgtypes::oids::TEXT],
             ),
         ] {
             let (_, parameter_types) = session
@@ -27184,11 +27184,11 @@ mod tests {
         for (sql, expected) in [
             (
                 "SELECT $1 @@ 'a'::tsquery",
-                vec![crabka_pgtypes::oids::TEXT],
+                vec![krabka_pgtypes::oids::TEXT],
             ),
             (
                 "SELECT 'a'::tsvector @@ $1",
-                vec![crabka_pgtypes::oids::TSQUERY],
+                vec![krabka_pgtypes::oids::TSQUERY],
             ),
         ] {
             let (_, parameter_types) = session
@@ -27199,10 +27199,10 @@ mod tests {
         }
 
         let expected = vec![
-            crabka_pgtypes::oids::JSONB,
-            crabka_pgtypes::oids::JSONPATH,
-            crabka_pgtypes::oids::JSONB,
-            crabka_pgtypes::oids::BOOL,
+            krabka_pgtypes::oids::JSONB,
+            krabka_pgtypes::oids::JSONPATH,
+            krabka_pgtypes::oids::JSONB,
+            krabka_pgtypes::oids::BOOL,
         ];
         for name in [
             "jsonb_path_exists",
@@ -27244,12 +27244,12 @@ mod tests {
         let (_, parameter_types) = session
             .test_describe_prepared(
                 "SELECT t.typname FROM pg_catalog.pg_type t WHERE t.oid = $1",
-                &[crabka_pgtypes::oids::OID],
+                &[krabka_pgtypes::oids::OID],
             )
             .await
             .expect("describe with declared oid parameter");
 
-        assert!(parameter_types == vec![crabka_pgtypes::oids::OID]);
+        assert!(parameter_types == vec![krabka_pgtypes::oids::OID]);
     }
 
     #[tokio::test]
@@ -27269,7 +27269,7 @@ mod tests {
             .test_describe_prepared(probe, &[])
             .await
             .expect("describe relkind probe");
-        assert!(parameter_types == vec![crabka_pgtypes::oids::REGCLASS]);
+        assert!(parameter_types == vec![krabka_pgtypes::oids::REGCLASS]);
 
         // ...and executing with the table name bound as untyped text resolves
         // the name through the catalog.
@@ -27277,7 +27277,7 @@ mod tests {
         let results = session
             .test_extended_query(
                 probe,
-                &[crabka_pgwire::engine::BoundParam {
+                &[krabka_pgwire::engine::BoundParam {
                     type_oid: None,
                     format: 0,
                     value: Some(bytes::Bytes::from_static(b"pgbench_accounts")),
@@ -27298,7 +27298,7 @@ mod tests {
         let error = session
             .test_extended_query(
                 probe,
-                &[crabka_pgwire::engine::BoundParam {
+                &[krabka_pgwire::engine::BoundParam {
                     type_oid: None,
                     format: 0,
                     value: Some(bytes::Bytes::from_static(b"no_such_relation")),
@@ -27393,8 +27393,8 @@ mod tests {
             .await
             .expect("create table");
         let params = [
-            binary_param(&9_000_000_000_i64.to_be_bytes(), crabka_pgtypes::oids::INT8),
-            binary_param(&1.5_f64.to_be_bytes(), crabka_pgtypes::oids::FLOAT8),
+            binary_param(&9_000_000_000_i64.to_be_bytes(), krabka_pgtypes::oids::INT8),
+            binary_param(&1.5_f64.to_be_bytes(), krabka_pgtypes::oids::FLOAT8),
         ];
         session
             .test_extended_query("INSERT INTO t VALUES ($1, $2)", &params)
@@ -27421,9 +27421,9 @@ mod tests {
             0x56, 0x78,
         ];
         let params = [
-            text_param(Some("\\xdeadbeef"), Some(crabka_pgtypes::oids::BYTEA)),
-            binary_param(&uuid, crabka_pgtypes::oids::UUID),
-            binary_param(&8_767_i32.to_be_bytes(), crabka_pgtypes::oids::DATE),
+            text_param(Some("\\xdeadbeef"), Some(krabka_pgtypes::oids::BYTEA)),
+            binary_param(&uuid, krabka_pgtypes::oids::UUID),
+            binary_param(&8_767_i32.to_be_bytes(), krabka_pgtypes::oids::DATE),
         ];
         session
             .test_extended_query("SELECT $1", &params[..1])
@@ -27455,19 +27455,19 @@ mod tests {
     #[test]
     fn bind_decoder_rejects_malformed_binary_and_invalid_utf8() {
         let time_zone = jiff::tz::TimeZone::UTC;
-        let malformed = binary_param(&[0, 1], crabka_pgtypes::oids::INT8);
+        let malformed = binary_param(&[0, 1], krabka_pgtypes::oids::INT8);
         let error = decode_bound_param(
             malformed.value.as_deref().expect("binary value"),
             &malformed,
             ColumnType::Int8,
             &time_zone,
-            crabka_pgtypes::xml::XmlOption::Content,
+            krabka_pgtypes::xml::XmlOption::Content,
         )
         .expect_err("short int8 must be malformed binary");
         assert_eq!(error.code, "22P03");
 
-        let invalid_utf8 = crabka_pgwire::engine::BoundParam {
-            type_oid: Some(crabka_pgtypes::oids::TEXT),
+        let invalid_utf8 = krabka_pgwire::engine::BoundParam {
+            type_oid: Some(krabka_pgtypes::oids::TEXT),
             format: 0,
             value: Some(bytes::Bytes::from_static(&[0xff])),
         };
@@ -27476,7 +27476,7 @@ mod tests {
             &invalid_utf8,
             ColumnType::Text,
             &time_zone,
-            crabka_pgtypes::xml::XmlOption::Content,
+            krabka_pgtypes::xml::XmlOption::Content,
         )
         .expect_err("invalid UTF-8 must fail");
         assert_eq!(error.code, "22021");
@@ -27493,7 +27493,7 @@ mod tests {
             .await
             .expect("extended null select");
 
-        let [crabka_pgwire::engine::QueryResult::Rows { rows, .. }] = &results[..] else {
+        let [krabka_pgwire::engine::QueryResult::Rows { rows, .. }] = &results[..] else {
             panic!("expected rows, got {results:?}");
         };
         assert!(rows[0][0].is_none());
@@ -27508,8 +27508,8 @@ mod tests {
             .await
             .expect("create table");
         let params = [
-            text_param(Some("7"), Some(crabka_pgtypes::oids::INT4)),
-            text_param(Some("seven"), Some(crabka_pgtypes::oids::TEXT)),
+            text_param(Some("7"), Some(krabka_pgtypes::oids::INT4)),
+            text_param(Some("seven"), Some(krabka_pgtypes::oids::TEXT)),
         ];
 
         session
@@ -27535,7 +27535,7 @@ mod tests {
             .await
             .expect_err("extra param rejected");
 
-        assert_eq!(err.code, crabka_pgwire::error::sqlstate::PROTOCOL_VIOLATION);
+        assert_eq!(err.code, krabka_pgwire::error::sqlstate::PROTOCOL_VIOLATION);
         assert!(err.message.contains("supplies 2 parameters"));
     }
 
@@ -27641,7 +27641,7 @@ mod tests {
             .await
             .expect_err("extended parse rejects multi-statement prepare");
 
-        assert_eq!(err.code, crabka_pgwire::error::sqlstate::SYNTAX_ERROR);
+        assert_eq!(err.code, krabka_pgwire::error::sqlstate::SYNTAX_ERROR);
         assert!(err.message.contains("multiple commands"));
     }
 
@@ -27656,7 +27656,7 @@ mod tests {
             .expect("empty extended query succeeds");
         assert!(matches!(
             results.as_slice(),
-            [crabka_pgwire::engine::QueryResult::Empty]
+            [krabka_pgwire::engine::QueryResult::Empty]
         ));
 
         let (fields, param_types) = session
@@ -28569,7 +28569,7 @@ mod tests {
             .simple_query("SELECT current_setting('no_such_setting', true)")
             .await
             .expect("missing ok");
-        let [crabka_pgwire::engine::QueryResult::Rows { rows, .. }] = &missing[..] else {
+        let [krabka_pgwire::engine::QueryResult::Rows { rows, .. }] = &missing[..] else {
             panic!("expected rows, got {missing:?}");
         };
         assert!(rows[0][0].is_none());
@@ -29771,8 +29771,8 @@ mod tests {
     async fn import_foreign_schema_creates_tables_from_scanner() {
         use std::sync::Arc;
 
-        use crabka_pgcatalog::{Column, ForeignServer, Table, UserMapping};
-        use crabka_pgtypes::{ColumnType, Datum};
+        use krabka_pgcatalog::{Column, ForeignServer, Table, UserMapping};
+        use krabka_pgtypes::{ColumnType, Datum};
 
         use crate::{
             clock::EvalCtx,
@@ -29848,15 +29848,15 @@ mod tests {
             .await
             .expect("import");
         assert!(
-            matches!(&res[..], [crabka_pgwire::engine::QueryResult::Command { tag }] if tag == "IMPORT FOREIGN SCHEMA"),
+            matches!(&res[..], [krabka_pgwire::engine::QueryResult::Command { tag }] if tag == "IMPORT FOREIGN SCHEMA"),
             "expected IMPORT FOREIGN SCHEMA command tag, got {res:?}"
         );
 
         // `orders` has the fixed Kafka envelope before the scanner's declared
         // `id` column; OPTIONS carries the topic name.
-        let orders = crabka_pgcatalog::get_table(
+        let orders = krabka_pgcatalog::get_table(
             &*engine.kv,
-            &crabka_pgcatalog::RelationName::public("orders"),
+            &krabka_pgcatalog::RelationName::public("orders"),
         )
         .expect("orders table exists");
         let meta = orders.foreign.expect("orders is a foreign table");
@@ -29879,9 +29879,9 @@ mod tests {
 
         // `payments` was excluded by LIMIT TO and must not exist.
         assert!(
-            crabka_pgcatalog::get_table(
+            krabka_pgcatalog::get_table(
                 &*engine.kv,
-                &crabka_pgcatalog::RelationName::public("payments")
+                &krabka_pgcatalog::RelationName::public("payments")
             )
             .is_err(),
             "payments was not in LIMIT TO and must not be imported"
@@ -29899,7 +29899,7 @@ mod tests {
     /// left to refuse it is the file endpoint itself.
     #[tokio::test]
     async fn copy_between_a_table_and_a_server_file_is_refused_for_a_non_superuser() {
-        use crabka_pgwire::error::PgError;
+        use krabka_pgwire::error::PgError;
 
         let engine = SqlEngine::new();
         let mut owner = engine.connect();
@@ -30142,7 +30142,7 @@ mod tests {
 }
 #[cfg(test)]
 mod compatibility_refusal_tests {
-    use crabka_pgwire::engine::{Engine, Session};
+    use krabka_pgwire::engine::{Engine, Session};
 
     use crate::SqlEngine;
 
@@ -30191,7 +30191,7 @@ mod compatibility_refusal_tests {
     #[tokio::test]
     async fn every_non_goal_executes_through_session_as_exact_refusal() {
         let engine = SqlEngine::new();
-        for spec in crabka_pgparser::ast::NON_GOAL_REFUSALS {
+        for spec in krabka_pgparser::ast::NON_GOAL_REFUSALS {
             let mut session = engine.connect();
             let error = session
                 .simple_query(spec.representative_sql)
@@ -30206,9 +30206,9 @@ mod compatibility_refusal_tests {
 #[cfg(test)]
 mod notify_and_binary_parameter_tests {
     use assert2::assert;
-    use crabka_pgparser::ast::Statement;
-    use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType, TemporalType, encoding, oids};
-    use crabka_pgwire::{engine::BoundParam, error::PgError};
+    use krabka_pgparser::ast::Statement;
+    use krabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType, TemporalType, encoding, oids};
+    use krabka_pgwire::{engine::BoundParam, error::PgError};
 
     use super::{
         ListenAction, NotifyPending, decode_bound_param, max_statement_param, param_column_type,
@@ -30230,16 +30230,16 @@ mod notify_and_binary_parameter_tests {
             param,
             ty,
             &jiff::tz::TimeZone::UTC,
-            crabka_pgtypes::xml::XmlOption::Content,
+            krabka_pgtypes::xml::XmlOption::Content,
         )
     }
 
     fn jsonb(text: &str) -> Datum {
-        Datum::Jsonb(crabka_pgtypes::jsonb::parse(text).expect("valid jsonb"))
+        Datum::Jsonb(krabka_pgtypes::jsonb::parse(text).expect("valid jsonb"))
     }
 
     fn parse_one(sql: &str) -> Statement {
-        let mut statements = crabka_pgparser::parse(sql).expect("parse");
+        let mut statements = krabka_pgparser::parse(sql).expect("parse");
         assert!(statements.len() == 1);
         statements.remove(0)
     }
@@ -30320,20 +30320,20 @@ mod notify_and_binary_parameter_tests {
     fn binary_temporal_parameters_apply_the_target_typmod() {
         let cases = [
             (
-                Datum::Time(crabka_pgtypes::datetime::parse_time("12:34:56.785").expect("time")),
+                Datum::Time(krabka_pgtypes::datetime::parse_time("12:34:56.785").expect("time")),
                 ColumnType::Temporal(TemporalType::Time, 2),
                 Datum::Time(
-                    crabka_pgtypes::datetime::parse_time("12:34:56.79").expect("rounded time"),
+                    krabka_pgtypes::datetime::parse_time("12:34:56.79").expect("rounded time"),
                 ),
             ),
             (
                 Datum::Timestamp(
-                    crabka_pgtypes::datetime::parse_timestamp("2024-01-02 03:04:05.5")
+                    krabka_pgtypes::datetime::parse_timestamp("2024-01-02 03:04:05.5")
                         .expect("timestamp"),
                 ),
                 ColumnType::Temporal(TemporalType::Timestamp, 0),
                 Datum::Timestamp(
-                    crabka_pgtypes::datetime::parse_timestamp("2024-01-02 03:04:06")
+                    krabka_pgtypes::datetime::parse_timestamp("2024-01-02 03:04:06")
                         .expect("rounded timestamp"),
                 ),
             ),
@@ -30482,7 +30482,7 @@ mod notify_and_binary_parameter_tests {
         let expected = Datum::OidVector(ArrayValue::with_dims(
             ElemType::Int4,
             vec![Datum::Int4(23), Datum::Int4(25)],
-            vec![crabka_pgtypes::ArrayDim::new(0, 2)],
+            vec![krabka_pgtypes::ArrayDim::new(0, 2)],
         ));
         let encoded = encoding::encode_binary(&expected);
         let decoded = decode(&param(oids::OIDVECTOR, 1, &encoded), ColumnType::OidVector);
@@ -30677,8 +30677,8 @@ mod notify_and_binary_parameter_tests {
         assert!(
             array.dims
                 == vec![
-                    crabka_pgtypes::ArrayDim::new(1, 2),
-                    crabka_pgtypes::ArrayDim::new(1, 2)
+                    krabka_pgtypes::ArrayDim::new(1, 2),
+                    krabka_pgtypes::ArrayDim::new(1, 2)
                 ]
         );
 
@@ -30692,7 +30692,7 @@ mod notify_and_binary_parameter_tests {
         let Datum::Array(array) = &decoded else {
             panic!("expected an array");
         };
-        assert!(array.dims == vec![crabka_pgtypes::ArrayDim::new(0, 1)]);
+        assert!(array.dims == vec![krabka_pgtypes::ArrayDim::new(0, 1)]);
     }
 
     #[test]
@@ -30798,8 +30798,8 @@ mod listen_notify_session_tests {
     use std::sync::{Arc, Mutex};
 
     use assert2::assert;
-    use crabka_pgkv::{Kv, MemKv, NotifyRecord, WriteOp, is_notify_op};
-    use crabka_pgwire::engine::{Engine, Notification, QueryResult, Session};
+    use krabka_pgkv::{Kv, MemKv, NotifyRecord, WriteOp, is_notify_op};
+    use krabka_pgwire::engine::{Engine, Notification, QueryResult, Session};
     use tokio::sync::{mpsc::error::TryRecvError, oneshot};
 
     use super::SqlSession;
@@ -31339,7 +31339,7 @@ mod listen_notify_session_tests {
 
     #[tokio::test]
     async fn the_streaming_select_fast_path_still_flushes_pg_notify() {
-        use crabka_pgwire::engine::CollectingResultSink;
+        use krabka_pgwire::engine::CollectingResultSink;
 
         let engine = SqlEngine::new();
         let mut listener = session(&engine, 11);
@@ -31505,7 +31505,7 @@ mod listen_notify_session_tests {
 
         let keys = committer.record_keys();
         assert!(keys.len() == 3);
-        assert!(keys.iter().all(|key| crabka_pgkv::key::is_notify_key(key)));
+        assert!(keys.iter().all(|key| krabka_pgkv::key::is_notify_key(key)));
         assert!(keys[0] < keys[1] && keys[1] < keys[2]);
     }
 
@@ -31546,7 +31546,7 @@ mod listen_notify_session_tests {
 #[cfg(test)]
 mod session_conformance_tests {
     use assert2::assert;
-    use crabka_pgwire::engine::{Engine, FastpathCall, QueryResult, Session};
+    use krabka_pgwire::engine::{Engine, FastpathCall, QueryResult, Session};
     use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
         net::{TcpListener, TcpStream},
@@ -32019,7 +32019,7 @@ mod session_conformance_tests {
 
     #[tokio::test]
     async fn load_plpgsql_reserves_its_custom_guc_prefix() {
-        use crabka_pgwire::error::Severity;
+        use krabka_pgwire::error::Severity;
         use tokio::sync::mpsc::error::TryRecvError;
 
         let engine = SqlEngine::new();
@@ -32385,7 +32385,7 @@ mod session_conformance_tests {
                 .simple_query(sql)
                 .await
                 .expect_err("the original target name is hidden");
-            let expected = crabka_pgwire::error::PgError::error(
+            let expected = krabka_pgwire::error::PgError::error(
                 "42P01",
                 "invalid reference to FROM-clause entry for table \"alias_target\"",
             )
@@ -32676,7 +32676,7 @@ mod session_conformance_tests {
         }
 
         let owned =
-            crabka_pgwire::error::PgError::error("22P02", "invalid input syntax for type json");
+            krabka_pgwire::error::PgError::error("22P02", "invalid input syntax for type json");
         // An error that already carries a position keeps the one it has, even
         // where this code would have chosen a different literal.
         let already = super::attach_type_input_literal_position(
@@ -32693,13 +32693,13 @@ mod session_conformance_tests {
         // A SQLSTATE no input function raises is returned untouched, message,
         // diagnostics and all.
         let unrelated =
-            crabka_pgwire::error::PgError::error("42601", "invalid input syntax for type json");
+            krabka_pgwire::error::PgError::error("42601", "invalid input syntax for type json");
         assert!(
             super::attach_type_input_literal_position("SELECT '01'::json", unrelated.clone())
                 == unrelated
         );
         // So is a message this code does not recognise, under a code it does.
-        let unshaped = crabka_pgwire::error::PgError::error(
+        let unshaped = krabka_pgwire::error::PgError::error(
             "22P02",
             "invalid input syntax for type json path",
         );
@@ -32778,7 +32778,7 @@ mod session_conformance_tests {
 
         let undecorated = super::attach_range_literal_position(
             "SELECT ''::int4range, ''::int4range",
-            crabka_pgwire::error::PgError::error("22P02", "malformed range literal: \"\""),
+            krabka_pgwire::error::PgError::error("22P02", "malformed range literal: \"\""),
         );
         assert!(
             undecorated
@@ -32790,7 +32790,7 @@ mod session_conformance_tests {
         );
         let unrelated = super::attach_range_literal_position(
             "SELECT make_bad_range('a', 'Z') @> 'b'::text",
-            crabka_pgwire::error::PgError::error(
+            krabka_pgwire::error::PgError::error(
                 "22000",
                 "range lower bound must be less than or equal to range upper bound",
             ),
@@ -32824,7 +32824,7 @@ mod session_conformance_tests {
         let ambiguous = super::attach_undefined_function_position(
             "SELECT missing(1), missing(2)",
             &only_statement("SELECT missing(1), missing(2)"),
-            crabka_pgwire::error::PgError::error(
+            krabka_pgwire::error::PgError::error(
                 "42883",
                 "function missing(integer) does not exist",
             ),
@@ -32841,7 +32841,7 @@ mod session_conformance_tests {
         let utility_signature = super::attach_undefined_function_position(
             family,
             &only_statement(family),
-            crabka_pgwire::error::PgError::error(
+            krabka_pgwire::error::PgError::error(
                 "42883",
                 "function missing(internal) does not exist",
             ),
@@ -32857,8 +32857,8 @@ mod session_conformance_tests {
 
     /// The one statement `sql` parses to, for the diagnostics helpers that ask
     /// what kind of statement raised the error.
-    fn only_statement(sql: &str) -> crabka_pgparser::ast::Statement {
-        let mut statements = crabka_pgparser::parse(sql).expect("parses");
+    fn only_statement(sql: &str) -> krabka_pgparser::ast::Statement {
+        let mut statements = krabka_pgparser::parse(sql).expect("parses");
         assert!(statements.len() == 1, "{sql} is one statement");
         statements.remove(0)
     }
@@ -32969,7 +32969,7 @@ mod session_conformance_tests {
             let error = super::attach_operator_resolution_position(
                 sql,
                 &only_statement(sql),
-                crabka_pgwire::error::PgError::error("42883", "operator does not exist: xid # xid"),
+                krabka_pgwire::error::PgError::error("42883", "operator does not exist: xid # xid"),
             );
             assert!(
                 error
@@ -33008,7 +33008,7 @@ mod session_conformance_tests {
             let error = super::attach_operator_resolution_position(
                 sql,
                 &only_statement(sql),
-                crabka_pgwire::error::PgError::error(
+                krabka_pgwire::error::PgError::error(
                     "42883",
                     format!("operator does not exist: {message}"),
                 ),
@@ -33041,7 +33041,7 @@ mod session_conformance_tests {
         ] {
             let error = super::attach_reg_cast_literal_position(
                 sql,
-                crabka_pgwire::error::PgError::error(
+                krabka_pgwire::error::PgError::error(
                     "42P01",
                     "relation \"pg_classes\" does not exist",
                 ),
@@ -33057,7 +33057,7 @@ mod session_conformance_tests {
         }
         // A message under one of those SQLSTATEs that does not report a name is
         // not a `reg*` failure at all.
-        let unrelated = crabka_pgwire::error::PgError::error("42P01", "relation is not a table");
+        let unrelated = krabka_pgwire::error::PgError::error("42P01", "relation is not a table");
         assert!(
             super::attach_reg_cast_literal_position("SELECT regclass('x')", unrelated.clone())
                 == unrelated
@@ -33157,10 +33157,10 @@ mod session_conformance_tests {
         // that is not a parse failure is left alone even when its message is
         // one this helper owns.
         let parsed = crate::error::ExecError::Parse(
-            crabka_pgparser::parse("SELECT b' 0'").expect_err("bad digit"),
+            krabka_pgparser::parse("SELECT b' 0'").expect_err("bad digit"),
         );
         let owned =
-            crabka_pgwire::error::PgError::error("22P02", "\" \" is not a valid binary digit");
+            krabka_pgwire::error::PgError::error("22P02", "\" \" is not a valid binary digit");
         let already = super::attach_parsed_bit_string_position(
             "SELECT b' 0'",
             &parsed,
@@ -34181,7 +34181,7 @@ mod session_conformance_tests {
             assert!(state(&mut session, sql).await == "00000", "case: {sql}");
             let warning = notices.try_recv().expect(sql);
             assert!(
-                warning.severity == crabka_pgwire::error::Severity::Warning,
+                warning.severity == krabka_pgwire::error::Severity::Warning,
                 "case: {sql}"
             );
             assert!(warning.message == expected, "case: {sql}");
@@ -34793,9 +34793,9 @@ mod session_conformance_tests {
                     results
                         .into_iter()
                         .flat_map(|result| match result {
-                            crabka_pgwire::engine::QueryResult::Rows { rows, .. } => rows,
-                            crabka_pgwire::engine::QueryResult::Command { .. }
-                            | crabka_pgwire::engine::QueryResult::Empty => Vec::new(),
+                            krabka_pgwire::engine::QueryResult::Rows { rows, .. } => rows,
+                            krabka_pgwire::engine::QueryResult::Command { .. }
+                            | krabka_pgwire::engine::QueryResult::Empty => Vec::new(),
                         })
                         .map(|row| {
                             row.into_iter()
@@ -35262,10 +35262,10 @@ mod session_conformance_tests {
 
         let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
         let port = listener.local_addr().expect("address").port();
-        tokio::spawn(crabka_pgwire::server::serve(
+        tokio::spawn(krabka_pgwire::server::serve(
             listener,
             std::sync::Arc::new(SqlEngine::new()),
-            std::sync::Arc::new(crabka_pgwire::session::SessionConfig::trust()),
+            std::sync::Arc::new(krabka_pgwire::session::SessionConfig::trust()),
         ));
         let mut stream = TcpStream::connect(("127.0.0.1", port))
             .await

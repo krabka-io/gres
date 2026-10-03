@@ -19,7 +19,7 @@
 1. **Commit = `frontier + 1`** — Kafka next-to-consume; ack(record@X) → commit X+1.
 2. **Gap-safe** — an out-of-order ack above a gap goes to `pending`, never advances the frontier past an unacked offset.
 3. **Bounded** — `pending` per partition is capped at `MAX_PENDING_PER_PARTITION`; overflow fails the stream fast (no silent unbounded growth).
-4. **Lazy seed** — frontier seeds from the first *delivered-and-acked* offset, never a resume offset.
+4. **Lazy seed** — frontier seeds from the first _delivered-and-acked_ offset, never a resume offset.
 5. **Explicit-mode only** — all frontier machinery gated on `auto_commit == false`; `auto_commit == true` keeps today's whole-position commit unchanged.
 6. **No committed-offset regression** — `commit_acked` commits only currently-owned partitions.
 7. **No broker change.** Every task ends green before its commit.
@@ -45,6 +45,7 @@
 ## Task 1 (Batch A): `PartitionAckState` + `record_ack` + pending cap
 
 **Files:**
+
 - Modify: `crates/grpc-gateway/src/consume.rs`
 
 - [ ] **Step 1: Write the failing tests**
@@ -130,7 +131,7 @@ mod ack_tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-grpc-gateway --lib consume::ack_tests`
+Run: `cargo test -p krabka-grpc-gateway --lib consume::ack_tests`
 Expected: FAIL — `PartitionAckState`/`record`/`AckOverflow`/`MAX_PENDING_PER_PARTITION` undefined.
 
 - [ ] **Step 3: Implement (pure, no I/O)**
@@ -193,7 +194,7 @@ impl PartitionAckState {
 
 - [ ] **Step 4: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-grpc-gateway --lib consume::ack_tests` → PASS.
+Run: `cargo test -p krabka-grpc-gateway --lib consume::ack_tests` → PASS.
 
 ```bash
 git add crates/grpc-gateway/src/consume.rs
@@ -205,6 +206,7 @@ git commit -m "feat(gateway): contiguous-ack frontier (PartitionAckState) with p
 ## Task 2 (Batch A): Client-consumer explicit-offset commit + assignment accessor
 
 **Files:**
+
 - Modify: `crates/client-consumer/src/commit.rs`, `crates/client-consumer/src/consumer.rs`
 
 - [ ] **Step 1: Write the failing tests**
@@ -251,7 +253,7 @@ pub async fn assigned_partitions(&self) -> Vec<(String, i32)> {
 
 - [ ] **Step 3: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-client-consumer commit` → PASS.
+Run: `cargo test -p krabka-client-consumer commit` → PASS.
 
 ```bash
 git add crates/client-consumer/src/commit.rs crates/client-consumer/src/consumer.rs
@@ -263,6 +265,7 @@ git commit -m "feat(client-consumer): commit_offsets_sync + assigned_partitions 
 ## Task 3: `acked_offsets` + `commit_acked` (ownership-filtered)
 
 **Files:**
+
 - Modify: `crates/grpc-gateway/src/consume.rs:95-102`
 
 Depends on Tasks 1 + 2.
@@ -327,7 +330,7 @@ Add `GatewayError::too_many_unacked` (a `resource_exhausted`-mapped variant).
 
 - [ ] **Step 3: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-grpc-gateway --lib consume::` → PASS.
+Run: `cargo test -p krabka-grpc-gateway --lib consume::` → PASS.
 
 ```bash
 git add crates/grpc-gateway/src/consume.rs
@@ -339,6 +342,7 @@ git commit -m "feat(gateway): commit_acked (ownership-filtered per-offset commit
 ## Task 4: Stream wiring — bind ack, buffer filtered records, replay after select
 
 **Files:**
+
 - Modify: `crates/grpc-gateway/src/streaming.rs:289,298-330`
 - Test: `crates/grpc-gateway/tests/streaming.rs` (extend)
 
@@ -393,7 +397,7 @@ if commit {
 
 - [ ] **Step 3: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-grpc-gateway --test streaming` → PASS.
+Run: `cargo test -p krabka-grpc-gateway --test streaming` → PASS.
 
 ```bash
 git add crates/grpc-gateway/src/streaming.rs crates/grpc-gateway/tests/streaming.rs
@@ -405,10 +409,11 @@ git commit -m "feat(gateway): per-offset ack wiring in the Subscribe stream (gap
 ## Task 5: Proto comment — fields are load-bearing
 
 **Files:**
+
 - Modify: `crates/grpc-gateway/proto/crabka/gateway/v1/gateway.proto:108-115`
 
 - [ ] **Step 1:** Replace the "advisory / per-offset commit is a follow-up" comment with: the `offset` is the record offset being acked; the gateway commits `offset+1` for `(topic,partition)` gated on a contiguous frontier; the fields are load-bearing only when `auto_commit=false` and are ignored under `auto_commit=true`. No field changes.
-- [ ] **Step 2:** `cargo build -p crabka-grpc-gateway` (regenerates pb, no code change). Commit.
+- [ ] **Step 2:** `cargo build -p krabka-grpc-gateway` (regenerates pb, no code change). Commit.
 
 ```bash
 git add crates/grpc-gateway/proto/crabka/gateway/v1/gateway.proto
@@ -420,8 +425,8 @@ git commit -m "docs(gateway): document SubscribeAck fields as load-bearing (expl
 ## Task 6: Final gate
 
 - [ ] **Step 1:** `cargo +nightly fmt --check` — no diff.
-- [ ] **Step 2:** `cargo clippy -p crabka-grpc-gateway -p crabka-client-consumer --all-targets -- -D warnings` — no warnings.
-- [ ] **Step 3:** `cargo nextest run -p crabka-grpc-gateway -p crabka-client-consumer` — PASS, incl. the frontier unit tests (seed/gap/drain/cap), `commit_offsets_sync` shaping, and the end-to-end gap-safety + filtered-auto-ack + rebalance-ownership integration tests.
+- [ ] **Step 2:** `cargo clippy -p krabka-grpc-gateway -p krabka-client-consumer --all-targets -- -D warnings` — no warnings.
+- [ ] **Step 3:** `cargo nextest run -p krabka-grpc-gateway -p krabka-client-consumer` — PASS, incl. the frontier unit tests (seed/gap/drain/cap), `commit_offsets_sync` shaping, and the end-to-end gap-safety + filtered-auto-ack + rebalance-ownership integration tests.
 - [ ] **Step 4:** Commit any formatting.
 
 ---

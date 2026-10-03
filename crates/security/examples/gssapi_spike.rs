@@ -18,7 +18,7 @@
 //! Prerequisites (see crates/security/tests/fixtures/kdc/):
 //!   cd crates/security/tests/fixtures/kdc && docker compose up --build -d
 //! Then:
-//!   cargo run -p crabka-security --example `gssapi_spike`
+//!   cargo run -p krabka-security --example `gssapi_spike`
 //!
 //! Env overrides, all with defaults that point at the fixture realm:
 //!   `SSPI_KDC_URL=tcp://localhost:88`
@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     if std::env::var("KRB5_CONFIG").is_err() {
         eprintln!(
             "WARN: KRB5_CONFIG not set; realm resolution may fail. Run with:\n  \
-             KRB5_CONFIG=crates/security/tests/fixtures/kdc/krb5.conf cargo run -p crabka-security --example gssapi_spike"
+             KRB5_CONFIG=crates/security/tests/fixtures/kdc/krb5.conf cargo run -p krabka-security --example gssapi_spike"
         );
     }
 
@@ -88,7 +88,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // ---- Operation 2: client initiate (produce AP-REQ) --------------------
     let mut client = Kerberos::new_client_from_config(KerberosConfig::new(
         &kdc_url,
-        "crabka-spike".to_string(),
+        "krabka-spike".to_string(),
     ))?;
     let identity = AuthIdentity {
         username: Username::parse(CLIENT_PRINCIPAL)?,
@@ -261,7 +261,7 @@ fn build_server(kdc_url: &str, service_key: Vec<u8>) -> Result<Kerberos, Box<dyn
         Some(Secret::new(service_key)), // raw ticket-decryption key bytes
     )?;
     let config = KerberosServerConfig {
-        kerberos_config: KerberosConfig::new(kdc_url, "crabka-broker".to_string()),
+        kerberos_config: KerberosConfig::new(kdc_url, "krabka-broker".to_string()),
         server_properties,
     };
     Ok(Kerberos::new_server_from_config(

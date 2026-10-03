@@ -2,11 +2,11 @@
 
 use std::collections::BTreeMap;
 
-use crabka_client_admin::{AdminClientLike, CreateTopicSpec};
-use crabka_gres_ranges::{
+use krabka_client_admin::{AdminClientLike, CreateTopicSpec};
+use krabka_gres_ranges::{
     RangeId, TenantName, txn_id as range_txn_id, wal_topic as range_wal_topic,
 };
-use crabka_units::{Time, convert::TimeExt as _, fmt::Human as _, secs};
+use krabka_units::{Time, convert::TimeExt as _, fmt::Human as _, secs};
 use refined_type::rule::MinMaxI32;
 
 use crate::error::SubstrateError;
@@ -299,7 +299,7 @@ pub async fn ensure_wal_topic_name_with_policy(
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_units::millis;
+    use krabka_units::millis;
 
     use super::*;
 

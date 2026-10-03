@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Bound every `crabka-client-core` bootstrap, reconnect, and advertised-broker DNS lookup with one validated, configurable per-lookup deadline.
+**Goal:** Bound every `krabka-client-core` bootstrap, reconnect, and advertised-broker DNS lookup with one validated, configurable per-lookup deadline.
 
 **Architecture:** Add a `refined_type`-validated `ClientDnsTimeout` to `ConnectionOptions`, validate the client builder's raw `Duration` before I/O, and route the typed value through the existing bootstrap and pool paths. Reuse one private future seam around `tokio::time::timeout`; do not add a resolver trait or alter ordered fallback.
 
@@ -25,6 +25,7 @@
 ### Task 1: Validated and Bounded Client DNS Policy
 
 **Files:**
+
 - Modify: `crates/client-core/Cargo.toml`
 - Modify: `crates/client-core/src/error.rs`
 - Modify: `crates/client-core/src/connection.rs`
@@ -34,6 +35,7 @@
 - Modify: `crates/client-core/src/lib.rs`
 
 **Interfaces:**
+
 - Produces: `DEFAULT_CLIENT_DNS_TIMEOUT`, `DEFAULT_CLIENT_CONNECT_TIMEOUT`, and `DEFAULT_CLIENT_REQUEST_TIMEOUT`.
 - Produces: `ClientDnsTimeout::new(Duration) -> Result<ClientDnsTimeout, String>`, `duration() -> Duration`, and `milliseconds() -> u64`.
 - Extends: `ConnectionOptions { dns_timeout: ClientDnsTimeout, .. }`.
@@ -47,7 +49,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core --all-targets
+  cargo test -p krabka-client-core --all-targets
 ```
 
 Expected: exit 0. Record every suite summary rather than inventing an aggregate when nested test processes interleave.
@@ -86,7 +88,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core client_dns_timeout --lib
+  cargo test -p krabka-client-core client_dns_timeout --lib
 ```
 
 Expected: compilation fails because `ClientDnsTimeout` and the named constants do not exist.
@@ -149,7 +151,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core client_dns_timeout --lib
+  cargo test -p krabka-client-core client_dns_timeout --lib
 ```
 
 Expected: the scalar/default tests pass.
@@ -199,9 +201,9 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core bounded_lookup_stops_at_the_configured_deadline --lib
+  cargo test -p krabka-client-core bounded_lookup_stops_at_the_configured_deadline --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core zero_dns_timeout_is_rejected_before_resolution --lib
+  cargo test -p krabka-client-core zero_dns_timeout_is_rejected_before_resolution --lib
 ```
 
 Expected: compilation fails because the seam and builder field are absent.
@@ -244,11 +246,11 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core bootstrap --lib
+  cargo test -p krabka-client-core bootstrap --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core bounded_lookup_stops_at_the_configured_deadline --lib
+  cargo test -p krabka-client-core bounded_lookup_stops_at_the_configured_deadline --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core zero_dns_timeout_is_rejected_before_resolution --lib
+  cargo test -p krabka-client-core zero_dns_timeout_is_rejected_before_resolution --lib
 ```
 
 Expected: all focused tests pass.
@@ -295,9 +297,9 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core pool_carries_the_configured_dns_timeout --lib
+  cargo test -p krabka-client-core pool_carries_the_configured_dns_timeout --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core advertised_broker_lookup_stops_at_the_configured_deadline --lib
+  cargo test -p krabka-client-core advertised_broker_lookup_stops_at_the_configured_deadline --lib
 ```
 
 Expected: compilation fails because `BrokerPool` does not store the policy and the advertised-resolution seam does not exist.
@@ -326,11 +328,11 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core pool_carries_the_configured_dns_timeout --lib
+  cargo test -p krabka-client-core pool_carries_the_configured_dns_timeout --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core advertised_broker_lookup_stops_at_the_configured_deadline --lib
+  cargo test -p krabka-client-core advertised_broker_lookup_stops_at_the_configured_deadline --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core refresh_ --lib
+  cargo test -p krabka-client-core refresh_ --lib
 ```
 
 Expected: all pool policy and resolution tests pass.
@@ -341,9 +343,9 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core --all-targets
+  cargo test -p krabka-client-core --all-targets
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-client-core --all-targets -- -D warnings
+  cargo clippy -p krabka-client-core --all-targets -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo fmt --all -- --check
 git diff --check
@@ -371,9 +373,11 @@ git commit -m "feat(client): bound DNS resolution"
 ### Task 2: Audit and Slice Verification
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: the committed `ClientDnsTimeout` policy and all lookup call sites from Task 1.
 - Produces: an evidence-backed audit entry and the next coherent unresolved configuration owner.
 
@@ -409,9 +413,9 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core --all-targets
+  cargo test -p krabka-client-core --all-targets
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-client-core --all-targets -- -D warnings
+  cargo clippy -p krabka-client-core --all-targets -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo fmt --all -- --check
 git diff --check
@@ -430,9 +434,11 @@ git commit -m "docs(client): record DNS timeout audit"
 ### Task 3: Independent Review and Publication
 
 **Files:**
+
 - Review only: the complete implementation range from the parent of Task 1 through Task 2 HEAD.
 
 **Interfaces:**
+
 - Consumes: the approved design, this plan, task reports, committed diff, and scanner evidence.
 - Produces: a clean independent review verdict and published draft PR head.
 

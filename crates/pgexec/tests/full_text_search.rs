@@ -2,16 +2,16 @@
 
 use std::sync::Arc;
 
-use crabka_pgcatalog::RelationName;
-use crabka_pgexec::SqlEngine;
-use crabka_pgwire::session::SessionConfig;
+use krabka_pgcatalog::RelationName;
+use krabka_pgexec::SqlEngine;
+use krabka_pgwire::session::SessionConfig;
 use tokio::net::TcpListener;
 use tokio_postgres::{NoTls, SimpleQueryMessage};
 
 async fn connect() -> tokio_postgres::Client {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
-    tokio::spawn(crabka_pgwire::server::serve(
+    tokio::spawn(krabka_pgwire::server::serve(
         listener,
         Arc::new(SqlEngine::new()),
         Arc::new(SessionConfig::trust()),
@@ -31,7 +31,7 @@ async fn connect() -> tokio_postgres::Client {
 async fn connect_to(engine: &SqlEngine) -> tokio_postgres::Client {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
-    tokio::spawn(crabka_pgwire::server::serve(
+    tokio::spawn(krabka_pgwire::server::serve(
         listener,
         Arc::new(engine.clone_handle()),
         Arc::new(SessionConfig::trust()),
@@ -468,12 +468,12 @@ async fn gin_index_backfills_tracks_writes_and_drives_exact_query_scans() {
 
     // An unindexed corrupt row makes a sequential table scan fail. The exact
     // query succeeds only when the GIN posting probe limits heap rechecks.
-    let table = crabka_pgcatalog::get_table(engine.catalog_kv(), &RelationName::public("docs"))
+    let table = krabka_pgcatalog::get_table(engine.catalog_kv(), &RelationName::public("docs"))
         .expect("table");
     engine
         .kv_handle()
-        .write_batch(&[crabka_pgkv::WriteOp::Put {
-            key: crabka_pgmvcc::version::version_key_xid(table.id, 999, 999),
+        .write_batch(&[krabka_pgkv::WriteOp::Put {
+            key: krabka_pgmvcc::version::version_key_xid(table.id, 999, 999),
             value: vec![0],
         }])
         .expect("inject unreachable row");
@@ -716,7 +716,7 @@ async fn json_to_tsvector_validates_the_documents_escapes() {
 /// `ts_lexize` reports the lexemes of one dictionary, including SQL-created
 /// ISpell dictionaries backed by PostgreSQL's regression sample.
 #[tokio::test]
-async fn ts_lexize_answers_for_the_dictionaries_crabka_has() {
+async fn ts_lexize_answers_for_the_dictionaries_krabka_has() {
     let client = connect().await;
     for (sql, expected) in [
         ("SELECT ts_lexize('english_stem', 'skies')", "{sky}"),

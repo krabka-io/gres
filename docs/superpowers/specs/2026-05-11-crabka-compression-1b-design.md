@@ -1,4 +1,4 @@
-# `crabka-compression` (sub-plan 1b) — Design
+# `krabka-compression` (sub-plan 1b) — Design
 
 **Status:** Draft for review
 **Date:** 2026-05-11
@@ -7,19 +7,19 @@
 
 ## Summary
 
-`crabka-compression` is a standalone Rust crate covering the four
+`krabka-compression` is a standalone Rust crate covering the four
 compression codecs Kafka uses on the wire — **gzip, snappy, lz4, zstd**
 — with byte-level wire compatibility verified against the JVM
 `kafka-clients` implementation. Pure Rust where viable; isolated as a
 separate crate so other Crabka crates can choose which codecs they pull
 in via Cargo features.
 
-This sub-plan does not change `crabka-protocol`. The typed `RecordBatch`
+This sub-plan does not change `krabka-protocol`. The typed `RecordBatch`
 decoder that consumes this crate is **sub-plan 1c**.
 
 ## North star (acceptance gate for sub-plan 1b)
 
-1. `crabka-compression` 0.0.0 exists in the workspace, ready for
+1. `krabka-compression` 0.0.0 exists in the workspace, ready for
    downstream depending.
 2. Free-function API over a `CompressionType` enum (Section 3 below).
 3. Default features enable all four codecs; each individually toggleable
@@ -48,7 +48,7 @@ decoder that consumes this crate is **sub-plan 1c**.
 
 ```
 crates/compression/
-├── Cargo.toml                  # name = "crabka-compression"
+├── Cargo.toml                  # name = "krabka-compression"
 ├── src/
 │   ├── lib.rs                  # CompressionType, compress/decompress, error, dispatch
 │   ├── gzip.rs                 # #[cfg(feature = "gzip")]
@@ -67,7 +67,7 @@ crate, including any Kafka-specific framing.
 
 ```toml
 [package]
-name = "crabka-compression"
+name = "krabka-compression"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -258,9 +258,10 @@ hex-encoded bytes.
 
 # 6. Test strategy
 
-Three layers, mirroring `crabka-protocol`:
+Three layers, mirroring `krabka-protocol`:
 
 **Layer 1 — Unit (per codec module).**
+
 - Round-trip a short known input (`b"hello kafka"`).
 - Empty-input behaviour per codec.
 - Malformed input → `InvalidData`, never panic.
@@ -268,10 +269,12 @@ Three layers, mirroring `crabka-protocol`:
   to prove the framing layer is right before any encode work runs.
 
 **Layer 2 — Proptest (`tests/proptest.rs`).**
+
 - Per codec: `decompress(c, &compress(c, &x)?)? == x` for `Vec<u8>` of
   size 0–32 KiB, default 256-case budget.
 
 **Layer 3 — JVM differential (`tests/differential.rs`, `#[ignore]`-gated).**
+
 - Per codec, both directions:
   - `jvm_decompress(c, rust_compress(c, x)?)? == x`
   - `rust_decompress(c, jvm_compress(c, x))? == x`
@@ -281,6 +284,7 @@ Three layers, mirroring `crabka-protocol`:
   implementer's choice in the plan.
 
 **Layer 4 — CodSpeed (`benches/codec.rs`).**
+
 - Compress + decompress at 1 KiB / 64 KiB / 1 MiB input sizes per
   codec. Baseline numbers for future regression detection.
 
@@ -299,11 +303,11 @@ Three layers, mirroring `crabka-protocol`:
 
 The sub-plan ships when **all** of these hold:
 
-1. `crates/compression/` exists; `cargo build -p crabka-compression --no-default-features`
+1. `crates/compression/` exists; `cargo build -p krabka-compression --no-default-features`
    succeeds (verifies the crate compiles with all codecs off).
-2. `cargo build -p crabka-compression` (default features) succeeds.
+2. `cargo build -p krabka-compression` (default features) succeeds.
 3. For each codec individually:
-   `cargo build -p crabka-compression --no-default-features --features <codec>`
+   `cargo build -p krabka-compression --no-default-features --features <codec>`
    succeeds.
 4. Free-function API matches Section 3: `CompressionType` enum with
    `None`, `Gzip`, `Snappy`, `Lz4`, `Zstd`, `compress`/`decompress`

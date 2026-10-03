@@ -1,8 +1,8 @@
 //! Open a durable engine, write, drop it, reopen, and assert everything
 //! survived. This includes the rowid allocator, which is the SP2 carry-over fix.
 
-use crabka_pgexec::SqlEngine;
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::SqlEngine;
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 fn text(cell: Option<&Cell>) -> Option<String> {
     cell.map(|c| String::from_utf8(c.text.to_vec()).expect("utf8"))

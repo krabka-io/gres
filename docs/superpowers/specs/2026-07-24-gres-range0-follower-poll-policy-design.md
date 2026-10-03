@@ -26,7 +26,7 @@ recovery-policy review.
 The standalone process accepts an optional positive millisecond value:
 
 - CLI: `--range0-follower-poll-interval-ms`
-- environment: `CRABKA_GRES_RANGE0_FOLLOWER_POLL_INTERVAL_MS`
+- environment: `KRABKA_GRES_RANGE0_FOLLOWER_POLL_INTERVAL_MS`
 - effective default: 100 ms
 
 The option requires `--ranges`, which already requires substrate mode. This
@@ -47,7 +47,7 @@ the same branch that renders `--ranges`.
 
 ## Ownership and Data Flow
 
-`crabka-gres-control` owns
+`krabka-gres-control` owns
 `DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL_MS`, so the binary and operator share
 one compiled default.
 

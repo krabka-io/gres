@@ -1,5 +1,5 @@
-use crabka_gres_ranges::tenant::GatewaySession;
-use crabka_pgwire::{
+use krabka_gres_ranges::tenant::GatewaySession;
+use krabka_pgwire::{
     engine::{BoundParam, Cell, ExecuteOutcome, QueryResult, Session},
     error::PgError,
 };
@@ -21,9 +21,9 @@ impl ExtendedQueryV2 for GatewaySession {
         let description = self.parse("", sql, &[]).await?;
         self.bind("", "", params, &[]).await?;
         let outcome = self.execute("", 0).await?;
-        self.close(crabka_pgwire::engine::CloseTarget::Portal(""))
+        self.close(krabka_pgwire::engine::CloseTarget::Portal(""))
             .await?;
-        self.close(crabka_pgwire::engine::CloseTarget::Statement(""))
+        self.close(krabka_pgwire::engine::CloseTarget::Statement(""))
             .await?;
         Ok(vec![match outcome {
             ExecuteOutcome::Rows { rows, completion } => QueryResult::Rows {

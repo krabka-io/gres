@@ -1,10 +1,10 @@
-# crabka-blockstore Implementation Plan (Logs Wedge — Phase 1)
+# krabka-blockstore Implementation Plan (Logs Wedge — Phase 1)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build `crabka-blockstore` — the signal-agnostic columnar block store (Parquet blocks on object storage + a label/series/block index + a DataFusion query facade) that every observability signal in the LGTM+P replacement will reuse, proven end-to-end on logs.
+**Goal:** Build `krabka-blockstore` — the signal-agnostic columnar block store (Parquet blocks on object storage + a label/series/block index + a DataFusion query facade) that every observability signal in the LGTM+P replacement will reuse, proven end-to-end on logs.
 
-**Architecture:** A block is a tenant-scoped, time-bounded Parquet file written to `object_store`, carrying two mandatory columns (`series_fingerprint: UInt64`, `timestamp: Int64` nanos) plus arbitrary signal payload columns, sorted by `(series_fingerprint, timestamp)`. An in-memory `Index` maps label matchers → series fingerprints → candidate block keys (pruning *before* any scan), and is snapshotted to object storage. A `BlockStore` facade resolves a query through the index, registers the surviving blocks as a DataFusion Parquet table, and hands back a `SessionContext` the caller (later: `crabka-logql`) runs its plan against. Block-level pruning is ours; intra-block row-group pruning + projection/predicate pushdown is delegated to DataFusion's native Parquet reader.
+**Architecture:** A block is a tenant-scoped, time-bounded Parquet file written to `object_store`, carrying two mandatory columns (`series_fingerprint: UInt64`, `timestamp: Int64` nanos) plus arbitrary signal payload columns, sorted by `(series_fingerprint, timestamp)`. An in-memory `Index` maps label matchers → series fingerprints → candidate block keys (pruning _before_ any scan), and is snapshotted to object storage. A `BlockStore` facade resolves a query through the index, registers the surviving blocks as a DataFusion Parquet table, and hands back a `SessionContext` the caller (later: `krabka-logql`) runs its plan against. Block-level pruning is ours; intra-block row-group pruning + projection/predicate pushdown is delegated to DataFusion's native Parquet reader.
 
 **Tech Stack:** Rust 2024 · `datafusion` (git `main`, pinned) · `arrow` 59 · `parquet` 59 · `object_store` 0.13 · `tokio` · `thiserror` · `serde_json` (index snapshot) · `regex` (matcher resolution). Tests: `assert2`, `proptest`, `tempfile`, `object_store::memory::InMemory`.
 
@@ -12,8 +12,8 @@
 
 - **No backwards compatibility.** Crabka is greenfield/undeployed. No `#[serde(default)]` shims, no V2-alongside-V1, no migration code. Change schemas/enums/wire formats freely. (Only Kafka wire compat matters — and this crate touches none of it.)
 - **`unsafe_code = "forbid"`** workspace-wide. No `unsafe`.
-- **Lints:** `clippy::pedantic` is `warn` workspace-wide. New code must be clippy-pedantic clean (`module_name_repetitions`, `missing_errors_doc`, `missing_panics_doc` are allowed workspace-wide). Run `cargo clippy -p crabka-blockstore --all-targets` and fix warnings before each commit.
-- **Formatting:** run `cargo fmt -p crabka-blockstore` before every commit. (Do NOT run `cargo +nightly fmt --all` — it fails with OS error 206 / path-too-long in deep worktrees on Windows; always scope with `-p`.)
+- **Lints:** `clippy::pedantic` is `warn` workspace-wide. New code must be clippy-pedantic clean (`module_name_repetitions`, `missing_errors_doc`, `missing_panics_doc` are allowed workspace-wide). Run `cargo clippy -p krabka-blockstore --all-targets` and fix warnings before each commit.
+- **Formatting:** run `cargo fmt -p krabka-blockstore` before every commit. (Do NOT run `cargo +nightly fmt --all` — it fails with OS error 206 / path-too-long in deep worktrees on Windows; always scope with `-p`.)
 - **Assertions:** use `assert2::assert!` / `assert2::check!` in tests (workspace convention), `prop_assert*` inside `proptest!`.
 - **Async tests:** `#[tokio::test]`. Crate dev-dep `tokio` features = `["macros", "rt-multi-thread"]`.
 - **Dependency pin (locked):** `datafusion = { git = "https://github.com/apache/datafusion", rev = "0838a4ddb902535b0e95a1c5a254be7e9c7fe9bf" }`. This `main` revision depends on arrow 59 / parquet 59 / object_store 0.13.2, which unify with the workspace's existing `arrow = "59"` / `object_store = "0.13"` pins (same major → cargo unifies to one crate instance, so types cross the DataFusion boundary cleanly). Do **not** substitute a released `datafusion` (54.x depends on arrow 58 and will pull a second, incompatible arrow major).
@@ -26,27 +26,27 @@
 
 This plan is Phase 1 of the logs wedge. Each later phase gets its own plan when we reach it; the crate seams were chosen so they compose:
 
-1. **`crabka-blockstore`** *(this plan)* — columnar block format + index + DataFusion query facade. Independently testable.
-2. **`crabka-logql`** — LogQL parser + planner that lowers a LogQL query onto SQL/DataFusion over a `BlockStore::scan_context` table + a `WAL-tail` table. Depends on Phase 1.
-3. **`crabka-observability` (ingest + compactor)** — distributor endpoints (Loki push / OTLP logs / Kafka produce) → WAL topic; compactor consumer-group → `BlockWriter` blocks + `Index` snapshots. Depends on Phase 1.
-4. **`crabka-observability` (querier)** — Loki HTTP API surface, hot/cold merge, `tail` websocket; differential-vs-Loki + Grafana integration tests. Depends on Phases 1–3.
+1. **`krabka-blockstore`** _(this plan)_ — columnar block format + index + DataFusion query facade. Independently testable.
+2. **`krabka-logql`** — LogQL parser + planner that lowers a LogQL query onto SQL/DataFusion over a `BlockStore::scan_context` table + a `WAL-tail` table. Depends on Phase 1.
+3. **`krabka-observability` (ingest + compactor)** — distributor endpoints (Loki push / OTLP logs / Kafka produce) → WAL topic; compactor consumer-group → `BlockWriter` blocks + `Index` snapshots. Depends on Phase 1.
+4. **`krabka-observability` (querier)** — Loki HTTP API surface, hot/cold merge, `tail` websocket; differential-vs-Loki + Grafana integration tests. Depends on Phases 1–3.
 
 ---
 
 ## File structure (`crates/blockstore/`)
 
-| File | Responsibility |
-|---|---|
-| `Cargo.toml` | crate manifest; workspace deps |
-| `src/lib.rs` | module decls + public re-exports + crate docs |
-| `src/error.rs` | `BlockStoreError` enum + `Result` mapping helpers |
-| `src/labels.rs` | `Labels`, `SeriesFingerprint`, fingerprint hashing |
-| `src/matcher.rs` | `MatchOp`, `LabelMatcher` |
-| `src/block.rs` | column-name constants, `BlockMeta`, schema validation |
-| `src/writer.rs` | `BlockWriter` — RecordBatches → Parquet → object_store |
-| `src/reader.rs` | `read_block` — object_store Parquet → RecordBatches |
-| `src/index.rs` | `Index` (series dict + postings + block index) + snapshot serde |
-| `src/store.rs` | `BlockStore` facade — resolve → prune → DataFusion `SessionContext` |
+| File             | Responsibility                                                      |
+| ---------------- | ------------------------------------------------------------------- |
+| `Cargo.toml`     | crate manifest; workspace deps                                      |
+| `src/lib.rs`     | module decls + public re-exports + crate docs                       |
+| `src/error.rs`   | `BlockStoreError` enum + `Result` mapping helpers                   |
+| `src/labels.rs`  | `Labels`, `SeriesFingerprint`, fingerprint hashing                  |
+| `src/matcher.rs` | `MatchOp`, `LabelMatcher`                                           |
+| `src/block.rs`   | column-name constants, `BlockMeta`, schema validation               |
+| `src/writer.rs`  | `BlockWriter` — RecordBatches → Parquet → object_store              |
+| `src/reader.rs`  | `read_block` — object_store Parquet → RecordBatches                 |
+| `src/index.rs`   | `Index` (series dict + postings + block index) + snapshot serde     |
+| `src/store.rs`   | `BlockStore` facade — resolve → prune → DataFusion `SessionContext` |
 
 Each file has one responsibility; `store.rs` is the only file that depends on DataFusion's query layer, isolating the churn-prone surface.
 
@@ -55,19 +55,21 @@ Each file has one responsibility; `store.rs` is the only file that depends on Da
 ### Task 1: Crate scaffold + workspace dependency wiring
 
 **Files:**
+
 - Create: `crates/blockstore/Cargo.toml`
 - Create: `crates/blockstore/src/lib.rs`
 - Modify: `Cargo.toml` (root — add `datafusion`, `parquet`, `url` to `[workspace.dependencies]`)
 
 **Interfaces:**
-- Produces: a compiling `crabka-blockstore` crate with `pub fn crate_smoke() -> bool` (placeholder, removed in Task 2) so there is a test to run.
+
+- Produces: a compiling `krabka-blockstore` crate with `pub fn crate_smoke() -> bool` (placeholder, removed in Task 2) so there is a test to run.
 
 - [ ] **Step 1: Add the three new workspace dependencies**
 
 In root `Cargo.toml`, under `[workspace.dependencies]`, add (place near the existing `arrow`/`object_store` lines):
 
 ```toml
-# Observability block store (crabka-blockstore): DataFusion query engine over
+# Observability block store (krabka-blockstore): DataFusion query engine over
 # Parquet blocks on object storage. Pinned to apache/datafusion `main` because
 # that revision tracks arrow 59 / parquet 59 / object_store 0.13.2 — matching the
 # workspace pins. The latest *released* datafusion (54.x) is on arrow 58 and would
@@ -81,16 +83,16 @@ url = "2"
 
 ```toml
 [package]
-name = "crabka-blockstore"
+name = "krabka-blockstore"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "Signal-agnostic columnar block store (Parquet on object storage + label/series index + DataFusion query) for Crabka observability"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-blockstore"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-blockstore"
 readme = "README.md"
 keywords = ["observability", "datafusion", "parquet", "object-store", "crabka"]
 categories = ["database-implementations"]
@@ -149,7 +151,7 @@ mod tests {
 
 - [ ] **Step 4: Build and test**
 
-Run: `cargo test -p crabka-blockstore`
+Run: `cargo test -p krabka-blockstore`
 Expected: compiles (the first build fetches + compiles DataFusion from git — this is slow, several minutes, normal) and `smoke` PASSES.
 
 If the build fails with an arrow major mismatch (`expected struct arrow::... found struct arrow::...`), the datafusion rev is wrong — re-confirm the pinned rev tracks arrow 59.
@@ -157,10 +159,10 @@ If the build fails with an arrow major mismatch (`expected struct arrow::... fou
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-blockstore
-cargo clippy -p crabka-blockstore --all-targets
+cargo fmt -p krabka-blockstore
+cargo clippy -p krabka-blockstore --all-targets
 git add Cargo.toml Cargo.lock crates/blockstore/
-git commit -m "feat(blockstore): scaffold crabka-blockstore crate + DataFusion dep"
+git commit -m "feat(blockstore): scaffold krabka-blockstore crate + DataFusion dep"
 ```
 
 ---
@@ -168,6 +170,7 @@ git commit -m "feat(blockstore): scaffold crabka-blockstore crate + DataFusion d
 ### Task 2: Core types — labels, fingerprint, matchers, block meta, error
 
 **Files:**
+
 - Create: `crates/blockstore/src/error.rs`
 - Create: `crates/blockstore/src/labels.rs`
 - Create: `crates/blockstore/src/matcher.rs`
@@ -175,6 +178,7 @@ git commit -m "feat(blockstore): scaffold crabka-blockstore crate + DataFusion d
 - Modify: `crates/blockstore/src/lib.rs` (declare modules, re-export, remove placeholder)
 
 **Interfaces:**
+
 - Produces:
   - `BlockStoreError` (enum) + `pub type Result<T> = std::result::Result<T, BlockStoreError>`
   - `type SeriesFingerprint = u64`
@@ -228,7 +232,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-blockstore --lib labels`
+Run: `cargo test -p krabka-blockstore --lib labels`
 Expected: FAIL — `cannot find type Labels in this scope`.
 
 - [ ] **Step 3: Implement `labels.rs`**
@@ -309,7 +313,7 @@ impl FromIterator<(String, String)> for Labels {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-blockstore --lib labels`
+Run: `cargo test -p krabka-blockstore --lib labels`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Implement `error.rs`**
@@ -318,7 +322,7 @@ Expected: PASS (3 tests).
 //! Error type for the block store.
 
 /// Errors raised by the block store. Backend errors are stringified (matching
-/// the `crabka-remote-storage` convention) rather than wrapping foreign types.
+/// the `krabka-remote-storage` convention) rather than wrapping foreign types.
 #[derive(Debug, thiserror::Error)]
 pub enum BlockStoreError {
     #[error("object store error: {0}")]
@@ -445,7 +449,7 @@ mod tests {
 
 - [ ] **Step 8: Run to verify it fails**
 
-Run: `cargo test -p crabka-blockstore --lib block`
+Run: `cargo test -p krabka-blockstore --lib block`
 Expected: FAIL — `cannot find function validate_block_schema`.
 
 - [ ] **Step 9: Implement `block.rs`**
@@ -526,14 +530,14 @@ pub use matcher::{LabelMatcher, MatchOp};
 
 - [ ] **Step 11: Run the full crate test suite**
 
-Run: `cargo test -p crabka-blockstore`
+Run: `cargo test -p krabka-blockstore`
 Expected: PASS (labels + block tests; the old `smoke` test is gone).
 
 - [ ] **Step 12: Commit**
 
 ```bash
-cargo fmt -p crabka-blockstore
-cargo clippy -p crabka-blockstore --all-targets
+cargo fmt -p krabka-blockstore
+cargo clippy -p krabka-blockstore --all-targets
 git add crates/blockstore/
 git commit -m "feat(blockstore): core types — labels, fingerprint, matchers, block meta, error"
 ```
@@ -543,10 +547,12 @@ git commit -m "feat(blockstore): core types — labels, fingerprint, matchers, b
 ### Task 3: `BlockWriter` — RecordBatches → Parquet → object_store
 
 **Files:**
+
 - Create: `crates/blockstore/src/writer.rs`
 - Modify: `crates/blockstore/src/lib.rs` (declare + re-export)
 
 **Interfaces:**
+
 - Consumes: `validate_block_schema`, `BlockMeta`, `COL_FINGERPRINT`, `COL_TIMESTAMP`, `SeriesFingerprint`, `Result`.
 - Produces:
   - `struct BlockWriter { /* store */ }` with `pub fn new(store: Arc<dyn object_store::ObjectStore>) -> Self`
@@ -636,7 +642,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-blockstore --lib writer`
+Run: `cargo test -p krabka-blockstore --lib writer`
 Expected: FAIL — `cannot find type BlockWriter`.
 
 - [ ] **Step 3: Implement `writer.rs`**
@@ -759,14 +765,14 @@ Add `mod writer;` (after `mod reader;` placeholder is not yet present — just a
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-blockstore --lib writer`
+Run: `cargo test -p krabka-blockstore --lib writer`
 Expected: PASS (2 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-blockstore
-cargo clippy -p crabka-blockstore --all-targets
+cargo fmt -p krabka-blockstore
+cargo clippy -p krabka-blockstore --all-targets
 git add crates/blockstore/
 git commit -m "feat(blockstore): BlockWriter — RecordBatches to Parquet on object_store"
 ```
@@ -776,10 +782,12 @@ git commit -m "feat(blockstore): BlockWriter — RecordBatches to Parquet on obj
 ### Task 4: `read_block` — object_store Parquet → RecordBatches (round-trip)
 
 **Files:**
+
 - Create: `crates/blockstore/src/reader.rs`
 - Modify: `crates/blockstore/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `Result`.
 - Produces: `pub async fn read_block(store: Arc<dyn object_store::ObjectStore>, object_key: &str) -> Result<Vec<arrow::record_batch::RecordBatch>>`.
 
@@ -834,7 +842,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-blockstore --lib reader`
+Run: `cargo test -p krabka-blockstore --lib reader`
 Expected: FAIL — `cannot find function read_block`.
 
 - [ ] **Step 3: Implement `reader.rs`**
@@ -880,14 +888,14 @@ Add `mod reader;` and `pub use reader::read_block;`.
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-blockstore --lib reader`
+Run: `cargo test -p krabka-blockstore --lib reader`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-blockstore
-cargo clippy -p crabka-blockstore --all-targets
+cargo fmt -p krabka-blockstore
+cargo clippy -p krabka-blockstore --all-targets
 git add crates/blockstore/
 git commit -m "feat(blockstore): read_block round-trip reader"
 ```
@@ -897,10 +905,12 @@ git commit -m "feat(blockstore): read_block round-trip reader"
 ### Task 5: `Index` — series dictionary, postings, matcher resolution, label APIs
 
 **Files:**
+
 - Create: `crates/blockstore/src/index.rs`
 - Modify: `crates/blockstore/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `Labels`, `SeriesFingerprint`, `LabelMatcher`, `MatchOp`, `BlockMeta`, `Result`.
 - Produces:
   - `struct Index` (`Default`, `Serialize`, `Deserialize`)
@@ -1045,7 +1055,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-blockstore --lib index`
+Run: `cargo test -p krabka-blockstore --lib index`
 Expected: FAIL — `cannot find type Index`.
 
 - [ ] **Step 3: Implement `index.rs`**
@@ -1270,14 +1280,14 @@ Add `mod index;` and `pub use index::Index;`.
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-blockstore --lib index`
+Run: `cargo test -p krabka-blockstore --lib index`
 Expected: PASS (6 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-blockstore
-cargo clippy -p crabka-blockstore --all-targets
+cargo fmt -p krabka-blockstore
+cargo clippy -p krabka-blockstore --all-targets
 git add crates/blockstore/
 git commit -m "feat(blockstore): Index — matcher resolution + block pruning + label APIs"
 ```
@@ -1287,9 +1297,11 @@ git commit -m "feat(blockstore): Index — matcher resolution + block pruning + 
 ### Task 6: Index snapshot — serialize/deserialize via object_store
 
 **Files:**
+
 - Modify: `crates/blockstore/src/index.rs` (add `save`/`load`)
 
 **Interfaces:**
+
 - Produces (on `Index`):
   - `pub async fn save(&self, store: &Arc<dyn object_store::ObjectStore>, object_key: &str) -> Result<()>`
   - `pub async fn load(store: &Arc<dyn object_store::ObjectStore>, object_key: &str) -> Result<Index>`
@@ -1320,7 +1332,7 @@ Append to the `tests` module in `index.rs`:
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-blockstore --lib index::tests::snapshot_round_trips`
+Run: `cargo test -p krabka-blockstore --lib index::tests::snapshot_round_trips`
 Expected: FAIL — `no function or associated item named save`.
 
 - [ ] **Step 3: Implement `save`/`load`**
@@ -1358,14 +1370,14 @@ Add to the `impl Index` block:
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-blockstore --lib index`
+Run: `cargo test -p krabka-blockstore --lib index`
 Expected: PASS (7 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-blockstore
-cargo clippy -p crabka-blockstore --all-targets
+cargo fmt -p krabka-blockstore
+cargo clippy -p krabka-blockstore --all-targets
 git add crates/blockstore/
 git commit -m "feat(blockstore): Index object-storage snapshot save/load"
 ```
@@ -1375,10 +1387,12 @@ git commit -m "feat(blockstore): Index object-storage snapshot save/load"
 ### Task 7: `BlockStore` facade — resolve → prune → DataFusion `SessionContext`
 
 **Files:**
+
 - Create: `crates/blockstore/src/store.rs`
 - Modify: `crates/blockstore/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `Index`, `BlockWriter`, `LabelMatcher`, `Result`, `BlockStoreError`.
 - Produces:
   - `struct BlockStore { /* store, base url, index */ }`
@@ -1490,7 +1504,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-blockstore --lib store`
+Run: `cargo test -p krabka-blockstore --lib store`
 Expected: FAIL — `cannot find type BlockStore`.
 
 - [ ] **Step 3: Implement `store.rs`**
@@ -1592,6 +1606,7 @@ impl BlockStore {
 ```
 
 > **Churn-point checklist (verify against the pinned datafusion rev if compile fails):**
+>
 > - `SessionContext::register_object_store(&self, &Url, Arc<dyn ObjectStore>)` — present in DF 54/main.
 > - `SessionContext::read_parquet(impl IntoIterator<Item = String>, ParquetReadOptions) -> Result<DataFrame>` — accepts multiple explicit file paths.
 > - `DataFrame::into_view(self) -> Arc<dyn TableProvider>`.
@@ -1604,18 +1619,18 @@ Add `mod store;` and `pub use store::BlockStore;`.
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-blockstore --lib store`
+Run: `cargo test -p krabka-blockstore --lib store`
 Expected: PASS (2 tests).
 
 - [ ] **Step 6: Run the whole suite + clippy**
 
-Run: `cargo test -p crabka-blockstore && cargo clippy -p crabka-blockstore --all-targets`
+Run: `cargo test -p krabka-blockstore && cargo clippy -p krabka-blockstore --all-targets`
 Expected: all tests PASS; no clippy warnings.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-cargo fmt -p crabka-blockstore
+cargo fmt -p krabka-blockstore
 git add crates/blockstore/
 git commit -m "feat(blockstore): BlockStore facade — index-pruned DataFusion scan context"
 ```
@@ -1625,9 +1640,11 @@ git commit -m "feat(blockstore): BlockStore facade — index-pruned DataFusion s
 ### Task 8: Property test — block round-trip preserves all rows (whole-crate integration)
 
 **Files:**
+
 - Create: `crates/blockstore/tests/roundtrip_proptest.rs`
 
 **Interfaces:**
+
 - Consumes the public API: `BlockStore`, `BlockWriter`, `Labels`, `LabelMatcher`, `MatchOp`, `COL_FINGERPRINT`, `COL_TIMESTAMP`.
 
 - [ ] **Step 1: Write the property test**
@@ -1645,7 +1662,7 @@ use std::sync::Arc;
 use arrow::array::{Int64Array, StringArray, UInt64Array};
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
-use crabka_blockstore::{BlockStore, COL_FINGERPRINT, COL_TIMESTAMP, LabelMatcher, Labels, MatchOp};
+use krabka_blockstore::{BlockStore, COL_FINGERPRINT, COL_TIMESTAMP, LabelMatcher, Labels, MatchOp};
 use object_store::ObjectStore;
 use object_store::memory::InMemory;
 use proptest::prelude::*;
@@ -1760,12 +1777,12 @@ proptest! {
 
 - [ ] **Step 2: Run to verify it passes**
 
-Run: `cargo test -p crabka-blockstore --test roundtrip_proptest`
+Run: `cargo test -p krabka-blockstore --test roundtrip_proptest`
 Expected: PASS (64 cases).
 
 - [ ] **Step 3: Final whole-crate gate**
 
-Run: `cargo test -p crabka-blockstore && cargo clippy -p crabka-blockstore --all-targets && cargo fmt -p crabka-blockstore --check`
+Run: `cargo test -p krabka-blockstore && cargo clippy -p krabka-blockstore --all-targets && cargo fmt -p krabka-blockstore --check`
 Expected: all PASS, no warnings, formatting clean.
 
 - [ ] **Step 4: Commit**
@@ -1780,13 +1797,14 @@ git commit -m "test(blockstore): property test — equality matcher returns only
 ## Self-review
 
 **Spec coverage (against the §3.3 / §4 / §7 substrate responsibilities):**
+
 - Columnar Parquet block format with mandatory `series_fingerprint` + `timestamp` columns → Tasks 2, 3.
 - Object-storage block IO (write + read) → Tasks 3, 4.
 - Two-level index (label/series postings + block index) + matcher resolution + block pruning → Task 5.
 - Index persistence to object storage → Task 6.
 - DataFusion query facade with index pruning + delegated Parquet pushdown ("`LogBlockTableProvider`" realized as a DataFusion Parquet view over pruned blocks) → Task 7.
 - Label/series APIs (`labels`/`label values`) the Loki `/labels` endpoints need → Task 5.
-- *Deferred (correctly, to later phases):* WAL-tail (hot) table, LogQL, ingest endpoints, compactor, Loki HTTP API, multi-tenancy enforcement via Crabka quotas/ACLs, bloom filters. These are Phases 2–4.
+- _Deferred (correctly, to later phases):_ WAL-tail (hot) table, LogQL, ingest endpoints, compactor, Loki HTTP API, multi-tenancy enforcement via Crabka quotas/ACLs, bloom filters. These are Phases 2–4.
 
 **Placeholder scan:** no "TBD"/"add error handling"/"similar to Task N". Every step has runnable code or an exact command. The single hand-wave (DataFusion scan wiring in Task 7) is explicitly bounded with a verify-against-rev checklist and a behavior-pinning test, not left vague.
 

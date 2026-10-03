@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Let any WAL-group member serve a byte-exact diskless read: drive `ReplicaState.hw` from the quorum-committed watermark on *every* member, allow a non-leader member to answer a diskless fetch, and add a hot-tail in-memory cache as a latency fast-path.
+**Goal:** Let any WAL-group member serve a byte-exact diskless read: drive `ReplicaState.hw` from the quorum-committed watermark on _every_ member, allow a non-leader member to answer a diskless fetch, and add a hot-tail in-memory cache as a latency fast-path.
 
 **Architecture:** 6a replicates each batch (fsync) to every WAL-group member's local WAL-replica `Log`, so every member holds the committed tail. 6b (read-side only) sources `ReplicaState.hw` from 6a's `on_watermark_advance` on every member (today HW installs only on `leader == self`, `replicator_supervisor.rs:353-364`), relaxes the leader-only consumer-serve check for diskless, and adds a hot-tail cache in `do_read`. The write/ack path and offset assignment are untouched (leaderless writes are 6c).
 
@@ -16,7 +16,7 @@
 
 ## Invariants
 
-1. **HW from the *committed* watermark only.** Never source HW from a local optimistic offset — a member must never over-report HW (would serve un-committed data). Under-reporting (lagging observer) is safe.
+1. **HW from the _committed_ watermark only.** Never source HW from a local optimistic offset — a member must never over-report HW (would serve un-committed data). Under-reporting (lagging observer) is safe.
 2. **Correctness floor = local WAL-replica read.** The hot-tail cache is advisory; a miss/stale entry falls through to the authoritative `do_read`.
 3. **Cache/network bytes take the `Raw` drain**, never sendfile.
 4. **Write/ack path untouched** — 6b is read-side only (leaderless writes = 6c).
@@ -40,6 +40,7 @@
 ## Task 1: Drive `ReplicaState.hw` from the quorum watermark on every member
 
 **Files:**
+
 - Modify: `crates/broker/src/replicator_supervisor.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -69,6 +70,7 @@ git commit -m "feat(broker): source ReplicaState.hw from the quorum watermark on
 ## Task 2: Let a non-leader WAL-group member serve a diskless fetch
 
 **Files:**
+
 - Modify: `crates/broker/src/handlers/fetch.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -98,6 +100,7 @@ git commit -m "feat(broker): allow any WAL-group member to serve a diskless fetc
 ## Task 3: Hot-tail latency cache
 
 **Files:**
+
 - Create: `crates/broker/src/diskless/hot_tail.rs`; Modify: `crates/broker/src/handlers/fetch.rs`
 
 - [ ] **Step 1: Write the failing tests**
@@ -130,7 +133,7 @@ git commit -m "feat(broker): hot-tail in-memory cache as a diskless fetch latenc
 
 - [ ] **Step 1:** `cargo +nightly fmt` then `--check` — no diff.
 - [ ] **Step 2:** `cargo clippy --workspace --all-targets -- -D warnings` — no warnings.
-- [ ] **Step 3:** `cargo nextest run -p crabka-broker` (or `cargo test`) — PASS, including the non-leader-serve + cache tests.
+- [ ] **Step 3:** `cargo nextest run -p krabka-broker` (or `cargo test`) — PASS, including the non-leader-serve + cache tests.
 - [ ] **Step 4:** Commit any formatting.
 
 ---

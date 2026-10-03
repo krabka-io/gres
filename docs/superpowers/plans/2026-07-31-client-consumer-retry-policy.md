@@ -15,7 +15,7 @@ policy through `Consumer::start`, `StartConfig`, and `CoordinatorState`; pass
 its coordinator subset to the existing retry helpers. The standalone demo
 parses the same UOM values and supplies the policy only to its Consume role.
 
-**Tech Stack:** Rust, `bon`, Clap, `crabka-units`, `refined_type`, Tokio,
+**Tech Stack:** Rust, `bon`, Clap, `krabka-units`, `refined_type`, Tokio,
 Docker Compose, Cargo.
 
 ## Global Constraints
@@ -43,16 +43,18 @@ Docker Compose, Cargo.
 ### Task 1: Add the Validated Policy and Startup Timing
 
 **Files:**
+
 - Modify: `crates/client-consumer/src/consumer.rs`
 - Modify: `crates/client-consumer/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   `ConsumerRetryPolicy::new(startup_attempt_timeout: Time,
-  startup_deadline: Time, startup_initial_backoff: Time,
-  startup_max_backoff: Time, coordinator_retry_timeout: Time,
-  coordinator_initial_backoff: Time, coordinator_max_backoff: Time)
-  -> Result<Self, String>`
+startup_deadline: Time, startup_initial_backoff: Time,
+startup_max_backoff: Time, coordinator_retry_timeout: Time,
+coordinator_initial_backoff: Time, coordinator_max_backoff: Time)
+-> Result<Self, String>`
 - Produces: named `Time` getters for all seven fields and `Default`
 - Produces:
   `Consumer::builder().retry_policy(ConsumerRetryPolicy::new(...).unwrap())`
@@ -82,9 +84,9 @@ backoff come from the builder value.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-consumer consumer_retry_policy --lib --locked
+  cargo test -p krabka-client-consumer consumer_retry_policy --lib --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-consumer configured_startup_retry_policy --lib --locked
+  cargo test -p krabka-client-consumer configured_startup_retry_policy --lib --locked
 ```
 
 Expected: `ConsumerRetryPolicy` and the builder input do not exist.
@@ -116,9 +118,9 @@ constants.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-consumer --all-targets --locked
+  cargo test -p krabka-client-consumer --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-client-consumer --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-client-consumer --all-targets --locked -- -D warnings
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo +nightly fmt --all
 git diff --check
@@ -131,15 +133,17 @@ git commit -m "feat(consumer): expose retry policy"
 ### Task 2: Propagate Coordinator Retry Timing
 
 **Files:**
+
 - Modify: `crates/client-consumer/src/consumer.rs`
 - Modify: `crates/client-consumer/src/coordinator.rs`
 - Modify: `crates/client-consumer/src/commit.rs`
 
 **Interfaces:**
+
 - Consumes: `ConsumerRetryPolicy` and its three coordinator getters
 - Produces:
   `CoordinatorRetryPolicy { timeout: Duration, initial_backoff: Duration,
-  max_backoff: Duration }`
+max_backoff: Duration }`
 - Produces coordinator helpers that receive `CoordinatorRetryPolicy` instead
   of reading constants
 
@@ -165,7 +169,7 @@ than the old `30s`, `100ms`, and `1s` constants.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-consumer configured_coordinator_retry_policy --lib --locked
+  cargo test -p krabka-client-consumer configured_coordinator_retry_policy --lib --locked
 ```
 
 Expected: `CoordinatorRetryPolicy` or the new helper parameters are absent.
@@ -194,9 +198,9 @@ literals must be test inputs or unrelated poll/request behavior.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-consumer --all-targets --locked
+  cargo test -p krabka-client-consumer --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-client-consumer --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-client-consumer --all-targets --locked -- -D warnings
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo +nightly fmt --all
 git diff --check
@@ -210,11 +214,13 @@ git commit -m "fix(consumer): propagate coordinator retry policy"
 ### Task 3: Expose the Demo Consume-Role Surface
 
 **Files:**
+
 - Modify: `crates/observability-demo-app/src/main.rs`
 - Modify: `crates/observability-demo-app/tests/observability_demo_config.rs`
 - Modify: `demo/observability/docker-compose.yml`
 
 **Interfaces:**
+
 - Consumes: `ConsumerRetryPolicy::new`
 - Produces the seven CLI/environment pairs specified in the approved design
 - Produces:
@@ -256,7 +262,7 @@ but with `Time`:
 ```rust
 #[arg(
     long = "consumer-startup-attempt-timeout",
-    env = "CRABKA_DEMO_CONSUMER_STARTUP_ATTEMPT_TIMEOUT",
+    env = "KRABKA_DEMO_CONSUMER_STARTUP_ATTEMPT_TIMEOUT",
     default_value = "90s"
 )]
 consumer_startup_attempt_timeout: Time,
@@ -272,13 +278,13 @@ roles before telemetry initialization, and pass the policy to
 Under `demo-consume` only, add:
 
 ```yaml
-CRABKA_DEMO_CONSUMER_STARTUP_ATTEMPT_TIMEOUT: "${CRABKA_DEMO_CONSUMER_STARTUP_ATTEMPT_TIMEOUT:-90s}"
-CRABKA_DEMO_CONSUMER_STARTUP_DEADLINE: "${CRABKA_DEMO_CONSUMER_STARTUP_DEADLINE:-5m}"
-CRABKA_DEMO_CONSUMER_STARTUP_INITIAL_BACKOFF: "${CRABKA_DEMO_CONSUMER_STARTUP_INITIAL_BACKOFF:-500ms}"
-CRABKA_DEMO_CONSUMER_STARTUP_MAX_BACKOFF: "${CRABKA_DEMO_CONSUMER_STARTUP_MAX_BACKOFF:-5s}"
-CRABKA_DEMO_CONSUMER_COORDINATOR_RETRY_TIMEOUT: "${CRABKA_DEMO_CONSUMER_COORDINATOR_RETRY_TIMEOUT:-30s}"
-CRABKA_DEMO_CONSUMER_COORDINATOR_INITIAL_BACKOFF: "${CRABKA_DEMO_CONSUMER_COORDINATOR_INITIAL_BACKOFF:-100ms}"
-CRABKA_DEMO_CONSUMER_COORDINATOR_MAX_BACKOFF: "${CRABKA_DEMO_CONSUMER_COORDINATOR_MAX_BACKOFF:-1s}"
+KRABKA_DEMO_CONSUMER_STARTUP_ATTEMPT_TIMEOUT: "${KRABKA_DEMO_CONSUMER_STARTUP_ATTEMPT_TIMEOUT:-90s}"
+KRABKA_DEMO_CONSUMER_STARTUP_DEADLINE: "${KRABKA_DEMO_CONSUMER_STARTUP_DEADLINE:-5m}"
+KRABKA_DEMO_CONSUMER_STARTUP_INITIAL_BACKOFF: "${KRABKA_DEMO_CONSUMER_STARTUP_INITIAL_BACKOFF:-500ms}"
+KRABKA_DEMO_CONSUMER_STARTUP_MAX_BACKOFF: "${KRABKA_DEMO_CONSUMER_STARTUP_MAX_BACKOFF:-5s}"
+KRABKA_DEMO_CONSUMER_COORDINATOR_RETRY_TIMEOUT: "${KRABKA_DEMO_CONSUMER_COORDINATOR_RETRY_TIMEOUT:-30s}"
+KRABKA_DEMO_CONSUMER_COORDINATOR_INITIAL_BACKOFF: "${KRABKA_DEMO_CONSUMER_COORDINATOR_INITIAL_BACKOFF:-100ms}"
+KRABKA_DEMO_CONSUMER_COORDINATOR_MAX_BACKOFF: "${KRABKA_DEMO_CONSUMER_COORDINATOR_MAX_BACKOFF:-1s}"
 ```
 
 - [x] **Step 5: Verify and commit**
@@ -302,17 +308,19 @@ git commit -m "feat(demo): expose consumer retry policy"
 ### Task 4: Audit and Verify the Slice
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 - Modify: `docs/superpowers/plans/2026-07-31-client-consumer-retry-policy.md`
 
 **Interfaces:**
+
 - Proves every old production constant is replaced by the typed policy and
   records that the broader repository audit remains active
 
 - [x] **Step 1: Run the focused ownership audit**
 
 ```bash
-rg -n 'CONSUMER_START_ATTEMPT_TIMEOUT|CONSUMER_START_DEADLINE|COORDINATOR_RETRY_TIMEOUT|MAX_BACKOFF|ConsumerRetryPolicy|consumer-(startup|coordinator)-|CRABKA_DEMO_CONSUMER_(STARTUP|COORDINATOR)_' \
+rg -n 'CONSUMER_START_ATTEMPT_TIMEOUT|CONSUMER_START_DEADLINE|COORDINATOR_RETRY_TIMEOUT|MAX_BACKOFF|ConsumerRetryPolicy|consumer-(startup|coordinator)-|KRABKA_DEMO_CONSUMER_(STARTUP|COORDINATOR)_' \
   crates/client-consumer crates/observability-demo-app demo/observability
 ```
 
@@ -323,7 +331,7 @@ or deployment input. There must be no unresolved old constant.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-consumer -p observability-demo-app --all-targets --locked
+  cargo test -p krabka-client-consumer -p observability-demo-app --all-targets --locked
 ```
 
 - [x] **Step 3: Run workspace gates**
@@ -342,7 +350,7 @@ git diff --check
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-consumer -p observability-demo-app --all-targets --locked
+  cargo test -p krabka-client-consumer -p observability-demo-app --all-targets --locked
 ```
 
 - [x] **Step 5: Update the audit and commit**

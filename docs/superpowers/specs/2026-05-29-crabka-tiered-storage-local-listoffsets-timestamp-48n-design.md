@@ -148,7 +148,7 @@ Independent. First parallel batch alongside 48m (disjoint files:
 
 - `cargo fmt --all --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test -p crabka-log -p crabka-broker`
+- `cargo test -p krabka-log -p krabka-broker`
 - `cargo test --workspace` (no regressions)
 - `kafka-get-offsets` / `ListOffsets` by-timestamp behavior matches
   Apache Kafka; no CRD drift.

@@ -12,7 +12,7 @@ seams: a record produced with `acks=all` is **never lost across clean leader cha
 read is consistent** (read-your-writes, no dirty reads, no read regression); and under **unclean** leader
 election, any loss is **exactly characterized** (only via unclean election, only on un-replicated offsets).
 
-The 14 existing models each verify a core *in isolation*, assuming its neighbors behave. This model targets
+The 14 existing models each verify a core _in isolation_, assuming its neighbors behave. This model targets
 the **seams** between them — `HWM ↔ truncation ↔ failover ↔ visibility` — which is where cross-component
 interaction bugs hide and where the program currently has zero coverage. Honest discovery odds:
 **moderate-to-good** (unlike the saturated per-slice space, this composition is genuinely unexplored).
@@ -23,28 +23,29 @@ interaction bugs hide and where the program currently has zero coverage. Honest 
 clean & unclean failover (with leader-epoch truncation) → consumer fetch (visibility).
 
 **Out (deliberate):**
+
 - **Metadata / raft consensus** — separately verified (`kraft_model`). The model takes leader/ISR decisions as
   driven actions, as if handed down by the controller.
-- **Idempotent-producer dedup (`check_pure`)** — a v1 trim. Dedup is about *not duplicating*, largely
-  orthogonal to the *not losing / read-consistency* property at the failover seam, and the weakest of the five
+- **Idempotent-producer dedup (`check_pure`)** — a v1 trim. Dedup is about _not duplicating_, largely
+  orthogonal to the _not losing / read-consistency_ property at the failover seam, and the weakest of the five
   seams while adding `(producer_id, epoch, seq)` state. The v1 spine is `HWM ↔ truncation ↔ failover ↔
-  visibility`; dedup is a possible v2 extension.
+visibility`; dedup is a possible v2 extension.
 - Multiple partitions / topics; `acks=0/1` (the property is the `acks=all` guarantee); transactions/EOS.
 
 ## Construction: wrap-real cores at the seams
 
 A single new `stateright` model `crates/broker/src/data_path_model.rs` (`#[cfg(test)]` module in
-`crabka-broker`, which can reach the broker-crate `pub(crate)` cores). It **drives the real pure cores** where
+`krabka-broker`, which can reach the broker-crate `pub(crate)` cores). It **drives the real pure cores** where
 they are the seam under test, and abstracts producer + log as small vectors:
 
-| Seam | Real core driven | Location |
-|------|------------------|----------|
-| commit (when a record is durable) | `ReplicaState::recompute_hw_for_leader_append`, `install_isr`, `update_follower_leo` | `crates/broker/src/replica_state.rs` |
-| truncation (divergence on epoch change) | `epoch_and_offset_for_entries`, `end_offset_for_epoch` | `crates/log/src/leader_epoch_checkpoint.rs` |
-| failover (winner selection) | `failover_one` (clean), `select_best_replica` (unclean) | `crates/broker/src/leader_election.rs`, `unclean_recovery.rs` |
-| visibility (what a consumer sees) | `compute_visibility_window` | `crates/broker/src/handlers/fetch.rs` |
+| Seam                                    | Real core driven                                                                     | Location                                                      |
+| --------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| commit (when a record is durable)       | `ReplicaState::recompute_hw_for_leader_append`, `install_isr`, `update_follower_leo` | `crates/broker/src/replica_state.rs`                          |
+| truncation (divergence on epoch change) | `epoch_and_offset_for_entries`, `end_offset_for_epoch`                               | `crates/log/src/leader_epoch_checkpoint.rs`                   |
+| failover (winner selection)             | `failover_one` (clean), `select_best_replica` (unclean)                              | `crates/broker/src/leader_election.rs`, `unclean_recovery.rs` |
+| visibility (what a consumer sees)       | `compute_visibility_window`                                                          | `crates/broker/src/handlers/fetch.rs`                         |
 
-**Production change (small, expected):** the log truncation core is `pub(crate)` in `crabka-log`; widen
+**Production change (small, expected):** the log truncation core is `pub(crate)` in `krabka-log`; widen
 `epoch_and_offset_for_entries` + `end_offset_for_epoch` to `pub` so the broker-crate model can drive them
 (greenfield — no compat concern). No logic change. The broker-side cores are already `pub(crate)` and reachable
 from a same-crate test module.
@@ -57,6 +58,7 @@ implementation work and bug-risk lives.
 ## State & actions
 
 **State (hashable projection):**
+
 - per-broker `log[b]: Vec<epoch>` — offset is the index; the record "value" ≡ offset (minimizes state; sufficient
   for no-loss / divergence / truncation; corruption shows as an epoch mismatch at an offset).
 - per-broker `leo[b]` (= `log[b].len()`).
@@ -65,6 +67,7 @@ implementation work and bug-risk lives.
   obligation); per-consumer `observed[c]` (read-prefix offset) and the epoch it saw at each read offset.
 
 **Actions:**
+
 - `Produce` — leader appends `(leader_epoch)` to `log[leader]`.
 - `Replicate(follower)` — follower fetches from leader: the **real truncation core** resolves any divergence
   point, the follower truncates and appends the next matching entry; bump `leo[follower]`.
@@ -78,14 +81,15 @@ implementation work and bug-risk lives.
 ## Invariants
 
 Per-transition `next_state` asserts + `Property::always`:
+
 - **No-dirty-read:** a consumer never observes an offset `≥` the leader's HWM.
 - **Read-monotonicity (the crux):** `observed[c]` never regresses, and an offset a consumer already read is
   never later rewritten with a different epoch underneath it.
 - **No-committed-loss (clean):** an offset ever `≤ hwm` stays present with the same epoch in every future
   leader's log.
 - **HWM-monotonic** except across an unclean election.
-- **Loss-is-flagged-and-bounded (unclean):** any committed loss occurs *only* via an unclean election and
-  *only* on offsets not replicated to the elected leader.
+- **Loss-is-flagged-and-bounded (unclean):** any committed loss occurs _only_ via an unclean election and
+  _only_ on offsets not replicated to the elected leader.
 - Sanity (from the cores): `leader ∈ isr` under clean operation; `isr ⊆ live`.
 
 **Non-vacuity witnesses (`sometimes`):** a clean failover occurs; an unclean failover causes a flagged loss; a
@@ -95,13 +99,14 @@ consumer reads then a failover happens; truncation actually removes a suffix; HW
 
 - **`data_clean`** — clean elections only (`isr ∩ live`). Asserts the strong properties: no-committed-loss +
   read-monotonicity MUST hold.
-- **`data_unclean`** — allow unclean elections. Asserts the weaker *characterization*: loss only via unclean +
+- **`data_unclean`** — allow unclean elections. Asserts the weaker _characterization_: loss only via unclean +
   bounded to un-replicated offsets; read-monotonicity may break only across an unclean election.
 
 ## Tractability (the central risk)
 
 This is the largest model in the program; state explosion + OOM is the primary risk
 (`[[feedback_bound_model_checkers]]` — it OOM'd the machine once). Controls:
+
 - 3 brokers, 1 partition, `leader_epoch ≤ 3`, `log-len ≤ 3–4`, 1–2 consumers.
 - Ghost state bounded (committed prefix + observed prefix, not a growing history).
 - Keep monotonic generators (epoch, offsets) out of the fingerprint where they don't gate transitions (the
@@ -129,8 +134,8 @@ fix production RED→GREEN, recording the counterexample; if a faithfulness gap 
 ## Verification discipline
 
 - `stateright` wrap-real; watchdog-guarded runs (mandatory). `cargo +nightly fmt` per-crate; `cargo clippy
-  --all-targets -- -D warnings` clean.
-- Production change limited to widening two `crabka-log` fns to `pub` (no logic change); any further change only
+--all-targets -- -D warnings` clean.
+- Production change limited to widening two `krabka-log` fns to `pub` (no logic change); any further change only
   if a real seam bug is found.
 
 ## Success criteria

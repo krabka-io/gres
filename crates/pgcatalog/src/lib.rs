@@ -3,7 +3,7 @@
 //! The catalog holds tables and their columns, and does CRUD with `PostgreSQL`
 //! error codes. SP3's KV layer stores the data.
 
-#![doc(html_root_url = "https://docs.rs/crabka-pgcatalog/0.4.1")]
+#![doc(html_root_url = "https://docs.rs/krabka-pgcatalog/0.4.2")]
 
 pub mod largeobject;
 pub mod policy;
@@ -18,8 +18,8 @@ use std::{
     sync::atomic::{AtomicU32, Ordering},
 };
 
-use crabka_pgkv::{Kv, KvError, WriteOp, key};
-use crabka_pgtypes::{
+use krabka_pgkv::{Kv, KvError, WriteOp, key};
+use krabka_pgtypes::{
     ColumnType, Datum,
     usertype::{UserType, UserTypeBody},
 };
@@ -4334,7 +4334,7 @@ fn validate_conversion_rewrite(
 
     if final_tuples
         .values()
-        .all(|value| crabka_pgmvcc::version::decode_ts_tuple(value).is_ok())
+        .all(|value| krabka_pgmvcc::version::decode_ts_tuple(value).is_ok())
     {
         return Ok(());
     }
@@ -7526,7 +7526,7 @@ pub fn create_user_type_ops(
     let oid = read_next_type_oid(kv)?;
     let ty = UserType {
         oid,
-        array_oid: crabka_pgtypes::usertype::user_array_oid(oid),
+        array_oid: krabka_pgtypes::usertype::user_array_oid(oid),
         schema: name.schema.clone(),
         name: name.name.clone(),
         body,
@@ -7742,7 +7742,7 @@ pub fn hydrate_user_types_with(
 
     let types: Vec<UserType> = decoded.into_values().collect();
     for ty in &types {
-        crabka_pgtypes::usertype::replace(ty);
+        krabka_pgtypes::usertype::replace(ty);
     }
     Ok(types)
 }
@@ -7760,7 +7760,7 @@ fn hydrated_column_type(types: &BTreeMap<u32, UserType>, oid: u32) -> Option<Col
 /// of them.
 ///
 /// The stride leaves room for each type's derived relation and array oids. Both
-/// values must match `crabka_pgtypes::usertype`.
+/// values must match `krabka_pgtypes::usertype`.
 const FIRST_USER_TYPE_OID: u32 = 300_000;
 const USER_TYPE_OID_STRIDE: u32 = 4;
 
@@ -8730,8 +8730,8 @@ pub fn set_next_table_id_op(next: TableId) -> WriteOp {
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgkv::{FjallKv, MemKv, WriteOp};
-    use crabka_pgtypes::{
+    use krabka_pgkv::{FjallKv, MemKv, WriteOp};
+    use krabka_pgtypes::{
         ColumnType,
         usertype::{DomainBody, RangeBody, UserTypeRef, intern},
     };
@@ -8848,7 +8848,7 @@ mod tests {
         let kv = MemKv::default();
         let legacy = UserType {
             oid: 300_000,
-            array_oid: crabka_pgtypes::usertype::user_array_oid(300_000),
+            array_oid: krabka_pgtypes::usertype::user_array_oid(300_000),
             schema: "a".into(),
             name: "b".into(),
             body: UserTypeBody::Composite(Vec::new()),
@@ -8892,11 +8892,11 @@ mod tests {
         assert_ne!(first_type.oid, second_type.oid);
         assert_eq!(
             first_type.array_oid,
-            crabka_pgtypes::usertype::user_array_oid(first_type.oid)
+            krabka_pgtypes::usertype::user_array_oid(first_type.oid)
         );
         assert_eq!(
             second_type.array_oid,
-            crabka_pgtypes::usertype::user_array_oid(second_type.oid)
+            krabka_pgtypes::usertype::user_array_oid(second_type.oid)
         );
     }
 
@@ -8905,15 +8905,15 @@ mod tests {
         let kv = MemKv::default();
         let foreign = UserType {
             oid: 1_100_000,
-            array_oid: crabka_pgtypes::usertype::user_array_oid(1_100_000),
+            array_oid: krabka_pgtypes::usertype::user_array_oid(1_100_000),
             schema: PUBLIC_SCHEMA.into(),
             name: "other_tenant_type".into(),
             body: UserTypeBody::Composite(Vec::new()),
         };
-        crabka_pgtypes::usertype::replace(&foreign);
+        krabka_pgtypes::usertype::replace(&foreign);
         let dependent = UserType {
             oid: 1_100_004,
-            array_oid: crabka_pgtypes::usertype::user_array_oid(1_100_004),
+            array_oid: krabka_pgtypes::usertype::user_array_oid(1_100_004),
             schema: PUBLIC_SCHEMA.into(),
             name: "local_domain_missing_base".into(),
             body: UserTypeBody::Domain(DomainBody {
@@ -8931,10 +8931,10 @@ mod tests {
         let error = hydrate_user_types(&kv).expect_err("foreign registry entry is ignored");
         assert!(error.to_string().contains("1100000"));
         assert_eq!(
-            crabka_pgtypes::usertype::lookup_oid(foreign.oid).as_deref(),
+            krabka_pgtypes::usertype::lookup_oid(foreign.oid).as_deref(),
             Some(&foreign)
         );
-        assert!(crabka_pgtypes::usertype::lookup_oid(dependent.oid).is_none());
+        assert!(krabka_pgtypes::usertype::lookup_oid(dependent.oid).is_none());
     }
 
     #[test]
@@ -8942,7 +8942,7 @@ mod tests {
         let kv = MemKv::default();
         let base = UserType {
             oid: 1_200_004,
-            array_oid: crabka_pgtypes::usertype::user_array_oid(1_200_004),
+            array_oid: krabka_pgtypes::usertype::user_array_oid(1_200_004),
             schema: PUBLIC_SCHEMA.into(),
             name: "later_oid_base".into(),
             body: UserTypeBody::Range(RangeBody {
@@ -8954,7 +8954,7 @@ mod tests {
         };
         let dependent = UserType {
             oid: 1_200_000,
-            array_oid: crabka_pgtypes::usertype::user_array_oid(1_200_000),
+            array_oid: krabka_pgtypes::usertype::user_array_oid(1_200_000),
             schema: PUBLIC_SCHEMA.into(),
             name: "earlier_oid_domain".into(),
             body: UserTypeBody::Domain(DomainBody {
@@ -8987,7 +8987,7 @@ mod tests {
         };
         let dependent = UserType {
             oid: 1_250_004,
-            array_oid: crabka_pgtypes::usertype::user_array_oid(1_250_004),
+            array_oid: krabka_pgtypes::usertype::user_array_oid(1_250_004),
             schema: PUBLIC_SCHEMA.into(),
             name: "domain_over_relation_rowtype".into(),
             body: UserTypeBody::Domain(DomainBody {
@@ -9013,12 +9013,12 @@ mod tests {
         let kv = MemKv::default();
         let original = UserType {
             oid: 1_300_000,
-            array_oid: crabka_pgtypes::usertype::user_array_oid(1_300_000),
+            array_oid: krabka_pgtypes::usertype::user_array_oid(1_300_000),
             schema: PUBLIC_SCHEMA.into(),
             name: "registry_before_failed_hydration".into(),
             body: UserTypeBody::Composite(Vec::new()),
         };
-        crabka_pgtypes::usertype::replace(&original);
+        krabka_pgtypes::usertype::replace(&original);
         let catalog_type = UserType {
             oid: original.oid,
             array_oid: original.array_oid,
@@ -9035,10 +9035,10 @@ mod tests {
 
         hydrate_user_types(&kv).expect_err("corrupt record rejects the whole hydration");
         assert_eq!(
-            crabka_pgtypes::usertype::lookup_oid(original.oid).as_deref(),
+            krabka_pgtypes::usertype::lookup_oid(original.oid).as_deref(),
             Some(&original)
         );
-        assert!(crabka_pgtypes::usertype::lookup_oid(1_300_004).is_none());
+        assert!(krabka_pgtypes::usertype::lookup_oid(1_300_004).is_none());
     }
 
     fn store_user_type(kv: &MemKv, ty: &UserType) {
@@ -10364,8 +10364,8 @@ mod tests {
     fn conversion_batch_rejects_xid_tuple_reinserted_after_delete() {
         let kv = MemKv::new();
         let table_id = create_table(&kv, &rel("conversion"), cols()).expect("create table");
-        let tuple_key = crabka_pgmvcc::version::version_key_xid(table_id, 1, 7);
-        let xid_tuple = crabka_pgmvcc::version::encode_tuple(
+        let tuple_key = krabka_pgmvcc::version::version_key_xid(table_id, 1, 7);
+        let xid_tuple = krabka_pgmvcc::version::encode_tuple(
             7,
             0,
             &[Datum::Int4(1), Datum::Text("old".into())],
@@ -11494,7 +11494,7 @@ pub fn serialize_user_cast(cast: &UserCast) -> Vec<u8> {
 }
 
 /// The first oid a user-declared cast takes. Above every built-in `pg_cast`
-/// row, which `crabka_pgexec::builtin_casts` numbers from 10000.
+/// row, which `krabka_pgexec::builtin_casts` numbers from 10000.
 pub const FIRST_USER_CAST_OID: u32 = 200_000;
 
 /// The write batch that records a cast, with its oid drawn from the durable

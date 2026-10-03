@@ -45,6 +45,7 @@
 `recover_active_tail` truncates a torn trailing batch (`segment.rs:266-269`), but `Log::open` never truncates the leader-epoch checkpoint to match (`log.rs:265`) — a torn batch that introduced a new epoch leaves an entry dangling past `log_end_offset`, corrupting epoch→offset lookups. Fix it (an unconditional correctness fix; also latent for classic topics).
 
 **Files:**
+
 - Modify: `crates/log/src/log.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -62,7 +63,7 @@ In `crates/log/src/log.rs` tests: open a log, append a batch that introduces lea
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-log open_truncates_epoch_checkpoint`
+Run: `cargo test -p krabka-log open_truncates_epoch_checkpoint`
 Expected: FAIL — the dangling entry survives.
 
 - [ ] **Step 3: Implement**
@@ -80,7 +81,7 @@ In `crates/log/src/log.rs` `Log::open`, change `let epoch_checkpoint = ...` (`:2
 
 - [ ] **Step 4: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-log open_truncates_epoch_checkpoint` → PASS. Also `cargo test -p crabka-log` (no classic regression).
+Run: `cargo test -p krabka-log open_truncates_epoch_checkpoint` → PASS. Also `cargo test -p krabka-log` (no classic regression).
 
 ```bash
 git add crates/log/src/log.rs
@@ -91,9 +92,10 @@ git commit -m "fix(log): truncate leader-epoch checkpoint to recovered LEO on op
 
 ## Task 2: Rebuild idempotent-producer sequence dedup from the recovered WAL
 
-`ProducerState` is always built empty (`ProducerState::new()`, `producer_state.rs:103`); on crash-restart the fsync'd log has the *records* but not the dedup map, so an idempotent retry would duplicate. Rebuild it broker-side by scanning the recovered tail (keeps the log/broker crate boundary clean).
+`ProducerState` is always built empty (`ProducerState::new()`, `producer_state.rs:103`); on crash-restart the fsync'd log has the _records_ but not the dedup map, so an idempotent retry would duplicate. Rebuild it broker-side by scanning the recovered tail (keeps the log/broker crate boundary clean).
 
 **Files:**
+
 - Modify: the broker's diskless partition-open path (where the `Log` is opened + `ProducerState` is created — `partition.rs:679` and the partition-registry open site); add a rebuild helper.
 
 - [ ] **Step 1: Write the failing test**
@@ -114,7 +116,7 @@ Run → FAIL. Add a rebuild routine that scans the recovered tail and populates 
 /// Scans verbatim batches (offset order) and replays each idempotent batch's
 /// (producer_id, epoch, base_sequence, last_offset_delta) through the same
 /// `ProducerState::commit` the produce path uses, so `last_sequence` matches.
-fn rebuild_producer_state(log: &crabka_log::Log, partition: PartitionIndex, ps: &ProducerState) {
+fn rebuild_producer_state(log: &krabka_log::Log, partition: PartitionIndex, ps: &ProducerState) {
     let start = log.log_start_offset();
     let end = log.log_end_offset();
     let raw = match log.read_raw(start, end, usize::MAX) {
@@ -123,12 +125,12 @@ fn rebuild_producer_state(log: &crabka_log::Log, partition: PartitionIndex, ps: 
     };
     let mut cur: &[u8] = &raw;
     while !cur.is_empty() {
-        let Ok(batch) = crabka_protocol::records::RecordBatch::decode(&mut cur) else { break };
+        let Ok(batch) = krabka_protocol::records::RecordBatch::decode(&mut cur) else { break };
         if batch.producer_id < 0 { continue; } // -1 sentinel: non-idempotent
         // Mirror the produce-path commit (grep handlers/produce.rs for `.commit(`):
         ps.commit(
             partition,
-            crabka_log::ProducerId(batch.producer_id),
+            krabka_log::ProducerId(batch.producer_id),
             batch.producer_epoch,
             batch.base_sequence,
             batch.last_offset_delta,
@@ -143,7 +145,7 @@ Call it from the diskless partition-open path after `Log::open`, before the part
 
 - [ ] **Step 3: Run to verify + commit**
 
-Run → PASS. `cargo test -p crabka-broker producer_dedup_rebuilt`.
+Run → PASS. `cargo test -p krabka-broker producer_dedup_rebuilt`.
 
 ```bash
 git add -A
@@ -157,6 +159,7 @@ git commit -m "feat(broker): rebuild idempotent-producer dedup from recovered WA
 After restart, `log_end_offset() < KRaft next-offset` (the `[B,B+N)` window). Slice-2's `base == log_end_offset()` guard would fail `OffsetMismatch` on every subsequent produce. Reconcile to the KRaft authority.
 
 **Files:**
+
 - Modify: Slice-2's `append_verbatim_at` (guard); the diskless-open reconciliation.
 
 - [ ] **Step 1: Write the failing test**
@@ -192,6 +195,7 @@ git commit -m "feat(broker): re-anchor diskless append cursor to KRaft frontier 
 Slice 4 gated trim on the in-memory `flushed_frontier`. Slice 5 requires the index entry to be **durably committed** to `__diskless_wal_index` before trim removes the local copy — else `[below-floor ∧ cache-miss]` loses acked data on restart.
 
 **Files:**
+
 - Modify: `crates/broker/src/diskless/flusher.rs` (Slice 4 trim gate)
 
 - [ ] **Step 1: Write the failing test**
@@ -218,6 +222,7 @@ git commit -m "feat(broker): gate diskless trim on committed-index durability (S
 A new, tighter diskless-only model proving no `wal_acked` loss across crash-restart.
 
 **Files:**
+
 - Create: `crates/broker/src/diskless_crash_model.rs`; Modify: `crates/broker/src/lib.rs`
 
 - [ ] **Step 1: Build the model (small bounds)**
@@ -230,7 +235,7 @@ Mirror the structure of `data_path_model.rs` but drop ISR/replication actions an
 
 - [ ] **Step 3: Run the checker**
 
-Run: `cargo test -p crabka-broker diskless_crash_model -- --nocapture`
+Run: `cargo test -p krabka-broker diskless_crash_model -- --nocapture`
 Expected: PASS — `wal_acked_durable` + `producer_dedup_no_regress` hold across every interleaving; all `sometimes` witnesses reached. A counterexample means a real crash window loses acked data — reconcile with the recovery logic (Tasks 1–4); do NOT weaken the property. Watch state-space bounds; keep `MAX_LEN` small.
 
 - [ ] **Step 4: Commit**
@@ -246,7 +251,7 @@ git commit -m "test(broker): diskless partial-durability crash model (no acked l
 
 - [ ] **Step 1:** `cargo +nightly fmt` then `--check` — no diff.
 - [ ] **Step 2:** `cargo clippy --workspace --all-targets -- -D warnings` — no warnings.
-- [ ] **Step 3:** `cargo nextest run -p crabka-log -p crabka-broker` (or `cargo test`) — PASS, including the crash model.
+- [ ] **Step 3:** `cargo nextest run -p krabka-log -p krabka-broker` (or `cargo test`) — PASS, including the crash model.
 - [ ] **Step 4:** Commit any formatting.
 
 ---

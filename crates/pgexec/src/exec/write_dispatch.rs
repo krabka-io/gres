@@ -13,7 +13,7 @@ pub(super) async fn execute_write_body(
     stmt: &Statement,
     writes: &mut StatementWrites,
     reach: Reach,
-) -> Result<(WriteOutcome, Vec<crabka_pgkv::WriteOp>), ExecError> {
+) -> Result<(WriteOutcome, Vec<krabka_pgkv::WriteOp>), ExecError> {
     // What this statement asks its target to carry. Taken from the text the
     // session wrote and not from `resolved`, because folding a subquery to the
     // value it stands for can only remove a reference, never add one.
@@ -28,7 +28,7 @@ pub(super) async fn execute_write_body(
     let xid = write_ctx.xid;
     let lock_owner = write_ctx.lock_owner;
     let ctx = write_ctx.eval_ctx;
-    let mut ops: Vec<crabka_pgkv::WriteOp> = Vec::new();
+    let mut ops: Vec<krabka_pgkv::WriteOp> = Vec::new();
     if let Statement::Insert {
         table,
         on_conflict: Some(_),
@@ -37,13 +37,13 @@ pub(super) async fn execute_write_body(
     {
         let name = resolve_relation(catalog_kv, resolution, table, SchemaDisposition::Reference)?;
         let relation = crate::trigger::relation_trigger_table(catalog_kv, &name)?;
-        if crabka_pgcatalog::rule::rules_for_table(catalog_kv, relation.id)?
+        if krabka_pgcatalog::rule::rules_for_table(catalog_kv, relation.id)?
             .into_iter()
             .any(|rule| {
                 matches!(
                     rule.event,
-                    crabka_pgcatalog::rule::RuleEvent::Insert
-                        | crabka_pgcatalog::rule::RuleEvent::Update
+                    krabka_pgcatalog::rule::RuleEvent::Insert
+                        | krabka_pgcatalog::rule::RuleEvent::Update
                 )
             })
         {
@@ -58,7 +58,7 @@ pub(super) async fn execute_write_body(
         Statement::Query(q) => {
             let read = write_ctx.read_ctx(ctes);
             let rel = if let Some(_locking) = &q.locking {
-                let crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Select(
+                let krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Select(
                     select,
                 )) = &q.body
                 else {
@@ -150,7 +150,7 @@ pub(super) async fn execute_write_body(
         } => {
             let table =
                 &resolve_relation(catalog_kv, resolution, table, SchemaDisposition::Reference)?;
-            let t = crabka_pgcatalog::get_table(catalog_kv, table)?;
+            let t = krabka_pgcatalog::get_table(catalog_kv, table)?;
             let (target_idx, rows) =
                 insert_source_rows(write_ctx, ctes, &t, columns, indirections, source)?;
             let rows = &rows;
@@ -160,11 +160,11 @@ pub(super) async fn execute_write_body(
             // A DO ALSO action gets its own evaluation of `NEW`, after the
             // base statement has produced all its rows.  Materialize only
             // those base rows before entering the per-row write path.
-            let prebuilt_rows = crabka_pgcatalog::rule::rules_for_table(catalog_kv, t.id)?
+            let prebuilt_rows = krabka_pgcatalog::rule::rules_for_table(catalog_kv, t.id)?
                 .into_iter()
                 .any(|rule| {
                     rule_is_enabled(rule.enabled)
-                        && rule.event == crabka_pgcatalog::rule::RuleEvent::Insert
+                        && rule.event == krabka_pgcatalog::rule::RuleEvent::Insert
                         && !rule.instead
                         && rule.action.to_ascii_lowercase().contains("new.")
                 })
@@ -196,7 +196,7 @@ pub(super) async fn execute_write_body(
             let supplied = WriteContext::modified_columns(&t, &target_idx);
             let insert_check = write_ctx.row_check(
                 &t,
-                crabka_pgcatalog::policy::PolicyCommand::Insert,
+                krabka_pgcatalog::policy::PolicyCommand::Insert,
                 &supplied,
             )?;
             // Arbiter resolution is statement-level: a bad conflict target is an
@@ -296,7 +296,7 @@ pub(super) async fn execute_write_body(
                             cur_cmin,
                             cur_row,
                         } => {
-                            let crabka_pgparser::ast::OnConflictAction::DoUpdate {
+                            let krabka_pgparser::ast::OnConflictAction::DoUpdate {
                                 assignments,
                                 filter,
                             } = &on_conflict.action
@@ -394,12 +394,12 @@ pub(super) async fn execute_write_body(
                         new_identity: rowid,
                     });
                 }
-                ops.push(crabka_pgkv::WriteOp::Put {
-                    key: crabka_pgmvcc::version::version_key_xid(t.id, rowid, xid),
+                ops.push(krabka_pgkv::WriteOp::Put {
+                    key: krabka_pgmvcc::version::version_key_xid(t.id, rowid, xid),
                     value: encode_table_tuple(
                         &t,
                         xid,
-                        crabka_pgmvcc::xid::INVALID_XID,
+                        krabka_pgmvcc::xid::INVALID_XID,
                         write_ctx.command_id,
                         0,
                         &full,
@@ -458,11 +458,11 @@ pub(super) async fn execute_write_body(
                     returning.as_ref(),
                 );
             }
-            let t = crabka_pgcatalog::get_table(catalog_kv, table)?;
+            let t = krabka_pgcatalog::get_table(catalog_kv, table)?;
             if matches_nothing_rule(
                 catalog_kv,
                 &t,
-                crabka_pgcatalog::rule::RuleEvent::Update,
+                krabka_pgcatalog::rule::RuleEvent::Update,
                 None,
                 None,
                 ctx,
@@ -505,7 +505,7 @@ pub(super) async fn execute_write_body(
                 .collect();
             let update_check = write_ctx.row_check(
                 &t,
-                crabka_pgcatalog::policy::PolicyCommand::Update,
+                krabka_pgcatalog::policy::PolicyCommand::Update,
                 &updated_columns,
             )?;
             // The virtual generated columns this statement can reach in the row
@@ -599,7 +599,7 @@ pub(super) async fn execute_write_body(
                     write_ctx,
                     ctes,
                     &t,
-                    crabka_pgcatalog::rule::RuleEvent::Update,
+                    krabka_pgcatalog::rule::RuleEvent::Update,
                     Some(&cur_row),
                     Some(&next),
                     true,
@@ -666,7 +666,7 @@ pub(super) async fn execute_write_body(
                     write_ctx,
                     ctes,
                     &t,
-                    crabka_pgcatalog::rule::RuleEvent::Update,
+                    krabka_pgcatalog::rule::RuleEvent::Update,
                     Some(&cur_row),
                     Some(&next),
                     false,
@@ -713,12 +713,12 @@ pub(super) async fn execute_write_body(
         } => {
             let table =
                 &resolve_relation(catalog_kv, resolution, table, SchemaDisposition::Reference)?;
-            let t = crabka_pgcatalog::get_table(catalog_kv, table)?;
+            let t = krabka_pgcatalog::get_table(catalog_kv, table)?;
             if !writes.truncate_set.contains(&t.id)
                 && matches_nothing_rule(
                     catalog_kv,
                     &t,
-                    crabka_pgcatalog::rule::RuleEvent::Delete,
+                    krabka_pgcatalog::rule::RuleEvent::Delete,
                     None,
                     None,
                     ctx,
@@ -865,7 +865,7 @@ pub(super) async fn execute_write_body(
                         write_ctx,
                         ctes,
                         &t,
-                        crabka_pgcatalog::rule::RuleEvent::Delete,
+                        krabka_pgcatalog::rule::RuleEvent::Delete,
                         Some(&cur_row),
                         None,
                         true,
@@ -960,7 +960,7 @@ pub(super) async fn execute_write_body(
                         write_ctx,
                         ctes,
                         &t,
-                        crabka_pgcatalog::rule::RuleEvent::Delete,
+                        krabka_pgcatalog::rule::RuleEvent::Delete,
                         Some(&cur_row),
                         None,
                         false,
@@ -1014,7 +1014,7 @@ pub(super) async fn execute_write_body(
                 if let Some(error) = truncate_wrong_kind(catalog_kv, &name) {
                     return Err(error);
                 }
-                let t = crabka_pgcatalog::get_table(catalog_kv, &name)?;
+                let t = krabka_pgcatalog::get_table(catalog_kv, &name)?;
                 if table_uses_global_visibility(&t) {
                     return Err(ExecError::Unsupported(
                         "TRUNCATE on sharded tables is not supported".into(),
@@ -1053,7 +1053,7 @@ pub(super) async fn execute_write_body(
             // than clearing storage, so it is transactional like PostgreSQL's.
             for table in &set.tables {
                 let delete = Statement::Delete {
-                    table: crabka_pgparser::ast::RelationRef {
+                    table: krabka_pgparser::ast::RelationRef {
                         schema: Some(table.name.schema.clone()),
                         name: table.name.name.clone(),
                     },

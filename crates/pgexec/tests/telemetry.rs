@@ -16,9 +16,9 @@
 use std::sync::Arc;
 
 use assert2::{assert, check};
-use crabka_pgexec::SqlEngine;
-use crabka_pgwire::engine::{CollectingResultSink, Engine as _, Session as _};
-use crabka_trace_context::TraceCarrier;
+use krabka_pgexec::SqlEngine;
+use krabka_pgwire::engine::{CollectingResultSink, Engine as _, Session as _};
+use krabka_trace_context::TraceCarrier;
 use opentelemetry::{
     Value,
     trace::{Status, TraceId, TracerProvider as _},
@@ -39,12 +39,12 @@ const OTHER_TRACE_ID: &str = "4bf92f3577b34da6a3ce929d0e0e4736";
 /// a fresh in-memory engine, and return the spans that closed.
 fn traced<F, Fut>(f: F) -> Vec<SpanData>
 where
-    F: FnOnce(<SqlEngine as crabka_pgwire::engine::Engine>::Session) -> Fut,
+    F: FnOnce(<SqlEngine as krabka_pgwire::engine::Engine>::Session) -> Fut,
     Fut: Future<Output = ()>,
 {
     // `TraceCarrier::apply_to` extracts through the global text-map
     // propagator; without one the default is a no-op and every ingress test
-    // would silently observe no parent. `crabka_telemetry::init` installs the
+    // would silently observe no parent. `krabka_telemetry::init` installs the
     // same one in a real process.
     opentelemetry::global::set_text_map_propagator(
         opentelemetry_sdk::propagation::TraceContextPropagator::new(),
@@ -147,7 +147,7 @@ fn a_select_statement_span_carries_its_summary_and_target() {
     check!(attribute(statement, "pg.table_id").is_some());
     check!(statement.status == Status::Unset);
 
-    // Tier 3 is off unless `CRABKA_OTLP_SQL_TEXT` says otherwise.
+    // Tier 3 is off unless `KRABKA_OTLP_SQL_TEXT` says otherwise.
     check!(attribute(statement, "db.query.text").is_none());
 
     // The read path's spans hang off the statement.

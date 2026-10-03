@@ -4,7 +4,7 @@
 //! pull Docker by default. Run with:
 //!
 //! ```text
-//! cargo test -p crabka-client-core --test integration -- --ignored --nocapture
+//! cargo test -p krabka-client-core --test integration -- --ignored --nocapture
 //! ```
 //!
 //! Each test starts a fresh `mirror.gcr.io/confluentinc/cp-kafka:6.1.1`
@@ -47,8 +47,8 @@
 use std::time::Duration;
 
 use assert2::{assert, check};
-use crabka_client_core::{Client, ClientError};
-use crabka_protocol::owned::api_versions_request::ApiVersionsRequest;
+use krabka_client_core::{Client, ClientError};
+use krabka_protocol::owned::api_versions_request::ApiVersionsRequest;
 use testcontainers::runners::AsyncRunner;
 // `testcontainers_modules::kafka` re-exports `confluent::*`, so the bare
 // `Kafka` here is the Confluent module's container type.
@@ -71,7 +71,7 @@ const BOOTSTRAP_RETRY_DELAY: Duration = Duration::from_secs(1);
 /// times.
 fn init_tracing() {
     let _ = tracing_subscriber::fmt()
-        .with_env_filter("crabka_client_core=debug,info")
+        .with_env_filter("krabka_client_core=debug,info")
         .with_test_writer()
         .try_init();
 }
@@ -105,7 +105,7 @@ async fn bootstrap_client(bootstrap: &str) -> Client {
     for attempt in 1..=BOOTSTRAP_MAX_ATTEMPTS {
         let client = Client::builder()
             .bootstrap(bootstrap)
-            .client_id("crabka-integration")
+            .client_id("krabka-integration")
             .build()
             .await
             .expect("client build failed");
@@ -197,7 +197,7 @@ async fn metadata_against_real_broker() {
 #[tokio::test]
 #[ignore = "requires Docker"]
 async fn create_then_delete_topic() {
-    use crabka_protocol::owned::{
+    use krabka_protocol::owned::{
         create_topics_request::{CreatableTopic, CreateTopicsRequest},
         delete_topics_request::{DeleteTopicState, DeleteTopicsRequest},
     };
@@ -208,7 +208,7 @@ async fn create_then_delete_topic() {
 
     let create = CreateTopicsRequest {
         topics: vec![CreatableTopic {
-            name: "crabka-test-topic".into(),
+            name: "krabka-test-topic".into(),
             num_partitions: 1,
             replication_factor: 1,
             ..Default::default()
@@ -228,10 +228,10 @@ async fn create_then_delete_topic() {
     // negotiated version. Populate both so the test works against any broker.
     let delete = DeleteTopicsRequest {
         topics: vec![DeleteTopicState {
-            name: Some("crabka-test-topic".into()),
+            name: Some("krabka-test-topic".into()),
             ..Default::default()
         }],
-        topic_names: vec!["crabka-test-topic".into()],
+        topic_names: vec!["krabka-test-topic".into()],
         timeout_ms: 5_000,
         ..Default::default()
     };
@@ -249,7 +249,7 @@ async fn create_then_delete_topic() {
 #[tokio::test]
 #[ignore = "requires Docker"]
 async fn list_topics() {
-    use crabka_protocol::owned::metadata_request::MetadataRequest;
+    use krabka_protocol::owned::metadata_request::MetadataRequest;
 
     init_tracing();
     let (kafka, bootstrap) = start_kafka().await;

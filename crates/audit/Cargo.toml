@@ -1,5 +1,5 @@
 [package]
-name = "crabka-audit"
+name = "krabka-audit"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -9,7 +9,7 @@ rust-version.workspace = true
 description = "Audit event model, OCSF serialization, and write pipeline for Crabka (FedRAMP 20x MLA)"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-audit"
+documentation = "https://docs.rs/krabka-audit"
 keywords = ["kafka", "audit", "ocsf", "fedramp", "crabka"]
 categories = ["development-tools::debugging"]
 
@@ -29,18 +29,18 @@ async-trait = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 bytes = { workspace = true }
-crabka-protocol = { version = "0.4.1", path = "../protocol", default-features = false }
-crabka-ids = { version = "0.4.1", path = "../ids" }
-crabka-units = { workspace = true }
+krabka-protocol = { version = "0.4.2", path = "../protocol", default-features = false }
+krabka-ids = { version = "0.4.2", path = "../ids" }
+krabka-units = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync"] }
 assert2 = { workspace = true }
-crabka-log = { version = "0.4", path = "../log" }
+krabka-log = { version = "0.4.2", path = "../log" }
 mutants = { workspace = true }
 tempfile = { workspace = true }
 
 [[bin]]
-name = "crabka-audit"
+name = "krabka-audit"
 path = "src/bin/audit.rs"

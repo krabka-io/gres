@@ -32,9 +32,9 @@
 //! * `regrole` and `regnamespace` accept exactly one name part; two is 42602
 //!   `invalid name syntax`, not a missing object.
 
-use crabka_pgkv::Kv;
-use crabka_pgparser::ast::{Expr, FuncCall};
-use crabka_pgtypes::{ColumnType, Datum, RegclassValue};
+use krabka_pgkv::Kv;
+use krabka_pgparser::ast::{Expr, FuncCall};
+use krabka_pgtypes::{ColumnType, Datum, RegclassValue};
 
 use crate::{clock::EvalCtx, error::ExecError, func::require_arity, scope::Scope};
 
@@ -131,7 +131,7 @@ pub(crate) fn soft(error: &ExecError) -> bool {
 /// The catalog-aware half of a `… :: reg*` cast, for every member of the
 /// family. `None` for an operand the catalog adds nothing to (NULL, an
 /// out-of-range `int8`, a type with no conversion), which then takes the pure
-/// cast in [`crabka_pgtypes::cast`] and its error reporting.
+/// cast in [`krabka_pgtypes::cast`] and its error reporting.
 ///
 /// # Errors
 ///
@@ -926,7 +926,7 @@ impl<'a> TypeSpelling<'a> {
     /// The typmod the resolved type packs this modifier list into, or `-1` when
     /// the type carries none.
     fn typmod(&self, oid: i32) -> Result<i32, ExecError> {
-        use crabka_pgtypes::oids;
+        use krabka_pgtypes::oids;
 
         let family = TypmodFamily::of(oid);
         let Some(written) = self.modifier else {
@@ -971,7 +971,7 @@ impl<'a> TypeSpelling<'a> {
             return invalid_type_name(self.written);
         };
         ExecError::Remote(
-            crabka_pgwire::error::PgError::error(
+            krabka_pgwire::error::PgError::error(
                 "42601",
                 format!("syntax error at or near \"{token}\""),
             )
@@ -1076,7 +1076,7 @@ enum TypmodFamily {
 
 impl TypmodFamily {
     fn of(oid: i32) -> Self {
-        use crabka_pgtypes::oids;
+        use krabka_pgtypes::oids;
 
         let Ok(oid) = u32::try_from(oid) else {
             return Self::None;
@@ -1093,7 +1093,7 @@ impl TypmodFamily {
 
     /// Run the `typmodin` this family names over a parsed modifier list.
     fn pack(self, oid: i32, parts: &[i32], name: &str) -> Result<i32, ExecError> {
-        use crabka_pgtypes::oids;
+        use krabka_pgtypes::oids;
 
         /// `MaxAttrSize`, the ceiling `anychar_typmodin` puts on a declared
         /// character length.
@@ -1219,9 +1219,9 @@ pub(crate) fn pack_typmod_in(
     parts: &[String],
     type_name: &str,
 ) -> Result<i32, ExecError> {
-    use crabka_pgtypes::oids;
+    use krabka_pgtypes::oids;
 
-    let source = crabka_pgcatalog::routine::routines_named(kv, routine_name)?
+    let source = krabka_pgcatalog::routine::routines_named(kv, routine_name)?
         .into_iter()
         .find(|routine| routine.name == routine_name && routine.language == "internal")
         .map_or_else(|| routine_name.to_owned(), |routine| routine.body);
@@ -1273,10 +1273,10 @@ enum TextSearch {
 }
 
 impl TextSearch {
-    const fn kind(self) -> crabka_pgparser::ast::TextSearchObjectKind {
+    const fn kind(self) -> krabka_pgparser::ast::TextSearchObjectKind {
         match self {
-            Self::Config => crabka_pgparser::ast::TextSearchObjectKind::Configuration,
-            Self::Dictionary => crabka_pgparser::ast::TextSearchObjectKind::Dictionary,
+            Self::Config => krabka_pgparser::ast::TextSearchObjectKind::Configuration,
+            Self::Dictionary => krabka_pgparser::ast::TextSearchObjectKind::Dictionary,
         }
     }
 
@@ -1321,7 +1321,7 @@ fn text_search_name(kv: &dyn Kv, oid: i32, what: TextSearch) -> Result<Option<St
 fn resolve_namespace(kv: &dyn Kv, written: &str) -> Result<i32, ExecError> {
     let name = single_part(written)?;
     namespace_oid(kv, &name)?.ok_or(ExecError::Catalog(
-        crabka_pgcatalog::CatalogError::UndefinedSchema(name),
+        krabka_pgcatalog::CatalogError::UndefinedSchema(name),
     ))
 }
 
@@ -1557,7 +1557,7 @@ fn cast_datum(kind: RegKind, value: &Datum, ctx: &EvalCtx) -> Result<Datum, Exec
     if let Some(resolved) = reg_cast(kind, value, ctx)? {
         return Ok(resolved);
     }
-    Ok(crabka_pgtypes::cast::cast_in(
+    Ok(krabka_pgtypes::cast::cast_in(
         value,
         kind.column_type(),
         ctx.output_style(),

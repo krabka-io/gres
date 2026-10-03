@@ -14,13 +14,13 @@ tenant. The gate fails loudly on any regression and writes machine-readable
 reports under the artifact directory.
 
 Environment:
-  CRABKA_GRES_SHARDED_CONFORMANCE_ARTIFACT_DIR=dir
+  KRABKA_GRES_SHARDED_CONFORMANCE_ARTIFACT_DIR=dir
       Artifact directory (default: target/gres-sharded-conformance-artifacts).
-  CRABKA_GRES_SHARDED_CONFORMANCE_EXTRA_ARGS=args
+  KRABKA_GRES_SHARDED_CONFORMANCE_EXTRA_ARGS=args
       Extra arguments appended after `--` for each cargo test invocation.
-  CRABKA_GRES_SHARDED_CONFORMANCE_MODE=static|live
+  KRABKA_GRES_SHARDED_CONFORMANCE_MODE=static|live
       Run deterministic tests only (default), or also run the live corpus gate.
-  CRABKA_GRES_SHARDED_ORACLE_URL=url
+  KRABKA_GRES_SHARDED_ORACLE_URL=url
       PostgreSQL admin connection used to recreate the live oracle database.
 EOF
 }
@@ -31,11 +31,11 @@ case "${1:-}" in
     *) echo "FAIL: unknown argument $1" >&2; usage >&2; exit 2 ;;
 esac
 
-readonly ARTIFACT_DIR="${CRABKA_GRES_SHARDED_CONFORMANCE_ARTIFACT_DIR:-target/gres-sharded-conformance-artifacts}"
+readonly ARTIFACT_DIR="${KRABKA_GRES_SHARDED_CONFORMANCE_ARTIFACT_DIR:-target/gres-sharded-conformance-artifacts}"
 readonly RESULTS_TSV="${ARTIFACT_DIR}/results.tsv"
-readonly EXTRA_ARGS="${CRABKA_GRES_SHARDED_CONFORMANCE_EXTRA_ARGS:-}"
-readonly MODE="${CRABKA_GRES_SHARDED_CONFORMANCE_MODE:-static}"
-readonly ORACLE_ADMIN_URL="${CRABKA_GRES_SHARDED_ORACLE_URL:-host=127.0.0.1 port=5432 user=postgres dbname=postgres password=postgres}"
+readonly EXTRA_ARGS="${KRABKA_GRES_SHARDED_CONFORMANCE_EXTRA_ARGS:-}"
+readonly MODE="${KRABKA_GRES_SHARDED_CONFORMANCE_MODE:-static}"
+readonly ORACLE_ADMIN_URL="${KRABKA_GRES_SHARDED_ORACLE_URL:-host=127.0.0.1 port=5432 user=postgres dbname=postgres password=postgres}"
 readonly CLUSTER_ID="00000000-0000-0000-0000-000000000001"
 BROKER_PID=""
 GRES_PID=""
@@ -88,12 +88,12 @@ PY
 
 run_live_corpus() {
     command -v psql >/dev/null 2>&1 || { echo "FAIL: psql is required for live mode" >&2; return 1; }
-    if [ "${CRABKA_GRES_SKIP_BUILD:-0}" != "1" ]; then
+    if [ "${KRABKA_GRES_SKIP_BUILD:-0}" != "1" ]; then
         cargo build --locked \
-            -p crabka-cli --bin crabka \
-            -p crabka-broker --bin crabka-broker \
-            -p crabka-gres --bin crabka-gres \
-            -p crabka-gres-conformance --bin crabka-gres-conformance \
+            -p krabka-cli --bin crabka \
+            -p krabka-broker --bin krabka-broker \
+            -p krabka-gres --bin krabka-gres \
+            -p krabka-gres-conformance --bin krabka-gres-conformance \
             >"${ARTIFACT_DIR}/build.log" 2>&1
     fi
     mapfile -t ports < <(choose_ports)
@@ -119,7 +119,7 @@ protocol = "Plaintext"
 type = "simple"
 super_users = ["ANONYMOUS"]
 EOF
-    ./target/debug/crabka-broker --log-dir "${ARTIFACT_DIR}/broker-data" \
+    ./target/debug/krabka-broker --log-dir "${ARTIFACT_DIR}/broker-data" \
         --cluster-id "$CLUSTER_ID" --broker-id 1 --config-file "${ARTIFACT_DIR}/broker.toml" \
         >"${ARTIFACT_DIR}/broker.log" 2>&1 &
     BROKER_PID=$!
@@ -129,7 +129,7 @@ EOF
     ./target/debug/crabka gres create-tenant --bootstrap "127.0.0.1:${BROKER_PORT}" \
         --name sharded-corpus --user corpus --password-file "${ARTIFACT_DIR}/tenant.password" \
         --ranges 0,0:250 >"${ARTIFACT_DIR}/create-tenant.log" 2>&1
-    ./target/debug/crabka-gres --listen "127.0.0.1:${GRES_PORT}" \
+    ./target/debug/krabka-gres --listen "127.0.0.1:${GRES_PORT}" \
         --substrate-bootstrap "127.0.0.1:${BROKER_PORT}" --tenant sharded-corpus \
         --ranges 0,0:250 --auth trust >"${ARTIFACT_DIR}/gres.log" 2>&1 &
     GRES_PID=$!
@@ -154,7 +154,7 @@ EOF
         -c "ALTER DATABASE gres_sharded_oracle SET lc_monetary = 'C'" \
         >>"${ARTIFACT_DIR}/oracle-setup.log" 2>&1
     local oracle_url="${ORACLE_ADMIN_URL/dbname=postgres/dbname=gres_sharded_oracle}"
-    if ! ./target/debug/crabka-gres-conformance \
+    if ! ./target/debug/krabka-gres-conformance \
         --oracle-url "$oracle_url" \
         --subject-url "host=127.0.0.1 port=${GRES_PORT} user=corpus dbname=crab" \
         --subject-sharded-ddl \
@@ -289,7 +289,7 @@ command -v python3 >/dev/null 2>&1 || { echo "FAIL: python3 is required" >&2; ex
 command -v cargo >/dev/null 2>&1 || { echo "FAIL: cargo is required" >&2; exit 1; }
 case "$MODE" in
     static|live) ;;
-    *) echo "FAIL: CRABKA_GRES_SHARDED_CONFORMANCE_MODE must be static or live" >&2; exit 2 ;;
+    *) echo "FAIL: KRABKA_GRES_SHARDED_CONFORMANCE_MODE must be static or live" >&2; exit 2 ;;
 esac
 
 rm -rf "$ARTIFACT_DIR"
@@ -297,14 +297,14 @@ mkdir -p "$ARTIFACT_DIR"
 : >"$RESULTS_TSV"
 
 status=0
-run_gate sharded-visibility crabka-gres-ranges sharded_visibility \
-    cargo test -p crabka-gres-ranges --test sharded_visibility || status=1
-run_gate multirange-global-visibility crabka-gres-ranges multirange \
-    cargo test -p crabka-gres-ranges --test multirange || status=1
-run_gate pgexec-global-decisions crabka-pgexec transactions \
-    cargo test -p crabka-pgexec --test transactions || status=1
-run_gate pgexec-sharded-seams crabka-pgexec lib \
-    cargo test -p crabka-pgexec create_table_sharded_persists_catalog_metadata || status=1
+run_gate sharded-visibility krabka-gres-ranges sharded_visibility \
+    cargo test -p krabka-gres-ranges --test sharded_visibility || status=1
+run_gate multirange-global-visibility krabka-gres-ranges multirange \
+    cargo test -p krabka-gres-ranges --test multirange || status=1
+run_gate pgexec-global-decisions krabka-pgexec transactions \
+    cargo test -p krabka-pgexec --test transactions || status=1
+run_gate pgexec-sharded-seams krabka-pgexec lib \
+    cargo test -p krabka-pgexec create_table_sharded_persists_catalog_metadata || status=1
 
 if [ "$status" -eq 0 ] && [ "$MODE" = "live" ]; then
     log "running primary PostgreSQL corpus through a live two-range SHARDED tenant"

@@ -5,7 +5,7 @@ use super::*;
 /// Was `xid` settled (committed or aborted) before `snapshot` was taken? True
 /// iff `xid` was neither still running at, nor started after, the snapshot.
 /// This mirrors the negation of `Snapshot::is_running`.
-pub(super) fn snapshot_can_see(snapshot: &crabka_pgmvcc::visibility::Snapshot, xid: u64) -> bool {
+pub(super) fn snapshot_can_see(snapshot: &krabka_pgmvcc::visibility::Snapshot, xid: u64) -> bool {
     xid < snapshot.xmax && !snapshot.xip.contains(&xid)
 }
 
@@ -27,7 +27,7 @@ pub(super) fn command_can_see(
         return true;
     };
     (xmin != own || cmin < command_id)
-        && (xmax != own || xmax == crabka_pgmvcc::xid::INVALID_XID || cmax >= command_id)
+        && (xmax != own || xmax == krabka_pgmvcc::xid::INVALID_XID || cmax >= command_id)
 }
 
 /// `satisfies_mvcc`, including PostgreSQL's command-counter exception for a
@@ -37,24 +37,24 @@ pub(super) fn satisfies_mvcc_at_command(
     xmax: u64,
     cmin: u32,
     cmax: u32,
-    snapshot: &crabka_pgmvcc::visibility::Snapshot,
+    snapshot: &krabka_pgmvcc::visibility::Snapshot,
     own: Option<u64>,
     command_id: Option<u32>,
-    status: impl Fn(u64) -> Result<crabka_pgmvcc::clog::XidStatus, crabka_pgkv::KvError>,
-) -> Result<bool, crabka_pgkv::KvError> {
+    status: impl Fn(u64) -> Result<krabka_pgmvcc::clog::XidStatus, krabka_pgkv::KvError>,
+) -> Result<bool, krabka_pgkv::KvError> {
     if !command_can_see(xmin, xmax, cmin, cmax, own, command_id) {
         return Ok(false);
     }
-    if command_id.is_some() && Some(xmax) == own && xmax != crabka_pgmvcc::xid::INVALID_XID {
-        return crabka_pgmvcc::visibility::satisfies_mvcc(
+    if command_id.is_some() && Some(xmax) == own && xmax != krabka_pgmvcc::xid::INVALID_XID {
+        return krabka_pgmvcc::visibility::satisfies_mvcc(
             xmin,
-            crabka_pgmvcc::xid::INVALID_XID,
+            krabka_pgmvcc::xid::INVALID_XID,
             snapshot,
             own,
             status,
         );
     }
-    crabka_pgmvcc::visibility::satisfies_mvcc(xmin, xmax, snapshot, own, status)
+    krabka_pgmvcc::visibility::satisfies_mvcc(xmin, xmax, snapshot, own, status)
 }
 
 /// The global-aware clog resolver handed to `satisfies_mvcc`. Given this range's
@@ -71,17 +71,17 @@ pub(super) fn satisfies_mvcc_at_command(
 /// `gsnap = NO_GLOBAL_SNAPSHOT()`; no `Prepared` tuple ever exists there, so the
 /// `Prepared` arm is unreachable and behavior is byte-for-byte unchanged.
 pub(crate) fn global_status<'a>(
-    local: &'a dyn crabka_pgkv::Kv,
-    global: &'a dyn crabka_pgkv::Kv,
-    gsnap: &'a crabka_pgmvcc::visibility::Snapshot,
-) -> impl Fn(u64) -> Result<crabka_pgmvcc::clog::XidStatus, crabka_pgkv::KvError> + 'a {
-    use crabka_pgmvcc::clog::XidStatus;
-    move |xid| match crabka_pgmvcc::clog::get(local, xid)? {
+    local: &'a dyn krabka_pgkv::Kv,
+    global: &'a dyn krabka_pgkv::Kv,
+    gsnap: &'a krabka_pgmvcc::visibility::Snapshot,
+) -> impl Fn(u64) -> Result<krabka_pgmvcc::clog::XidStatus, krabka_pgkv::KvError> + 'a {
+    use krabka_pgmvcc::clog::XidStatus;
+    move |xid| match krabka_pgmvcc::clog::get(local, xid)? {
         XidStatus::Prepared(g) => {
             if g >= gsnap.xmax || gsnap.xip.binary_search(&g).is_ok() {
                 Ok(XidStatus::InProgress) // global txn in-doubt as of my global snapshot
             } else {
-                Ok(crabka_pgmvcc::clog::get(global, g)?) // settled: range 0's global decision
+                Ok(krabka_pgmvcc::clog::get(global, g)?) // settled: range 0's global decision
             }
         }
         other => Ok(other),
@@ -101,12 +101,12 @@ pub(crate) fn global_status<'a>(
 pub(super) fn find_visible_one(
     kv: &dyn Kv,
     global: &dyn Kv,
-    gsnap: &crabka_pgmvcc::visibility::Snapshot,
-    snap: &crabka_pgmvcc::visibility::Snapshot,
+    gsnap: &krabka_pgmvcc::visibility::Snapshot,
+    snap: &krabka_pgmvcc::visibility::Snapshot,
     own: Option<u64>,
     command_id: Option<u32>,
-    versions: &[(u64, u64, Vec<crabka_pgtypes::Datum>)],
-) -> Result<Option<(u64, Vec<crabka_pgtypes::Datum>)>, ExecError> {
+    versions: &[(u64, u64, Vec<krabka_pgtypes::Datum>)],
+) -> Result<Option<(u64, Vec<krabka_pgtypes::Datum>)>, ExecError> {
     let versions = versions
         .iter()
         .map(|(xmin, xmax, row)| (*xmin, *xmax, 0, 0, row.clone()))
@@ -118,12 +118,12 @@ pub(super) fn find_visible_one(
 pub(super) fn find_visible_one_with_command_ids(
     kv: &dyn Kv,
     global: &dyn Kv,
-    gsnap: &crabka_pgmvcc::visibility::Snapshot,
-    snap: &crabka_pgmvcc::visibility::Snapshot,
+    gsnap: &krabka_pgmvcc::visibility::Snapshot,
+    snap: &krabka_pgmvcc::visibility::Snapshot,
     own: Option<u64>,
     command_id: Option<u32>,
-    versions: &[(u64, u64, u32, u32, Vec<crabka_pgtypes::Datum>)],
-) -> Result<Option<(u64, u32, u32, Vec<crabka_pgtypes::Datum>)>, ExecError> {
+    versions: &[(u64, u64, u32, u32, Vec<krabka_pgtypes::Datum>)],
+) -> Result<Option<(u64, u32, u32, Vec<krabka_pgtypes::Datum>)>, ExecError> {
     let mut visible = None;
     let mut live_count = 0;
     for (xmin, xmax, cmin, cmax, row) in versions {
@@ -165,23 +165,23 @@ struct ChainVersion {
     xmax: u64,
     cmin: u32,
     cmax: u32,
-    row: Vec<crabka_pgtypes::Datum>,
+    row: Vec<krabka_pgtypes::Datum>,
     next_rowid: Option<u64>,
 }
 
 fn scan_chain_versions(
     kv: &dyn Kv,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     rowid: u64,
 ) -> Result<Vec<ChainVersion>, ExecError> {
-    let prefix = crabka_pgkv::key::row_key(table.id, rowid);
+    let prefix = krabka_pgkv::key::row_key(table.id, rowid);
     kv.scan_prefix(&prefix)?
         .iter()
         .map(|(key, value)| {
             let (xmin, xmax, cmin, cmax, row, next_rowid) =
-                crabka_pgmvcc::version::decode_tuple_with_command_ids_and_update_target(value)?;
+                krabka_pgmvcc::version::decode_tuple_with_command_ids_and_update_target(value)?;
             Ok(ChainVersion {
-                key_xid: crabka_pgmvcc::version::xid_of_key(key)?,
+                key_xid: krabka_pgmvcc::version::xid_of_key(key)?,
                 xmin,
                 xmax,
                 cmin,
@@ -202,10 +202,10 @@ fn scan_chain_versions(
 /// READ COMMITTED, re-find the latest live version (a fresh snapshot).
 pub(super) fn eval_plan_qual(
     mutation: &MutationContext<'_>,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     rowid: u64,
     reads: crate::scope::GeneratedReads<'_>,
-) -> Result<Option<(u64, u64, u64, u32, u32, Vec<crabka_pgtypes::Datum>)>, ExecError> {
+) -> Result<Option<(u64, u64, u64, u32, u32, Vec<krabka_pgtypes::Datum>)>, ExecError> {
     let kv = mutation.kv;
     let global = mutation.global;
     let procarray = mutation.procarray;
@@ -232,7 +232,7 @@ pub(super) fn eval_plan_qual(
     // (`g >= xmax || xip.contains(g)`) always false, so it reads `clog::get` for g.
     // The LOCAL `snapshot`/`fresh` handling below is unchanged — it is about local
     // creation ordering and is already correct.
-    let settled_global = crabka_pgmvcc::visibility::Snapshot {
+    let settled_global = krabka_pgmvcc::visibility::Snapshot {
         xmin: 0,
         xmax: u64::MAX,
         xip: Vec::new(),
@@ -243,11 +243,11 @@ pub(super) fn eval_plan_qual(
     // decision so a cross-range supersede is detected exactly when it commits.
     let resolve = global_status(kv, global, &settled_global);
     let changed_since_snapshot = versions.iter().any(|version| {
-        version.xmax != crabka_pgmvcc::xid::INVALID_XID
+        version.xmax != krabka_pgmvcc::xid::INVALID_XID
             && version.xmax != xid
             && matches!(
                 resolve(version.xmax),
-                Ok(crabka_pgmvcc::clog::XidStatus::Committed)
+                Ok(krabka_pgmvcc::clog::XidStatus::Committed)
             )
             && !snapshot_can_see(snapshot, version.xmax)
     });
@@ -276,10 +276,10 @@ pub(super) fn eval_plan_qual(
                 .iter()
                 .filter(|version| {
                     version.next_rowid.is_some()
-                        && version.xmax != crabka_pgmvcc::xid::INVALID_XID
+                        && version.xmax != krabka_pgmvcc::xid::INVALID_XID
                         && matches!(
                             global_status(kv, global, &settled_global)(version.xmax),
-                            Ok(crabka_pgmvcc::clog::XidStatus::Committed)
+                            Ok(krabka_pgmvcc::clog::XidStatus::Committed)
                         )
                 })
                 .max_by_key(|version| version.key_xid)
@@ -324,13 +324,13 @@ pub(super) fn eval_plan_qual(
 fn find_visible_one_keyed(
     kv: &dyn Kv,
     global: &dyn Kv,
-    gsnap: &crabka_pgmvcc::visibility::Snapshot,
-    snap: &crabka_pgmvcc::visibility::Snapshot,
+    gsnap: &krabka_pgmvcc::visibility::Snapshot,
+    snap: &krabka_pgmvcc::visibility::Snapshot,
     own: Option<u64>,
     command_id: Option<u32>,
     versions: &[ChainVersion],
-) -> Result<Option<(u64, u64, u32, u32, Vec<crabka_pgtypes::Datum>)>, ExecError> {
-    let mut visible: Option<(u64, u64, u32, u32, Vec<crabka_pgtypes::Datum>)> = None;
+) -> Result<Option<(u64, u64, u32, u32, Vec<krabka_pgtypes::Datum>)>, ExecError> {
+    let mut visible: Option<(u64, u64, u32, u32, Vec<krabka_pgtypes::Datum>)> = None;
     let mut live_count: usize = 0;
     for version in versions {
         if satisfies_mvcc_at_command(
@@ -370,7 +370,7 @@ fn find_visible_one_keyed(
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgmvcc::{clog::XidStatus, visibility::Snapshot};
+    use krabka_pgmvcc::{clog::XidStatus, visibility::Snapshot};
 
     use super::{command_can_see, satisfies_mvcc_at_command};
 

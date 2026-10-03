@@ -15,7 +15,7 @@ fn partitioned_scan(
     let tree_system = crate::scope::SystemColumns::of(read_ctx.refs, parent);
     let mut tree = crate::rls::RawScan::tree_of(parent, qualifier, tree_system);
     for leaf in crate::partition::leaves_of(read_ctx.catalog_kv, &parent.name)? {
-        let leaf_table = crabka_pgcatalog::get_table(read_ctx.catalog_kv, &leaf)?;
+        let leaf_table = krabka_pgcatalog::get_table(read_ctx.catalog_kv, &leaf)?;
         let ordinals = tree_ordinals(parent, &leaf_table, tree_system, read_ctx.refs)?;
         // Straight to the scan, not back through `build_table_expr`: re-entering
         // there would run each leaf through the row-security gate under the
@@ -53,7 +53,7 @@ fn inherited_scan(
     let tree_system = crate::scope::SystemColumns::of(read_ctx.refs, parent);
     let mut tree = crate::rls::RawScan::tree_of(parent, qualifier, tree_system);
     for relation_name in relations {
-        let table = crabka_pgcatalog::get_table(read_ctx.catalog_kv, &relation_name)?;
+        let table = krabka_pgcatalog::get_table(read_ctx.catalog_kv, &relation_name)?;
         let ordinals = tree_ordinals(parent, &table, tree_system, read_ctx.refs)?;
         // See `partitioned_scan`: the child's rows are governed by the parent's
         // policies and read under the parent's permit, so they must not pass
@@ -133,25 +133,25 @@ pub(super) fn scan_stored_relation(
     // MVCC version store. `build_from` materializes BEFORE WHERE, so this scan
     // runs even for `WHERE false` — there is no skip path.
     if let Some(meta) = &t.foreign {
-        let server = crabka_pgcatalog::get_server(catalog_kv, &meta.server)?;
+        let server = krabka_pgcatalog::get_server(catalog_kv, &meta.server)?;
         let scanner = read_ctx.fctx.scanner.ok_or_else(|| {
             ExecError::Unsupported("foreign tables require the `kafka` feature".into())
         })?;
         crate::exec::foreign_scan::require_handler(catalog_kv, t)?;
         if !crate::catalog_fn::foreign_usage_is_held(
             catalog_kv,
-            crabka_pgcatalog::ForeignPrivilegeTarget::Server,
+            krabka_pgcatalog::ForeignPrivilegeTarget::Server,
             &meta.server,
             read_ctx.fctx.effective_role(),
         )? {
-            return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+            return Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
                 "42501",
                 format!("permission denied for foreign server {}", meta.server),
             )));
         }
         // A per-user mapping is optional; PostgreSQL falls back to PUBLIC when
         // the current role has no mapping on this server.
-        let mapping = crabka_pgcatalog::get_user_mapping_or_public(
+        let mapping = krabka_pgcatalog::get_user_mapping_or_public(
             catalog_kv,
             read_ctx.fctx.current_user,
             &meta.server,
@@ -184,7 +184,7 @@ pub(super) fn scan_stored_relation(
     let decision = crate::rls::decide(
         &read_ctx.rls(),
         t,
-        crabka_pgcatalog::policy::PolicyCommand::Select,
+        krabka_pgcatalog::policy::PolicyCommand::Select,
     )?;
     // Sanitize where the `ScanRequest` is built rather than trusting each caller
     // to have stripped its own plan: an aggregate folded inside the scanner sums

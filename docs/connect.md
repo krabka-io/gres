@@ -76,7 +76,7 @@ PostgreSQL table, operation, and LSN headers.
 
 Delivery is at least once. The worker first obtains Kafka acknowledgement for
 the data, then durably stores the LSN in the compacted
-`__crabka_connect_offsets` topic, and only then advances the PostgreSQL slot. A
+`__krabka_connect_offsets` topic, and only then advances the PostgreSQL slot. A
 crash after the data acknowledgement but before the checkpoint is durable can
 replay records after restart. Consumers must tolerate duplicates; keys and the
 `crabka.pg.lsn` header can support idempotent processing. This contract avoids

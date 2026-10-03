@@ -23,13 +23,13 @@
 use std::sync::{Arc, OnceLock};
 
 use assert2::{assert, check};
-use crabka_broker::{Broker, BrokerConfig, BrokerHandle};
-use crabka_gres_substrate::{
+use krabka_broker::{Broker, BrokerConfig, BrokerHandle};
+use krabka_gres_substrate::{
     ProducerWalWriter, SubstrateCommitter, recover_live,
     recovery::{MAX_WAL_APPLY_LINKS, WalTraceLinks, wal_apply_span},
 };
-use crabka_pgexec::Committer as _;
-use crabka_pgkv::{Kv, MemKv, WriteOp};
+use krabka_pgexec::Committer as _;
+use krabka_pgkv::{Kv, MemKv, WriteOp};
 use opentelemetry::{
     Value,
     trace::{SpanKind, TraceId, TracerProvider as _},

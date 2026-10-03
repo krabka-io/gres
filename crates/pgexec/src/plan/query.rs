@@ -11,8 +11,8 @@
 
 use std::collections::BTreeSet;
 
-use crabka_pgparser::ast::TableExpr;
-use crabka_pgtypes::ColumnType;
+use krabka_pgparser::ast::TableExpr;
+use krabka_pgtypes::ColumnType;
 
 use crate::{
     bind::BoundExpr,
@@ -110,8 +110,8 @@ pub(crate) enum PlanNode {
     NestedLoop {
         outer: Box<Plan>,
         inner: Box<Plan>,
-        kind: crabka_pgparser::ast::JoinKind,
-        constraint: crabka_pgparser::ast::JoinConstraint,
+        kind: krabka_pgparser::ast::JoinKind,
+        constraint: krabka_pgparser::ast::JoinConstraint,
     },
 }
 

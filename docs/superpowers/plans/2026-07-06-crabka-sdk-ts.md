@@ -32,6 +32,7 @@
 ## Task 1: Package scaffold + codegen + the h2c transport smoke
 
 **Files:**
+
 - Create: `sdks/ts/{package.json, tsconfig.json, vitest.config.ts}`; Modify: `buf.gen.yaml`
 - Create: `sdks/ts/test/transport.smoke.test.ts`
 
@@ -52,13 +53,19 @@ git commit -m "feat(sdk-ts): package scaffold, connect-es codegen, h2c transport
 
 ```ts
 test("connect codes map to the taxonomy", () => {
-  expect(fromConnectError(new ConnectError("x", Code.NotFound))).toBeInstanceOf(NotFoundError);
-  expect(fromConnectError(new ConnectError("x", Code.Unavailable))).toBeInstanceOf(TransportError);
+  expect(fromConnectError(new ConnectError("x", Code.NotFound))).toBeInstanceOf(
+    NotFoundError,
+  );
+  expect(
+    fromConnectError(new ConnectError("x", Code.Unavailable)),
+  ).toBeInstanceOf(TransportError);
 });
 test("stub errors carry pinned slugs", () => {
   const c = createClient({ endpoint: "http://localhost:1" });
   return expect(c.queues.acquire("t", {})).rejects.toMatchObject({
-    name: "UnimplementedError", module: "queues", gatedOn: "gateway-sharegroup-rpc",
+    name: "UnimplementedError",
+    module: "queues",
+    gatedOn: "gateway-sharegroup-rpc",
   });
 });
 ```
@@ -89,7 +96,7 @@ git commit -m "feat(sdk-ts): messaging module (publish, CloudEvents, subscribe)"
 ## Task 4: The conformance adapter + suite green
 
 - [ ] **Step 1:** `src/conformance-adapter.ts`: readline-over-stdin JSON loop → SDK calls → protocol responses (`Hello{contract_major: 1, language: "ts"}`; `Subscribe`/`NextMessage` bridged through a buffered queue; every error through the taxonomy→wire mapping). Build to `sdks/ts/bin/conformance-adapter` (a `#!/usr/bin/env node` entry).
-- [ ] **Step 2:** Run the real suite: `cargo run -p crabka-sdk-conformance --bin conformance -- --adapter sdks/ts/bin/conformance-adapter --vectors crates/sdk-conformance/vectors/v1` → **all vectors PASS**. Fix the SDK, never the vectors (ambiguity → mock + Go first).
+- [ ] **Step 2:** Run the real suite: `cargo run -p krabka-sdk-conformance --bin conformance -- --adapter sdks/ts/bin/conformance-adapter --vectors crates/sdk-conformance/vectors/v1` → **all vectors PASS**. Fix the SDK, never the vectors (ambiguity → mock + Go first).
 - [ ] **Step 3:** Commit.
 
 ```bash

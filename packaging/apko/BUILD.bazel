@@ -21,14 +21,14 @@ config_setting(
 
 apko_image(
     name = "base_oci",
-    config = "crabka-gres.yaml",
+    config = "krabka-gres.yaml",
     contents = "@gres_base_lock//:contents",
     tag = "gres-base:amd64-locked",
 )
 
 apko_image(
     name = "base_arm64_oci",
-    config = "crabka-gres.arm64.yaml",
+    config = "krabka-gres.arm64.yaml",
     contents = "@gres_base_arm64_lock//:contents",
     tag = "gres-base:arm64-locked",
 )
@@ -58,7 +58,7 @@ NONROOT = file_metadata(
 image_layer(
     name = "application_layer",
     srcs = {
-        "/usr/bin/crabka-gres": "//crates/gres:crabka-gres",
+        "/usr/bin/krabka-gres": "//crates/gres:krabka-gres",
     },
     default_metadata = NONROOT,
     include_runfiles = False,
@@ -70,7 +70,7 @@ image_manifest(
         ":linux_arm64": ":base_arm64",
         "//conditions:default": ":base",
     }),
-    entrypoint = ["/usr/bin/crabka-gres"],
+    entrypoint = ["/usr/bin/krabka-gres"],
     labels = {
         "org.opencontainers.image.description": "Gres PostgreSQL-compatible SQL engine over Krabka",
         "org.opencontainers.image.licenses": "Apache-2.0",

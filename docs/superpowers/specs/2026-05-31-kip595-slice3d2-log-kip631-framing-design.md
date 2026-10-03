@@ -16,7 +16,7 @@ Crabka's `MetadataImage`/handlers do not model and key differently —
 plus `partition_epoch`/`directories`/ELR), `TopicRecord` (just `{name,
 topic_id}` — no partition count / replication factor), `ConfigRecord`
 (one-per-key with a `resourceType`), `RemoveTopicRecord` (by `topic_id`). So a
-*semantically faithful* KIP-631 log can't exist without re-modeling the image —
+_semantically faithful_ KIP-631 log can't exist without re-modeling the image —
 a large effort that genuinely belongs to **Slice 6** (mixed JVM+Crabka quorum),
 where fidelity can be validated against a real JVM peer.
 
@@ -81,7 +81,7 @@ broker-handler churn.
 
 ### Engine + snapshot wiring (`crates/raft/src/kraft/controller.rs`, `snapshot.rs`)
 
-- `on_submit_change`: replace `crabka_metadata::to_kafka_record` (wincode) with
+- `on_submit_change`: replace `krabka_metadata::to_kafka_record` (wincode) with
   `to_kraft(rec, &image)` → `KraftMetadataRecord::encode_value(version)` → the
   log `RecordBatch`.
 - `advance_and_apply`: decode the record value via
@@ -120,7 +120,7 @@ rule now reads the derived count).
 - **JVM byte check (Docker-gated):** a Crabka-produced metadata log /
   `bootstrap.checkpoint` now decodes in `kafka-dump-log --cluster-metadata-decoder`
   as real KIP-631 records (FeatureLevel, RegisterBroker, RegisterController,
-  Topic, Partition, NoOp) with `isvalid: true`. Field *values* are defaulted
+  Topic, Partition, NoOp) with `isvalid: true`. Field _values_ are defaulted
   (incarnation/epoch/etc.); Slice 6 fills them.
 
 ## Disposition

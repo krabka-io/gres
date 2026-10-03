@@ -1,5 +1,5 @@
 [package]
-name = "crabka-gres-conformance"
+name = "krabka-gres-conformance"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -9,7 +9,7 @@ rust-version.workspace = true
 description = "Differential conformance harness diffing Crabka Gres against a real PostgreSQL oracle over the wire"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-gres-conformance"
+documentation = "https://docs.rs/krabka-gres-conformance"
 readme = "README.md"
 keywords = ["postgres", "conformance", "testing", "crabka", "gres"]
 categories = ["development-tools::testing"]
@@ -18,23 +18,23 @@ categories = ["development-tools::testing"]
 workspace = true
 
 [[bin]]
-name = "crabka-gres-record"
+name = "krabka-gres-record"
 path = "src/bin/record.rs"
 
 [[bin]]
-name = "crabka-gres-parser-commands"
+name = "krabka-gres-parser-commands"
 path = "src/bin/parser_commands.rs"
 
 [[bin]]
-name = "crabka-gres-driver-smoke"
+name = "krabka-gres-driver-smoke"
 path = "src/bin/driver_smoke.rs"
 
 [[bin]]
-name = "crabka-gres-driver-golden-replay"
+name = "krabka-gres-driver-golden-replay"
 path = "src/bin/driver_golden_replay.rs"
 
 [dependencies]
-crabka-units = { workspace = true }
+krabka-units = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-postgres = { workspace = true }
 native-tls = { workspace = true }
@@ -46,12 +46,12 @@ bytes = { workspace = true }
 futures-util = { workspace = true }
 clap = { workspace = true }
 thiserror = { workspace = true }
-crabka-pgparser = { version = "0.4.1", path = "../pgparser" }
+krabka-pgparser = { version = "0.4.2", path = "../pgparser" }
 
 [dev-dependencies]
 assert2 = { workspace = true }
 tempfile = { workspace = true }
-crabka-pgexec = { version = "0.4.1", path = "../pgexec" }
-crabka-pgwire = { version = "0.4.1", path = "../pgwire" }
-crabka-pgcatalog = { version = "0.4.1", path = "../pgcatalog" }
-crabka-pgtypes = { version = "0.4.1", path = "../pgtypes" }
+krabka-pgexec = { version = "0.4.2", path = "../pgexec" }
+krabka-pgwire = { version = "0.4.2", path = "../pgwire" }
+krabka-pgcatalog = { version = "0.4.2", path = "../pgcatalog" }
+krabka-pgtypes = { version = "0.4.2", path = "../pgtypes" }

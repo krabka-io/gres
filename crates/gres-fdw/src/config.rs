@@ -2,8 +2,8 @@
 //! [`ConnProfile`]. The scanner and the source use that profile to connect to
 //! Kafka.
 
-use crabka_client_core::security::{ClientSecurity, SaslCredentials, TlsConnectorConfig};
-use crabka_security::{ListenerProtocol, SaslMechanism};
+use krabka_client_core::security::{ClientSecurity, SaslCredentials, TlsConnectorConfig};
+use krabka_security::{ListenerProtocol, SaslMechanism};
 
 use crate::{decode::Wire, error::KafkaFdwError};
 
@@ -24,7 +24,7 @@ pub struct ConnProfile {
     pub key_format: Wire,
 }
 
-/// Resolves a [`crabka_pgcatalog::ForeignServer`], an optional [`crabka_pgcatalog::UserMapping`],
+/// Resolves a [`krabka_pgcatalog::ForeignServer`], an optional [`krabka_pgcatalog::UserMapping`],
 /// and foreign-table OPTIONS into a [`ConnProfile`].
 ///
 /// # Required options
@@ -51,8 +51,8 @@ pub struct ConnProfile {
 /// an option value is unrecognised, for example an unknown
 /// `security_protocol`.
 pub fn resolve(
-    server: &crabka_pgcatalog::ForeignServer,
-    mapping: Option<&crabka_pgcatalog::UserMapping>,
+    server: &krabka_pgcatalog::ForeignServer,
+    mapping: Option<&krabka_pgcatalog::UserMapping>,
     table_options: &[(String, String)],
     default_bootstrap: Option<&str>,
 ) -> Result<ConnProfile, KafkaFdwError> {
@@ -108,8 +108,8 @@ pub fn resolve(
 ///
 /// `IMPORT FOREIGN SCHEMA` has no table OPTIONS to supply a `topic`, because
 /// it *discovers* topics, so it resolves only the bootstrap, the registry,
-/// and the security from the [`crabka_pgcatalog::ForeignServer`]
-/// and the [`crabka_pgcatalog::UserMapping`].
+/// and the security from the [`krabka_pgcatalog::ForeignServer`]
+/// and the [`krabka_pgcatalog::UserMapping`].
 #[derive(Debug)]
 pub struct ServerProfile {
     /// Bootstrap broker addresses, e.g. `["h1:9092", "h2:9092"]`.
@@ -120,8 +120,8 @@ pub struct ServerProfile {
     pub security: Option<ClientSecurity>,
 }
 
-/// Resolves a [`crabka_pgcatalog::ForeignServer`], and an optional
-/// [`crabka_pgcatalog::UserMapping`], into the connection-level
+/// Resolves a [`krabka_pgcatalog::ForeignServer`], and an optional
+/// [`krabka_pgcatalog::UserMapping`], into the connection-level
 /// [`ServerProfile`] **without** a `topic`. The `IMPORT FOREIGN SCHEMA` path
 /// uses it.
 ///
@@ -130,8 +130,8 @@ pub struct ServerProfile {
 /// `security_protocol` is unrecognised, or SASL credentials are required but
 /// absent.
 pub fn resolve_server(
-    server: &crabka_pgcatalog::ForeignServer,
-    mapping: Option<&crabka_pgcatalog::UserMapping>,
+    server: &krabka_pgcatalog::ForeignServer,
+    mapping: Option<&krabka_pgcatalog::UserMapping>,
     default_bootstrap: Option<&str>,
 ) -> Result<ServerProfile, KafkaFdwError> {
     let server_opt = |key: &str| -> Option<&str> {
@@ -200,7 +200,7 @@ fn parse_listener_protocol(s: &str) -> Result<ListenerProtocol, KafkaFdwError> {
 ///
 /// `SaslCredentials` has **no** `ScramSha256` or `ScramSha512` variant. It
 /// uses a single `Scram { mechanism, username, password }` variant, where
-/// `mechanism` is [`crabka_security::SaslMechanism`]. Both `SCRAM-SHA-256`
+/// `mechanism` is [`krabka_security::SaslMechanism`]. Both `SCRAM-SHA-256`
 /// and `SCRAM-SHA-512` map to this variant with the matching
 /// `SaslMechanism::ScramSha256` or `SaslMechanism::ScramSha512`
 /// discriminant.
@@ -298,12 +298,12 @@ fn build_security(
 mod tests {
     use super::*;
 
-    fn make_server(opts: &[(&str, &str)]) -> crabka_pgcatalog::ForeignServer {
-        crabka_pgcatalog::ForeignServer {
+    fn make_server(opts: &[(&str, &str)]) -> krabka_pgcatalog::ForeignServer {
+        krabka_pgcatalog::ForeignServer {
             oid: 1,
             name: "s".into(),
             owner: "postgres".into(),
-            wrapper: "crabka_gres_fdw".into(),
+            wrapper: "krabka_gres_fdw".into(),
             server_type: None,
             version: None,
             options: opts
@@ -313,8 +313,8 @@ mod tests {
         }
     }
 
-    fn make_mapping(opts: &[(&str, &str)]) -> crabka_pgcatalog::UserMapping {
-        crabka_pgcatalog::UserMapping {
+    fn make_mapping(opts: &[(&str, &str)]) -> krabka_pgcatalog::UserMapping {
+        krabka_pgcatalog::UserMapping {
             oid: 2,
             user: "public".into(),
             server: "s".into(),
@@ -335,11 +335,11 @@ mod tests {
     /// Verbatim test from the task brief.
     #[test]
     fn resolve_builds_scram_profile() {
-        let server = crabka_pgcatalog::ForeignServer {
+        let server = krabka_pgcatalog::ForeignServer {
             oid: 1,
             name: "s".into(),
             owner: "postgres".into(),
-            wrapper: "crabka_gres_fdw".into(),
+            wrapper: "krabka_gres_fdw".into(),
             server_type: None,
             version: None,
             options: vec![
@@ -348,7 +348,7 @@ mod tests {
                 ("security_protocol".into(), "SASL_SSL".into()),
             ],
         };
-        let mapping = crabka_pgcatalog::UserMapping {
+        let mapping = krabka_pgcatalog::UserMapping {
             oid: 2,
             user: "public".into(),
             server: "s".into(),

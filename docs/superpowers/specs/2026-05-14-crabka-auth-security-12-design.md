@@ -37,14 +37,14 @@ tooling and client configs work unchanged:
 
 ### New and modified crates
 
-| Crate | Change |
-|-------|--------|
-| `crabka-security` (new) | Pure-logic SCRAM + PLAIN verifiers, credential hashing, listener+TLS config types. No I/O. Shared by broker and CLI. |
-| `crabka-cli` (new) | `crabka format --add-scram` bootstrap tool. |
-| `crabka-metadata` | New `V1ScramCredential` + `V1DeleteScramCredential` records; image entry; `scram_credential()` accessor. |
-| `crabka-broker` | Listener registry; per-listener accept loops; TLS termination; SASL handshake handlers; per-connection auth state machine; `AlterUserScramCredentials` handler; inter-broker client wrapper. |
+| Crate                   | Change                                                                                                                                                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `krabka-security` (new) | Pure-logic SCRAM + PLAIN verifiers, credential hashing, listener+TLS config types. No I/O. Shared by broker and CLI.                                                                         |
+| `krabka-cli` (new)      | `crabka format --add-scram` bootstrap tool.                                                                                                                                                  |
+| `krabka-metadata`       | New `V1ScramCredential` + `V1DeleteScramCredential` records; image entry; `scram_credential()` accessor.                                                                                     |
+| `krabka-broker`         | Listener registry; per-listener accept loops; TLS termination; SASL handshake handlers; per-connection auth state machine; `AlterUserScramCredentials` handler; inter-broker client wrapper. |
 
-`crabka-security` exists as its own crate so the format CLI can produce
+`krabka-security` exists as its own crate so the format CLI can produce
 a `ScramCredential` using the exact code the broker validates against,
 without dragging the broker crate into the CLI.
 
@@ -103,7 +103,7 @@ A new `crate::network::client::InterBrokerClient` resolves the target
 broker's endpoint matching `BrokerConfig.inter_broker_listener_name`
 from the metadata image, runs TLS if the listener protocol requires
 it, then runs the client-side SASL handshake using
-`crabka-security::ScramClientExchange` or the PLAIN client.
+`krabka-security::ScramClientExchange` or the PLAIN client.
 
 The replicator, raft transport, and controller-heartbeat clients all
 dial through `InterBrokerClient`. Existing per-RPC logic is unchanged
@@ -121,7 +121,7 @@ that don't read the array.
 
 ## Components
 
-### `crabka-security`
+### `krabka-security`
 
 ```rust
 pub enum ListenerProtocol { Plaintext, Ssl, SaslPlaintext, SaslSsl }
@@ -183,7 +183,7 @@ the single error code `SASL_AUTHENTICATION_FAILED (58)` on the
 response, with the detail logged at `debug`. This prevents
 username-enumeration via response timing/content.
 
-### `crabka-metadata`
+### `krabka-metadata`
 
 ```rust
 pub enum MetadataRecord {
@@ -210,7 +210,7 @@ pub struct DeleteScramCredentialRecord {
 ScramCredential>`. Last-write-wins. `scram_credential(user,
 mechanism) -> Option<&ScramCredential>` is the accessor.
 
-### `crabka-broker`
+### `krabka-broker`
 
 New modules:
 
@@ -229,7 +229,7 @@ is empty, the existing `listen_addr` + `advertised_listener` fields
 synthesize a single `PLAINTEXT` listener named `PLAINTEXT`. All
 current tests stay green without rewrite.
 
-### `crabka-cli`
+### `krabka-cli`
 
 A new minimal crate with one binary, `crabka`, and one subcommand:
 
@@ -239,7 +239,7 @@ crabka format --log-dir <DIR> --cluster-id <UUID> \
 ```
 
 Refuses to overwrite an already-formatted log directory. Computes the
-PBKDF2 hash via `crabka-security`, writes a `V1ScramCredential` record
+PBKDF2 hash via `krabka-security`, writes a `V1ScramCredential` record
 into a fresh raft log at the same offset the broker would use for its
 initial cluster-id record.
 
@@ -293,7 +293,7 @@ initial cluster-id record.
 ### `AlterUserScramCredentials` (api_key 51)
 
 1. Request: `Upsertions: [{ name, mechanism, iterations, salt,
-   salted_password }]`, `Deletions: [{ name, mechanism }]`. The
+salted_password }]`, `Deletions: [{ name, mechanism }]`. The
    client (`kafka-configs --alter --entity-type users`) computes the
    PBKDF2 hash and salt locally; the broker stores them as given.
 2. Authorization: `principal.name == BrokerConfig.super_user_name`,
@@ -378,7 +378,7 @@ initial cluster-id record.
 
 ### Unit tests
 
-`crabka-security`:
+`krabka-security`:
 
 - PBKDF2 vectors from RFC 7677 / RFC 5802.
 - `ScramServerExchange` round-trips with `ScramClientExchange`
@@ -391,13 +391,13 @@ initial cluster-id record.
 - TLS config builder: valid cert+key loads; mismatched key errors;
   bad PEM errors.
 
-`crabka-metadata`:
+`krabka-metadata`:
 
 - `V1ScramCredential` round-trip via `serde_wincode`.
 - `V1DeleteScramCredential` apply removes from image.
 - `scram_credential()` accessor returns last-write-wins.
 
-`crabka-broker`:
+`krabka-broker`:
 
 - `auth.rs` state machine: pre-auth allowlist (ApiVersions /
   SaslHandshake / SaslAuthenticate pass, anything else → 34);
@@ -427,12 +427,12 @@ initial cluster-id record.
 - `jvm_sasl_plain_produce_consume` — broker with SASL_PLAINTEXT
   listener and super-user creds. `kafka-console-producer` with
   `security.protocol=SASL_PLAINTEXT,sasl.mechanism=PLAIN,
-  sasl.jaas.config=...` produces 10 records;
+sasl.jaas.config=...` produces 10 records;
   `kafka-console-consumer` reads them back.
 - `jvm_sasl_scram_sha512_produce_consume` — same but
   `sasl.mechanism=SCRAM-SHA-512`. User provisioned via
   `kafka-configs --alter --entity-type users --entity-name alice
-  --add-config 'SCRAM-SHA-512=[password=foo]'` (JVM translates this
+--add-config 'SCRAM-SHA-512=[password=foo]'` (JVM translates this
   to `AlterUserScramCredentials`).
 - `jvm_tls_handshake_succeeds` — broker with SSL listener
   (self-signed cert), JVM client with
@@ -469,11 +469,11 @@ initial cluster-id record.
 
 ## Wire-protocol additions
 
-| api_key | Name | Versions targeted |
-|---------|------|-------------------|
-| 17 | SaslHandshake | v1 |
-| 36 | SaslAuthenticate | v2 (flexible) |
-| 51 | AlterUserScramCredentials | v0 (flexible) |
+| api_key | Name                      | Versions targeted |
+| ------- | ------------------------- | ----------------- |
+| 17      | SaslHandshake             | v1                |
+| 36      | SaslAuthenticate          | v2 (flexible)     |
+| 51      | AlterUserScramCredentials | v0 (flexible)     |
 
 `Metadata` response: populate the per-listener `endpoints` array on
 each broker (v9+), which the codec already supports.

@@ -45,6 +45,7 @@
 ## Task 1: `TimelineMeta` + the ancestry graph
 
 **Files:**
+
 - Create: `crates/page-store/src/timeline.rs`
 
 - [ ] **Step 1: Write the failing tests**
@@ -81,6 +82,7 @@ git commit -m "feat(page-store): write-once timeline metadata + ancestry graph"
 ## Task 2: Ancestry-aware reconstruction + the ingest boundary
 
 **Files:**
+
 - Modify: `crates/page-store/src/layer_map.rs`
 
 - [ ] **Step 1: Write the failing tests** (synthetic layers, two timelines)
@@ -118,6 +120,7 @@ git commit -m "feat(page-store): ancestry-aware get_reconstruct_data with bounda
 ## Task 3: GC pinning (and un-pinning by image coverage)
 
 **Files:**
+
 - Modify: `crates/page-store/src/materialize.rs`
 
 - [ ] **Step 1: Write the failing tests**
@@ -160,6 +163,7 @@ git commit -m "feat(page-store): descendant-aware GC pinning with image-coverage
 ## Task 4 (∥ 2–3): The service surface
 
 **Files:**
+
 - Modify: `crates/pageserver/{proto/…/pageserver.proto, src/service.rs, src/basebackup.rs}`
 
 - [ ] **Step 1: Write the failing tests** — `CreateBranch` beyond the ingested head → error; below `gc_horizon` → error; happy path returns a servable timeline id; `DeleteTimeline` with a descendant → `HasDescendants`; leaf deletion removes layers then meta (listing empty afterward); `GetPage` with an unknown timeline → NotFound.
@@ -176,13 +180,14 @@ git commit -m "feat(pageserver): branch RPCs + timeline-scoped page service"
 ## Task 5: Forked fixtures + the divergence gate
 
 **Files:**
+
 - Modify: `tools/gen-pg-wal-fixtures.sh`; Create: `crates/pageserver/tests/branch_gate.rs`
 
-- [ ] **Step 1 (∥ Task 1): Extend the generator** — at `L`: `pg_basebackup` → **promote** the standby (PG bumps its timeline-id; same LSN space, real divergence); run *different* traffic on parent and promoted child; capture **both** WAL streams (`fixtures/fork/{parent,child}/`) and **both** standby snapshots + a fork manifest (`fork_lsn`, per-side capture LSNs). Regenerate once locally; commit.
+- [ ] **Step 1 (∥ Task 1): Extend the generator** — at `L`: `pg_basebackup` → **promote** the standby (PG bumps its timeline-id; same LSN space, real divergence); run _different_ traffic on parent and promoted child; capture **both** WAL streams (`fixtures/fork/{parent,child}/`) and **both** standby snapshots + a fork manifest (`fork_lsn`, per-side capture LSNs). Regenerate once locally; commit.
 - [ ] **Step 2: Write the gate test** — ingest the parent stream into timeline P; `CreateBranch(P, fork_lsn)` → C; ingest the child stream into C. Assert: (a) for every covered key, C's reads at `lsn ≤ fork_lsn` are **byte-identical** to P's at the same LSN; (b) above the fork, each side matches **its own** standby capture (the PG-4 comparator, per side); (c) a `RelMeta` size query below the fork inherits (PG-4b landed) and diverges correctly above it; (d) rebuild-from-bucket (drop all state, reload graph + maps) leaves the full two-timeline probe grid identical; (e) `Basebackup(C, fork_lsn + δ)` validates under `pg_controldata` with C's SLRU segments matching C's capture.
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-pageserver --test branch_gate` → PASS.
+Run: `cargo test -p krabka-pageserver --test branch_gate` → PASS.
 
 ```bash
 git add tools/gen-pg-wal-fixtures.sh crates/postgres-wal/tests/fixtures crates/pageserver/tests
@@ -193,7 +198,7 @@ git commit -m "test(pageserver): forked-WAL divergence gate (per-side standby or
 
 ## Task 6: Final gate
 
-- [ ] **Step 1:** `cargo +nightly fmt --check`; `cargo clippy -p crabka-page-store -p crabka-pageserver --all-targets -- -D warnings`; `cargo nextest run -p crabka-page-store -p crabka-pageserver` — all green (ancestry, GC property, RPCs, the divergence gate).
+- [ ] **Step 1:** `cargo +nightly fmt --check`; `cargo clippy -p krabka-page-store -p krabka-pageserver --all-targets -- -D warnings`; `cargo nextest run -p krabka-page-store -p krabka-pageserver` — all green (ancestry, GC property, RPCs, the divergence gate).
 - [ ] **Step 2:** `./tools/check-publish-allowlist.sh` — exit 0 (no new crates; confirm nothing drifted). Commit any formatting.
 
 ---

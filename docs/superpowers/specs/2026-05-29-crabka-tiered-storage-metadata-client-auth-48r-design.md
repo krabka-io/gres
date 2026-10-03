@@ -26,8 +26,8 @@ Producer::builder().bootstrap(cfg.bootstrap.clone()) ...   // plaintext
 Consumer::builder().bootstrap(bootstrap) ...               // plaintext
 ```
 
-The 48f design records this: *"The TBRLMM connects via plaintext loopback
-to its own broker. TLS / SASL on the internal client is a follow-up."*
+The 48f design records this: _"The TBRLMM connects via plaintext loopback
+to its own broker. TLS / SASL on the internal client is a follow-up."_
 
 Crabka **already has** all the outbound auth machinery — just not on the
 public clients:
@@ -138,6 +138,6 @@ the topic-RLMM chain.
 
 - `cargo fmt --all --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test -p crabka-client-core -p crabka-broker -p crabka-remote-storage-topic`
+- `cargo test -p krabka-client-core -p krabka-broker -p krabka-remote-storage-topic`
 - `cargo test --workspace` (no regressions)
 - Inter-broker SASL/TLS semantics unchanged; no CRD drift.

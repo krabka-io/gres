@@ -10,9 +10,9 @@ use std::{
     time::Duration,
 };
 
-use crabka_broker::{Broker, BrokerConfig, BrokerHandle};
-use crabka_client_admin::{AdminClient, CreateTopicSpec};
-use crabka_gres_control::{
+use krabka_broker::{Broker, BrokerConfig, BrokerHandle};
+use krabka_client_admin::{AdminClient, CreateTopicSpec};
+use krabka_gres_control::{
     RangeBoundary, RangeLayoutEntry, RangeLifecycle, Registry, SqlUser, TenantId, TenantName,
     TenantRecord, TenantState,
 };
@@ -404,30 +404,30 @@ impl ProcessHarness {
         [self.range_endpoint(2), self.range_endpoint(3)]
     }
 
-    pub fn operator_control_client(&self) -> crabka_gres_ranges::FramedTcpClient {
-        crabka_gres_ranges::FramedTcpClient::with_tls_pem(
+    pub fn operator_control_client(&self) -> krabka_gres_ranges::FramedTcpClient {
+        krabka_gres_ranges::FramedTcpClient::with_tls_pem(
             &std::fs::read(&self.tls.server_cert).expect("operator certificate"),
             &std::fs::read(&self.tls.server_key).expect("operator key"),
             &std::fs::read(&self.tls.ca).expect("range CA"),
-            "crabka-dev".to_owned(),
+            "krabka-dev".to_owned(),
         )
         .expect("operator mTLS client")
     }
 
     pub async fn inspect_durable_records(
         &self,
-        request: crabka_gres_ranges::InspectDurableRecordsReq,
-    ) -> crabka_gres_ranges::InspectDurableRecordsResp {
+        request: krabka_gres_ranges::InspectDurableRecordsReq,
+    ) -> krabka_gres_ranges::InspectDurableRecordsResp {
         let range_id = request.range_id;
         let response = self
             .operator_control_client()
             .call(
                 &self.range_endpoint(range_id.as_u32()),
-                &crabka_gres_ranges::RangeRequest::InspectDurableRecords(request),
+                &krabka_gres_ranges::RangeRequest::InspectDurableRecords(request),
             )
             .await
             .expect("authenticated durable-record inspection");
-        let crabka_gres_ranges::RangeResponse::InspectDurableRecords(response) = response else {
+        let krabka_gres_ranges::RangeResponse::InspectDurableRecords(response) = response else {
             panic!("unexpected durable-record inspection response: {response:?}");
         };
         *response
@@ -771,14 +771,14 @@ fn write_tls_fixture(root: &Path) -> TlsPaths {
         std::fs::write(&path, bytes).expect("write TLS fixture");
         path
     }
-    let ca = crabka_security::ca::generate_cluster_ca("process-range-ca", 1)
+    let ca = krabka_security::ca::generate_cluster_ca("process-range-ca", 1)
         .expect("generate range test CA");
-    let peer = crabka_security::ca::issue_broker_cert(
+    let peer = krabka_security::ca::issue_broker_cert(
         &ca.cert_pem,
         &ca.key_pem,
         "process-range",
-        &[crabka_security::ca::SubjectAltName::Dns(
-            "crabka-dev".to_owned(),
+        &[krabka_security::ca::SubjectAltName::Dns(
+            "krabka-dev".to_owned(),
         )],
         &[],
         1,
@@ -791,7 +791,7 @@ fn write_tls_fixture(root: &Path) -> TlsPaths {
     }
 }
 
-/// Everything one `crabka-gres` child needs to be spawned or respawned.
+/// Everything one `krabka-gres` child needs to be spawned or respawned.
 #[derive(Clone, Copy)]
 struct NodeSpawn<'a> {
     root: &'a Path,
@@ -819,7 +819,7 @@ fn spawn_node(spawn: NodeSpawn<'_>) -> ProcessNode {
     let checkpoint_dir = root.join("checkpoints");
     std::fs::create_dir_all(&cache_dir).expect("cache dir");
     std::fs::create_dir_all(&checkpoint_dir).expect("checkpoint dir");
-    let log_path = std::env::var_os("CRABKA_G8_PROCESS_LOG_DIR").map_or_else(
+    let log_path = std::env::var_os("KRABKA_G8_PROCESS_LOG_DIR").map_or_else(
         || root.join(format!("r{range}.log")),
         |directory| {
             let directory = PathBuf::from(directory);
@@ -852,7 +852,7 @@ fn spawn_node(spawn: NodeSpawn<'_>) -> ProcessNode {
         "--range-tls-ca",
         tls.ca.to_str().expect("ca"),
         "--range-tls-server-name",
-        "crabka-dev",
+        "krabka-dev",
         "--range-allowed-principal",
         "CN=process-range",
         "--operator-control-principal",
@@ -871,7 +871,7 @@ fn spawn_node(spawn: NodeSpawn<'_>) -> ProcessNode {
         command.args(["--checkpoint-frames", &frames.to_string()]);
     }
     if let Some(fault) = commit_fault {
-        command.env("CRABKA_GRES_TEST_COMMIT_FAULT", fault);
+        command.env("KRABKA_GRES_TEST_COMMIT_FAULT", fault);
     }
     command
         .stdout(Stdio::piped())
@@ -895,7 +895,7 @@ fn spawn_node(spawn: NodeSpawn<'_>) -> ProcessNode {
         while let Ok(Some(line)) = lines.next_line().await {
             let _ = log.write_all(line.as_bytes()).await;
             let _ = log.write_all(b"\n").await;
-            if let Some(payload) = line.strip_prefix("CRABKA_GRES_READY ") {
+            if let Some(payload) = line.strip_prefix("KRABKA_GRES_READY ") {
                 let mut addresses = payload.split_whitespace();
                 let event = addresses
                     .next()
@@ -940,14 +940,14 @@ async fn provision_control(bootstrap: &str, tenant: &str, r0_port: u16, r1_port:
     })
     .collect::<Vec<_>>();
     let outcomes = admin
-        .create_topics(&topics, crabka_units::secs(30))
+        .create_topics(&topics, krabka_units::secs(30))
         .await
         .expect("create WAL topics");
     assert!(
         outcomes.iter().all(|outcome| outcome.error.is_none()),
         "WAL topics: {outcomes:?}"
     );
-    let verifier = crabka_security::scram::PgScramVerifier::generate_with_salt(
+    let verifier = krabka_security::scram::PgScramVerifier::generate_with_salt(
         &fixture_password(),
         8192,
         vec![7; 16],
@@ -1088,7 +1088,7 @@ impl RawPgConnection {
 /// stream at the post-authentication startup burst.
 async fn authenticate_scram(stream: &mut TcpStream) {
     use assert2::assert;
-    use crabka_security::{SaslMechanism, scram::ScramClientExchange};
+    use krabka_security::{SaslMechanism, scram::ScramClientExchange};
 
     let (code, _) = read_authentication(stream).await;
     assert!(code == 10, "expected an AuthenticationSASL request: {code}");
@@ -1180,20 +1180,20 @@ async fn write_message(stream: &mut TcpStream, kind: Option<u8>, body: &[u8]) {
 
 fn gres_binary() -> PathBuf {
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let configured = std::env::var_os("CRABKA_GRES_TEST_BINARY")
-        .map_or_else(|| workspace.join("target/debug/crabka-gres"), PathBuf::from);
+    let configured = std::env::var_os("KRABKA_GRES_TEST_BINARY")
+        .map_or_else(|| workspace.join("target/debug/krabka-gres"), PathBuf::from);
     let candidate = configured
         .canonicalize()
         .or_else(|_| workspace.join(&configured).canonicalize())
         .unwrap_or_else(|error| {
             panic!(
-                "resolve crabka-gres binary {}: {error}",
+                "resolve krabka-gres binary {}: {error}",
                 configured.display()
             )
         });
     assert!(
         candidate.is_file(),
-        "crabka-gres binary is not a file: {}",
+        "krabka-gres binary is not a file: {}",
         candidate.display()
     );
     candidate

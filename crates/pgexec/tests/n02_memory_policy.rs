@@ -1,10 +1,10 @@
 use assert2::assert;
-use crabka_pgexec::{RuntimePolicy, SqlEngine};
-use crabka_pgwire::engine::{Engine, QueryResult, Session};
+use krabka_pgexec::{RuntimePolicy, SqlEngine};
+use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
 fn constrained_engine() -> SqlEngine {
     SqlEngine::new_with_policy(RuntimePolicy {
-        blocking_query_memory: crabka_units::bytes(1),
+        blocking_query_memory: krabka_units::bytes(1),
         ..Default::default()
     })
     .expect("policy")

@@ -1,4 +1,4 @@
-# KIP-595 Slice 3b — KRaft replicated log over crabka-log
+# KIP-595 Slice 3b — KRaft replicated log over krabka-log
 
 Date: 2026-05-31
 Status: Approved (brainstorming) — pending spec review
@@ -10,18 +10,18 @@ Slice 3 replaces openraft with a hand-rolled KRaft engine, decomposed 3a–3d
 consensus core (`crates/raft/src/kraft/`) with an injected `LogView` seam. 3b
 supplies the real log behind that seam.
 
-Exploration of `crabka_log::Log` (`crates/log/src/`) confirmed it already
+Exploration of `krabka_log::Log` (`crates/log/src/`) confirmed it already
 provides every primitive needed: `append` / `append_at` (the latter preserves a
 leader-assigned offset on followers), `read_raw(fetch_offset, limit_offset,
 max_bytes)` (verbatim wire bytes), `truncate_to(offset)`, `log_start_offset` /
 `log_end_offset`, and a per-partition leader-epoch checkpoint
 (`epoch_checkpoint().end_offset_for_epoch(epoch, log_end)`, with per-batch
-`partition_leader_epoch` recorded on append). crabka-log does NOT track a
+`partition_leader_epoch` recorded on append). krabka-log does NOT track a
 high-watermark — that is consensus state the facade adds.
 
 ## Goal & scope
 
-Build `KraftLog`, a thin facade over `crabka_log::Log` that adds the consensus
+Build `KraftLog`, a thin facade over `krabka_log::Log` that adds the consensus
 semantics the 3a core needs (HWM tracking, committed-read filtering for `Fetch`,
 divergence lookup) and implements the 3a `LogView` trait. Prove it by re-backing
 the 3a multi-node simulation with real `KraftLog` instances (tempdirs).
@@ -37,7 +37,7 @@ purge interaction — Slice 4. openraft remains the live engine; 3b is additive.
 
 ### `KraftLog` facade (`crates/raft/src/kraft/log.rs`)
 
-Wraps `crabka_log::Log` plus an in-memory `hwm: i64`:
+Wraps `krabka_log::Log` plus an in-memory `hwm: i64`:
 
 - `open(dir, config) -> Result<KraftLog, RaftError>` — opens/creates the log;
   initializes `hwm = log.log_start_offset()`.
@@ -49,7 +49,7 @@ Wraps `crabka_log::Log` plus an in-memory `hwm: i64`:
   which validates `offset == log_end_offset`).
 - `read_committed(&self, offset: i64, max_bytes: usize) -> Result<RawRead, RaftError>`
   — serves KIP-595 `Fetch`: `log.read_raw(offset, self.hwm.min(log_end),
-  max_bytes)`. Verbatim wire bytes, never beyond the committed (HWM) range.
+max_bytes)`. Verbatim wire bytes, never beyond the committed (HWM) range.
 - `truncate_to(&mut self, offset: i64) -> Result<(), RaftError>` —
   `log.truncate_to(offset)`, then `hwm = hwm.min(offset)`.
 - `advance_hwm(&mut self, new_hwm: i64)` — `hwm = hwm.max(new_hwm).min(log_end)`
@@ -58,7 +58,7 @@ Wraps `crabka_log::Log` plus an in-memory `hwm: i64`:
 
 ### `LogView` impl for `KraftLog`
 
-Bridges the 3a core's `LogView` to crabka-log:
+Bridges the 3a core's `LogView` to krabka-log:
 
 - `end_offset()` → `log.log_end_offset()`
 - `last_epoch()` → `epoch_checkpoint().latest_epoch().unwrap_or(0)` (i32 →
@@ -70,7 +70,7 @@ Bridges the 3a core's `LogView` to crabka-log:
 ## Data flow
 
 ```
-3a core Action          KraftLog call                       crabka_log
+3a core Action          KraftLog call                       krabka_log
 -------------------     -------------------------------     -----------------
 AppendLeaderChange  ->  append(leader_change_batch)     ->  Log::append
 (leader appends)        append(record_batch)
@@ -87,8 +87,8 @@ core reads          ->  LogView {end_offset,last_epoch,  ->  log_end_offset,
 - **Standalone unit tests (`KraftLog`):** append varied-epoch batches → read
   back → `LogView` queries (`end_offset`, `last_epoch`, `end_offset_for_epoch`
   including unknown→`None`) → `truncate_to` at an epoch boundary (assert log-end
-  + hwm both drop) → `read_committed` never returns bytes past HWM →
-  `advance_hwm` monotonic + clamped to log end.
+  - hwm both drop) → `read_committed` never returns bytes past HWM →
+    `advance_hwm` monotonic + clamped to log end.
 - **Core-over-real-log integration (headline):** generalize the 3a simulation
   harness so each node's log is a real `KraftLog` on a tempdir. The harness maps
   the core's log-related `Action`s onto the real log (`AppendLeaderChange` /
@@ -106,7 +106,7 @@ core reads          ->  LogView {end_offset,last_epoch,  ->  log_end_offset,
 
 ## Error handling
 
-`crabka_log::LogError` is surfaced through `RaftError` (the crate's existing
+`krabka_log::LogError` is surfaced through `RaftError` (the crate's existing
 error). Invariants guarded with `debug_assert!` (`hwm <= log_end_offset`;
 `truncate_to` target `>= log_start_offset`). A `Fetch` below `log_start_offset`
 (records compacted away) returns the available range plus a flag the caller maps

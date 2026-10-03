@@ -1,6 +1,6 @@
-# crabka-trace-context
+# krabka-trace-context
 
-[![crates.io](https://img.shields.io/crates/v/crabka-trace-context.svg)](https://crates.io/crates/crabka-trace-context)
+[![crates.io](https://img.shields.io/crates/v/krabka-trace-context.svg)](https://crates.io/crates/krabka-trace-context)
 
 W3C Trace Context propagation helpers shared by Crabka's wire-protocol crates.
 
@@ -8,7 +8,7 @@ Part of [Crabka](https://github.com/robot-head/crabka), a Rust implementation of
 
 ## Overview
 
-This crate is the single place where a distributed trace crosses a Crabka process boundary. It holds only the propagation primitives. The OTLP exporter, its environment configuration, and the process-wide subscriber are in `crabka-telemetry`, which re-exports this crate as `crabka_telemetry::propagation`. The split lets published crates such as `crabka-pgwire` join a trace. Those crates do not need to link an HTTP server, a CLI parser, and a profiler.
+This crate is the single place where a distributed trace crosses a Crabka process boundary. It holds only the propagation primitives. The OTLP exporter, its environment configuration, and the process-wide subscriber are in `krabka-telemetry`, which re-exports this crate as `krabka_telemetry::propagation`. The split lets published crates such as `krabka-pgwire` join a trace. Those crates do not need to link an HTTP server, a CLI parser, and a profiler.
 
 ## Features
 
@@ -20,7 +20,7 @@ This crate is the single place where a distributed trace crosses a Crabka proces
 ## Usage
 
 ```rust
-use crabka_trace_context::{TraceCarrier, extract_sqlcommenter};
+use krabka_trace_context::{TraceCarrier, extract_sqlcommenter};
 
 let sql = "SELECT 1 /*traceparent='00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01'*/";
 let carrier = extract_sqlcommenter(sql)

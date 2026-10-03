@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use assert2::check;
-use crabka_pgcatalog::{Column, RelationName, Table};
-use crabka_pgexec::{
+use krabka_pgcatalog::{Column, RelationName, Table};
+use krabka_pgexec::{
     ColumnPredicate, JoinExecutionStrategy, JoinRangeRequest, JoinRangeResult,
     PartialAggregateFunction, PartialAggregateSpec, PredicateOp, PredicatePushdown,
     ProjectionPushdown, RangeCursor, RangeScanner, RuntimePolicy, ScanPage, ScanRequest,
@@ -19,7 +19,7 @@ use crabka_pgexec::{
 
 #[test]
 fn co_partitioning_requires_identical_hash_metadata() {
-    use crabka_pgcatalog::{HashSharding, ShardingStrategy};
+    use krabka_pgcatalog::{HashSharding, ShardingStrategy};
 
     let hash = |columns: &[&str], buckets, group: Option<&str>| {
         Some(ShardingStrategy::Hash(HashSharding {
@@ -33,15 +33,15 @@ fn co_partitioning_requires_identical_hash_metadata() {
     let mut right = left.clone();
     right.id = 43;
 
-    assert!(crabka_pgexec::plan_dist::tables_are_co_partitioned(
+    assert!(krabka_pgexec::plan_dist::tables_are_co_partitioned(
         &left, &right
     ));
     right.sharding = hash(&["id"], 32, Some("orders"));
-    assert!(!crabka_pgexec::plan_dist::tables_are_co_partitioned(
+    assert!(!krabka_pgexec::plan_dist::tables_are_co_partitioned(
         &left, &right
     ));
     right.sharding = hash(&["id"], 16, None);
-    assert!(!crabka_pgexec::plan_dist::tables_are_co_partitioned(
+    assert!(!krabka_pgexec::plan_dist::tables_are_co_partitioned(
         &left, &right
     ));
 }
@@ -147,7 +147,7 @@ async fn production_engine_stats_follow_durable_table_sequence() {
         .await
         .unwrap();
     let table =
-        crabka_pgcatalog::get_table(engine.catalog_kv(), &RelationName::public("runtime_stats"))
+        krabka_pgcatalog::get_table(engine.catalog_kv(), &RelationName::public("runtime_stats"))
             .unwrap();
     let before = engine.join_stats().estimated_bytes(u64::from(table.id));
     session
@@ -160,14 +160,14 @@ async fn production_engine_stats_follow_durable_table_sequence() {
         "runtime sequence adapter must observe committed inserts"
     );
 }
-use crabka_pgparser::ast::{BinaryOp, Expr, SelectItem};
-use crabka_pgtypes::{ColumnType, Datum};
-use crabka_pgwire::engine::{Engine, QueryResult, Session};
+use krabka_pgparser::ast::{BinaryOp, Expr, SelectItem};
+use krabka_pgtypes::{ColumnType, Datum};
+use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
 fn table() -> Table {
     Table {
         id: 42,
-        owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+        owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
         name: RelationName::public("items"),
         columns: vec![
             Column::new("id", ColumnType::Int4),
@@ -184,7 +184,7 @@ fn table() -> Table {
 }
 
 fn expr(sql: &str) -> Expr {
-    crabka_pgparser::parser::parse_expr_for_test(sql).expect("predicate parses")
+    krabka_pgparser::parser::parse_expr_for_test(sql).expect("predicate parses")
 }
 
 #[test]
@@ -445,7 +445,7 @@ fn top_k_pushdown_orders_multiple_keys_before_deterministic_identity() {
         },
     ];
 
-    crabka_pgexec::scanner::apply_top_k_pushdown(
+    krabka_pgexec::scanner::apply_top_k_pushdown(
         &mut rows,
         &TopKSpec {
             order_by: vec![
@@ -538,12 +538,12 @@ fn top_k_pushdown_merges_uneven_range_local_results_lexicographically() {
     let mut merged = ranges
         .into_iter()
         .flat_map(|mut range| {
-            crabka_pgexec::scanner::apply_top_k_pushdown(&mut range, &spec)
+            krabka_pgexec::scanner::apply_top_k_pushdown(&mut range, &spec)
                 .expect("range-local top-k applies");
             range
         })
         .collect::<Vec<_>>();
-    crabka_pgexec::scanner::apply_top_k_pushdown(&mut merged, &spec)
+    krabka_pgexec::scanner::apply_top_k_pushdown(&mut merged, &spec)
         .expect("global top-k merge applies");
 
     assert_eq!(
@@ -578,10 +578,10 @@ fn k_way_top_k_merge_matches_global_order_and_bounds_output_for_random_streams()
             });
         }
         for stream in &mut streams {
-            crabka_pgexec::scanner::apply_top_k_pushdown(stream, &spec).unwrap();
+            krabka_pgexec::scanner::apply_top_k_pushdown(stream, &spec).unwrap();
         }
         let mut expected = streams.iter().flatten().cloned().collect::<Vec<_>>();
-        crabka_pgexec::scanner::apply_top_k_pushdown(&mut expected, &spec).unwrap();
+        krabka_pgexec::scanner::apply_top_k_pushdown(&mut expected, &spec).unwrap();
         let actual = merge_top_k_streams(streams, &spec).unwrap();
         assert_eq!(actual, expected);
         assert!(actual.len() <= 7);
@@ -971,8 +971,8 @@ fn partial_avg_merges_sum_count_across_uneven_ranges_and_preserves_null_semantic
         .collect();
     let pushed = finalize_partial_aggregate_rows(partials, &spec).expect("AVG parts finalize");
 
-    let expected = crabka_pgtypes::ops::div(
-        &Datum::Numeric(crabka_pgtypes::numeric::NumericValue::from(117i64)),
+    let expected = krabka_pgtypes::ops::div(
+        &Datum::Numeric(krabka_pgtypes::numeric::NumericValue::from(117i64)),
         &Datum::Int8(3),
     )
     .expect("expected exact numeric average");
@@ -1037,7 +1037,7 @@ fn unsupported_predicate_fails_clearly_for_strict_pushdown() {
 fn strict_predicate_rejects_const_types_the_scanner_cannot_execute() {
     let table = Table {
         id: 99,
-        owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+        owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
         name: RelationName::public("measurements"),
         columns: vec![Column::new("reading", ColumnType::Float8)],
         sharded: true,
@@ -1097,7 +1097,7 @@ impl RecordingScanner {
 }
 
 impl RangeScanner for RecordingScanner {
-    fn scan(&self, request: ScanRequest<'_>) -> Result<Vec<ScannedRow>, crabka_pgexec::ExecError> {
+    fn scan(&self, request: ScanRequest<'_>) -> Result<Vec<ScannedRow>, krabka_pgexec::ExecError> {
         self.scans.lock().expect("scan log").push(RecordedScan {
             table: request.table.name.clone(),
             predicate: request.predicate.clone(),
@@ -1108,9 +1108,9 @@ impl RangeScanner for RecordingScanner {
         LocalRangeScanner.scan(request)
     }
 
-    fn join(&self, request: JoinRangeRequest) -> Result<JoinRangeResult, crabka_pgexec::ExecError> {
+    fn join(&self, request: JoinRangeRequest) -> Result<JoinRangeResult, krabka_pgexec::ExecError> {
         self.joins.lock().expect("join log").push(request);
-        Err(crabka_pgexec::ExecError::Unsupported(
+        Err(krabka_pgexec::ExecError::Unsupported(
             "recording scanner requests deterministic local fallback".into(),
         ))
     }
@@ -1326,7 +1326,7 @@ async fn correlated_exists_equality_builds_one_lazy_lookup() {
 async fn correlated_exists_inside_or_builds_one_lazy_lookup() {
     let scanner = Arc::new(RecordingScanner::default());
     let mut engine = SqlEngine::new_with_policy(RuntimePolicy {
-        blocking_query_memory: crabka_units::mebibytes(20),
+        blocking_query_memory: krabka_units::mebibytes(20),
         ..RuntimePolicy::default()
     })
     .expect("20 MiB runner policy");
@@ -1420,7 +1420,7 @@ async fn correlated_exists_inside_or_builds_one_lazy_lookup() {
 
 /// Read a relation's id the way the planner keys statistics on it.
 fn table_id(engine: &SqlEngine, relname: &str) -> u64 {
-    let table = crabka_pgcatalog::get_table(engine.catalog_kv(), &RelationName::public(relname))
+    let table = krabka_pgcatalog::get_table(engine.catalog_kv(), &RelationName::public(relname))
         .expect("relation exists");
     u64::from(table.id)
 }
@@ -1473,7 +1473,7 @@ async fn table_statistics_track_the_rows_a_table_holds_not_the_rowids_it_burned(
 }
 
 fn relation(engine: &SqlEngine, relname: &str) -> Table {
-    crabka_pgcatalog::get_table(engine.catalog_kv(), &RelationName::public(relname))
+    krabka_pgcatalog::get_table(engine.catalog_kv(), &RelationName::public(relname))
         .expect("relation exists")
 }
 
@@ -1554,8 +1554,8 @@ async fn clustering_a_table_does_not_change_how_it_is_joined() {
 
 #[test]
 fn stored_row_counts_bound_estimates_that_the_rowid_counter_cannot() {
-    use crabka_pgexec::plan_dist::StoredRowStats;
-    use crabka_pgkv::{Kv as _, MemKv, key};
+    use krabka_pgexec::plan_dist::StoredRowStats;
+    use krabka_pgkv::{Kv as _, MemKv, key};
 
     // A sharded table's rowid is a packed clock reading, so its sequence key
     // holds a number near the top of the domain however few rows it has.
@@ -1745,26 +1745,26 @@ async fn sql_copartitioned_join_uses_catalog_proof_when_stats_only_estimate_size
 
 #[derive(Debug)]
 struct MaterializedJoinScanner {
-    left: Vec<crabka_pgexec::JoinRow>,
-    right: Vec<crabka_pgexec::JoinRow>,
+    left: Vec<krabka_pgexec::JoinRow>,
+    right: Vec<krabka_pgexec::JoinRow>,
     joins: Mutex<Vec<JoinRangeRequest>>,
 }
 
 impl RangeScanner for MaterializedJoinScanner {
-    fn scan(&self, request: ScanRequest<'_>) -> Result<Vec<ScannedRow>, crabka_pgexec::ExecError> {
+    fn scan(&self, request: ScanRequest<'_>) -> Result<Vec<ScannedRow>, krabka_pgexec::ExecError> {
         LocalRangeScanner.scan(request)
     }
 
-    fn join(&self, request: JoinRangeRequest) -> Result<JoinRangeResult, crabka_pgexec::ExecError> {
+    fn join(&self, request: JoinRangeRequest) -> Result<JoinRangeResult, krabka_pgexec::ExecError> {
         self.joins.lock().expect("join log").push(request.clone());
-        crabka_pgexec::scanner::execute_materialized_join(&request, &self.left, &self.right)
+        krabka_pgexec::scanner::execute_materialized_join(&request, &self.left, &self.right)
     }
 }
 
-fn encoded_join_rows(rows: &[Vec<Datum>]) -> Vec<crabka_pgexec::JoinRow> {
+fn encoded_join_rows(rows: &[Vec<Datum>]) -> Vec<krabka_pgexec::JoinRow> {
     rows.iter()
-        .map(|row| crabka_pgexec::JoinRow {
-            tuple: crabka_pgmvcc::version::encode_tuple(0, 0, row),
+        .map(|row| krabka_pgexec::JoinRow {
+            tuple: krabka_pgmvcc::version::encode_tuple(0, 0, row),
         })
         .collect()
 }
@@ -1866,14 +1866,14 @@ async fn sql_join_strategies_dispatch_and_match_local_whole_rows() {
 struct RejectExecutableScanner;
 
 impl RangeScanner for RejectExecutableScanner {
-    fn scan(&self, request: ScanRequest<'_>) -> Result<Vec<ScannedRow>, crabka_pgexec::ExecError> {
+    fn scan(&self, request: ScanRequest<'_>) -> Result<Vec<ScannedRow>, krabka_pgexec::ExecError> {
         if request.partial_aggregate.is_some() {
-            return Err(crabka_pgexec::ExecError::Unsupported(
+            return Err(krabka_pgexec::ExecError::Unsupported(
                 "injected partial aggregate pushdown failure".into(),
             ));
         }
         if request.top_k.is_some() {
-            return Err(crabka_pgexec::ExecError::Unsupported(
+            return Err(krabka_pgexec::ExecError::Unsupported(
                 "injected top-k pushdown failure".into(),
             ));
         }
@@ -1894,7 +1894,7 @@ struct PagingCursor {
 
 #[async_trait::async_trait]
 impl RangeCursor for PagingCursor {
-    async fn next_page(&mut self, max_rows: usize) -> Result<ScanPage, crabka_pgexec::ExecError> {
+    async fn next_page(&mut self, max_rows: usize) -> Result<ScanPage, krabka_pgexec::ExecError> {
         self.page_calls
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let rows = (0..max_rows)
@@ -1919,7 +1919,7 @@ impl RangeCursor for PagingCursor {
 }
 
 impl RangeScanner for PagingScanner {
-    fn scan(&self, _request: ScanRequest<'_>) -> Result<Vec<ScannedRow>, crabka_pgexec::ExecError> {
+    fn scan(&self, _request: ScanRequest<'_>) -> Result<Vec<ScannedRow>, krabka_pgexec::ExecError> {
         self.scan_calls
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(Vec::new())
@@ -1928,7 +1928,7 @@ impl RangeScanner for PagingScanner {
     fn scan_cursor<'a>(
         &'a self,
         _request: ScanRequest<'a>,
-    ) -> Result<Box<dyn RangeCursor + 'a>, crabka_pgexec::ExecError> {
+    ) -> Result<Box<dyn RangeCursor + 'a>, krabka_pgexec::ExecError> {
         Ok(Box::new(PagingCursor {
             next: 1,
             page_calls: Arc::clone(&self.page_calls),
@@ -1938,7 +1938,7 @@ impl RangeScanner for PagingScanner {
 
 #[tokio::test]
 async fn simple_select_limit_stops_native_cursor_before_materialization() {
-    use crabka_pgwire::engine::{CollectingResultSink, Session};
+    use krabka_pgwire::engine::{CollectingResultSink, Session};
 
     let scanner = Arc::new(PagingScanner::default());
     let mut engine = SqlEngine::new();

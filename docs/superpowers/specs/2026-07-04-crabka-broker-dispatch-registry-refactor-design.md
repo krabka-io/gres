@@ -134,7 +134,7 @@ New tests should cover:
 - Unknown keys still return the synthetic unsupported response.
 - SASL frames still bypass ordinary registry execution and preserve close-after-response behavior.
 
-Focused verification should start with dispatch tests and representative broker integration tests, then run `cargo test -p crabka-broker`. Formatting and clippy remain required before claiming implementation completion.
+Focused verification should start with dispatch tests and representative broker integration tests, then run `cargo test -p krabka-broker`. Formatting and clippy remain required before claiming implementation completion.
 
 ## Risks
 

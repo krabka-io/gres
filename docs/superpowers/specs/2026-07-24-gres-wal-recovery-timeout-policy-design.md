@@ -26,9 +26,9 @@ require separate owner reviews.
 The standalone process accepts two optional positive millisecond values:
 
 - `--wal-recovery-connect-timeout-ms`
-  / `CRABKA_GRES_WAL_RECOVERY_CONNECT_TIMEOUT_MS`
+  / `KRABKA_GRES_WAL_RECOVERY_CONNECT_TIMEOUT_MS`
 - `--wal-recovery-request-timeout-ms`
-  / `CRABKA_GRES_WAL_RECOVERY_REQUEST_TIMEOUT_MS`
+  / `KRABKA_GRES_WAL_RECOVERY_REQUEST_TIMEOUT_MS`
 
 Effective defaults are 10,000 ms and 30,000 ms. Explicit settings require
 `--substrate-bootstrap`; inert local-engine configuration is rejected before
@@ -49,7 +49,7 @@ and multi-range mode.
 
 ## Ownership and Data Flow
 
-`crabka-gres-substrate` owns
+`krabka-gres-substrate` owns
 `DEFAULT_WAL_RECOVERY_CONNECT_TIMEOUT_MS` and
 `DEFAULT_WAL_RECOVERY_REQUEST_TIMEOUT_MS`.
 

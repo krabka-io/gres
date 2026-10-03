@@ -14,7 +14,7 @@ no split votes, deterministic 3-broker boot.
 
 openraft 0.9 doesn't have pre-vote (KIP-595's equivalent), so its election
 randomization is the only defense against split-vote on cold boot. The
-randomization picks a per-engine election timeout *once at startup*
+randomization picks a per-engine election timeout _once at startup_
 (`config.new_rand_election_timeout::<RT>()` in `engine_config.rs:46`) and
 re-uses that fixed value for every subsequent election round. When 3 brokers
 spawn concurrently with the same election_timeout range, they:
@@ -57,7 +57,7 @@ Replace simultaneous static initialization with a **two-phase** boot:
 
 ## API changes
 
-Add a `BootstrapMode` enum to `crabka_raft::ControllerConfig`:
+Add a `BootstrapMode` enum to `krabka_raft::ControllerConfig`:
 
 ```rust
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,8 +92,8 @@ No default. Callers explicitly pick the mode they need; this is a one-time
 operational decision per broker per cluster, and silent defaults would
 silently re-introduce the simultaneous-init failure.
 
-Mirror onto `crabka_broker::BrokerConfig` with the same enum re-exported
-from `crabka_broker`. Both `Default` and `for_tests` set
+Mirror onto `krabka_broker::BrokerConfig` with the same enum re-exported
+from `krabka_broker`. Both `Default` and `for_tests` set
 `BootstrapMode::Bootstrap` — that's the right answer for single-broker
 setups (the singleton-voter path is a no-op for a 1-voter "cluster") and
 for the first broker in a multi-broker cold boot. Callers building a
@@ -197,15 +197,15 @@ get un-skipped.
 KRaft uses simultaneous static-init + pre-vote (KIP-595) to avoid the
 disruption-on-rejoin variant of split-vote. We don't have pre-vote so we
 take a different path: explicit bootstrap orchestration. The
-*operational semantics* match — all membership changes are operator/test
+_operational semantics_ match — all membership changes are operator/test
 driven via the equivalent of `kafka-metadata-quorum.sh add-controller`
 (our `change_membership`). The difference is at format/cold-boot:
 
-| Kafka KRaft | Crabka (this slice) |
-|---|---|
-| `kafka-storage format` writes membership to log | `BootstrapMode::Bootstrap` initializes log on first start |
-| All brokers boot with full static voter set | Bootstrap broker boots alone; Join brokers wait |
-| Pre-vote dampens spurious elections | No pre-vote; deterministic boot path avoids contention |
+| Kafka KRaft                                      | Crabka (this slice)                                                    |
+| ------------------------------------------------ | ---------------------------------------------------------------------- |
+| `kafka-storage format` writes membership to log  | `BootstrapMode::Bootstrap` initializes log on first start              |
+| All brokers boot with full static voter set      | Bootstrap broker boots alone; Join brokers wait                        |
+| Pre-vote dampens spurious elections              | No pre-vote; deterministic boot path avoids contention                 |
 | Membership mutated by `kafka-metadata-quorum.sh` | Membership mutated by `BrokerHandle::{add_learner, change_membership}` |
 
 When openraft adds pre-vote (or we adopt a fork that has it), we can collapse
@@ -238,8 +238,8 @@ single-broker test. Multi-broker test/integration callers explicitly set
 
 ## Test plan
 
-1. `cargo test -p crabka-broker` — all green on Linux + macOS + Windows.
-2. `cargo test -p crabka-broker --test jvm_acceptance --ignored` — all 9
+1. `cargo test -p krabka-broker` — all green on Linux + macOS + Windows.
+2. `cargo test -p krabka-broker --test jvm_acceptance --ignored` — all 9
    tests pass (the 4 previously-skipped multi-broker tests run).
 3. New unit test: `BrokerConfig::default()` sets `bootstrap_mode == Bootstrap`.
 4. New unit test: `Controller::start` returns `Startup` error if `Bootstrap`

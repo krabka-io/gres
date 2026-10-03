@@ -3,7 +3,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use async_trait::async_trait;
-use crabka_gres_control::{RangeLayoutEntry, TenantRecord, TenantRegistryStore};
+use krabka_gres_control::{RangeLayoutEntry, TenantRecord, TenantRegistryStore};
 use tokio::sync::RwLock;
 
 use crate::{RangeId, TableId};
@@ -102,7 +102,7 @@ impl RangeRegistry {
     pub async fn refresh_from_store<S>(
         &self,
         store: &S,
-        tenant: &crabka_gres_control::TenantName,
+        tenant: &krabka_gres_control::TenantName,
     ) -> Result<(), RegistryError>
     where
         S: TenantRegistryStore + Sync,
@@ -181,7 +181,7 @@ fn range_endpoints_from_layout(layout: &[RangeLayoutEntry]) -> BTreeMap<RangeId,
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_gres_control::{
+    use krabka_gres_control::{
         InMemoryRegistryStore, RangeLayoutEntry, SqlUser, TenantId, TenantName, TenantRecord,
         TenantRegistryStore, TenantState,
     };
@@ -202,10 +202,10 @@ mod tests {
         .with_range_layout(vec![
             RangeLayoutEntry {
                 range_id: 0,
-                end_key: Some(crabka_gres_control::RangeBoundary::new(10, 25)),
+                end_key: Some(krabka_gres_control::RangeBoundary::new(10, 25)),
                 endpoint: "127.0.0.1:7000".to_string(),
                 wal_generation: 1,
-                lifecycle: crabka_gres_control::RangeLifecycle::default(),
+                lifecycle: krabka_gres_control::RangeLifecycle::default(),
                 retirement: None,
             },
             RangeLayoutEntry {
@@ -213,7 +213,7 @@ mod tests {
                 end_key: None,
                 endpoint: "127.0.0.1:7001".to_string(),
                 wal_generation: 4,
-                lifecycle: crabka_gres_control::RangeLifecycle::default(),
+                lifecycle: krabka_gres_control::RangeLifecycle::default(),
                 retirement: None,
             },
         ])

@@ -24,8 +24,8 @@
 //! are the ones `src/test/regress/sql/oid.sql` asserts.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 fn cell_text(cell: Option<&Cell>) -> String {
     cell.map_or_else(

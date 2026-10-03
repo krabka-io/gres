@@ -142,7 +142,7 @@ pub(crate) fn projected_scope(fields: &[FieldDescription], tys: &[ColumnType]) -
 
 /// Is this binding one of the synthetic columns a window call's result occupies?
 fn is_window_binding(c: &ColumnBinding) -> bool {
-    c.qualifier.as_deref() == Some(crabka_pgparser::ast::WINDOW_QUALIFIER)
+    c.qualifier.as_deref() == Some(krabka_pgparser::ast::WINDOW_QUALIFIER)
 }
 
 pub(crate) fn derived_name(expr: &Expr) -> String {
@@ -163,7 +163,7 @@ fn named_expr_inner(expr: &Expr) -> (String, u8) {
         // A window placeholder carries the label PostgreSQL gives an unaliased
         // window call: the function's own name.
         Expr::Column { name, .. } => (
-            crabka_pgparser::ast::window_binding_parts(name)
+            krabka_pgparser::ast::window_binding_parts(name)
                 .map_or_else(|| name.clone(), |(_, label)| label.to_string()),
             2,
         ),
@@ -216,12 +216,12 @@ fn named_expr_inner(expr: &Expr) -> (String, u8) {
 
 /// The first output name of a scalar subquery.  A scalar subquery has one
 /// column, and set operations retain their left input's output name.
-fn scalar_subquery_name(query: &crabka_pgparser::ast::QueryExpr) -> Option<(String, u8)> {
+fn scalar_subquery_name(query: &krabka_pgparser::ast::QueryExpr) -> Option<(String, u8)> {
     scalar_subquery_set_expr_name(&query.body)
 }
 
-fn scalar_subquery_set_expr_name(set_expr: &crabka_pgparser::ast::SetExpr) -> Option<(String, u8)> {
-    use crabka_pgparser::ast::{QueryBody, SetExpr};
+fn scalar_subquery_set_expr_name(set_expr: &krabka_pgparser::ast::SetExpr) -> Option<(String, u8)> {
+    use krabka_pgparser::ast::{QueryBody, SetExpr};
 
     match set_expr {
         SetExpr::SetOp { left, .. } => scalar_subquery_set_expr_name(left),

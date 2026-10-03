@@ -7,7 +7,7 @@
 
 [KIP-447](https://cwiki.apache.org/confluence/display/KAFKA/KIP-447:+Producer+scalability+for+exactly+once+semantics)
 lets a single transactional producer drive exactly-once consume-process-produce
-across *all* of a consumer group's input partitions, instead of requiring one
+across _all_ of a consumer group's input partitions, instead of requiring one
 producer per input partition. It does this by fencing zombie producers through
 the **consumer group's** state (generation / member id / member epoch) at
 `TxnOffsetCommit` time, rather than relying solely on per-`transactional.id`
@@ -30,9 +30,9 @@ closed**:
   but no single `group_metadata()` accessor to hand to the producer
   (`crates/client-consumer/src/consumer.rs:397`).
 
-KIP-447's wiki text: *"To provide fencing consistent with normal offset
+KIP-447's wiki text: _"To provide fencing consistent with normal offset
 fencing, member.id, group.instance.id and generation.id fields were added to
-TxnOffsetCommitRequest."* The phrase **"consistent with normal offset
+TxnOffsetCommitRequest."_ The phrase **"consistent with normal offset
 fencing"** is the design north star: the txn path must validate exactly the
 way the regular `OffsetCommit` path does.
 
@@ -109,7 +109,7 @@ pub async fn send_offsets_to_transaction(
 - `TxnOffsetCommitRequest` is populated with `group_meta.generation_id`,
   `group_meta.member_id`, `group_meta.group_instance_id`.
 - Re-export `ConsumerGroupMetadata` from the producer crate root
-  (`crabka-client-producer` already depends on `crabka-client-consumer`), so
+  (`krabka-client-producer` already depends on `krabka-client-consumer`), so
   callers need a single import.
 
 The client negotiates `TxnOffsetCommit` to v3+ (broker advertises through v5),

@@ -2,8 +2,8 @@
 
 ## Goal
 
-Build a standalone **`crabka-grpc-gateway`** service that lets non-Kafka
-applications produce to and consume from *real* Kafka topics over **gRPC /
+Build a standalone **`krabka-grpc-gateway`** service that lets non-Kafka
+applications produce to and consume from _real_ Kafka topics over **gRPC /
 Connect-RPC** and **HTTP webhooks (JSON)**, with server-side **exactly-once
 deduplication** of caller-initiated duplicate sends. The gateway speaks the
 ordinary Kafka wire protocol to the broker using Crabka's own native idempotent
@@ -14,7 +14,7 @@ The unifying model: **multiple protocol front-ends over one shared
 produce / consume / dedup core.**
 
 ```
-            ┌──────────────── crabka-grpc-gateway (standalone binary) ───────────────┐
+            ┌──────────────── krabka-grpc-gateway (standalone binary) ───────────────┐
             │                                                                          │
   gRPC ───► │  Connect/gRPC front-end ┐                                                │
   client    │                          │                                              │
@@ -73,8 +73,8 @@ produce / consume / dedup core.**
 
 ### Process shape
 
-A single binary, `crabka-grpc-gateway`. One **axum** server hosts the
-Connect/gRPC service *and* the inbound webhook HTTP routes on the same listener
+A single binary, `krabka-grpc-gateway`. One **axum** server hosts the
+Connect/gRPC service _and_ the inbound webhook HTTP routes on the same listener
 (content-negotiated). The **outbound webhook delivery** subsystem runs as
 background tasks (one consumer group per subscription) in the same process. A
 health/readiness endpoint reports per-dedup-partition warm-up state.
@@ -84,8 +84,8 @@ health/readiness endpoint reports per-dedup-partition warm-up state.
 ```
 crates/grpc-gateway/
   Cargo.toml                      # connectrpc-axum, prost, tower, axum, reqwest,
-                                  # rustls; crabka-client-core/-producer/-consumer,
-                                  # crabka-security, crabka-authz (factored, see §4)
+                                  # rustls; krabka-client-core/-producer/-consumer,
+                                  # krabka-security, krabka-authz (factored, see §4)
   build.rs                        # connectrpc_axum_build, system-protoc + fetch fallback
   proto/crabka/gateway/v1/gateway.proto
   src/
@@ -100,7 +100,7 @@ crates/grpc-gateway/
         txn.rs                    # transactional record+claim, txn.id-per-partition
       consume.rs                  # group subscribe + commit
       codec.rs                    # RecordCodec trait + RawCodec (SchemaRegistryCodec later)
-      authz.rs                    # trusted-proxy authorizer (uses crabka-authz)
+      authz.rs                    # trusted-proxy authorizer (uses krabka-authz)
     frontend/
       grpc.rs                     # Connect/gRPC service impl (Send/SendStream/Subscribe)
       webhook_in.rs               # HTTP POST → produce (signature verify, JSONPath map)
@@ -114,15 +114,15 @@ crates/grpc-gateway/
 
 ### Reused Crabka building blocks (no new Kafka-protocol code)
 
-| Need | Reuse |
-|---|---|
-| Bootstrap / connection pool | `crabka-client-core` (`bootstrap`, `pool`, `transport`) |
-| Idempotent + transactional produce | `crabka-client-producer` (`InitProducerId`, `(pid,epoch,seq)`, txn) |
-| Group consume + commit | `crabka-client-consumer` (`subscribe`, `poll`, `commit_sync/async`) |
-| TLS / mTLS / principal / hot reload | `crabka-security` (`tls`, `mtls`, `principal`, `reload`) |
-| ACL evaluation (trusted-proxy) | factor `crates/broker/src/authorizer` → shared `crabka-authz` |
-| JSON field extraction (webhook-in) | `jsonpath-rust` (already a workspace dep) |
-| Outbound HTTP client | `reqwest` (already in the dep graph via OTLP) |
+| Need                                | Reuse                                                               |
+| ----------------------------------- | ------------------------------------------------------------------- |
+| Bootstrap / connection pool         | `krabka-client-core` (`bootstrap`, `pool`, `transport`)             |
+| Idempotent + transactional produce  | `krabka-client-producer` (`InitProducerId`, `(pid,epoch,seq)`, txn) |
+| Group consume + commit              | `krabka-client-consumer` (`subscribe`, `poll`, `commit_sync/async`) |
+| TLS / mTLS / principal / hot reload | `krabka-security` (`tls`, `mtls`, `principal`, `reload`)            |
+| ACL evaluation (trusted-proxy)      | factor `crates/broker/src/authorizer` → shared `krabka-authz`       |
+| JSON field extraction (webhook-in)  | `jsonpath-rust` (already a workspace dep)                           |
+| Outbound HTTP client                | `reqwest` (already in the dep graph via OTLP)                       |
 
 ## Components
 
@@ -140,17 +140,17 @@ present, sticky otherwise). Per-record results (`partition`, `offset`,
 
 ### 2. Dedup engine (active-active EOS) — the crux
 
-**Claim topic.** Internal compacted topic `__crabka_grpc_dedup`, `N`
+**Claim topic.** Internal compacted topic `__krabka_grpc_dedup`, `N`
 partitions, `cleanup.policy=compact,delete`, `retention.ms = dedup_window_ms`.
 Key = `idempotency_key`; value = `{topic, partition, offset, produce_ts}`. The
-retention bound is *both* the topic size bound and the dedup-window guarantee.
+retention bound is _both_ the topic size bound and the dedup-window guarantee.
 
 **Ownership sharding (mutual exclusion).** Gateway replicas form a consumer
-group (`__crabka_grpc_gateway_dedup_owners`) subscribed to `__crabka_grpc_dedup`.
+group (`__krabka_grpc_gateway_dedup_owners`) subscribed to `__krabka_grpc_dedup`.
 Partition assignment **is** ownership: the owner of dedup-partition `p` is the
 sole writer for every key with `hash(key) % N == p`. On each assignment, every
 replica publishes its `{node_id, advertised_addr, owned_partitions, epoch}` to a
-compacted membership topic `__crabka_grpc_gateway_membership`, which all replicas
+compacted membership topic `__krabka_grpc_gateway_membership`, which all replicas
 tail into a routing table `dedup_partition → owner_addr`.
 
 **Materialized map (atomic-claim visibility).** Each owner consumes its assigned
@@ -167,12 +167,13 @@ During warm-up / rebalance gaps the owner answers `UNAVAILABLE`; the origin
 re-resolves and retries.
 
 **Strict-EOS write path (owner, on a map miss):**
+
 1. acquire the sharded **per-key lock**;
 2. re-check the map (may have filled while waiting);
 3. still missing → using the partition's **transactional producer**
-   (`transactional.id = "crabka-grpc-dedup-{p}"`): `beginTxn` → produce the data
+   (`transactional.id = "krabka-grpc-dedup-{p}"`): `beginTxn` → produce the data
    record to the user topic (`acks=all`) → produce the claim to
-   `__crabka_grpc_dedup[p]` → `commitTxn`;
+   `__krabka_grpc_dedup[p]` → `commitTxn`;
 4. update the local map with the committed offset;
 5. release the lock; return `(partition, offset, deduplicated=false)`.
 
@@ -180,11 +181,12 @@ Map **hit** → return the cached `(partition, offset, deduplicated=true)` witho
 producing.
 
 **Why this is strictly exactly-once:**
-- *Single writer per key* — ownership sharding ⇒ no two replicas race a key.
-- *Atomic claim* — record + claim land in one transaction; `read_committed`
+
+- _Single writer per key_ — ownership sharding ⇒ no two replicas race a key.
+- _Atomic claim_ — record + claim land in one transaction; `read_committed`
   materialization hides partial state; a crash mid-txn aborts ⇒ clean retry.
-- *No cold-start gap* — per-partition warm-up gate before serving.
-- *No zombies* — `transactional.id` pinned to the dedup-partition ⇒ on ownership
+- _No cold-start gap_ — per-partition warm-up gate before serving.
+- _No zombies_ — `transactional.id` pinned to the dedup-partition ⇒ on ownership
   move the new owner's `InitProducerId` bumps the epoch and **fences** the old
   owner (the KIP-447 pattern Crabka already implements).
 
@@ -199,7 +201,7 @@ results; an owner may coalesce same-owner records into one transaction.
 
 ### 3. Consume core
 
-Wraps `crabka-client-consumer`. A subscription joins a Kafka consumer group,
+Wraps `krabka-client-consumer`. A subscription joins a Kafka consumer group,
 runs a poll loop, and yields records to whichever front-end requested them
 (gRPC `Subscribe` or an outbound-webhook subscription). At-least-once: offsets
 commit after delivery is acknowledged (client ack for gRPC; successful POST for
@@ -209,11 +211,11 @@ load-balancing.
 ### 4. Trusted-proxy authorizer (identity → ACL)
 
 The caller authenticates to the gateway (mTLS client cert → principal via
-`crabka-security::principal`, or a bearer token). For each produce/consume the
+`krabka-security::principal`, or a bearer token). For each produce/consume the
 gateway evaluates **the caller's** authorization against a **cached snapshot of
 broker ACLs** and then performs the Kafka operation as its **own** service
 principal. ACL evaluation reuses Crabka's existing broker-side authorizer logic,
-**factored out of `crates/broker/src/authorizer` into a shared `crabka-authz`
+**factored out of `crates/broker/src/authorizer` into a shared `krabka-authz`
 crate** so both broker and gateway share one implementation (allow/deny
 precedence, literal/prefix resource patterns, operation matrix). Broker audit
 shows the gateway principal plus an `on-behalf-of` header carrying the real
@@ -296,7 +298,7 @@ target_url, signing_secret, retry{max_attempts, base_backoff, max_backoff, jitte
 concurrency_per_partition (default 1 = in-order), filter (optional JSONPath/header
 predicate), dead_letter_topic, tls/headers }`.
 
-Each subscription runs a consumer group `__crabka_grpc_wh_{name}`. Per record:
+Each subscription runs a consumer group `__krabka_grpc_wh_{name}`. Per record:
 render a JSON envelope `{topic, partition, offset, timestamp, key, headers, value}`
 (value parsed as JSON when valid, else base64) → POST to `target_url` with
 `X-Crabka-Event-Id` (= `topic-partition-offset`, for receiver dedup),
@@ -304,6 +306,7 @@ render a JSON envelope `{topic, partition, offset, timestamp, key, headers, valu
 `X-Crabka-Timestamp`.
 
 **Delivery semantics — at-least-once, ordered:**
+
 - `2xx` → delivered; commit the partition's contiguous-delivered prefix.
 - non-`2xx` / timeout → retry with exponential backoff + jitter up to
   `max_attempts`. The partition is **head-of-line blocked** while retrying (no
@@ -319,7 +322,7 @@ render a JSON envelope `{topic, partition, offset, timestamp, key, headers, valu
 
 ### 9. TLS / mTLS
 
-rustls listener via `crabka-security` with hot cert reload (as the broker does).
+rustls listener via `krabka-security` with hot cert reload (as the broker does).
 Optional **mTLS**; the client cert → principal feeds the trusted-proxy authorizer
 (§4). Config-driven per listener.
 
@@ -337,18 +340,22 @@ the broker's existing telemetry stack.
 ## Data flow
 
 ### Send (keyed, strict EOS)
+
 `Send/SendStream | webhook-in → produce core → hash(key)%N → own? handle :
 forward → per-key lock → map check → (miss) txn{record→user-topic, claim→dedup} →
 commit → map update → result`.
 
 ### Subscribe (gRPC, at-least-once)
+
 `Start → join group → poll loop → stream Inbound → caller Ack → commit offset`.
 
 ### Webhook inbound
+
 `POST → size-limit → verify HMAC → extract idempotency_key → Record → produce+dedup
 core → 200 {partition, offset, deduplicated}`.
 
 ### Webhook outbound
+
 `group poll → filter → render JSON envelope → sign → POST → 2xx? commit prefix :
 backoff-retry (head-of-line) → exhausted? → DLQ + commit`.
 
@@ -368,7 +375,7 @@ backoff-retry (head-of-line) → exhausted? → DLQ + commit`.
 - Inbound webhook **signature verification** (HMAC + timestamp tolerance).
 - Outbound webhook **HMAC signing** + TLS verify + **SSRF host allow-list**.
 - Authorization via the trusted-proxy authorizer (§4); `on-behalf-of` auditing.
-- Internal topics (`__crabka_grpc_dedup`, `__crabka_grpc_gateway_membership`)
+- Internal topics (`__krabka_grpc_dedup`, `__krabka_grpc_gateway_membership`)
   owned by the gateway service principal.
 
 ## Testing strategy
@@ -404,7 +411,7 @@ parallel-batch subagent execution within a phase (see File-set sketch).
   membership routing topic, key→owner routing, gateway→gateway forwarding,
   per-partition rebalance warm-up, `transactional.id`-per-partition fencing.
 - **P4 — TLS / mTLS.**
-- **P5 — Identity → ACL.** Factor `crabka-authz`; trusted-proxy authorizer;
+- **P5 — Identity → ACL.** Factor `krabka-authz`; trusted-proxy authorizer;
   ACL-snapshot cache; on-behalf-of auditing; identity forwarding.
 - **P6 — Webhook inbound.** HTTP route, signature verification, JSONPath
   mapping, dedup integration.
@@ -432,7 +439,7 @@ Disjoint sets that can run concurrently within a phase:
   (locks) — `store`/`txn` are disjoint; `mod` integrates after.
 - **P3:** `core/dedup/ownership.rs` + `forward.rs` (membership/routing) —
   depends on P2, so a later batch.
-- **P5:** new `crabka-authz` crate (factor) ∥ `core/authz.rs` glue.
+- **P5:** new `krabka-authz` crate (factor) ∥ `core/authz.rs` glue.
 - **P6:** `frontend/webhook_in.rs` (depends on produce+dedup core).
 - **P7:** `frontend/webhook_out/{mod,delivery,sign}.rs` (depends on consume core).
 - **P8:** `telemetry.rs` + metric call-sites (touches many files — run solo or
@@ -440,11 +447,11 @@ Disjoint sets that can run concurrently within a phase:
 
 ## Risks & open questions
 
-- **Owner discovery mechanism.** Plan: compacted `__crabka_grpc_gateway_membership`
+- **Owner discovery mechanism.** Plan: compacted `__krabka_grpc_gateway_membership`
   topic materialized by all replicas. Alternative: piggyback on the group
   assignor's output. Confirm during P3.
 - **ACL-evaluation fidelity.** The trusted-proxy authorizer must mirror Kafka
-  ACL semantics exactly; factoring `crabka-authz` out of the broker keeps one
+  ACL semantics exactly; factoring `krabka-authz` out of the broker keeps one
   source of truth. ACL-cache refresh (push vs poll) is open — start with poll +
   change-driven refresh.
 - **Transactional-producer pool.** Bounded by `N` dedup-partitions per owner;
@@ -463,7 +470,7 @@ Disjoint sets that can run concurrently within a phase:
 A separate in-flight component will provide **Avro / JSON Schema / Protobuf**
 schema management. Integration is purely additive via the codec seam (§5):
 
-- **`SchemaRegistryCodec`** wraps the registry *client*; `produce.rs` /
+- **`SchemaRegistryCodec`** wraps the registry _client_; `produce.rs` /
   `consume.rs` / webhook front-ends are unchanged — only the injected codec
   differs. Dependency direction is gateway → registry client, never the reverse.
 - **Confluent wire framing** for JVM serde interop: encode values as
@@ -473,7 +480,7 @@ schema management. Integration is purely additive via the codec seam (§5):
   vice-versa.
 - **Proto additions (later):** `Record` grows
   `oneof { bytes raw; StructuredValue structured }` + a `schema{subject, id,
-  format}` selector; `Inbound` gains a decoded value + schema metadata. Default
+format}` selector; `Inbound` gains a decoded value + schema metadata. Default
   subject strategy = `TopicNameStrategy` (`<topic>-value` / `-key`). Greenfield ⇒
   these can be added freely when the time comes.
 - **Webhook tie-in:** inbound JSON can be validated against a JSON Schema

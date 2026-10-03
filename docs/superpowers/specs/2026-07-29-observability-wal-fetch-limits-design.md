@@ -27,17 +27,17 @@ The traces binary accepts:
 
 ```text
 --wal-fetch-max-bytes
-CRABKA_TRACES_WAL_FETCH_MAX_BYTES
+KRABKA_TRACES_WAL_FETCH_MAX_BYTES
 
 --wal-fetch-partition-max-bytes
-CRABKA_TRACES_WAL_FETCH_PARTITION_MAX_BYTES
+KRABKA_TRACES_WAL_FETCH_PARTITION_MAX_BYTES
 ```
 
 The profiles binary accepts the same command-line arguments with:
 
 ```text
-CRABKA_PROFILES_WAL_FETCH_MAX_BYTES
-CRABKA_PROFILES_WAL_FETCH_PARTITION_MAX_BYTES
+KRABKA_PROFILES_WAL_FETCH_MAX_BYTES
+KRABKA_PROFILES_WAL_FETCH_PARTITION_MAX_BYTES
 ```
 
 Command-line values win over environment values. Defaults remain 2,097,152
@@ -49,9 +49,9 @@ values are rejected by Clap before network I/O.
 ## Validated Types
 
 Add `ConsumerFetchMaxBytes(i32)` and
-`ConsumerFetchPartitionMaxBytes(i32)` to `crabka-client-consumer`. Both use
+`ConsumerFetchPartitionMaxBytes(i32)` to `krabka-client-consumer`. Both use
 `refined_type::rule::GreaterI32<0>` and implement the parsing and display traits
-needed by Clap. Each exposes its value as a `crabka_units::ByteSize` for the
+needed by Clap. Each exposes its value as a `krabka_units::ByteSize` for the
 runtime boundary while retaining the exact positive-`i32` Kafka protocol
 domain.
 
@@ -60,8 +60,8 @@ arguments and validation. Traces and profiles pass the validated settings as
 `ByteSize` values and retain their current application-specific defaults rather
 than changing the client library's independent default fetch policy.
 
-No dependency is added: `crabka-client-consumer` already depends on
-`refined_type` and `crabka-units`, and both services already depend on the
+No dependency is added: `krabka-client-consumer` already depends on
+`refined_type` and `krabka-units`, and both services already depend on the
 consumer and units crates.
 
 ## Runtime Flow

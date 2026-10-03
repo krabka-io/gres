@@ -7,7 +7,7 @@
 
 ## 1. Context
 
-Sub-project #1 (merged: PRs #373, #377) delivered the `crabka-client-streams`
+Sub-project #1 (merged: PRs #373, #377) delivered the `krabka-client-streams`
 crate — a `StreamsGroupHeartbeat` membership client + a byte-exact topology
 builder. In #1, processors are **structural placeholders**: `NodeKind::Processor
 { predecessors }` carries no executable logic, and the topology only feeds the
@@ -29,7 +29,7 @@ on.
 
 ### Goal
 
-Extend `crabka-client-streams` so a Rust application can:
+Extend `krabka-client-streams` so a Rust application can:
 
 1. **Attach executable logic** to a topology via a typed Processor API
    (`Processor<KIn,VIn,KOut,VOut>`, `ProcessorContext::forward`, serdes at topic
@@ -88,13 +88,13 @@ pub trait ProcessorSupplier<KIn, VIn, KOut, VOut>: Send + Sync + 'static {
 ### 3.2 Erased records + driver-loop forwarding (`processor/erased.rs`, `graph.rs`)
 
 - **`ErasedRecord`**: `{ key: Option<Box<dyn Any + Send>>, value: Box<dyn Any +
-  Send>, timestamp }`, with a **Bytes fast-path** enum variant at source/sink
+Send>, timestamp }`, with a **Bytes fast-path** enum variant at source/sink
   boundaries to avoid needless boxing.
 - **No recursive forwarding.** `ProcessorContext::forward` does **not** invoke
   children (that would alias `&mut` across nodes). It **appends** the erased
   output to a `forward_buffer: VecDeque<(child_node_idx, ErasedRecord)>` owned by
   the graph driver. The driver owns `nodes: Vec<ErasedNode>` + `children:
-  Vec<Vec<usize>>` and runs, per input record:
+Vec<Vec<usize>>` and runs, per input record:
   ```
   push (source_node_idx, erased); while let Some((idx, rec)) = buffer.pop():
       nodes[idx].process(&mut Ctx { buffer, children: &children[idx], record_ctx }, rec)
@@ -130,7 +130,9 @@ TopologyError::TypeMismatch {
     child:  String, child_kind:  NodeKind, expects:  &'static str,
 }
 ```
+
 whose `Display` reads like an `rustc` error:
+
 ```
 topology wiring type error: sink `out` expects `Record<String, String>`,
   but its parent processor `upcase` forwards `Record<String, i64>`
@@ -138,6 +140,7 @@ topology wiring type error: sink `out` expects `Record<String, String>`,
   = note: checked at build() because the Processor API wires nodes by name;
           use the typed DSL (sub-project #4) for compile-time wiring safety
 ```
+
 The per-record runtime downcast remains only as an unreachable-in-practice
 backstop (returns `ProcessorError`).
 
@@ -178,8 +181,9 @@ One per assigned **active** task `(subtopology_id, partition)`. Owns: an
 instantiated erased graph for that subtopology (its own processor instances via
 `ProcessorSupplier::get()` — per-task isolation), the fetch position per source
 partition, and pending source offsets to commit.
+
 - `process(batch)` — for each fetched record (offset order), feed `(topic,
-  key_bytes, value_bytes, ts)` to the matching source node → drive the graph to
+key_bytes, value_bytes, ts)` to the matching source node → drive the graph to
   completion → sinks serialize and **buffer** into the shared producer; advance
   the in-memory position.
 - `commit()` — **flush the producer** (sink/repartition records durable), then
@@ -189,7 +193,7 @@ partition, and pending source offsets to commit.
 ### 5.2 `StreamThread` (`thread.rs`)
 
 A single tokio task (num.stream.threads = 1 for #2) owning the active-task set.
-Loop: round-robin `crabka_client_core::fetch_partition` each task's source
+Loop: round-robin `krabka_client_core::fetch_partition` each task's source
 partitions at the tracked offset → `process` → every `commit.interval.ms`,
 `commit()` all tasks. On task creation, seek to the committed offset
 (`OffsetFetch`) or `auto.offset.reset` (earliest/latest) if none. Uses its own
@@ -199,6 +203,7 @@ connection — broker is serial per-connection).
 ### 5.3 Rebalance integration
 
 Reacts to `StreamsEvent` from #1's membership:
+
 - `Assigned(a)` → diff `a.active` vs current tasks: **close revoked** (flush +
   commit + `Processor::close()`), **create added** (build graph, seek to
   committed). `standby`/`warmup` **ignored** in #2.
@@ -208,6 +213,7 @@ Reacts to `StreamsEvent` from #1's membership:
 ### 5.4 `KafkaStreams` handle (`app.rs`)
 
 Owns the `StreamsMembership` (#1) + the `StreamThread` + the shared `Producer`.
+
 - `start()` → joins the group, spawns a supervisor pumping `membership.next_event()`
   into the thread's task-management + the poll loop.
 - `close()` → stop the thread (flush + commit + close all tasks), then
@@ -249,7 +255,7 @@ topologies are testable end-to-end in one driver (as the JVM
    adapters, multi-child child-order, source/sink (de)serialization, the
    build-time `TypeId` validation.
 3. **In-process broker integration** — a `KafkaStreams` app against a real
-   `crabka-broker` (reuse #1's harness + `streams.version` enablement): produce
+   `krabka-broker` (reuse #1's harness + `streams.version` enablement): produce
    input to the source topic, run the app, assert the transformed records land on
    the sink topic and committed offsets advance, then clean `close()`. The only
    end-to-end (fetch→process→produce→commit) gate; runs under the existing
@@ -278,7 +284,7 @@ topologies are testable end-to-end in one driver (as the JVM
 
 ## 9. Success criteria
 
-- `cargo test -p crabka-client-streams` green: TopologyTestDriver unit tests +
+- `cargo test -p krabka-client-streams` green: TopologyTestDriver unit tests +
   erased-graph unit tests + the in-process broker integration test + the doctest.
 - `cargo clippy --workspace --all-targets -- -D warnings` and
   `cargo fmt --check` clean.

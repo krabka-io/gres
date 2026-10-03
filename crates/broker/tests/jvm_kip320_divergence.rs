@@ -7,7 +7,7 @@
 //!
 //! Run on Linux/CI:
 //! ```text
-//! cargo test -p crabka-broker --test jvm_kip320_divergence -- --ignored --nocapture
+//! cargo test -p krabka-broker --test jvm_kip320_divergence -- --ignored --nocapture
 //! ```
 //!
 //! Four scenarios, each independently `#[ignore]`d:
@@ -27,7 +27,7 @@
 //!    `OffsetForLeaderEpoch` answer over the wire with the Task-2 client
 //!    helper.
 //!
-//! 2. [`kip320_jvm_follower_truncates_from_crabka_leader`][]: induced divergence.
+//! 2. [`kip320_jvm_follower_truncates_from_krabka_leader`][]: induced divergence.
 //!    The test runs a mixed JVM+Crabka cluster: one
 //!    `mirror.gcr.io/apache/kafka:4.0.0` broker and a Crabka broker that share
 //!    a Crabka-led `KRaft` metadata quorum, per the Slice-6 mixed-quorum work
@@ -43,7 +43,7 @@
 //!    `kafka-console-consumer` recovers and continues without a fatal
 //!    deserialization/`LogTruncationException`.
 //!
-//! 3. [`kip320_crabka_follower_truncates_from_jvm_leader`][]: the reverse
+//! 3. [`kip320_krabka_follower_truncates_from_jvm_leader`][]: the reverse
 //!    direction. The test parks replication behind a phantom leader, appends a
 //!    Crabka-only suffix, then promotes the JVM replica. The Crabka follower
 //!    must truncate that suffix and resume at the JVM leader's exact LEO.
@@ -72,9 +72,9 @@ use std::{
 };
 
 use base64::Engine as _;
-use crabka_broker::{BootstrapMode, Broker, BrokerConfig, BrokerHandle};
-use crabka_log::LogConfig;
-use crabka_metadata::{LeaderEpoch, MetadataRecord, PartitionRecord};
+use krabka_broker::{BootstrapMode, Broker, BrokerConfig, BrokerHandle};
+use krabka_log::LogConfig;
+use krabka_metadata::{LeaderEpoch, MetadataRecord, PartitionRecord};
 use tempfile::TempDir;
 use uuid::Uuid;
 
@@ -231,20 +231,20 @@ async fn start_host_broker_on(client_port: u16, controller_port: u16) -> (Broker
         advertised_listener: format!("host.docker.internal:{client_port}"),
         log_dir: dir.path().to_path_buf(),
         log_config: LogConfig::default(),
-        node_id: crabka_broker::NodeId(1),
+        node_id: krabka_broker::NodeId(1),
         controller_listen_addr: format!("0.0.0.0:{controller_port}").parse().expect("addr"),
         controller_quorum_voters: vec![(
-            crabka_broker::NodeId(1),
+            krabka_broker::NodeId(1),
             format!("127.0.0.1:{controller_port}"),
         )],
-        heartbeat_interval: crabka_units::millis(3_000),
+        heartbeat_interval: krabka_units::millis(3_000),
         // This broker advertises a container-only hostname, so its host-side
         // heartbeat client cannot loop back through the advertised listener.
         // Keep it alive for the bounded in-container Java compile and probe.
-        heartbeat_timeout: crabka_units::secs(120),
-        replica_lag_time_max: crabka_units::millis(30_000),
-        controller_election_timeout: crabka_units::secs(5),
-        controller_heartbeat_interval: crabka_units::millis(500),
+        heartbeat_timeout: krabka_units::secs(120),
+        replica_lag_time_max: krabka_units::millis(30_000),
+        controller_election_timeout: krabka_units::secs(5),
+        controller_heartbeat_interval: krabka_units::millis(500),
         bootstrap_mode: BootstrapMode::Bootstrap,
         ..BrokerConfig::default()
     };
@@ -345,8 +345,8 @@ public class Kip320Probe {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "requires Docker; Linux-bound (host.docker.internal bridge)"]
 async fn kip320_wire_conformance_offset_for_leader_epoch() {
-    const TOPIC: &str = "crabka-kip320-wire";
-    const CONTAINER: &str = "crabka-kip320-wire-helper";
+    const TOPIC: &str = "krabka-kip320-wire";
+    const CONTAINER: &str = "krabka-kip320-wire-helper";
     const CLIENT_PORT: u16 = 10692;
     const CONTROLLER_PORT: u16 = 10693;
     const BOOTSTRAP: &str = "host.docker.internal:10692";
@@ -420,7 +420,7 @@ async fn kip320_wire_conformance_offset_for_leader_epoch() {
     //    the Rust client helper (Task 2). This is the byte-exact source of
     //    truth the JVM helper is validated against.
     {
-        let client = crabka_client_core::Client::builder()
+        let client = krabka_client_core::Client::builder()
             .bootstrap(format!("127.0.0.1:{CLIENT_PORT}"))
             .build()
             .await
@@ -691,9 +691,9 @@ impl MixedCluster {
 
 /// Build a Crabka broker config that is BOTH a controller voter (in the shared
 /// static `KRaft` quorum) and a data-plane broker. Mirrors
-/// `jvm_static_quorum_spike.rs::crabka_controller_config` plus a bound data
+/// `jvm_static_quorum_spike.rs::krabka_controller_config` plus a bound data
 /// listener.
-fn crabka_mixed_config(
+fn krabka_mixed_config(
     i: usize,
     client_port: u16,
     advertised_host: &str,
@@ -704,7 +704,7 @@ fn crabka_mixed_config(
 ) -> BrokerConfig {
     let mut cfg = BrokerConfig::for_tests(log_dir.to_path_buf());
     cfg.broker_id = i32::try_from(i + 1).unwrap();
-    cfg.node_id = crabka_broker::NodeId(u64::try_from(i + 1).unwrap());
+    cfg.node_id = krabka_broker::NodeId(u64::try_from(i + 1).unwrap());
     cfg.listen_addr = format!("0.0.0.0:{client_port}").parse().unwrap();
     cfg.advertised_listener = format!("{advertised_host}:{client_port}");
     cfg.controller_listen_addr = own_controller_addr;
@@ -712,22 +712,22 @@ fn crabka_mixed_config(
     cfg.bootstrap_mode = BootstrapMode::Bootstrap;
     cfg.controller_quorum_voters = voters
         .iter()
-        .map(|(id, a)| (crabka_broker::NodeId(*id), a.to_string()))
+        .map(|(id, a)| (krabka_broker::NodeId(*id), a.to_string()))
         .collect();
     cfg.auto_join = false;
     cfg.bootstrap_servers = vec![];
     cfg.cluster_id = Some(cluster_id);
-    cfg.heartbeat_interval = crabka_units::millis(1_000);
+    cfg.heartbeat_interval = krabka_units::millis(1_000);
     // Kafka's `broker.session.timeout.ms` default. The controller starts a
     // broker's session when its registration lands, and the JVM broker
     // heartbeats every 2 s (`broker.heartbeat.interval.ms`). Under CI load the
     // JVM's first heartbeat can take more than 4 s to reach the controller,
     // and a shorter window then declares the JVM broker dead, shrinks it out
     // of the ISR, and breaks the tests that make it leader.
-    cfg.heartbeat_timeout = crabka_units::millis(9_000);
-    cfg.replica_lag_time_max = crabka_units::millis(10_000);
-    cfg.controller_election_timeout = crabka_units::secs(3);
-    cfg.controller_heartbeat_interval = crabka_units::millis(250);
+    cfg.heartbeat_timeout = krabka_units::millis(9_000);
+    cfg.replica_lag_time_max = krabka_units::millis(10_000);
+    cfg.controller_election_timeout = krabka_units::secs(3);
+    cfg.controller_heartbeat_interval = krabka_units::millis(250);
     cfg
 }
 
@@ -745,36 +745,36 @@ async fn start_mixed_cluster(container: &str, jvm_is_controller: bool) -> MixedC
 
     // Pre-bind 2 Crabka client ports, 3 controller ports.
     let (client_addrs, controller_addrs) = support::bind_and_drop_ports(3).await;
-    let crabka_client_ports = [client_addrs[0].port(), client_addrs[1].port()];
+    let krabka_client_ports = [client_addrs[0].port(), client_addrs[1].port()];
     let p1 = controller_addrs[0].port();
     let p2 = controller_addrs[1].port();
     let p3 = controller_addrs[2].port();
 
-    let mut crabka_voters: Vec<(u64, SocketAddr)> = vec![
+    let mut krabka_voters: Vec<(u64, SocketAddr)> = vec![
         (1, format!("127.0.0.1:{p1}").parse().unwrap()),
         (2, format!("127.0.0.1:{p2}").parse().unwrap()),
     ];
     if jvm_is_controller {
-        crabka_voters.push((3, format!("127.0.0.1:{p3}").parse().unwrap()));
+        krabka_voters.push((3, format!("127.0.0.1:{p3}").parse().unwrap()));
     }
 
     let dir1 = TempDir::new().unwrap();
     let dir2 = TempDir::new().unwrap();
-    let cfg1 = crabka_mixed_config(
+    let cfg1 = krabka_mixed_config(
         0,
-        crabka_client_ports[0],
+        krabka_client_ports[0],
         &advertised_host,
         format!("0.0.0.0:{p1}").parse().unwrap(),
-        &crabka_voters,
+        &krabka_voters,
         cluster_id,
         dir1.path(),
     );
-    let cfg2 = crabka_mixed_config(
+    let cfg2 = krabka_mixed_config(
         1,
-        crabka_client_ports[1],
+        krabka_client_ports[1],
         &advertised_host,
         format!("0.0.0.0:{p2}").parse().unwrap(),
-        &crabka_voters,
+        &krabka_voters,
         cluster_id,
         dir2.path(),
     );
@@ -866,9 +866,9 @@ async fn start_mixed_cluster(container: &str, jvm_is_controller: bool) -> MixedC
     let bootstrap_all = format!(
         "{}:{},{}:{},{}:{}",
         advertised_host,
-        crabka_client_ports[0],
+        krabka_client_ports[0],
         advertised_host,
-        crabka_client_ports[1],
+        krabka_client_ports[1],
         advertised_host,
         jvm_data_port,
     );
@@ -894,11 +894,11 @@ async fn wait_for_jvm_metadata_max(cluster: &MixedCluster, expected: i16) {
             .map(|(broker, _)| {
                 broker
                     .controller_image_for_test()
-                    .broker(crabka_broker::NodeId(3))
+                    .broker(krabka_broker::NodeId(3))
                     .and_then(|registration| {
                         registration
                             .features
-                            .get(crabka_metadata::metadata_version::METADATA_VERSION_FEATURE)
+                            .get(krabka_metadata::metadata_version::METADATA_VERSION_FEATURE)
                             .map(|(_, max)| *max)
                     })
             })
@@ -940,8 +940,8 @@ async fn wait_for_voter_registrations(cluster: &MixedCluster) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "requires Docker + published controller/data ports; Linux-bound"]
 async fn metadata_version_downgrade_rejects_pre_kip1155_jvm() {
-    const EXISTING_TOPIC: &str = "crabka-mv-capability-existing";
-    const CONTAINER: &str = "crabka-mv-capability-jvm-broker";
+    const EXISTING_TOPIC: &str = "krabka-mv-capability-existing";
+    const CONTAINER: &str = "krabka-mv-capability-jvm-broker";
     const UPPER_LEVEL: i16 = 25; // 4.0-IV3.
 
     let cluster = start_mixed_cluster(CONTAINER, false).await;
@@ -975,10 +975,10 @@ async fn metadata_version_downgrade_rejects_pre_kip1155_jvm() {
     let image = cluster.crabka[0].0.controller_image_for_test();
     assert!(
         !image
-            .broker(crabka_broker::NodeId(3))
+            .broker(krabka_broker::NodeId(3))
             .expect("Kafka 4.0 registration")
             .features
-            .contains_key(crabka_metadata::metadata_version::METADATA_DOWNGRADE_CAPABILITY_FEATURE),
+            .contains_key(krabka_metadata::metadata_version::METADATA_DOWNGRADE_CAPABILITY_FEATURE),
         "pre-KIP-1155 JVM registration unexpectedly advertised downgrade capability"
     );
 
@@ -1027,9 +1027,9 @@ async fn metadata_version_downgrade_rejects_pre_kip1155_jvm() {
 ///      truncation/deserialization error after the suffix is rewritten.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "requires Docker + a published controller/data port; Linux-bound"]
-async fn kip320_jvm_follower_truncates_from_crabka_leader() {
-    const TOPIC: &str = "crabka-kip320-jvm-follower";
-    const CONTAINER: &str = "crabka-kip320-jvm-follower-broker";
+async fn kip320_jvm_follower_truncates_from_krabka_leader() {
+    const TOPIC: &str = "krabka-kip320-jvm-follower";
+    const CONTAINER: &str = "krabka-kip320-jvm-follower-broker";
 
     let cluster = start_mixed_cluster(CONTAINER, true).await;
     let c1 = &cluster.crabka[0].0; // Crabka broker_id 1
@@ -1121,9 +1121,9 @@ async fn kip320_jvm_follower_truncates_from_crabka_leader() {
     c1.submit_metadata_record_for_test(MetadataRecord::V1Partition(PartitionRecord {
         topic: TOPIC.to_string(),
         partition: 0,
-        leader: crabka_broker::NodeId(3),
+        leader: krabka_broker::NodeId(3),
         replicas: pr.replicas.clone(),
-        isr: vec![crabka_broker::NodeId(3)],
+        isr: vec![krabka_broker::NodeId(3)],
         leader_epoch: jvm_epoch,
         adding_replicas: vec![],
         removing_replicas: vec![],
@@ -1159,9 +1159,9 @@ async fn kip320_jvm_follower_truncates_from_crabka_leader() {
     let forged = MetadataRecord::V1Partition(PartitionRecord {
         topic: TOPIC.to_string(),
         partition: 0,
-        leader: crabka_broker::NodeId(99),
+        leader: krabka_broker::NodeId(99),
         replicas: pr.replicas.clone(),
-        isr: vec![crabka_broker::NodeId(99)],
+        isr: vec![krabka_broker::NodeId(99)],
         leader_epoch: parked_epoch,
         adding_replicas: vec![],
         removing_replicas: vec![],
@@ -1174,7 +1174,7 @@ async fn kip320_jvm_follower_truncates_from_crabka_leader() {
     let parked_deadline = Instant::now() + Duration::from_secs(30);
     loop {
         if c1.partition_record_for_test(TOPIC, 0).is_some_and(|p| {
-            p.leader == crabka_broker::NodeId(99) && p.leader_epoch == parked_epoch
+            p.leader == krabka_broker::NodeId(99) && p.leader_epoch == parked_epoch
         }) {
             break;
         }
@@ -1191,17 +1191,17 @@ async fn kip320_jvm_follower_truncates_from_crabka_leader() {
     c1.test_truncate_local_log(TOPIC, 0, prefix_leo)
         .await
         .expect("truncate Crabka copy of JVM suffix");
-    let crabka_leo_before = c1.local_log_end_offset(TOPIC, 0).unwrap_or(0);
+    let krabka_leo_before = c1.local_log_end_offset(TOPIC, 0).unwrap_or(0);
     c1.produce_records_for_test(TOPIC, 0, 4)
         .await
         .expect("append divergent suffix on Crabka leader");
-    let crabka_leo_after = c1.local_log_end_offset(TOPIC, 0).unwrap_or(0);
+    let krabka_leo_after = c1.local_log_end_offset(TOPIC, 0).unwrap_or(0);
     eprintln!(
-        "CRABKA[kip320] Crabka leader LEO {crabka_leo_before} -> {crabka_leo_after} (divergent suffix)"
+        "CRABKA[kip320] Crabka leader LEO {krabka_leo_before} -> {krabka_leo_after} (divergent suffix)"
     );
 
     assert!(
-        crabka_leo_before == prefix_leo && crabka_leo_after == prefix_leo + 4,
+        krabka_leo_before == prefix_leo && krabka_leo_after == prefix_leo + 4,
         "Crabka divergent rewrite should replace four offsets in place"
     );
 
@@ -1211,9 +1211,9 @@ async fn kip320_jvm_follower_truncates_from_crabka_leader() {
     let restore = MetadataRecord::V1Partition(PartitionRecord {
         topic: TOPIC.to_string(),
         partition: 0,
-        leader: crabka_broker::NodeId(1),
+        leader: krabka_broker::NodeId(1),
         replicas: pr.replicas.clone(),
-        isr: vec![crabka_broker::NodeId(1)],
+        isr: vec![krabka_broker::NodeId(1)],
         leader_epoch: LeaderEpoch(parked_epoch.0 + 1),
         adding_replicas: vec![],
         removing_replicas: vec![],
@@ -1258,9 +1258,9 @@ async fn kip320_jvm_follower_truncates_from_crabka_leader() {
     // independently parsed, on-disk last offset.
     let jvm_max = max_offset_in_dump(&jvm_dump);
     assert!(
-        jvm_max == Some(crabka_leo_after - 1),
+        jvm_max == Some(krabka_leo_after - 1),
         "JVM follower did not converge to Crabka leader after truncation: \
-         jvm_max={jvm_max:?} crabka_leo={crabka_leo_after}"
+         jvm_max={jvm_max:?} krabka_leo={krabka_leo_after}"
     );
 
     // 7. ASSERTION (b): a kafka-console-consumer recovers — it reads the
@@ -1312,9 +1312,9 @@ async fn kip320_jvm_follower_truncates_from_crabka_leader() {
 /// a fresh JVM-authored suffix.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "requires Docker + a published controller/data port; Linux-bound"]
-async fn kip320_crabka_follower_truncates_from_jvm_leader() {
-    const TOPIC: &str = "crabka-kip320-crabka-follower";
-    const CONTAINER: &str = "crabka-kip320-crabka-follower-broker";
+async fn kip320_krabka_follower_truncates_from_jvm_leader() {
+    const TOPIC: &str = "krabka-kip320-krabka-follower";
+    const CONTAINER: &str = "krabka-kip320-krabka-follower-broker";
 
     let cluster = start_mixed_cluster(CONTAINER, true).await;
     let c1 = &cluster.crabka[0].0;
@@ -1388,9 +1388,9 @@ async fn kip320_crabka_follower_truncates_from_jvm_leader() {
     c1.submit_metadata_record_for_test(MetadataRecord::V1Partition(PartitionRecord {
         topic: TOPIC.to_string(),
         partition: 0,
-        leader: crabka_broker::NodeId(99),
+        leader: krabka_broker::NodeId(99),
         replicas: partition.replicas.clone(),
-        isr: vec![crabka_broker::NodeId(99)],
+        isr: vec![krabka_broker::NodeId(99)],
         leader_epoch: parked_epoch,
         adding_replicas: vec![],
         removing_replicas: vec![],
@@ -1399,18 +1399,18 @@ async fn kip320_crabka_follower_truncates_from_jvm_leader() {
     }))
     .await
     .expect("park reverse-direction replicas behind phantom leader");
-    c1.wait_until_local_partition_target(TOPIC, 0, crabka_broker::NodeId(99), parked_epoch)
+    c1.wait_until_local_partition_target(TOPIC, 0, krabka_broker::NodeId(99), parked_epoch)
         .await;
 
     c1.produce_records_for_test(TOPIC, 0, 5)
         .await
         .expect("append divergent suffix on parked Crabka replica");
-    let crabka_leo_diverged = c1.local_log_end_offset(TOPIC, 0).unwrap_or(0);
+    let krabka_leo_diverged = c1.local_log_end_offset(TOPIC, 0).unwrap_or(0);
     eprintln!(
-        "CRABKA[kip320] reverse: Crabka replica LEO {prefix_leo} -> {crabka_leo_diverged} (forced divergent suffix)"
+        "CRABKA[kip320] reverse: Crabka replica LEO {prefix_leo} -> {krabka_leo_diverged} (forced divergent suffix)"
     );
     assert2::assert!(
-        crabka_leo_diverged == prefix_leo + 5,
+        krabka_leo_diverged == prefix_leo + 5,
         "Crabka-only divergent suffix should add five records"
     );
 
@@ -1420,9 +1420,9 @@ async fn kip320_crabka_follower_truncates_from_jvm_leader() {
     c1.submit_metadata_record_for_test(MetadataRecord::V1Partition(PartitionRecord {
         topic: TOPIC.to_string(),
         partition: 0,
-        leader: crabka_broker::NodeId(3),
+        leader: krabka_broker::NodeId(3),
         replicas: partition.replicas.clone(),
-        isr: vec![crabka_broker::NodeId(3)],
+        isr: vec![krabka_broker::NodeId(3)],
         leader_epoch: jvm_epoch,
         adding_replicas: vec![],
         removing_replicas: vec![],
@@ -1440,7 +1440,7 @@ async fn kip320_crabka_follower_truncates_from_jvm_leader() {
     //    Equal final LEOs alone would not distinguish truncate-and-refetch from
     //    leaving the bogus suffix in place.
     let dl = Instant::now() + Duration::from_secs(45);
-    let mut final_leo = crabka_leo_diverged;
+    let mut final_leo = krabka_leo_diverged;
     loop {
         final_leo = c1.local_log_end_offset(TOPIC, 0).unwrap_or(final_leo);
         if final_leo == prefix_leo {
@@ -1477,7 +1477,7 @@ async fn kip320_crabka_follower_truncates_from_jvm_leader() {
         "Crabka follower did not resume at the JVM leader's exact LEO"
     );
     eprintln!(
-        "CRABKA[kip320] reverse: truncated from {crabka_leo_diverged} to {prefix_leo}, then followed JVM to {final_leo}"
+        "CRABKA[kip320] reverse: truncated from {krabka_leo_diverged} to {prefix_leo}, then followed JVM to {final_leo}"
     );
 
     cluster.shutdown().await;
@@ -1580,6 +1580,6 @@ fn kafka_dump_offset_parser_accepts_spaced_values() {
 #[test]
 fn topic_description_isr_parser_ignores_ids_outside_isr_field() {
     let description =
-        "Topic: crabka-kip320-3 Partition: 0 Leader: 1 Replicas: 1,2,3 Isr: 1,2 Elr: 3";
+        "Topic: krabka-kip320-3 Partition: 0 Leader: 1 Replicas: 1,2,3 Isr: 1,2 Elr: 3";
     assert2::assert!(described_isr(description) == vec![1, 2]);
 }

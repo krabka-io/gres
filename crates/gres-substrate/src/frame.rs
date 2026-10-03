@@ -6,7 +6,7 @@
 //! (`vlen`/`value` present only for Put). The parser bounds-checks every wire
 //! length against the remaining buffer before any allocation.
 
-use crabka_pgkv::WriteOp;
+use krabka_pgkv::WriteOp;
 
 use crate::error::SubstrateError;
 
@@ -193,7 +193,7 @@ impl<'a> Reader<'a> {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgkv::WriteOp;
+    use krabka_pgkv::WriteOp;
     use proptest::prelude::*;
 
     use super::*;

@@ -29,7 +29,7 @@ TLS cert isn't signed by a public webpki root.
    `/etc/crabka/oauth-jwks-trust/` when any OAuth listener has trust
    certs.
 5. **Broker TOML rendering**: `[oauthbearer].jwks_tls_trust =
-   "/etc/crabka/oauth-jwks-trust/ca.crt"` emitted when trust certs are
+"/etc/crabka/oauth-jwks-trust/ca.crt"` emitted when trust certs are
    set.
 6. **Three new `Ready=False` reasons** for trust-bundle assembly
    failures.
@@ -41,15 +41,15 @@ TLS cert isn't signed by a public webpki root.
 
 ## Non-deliverables (out of scope)
 
-| Item | Status |
-|------|--------|
-| Source-Secret reflector for instant rotation pickup | Out — periodic reconcile is sufficient for slice 50b. Future slice if real demand. |
-| Cross-namespace Secret references | Out — `secretName` constrained to same ns as the `Kafka` CR. |
-| mTLS from broker *to* IdP (client cert auth) | Out — not in any roadmap slice. |
-| Per-listener `[oauthbearer]` config (allowing divergent trust per listener) | Still rejected at validation by the existing slice-50 cross-listener guard; lifts in future slice 49h. |
-| Operator-managed truststore in the JVM producer Job | E2E concern only — handled inline in the workflow (keytool import of Keycloak CA into the existing cluster-CA JKS). |
-| Multiple PEM paths threaded into the broker (broker reads one file only) | Out — broker accepts one path (per slice 49c); operator concatenates. |
-| Pinning the IdP cert SHA / public-key fingerprint | Out — rustls chain verification only (matches 49c). |
+| Item                                                                        | Status                                                                                                              |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Source-Secret reflector for instant rotation pickup                         | Out — periodic reconcile is sufficient for slice 50b. Future slice if real demand.                                  |
+| Cross-namespace Secret references                                           | Out — `secretName` constrained to same ns as the `Kafka` CR.                                                        |
+| mTLS from broker _to_ IdP (client cert auth)                                | Out — not in any roadmap slice.                                                                                     |
+| Per-listener `[oauthbearer]` config (allowing divergent trust per listener) | Still rejected at validation by the existing slice-50 cross-listener guard; lifts in future slice 49h.              |
+| Operator-managed truststore in the JVM producer Job                         | E2E concern only — handled inline in the workflow (keytool import of Keycloak CA into the existing cluster-CA JKS). |
+| Multiple PEM paths threaded into the broker (broker reads one file only)    | Out — broker accepts one path (per slice 49c); operator concatenates.                                               |
+| Pinning the IdP cert SHA / public-key fingerprint                           | Out — rustls chain verification only (matches 49c).                                                                 |
 
 ## CRD shape
 
@@ -125,21 +125,23 @@ needed; the canonical clone includes the field as-is.
 
 ### Failure-mode summary
 
-| Reason string (Ready=False) | Trigger |
-|------|---------|
-| `MissingOauthTrustSecret` | Source Secret name doesn't exist in the Kafka CR's namespace |
-| `MissingOauthTrustKey` | Source Secret exists; key name doesn't |
-| `EmptyOauthTrustValue` | Key exists but value is zero bytes |
-| `ConflictingOAuthConfig` (existing — extended) | Two OAuth listeners declare different trust bundles |
+| Reason string (Ready=False)                    | Trigger                                                      |
+| ---------------------------------------------- | ------------------------------------------------------------ |
+| `MissingOauthTrustSecret`                      | Source Secret name doesn't exist in the Kafka CR's namespace |
+| `MissingOauthTrustKey`                         | Source Secret exists; key name doesn't                       |
+| `EmptyOauthTrustValue`                         | Key exists but value is zero bytes                           |
+| `ConflictingOAuthConfig` (existing — extended) | Two OAuth listeners declare different trust bundles          |
 
 ## Pod template
 
 In `controller/kafka_node_pool.rs`:
 
 - `render_storage(..., oauth_jwks_trust_secret: Option<&str>)` — new parameter. When `Some(name)`, append:
+
   ```json
   { "name": "oauth-jwks-trust", "secret": { "secretName": name, "defaultMode": 0o400 } }
   ```
+
   to the `volumes` array. (Mirrors the existing `cluster_ca_cert_vol` / `clients_ca_cert_vol` pattern.)
 
 - `render_main_container(..., oauth_jwks_trust_mount: Option<&str>)` — new parameter. When `Some(mount_path)`, append:
@@ -184,34 +186,37 @@ internal; the broker only sees the file path.
 
 ## File-level change map
 
-| File | Change |
-|------|--------|
-| `crates/operator/src/crd/listener.rs` | New `TlsTrustedCertificate` struct, new field on `ListenerAuthenticationOAuth`, extend `listener_authentication_schema` |
-| `crates/operator/src/controller/listeners.rs` | Render `jwks_tls_trust` line; canonical-tuple includes `tls_trusted_certificates` (no helper change needed — `Eq` derives carry through) |
-| `crates/operator/src/controller/kafka.rs` | New `reconcile_oauth_jwks_trust` helper; 3 new failure paths; thread `Option<String>` (managed Secret name) into render calls |
-| `crates/operator/src/controller/kafka_node_pool.rs` | Add `oauth_jwks_trust_secret: Option<&str>` to `render_storage` + `render_main_container`; conditional volume + mount entries |
-| `crates/operator/src/controller/common.rs` (or wherever `ReconcileError` is defined) | New error variants (or new `Ready=False` reason strings) for the three failure modes |
-| `crates/operator/sample/oauth-listener.yaml` | Add `tlsTrustedCertificates` example |
-| `deploy/crds/crabka.io_kafkas.yaml` | Regenerated |
-| `crates/operator/tests/reconcile_listener_oauth.rs` | Extend cross-listener-divergence test with `tls_trusted_certificates` perturbation; new TOML-render tests |
-| `crates/operator/tests/reconcile_oauth_trust.rs` (new) | Reconcile-level integration tests for managed-Secret creation + failure modes + pod-mount assertions |
-| `.github/workflows/operator-e2e.yml` | `kind-oauth` job: install Keycloak with TLS, copy auto-generated CA into default ns, point Kafka CR at HTTPS + declare trust certs, drop WeakAuth assertion, update producer-Job truststore |
-| `STATUS.md` | New `## Slice 50b` entry |
+| File                                                                                 | Change                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/operator/src/crd/listener.rs`                                                | New `TlsTrustedCertificate` struct, new field on `ListenerAuthenticationOAuth`, extend `listener_authentication_schema`                                                                     |
+| `crates/operator/src/controller/listeners.rs`                                        | Render `jwks_tls_trust` line; canonical-tuple includes `tls_trusted_certificates` (no helper change needed — `Eq` derives carry through)                                                    |
+| `crates/operator/src/controller/kafka.rs`                                            | New `reconcile_oauth_jwks_trust` helper; 3 new failure paths; thread `Option<String>` (managed Secret name) into render calls                                                               |
+| `crates/operator/src/controller/kafka_node_pool.rs`                                  | Add `oauth_jwks_trust_secret: Option<&str>` to `render_storage` + `render_main_container`; conditional volume + mount entries                                                               |
+| `crates/operator/src/controller/common.rs` (or wherever `ReconcileError` is defined) | New error variants (or new `Ready=False` reason strings) for the three failure modes                                                                                                        |
+| `crates/operator/sample/oauth-listener.yaml`                                         | Add `tlsTrustedCertificates` example                                                                                                                                                        |
+| `deploy/crds/crabka.io_kafkas.yaml`                                                  | Regenerated                                                                                                                                                                                 |
+| `crates/operator/tests/reconcile_listener_oauth.rs`                                  | Extend cross-listener-divergence test with `tls_trusted_certificates` perturbation; new TOML-render tests                                                                                   |
+| `crates/operator/tests/reconcile_oauth_trust.rs` (new)                               | Reconcile-level integration tests for managed-Secret creation + failure modes + pod-mount assertions                                                                                        |
+| `.github/workflows/operator-e2e.yml`                                                 | `kind-oauth` job: install Keycloak with TLS, copy auto-generated CA into default ns, point Kafka CR at HTTPS + declare trust certs, drop WeakAuth assertion, update producer-Job truststore |
+| `STATUS.md`                                                                          | New `## Slice 50b` entry                                                                                                                                                                    |
 
 ## Test plan
 
 ### Unit tests (in `crd/listener.rs`)
+
 - `oauth_with_tls_trusted_certificates_round_trips`
 - `oauth_tls_trusted_certificates_default_omitted_on_serialize`
 - `tls_trusted_certificate_minimum_required_fields_parse`
 
 ### Validation + render tests (in `controller/listeners.rs`)
+
 - Extend `validate_listeners_rejects_two_oauth_listeners_with_divergent_config_in_any_canonical_field` to add a perturbation entry for `tls_trusted_certificates`.
 - `render_broker_toml_emits_jwks_tls_trust_when_trust_certs_present`
 - `render_broker_toml_omits_jwks_tls_trust_when_no_trust_certs`
 - `render_broker_toml_oauthbearer_block_byte_order_with_trust_certs` — pin the exact `[oauthbearer]` block including `jwks_tls_trust` at the bottom (extends the existing canonical-order test from slice-50 T3 polish).
 
 ### Reconciler integration tests (in `tests/reconcile_oauth_trust.rs` — new file)
+
 - `oauth_trust_creates_managed_secret_from_concatenated_pems`
 - `oauth_trust_missing_source_secret_rejects_with_missing_oauth_trust_secret`
 - `oauth_trust_missing_key_in_source_secret_rejects_with_missing_oauth_trust_key`
@@ -222,6 +227,7 @@ internal; the broker only sees the file path.
 - `statefulset_omits_oauth_jwks_trust_volume_when_no_trust_certs`
 
 ### Kind e2e (`kind-oauth` in `.github/workflows/operator-e2e.yml`)
+
 - Keycloak installed with TLS on.
 - Auto-generated `kc-keycloak-crt` Secret copied into `default` ns as `keycloak-ca`.
 - Kafka CR has `tlsTrustedCertificates: [{secretName: keycloak-ca, certificate: tls.crt}]`.
@@ -236,6 +242,7 @@ The `kind-oauth` job currently (slice 50) installs Keycloak with TLS
 off and points the broker + producer at HTTP. The upgrade:
 
 1. **Chart install:**
+
    ```bash
    helm install kc bitnami/keycloak --namespace keycloak --create-namespace \
      --version 25.2.0 \
@@ -245,12 +252,14 @@ off and points the broker + producer at HTTP. The upgrade:
      --set production=false --set proxy=edge \
      --wait --timeout=600s
    ```
+
    Bitnami `tls.autoGenerated=true` produces a Secret named like
    `kc-keycloak-crt` in the `keycloak` namespace with `tls.crt` and
    `tls.key`. The exact name is chart-version dependent — verify at
    implementation time via `kubectl get secret -n keycloak`.
 
 2. **Copy CA into the Kafka CR's namespace:**
+
    ```bash
    kubectl get secret kc-keycloak-crt -n keycloak -o json \
      | jq '.metadata = {"name":"keycloak-ca","namespace":"default"}' \
@@ -264,6 +273,7 @@ off and points the broker + producer at HTTP. The upgrade:
    Use `--insecure` for simplicity; document the choice in a comment.
 
 4. **Kafka CR URLs all `https://`:**
+
    ```yaml
    validIssuerUri: https://kc-keycloak.keycloak.svc.cluster.local/realms/kafka
    jwksEndpointUri: https://kc-keycloak.keycloak.svc.cluster.local/realms/kafka/protocol/openid-connect/certs
@@ -275,11 +285,12 @@ off and points the broker + producer at HTTP. The upgrade:
 5. **Producer Job's JKS truststore** — extend the existing keytool-import
    init step to also import the Keycloak CA. Pull `keycloak-ca`'s
    `tls.crt`, convert with `keytool -importcert -alias keycloak-ca
-   -file /tmp/keycloak.crt -keystore /etc/truststore/truststore.jks
-   -storepass <pw> -noprompt`. The producer's JAAS config keeps a
+-file /tmp/keycloak.crt -keystore /etc/truststore/truststore.jks
+-storepass <pw> -noprompt`. The producer's JAAS config keeps a
    single truststore for both broker TLS and token-endpoint HTTPS.
 
 6. **Producer JAAS:**
+
    ```
    sasl.oauthbearer.token.endpoint.url=https://kc-keycloak.keycloak.svc.cluster.local/realms/kafka/protocol/openid-connect/token
    ```
@@ -293,7 +304,7 @@ off and points the broker + producer at HTTP. The upgrade:
 
 ## Acceptance criteria
 
-1. `cargo build -p crabka-operator` + `cargo test -p crabka-operator` pass.
+1. `cargo build -p krabka-operator` + `cargo test -p krabka-operator` pass.
 2. `cargo fmt --check` + `cargo clippy --workspace --all-targets -- -D warnings` pass.
 3. CRD-drift gate (`tools/regen-crds.sh` + `git diff --exit-code -- deploy/crds/`) clean.
 4. New unit + integration tests above all pass.

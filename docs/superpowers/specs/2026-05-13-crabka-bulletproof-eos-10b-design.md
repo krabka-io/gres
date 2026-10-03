@@ -160,6 +160,7 @@ NEW directory. Three files:
 
 - `controller_state.rs` — controller-side liveness state. Owned by the
   `Broker` (only meaningful on the openraft leader). Structure:
+
   ```rust
   pub(crate) struct ControllerLivenessState {
       pub(crate) brokers: Mutex<HashMap<NodeId, BrokerLivenessState>>,
@@ -174,6 +175,7 @@ NEW directory. Three files:
       pub(crate) registration_epoch: i32,
   }
   ```
+
   Plus the 1s ticker task: scans `brokers`, transitions
   `alive→dead` for entries older than `heartbeat_timeout`, fires
   `leader_election::on_broker_dead(node_id)` per transition. On
@@ -184,7 +186,7 @@ NEW directory. Three files:
 
 - `handler.rs` — `BrokerHeartbeat` wire handler. Updates the
   controller's liveness state on each request. Returns `NOT_CONTROLLER
-  (41)` if this broker isn't the openraft leader. Returns OK with
+(41)` if this broker isn't the openraft leader. Returns OK with
   `controller_id` so the broker client can redirect.
 
 ### `crates/broker/src/leader_election.rs`
@@ -312,7 +314,7 @@ epoch:
 
 1. If `epoch > current_leader_epoch`: return `UNKNOWN_LEADER_EPOCH (75)`.
 2. If `epoch == current_leader_epoch`: return `end_offset =
-   log_end_offset`.
+log_end_offset`.
 3. If `epoch < current_leader_epoch`: look up the start_offset of
    `(current_leader_epoch)` in the `.leader-epoch-checkpoint` file
    and return that as `end_offset` (the offset at which the requested
@@ -605,11 +607,11 @@ T+30.3s any blocked acks=-1 produce completes
 ## Error handling
 
 - **`FENCED_LEADER_EPOCH (74)`** — request's `current_leader_epoch <
-  partition.leader_epoch`. Returned by Produce, Fetch, AlterPartition,
+partition.leader_epoch`. Returned by Produce, Fetch, AlterPartition,
   OffsetForLeaderEpoch. Caller should re-fetch metadata or call
   OffsetForLeaderEpoch.
 - **`UNKNOWN_LEADER_EPOCH (75)`** — request's `current_leader_epoch >
-  partition.leader_epoch`. Returned by Fetch and AlterPartition.
+partition.leader_epoch`. Returned by Fetch and AlterPartition.
   Caller retries after metadata propagation (typically <100ms).
 - **`NOT_CONTROLLER (41)`** — `BrokerHeartbeat` or `AlterPartition`
   sent to a broker that isn't the openraft leader. Caller redirects
@@ -731,7 +733,7 @@ leader. Verify producer completes; `kafka-console-consumer
 --isolation-level=read_committed --max-messages=100` reads all 100.
 
 UN-ENV-GATE `three_node_replication_byte_compare` and
-`acks_all_durability` (drop their `CRABKA_RUN_*_TEST` gates).
+`acks_all_durability` (drop their `KRABKA_RUN_*_TEST` gates).
 
 ### Acceptance gate
 
@@ -740,7 +742,7 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
-cargo test -p crabka-broker --test jvm_acceptance -- --ignored --nocapture --test-threads=1
+cargo test -p krabka-broker --test jvm_acceptance -- --ignored --nocapture --test-threads=1
 ```
 
 All clean. **No new `#[ignore]`s land in this slice.** The slice-9

@@ -16,8 +16,8 @@
 //! are left — never that the value itself was any particular one.
 
 use assert2::assert;
-use crabka_pgexec::SqlEngine;
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::SqlEngine;
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 async fn run(engine: &SqlEngine, sql: &str) -> QueryResult {
     engine

@@ -23,7 +23,7 @@ against the certified diffs of the latest CI run of `main` (175 failing files,
    whenever an equality key exists (`join.rs:345 join_relations_impl` + `JoinIndex`), and three
    sharded-table pushdowns (`exec.rs:18261–18566`). Join order is FROM order. Every join prints
    as `Nested Loop`.
-4. Secondary indexes are not ordered. `crabka_pgkv::key::secondary_index_entry_key`
+4. Secondary indexes are not ordered. `krabka_pgkv::key::secondary_index_entry_key`
    (`crates/pgkv/src/key.rs:248`) is `prefix ‖ u32 len ‖ rowenc::encode_row(values) ‖ rowid`,
    and `rowenc.rs:1` says "It is NOT order-preserving". A btree index is physically an
    equality-only index. Ordered `Index Scan` needs a memcomparable key encoding, which
@@ -38,7 +38,7 @@ against the certified diffs of the latest CI run of `main` (175 failing files,
    `select_parallel`, `join_hash`, `partition_prune`, `partition_aggregate`, `incremental_sort`,
    `select_distinct`, `write_parallel`, `aggregates` set parallel cost GUCs, `work_mem`,
    `random_page_cost`, `debug_parallel_query`. Gres: `unrecognized configuration parameter
-   "work_mem"` (4×), `invalid value for parameter "debug_parallel_query"` (9×).
+"work_mem"` (4×), `invalid value for parameter "debug_parallel_query"` (9×).
 7. A non-planner producer defect hides most of the EXPLAIN tests: `explain_filter`,
    `explain_mask_costs`, `explain_memoize`, `explain_parallel_append`, `explain_merge`,
    `explain_analyze*` are PL/pgSQL `RETURNS SETOF text` functions called in the select list.
@@ -132,21 +132,21 @@ order = KV key order defect noted in the plan doc). Gather/Gather Merge no. Modi
 
 ## 3. Index read path
 
-* `index_entries` (`exec.rs:11240`): btree → one entry of the key tuple; GIN → one entry per
+- `index_entries` (`exec.rs:11240`): btree → one entry of the key tuple; GIN → one entry per
   tsvector lexeme; Hash/GiST/SP-GiST → NO entries; any expression key → no entries. `brin`
   refused (36 errors). Expression indexes catalog-only (17 errors). Partial indexes refused (42).
   INCLUDE refused (27). `Index` (`crates/pgcatalog/src/lib.rs:397`) has no per-column direction,
   opclass, collation, predicate, include list.
-* Key layout `[table_id][index_id+INDEX_PRIMARY][u32 len][encode_row(canonical values)][rowid]`;
+- Key layout `[table_id][index_id+INDEX_PRIMARY][u32 len][encode_row(canonical values)][rowid]`;
   `scan_prefix` answers only exact-equality. No range, no leading-column prefix, no order.
-* Reads consulting an index: only `try_scan_with_local_index` (18151), reached from
+- Reads consulting an index: only `try_scan_with_local_index` (18151), reached from
   `scan_stored_relation` when not sharded, no partial aggregate pushed, `UnrestrictedTable`:
   (a) `tsvector @@ const` via `choose_local_gin_index`; (b) `col = const` via
   `choose_local_index_equality` on the first single-column local btree. All else full scan.
-* MVCC coupling: entries are bare keys; probe collects rowids then `visible_rows_for_rowids`
+- MVCC coupling: entries are bare keys; probe collects rowids then `visible_rows_for_rowids`
   reads version chains and rechecks values (11526). Every index read is a bitmap-heap-with-recheck.
   No visibility map, so Index Only Scan (`Heap Fetches: 0`) is not honestly available.
-* Needed: (1) `crates/pgkv/src/keyenc.rs` memcomparable encoding for indexable Datums (C/POSIX
+- Needed: (1) `crates/pgkv/src/keyenc.rs` memcomparable encoding for indexable Datums (C/POSIX
   text; en_US would need collation keys), NULLS/DESC by inversion; drop the length prefix; add
   `secondary_index_range`; rebuild via `local_index_backfill_ops` (`exec.rs:10060`).
   (2) `pgcatalog` Index key options/predicate/include; `pg_index.indkey/indoption/indexprs/indpred`.
@@ -154,22 +154,22 @@ order = KV key order defect noted in the plan doc). Gather/Gather Merge no. Modi
   `builtin_opfamilies.rs`), ordered index cursor in `scanner.rs` (local KV only;
   `IndexPlacement::Global` excluded at first), bitmap path over rowid sets. (4) Merge Join /
   ORDER BY via index / Backward / Merge Append follow from (1)+(3).
-* `hash` method entries: one-line change in `index_entries`. GiST/SP-GiST/BRIN scans: separate XXL.
+- `hash` method entries: one-line change in `index_entries`. GiST/SP-GiST/BRIN scans: separate XXL.
 
 ## 4. Memory policy
 
-* Flag `crates/gres/src/lib.rs:857` (CI 20MiB, `scripts/gres-pg-regress.sh:267`) →
+- Flag `crates/gres/src/lib.rs:857` (CI 20MiB, `scripts/gres-pg-regress.sh:267`) →
   `SqlEngine.blocking_query_memory` → `Session` → `SubCtx.blocking_query_memory` →
   `JoinPolicy.memory` (`subquery.rs:171`). Per-operator cap on retained bytes raising 53200,
   no spill. Applied by `collect_cursor_bounded` (each scan), `push_bounded_join_row`/
   `JoinIndex::build`, `count_join_rows`, lateral cache, `key_source_rows` (sort),
   `ensure_blocking_rows_fit` (DISTINCT), `agg.rs:2872`, `grouping.rs:496`, `cte.rs:492`,
   `setops.rs:353`, `srf.rs:2321`.
-* Inconsistency: sort/DISTINCT/aggregate/grouping/CTE/setops/SRF sites use the compile-time
+- Inconsistency: sort/DISTINCT/aggregate/grouping/CTE/setops/SRF sites use the compile-time
   `scanner::BLOCKING_QUERY_MEMORY` (16 MiB, `scanner.rs:939`), not the flag.
-* 104 statements fail with 53200 (`type_sanity` 23, `opr_sanity` 18, `tuplesort` 16, `join` 10,
+- 104 statements fail with 53200 (`type_sanity` 23, `opr_sanity` 18, `tuplesort` 16, `join` 10,
   `portals` 5, `limit` 4 …).
-* Planner interaction: `work_mem` feeds cost_sort, hash-vs-sort agg choice
+- Planner interaction: `work_mem` feeds cost_sort, hash-vs-sort agg choice
   (`hash_mem_multiplier`), `ExecChooseHashTableSize` batches (`join_hash`), Memoize size, bitmap
   lossiness. Recommendation: `work_mem` GUC for cost model + ANALYZE text; statement-level hard
   cap for the flag (raised for the regress run so `opr_sanity` fits); keep the RangeScanner
@@ -262,14 +262,14 @@ SubPlan children, `->` children, Planning/Execution Time, Triggers, JSON/YAML/XM
 Dead in `exec.rs`: roughly 13300–19330 and 24100–24900 — build_from, append_from_item,
 push_local_where, leakproof/immutable predicate helpers, filter_relation, is_lateral_item,
 lateral_join, lateral_cacheable*, LateralBinder + the correlated-subquery rewriting family
-(plan_correlated_*, install_lazy_initplans, resolve_select_subqueries,
+(plan_correlated__, install_lazy_initplans, resolve_select_subqueries,
 fold_correlated_lazy_expressions, materialize_correlated_row_exprs,
 replace_subqueries_with_typed_nulls …), try_execute_partial_aggregate_pushdown,
 try_execute_local_streaming_aggregate, try_execute_local_join_count, single_table_scan_plan,
-top_k_pushdown_*, select_to_relation_with_ctes, project_rows_ordered, key_source_rows,
+top_k_pushdown__, select_to_relation_with_ctes, project_rows_ordered, key_source_rows,
 distinct_on_plan, keep_first_per_distinct_on_group, apply_row_window, the describe walk
-(build_from_schema_*, build_table_expr_schema_with_ctes, lateral_schema_item,
-query.rs::describe_query_expr*), explain.rs::plan_* (keep the deparser). join.rs join_relations*
+(build_from_schema__, build_table_expr_schema_with_ctes, lateral_schema_item,
+query.rs::describe_query_expr_), explain.rs::plan_* (keep the deparser). join.rs join_relations*
 and count_join_rows become Hash/NestLoop node bodies; subquery.rs folding becomes InitPlan
 evaluation. ~8–10k lines removed from exec.rs.
 
@@ -325,15 +325,15 @@ missing GUCs) attributable to concrete non-planner roots.
 
 ## 10. Brief corrections
 
-* "the read path does not consult secondary indexes for ordinary scans": nearly right — it
+- "the read path does not consult secondary indexes for ordinary scans": nearly right — it
   consults a local single-column btree for `col = const` and a GIN for `tsvector @@ const`, only
   when not under RLS and not sharded (`exec.rs:18151`); never ranges/ORDER BY/joins/multi-column.
-* EXPLAIN ANALYZE prints `actual rows` on the root only, `loops=1` everywhere, no timing, no
+- EXPLAIN ANALYZE prints `actual rows` on the root only, `loops=1` everywhere, no timing, no
   Planning/Execution Time (`explain.rs:891–895`).
-* `read_gate.rs` is the linearizable-read `Linearizer` seam, unrelated to planning.
-* `plan_dist.rs` `Gather` is a distributed strategy, not PostgreSQL's Gather node.
-* The memory flag reaches scans and joins only; sorts/DISTINCT/aggregates/CTEs/setops/SRF use the
+- `read_gate.rs` is the linearizable-read `Linearizer` seam, unrelated to planning.
+- `plan_dist.rs` `Gather` is a distributed strategy, not PostgreSQL's Gather node.
+- The memory flag reaches scans and joins only; sorts/DISTINCT/aggregates/CTEs/setops/SRF use the
   hard-coded 16 MiB (`exec.rs:24253`, `24427`, `agg.rs:2872`, `grouping.rs:496`, `cte.rs:492`,
   `setops.rs:353`, `srf.rs:2321`).
-* `explain`, `memoize`, `incremental_sort` and the `explain_*` wrapper calls elsewhere fail on
+- `explain`, `memoize`, `incremental_sort` and the `explain_*` wrapper calls elsewhere fail on
   `routine.rs:2112` (user SRF in the select list), a non-planner defect.

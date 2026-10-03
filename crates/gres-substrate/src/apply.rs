@@ -9,8 +9,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crabka_pgkv::{Kv, KvError, WriteOp, is_notify_op, key};
-use crabka_pgmvcc::clog;
+use krabka_pgkv::{Kv, KvError, WriteOp, is_notify_op, key};
+use krabka_pgmvcc::clog;
 
 use crate::telemetry;
 
@@ -78,7 +78,7 @@ fn push_counter_op(
 }
 
 fn counter_value(key: &[u8], value: &[u8]) -> Result<u64, KvError> {
-    if key == crabka_gres_ranges::tso::MAX_TS_KEY {
+    if key == krabka_gres_ranges::tso::MAX_TS_KEY {
         return strict_u64_be(value, "range-0 TSO horizon");
     }
 
@@ -111,7 +111,7 @@ fn push_clog_op(
 /// True for the `next_xid` counter, the range-0 TSO horizon, and any per-table sequence key.
 fn is_counter_key(k: &[u8]) -> bool {
     k == key::next_xid_key().as_slice()
-        || k == crabka_gres_ranges::tso::MAX_TS_KEY
+        || k == krabka_gres_ranges::tso::MAX_TS_KEY
         || k.starts_with(&key::seq_prefix())
 }
 
@@ -141,8 +141,8 @@ fn strict_u64_be(bytes: &[u8], name: &str) -> Result<u64, KvError> {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgkv::{Kv, MemKv, WriteOp, key};
-    use crabka_pgmvcc::clog;
+    use krabka_pgkv::{Kv, MemKv, WriteOp, key};
+    use krabka_pgmvcc::clog;
 
     use super::*;
 
@@ -226,7 +226,7 @@ mod tests {
         apply_frame(
             &kv,
             &[WriteOp::Put {
-                key: crabka_gres_ranges::tso::MAX_TS_KEY.to_vec(),
+                key: krabka_gres_ranges::tso::MAX_TS_KEY.to_vec(),
                 value: u64_be_vec(12),
             }],
         )
@@ -234,13 +234,13 @@ mod tests {
         apply_frame(
             &kv,
             &[WriteOp::Put {
-                key: crabka_gres_ranges::tso::MAX_TS_KEY.to_vec(),
+                key: krabka_gres_ranges::tso::MAX_TS_KEY.to_vec(),
                 value: u64_be_vec(7),
             }],
         )
         .expect("apply");
 
-        assert!(kv.get(crabka_gres_ranges::tso::MAX_TS_KEY).expect("get") == Some(u64_be_vec(12)));
+        assert!(kv.get(krabka_gres_ranges::tso::MAX_TS_KEY).expect("get") == Some(u64_be_vec(12)));
     }
 
     #[test]
@@ -250,7 +250,7 @@ mod tests {
         let error = apply_frame(
             &kv,
             &[WriteOp::Put {
-                key: crabka_gres_ranges::tso::MAX_TS_KEY.to_vec(),
+                key: krabka_gres_ranges::tso::MAX_TS_KEY.to_vec(),
                 value: vec![1, 2, 3],
             }],
         )
@@ -259,7 +259,7 @@ mod tests {
         assert!(matches!(error, KvError::CorruptRow(_)));
         assert!(error.to_string().contains("exactly 8 bytes"));
         assert!(
-            kv.get(crabka_gres_ranges::tso::MAX_TS_KEY)
+            kv.get(krabka_gres_ranges::tso::MAX_TS_KEY)
                 .expect("get")
                 .is_none()
         );
@@ -308,7 +308,7 @@ mod tests {
     fn notify_ops_are_dropped_without_disturbing_the_rest_of_the_batch() {
         let kv = MemKv::default();
         let row = key::row_key(7, 1);
-        let record = crabka_pgkv::NotifyRecord {
+        let record = krabka_pgkv::NotifyRecord {
             origin: "node-a".into(),
             process_id: 99,
             channel: "c".into(),

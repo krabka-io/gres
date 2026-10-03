@@ -8,14 +8,14 @@ in one slice:
 
 1. **Broker** — implement KIP-48 act-as on `CreateDelegationToken`: a
    super-user caller may specify `owner_principal_type` +
-   `owner_principal_name` to mint a token *owned by another principal*.
+   `owner_principal_name` to mint a token _owned by another principal_.
    Required because slice 51 only honors "owner = caller", which means an
    operator-issued token would carry the operator's super-user authority.
 2. **Operator** — new `KafkaUser.spec.authentication.type:
-   delegation-token` auth variant. The operator authenticates as itself
+delegation-token` auth variant. The operator authenticates as itself
    (super-user inter-broker credential), uses act-as to mint a token
    owned by `User:<KafkaUser.metadata.name>`, persists `(token-id, hmac,
-   sasl.jaas.config)` into a Secret, periodically renews before expiry,
+sasl.jaas.config)` into a Secret, periodically renews before expiry,
    and expires the token on KafkaUser deletion.
 
 **Out of scope:**
@@ -55,7 +55,7 @@ In the handler (around `create_delegation_token.rs::handle`):
      `broker.config.super_users`). On non-super-user → return
      `DELEGATION_TOKEN_AUTHORIZATION_FAILED` (65). On super-user, the
      owner becomes `KafkaPrincipal { principal_type: <wire>, name:
-     <wire> }`. Renewers default to the caller's principal in this case
+<wire> }`. Renewers default to the caller's principal in this case
      so the operator can renew/expire the token without needing
      bootstrap-as-the-owner flow.
    - If exactly one of the two is empty: `INVALID_REQUEST` (42). Both
@@ -151,6 +151,7 @@ New module `crates/operator/src/controller/user_delegation_token.rs`,
 called from the existing `user::reconcile` arm for the new variant.
 
 **Inputs:**
+
 - `KafkaUser` object (immutable spec; mutable status).
 - Admin client connection to the cluster (existing pattern: operator's
   inter-broker SASL credential, which is a super-user).
@@ -213,9 +214,9 @@ metadata:
   name: <kafkauser-name>
   ownerReferences: [<kafkauser>]
 data:
-  token-id: base64(<token uuid>)             # the SCRAM "username" for token auth
-  hmac: base64(<32 raw hmac bytes>)          # the SCRAM "password equivalent" (raw, not base64-of-base64)
-  password: base64(base64(<hmac bytes>))     # convenience: ready-to-paste base64 password
+  token-id: base64(<token uuid>) # the SCRAM "username" for token auth
+  hmac: base64(<32 raw hmac bytes>) # the SCRAM "password equivalent" (raw, not base64-of-base64)
+  password: base64(base64(<hmac bytes>)) # convenience: ready-to-paste base64 password
   sasl.jaas.config: |
     org.apache.kafka.common.security.scram.ScramLoginModule required
     username="<token-id>"
@@ -243,20 +244,21 @@ Two new conditions added to `KafkaUserStatus`:
 the Secret exists.
 
 Status fields added:
+
 - `delegation_token_id: Option<String>` (the UUID)
 - `delegation_token_expiry_timestamp_ms: Option<i64>`
 - `delegation_token_max_timestamp_ms: Option<i64>`
 
 ### 2.5 Failure handling
 
-| Broker response | Operator action |
-|----------------|-----------------|
-| `error_code=0` | Normal flow, update status. |
-| `61` (`AUTH_DISABLED`) | Operator never issued — patch `TokenIssued.status=False, reason=BrokerAuthDisabled`. Requeue with 5m backoff. Do not crash. |
-| `65` (`AUTHORIZATION_FAILED`) | Operator's principal isn't a super-user. Patch `TokenIssued.status=False, reason=OperatorNotSuperUser`. Requeue with 5m backoff. |
-| `42` (`INVALID_REQUEST`) | Spec is malformed; patch with reason `InvalidSpec`. No automatic recovery. |
-| `64` (`REQUEST_NOT_ALLOWED`) | Operator's connection is somehow token-authed. Should be impossible (the operator uses inter-broker SASL/PLAIN or SCRAM). Patch + requeue. |
-| Network / timeout | Bubble up to the reconciler's standard retry. |
+| Broker response               | Operator action                                                                                                                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `error_code=0`                | Normal flow, update status.                                                                                                                |
+| `61` (`AUTH_DISABLED`)        | Operator never issued — patch `TokenIssued.status=False, reason=BrokerAuthDisabled`. Requeue with 5m backoff. Do not crash.                |
+| `65` (`AUTHORIZATION_FAILED`) | Operator's principal isn't a super-user. Patch `TokenIssued.status=False, reason=OperatorNotSuperUser`. Requeue with 5m backoff.           |
+| `42` (`INVALID_REQUEST`)      | Spec is malformed; patch with reason `InvalidSpec`. No automatic recovery.                                                                 |
+| `64` (`REQUEST_NOT_ALLOWED`)  | Operator's connection is somehow token-authed. Should be impossible (the operator uses inter-broker SASL/PLAIN or SCRAM). Patch + requeue. |
+| Network / timeout             | Bubble up to the reconciler's standard retry.                                                                                              |
 
 ---
 
@@ -305,17 +307,20 @@ consumes against the cluster using `sasl.jaas.config` from the Secret.
 ## 4. Decomposition (~10 tasks across 5 batches)
 
 **Batch 1 — Broker act-as (parallel: B1, B2)**
+
 - **B1**: act-as logic in `create_delegation_token.rs` + dispatch passing
   super_users to the handler + 4 unit tests.
 - **B2**: extend `crates/broker/tests/delegation_tokens.rs` with 2 act-as
   end-to-end integration tests.
 
 **Batch 2 — Operator CRD (sequential: O1)**
+
 - **O1**: `Authentication::DelegationToken(DelegationTokenAuth)` variant
-  + manual schema + status field additions + cascade sweep of fixture
-  sites + CRD regen.
+  - manual schema + status field additions + cascade sweep of fixture
+    sites + CRD regen.
 
 **Batch 3 — Operator reconciler (parallel: O2, O3)**
+
 - **O2**: `user_delegation_token.rs` reconciler module — Describe →
   Create/Renew/No-op → Secret build/patch + status patch + requeue.
   Unit tests for Case A/B/C/D logic with mocked admin client.
@@ -325,9 +330,11 @@ consumes against the cluster using `sasl.jaas.config` from the Secret.
   `crates/client-admin`.
 
 **Batch 4 — Operator integration tests (sequential: O4)**
+
 - **O4**: 3 integration tests in `tests/reconcile_kafkauser_delegation_token.rs`.
 
 **Batch 5 — e2e + STATUS (parallel: E1, S1)**
+
 - **E1**: kind-kafkauser-delegation-token e2e workflow.
 - **S1**: STATUS.md entry + final fmt/clippy/test gate.
 
@@ -338,13 +345,13 @@ all the slice 51 broker plumbing.
 
 ## 5. Tests (~18 total)
 
-| Layer | Count |
-|------:|-------|
-| Broker unit (act-as in Create handler) | 4 |
-| Broker integration (act-as end-to-end) | 2 |
-| Operator CRD (round-trip + schema regression) | 2 |
-| Operator reconciler unit (Case A/B/C/D + failure cases) | ~7 |
-| Operator integration (Secret + lifecycle + finalizer) | 3 |
+|                                                   Layer | Count |
+| ------------------------------------------------------: | ----- |
+|                  Broker unit (act-as in Create handler) | 4     |
+|                  Broker integration (act-as end-to-end) | 2     |
+|           Operator CRD (round-trip + schema regression) | 2     |
+| Operator reconciler unit (Case A/B/C/D + failure cases) | ~7    |
+|   Operator integration (Secret + lifecycle + finalizer) | 3     |
 
 ---
 
@@ -371,7 +378,7 @@ all the slice 51 broker plumbing.
 - `cargo fmt --all --check`
 - `cargo clippy --all-targets -- -D warnings`
 - `cargo test --workspace`
-- `cargo test -p crabka-broker --test delegation_tokens`
-- `cargo test -p crabka-operator --test reconcile_kafkauser_delegation_token`
+- `cargo test -p krabka-broker --test delegation_tokens`
+- `cargo test -p krabka-operator --test reconcile_kafkauser_delegation_token`
 - New kind-kafkauser-delegation-token e2e job green on the slice branch.
 - CRD drift check stays green (`deploy/crds/crabka.io_kafkausers.yaml` regenerated).

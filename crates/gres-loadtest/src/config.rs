@@ -2,7 +2,7 @@
 
 use std::str::FromStr;
 
-use crabka_units::prelude::*;
+use krabka_units::prelude::*;
 use refined_type::rule::{GreaterEqualUsize, GreaterUsize};
 
 /// A positive process-owned count.

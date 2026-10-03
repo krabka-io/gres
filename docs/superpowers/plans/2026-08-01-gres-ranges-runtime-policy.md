@@ -4,7 +4,7 @@
 existing CLI/environment and compute CRD paths while preserving defaults.
 
 **Architecture:** Add one validated `RangeRuntimePolicy` to
-`crabka-gres-ranges`; resolve it in `ServeArgs`/`SubstrateRuntimeConfig`; pass it
+`krabka-gres-ranges`; resolve it in `ServeArgs`/`SubstrateRuntimeConfig`; pass it
 through existing runtime owners; render identical values from
 `GresComputeSpec`.
 
@@ -17,7 +17,7 @@ through existing runtime owners; render identical values from
 
 ### Task 2: Gres CLI and runtime ownership
 
-- [x] Add optional `CRABKA_GRES_RANGE_*`-backed `ServeArgs` fields.
+- [x] Add optional `KRABKA_GRES_RANGE_*`-backed `ServeArgs` fields.
 - [x] Resolve one policy in `SubstrateRuntimeConfig` and reject invalid combinations.
 - [x] Thread the policy through transport, forwarding, barrier, inspection, release, and timestamp owners.
 - [x] Preserve default public constructors.

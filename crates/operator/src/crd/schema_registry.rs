@@ -1,13 +1,13 @@
 //! `SchemaRegistry` CRD.
 //!
-//! This CRD deploys the standalone `crabka-schema-registry` service. The
+//! This CRD deploys the standalone `krabka-schema-registry` service. The
 //! service is a Kafka client of the broker, and its state lives in
 //! `_schemas`. The service is stateless. N replicas join the `"sr"`
 //! election group. The group elects one primary, and the other replicas
 //! forward the writes to it. The `crabka.io/cluster` label links the CR to
 //! a managed `Kafka`, as it does for `KafkaTopic`.
 
-use crabka_units::{ByteSize, Time};
+use krabka_units::{ByteSize, Time};
 use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -60,7 +60,7 @@ pub struct SchemaRegistrySpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runtime: Option<SchemaRegistryRuntime>,
 
-    /// Kafka client id used by the registry. Default `crabka-schema-registry`.
+    /// Kafka client id used by the registry. Default `krabka-schema-registry`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(length(min = 1))]
     pub client_id: Option<String>,
@@ -103,70 +103,70 @@ pub struct SchemaRegistryRuntime {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_byte_size"
+        with = "krabka_units::serde_units::human::option_byte_size"
     )]
     #[schemars(with = "Option<String>")]
     pub client_frame_max: Option<ByteSize>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub election_session_timeout: Option<Time>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub election_rebalance_timeout: Option<Time>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub election_heartbeat_interval: Option<Time>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub election_reconnect_backoff: Option<Time>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub store_reader_retry_backoff: Option<Time>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub store_reader_fetch_max_wait: Option<Time>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_byte_size"
+        with = "krabka_units::serde_units::human::option_byte_size"
     )]
     #[schemars(with = "Option<String>")]
     pub store_reader_fetch_max: Option<ByteSize>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub schemas_topic_create_timeout: Option<Time>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_byte_size"
+        with = "krabka_units::serde_units::human::option_byte_size"
     )]
     #[schemars(with = "Option<String>")]
     pub forward_max_body: Option<ByteSize>,
@@ -294,7 +294,7 @@ pub struct BearerAuthn {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub jwks_refresh: Option<Time>,
@@ -321,7 +321,7 @@ pub struct SchemaRegistryAuthz {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub acl_refresh: Option<Time>,
@@ -394,7 +394,7 @@ mod tests {
     fn client_policy_round_trips_and_has_schema() {
         let runtime = SchemaRegistryRuntime {
             client_dispatch_queue_capacity: Some(7),
-            client_frame_max: Some(crabka_units::kibibytes(32)),
+            client_frame_max: Some(krabka_units::kibibytes(32)),
             ..SchemaRegistryRuntime::default()
         };
         let json = serde_json::to_value(&runtime).unwrap();

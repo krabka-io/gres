@@ -2,8 +2,8 @@
 
 use super::*;
 
-pub(crate) fn is_lateral_item(te: &crabka_pgparser::ast::TableExpr, outer: &Scope) -> bool {
-    use crabka_pgparser::ast::TableExpr;
+pub(crate) fn is_lateral_item(te: &krabka_pgparser::ast::TableExpr, outer: &Scope) -> bool {
+    use krabka_pgparser::ast::TableExpr;
     match te {
         TableExpr::Derived { lateral, .. } => *lateral,
         TableExpr::Function {
@@ -56,11 +56,11 @@ pub(crate) fn expr_references_scope(expr: &Expr, scope: &Scope) -> bool {
 pub(crate) fn lateral_join(
     read_ctx: &crate::subquery::SubCtx<'_>,
     acc: Relation,
-    te: &crabka_pgparser::ast::TableExpr,
-    kind: crabka_pgparser::ast::JoinKind,
-    constraint: &crabka_pgparser::ast::JoinConstraint,
+    te: &krabka_pgparser::ast::TableExpr,
+    kind: krabka_pgparser::ast::JoinKind,
+    constraint: &krabka_pgparser::ast::JoinConstraint,
 ) -> Result<Relation, ExecError> {
-    use crabka_pgparser::ast::JoinKind;
+    use krabka_pgparser::ast::JoinKind;
     let ctx = read_ctx.eval_ctx;
     let mut binder =
         LateralBinder::new(read_ctx.catalog_kv, read_ctx.fctx.resolution, read_ctx.ctes);
@@ -84,7 +84,7 @@ pub(crate) fn lateral_join(
     let mut scope: Option<Scope> = None;
     let mut bytes = 0usize;
     struct CachedRight {
-        specialized: crabka_pgparser::ast::TableExpr,
+        specialized: krabka_pgparser::ast::TableExpr,
         relation: Relation,
         index: PreparedJoinIndex,
     }
@@ -94,7 +94,7 @@ pub(crate) fn lateral_join(
         rows: TableFunctionRows,
     }
     let rows_from_correlated = match te {
-        crabka_pgparser::ast::TableExpr::Function {
+        krabka_pgparser::ast::TableExpr::Function {
             functions,
             rows_from: true,
             ..
@@ -143,7 +143,7 @@ pub(crate) fn lateral_join(
                 (
                     Some(correlated),
                     Some(cache),
-                    crabka_pgparser::ast::TableExpr::Function {
+                    krabka_pgparser::ast::TableExpr::Function {
                         functions,
                         with_ordinality,
                         rows_from: true,
@@ -205,7 +205,7 @@ pub(crate) fn lateral_join(
                     &right,
                     constraint,
                     ctx,
-                    crabka_units::ByteSize::from_bytes(remaining),
+                    krabka_units::ByteSize::from_bytes(remaining),
                 )?)
             } else {
                 None
@@ -295,8 +295,8 @@ pub(crate) fn lateral_join(
     Ok(Relation { scope, rows })
 }
 
-pub(crate) fn lateral_cacheable(te: &crabka_pgparser::ast::TableExpr) -> bool {
-    use crabka_pgparser::ast::{DistinctClause, QueryBody, SetExpr, TableExpr};
+pub(crate) fn lateral_cacheable(te: &krabka_pgparser::ast::TableExpr) -> bool {
+    use krabka_pgparser::ast::{DistinctClause, QueryBody, SetExpr, TableExpr};
     let TableExpr::Derived {
         subquery,
         lateral: true,

@@ -1,6 +1,6 @@
 # Investigation: why range 0 costs ~3.5× less CPU per write than data ranges
 
-*Follow-up to the `crabka-gres` scalability harness (`crates/gres-loadtest`, PR #896).*
+_Follow-up to the `krabka-gres` scalability harness (`crates/gres-loadtest`, PR #896)._
 
 ## Summary
 
@@ -16,8 +16,8 @@ the catalog and therefore installs **no barrier at all** (`Range0Barrier` is
 `None` on range 0's own engine), so it skips that work entirely.
 
 The barrier is load-bearing for catalog / global-clog linearizability, so range 0
-being cheaper is partly *structural* (it needs no coherence round-trip to itself).
-But the barrier's *implementation* is also substantially redundant: it re-establishes
+being cheaper is partly _structural_ (it needs no coherence round-trip to itself).
+But the barrier's _implementation_ is also substantially redundant: it re-establishes
 a broker connection (TLS handshake + admin metadata + topic-UUID resolution) per
 call instead of reusing the follower's already-live connection or the follower's
 already-tracked end. Removing that per-statement reconnect is the concrete path to
@@ -29,7 +29,7 @@ The exact scenario in the brief (`topology { nodes: 4, ranges: 4, cpus_per_node:
 broker_cpus: 4 }`) needs 12 online CPUs; this investigation ran on a 4-CPU host, so
 the cluster was run **unpinned** (no `cpus_per_node`). Per-process
 `cpu_core_seconds` measures actual CPU consumed and is independent of CPU pinning,
-so the *work-per-write* asymmetry reproduces regardless. Load is uniform per range
+so the _work-per-write_ asymmetry reproduces regardless. Load is uniform per range
 by construction: `single_shard_insert` picks a target table uniformly at random,
 independent of which node's front door the connection landed on
 (`crates/gres-loadtest/src/workload.rs`).
@@ -37,10 +37,10 @@ independent of which node's front door the connection landed on
 Scenario: `nodes: 4, ranges: 4, connections: 256, duration_s: 30/80, warmup_s: 5,
 mix { single_shard_insert: 100 }`, `logical-tso`.
 
-| run | node0 (range 0) | node1 | node2 | node3 | broker |
-|-----|-----------------|-------|-------|-------|--------|
-| E0 — shipped harness (node0 checkpoints, others none) | **7.84** | 27.67 | 27.00 | 26.73 | 27.27 |
-| E1 — no node checkpoints                              | **8.07** | 27.28 | 27.65 | 27.49 | 28.29 |
+| run                                                   | node0 (range 0) | node1 | node2 | node3 | broker |
+| ----------------------------------------------------- | --------------- | ----- | ----- | ----- | ------ |
+| E0 — shipped harness (node0 checkpoints, others none) | **7.84**        | 27.67 | 27.00 | 26.73 | 27.27  |
+| E1 — no node checkpoints                              | **8.07**        | 27.28 | 27.65 | 27.49 | 28.29  |
 
 Values are `cpu_core_seconds` over a 30 s window (0 failed txns, 30 021 committed).
 node0 is ~3.4× cheaper — matching the ~3.5× reported on the pinned 2-vCPU cluster.
@@ -48,21 +48,21 @@ node0 is ~3.4× cheaper — matching the ~3.5× reported on the pinned 2-vCPU cl
 ## Ruled-out hypotheses
 
 - **Checkpoint configuration (the harness gives node0 `--checkpoint-store local
-  --checkpoint-frames 1` and data nodes nothing).** *Ruled out.* E1 disables
+--checkpoint-frames 1` and data nodes nothing).** _Ruled out._ E1 disables
   checkpointing everywhere and node0 stays cheap (8.07 vs ~27.5). Checkpointing is
-  background/threshold work that runs *only* on node0, so if anything it is a
+  background/threshold work that runs _only_ on node0, so if anything it is a
   headwind that makes node0's true per-write advantage larger than the raw number.
   E0 (checkpoint-pruned range-0 WAL) and E1 (unpruned) also produce near-identical
   data-node cost — see "The dominant cost is the reconnect" below.
 
-- **Per-write timestamp RPC to node0.** *Ruled out as the driver.* Single-shard
+- **Per-write timestamp RPC to node0.** _Ruled out as the driver._ Single-shard
   autocommit inserts use the local-sequence bypass when the seat co-hosts the target
   range, and the global path otherwise; the global path's timestamp grant is
-  coalesced by `BatchedTsoClient` and is a *seat-side* cost that is symmetric across
-  all four seats. node0 also *serves* those grants, which would make it busier, not
+  coalesced by `BatchedTsoClient` and is a _seat-side_ cost that is symmetric across
+  all four seats. node0 also _serves_ those grants, which would make it busier, not
   idler.
 
-- **WAL-apply / commit path.** *Ruled out.* Every autocommit insert routes through
+- **WAL-apply / commit path.** _Ruled out._ Every autocommit insert routes through
   `execute_timestamp_scatter` → `prewrite_as_primary` + `resolve` (two WAL frames) on
   the owning range, identically for range 0 and data ranges. Both ranges have a
   broker WAL topic (`__gres_wal.loadtest.r{0..3}`) and both self-apply via
@@ -84,10 +84,10 @@ self.ensure_global_readable().await?;         // range 0 caught up before the gs
 (`crates/gres-ranges/src/barrier.rs`):
 
 1. `sample_end_after_call_begins()` →
-   `crabka_gres_substrate::recovery::live_committed_end()`, which
+   `krabka_gres_substrate::recovery::live_committed_end()`, which
    **`AdminClient::connect_secured` (a new broker TLS connection) + `resolve_topic_uuid`
-   + opens a reader connection + fetches range 0's committed tail** to find the end
-   offset, and
+   - opens a reader connection + fetches range 0's committed tail** to find the end
+     offset, and
 2. waits for the local range-0 follower tail to apply up to that offset.
 
 `handle_range0_barrier` in `forward.rs` states the structural reason directly: a node
@@ -102,11 +102,11 @@ end from the broker and wait for its follower.
 (sampling only threads in `R` state) was used instead. Sampling node0 (range 0) and
 node1 (a data range) concurrently under the 80 s run:
 
-| frame group | node0 (coordinator) | node1 (data) |
-|-------------|---------------------|--------------|
-| total running-frame samples | 1 799 | 4 432 |
-| `Range0Barrier` / `*EndSampler` / `live_committed_end` | **0** | 242 |
-| broker fetch + `FetchResponse::decode` / `RecordBatch::decode` / `RecordsPayload::from_fetch_bytes` / client connection setup | 8 (own producer) | 232 |
+| frame group                                                                                                                   | node0 (coordinator) | node1 (data) |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------------------- | ------------ |
+| total running-frame samples                                                                                                   | 1 799               | 4 432        |
+| `Range0Barrier` / `*EndSampler` / `live_committed_end`                                                                        | **0**               | 242          |
+| broker fetch + `FetchResponse::decode` / `RecordBatch::decode` / `RecordsPayload::from_fetch_bytes` / client connection setup | 8 (own producer)    | 232          |
 
 node0 shows **zero** barrier frames — it has no barrier. On node1, ~11 % of all
 running-frame samples land directly in the barrier + broker-fetch/decode machinery
@@ -124,14 +124,14 @@ dominated, E1 would be dramatically more expensive and would degrade over time. 
 does not — so the **per-call fixed overhead (establishing the broker connection +
 admin metadata + topic-UUID resolution) is the dominant cost**, incurred on a
 continuous back-to-back stream of samples because the barrier's linearizability rule
-(sample a fetch that *started after* the call began) prevents concurrent inserts from
+(sample a fetch that _started after_ the call began) prevents concurrent inserts from
 fully coalescing onto one sample.
 
 ## Equalization
 
-The barrier's *semantics* (a fresh, linearizable sample of range 0's committed end,
+The barrier's _semantics_ (a fresh, linearizable sample of range 0's committed end,
 then wait for the local follower) are correctness-load-bearing and should be
-preserved. The *redundant transport* is what to remove. In rough order of
+preserved. The _redundant transport_ is what to remove. In rough order of
 impact-per-risk:
 
 1. **Reuse a broker connection + cached topic UUID in the sampler, with
@@ -188,7 +188,7 @@ Option 1 was implemented, extended with an incremental scan cursor
   (OFFSET_OUT_OF_RANGE) jumps the cursor to the retained log start.
 - The follower poll loop in `crates/gres/src/lib.rs` shares the same sampler
   instance as the barrier, removing its independent reconnect-per-tick end
-  probe as well. (Its bounded tail *read* still dials per catch-up; that is
+  probe as well. (Its bounded tail _read_ still dials per catch-up; that is
   per poll tick under load, not per statement.)
 - `live_committed_end()` now delegates to a one-shot sampler, so recovery and
   split-activation callers keep today's fresh-dial semantics through one scan
@@ -204,7 +204,7 @@ stable-end exclusion, pruning) plus an end-to-end barrier test in
 
 ## Tooling used
 
-- `crates/gres-loadtest`: added `CRABKA_GRES_LOADTEST_CHECKPOINT_NODES`
+- `crates/gres-loadtest`: added `KRABKA_GRES_LOADTEST_CHECKPOINT_NODES`
   (`all` | `none`, default = node0-only) to A/B the checkpoint config without
   rebuilding — this produced E1 and ruled checkpointing out.
 - A `eu-stack`-based running-thread sampler (no `perf` on this kernel) to diff the

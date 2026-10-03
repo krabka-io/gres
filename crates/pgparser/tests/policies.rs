@@ -8,7 +8,7 @@
 //! `pg_policies`.
 
 use assert2::assert;
-use crabka_pgparser::{
+use krabka_pgparser::{
     ast::{
         AlterPolicyAction, AlterTableAction, BinaryOp, CreatePolicy, Expr, PolicyCommand,
         PolicyQual, RelationRef, Statement,

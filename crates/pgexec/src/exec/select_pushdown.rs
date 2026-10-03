@@ -107,8 +107,8 @@ pub(super) fn uses_local_join_count_shape(s: &SelectStmt) -> bool {
     }
     matches!(
         s.from.as_slice(),
-        [crabka_pgparser::ast::TableExpr::Join {
-            kind: crabka_pgparser::ast::JoinKind::Inner | crabka_pgparser::ast::JoinKind::Left,
+        [krabka_pgparser::ast::TableExpr::Join {
+            kind: krabka_pgparser::ast::JoinKind::Inner | krabka_pgparser::ast::JoinKind::Left,
             ..
         }]
     )
@@ -121,13 +121,13 @@ pub(crate) fn should_defer_local_join_count_plan(s: &SelectStmt) -> bool {
     if !uses_local_join_count_shape(s) {
         return false;
     }
-    let [crabka_pgparser::ast::TableExpr::Join { constraint, .. }] = s.from.as_slice() else {
+    let [krabka_pgparser::ast::TableExpr::Join { constraint, .. }] = s.from.as_slice() else {
         return false;
     };
     match constraint {
-        crabka_pgparser::ast::JoinConstraint::Using(_) => true,
-        crabka_pgparser::ast::JoinConstraint::On(crabka_pgparser::ast::Expr::Binary {
-            op: crabka_pgparser::ast::BinaryOp::Eq,
+        krabka_pgparser::ast::JoinConstraint::Using(_) => true,
+        krabka_pgparser::ast::JoinConstraint::On(krabka_pgparser::ast::Expr::Binary {
+            op: krabka_pgparser::ast::BinaryOp::Eq,
             left,
             right,
         }) => {
@@ -149,7 +149,7 @@ pub(super) fn try_execute_local_join_count(
         return Ok(None);
     }
     let [
-        crabka_pgparser::ast::TableExpr::Join {
+        krabka_pgparser::ast::TableExpr::Join {
             left,
             right,
             kind,
@@ -164,7 +164,7 @@ pub(super) fn try_execute_local_join_count(
         return Ok(None);
     }
 
-    let (left, right) = if let crabka_pgparser::ast::JoinConstraint::Using(names) = constraint {
+    let (left, right) = if let krabka_pgparser::ast::JoinConstraint::Using(names) = constraint {
         (
             build_local_join_count_table(read_ctx, left, names)?,
             build_local_join_count_table(read_ctx, right, names)?,
@@ -194,10 +194,10 @@ pub(super) fn try_execute_local_join_count(
 /// payload columns while scanning either side.
 fn build_local_join_count_table(
     read_ctx: &crate::subquery::SubCtx<'_>,
-    expression: &crabka_pgparser::ast::TableExpr,
+    expression: &krabka_pgparser::ast::TableExpr,
     names: &[String],
 ) -> Result<Relation, ExecError> {
-    let crabka_pgparser::ast::TableExpr::Table { name, alias, .. } = expression else {
+    let krabka_pgparser::ast::TableExpr::Table { name, alias, .. } = expression else {
         unreachable!("local join count only accepts base tables");
     };
     let Some(table) = scan_plan_table(read_ctx.catalog_kv, read_ctx.fctx.resolution, name)? else {
@@ -222,9 +222,9 @@ fn build_local_join_count_table(
 
 fn is_plain_local_join_table(
     read_ctx: &crate::subquery::SubCtx<'_>,
-    expression: &crabka_pgparser::ast::TableExpr,
+    expression: &krabka_pgparser::ast::TableExpr,
 ) -> Result<bool, ExecError> {
-    let crabka_pgparser::ast::TableExpr::Table {
+    let krabka_pgparser::ast::TableExpr::Table {
         name,
         columns: None,
         sample: None,
@@ -466,7 +466,7 @@ enum StreamingAggregatePlan {
     Scalar {
         /// Deduped aggregate calls, aligned index-for-index with `specs` (and
         /// with the finalized values fed to the outer-expression evaluation).
-        calls: Vec<crabka_pgparser::ast::FuncCall>,
+        calls: Vec<krabka_pgparser::ast::FuncCall>,
         specs: Vec<crate::PartialAggregateSpec>,
     },
     /// The narrow grouped shape: one spec whose finalized rows ARE the output
@@ -562,7 +562,7 @@ fn single_local_base_table(
     ctes: &crate::cte::CteContext,
 ) -> Result<Option<(Table, String)>, ExecError> {
     let [
-        crabka_pgparser::ast::TableExpr::Table {
+        krabka_pgparser::ast::TableExpr::Table {
             name,
             only,
             alias,
@@ -581,14 +581,14 @@ fn single_local_base_table(
     if is_virtual_relation(name) {
         return Ok(None);
     }
-    match crabka_pgcatalog::get_view(catalog_kv, name) {
+    match krabka_pgcatalog::get_view(catalog_kv, name) {
         Ok(_) => return Ok(None),
-        Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => {}
+        Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => {}
         Err(error) => return Err(error.into()),
     }
-    let table = match crabka_pgcatalog::get_table(catalog_kv, name) {
+    let table = match krabka_pgcatalog::get_table(catalog_kv, name) {
         Ok(table) => table,
-        Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => return Ok(None),
+        Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => return Ok(None),
         Err(error) => return Err(error.into()),
     };
     // An unpopulated materialized view is an error to read, and the pushdowns
@@ -623,7 +623,7 @@ fn single_local_base_table(
 pub(crate) fn reads_inheritance_children(
     catalog_kv: &dyn Kv,
     only: bool,
-    name: &crabka_pgcatalog::RelationName,
+    name: &krabka_pgcatalog::RelationName,
 ) -> Result<bool, ExecError> {
     if only {
         return Ok(false);
@@ -647,7 +647,7 @@ fn single_sharded_base_table(
     ctes: &crate::cte::CteContext,
 ) -> Result<Option<(Table, String)>, ExecError> {
     let [
-        crabka_pgparser::ast::TableExpr::Table {
+        krabka_pgparser::ast::TableExpr::Table {
             name,
             only,
             alias,
@@ -666,14 +666,14 @@ fn single_sharded_base_table(
     if is_virtual_relation(name) {
         return Ok(None);
     }
-    match crabka_pgcatalog::get_view(catalog_kv, name) {
+    match krabka_pgcatalog::get_view(catalog_kv, name) {
         Ok(_) => return Ok(None),
-        Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => {}
+        Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => {}
         Err(error) => return Err(error.into()),
     }
-    let table = match crabka_pgcatalog::get_table(catalog_kv, name) {
+    let table = match krabka_pgcatalog::get_table(catalog_kv, name) {
         Ok(table) => table,
-        Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => return Ok(None),
+        Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => return Ok(None),
         Err(error) => return Err(error.into()),
     };
     require_populated(&table)?;
@@ -753,7 +753,7 @@ pub(super) fn single_table_scan_plan(
     s: &SelectStmt,
 ) -> Result<Option<crate::plan_dist::DistributedScanPlan>, ExecError> {
     let [
-        crabka_pgparser::ast::TableExpr::Table {
+        krabka_pgparser::ast::TableExpr::Table {
             name,
             alias,
             columns: None,
@@ -919,9 +919,9 @@ pub(crate) fn table_uses_global_visibility(table: &Table) -> bool {
 /// validation raises the undefined-column error for that.
 pub(super) fn ensure_hash_shard_key_types_are_supported(
     columns: &[Column],
-    sharding: Option<&crabka_pgcatalog::ShardingStrategy>,
+    sharding: Option<&krabka_pgcatalog::ShardingStrategy>,
 ) -> Result<(), ExecError> {
-    let Some(crabka_pgcatalog::ShardingStrategy::Hash(hash)) = sharding else {
+    let Some(krabka_pgcatalog::ShardingStrategy::Hash(hash)) = sharding else {
         return Ok(());
     };
     for column in hash
@@ -959,10 +959,10 @@ fn hash_shard_key_type_is_supported(ty: ColumnType) -> bool {
 }
 
 pub(super) fn hash_sharding_from_ast(
-    sharding: &crabka_pgparser::ast::ShardingSpec,
-) -> Result<crabka_pgcatalog::ShardingStrategy, ExecError> {
+    sharding: &krabka_pgparser::ast::ShardingSpec,
+) -> Result<krabka_pgcatalog::ShardingStrategy, ExecError> {
     match sharding {
-        crabka_pgparser::ast::ShardingSpec::Hash(hash) => {
+        krabka_pgparser::ast::ShardingSpec::Hash(hash) => {
             // Redundant for SQL input: the grammar refuses a `SHARDED BY HASH`
             // list of any length but one outright (42601), so this never fires
             // for a parsed statement. It is the gate for the callers that build
@@ -979,8 +979,8 @@ pub(super) fn hash_sharding_from_ast(
                     "hash sharding bucket count must be a power of two".into(),
                 ));
             }
-            Ok(crabka_pgcatalog::ShardingStrategy::Hash(
-                crabka_pgcatalog::HashSharding {
+            Ok(krabka_pgcatalog::ShardingStrategy::Hash(
+                krabka_pgcatalog::HashSharding {
                     columns: hash.columns.clone(),
                     buckets: hash.buckets,
                     co_location_group: hash.co_location_group.clone(),

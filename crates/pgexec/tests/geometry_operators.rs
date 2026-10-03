@@ -13,8 +13,8 @@
 //! because `lseg_eq` compares endpoints and `box_eq` compares areas.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 // ---------------------------------------------------------------------------
 // Harness

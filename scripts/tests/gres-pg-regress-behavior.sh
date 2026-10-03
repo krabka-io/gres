@@ -85,7 +85,7 @@ touch "$REGRESS_SOURCE_DIR/parallel_schedule" "$REGRESS_SOURCE_DIR/resultmap"
     cd "$REGRESS_SOURCE_DIR"
     { find data expected sql -type f -print0; printf '%s\0' parallel_schedule resultmap; } |
         sort -z | xargs -0 sha256sum
-) >"$SOURCE_DIR/.crabka-regress-inputs.sha256"
+) >"$SOURCE_DIR/.krabka-regress-inputs.sha256"
 verify_regress_inputs
 printf 'changed\n' >>"$REGRESS_SOURCE_DIR/expected/smoke.out"
 if verify_regress_inputs 2>/dev/null; then

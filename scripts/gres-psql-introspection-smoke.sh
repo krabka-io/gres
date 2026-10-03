@@ -40,12 +40,12 @@ trap cleanup EXIT
 
 CONN="host=127.0.0.1 port=${PORT} user=crab dbname=crab sslmode=disable"
 
-# Set CRABKA_GRES_SKIP_BUILD=1 to reuse an existing target/debug binary.
-if [ "${CRABKA_GRES_SKIP_BUILD:-}" != "1" ]; then
-    cargo build --locked -p crabka-gres
+# Set KRABKA_GRES_SKIP_BUILD=1 to reuse an existing target/debug binary.
+if [ "${KRABKA_GRES_SKIP_BUILD:-}" != "1" ]; then
+    cargo build --locked -p krabka-gres
 fi
 
-./target/debug/crabka-gres --listen "127.0.0.1:${PORT}" \
+./target/debug/krabka-gres --listen "127.0.0.1:${PORT}" \
     --data-dir "${DATA_ROOT}/data" \
     >"${DATA_ROOT}/server.log" 2>&1 &
 SERVER_PID=$!

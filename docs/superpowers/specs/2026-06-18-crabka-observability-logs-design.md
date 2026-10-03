@@ -25,7 +25,7 @@ query dialects and their wire-compatible API surfaces.
 The design makes "one system replaces four" an **architecture, not a bundle**:
 a single columnar block store + DataFusion query engine, with each signal adding
 only a thin query-dialect front-end and a wire-compatible HTTP API. This is the
-exact pattern Crabka already uses for Kafka — *be a drop-in, not a fork*.
+exact pattern Crabka already uses for Kafka — _be a drop-in, not a fork_.
 
 The observability stack is itself a **Crabka client**: it uses the broker as its
 durable write-ahead log over the ordinary Kafka protocol. It eats its own dog
@@ -33,14 +33,14 @@ food.
 
 ## 2. Decisions (locked)
 
-| # | Decision | Choice |
-|---|---|---|
-| 1 | Ambition | Full LGTM+P replacement, decomposed by signal |
-| 2 | First wedge | **Logs / Loki** — cleanest storage mapping, most tractable query language, validates the full pipeline with least query-engine risk |
-| 3 | Storage representation | **Unified columnar block store** — WAL topic → compactor → Arrow/Parquet blocks + shared label/series index in object storage. Logs are the first tenant of a format all four signals reuse |
-| 4 | Grafana integration | **Loki HTTP API emulation** — Grafana's built-in Loki datasource points at Crabka unmodified; inherits the whole Loki ecosystem (LogCLI, alerting, Promtail/Alloy). Implies we parse + execute LogQL. (A native plugin is a possible later addition; out of scope.) |
-| 5 | Query engine | **DataFusion** as the shared execution substrate (the IOx/InfluxDB-3.0 shape: DataFusion + Parquet + `object_store`). LogQL — and later PromQL/TraceQL/profiles — lower onto DataFusion logical plans via a custom `TableProvider` with pushdown |
-| 6 | Process model | **Separate role-selectable service** (`-target distributor\|compactor\|querier`), mirroring Loki/Mimir deployment and Crabka's existing separate services (gateway, schema-registry, operator). Uses Crabka-the-broker as its WAL |
+| #   | Decision               | Choice                                                                                                                                                                                                                                                              |
+| --- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Ambition               | Full LGTM+P replacement, decomposed by signal                                                                                                                                                                                                                       |
+| 2   | First wedge            | **Logs / Loki** — cleanest storage mapping, most tractable query language, validates the full pipeline with least query-engine risk                                                                                                                                 |
+| 3   | Storage representation | **Unified columnar block store** — WAL topic → compactor → Arrow/Parquet blocks + shared label/series index in object storage. Logs are the first tenant of a format all four signals reuse                                                                         |
+| 4   | Grafana integration    | **Loki HTTP API emulation** — Grafana's built-in Loki datasource points at Crabka unmodified; inherits the whole Loki ecosystem (LogCLI, alerting, Promtail/Alloy). Implies we parse + execute LogQL. (A native plugin is a possible later addition; out of scope.) |
+| 5   | Query engine           | **DataFusion** as the shared execution substrate (the IOx/InfluxDB-3.0 shape: DataFusion + Parquet + `object_store`). LogQL — and later PromQL/TraceQL/profiles — lower onto DataFusion logical plans via a custom `TableProvider` with pushdown                    |
+| 6   | Process model          | **Separate role-selectable service** (`-target distributor\|compactor\|querier`), mirroring Loki/Mimir deployment and Crabka's existing separate services (gateway, schema-registry, operator). Uses Crabka-the-broker as its WAL                                   |
 
 ## 3. Architecture
 
@@ -69,13 +69,13 @@ food.
 
 ### 3.1 Components
 
-| Component | Role | Reuse vs. net-new |
-|---|---|---|
-| **Distributor** | Terminate Loki-push / OTLP-logs / Kafka-produce; validate; map `X-Scope-OrgID` → tenant; write to WAL | Net-new endpoints; reuses Crabka produce path, quotas, ACLs |
-| **WAL topic** | Short-retention durable buffer | 100% reuse — a Kafka topic |
-| **Compactor** | Consumer group: roll WAL rows → columnar blocks + index → object storage | Net-new; reuses `object_store` + consumer-group offsets for crash-safety |
-| **Block store** | Signal-agnostic columnar block format + index + `TableProvider` w/ pushdown | **Net-new — the shared substrate** |
-| **Querier** | Serve Loki HTTP API; LogQL→DataFusion; merge hot (WAL tail) + cold (blocks) | Net-new front-end; reuses DataFusion + block store |
+| Component       | Role                                                                                                  | Reuse vs. net-new                                                        |
+| --------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| **Distributor** | Terminate Loki-push / OTLP-logs / Kafka-produce; validate; map `X-Scope-OrgID` → tenant; write to WAL | Net-new endpoints; reuses Crabka produce path, quotas, ACLs              |
+| **WAL topic**   | Short-retention durable buffer                                                                        | 100% reuse — a Kafka topic                                               |
+| **Compactor**   | Consumer group: roll WAL rows → columnar blocks + index → object storage                              | Net-new; reuses `object_store` + consumer-group offsets for crash-safety |
+| **Block store** | Signal-agnostic columnar block format + index + `TableProvider` w/ pushdown                           | **Net-new — the shared substrate**                                       |
+| **Querier**     | Serve Loki HTTP API; LogQL→DataFusion; merge hot (WAL tail) + cold (blocks)                           | Net-new front-end; reuses DataFusion + block store                       |
 
 ### 3.2 Hot/cold split
 
@@ -88,17 +88,17 @@ a Kafka consumer on a Crabka topic.
 
 ### 3.3 Crate layout
 
-- `crabka-blockstore` — signal-agnostic columnar blocks + two-level index +
+- `krabka-blockstore` — signal-agnostic columnar blocks + two-level index +
   `object_store` IO + DataFusion `TableProvider` with pushdown. The shared half.
-- `crabka-logql` — LogQL parser + planner (lowers to DataFusion). The
+- `krabka-logql` — LogQL parser + planner (lowers to DataFusion). The
   signal-specific front-end.
-- `crabka-observability` — the role-selectable service binary
+- `krabka-observability` — the role-selectable service binary
   (`-target distributor|compactor|querier`), wiring blockstore + logql + a
   Kafka client.
 
-The split is deliberate: adding metrics later means `crabka-promql` + a
-Prometheus-API surface drop in beside `crabka-logql` on the *same*
-`crabka-blockstore` and the *same* service skeleton.
+The split is deliberate: adding metrics later means `krabka-promql` + a
+Prometheus-API surface drop in beside `krabka-logql` on the _same_
+`krabka-blockstore` and the _same_ service skeleton.
 
 ## 4. Data model
 
@@ -110,11 +110,11 @@ projection/predicate pushdown and row-group pruning for free). Rows sorted by
 `(series_fingerprint, timestamp)` so each series' lines are contiguous —
 excellent compression and cheap range scans.
 
-| Column | Meaning |
-|---|---|
-| `series_fingerprint` | hash of the stream label-set (defines the series) |
-| `timestamp` (ns) | log line time |
-| `line` | the log body |
+| Column                | Meaning                                             |
+| --------------------- | --------------------------------------------------- |
+| `series_fingerprint`  | hash of the stream label-set (defines the series)   |
+| `timestamp` (ns)      | log line time                                       |
+| `line`                | the log body                                        |
 | `structured_metadata` | map column — Loki's high-cardinality per-line attrs |
 
 The full label-set lives once in a **series dictionary**
@@ -126,14 +126,14 @@ payload columns.
 ### 4.2 Index (two-level, TSDB-style; object storage + querier cache)
 
 - **Label index** — inverted: `(label_name, value) → posting list of series
-  fingerprints`, plus the series dictionary. Resolves LogQL matchers
+fingerprints`, plus the series dictionary. Resolves LogQL matchers
   `{app="api", env="prod"}` → a set of fingerprints.
 - **Block index** — `(tenant, time-range, fingerprint) → block object key(s)`.
 
 Query planning = matchers → fingerprints (label index) → candidate blocks (block
 index) → Parquet scan with pushdown.
 
-*Future:* per-block bloom filters on line tokens to accelerate `|= "needle"`
+_Future:_ per-block bloom filters on line tokens to accelerate `|= "needle"`
 (Loki's bloom-compactor trick). Out of scope for the wedge.
 
 ## 5. Ingest
@@ -171,7 +171,7 @@ LogQL has two shapes, both lowering onto DataFusion:
 
 ```
 LogQL string
-   │  crabka-logql parser → AST
+   │  krabka-logql parser → AST
    ▼
 Stream selector matchers ─► label index ─► series fingerprints ─► block index ─► candidate blocks
    │                                                                                   │ (pruning)
@@ -188,7 +188,7 @@ Execute → serialize to Loki's exact JSON: {resultType: "streams"|"matrix", res
 ```
 
 The **matchers → fingerprints → blocks** chain is the performance story: touch
-the cached label index to prune to a handful of blocks *before* any Parquet scan,
+the cached label index to prune to a handful of blocks _before_ any Parquet scan,
 then push the time range + line filters into the scan so row-group statistics
 skip most data.
 
@@ -244,7 +244,7 @@ ops between sub-queries, `label_replace`.
 
 Mirrors Crabka's differential-testing ethos:
 
-- **Differential conformance vs. real Loki** *(headline)* — ingest identical data
+- **Differential conformance vs. real Loki** _(headline)_ — ingest identical data
   into Loki and Crabka, run a LogQL query corpus against both, assert equal
   results. The byte-equality analog that proves "drop-in."
 - **Grafana integration** (testcontainers) — real Grafana, built-in Loki
@@ -256,12 +256,13 @@ Mirrors Crabka's differential-testing ethos:
 - **Multi-tenant isolation** — tenant A cannot see B's series/labels/lines; quota
   enforced.
 - LogQL parser/planner snapshots; DataFusion golden-plan + pushdown assertions.
-- *(Stretch, fits Crabka's stateright program:* model the compactor's
+- _(Stretch, fits Crabka's stateright program:_ model the compactor's
   offset-commit-vs-block-durability ordering for no-loss/no-dup.)
 
 ## 10. Scope
 
 **In (logs wedge MVP):**
+
 - 3 ingest doors (Loki push, OTLP logs, Kafka produce)
 - WAL topic + compactor + Parquet blocks + two-level index in object storage
 - DataFusion querier serving the Loki HTTP API (`query_range`, `query`, `labels`,
@@ -273,6 +274,7 @@ Mirrors Crabka's differential-testing ethos:
 - Differential-vs-Loki + Grafana integration tests
 
 **Out (explicitly deferred):**
+
 - Bloom-filter line acceleration
 - Full LogQL surface (§7.5 "out" list)
 - Loki ruler / recording rules / alerting
@@ -285,16 +287,16 @@ Mirrors Crabka's differential-testing ethos:
 
 ## 11. Generalization to all four signals
 
-Why full replacement is an architecture and not a bundle. Everything *below* the
+Why full replacement is an architecture and not a bundle. Everything _below_ the
 front-end — block store, index, compactor, querier skeleton, service binary,
 multi-tenancy, object-store IO — is built once in the logs wedge and reused.
 
-| Signal | Front-end crate | API emulated | Block payload | Index key | Existing Crabka reuse |
-|---|---|---|---|---|---|
-| **Logs** (wedge) | `crabka-logql` | Loki HTTP | `line`, metadata | series fingerprint | produce, quotas, `object_store` |
-| **Metrics** | `crabka-promql` | Prometheus HTTP | `value:f64` | series fingerprint | **KIP-714 OTLP ingest + `prometheus_sink` already exist** |
-| **Traces** | `crabka-traceql` | Tempo HTTP | span fields | `trace_id` + span index | OTLP ingest path |
-| **Profiles** | `crabka-pprof` | Pyroscope HTTP | sample/stack | profile-type + symbol index | OTLP/pprof |
+| Signal           | Front-end crate  | API emulated    | Block payload    | Index key                   | Existing Crabka reuse                                     |
+| ---------------- | ---------------- | --------------- | ---------------- | --------------------------- | --------------------------------------------------------- |
+| **Logs** (wedge) | `krabka-logql`   | Loki HTTP       | `line`, metadata | series fingerprint          | produce, quotas, `object_store`                           |
+| **Metrics**      | `krabka-promql`  | Prometheus HTTP | `value:f64`      | series fingerprint          | **KIP-714 OTLP ingest + `prometheus_sink` already exist** |
+| **Traces**       | `krabka-traceql` | Tempo HTTP      | span fields      | `trace_id` + span index     | OTLP ingest path                                          |
+| **Profiles**     | `krabka-pprof`   | Pyroscope HTTP  | sample/stack     | profile-type + symbol index | OTLP/pprof                                                |
 
 Each later signal is **one front-end crate + one API-surface module + one block
 schema**. LogQL's metric-query aggregation is a literal down-payment on PromQL.

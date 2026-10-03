@@ -1,13 +1,13 @@
 use super::*;
 
 const ANYARRAY_TEXT_REPRESENTATION: ColumnType = ColumnType::Text;
-const PG_STATISTIC_ANYARRAY: ColumnType = ColumnType::Base(crabka_pgtypes::usertype::BaseRef {
+const PG_STATISTIC_ANYARRAY: ColumnType = ColumnType::Base(krabka_pgtypes::usertype::BaseRef {
     oid: 2277,
     name: "anyarray",
     representation: &ANYARRAY_TEXT_REPRESENTATION,
 });
 
-pub(crate) fn virtual_lookup_key(name: &crabka_pgcatalog::RelationName) -> String {
+pub(crate) fn virtual_lookup_key(name: &krabka_pgcatalog::RelationName) -> String {
     if name.schema == crate::search_path::PG_CATALOG {
         name.name.clone()
     } else {
@@ -15,11 +15,11 @@ pub(crate) fn virtual_lookup_key(name: &crabka_pgcatalog::RelationName) -> Strin
     }
 }
 
-pub(crate) fn is_virtual_relation(name: &crabka_pgcatalog::RelationName) -> bool {
+pub(crate) fn is_virtual_relation(name: &krabka_pgcatalog::RelationName) -> bool {
     virtual_table(&virtual_lookup_key(name)).is_some()
 }
 
-pub(crate) fn virtual_relation_kind(name: &crabka_pgcatalog::RelationName) -> Option<&'static str> {
+pub(crate) fn virtual_relation_kind(name: &krabka_pgcatalog::RelationName) -> Option<&'static str> {
     let relation = virtual_table(&virtual_lookup_key(name))?;
     Some(match virtual_pg_class_properties(relation, 0).0 {
         "v" => "view",
@@ -28,24 +28,24 @@ pub(crate) fn virtual_relation_kind(name: &crabka_pgcatalog::RelationName) -> Op
 }
 
 pub(crate) fn virtual_relation_table(
-    name: &crabka_pgcatalog::RelationName,
-) -> Option<crabka_pgcatalog::Table> {
+    name: &krabka_pgcatalog::RelationName,
+) -> Option<krabka_pgcatalog::Table> {
     virtual_table(&virtual_lookup_key(name)).map(virtual_catalog_table)
 }
 
-pub(crate) fn is_system_catalog(name: &crabka_pgcatalog::RelationName) -> bool {
+pub(crate) fn is_system_catalog(name: &krabka_pgcatalog::RelationName) -> bool {
     virtual_relation_kind(name) == Some("table")
 }
 
-fn system_catalog_refusal(name: &crabka_pgcatalog::RelationName) -> ExecError {
-    ExecError::Remote(crabka_pgwire::error::PgError::error(
+fn system_catalog_refusal(name: &krabka_pgcatalog::RelationName) -> ExecError {
+    ExecError::Remote(krabka_pgwire::error::PgError::error(
         "42501",
         format!("permission denied: \"{}\" is a system catalog", name.name),
     ))
 }
 
 pub(crate) fn system_catalog_wrong_kind(
-    name: &crabka_pgcatalog::RelationName,
+    name: &krabka_pgcatalog::RelationName,
 ) -> Option<ExecError> {
     is_system_catalog(name).then(|| system_catalog_refusal(name))
 }
@@ -89,8 +89,8 @@ pub(crate) fn virtual_table(name: &str) -> Option<&'static str> {
 pub(crate) fn virtual_catalog_table(name: &str) -> Table {
     Table {
         id: virtual_relation_oid(name) as u32,
-        owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
-        name: crabka_pgcatalog::RelationName::new(
+        owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+        name: krabka_pgcatalog::RelationName::new(
             virtual_relation_schema(name),
             virtual_relation_name(name),
         ),
@@ -114,7 +114,7 @@ pub(crate) fn virtual_catalog_columns(name: &str) -> Vec<Column> {
             ("nspname", Text),
             // `\dn` reads `nspowner` through `pg_get_userbyid`.
             ("nspowner", Int4),
-            ("nspacl", ColumnType::Array(crabka_pgtypes::ElemType::Text)),
+            ("nspacl", ColumnType::Array(krabka_pgtypes::ElemType::Text)),
         ]),
         // PostgreSQL 18.4's column set, in catalog order: `psql`'s `\d` reads
         // relpersistence/relreplident/relchecks/relhasrules/relhastriggers/
@@ -154,7 +154,7 @@ pub(crate) fn virtual_catalog_columns(name: &str) -> Vec<Column> {
             ("typcollation", ColumnType::Oid),
             ("typdefaultbin", Text),
             ("typdefault", Text),
-            ("typacl", ColumnType::Array(crabka_pgtypes::ElemType::Text)),
+            ("typacl", ColumnType::Array(krabka_pgtypes::ElemType::Text)),
         ]),
         "pg_ts_config" => cols(&[
             ("oid", Int4),
@@ -290,7 +290,7 @@ pub(crate) fn virtual_catalog_columns(name: &str) -> Vec<Column> {
             ("rolbypassrls", Bool),
             (
                 "rolconfig",
-                ColumnType::Array(crabka_pgtypes::ElemType::Text),
+                ColumnType::Array(krabka_pgtypes::ElemType::Text),
             ),
             ("oid", Int4),
         ]),
@@ -319,23 +319,23 @@ pub(crate) fn virtual_catalog_columns(name: &str) -> Vec<Column> {
             ("stacoll5", Int4),
             (
                 "stanumbers1",
-                ColumnType::Array(crabka_pgtypes::ElemType::Float4),
+                ColumnType::Array(krabka_pgtypes::ElemType::Float4),
             ),
             (
                 "stanumbers2",
-                ColumnType::Array(crabka_pgtypes::ElemType::Float4),
+                ColumnType::Array(krabka_pgtypes::ElemType::Float4),
             ),
             (
                 "stanumbers3",
-                ColumnType::Array(crabka_pgtypes::ElemType::Float4),
+                ColumnType::Array(krabka_pgtypes::ElemType::Float4),
             ),
             (
                 "stanumbers4",
-                ColumnType::Array(crabka_pgtypes::ElemType::Float4),
+                ColumnType::Array(krabka_pgtypes::ElemType::Float4),
             ),
             (
                 "stanumbers5",
-                ColumnType::Array(crabka_pgtypes::ElemType::Float4),
+                ColumnType::Array(krabka_pgtypes::ElemType::Float4),
             ),
             // The values stay in their durable text form, but the catalog
             // exposes PostgreSQL's unbound `anyarray` pseudo-type.
@@ -356,18 +356,18 @@ pub(crate) fn virtual_catalog_columns(name: &str) -> Vec<Column> {
             ("most_common_vals", Text),
             (
                 "most_common_freqs",
-                ColumnType::Array(crabka_pgtypes::ElemType::Float4),
+                ColumnType::Array(krabka_pgtypes::ElemType::Float4),
             ),
             ("histogram_bounds", Text),
             ("correlation", ColumnType::Float4),
             ("most_common_elems", Text),
             (
                 "most_common_elem_freqs",
-                ColumnType::Array(crabka_pgtypes::ElemType::Float4),
+                ColumnType::Array(krabka_pgtypes::ElemType::Float4),
             ),
             (
                 "elem_count_histogram",
-                ColumnType::Array(crabka_pgtypes::ElemType::Float4),
+                ColumnType::Array(krabka_pgtypes::ElemType::Float4),
             ),
             ("range_length_histogram", Text),
             ("range_empty_frac", ColumnType::Float4),
@@ -381,10 +381,10 @@ pub(crate) fn virtual_catalog_columns(name: &str) -> Vec<Column> {
             ("statistics_owner", Text),
             (
                 "attnames",
-                ColumnType::Array(crabka_pgtypes::ElemType::Text),
+                ColumnType::Array(krabka_pgtypes::ElemType::Text),
             ),
-            ("exprs", ColumnType::Array(crabka_pgtypes::ElemType::Text)),
-            ("kinds", ColumnType::Array(crabka_pgtypes::ElemType::Text)),
+            ("exprs", ColumnType::Array(krabka_pgtypes::ElemType::Text)),
+            ("kinds", ColumnType::Array(krabka_pgtypes::ElemType::Text)),
             ("inherited", Bool),
             ("n_distinct", Text),
             ("dependencies", Text),
@@ -392,11 +392,11 @@ pub(crate) fn virtual_catalog_columns(name: &str) -> Vec<Column> {
             ("most_common_val_nulls", Text),
             (
                 "most_common_freqs",
-                ColumnType::Array(crabka_pgtypes::ElemType::Float8),
+                ColumnType::Array(krabka_pgtypes::ElemType::Float8),
             ),
             (
                 "most_common_base_freqs",
-                ColumnType::Array(crabka_pgtypes::ElemType::Float8),
+                ColumnType::Array(krabka_pgtypes::ElemType::Float8),
             ),
         ]),
         "pg_stats_ext_exprs" => cols(&[
@@ -413,18 +413,18 @@ pub(crate) fn virtual_catalog_columns(name: &str) -> Vec<Column> {
             ("most_common_vals", Text),
             (
                 "most_common_freqs",
-                ColumnType::Array(crabka_pgtypes::ElemType::Float4),
+                ColumnType::Array(krabka_pgtypes::ElemType::Float4),
             ),
             ("histogram_bounds", Text),
             ("correlation", ColumnType::Float4),
             ("most_common_elems", Text),
             (
                 "most_common_elem_freqs",
-                ColumnType::Array(crabka_pgtypes::ElemType::Float4),
+                ColumnType::Array(krabka_pgtypes::ElemType::Float4),
             ),
             (
                 "elem_count_histogram",
-                ColumnType::Array(crabka_pgtypes::ElemType::Float4),
+                ColumnType::Array(krabka_pgtypes::ElemType::Float4),
             ),
         ]),
         // The full standard projection, in PostgreSQL 18.4's column order. The

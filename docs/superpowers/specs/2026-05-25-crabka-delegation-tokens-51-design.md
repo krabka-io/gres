@@ -33,12 +33,12 @@ background expiry sweep that prunes stale tokens.
 
 All four handlers live under `crates/broker/src/handlers/`:
 
-| api_key | request                       | min ver | max ver | handler file                          |
-|--------:|-------------------------------|--------:|--------:|---------------------------------------|
-| 38      | `CreateDelegationToken`       |       0 |       3 | `create_delegation_token.rs`          |
-| 39      | `RenewDelegationToken`        |       0 |       2 | `renew_delegation_token.rs`           |
-| 40      | `ExpireDelegationToken`       |       0 |       2 | `expire_delegation_token.rs`          |
-| 41      | `DescribeDelegationToken`     |       0 |       3 | `describe_delegation_token.rs`        |
+| api_key | request                   | min ver | max ver | handler file                   |
+| ------: | ------------------------- | ------: | ------: | ------------------------------ |
+|      38 | `CreateDelegationToken`   |       0 |       3 | `create_delegation_token.rs`   |
+|      39 | `RenewDelegationToken`    |       0 |       2 | `renew_delegation_token.rs`    |
+|      40 | `ExpireDelegationToken`   |       0 |       2 | `expire_delegation_token.rs`   |
+|      41 | `DescribeDelegationToken` |       0 |       3 | `describe_delegation_token.rs` |
 
 Wire-struct generation is already in `crates/protocol/generated/` (the
 owned + borrowed forms are present per the survey I did) — no new
@@ -66,9 +66,9 @@ codegen required.
    - `expiry_timestamp_ms = issue_ts + min(delegation_token_default_renew_period_ms, chosen_lifetime)`
      — the initial "next renewal due" instant, what `Renew` actually extends
      (up to `max_timestamp_ms`).
-   The two collapse only when `default_renew_period_ms >= chosen_lifetime`
-   (e.g. caller asked for a very short ceiling); otherwise they're
-   distinct so `Renew` has room to actually advance the expiry.
+     The two collapse only when `default_renew_period_ms >= chosen_lifetime`
+     (e.g. caller asked for a very short ceiling); otherwise they're
+     distinct so `Renew` has room to actually advance the expiry.
 6. **Renewers list.** Whatever caller passed (zero-or-more SASL
    principal strings, e.g. `"User:alice"`). Renewers in addition to the
    owner can call `RenewDelegationToken`.
@@ -78,8 +78,8 @@ codegen required.
 8. **Response.** Standard KIP-48 shape — `owner`, `principal_type`,
    `issue_timestamp_ms`, `expiry_timestamp_ms`, `max_timestamp_ms`,
    `token_id`, `hmac`. Error code `0` on success; `61
-   DELEGATION_TOKEN_AUTH_DISABLED` if no master key configured; `62
-   DELEGATION_TOKEN_NOT_FOUND` is a Describe/Renew/Expire-only
+DELEGATION_TOKEN_AUTH_DISABLED` if no master key configured; `62
+DELEGATION_TOKEN_NOT_FOUND` is a Describe/Renew/Expire-only
    condition; `81 DELEGATION_TOKEN_REQUEST_NOT_ALLOWED` for the
    token-creating-token case.
 
@@ -94,7 +94,7 @@ codegen required.
    OR appear in `renewers`. `DELEGATION_TOKEN_OWNER_MISMATCH` (err 64)
    otherwise.
 4. **Compute new expiry.** `new_expire = min(now + renew_period_ms,
-   issue_ts + max_lifetime_ms)`. If `renew_period_ms == -1`, fall back
+issue_ts + max_lifetime_ms)`. If `renew_period_ms == -1`, fall back
    to broker config `delegation_token_expiry_check_interval_ms` (Kafka
    default 24h).
 5. **Persist via raft.** Append a `DelegationTokenRecord` with the
@@ -260,7 +260,7 @@ pub struct DelegationTokenRecord {
 
 ### 3.3 Image accessor
 
-`crabka_raft::Image` gains:
+`krabka_raft::Image` gains:
 
 ```rust
 pub struct Image {
@@ -310,7 +310,7 @@ representation.
 Required; loaded once at broker startup. Two sources, precedence
 order:
 
-1. Env var `CRABKA_DELEGATION_TOKEN_SECRET_KEY` (Kafka's
+1. Env var `KRABKA_DELEGATION_TOKEN_SECRET_KEY` (Kafka's
    `KAFKA_DELEGATION_TOKEN_SECRET_KEY` convention — namespaced).
 2. Broker config TOML: `[delegation_token] secret_key = "..."`.
 
@@ -369,10 +369,10 @@ string** (e.g. `"User:alice"`). Pattern types `LITERAL`, `PREFIXED`,
 
 ### 5.3 Operation matrix
 
-| operation  | Create   | Renew         | Expire        | Describe         |
-|-----------:|----------|---------------|---------------|------------------|
-| any auth'd | implicit | implicit if owner/renewer | implicit if owner/renewer | implicit if owner/renewer |
-| ACL        | n/a      | n/a           | n/a           | `Describe` on `TOKEN:<owner>` extends visibility |
+|  operation | Create   | Renew                     | Expire                    | Describe                                         |
+| ---------: | -------- | ------------------------- | ------------------------- | ------------------------------------------------ |
+| any auth'd | implicit | implicit if owner/renewer | implicit if owner/renewer | implicit if owner/renewer                        |
+|        ACL | n/a      | n/a                       | n/a                       | `Describe` on `TOKEN:<owner>` extends visibility |
 
 Only `Describe` is an externally grantable token operation —
 `Create/Renew/Expire` are implicit-on-ownership.
@@ -433,8 +433,9 @@ matches Kafka's "every broker sweeps, idempotent" pattern.
 Eight tasks, grouped into batches by file-set independence:
 
 **Batch 1 — record + image + helper** (parallel: T1, T2, T3)
+
 - **T1**: `DelegationTokenRecord` in `crates/protocol/src/records.rs`
-  + bincode encode/decode + image apply branch in `crabka_raft`.
+  - bincode encode/decode + image apply branch in `krabka_raft`.
 - **T2**: `DelegationToken` image type + accessors (`delegation_token_by_id`,
   `delegation_tokens_by_owner`, `delegation_tokens_visible_to`,
   `all_delegation_tokens`).
@@ -442,6 +443,7 @@ Eight tasks, grouped into batches by file-set independence:
   `crates/security/src/delegation_token.rs`.
 
 **Batch 2 — config + handler scaffolding** (parallel: T4, T5)
+
 - **T4**: BrokerConfig fields (secret key, lifetime config, sweep
   interval) + TOML parsing in `file_config.rs` + env-var precedence.
 - **T5**: Four handler stubs (Create/Renew/Expire/Describe) returning
@@ -449,6 +451,7 @@ Eight tasks, grouped into batches by file-set independence:
   `network/dispatch.rs` request routing.
 
 **Batch 3 — handler bodies** (parallel: T6, T7) — depends on B1 + B2
+
 - **T6**: `CreateDelegationToken` + `DescribeDelegationToken` full
   implementations (more complex — UUID, HMAC, persist + auth-gate
   checks for Create; owner/renewer visibility for Describe).
@@ -456,8 +459,9 @@ Eight tasks, grouped into batches by file-set independence:
   implementations (HMAC-lookup-based, simpler).
 
 **Batch 4 — auth + ACL + sweep** (parallel: T8, T9, T10) — depends on B3
+
 - **T8**: SCRAM auth.rs token-fallback + `ScramServerExchange::new_with_principal`
-  + `ConnectionAuth::Authenticated.authenticated_via_token` + token-creates-token rejection.
+  - `ConnectionAuth::Authenticated.authenticated_via_token` + token-creates-token rejection.
 - **T9**: `acl_wire.rs` TOKEN resource type unblock + matcher
   canonicalization + Describe-on-TOKEN authorization gate in T6's
   Describe handler.
@@ -465,14 +469,16 @@ Eight tasks, grouped into batches by file-set independence:
   shutdown integration.
 
 **Batch 5 — integration + e2e** (parallel: T11, T12) — depends on B4
+
 - **T11**: Broker integration test
   `crates/broker/tests/delegation_tokens.rs`: create → describe →
   authenticate-as-token → renew → expire → verify gone.
 - **T12**: JVM acceptance test
   `jvm_kafka_delegation_tokens_end_to_end` — `kafka-delegation-tokens.sh
-  --create` then SCRAM auth with returned creds.
+--create` then SCRAM auth with returned creds.
 
 **Batch 6 — STATUS** (sequential: T13)
+
 - **T13**: STATUS entry + final fmt/clippy/test gate.
 
 ---
@@ -481,16 +487,16 @@ Eight tasks, grouped into batches by file-set independence:
 
 ### 8.1 Unit tests (~22 total)
 
-| file                                                  | new tests | covers                                                                 |
-|-------------------------------------------------------|----------:|------------------------------------------------------------------------|
-| `crates/security/src/delegation_token.rs`             |         3 | HMAC determinism, key sensitivity, SecretBytes Debug redaction         |
-| `crates/protocol/src/records.rs` (or wherever record encoding lives) | 2 | record round-trip encode/decode, tombstone flag round-trip   |
-| `crabka_raft` image apply tests                       |         3 | apply insert / apply replace / apply tombstone                         |
-| `crates/broker/src/handlers/create_delegation_token.rs` | 4       | success, auth-disabled, token-creates-token rejected, max-lifetime clamping |
-| `crates/broker/src/handlers/renew_delegation_token.rs` | 3        | success-as-owner, success-as-renewer, owner-mismatch                    |
-| `crates/broker/src/handlers/expire_delegation_token.rs`| 3        | future-expiry, immediate-delete (negative period), owner-mismatch       |
-| `crates/broker/src/handlers/describe_delegation_token.rs` | 3     | empty-filter, owner-filter-match, token-authed-sees-own-only             |
-| `crates/broker/src/network/auth.rs`                   |         1 | token-username-falls-back-to-token-cred (synthetic image fixture)       |
+| file                                                                 | new tests | covers                                                                      |
+| -------------------------------------------------------------------- | --------: | --------------------------------------------------------------------------- |
+| `crates/security/src/delegation_token.rs`                            |         3 | HMAC determinism, key sensitivity, SecretBytes Debug redaction              |
+| `crates/protocol/src/records.rs` (or wherever record encoding lives) |         2 | record round-trip encode/decode, tombstone flag round-trip                  |
+| `krabka_raft` image apply tests                                      |         3 | apply insert / apply replace / apply tombstone                              |
+| `crates/broker/src/handlers/create_delegation_token.rs`              |         4 | success, auth-disabled, token-creates-token rejected, max-lifetime clamping |
+| `crates/broker/src/handlers/renew_delegation_token.rs`               |         3 | success-as-owner, success-as-renewer, owner-mismatch                        |
+| `crates/broker/src/handlers/expire_delegation_token.rs`              |         3 | future-expiry, immediate-delete (negative period), owner-mismatch           |
+| `crates/broker/src/handlers/describe_delegation_token.rs`            |         3 | empty-filter, owner-filter-match, token-authed-sees-own-only                |
+| `crates/broker/src/network/auth.rs`                                  |         1 | token-username-falls-back-to-token-cred (synthetic image fixture)           |
 
 ### 8.2 Broker integration test
 
@@ -549,6 +555,6 @@ Eight tasks, grouped into batches by file-set independence:
 - `cargo fmt --all --check`
 - `cargo clippy --all-targets -- -D warnings`
 - `cargo test --workspace`
-- `cargo test -p crabka-broker --test delegation_tokens`
-- `cargo test -p crabka-broker --test jvm_acceptance -- --ignored jvm_kafka_delegation_tokens_end_to_end` (WSL; not run in CI)
+- `cargo test -p krabka-broker --test delegation_tokens`
+- `cargo test -p krabka-broker --test jvm_acceptance -- --ignored jvm_kafka_delegation_tokens_end_to_end` (WSL; not run in CI)
 - CRD drift check stays green (no CRD changes in this slice).

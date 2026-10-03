@@ -4,7 +4,7 @@
 
 Move the remaining observability deployment policy into the existing
 `ServiceConfig`, preserving behavior and exposing every value through a
-`CRABKA_OBSERVABILITY_*` environment variable.
+`KRABKA_OBSERVABILITY_*` environment variable.
 
 ## Boundary
 

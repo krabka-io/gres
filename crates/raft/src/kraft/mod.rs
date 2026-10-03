@@ -9,10 +9,10 @@
 
 // The pure, deterministic, sans-IO consensus core (the `on_event` state
 // machine, its event/action/role/type model, and the snapshot reassembler)
-// lives in the wasm-friendly leaf crate `crabka-kraft-core`. Re-export its
+// lives in the wasm-friendly leaf crate `krabka-kraft-core`. Re-export its
 // modules here so the async engine, real wire, and on-disk log below keep
 // referencing `crate::kraft::{core, types, event, ...}` unchanged.
-pub use crabka_kraft_core::{action, core, event, role, snapshot_fetch, types};
+pub use krabka_kraft_core::{action, core, event, role, snapshot_fetch, types};
 
 pub mod controller;
 pub mod log;

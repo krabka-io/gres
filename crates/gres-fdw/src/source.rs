@@ -1,4 +1,4 @@
-//! Bounded per-partition snapshot scan over `crabka-client-core`.
+//! Bounded per-partition snapshot scan over `krabka-client-core`.
 //!
 //! Phase-1 contract:
 //! * [`scan_topic`] materialises all records between a per-partition start
@@ -7,17 +7,17 @@
 //! * [`plan_fetch`] is a pure helper that maps `(earliest, hwm, partition,
 //!   bounds)` → [`FetchPlan`]. Its unit tests need no broker.
 
-use crabka_client_admin::AdminClient;
-use crabka_client_core::{
+use krabka_client_admin::AdminClient;
+use krabka_client_core::{
     Connection, DEFAULT_FETCH_RESPONSE_MAX, FetchedHeader, IsolatedFetch,
     fetch_partition_with_isolation,
 };
-use crabka_pgexec::foreign::ScanBounds;
-use crabka_protocol::{
+use krabka_pgexec::foreign::ScanBounds;
+use krabka_protocol::{
     owned::list_offsets_request::{ListOffsetsPartition, ListOffsetsRequest, ListOffsetsTopic},
     primitives::uuid::Uuid as WireUuid,
 };
-use crabka_units::{
+use krabka_units::{
     ByteSize, Time,
     convert::{ByteSizeExt as _, TimeExt as _},
     mebibytes, secs,
@@ -224,7 +224,7 @@ pub async fn scan_topic(
         profile,
         topic,
         bounds,
-        crabka_client_core::ClientDnsTimeout::default(),
+        krabka_client_core::ClientDnsTimeout::default(),
     )
     .await
 }
@@ -238,16 +238,16 @@ pub async fn scan_topic_with_dns_timeout(
     profile: &ConnProfile,
     topic: &str,
     bounds: &ScanBounds,
-    dns_timeout: crabka_client_core::ClientDnsTimeout,
+    dns_timeout: krabka_client_core::ClientDnsTimeout,
 ) -> Result<Vec<RawRecord>, KafkaFdwError> {
     scan_topic_with_policy(
         profile,
         topic,
         bounds,
         dns_timeout,
-        crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-        crabka_client_core::ClientFrameMax::default(),
-        crabka_client_core::FetchMinBytes::default(),
+        krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+        krabka_client_core::ClientFrameMax::default(),
+        krabka_client_core::FetchMinBytes::default(),
         FdwScanPolicy::default(),
     )
     .await
@@ -258,10 +258,10 @@ pub(crate) async fn scan_topic_with_policy(
     profile: &ConnProfile,
     topic: &str,
     bounds: &ScanBounds,
-    dns_timeout: crabka_client_core::ClientDnsTimeout,
-    dispatch_queue_capacity: crabka_client_core::ConnectionDispatchQueueCapacity,
-    frame_max: crabka_client_core::ClientFrameMax,
-    fetch_min: crabka_client_core::FetchMinBytes,
+    dns_timeout: krabka_client_core::ClientDnsTimeout,
+    dispatch_queue_capacity: krabka_client_core::ConnectionDispatchQueueCapacity,
+    frame_max: krabka_client_core::ClientFrameMax,
+    fetch_min: krabka_client_core::FetchMinBytes,
     policy: FdwScanPolicy,
 ) -> Result<Vec<RawRecord>, KafkaFdwError> {
     let policy = policy.validate().map_err(KafkaFdwError::Config)?;
@@ -271,8 +271,8 @@ pub(crate) async fn scan_topic_with_policy(
     // Step 2: resolve partition metadata.
     let mut admin = AdminClient::connect_with_options(
         &profile.bootstrap,
-        crabka_client_core::ConnectionOptions {
-            client_id: "crabka-fdw".into(),
+        krabka_client_core::ConnectionOptions {
+            client_id: "krabka-fdw".into(),
             dns_timeout,
             connect_timeout: policy.connect_timeout,
             request_timeout: policy.request_timeout,
@@ -517,7 +517,7 @@ pub(crate) async fn scan_topic_with_policy(
 /// Resolves the first address within the configured DNS deadline.
 async fn lookup_first<F, I>(
     host_port: &str,
-    dns_timeout: crabka_client_core::ClientDnsTimeout,
+    dns_timeout: krabka_client_core::ClientDnsTimeout,
     lookup: F,
 ) -> Result<std::net::SocketAddr, KafkaFdwError>
 where
@@ -546,9 +546,9 @@ where
 /// nor its underlying `Connection`, so a second `Client` would add nothing.
 async fn open_connection(
     profile: &ConnProfile,
-    dns_timeout: crabka_client_core::ClientDnsTimeout,
-    dispatch_queue_capacity: crabka_client_core::ConnectionDispatchQueueCapacity,
-    frame_max: crabka_client_core::ClientFrameMax,
+    dns_timeout: krabka_client_core::ClientDnsTimeout,
+    dispatch_queue_capacity: krabka_client_core::ConnectionDispatchQueueCapacity,
+    frame_max: krabka_client_core::ClientFrameMax,
     policy: FdwScanPolicy,
 ) -> Result<Connection, KafkaFdwError> {
     let host_port = profile.bootstrap.first().ok_or_else(|| {
@@ -557,7 +557,7 @@ async fn open_connection(
 
     let addr = lookup_first(host_port, dns_timeout, tokio::net::lookup_host(host_port)).await?;
 
-    crabka_client_core::Connection::connect_with_options(
+    krabka_client_core::Connection::connect_with_options(
         addr,
         connection_options(profile, dispatch_queue_capacity, frame_max, policy),
     )
@@ -568,18 +568,18 @@ async fn open_connection(
 /// The scan connection's settings.
 fn connection_options(
     profile: &ConnProfile,
-    dispatch_queue_capacity: crabka_client_core::ConnectionDispatchQueueCapacity,
-    frame_max: crabka_client_core::ClientFrameMax,
+    dispatch_queue_capacity: krabka_client_core::ConnectionDispatchQueueCapacity,
+    frame_max: krabka_client_core::ClientFrameMax,
     policy: FdwScanPolicy,
-) -> crabka_client_core::ConnectionOptions {
-    crabka_client_core::ConnectionOptions {
-        client_id: "crabka-fdw".to_string(),
+) -> krabka_client_core::ConnectionOptions {
+    krabka_client_core::ConnectionOptions {
+        client_id: "krabka-fdw".to_string(),
         connect_timeout: policy.connect_timeout,
         request_timeout: policy.request_timeout,
         dispatch_queue_capacity,
         frame_max,
         security: profile.security.clone().map(Box::new),
-        ..crabka_client_core::ConnectionOptions::default()
+        ..krabka_client_core::ConnectionOptions::default()
     }
 }
 
@@ -590,7 +590,7 @@ mod tests {
     use std::time::Duration;
 
     use assert2::assert;
-    use crabka_units::millis;
+    use krabka_units::millis;
 
     use super::*;
 
@@ -721,7 +721,7 @@ mod tests {
         );
     }
 
-    /// The connection deadlines reach `crabka-client-core` as the durations the
+    /// The connection deadlines reach `krabka-client-core` as the durations the
     /// quantities name.
     #[test]
     fn connection_options_carry_the_configured_policy() {
@@ -735,8 +735,8 @@ mod tests {
         };
 
         let dispatch =
-            crabka_client_core::ConnectionDispatchQueueCapacity::new(7).expect("positive");
-        let frame_max = crabka_client_core::ClientFrameMax::try_from(crabka_units::kibibytes(32))
+            krabka_client_core::ConnectionDispatchQueueCapacity::new(7).expect("positive");
+        let frame_max = krabka_client_core::ClientFrameMax::try_from(krabka_units::kibibytes(32))
             .expect("valid frame max");
         let policy = FdwScanPolicy {
             connect_timeout: millis(37),
@@ -752,7 +752,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn raw_dns_lookup_stops_at_configured_deadline() {
-        let timeout = crabka_client_core::ClientDnsTimeout::new(Time::from_millis(37))
+        let timeout = krabka_client_core::ClientDnsTimeout::new(Time::from_millis(37))
             .expect("positive timeout");
         let started = tokio::time::Instant::now();
         let pending =

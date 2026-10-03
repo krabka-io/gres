@@ -14,13 +14,13 @@
 use std::time::Duration;
 
 use assert2::assert;
-use crabka_pgexec::SqlEngine;
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::SqlEngine;
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 /// One session, so a `CREATE` and the statements that depend on it stay
 /// together.
 struct Client {
-    session: crabka_pgexec::SqlSession,
+    session: krabka_pgexec::SqlSession,
 }
 
 impl Client {

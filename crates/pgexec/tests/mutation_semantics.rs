@@ -7,8 +7,8 @@
 //! (`ERROR_ELEVATION_REQUIRED`). See the "UAC-safe target names" policy in
 //! CLAUDE.md.
 
-use crabka_pgexec::SqlEngine;
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::SqlEngine;
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 async fn run(s: &mut impl Session, sql: &str) -> Vec<QueryResult> {
     s.simple_query(sql).await.expect("ok")

@@ -7,17 +7,17 @@ jsonb_jsonpath, analyst 1265); fix location PARTLY WRONG; dependencies PARTLY WR
 
 Recount by statement block (whole-block rule, script count_jx_dt.py):
 
-| class                                    | lines | stmts |
-|------------------------------------------|-------|-------|
-| .datetime("template")                    | 348   | 69    |
-| .time(n)/.timestamp(n)/... precision     | 205   | 41    |
-| typed items / tz rules / rendering       | 705   | 117   |
-| 6 hunks that start mid-statement (all datetime comparisons under _tz) | 18 | 6 |
-| `set time zone` reorder artefacts inside the datetime section | 4 | - |
-| **datetime total**                       | **1280** | |
-| named args (`silent =>`, `vars =>`)      | 568   | 88    |
-| .decimal(p,s) args                       | 66    | 17    |
-| other (like_regex, keyvalue id, `.**{last}`, NaN messages, unary +, ...) | 168 | 53 |
+| class                                                                    | lines    | stmts |
+| ------------------------------------------------------------------------ | -------- | ----- |
+| .datetime("template")                                                    | 348      | 69    |
+| .time(n)/.timestamp(n)/... precision                                     | 205      | 41    |
+| typed items / tz rules / rendering                                       | 705      | 117   |
+| 6 hunks that start mid-statement (all datetime comparisons under _tz)    | 18       | 6     |
+| `set time zone` reorder artefacts inside the datetime section            | 4        | -     |
+| **datetime total**                                                       | **1280** |       |
+| named args (`silent =>`, `vars =>`)                                      | 568      | 88    |
+| .decimal(p,s) args                                                       | 66       | 17    |
+| other (like_regex, keyvalue id, `.**{last}`, NaN messages, unary +, ...) | 168      | 53    |
 
 Of the 1280, 2 lines (`"1000000-01-01"` overflow comparison, expected `true`,
 Gres `null`) will still fail after this root: jiff `civil::Date` stops at year
@@ -29,11 +29,12 @@ Not a cascade: every statement is independent. First datetime failure is
 `.datetime() format is not recognized: "bogus"`).
 
 Sub-claims checked against source:
+
 - template refused at parse time: crates/pgexec/src/jsonpath.rs:1015-1024
   (`ExecError::Unsupported("jsonpath .datetime(template) is not supported")`),
   precision args -> `self.error_here()` syntax error at line 1023. CONFIRMED.
 - datetime_method (jsonpath.rs:1995-2040) casts through
-  `crabka_pgtypes::cast::cast(&source, target, &TimeZone::UTC)` and returns
+  `krabka_pgtypes::cast::cast(&source, target, &TimeZone::UTC)` and returns
   `JsonbValue::String`; renders with `encoding::encode_text` and swaps the
   first space for `T`. CONFIRMED. Consequences seen in the diff: `.datetime()`
   on "2017-03-10 12:34:56" yields "2017-03-10" (date cast accepts trailing
@@ -58,6 +59,7 @@ plus json_path_operator (~930-945) must take use_tz + &ctx.time_zone
 (EvalCtx.time_zone exists, crates/pgexec/src/clock.rs:65).
 
 Wrong / missing:
+
 - format_fn.rs is only a wrapper. The template engine is
   crates/pgtypes/src/datetime.rs `parse_by_template` (5481), `Scanner`
   (5049), `Assembly` (5490), `tokenize_template` (4613). It has NO std mode:

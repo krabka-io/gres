@@ -20,7 +20,7 @@ Land slice 43e: the rebalancer collects per-partition usage data from each broke
 ## Decisions captured during brainstorm
 
 1. **Bundle broker + rebalancer in one slice.** The broker-side per-partition counters and the rebalancer-side scraper land together; alternative was two PRs in sequence.
-2. **Periodic log-dir scan for disk usage.** Broker spawns a tokio task that ticks every `--partition-disk-scan-interval-secs` (default 60), walks each partition's log directory, sums segment file sizes, and updates a `crabka_broker_partition_disk_bytes` gauge.
+2. **Periodic log-dir scan for disk usage.** Broker spawns a tokio task that ticks every `--partition-disk-scan-interval-secs` (default 60), walks each partition's log directory, sums segment file sizes, and updates a `krabka_broker_partition_disk_bytes` gauge.
 3. **Fixed ring buffer for window storage.** Per-series ring buffer sized to the longest window (`retention / scrape_interval`). Goals average over the requested window. Operator caps memory via the scrape interval + retention.
 4. **Operator-supplied scrape targets** in `id:host:port,id:host:port,…` format (the broker_id prefix is needed to attribute metrics to specific brokers; the leader sees full traffic, followers only see replication).
 5. **Add `Goal::is_satisfied_with_ctx` to the trait** to close the 43d known trade. Default impl forwards to `is_satisfied`; the four capacity goals (`ReplicaCapacity`, `DiskCapacity`, `NetworkInCapacity`, `NetworkOutCapacity`) override to use the context's capacity + usage data. Optimizer's incremental hard-goal validation switches to call the new method.
@@ -83,11 +83,12 @@ pub partition_disk_bytes: Family<PartitionLabel, Gauge>,
 ```
 
 Metric names emitted by `prometheus-client`:
-- `crabka_broker_partition_bytes_in_total{topic="...", partition="0"}`
-- `crabka_broker_partition_bytes_out_total{topic="...", partition="0"}`
-- `crabka_broker_partition_disk_bytes{topic="...", partition="0"}`
 
-Topic-level counters (`crabka_broker_topic_bytes_in_total` etc.) stay — slice 39 consumers still want them, and per-topic + per-partition both have legitimate uses.
+- `krabka_broker_partition_bytes_in_total{topic="...", partition="0"}`
+- `krabka_broker_partition_bytes_out_total{topic="...", partition="0"}`
+- `krabka_broker_partition_disk_bytes{topic="...", partition="0"}`
+
+Topic-level counters (`krabka_broker_topic_bytes_in_total` etc.) stay — slice 39 consumers still want them, and per-topic + per-partition both have legitimate uses.
 
 ### Emit-site changes
 
@@ -127,12 +128,13 @@ disk_scanner/
 `scan::sum_partition_dir(path: &Path) -> Result<u64, io::Error>`: reads the directory entry, sums the size of every regular file. Pure-logic, easily unit-tested with a tempdir.
 
 `DiskScanner::run(self)`:
+
 1. `tokio::time::interval(self.interval)` tick loop.
 2. Per tick: read the log manager's `partition_dirs() -> impl Iterator<Item=(PartitionLabel, PathBuf)>` (a new accessor on the existing log manager). For each entry, `sum_partition_dir(path)`, set `metrics.partition_disk_bytes.get_or_create(&label).set(bytes as i64)`.
 3. Errors: `warn!` with topic/partition + the io error, skip that partition, continue the tick.
 4. Shutdown via `CancellationToken` (mirrors `Ingester` pattern).
 
-New broker CLI flag: `--partition-disk-scan-interval-secs <secs>` (env `CRABKA_PARTITION_DISK_SCAN_INTERVAL_SECS`, default 60). Setting to `0` disables the scanner entirely (no tick task spawned).
+New broker CLI flag: `--partition-disk-scan-interval-secs <secs>` (env `KRABKA_PARTITION_DISK_SCAN_INTERVAL_SECS`, default 60). Setting to `0` disables the scanner entirely (no tick task spawned).
 
 `Broker::start` spawns the `DiskScanner` task alongside its other background tasks. The task's `JoinHandle` is owned by the `Broker` so shutdown can drain it.
 
@@ -182,9 +184,10 @@ pub enum MetricKind {
 ```
 
 Implementation: line-oriented. Skip `#` comments + blank lines. For each metric line, match the metric name prefix against the three known families:
-- `crabka_broker_partition_bytes_in_total` → `BytesIn`
-- `crabka_broker_partition_bytes_out_total` → `BytesOut`
-- `crabka_broker_partition_disk_bytes` → `DiskBytes`
+
+- `krabka_broker_partition_bytes_in_total` → `BytesIn`
+- `krabka_broker_partition_bytes_out_total` → `BytesOut`
+- `krabka_broker_partition_disk_bytes` → `DiskBytes`
 
 Parse labels (`{topic="...",partition="..."}`), value. Skip lines for any other metric.
 
@@ -232,6 +235,7 @@ pub enum Window { FiveMin, OneHour, TwelveHour }
 ```
 
 **API:**
+
 - `UsageStore::new(config: WindowConfig) -> Self`
 - `UsageStore::default() -> Self` — empty, default config (30s scrape / 12h retention)
 - `UsageStore::insert(&self, broker_id: i32, samples: Vec<ParsedSample>, at_ms: i64)` — bulk-insert one scrape's worth. Drops samples older than `retention`. Single write lock.
@@ -240,6 +244,7 @@ pub enum Window { FiveMin, OneHour, TwelveHour }
 - `UsageStore::disk_bytes_avg(broker_id, topic, partition, window) -> Option<f64>` — arithmetic average of gauge samples within window.
 
 Window length lookup:
+
 - `FiveMin` → `Duration::from_secs(300)`
 - `OneHour` → `Duration::from_secs(3600)`
 - `TwelveHour` → `Duration::from_secs(43200)`
@@ -308,6 +313,7 @@ Default = empty `UsageStore::default()`. Threaded into the goals via the existin
 15 goals total:
 
 Hard (unchanged order; some now have real bodies):
+
 1. `PreferredLeaderIdempotency`
 2. `RackAware`
 3. `ReplicaCapacity`
@@ -316,28 +322,20 @@ Hard (unchanged order; some now have real bodies):
 6. `NetworkOutCapacity` (functional now)
 7. `CpuCapacity` (still stub)
 
-Soft (extended with four new):
-8. `ReplicaDistribution`
-9. `LeaderDistribution`
-10. `TopicReplicaDistribution`
-11. `MinTopicLeadersPerBroker`
-12. `DiskUsage` *(new)*
-13. `LeaderBytesIn` *(new)*
-14. `NetworkInUsage` *(new)*
-15. `NetworkOutUsage` *(new)*
+Soft (extended with four new): 8. `ReplicaDistribution` 9. `LeaderDistribution` 10. `TopicReplicaDistribution` 11. `MinTopicLeadersPerBroker` 12. `DiskUsage` _(new)_ 13. `LeaderBytesIn` _(new)_ 14. `NetworkInUsage` _(new)_ 15. `NetworkOutUsage` _(new)_
 
 ### Binary entry
 
 `bin/rebalancer.rs` gains three new CLI flags + one new spawn:
 
 ```rust
-#[arg(long, env = "CRABKA_METRICS_SCRAPE_TARGETS", default_value = "")]
+#[arg(long, env = "KRABKA_METRICS_SCRAPE_TARGETS", default_value = "")]
 metrics_scrape_targets: String,
 
-#[arg(long, env = "CRABKA_METRICS_SCRAPE_INTERVAL_SECS", default_value_t = 30)]
+#[arg(long, env = "KRABKA_METRICS_SCRAPE_INTERVAL_SECS", default_value_t = 30)]
 metrics_scrape_interval_secs: u64,
 
-#[arg(long, env = "CRABKA_METRICS_RETENTION_SECS", default_value_t = 43_200)]
+#[arg(long, env = "KRABKA_METRICS_RETENTION_SECS", default_value_t = 43_200)]
 metrics_retention_secs: u64,
 ```
 
@@ -387,11 +385,11 @@ metricsRetentionSecs: 43200
 
 ```yaml
 {{- if .Values.metricsScrapeTargets }}
-- name: CRABKA_METRICS_SCRAPE_TARGETS
+- name: KRABKA_METRICS_SCRAPE_TARGETS
   value: {{ .Values.metricsScrapeTargets | quote }}
-- name: CRABKA_METRICS_SCRAPE_INTERVAL_SECS
+- name: KRABKA_METRICS_SCRAPE_INTERVAL_SECS
   value: {{ .Values.metricsScrapeIntervalSecs | quote }}
-- name: CRABKA_METRICS_RETENTION_SECS
+- name: KRABKA_METRICS_RETENTION_SECS
   value: {{ .Values.metricsRetentionSecs | quote }}
 {{- end }}
 ```
@@ -402,7 +400,7 @@ metricsRetentionSecs: 43200
 
 ### Broker-side
 
-- **`metrics::tests`** (1 new): assert `crabka_broker_partition_bytes_in_total{topic="t",partition="0"}` and `_out_total` render after `record_partition_*` calls.
+- **`metrics::tests`** (1 new): assert `krabka_broker_partition_bytes_in_total{topic="t",partition="0"}` and `_out_total` render after `record_partition_*` calls.
 - **`disk_scanner::scan::tests`** (3 tests): empty dir → 0; tempdir with N segment files → correct sum; missing dir → error.
 - **`disk_scanner::tests`** (1 test): mock log-manager iterator → gauge values land on the right labels after one tick.
 - **`tests/metrics.rs`** (integration, 1 new): real broker fixture, produce records, scrape `/metrics`, assert both topic-level and partition-level counters present with expected values.
@@ -429,15 +427,15 @@ metricsRetentionSecs: 43200
 - **Counter reset detection.** A broker restart resets counters to 0. The naive `(latest - earliest) / dt` rate computation will produce a huge negative value when the latest reading is post-reset. Defensive: if `latest < earliest`, treat as a counter reset and return `None` (no rate signal until two post-reset samples accumulate). Document in `window.rs`.
 - **OpenMetrics text format quirks.** Our parser handles only what `prometheus-client` actually emits. Don't claim general OpenMetrics support; document it as scoped to the three known metric names.
 - **`partition_dirs()` accessor on log manager.** The existing log manager may not expose this; T3 needs to add a small public accessor. Verify during T3 — if the accessor isn't easy to add, fall back to the broker config's `log_dir` + reading `<log_dir>/<topic>-<partition>/` directly.
-- **`is_satisfied_with_ctx` correctness vs. tentative state.** The optimizer applies the tentative movement to a clone of the state before calling `is_satisfied_with_ctx`. Capacity goals consult `ctx.broker_usages` for current rates — but the *tentative* state has moved a replica, while the usages store is unchanged. So the check uses fresh placement + stale usage. That's fine for the first usage-driven proposal (operator-supplied placement causes usage to flow); subsequent proposals would benefit from usage re-estimation, deferred.
+- **`is_satisfied_with_ctx` correctness vs. tentative state.** The optimizer applies the tentative movement to a clone of the state before calling `is_satisfied_with_ctx`. Capacity goals consult `ctx.broker_usages` for current rates — but the _tentative_ state has moved a replica, while the usages store is unchanged. So the check uses fresh placement + stale usage. That's fine for the first usage-driven proposal (operator-supplied placement causes usage to flow); subsequent proposals would benefit from usage re-estimation, deferred.
 
 ## Acceptance criteria
 
-1. `cargo test -p crabka-broker` — existing + new tests pass.
-2. `cargo test -p crabka-rebalancer` — existing + new tests pass.
+1. `cargo test -p krabka-broker` — existing + new tests pass.
+2. `cargo test -p krabka-rebalancer` — existing + new tests pass.
 3. `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings` clean.
-4. `helm lint charts/crabka-rebalancer --set bootstrapServers=test:9092` clean.
-5. `helm unittest charts/crabka-rebalancer` clean.
+4. `helm lint charts/krabka-rebalancer --set bootstrapServers=test:9092` clean.
+5. `helm unittest charts/krabka-rebalancer` clean.
 6. `STATUS.md` gains a slice-43e entry covering broker-side per-partition metrics, the rebalancer scraper, the four new soft goals, the three now-functional capacity goals, and the `Goal::is_satisfied_with_ctx` trait addition.
 7. Running the binary with `--metrics-scrape-targets ""` leaves usage-dependent goals as no-ops; setting it to a real broker activates them. Same fail-safe pattern as the 43d capacity config.
 
@@ -480,7 +478,7 @@ crates/rebalancer/
 │   └── lib.rs                                       # MODIFIED — pub mod scraper;
 └── tests/end_to_end.rs                              # MODIFIED — 1 new test + fixture GoalContext literal
 
-charts/crabka-rebalancer/
+charts/krabka-rebalancer/
 ├── values.yaml                                       # MODIFIED — metricsScrape* values
 ├── templates/deployment.yaml                         # MODIFIED — 3 env entries
 └── tests/deployment_test.yaml                        # MODIFIED — 1 assertion

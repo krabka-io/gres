@@ -166,7 +166,7 @@ Add or update observability HTTP tests to verify:
 Verification command:
 
 ```sh
-cargo test -p crabka-observability
+cargo test -p krabka-observability
 ```
 
 ## Risks
@@ -183,4 +183,4 @@ cargo test -p crabka-observability
 - `crates/observability/src/lib.rs` has fewer maintained lines after the refactor.
 - Role-specific operational wrapper handlers are removed or substantially reduced.
 - All existing role operational routes still respond with equivalent behavior.
-- `cargo test -p crabka-observability` passes.
+- `cargo test -p krabka-observability` passes.

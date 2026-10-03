@@ -14,7 +14,7 @@ consumer network I/O, carry the minimum beside the existing byte budgets, and
 lower all three only when building Kafka requests. The demo resolves optional
 role-scoped UOM inputs and supplies them to the existing builder.
 
-**Tech Stack:** Rust, `bon`, Clap, `crabka-units`, `refined_type`, Docker
+**Tech Stack:** Rust, `bon`, Clap, `krabka-units`, `refined_type`, Docker
 Compose, Cargo.
 
 ## Global Constraints
@@ -41,15 +41,17 @@ Compose, Cargo.
 ### Task 1: Add Classic Consumer Fetch Minimum
 
 **Files:**
+
 - Modify: `crates/client-consumer/src/consumer.rs`
 - Modify: `crates/client-consumer/src/poll.rs`
 
 **Interfaces:**
-- Consumes: `crabka_client_core::FetchMinBytes`
+
+- Consumes: `krabka_client_core::FetchMinBytes`
 - Produces: `Consumer::builder().fetch_min(ByteSize)`
 - Produces internally:
   `build_fetch_request(timeout_ms: i32, isolation_level: IsolationLevel,
-  min: ByteSize, max: ByteSize, topics: Vec<FetchTopic>) -> FetchRequest`
+min: ByteSize, max: ByteSize, topics: Vec<FetchTopic>) -> FetchRequest`
 
 - [x] **Step 1: Write failing propagation and validation tests**
 
@@ -84,7 +86,7 @@ consumer fetch min must not exceed consumer fetch max
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-consumer fetch_min --lib --locked
+  cargo test -p krabka-client-consumer fetch_min --lib --locked
 ```
 
 Expected: the classic Consumer builder has no `fetch_min` input or the request
@@ -120,9 +122,9 @@ Delete the production `min_bytes: 1` literal.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-consumer --all-targets --locked
+  cargo test -p krabka-client-consumer --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-client-consumer --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-client-consumer --all-targets --locked -- -D warnings
 cargo +nightly fmt --all
 git diff --check
 git add crates/client-consumer/src/consumer.rs crates/client-consumer/src/poll.rs
@@ -134,6 +136,7 @@ git commit -m "feat(consumer): expose fetch minimum"
 ### Task 2: Expose the Demo Consume-Role Policy
 
 **Files:**
+
 - Modify: `crates/observability-demo-app/src/main.rs`
 - Create:
   `crates/observability-demo-app/tests/consumer_fetch_policy_config.rs`
@@ -142,11 +145,12 @@ git commit -m "feat(consumer): expose fetch minimum"
 - Modify: `demo/observability/docker-compose.yml`
 
 **Interfaces:**
+
 - Consumes: `Consumer::builder().fetch_min`, `.fetch_max`, and
   `.fetch_partition_max`
 - Produces:
   `effective_consumer_fetch_policy(&Cli) ->
-  std::io::Result<(ByteSize, ByteSize, ByteSize)>`
+std::io::Result<(ByteSize, ByteSize, ByteSize)>`
 
 - [x] **Step 1: Write failing CLI, role, and Compose tests**
 
@@ -166,9 +170,9 @@ by rejecting `--consumer-fetch-min 5B` on Stream while the environment contains
 Extend the Compose contract to require under `demo-consume` only:
 
 ```yaml
-CRABKA_DEMO_CONSUMER_FETCH_MIN: "${CRABKA_DEMO_CONSUMER_FETCH_MIN:-1B}"
-CRABKA_DEMO_CONSUMER_FETCH_MAX: "${CRABKA_DEMO_CONSUMER_FETCH_MAX:-50MiB}"
-CRABKA_DEMO_CONSUMER_FETCH_PARTITION_MAX: "${CRABKA_DEMO_CONSUMER_FETCH_PARTITION_MAX:-1MiB}"
+KRABKA_DEMO_CONSUMER_FETCH_MIN: "${KRABKA_DEMO_CONSUMER_FETCH_MIN:-1B}"
+KRABKA_DEMO_CONSUMER_FETCH_MAX: "${KRABKA_DEMO_CONSUMER_FETCH_MAX:-50MiB}"
+KRABKA_DEMO_CONSUMER_FETCH_PARTITION_MAX: "${KRABKA_DEMO_CONSUMER_FETCH_PARTITION_MAX:-1MiB}"
 ```
 
 - [x] **Step 2: Run focused tests and confirm failure**
@@ -220,11 +224,13 @@ git commit -m "feat(demo): expose consumer fetch policy"
 ### Task 3: Audit and Close the Slice
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 - Modify:
   `docs/superpowers/plans/2026-07-31-client-consumer-fetch-policy.md`
 
 **Interfaces:**
+
 - Proves the classic fetch minimum is no longer hardcoded and records that the
   repository-wide audit remains active
 
@@ -232,7 +238,7 @@ git commit -m "feat(demo): expose consumer fetch policy"
 
 ```bash
 rg -n \
-  'min_bytes: 1|fetch_min|fetch_max|fetch_partition_max|ConsumerFetch(Max|PartitionMax)Bytes|FetchMinBytes|CRABKA_DEMO_CONSUMER_FETCH_' \
+  'min_bytes: 1|fetch_min|fetch_max|fetch_partition_max|ConsumerFetch(Max|PartitionMax)Bytes|FetchMinBytes|KRABKA_DEMO_CONSUMER_FETCH_' \
   crates/client-consumer crates/observability-demo-app demo/observability
 ```
 
@@ -244,7 +250,7 @@ must be tests.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-consumer -p observability-demo-app \
+  cargo test -p krabka-client-consumer -p observability-demo-app \
   --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo check --workspace --all-targets --locked
@@ -258,7 +264,7 @@ git diff --check
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-consumer -p observability-demo-app \
+  cargo test -p krabka-client-consumer -p observability-demo-app \
   --all-targets --locked
 ```
 

@@ -2,7 +2,7 @@
 
 use std::str::FromStr;
 
-use crabka_units::{
+use krabka_units::{
     ByteSize, Time, kibibytes, mebibytes, millis, minutes,
     prelude::{ByteSizeExt as _, TimeExt as _},
     secs,
@@ -52,7 +52,7 @@ positive_newtype!(PositiveU64, u64, GreaterU64);
 /// Process-owned limits and pacing for distributed ranges.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RangeRuntimePolicy {
-    pub join: crabka_pgexec::scanner::JoinPolicy,
+    pub join: krabka_pgexec::scanner::JoinPolicy,
     pub rpc_frame_max: ByteSize,
     pub rpc_request_timeout: Time,
     pub rpc_server_idle_timeout: Time,
@@ -139,7 +139,7 @@ impl RangeRuntimePolicy {
 impl Default for RangeRuntimePolicy {
     fn default() -> Self {
         Self {
-            join: crabka_pgexec::scanner::JoinPolicy::default(),
+            join: krabka_pgexec::scanner::JoinPolicy::default(),
             rpc_frame_max: mebibytes(1),
             rpc_request_timeout: secs(5),
             rpc_server_idle_timeout: minutes(1),

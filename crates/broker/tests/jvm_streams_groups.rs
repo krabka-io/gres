@@ -6,7 +6,7 @@
 //! tool runs inside an `mirror.gcr.io/apache/kafka:4.1.0` container against an
 //! in-process Crabka broker on the host. The container has a JRE-only Kafka
 //! image with no `javac` or `jshell`, so we cannot compile a custom
-//! `KafkaStreams` app. Instead we use the native `crabka-client-core` client to
+//! `KafkaStreams` app. Instead we use the native `krabka-client-core` client to
 //! make a streams group EXIST on Crabka. The client finalizes
 //! `streams.version=1`, creates a source topic, and drives a
 //! `StreamsGroupHeartbeat` so the group has a live member with an assignment.
@@ -40,10 +40,10 @@ use std::{
 };
 
 use assert2::{assert, check};
-use crabka_broker::{Broker, BrokerConfig, BrokerHandle};
-use crabka_client_core::Client;
-use crabka_log::LogConfig;
-use crabka_protocol::owned::{
+use krabka_broker::{Broker, BrokerConfig, BrokerHandle};
+use krabka_client_core::Client;
+use krabka_log::LogConfig;
+use krabka_protocol::owned::{
     common::streams_group_heartbeat_request::task_ids::TaskIds as ReqTaskIds,
     create_topics_request::{CreatableTopic, CreateTopicsRequest},
     streams_group_heartbeat_request::{StreamsGroupHeartbeatRequest, Subtopology, Topology},
@@ -71,7 +71,7 @@ async fn start_host_broker() -> (BrokerHandle, tempfile::TempDir) {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("crabka_broker=info,info")),
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("krabka_broker=info,info")),
         )
         .with_test_writer()
         .try_init();
@@ -84,15 +84,15 @@ async fn start_host_broker() -> (BrokerHandle, tempfile::TempDir) {
         advertised_listener: BOOTSTRAP.into(),
         log_dir: dir.path().to_path_buf(),
         log_config: LogConfig::default(),
-        node_id: crabka_broker::NodeId(1),
+        node_id: krabka_broker::NodeId(1),
         controller_listen_addr: controller_addr,
-        controller_quorum_voters: vec![(crabka_broker::NodeId(1), controller_addr.to_string())],
-        heartbeat_interval: crabka_units::millis(3_000),
-        heartbeat_timeout: crabka_units::millis(9_000),
-        replica_lag_time_max: crabka_units::millis(30_000),
-        controller_election_timeout: crabka_units::secs(5),
-        controller_heartbeat_interval: crabka_units::millis(500),
-        bootstrap_mode: crabka_broker::BootstrapMode::Bootstrap,
+        controller_quorum_voters: vec![(krabka_broker::NodeId(1), controller_addr.to_string())],
+        heartbeat_interval: krabka_units::millis(3_000),
+        heartbeat_timeout: krabka_units::millis(9_000),
+        replica_lag_time_max: krabka_units::millis(30_000),
+        controller_election_timeout: krabka_units::secs(5),
+        controller_heartbeat_interval: krabka_units::millis(500),
+        bootstrap_mode: krabka_broker::BootstrapMode::Bootstrap,
         ..BrokerConfig::default()
     };
     let handle = Broker::start(config).await.expect("start broker");
@@ -107,7 +107,7 @@ async fn start_host_broker() -> (BrokerHandle, tempfile::TempDir) {
 async fn connect() -> Client {
     Client::builder()
         .bootstrap(format!("127.0.0.1:{HOST_PORT}"))
-        .client_id("crabka-streams-test")
+        .client_id("krabka-streams-test")
         .build()
         .await
         .expect("client build")
@@ -324,7 +324,7 @@ const TOOL_DEBUG_PREAMBLE: &str = concat!(
 );
 
 /// The headline differential test: make a KIP-1071 streams group live on Crabka
-/// with the native `crabka-client-core` client (`StreamsGroupHeartbeat`, api
+/// with the native `krabka-client-core` client (`StreamsGroupHeartbeat`, api
 /// 88). Then drive the REAL Apache Kafka 4.1.0 `kafka-streams-groups.sh` admin
 /// tool against Crabka and prove it round-trips the streams-group admin wire
 /// path. That tool is the JVM `StreamsGroupCommand` that wraps `AdminClient`.

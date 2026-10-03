@@ -8,7 +8,7 @@
 ## Goal
 
 Replace the fixed 15-second Prometheus HTTP request timeout in
-`crabka-bench-driver` with one validated runtime setting while preserving the
+`krabka-bench-driver` with one validated runtime setting while preserving the
 existing default and resource-capture behavior.
 
 ## Scope
@@ -50,7 +50,7 @@ constructing the HTTP client.
 
 The default is a named `DEFAULT_PROMETHEUS_REQUEST_TIMEOUT_SECONDS` constant.
 Add the workspace-pinned `refined_type` as a direct dependency of
-`crabka-bench-driver`. The only permitted `Cargo.lock` change is adding
+`krabka-bench-driver`. The only permitted `Cargo.lock` change is adding
 `refined_type` to that package's direct dependency list; dependency versions
 and transitive packages must remain unchanged.
 

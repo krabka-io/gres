@@ -12,8 +12,8 @@
 //! a plan the engine does not run.
 
 use assert2::assert;
-use crabka_pgexec::SqlEngine;
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::SqlEngine;
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 /// The plan `EXPLAIN (COSTS OFF)` prints for `sql`, one string per line.
 async fn plan(engine: &SqlEngine, sql: &str) -> Vec<String> {
@@ -237,7 +237,7 @@ async fn a_group_key_over_a_function_call_is_unchanged() {
 }
 
 /// A window call is held outside the expression tree, with its own `FILTER` and
-/// `OVER` on [`crabka_pgparser::ast::WindowCall`] rather than on a `FuncCall`,
+/// `OVER` on [`krabka_pgparser::ast::WindowCall`] rather than on a `FuncCall`,
 /// so it is rendered by a different path entirely. Widening the aggregate arm
 /// must not start printing window syntax through it.
 #[tokio::test]

@@ -1,6 +1,6 @@
 //! Error type for the substrate durability layer.
 
-use crabka_units::{ByteSize, fmt::Human as _};
+use krabka_units::{ByteSize, fmt::Human as _};
 
 /// Errors from WAL framing, journaling, and recovery.
 #[derive(Debug, thiserror::Error)]
@@ -30,7 +30,7 @@ pub enum SubstrateError {
     AlreadyPaused,
     /// Local read-model storage failed.
     #[error(transparent)]
-    Kv(#[from] crabka_pgkv::KvError),
+    Kv(#[from] krabka_pgkv::KvError),
     /// One operation cannot fit in the configured WAL frame size.
     #[error(
         "WAL operation is too large: encoded length {encoded_len} exceeds frame limit {}",
@@ -80,7 +80,7 @@ pub enum SubstrateError {
     FoldLimit(String),
 }
 
-impl From<SubstrateError> for crabka_pgexec::ExecError {
+impl From<SubstrateError> for krabka_pgexec::ExecError {
     fn from(error: SubstrateError) -> Self {
         match error {
             SubstrateError::Kv(source) => Self::Kv(source),

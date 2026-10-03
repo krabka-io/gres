@@ -19,7 +19,7 @@
 - Use `refined_type` at validation boundaries; do not add a hand-written validation newtype.
 - Use the approved 10,000 ms default as `DEFAULT_WAL_RECOVERY_DNS_TIMEOUT_MS`.
 - DNS timeout, TCP connect timeout, and request timeout remain independent positive durations.
-- The setting is `--wal-recovery-dns-timeout-ms` / `CRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT_MS` / `spec.compute.walRecoveryDnsTimeoutMs`.
+- The setting is `--wal-recovery-dns-timeout-ms` / `KRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT_MS` / `spec.compute.walRecoveryDnsTimeoutMs`.
 - The CRD field is optional with minimum one; the operator renders the effective value for every single-range and multi-range compute.
 - Do not change bootstrap ordering, first-address selection, security, fetch behavior, or unrelated DNS lookups.
 - Do not add dependencies, compatibility shims, Clippy suppressions, source-text tests, or speculative abstractions.
@@ -37,10 +37,12 @@
 ### Task 1: Validate and enforce the raw WAL DNS deadline
 
 **Files:**
+
 - Modify: `crates/gres-substrate/src/recovery.rs`
 - Modify: `crates/gres-substrate/src/lib.rs`
 
 **Interfaces:**
+
 - Produces: `DEFAULT_WAL_RECOVERY_DNS_TIMEOUT_MS: u64 = 10_000`
 - Produces: `RecoveryReadPolicy::with_dns_timeout(u64) -> Result<Self, String>`
 - Produces: `RecoveryReadPolicy::dns_timeout() -> Duration`
@@ -81,7 +83,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-substrate \
+  cargo test -p krabka-gres-substrate \
   recovery_read_policy_validates_and_replaces_dns_timeout --lib
 ```
 
@@ -157,7 +159,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-substrate wal_dns_lookup --lib
+  cargo test -p krabka-gres-substrate wal_dns_lookup --lib
 ```
 
 Expected: compilation fails because `resolve_wal_addr` does not exist.
@@ -253,13 +255,13 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-substrate wal_dns_lookup --lib
+  cargo test -p krabka-gres-substrate wal_dns_lookup --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-substrate recovery_read_policy --lib
+  cargo test -p krabka-gres-substrate recovery_read_policy --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-substrate --all-targets
+  cargo test -p krabka-gres-substrate --all-targets
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-gres-substrate --all-targets -- -D warnings
+  cargo clippy -p krabka-gres-substrate --all-targets -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo fmt --all -- --check
 git diff --check
@@ -283,10 +285,12 @@ Obtain independent spec-compliance and quality approval. Resume this implementer
 ### Task 2: Expose standalone Gres CLI and environment policy
 
 **Files:**
+
 - Modify: `crates/gres/src/lib.rs`
 - Modify: `crates/gres/tests/runtime.rs` only if compilation requires adding the new `ServeArgs` field to an explicit fixture
 
 **Interfaces:**
+
 - Consumes: `DEFAULT_WAL_RECOVERY_DNS_TIMEOUT_MS`
 - Consumes: `RecoveryReadPolicy::with_dns_timeout`
 - Produces: `ServeArgs::wal_recovery_dns_timeout_ms: Option<PositiveMillis>`
@@ -298,7 +302,7 @@ Extend the existing WAL recovery policy tests rather than creating a parallel su
 
 ```rust
 // Environment variable list:
-"CRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT_MS",
+"KRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT_MS",
 
 // Default/environment assertion:
 assert!(policy.dns_timeout() == Duration::from_millis(expected_dns_timeout_ms));
@@ -322,7 +326,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres \
+  cargo test -p krabka-gres \
   wal_recovery_read_policy_uses_defaults_environment_and_cli_precedence --lib
 ```
 
@@ -336,7 +340,7 @@ Place the field immediately before the existing TCP connect timeout:
 /// Timeout for resolving raw WAL recovery broker hostnames.
 #[arg(
     long = "wal-recovery-dns-timeout-ms",
-    env = "CRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT_MS",
+    env = "KRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT_MS",
     requires = "substrate_bootstrap"
 )]
 pub wal_recovery_dns_timeout_ms: Option<PositiveMillis>,
@@ -352,7 +356,7 @@ Extend the existing builder chain without adding a new runtime field:
 .and_then(|policy| {
     policy.with_dns_timeout(
         args.wal_recovery_dns_timeout_ms.map_or(
-            crabka_gres_substrate::DEFAULT_WAL_RECOVERY_DNS_TIMEOUT_MS,
+            krabka_gres_substrate::DEFAULT_WAL_RECOVERY_DNS_TIMEOUT_MS,
             PositiveMillis::into_value,
         ),
     )
@@ -360,11 +364,11 @@ Extend the existing builder chain without adding a new runtime field:
 .and_then(|policy| {
     policy.with_timeouts(
         args.wal_recovery_connect_timeout_ms.map_or(
-            crabka_gres_substrate::DEFAULT_WAL_RECOVERY_CONNECT_TIMEOUT_MS,
+            krabka_gres_substrate::DEFAULT_WAL_RECOVERY_CONNECT_TIMEOUT_MS,
             PositiveMillis::into_value,
         ),
         args.wal_recovery_request_timeout_ms.map_or(
-            crabka_gres_substrate::DEFAULT_WAL_RECOVERY_REQUEST_TIMEOUT_MS,
+            krabka_gres_substrate::DEFAULT_WAL_RECOVERY_REQUEST_TIMEOUT_MS,
             PositiveMillis::into_value,
         ),
     )
@@ -379,16 +383,16 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres \
+  cargo test -p krabka-gres \
   wal_recovery_read_policy_uses_defaults_environment_and_cli_precedence --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres wal_recovery --lib
+  cargo test -p krabka-gres wal_recovery --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres --all-targets
+  cargo test -p krabka-gres --all-targets
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-gres --all-targets -- -D warnings
+  cargo clippy -p krabka-gres --all-targets -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-gres -- --help |
+  cargo run -q -p krabka-gres -- --help |
   rg -- '--wal-recovery-dns-timeout-ms'
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo fmt --all -- --check
@@ -414,11 +418,13 @@ If `crates/gres/tests/runtime.rs` did not change, omit it from `git add`. Obtain
 ### Task 3: Expose fleet CRD policy and render it once
 
 **Files:**
+
 - Modify: `crates/operator/src/crd/gres.rs`
 - Modify: `crates/operator/src/controller/gres_tenant.rs`
 - Modify generated: `deploy/crds/crabka.io_greses.yaml`
 
 **Interfaces:**
+
 - Consumes: `DEFAULT_WAL_RECOVERY_DNS_TIMEOUT_MS`
 - Produces: optional `GresComputeSpec::wal_recovery_dns_timeout_ms: Option<u64>`
 - Produces: validated `EffectiveGresComputePolicy::wal_recovery_dns_timeout_ms: PositiveMillis`
@@ -483,10 +489,10 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator \
+  cargo test -p krabka-operator \
   compute_wal_recovery_policy_round_trips_validates_and_uses_substrate_defaults --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator \
+  cargo test -p krabka-operator \
   compute_wal_recovery_args_are_exact_in_single_and_multi_range_modes --lib
 ```
 
@@ -541,9 +547,9 @@ Run:
 crd_a=$(mktemp -d)
 crd_b=$(mktemp -d)
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-operator -- gen-crds "$crd_a"
+  cargo run -q -p krabka-operator -- gen-crds "$crd_a"
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-operator -- gen-crds "$crd_b"
+  cargo run -q -p krabka-operator -- gen-crds "$crd_b"
 test "$(find "$crd_a" -maxdepth 1 -type f | wc -l)" -eq 9
 test "$(find "$crd_b" -maxdepth 1 -type f | wc -l)" -eq 9
 diff -ru "$crd_a" "$crd_b"
@@ -558,15 +564,15 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator \
+  cargo test -p krabka-operator \
   compute_wal_recovery_policy_round_trips_validates_and_uses_substrate_defaults --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator \
+  cargo test -p krabka-operator \
   compute_wal_recovery_args_are_exact_in_single_and_multi_range_modes --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator --all-targets
+  cargo test -p krabka-operator --all-targets
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-operator --all-targets -- -D warnings
+  cargo clippy -p krabka-operator --all-targets -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo fmt --all -- --check
 git diff --check
@@ -592,9 +598,11 @@ Obtain independent spec-compliance and quality approval and remediate every find
 ### Task 4: Audit, verify, publish, and continue
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: the reviewed substrate, standalone, and operator implementation
 - Produces: classified audit evidence, an updated draft PR #904, and the next coherent owner
 
@@ -655,14 +663,14 @@ Run:
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo test \
-  -p crabka-gres-substrate -p crabka-gres -p crabka-operator \
+  -p krabka-gres-substrate -p krabka-gres -p krabka-operator \
   --all-targets
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo clippy \
-  -p crabka-gres-substrate -p crabka-gres -p crabka-operator \
+  -p krabka-gres-substrate -p krabka-gres -p krabka-operator \
   --all-targets -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-gres -- --help |
+  cargo run -q -p krabka-gres -- --help |
   rg -- '--wal-recovery-dns-timeout-ms'
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo fmt --all -- --check

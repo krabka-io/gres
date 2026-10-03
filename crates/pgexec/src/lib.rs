@@ -37,7 +37,7 @@
 //! its own, which a session takes once per block of ids rather than once per
 //! `CREATE TABLE`.
 
-#![doc(html_root_url = "https://docs.rs/crabka-pgexec/0.4.1")]
+#![doc(html_root_url = "https://docs.rs/krabka-pgexec/0.4.2")]
 
 mod agg;
 mod array_fn;
@@ -161,9 +161,6 @@ use std::{
 /// the oid a `regclass` value carries is this, not the bare catalog id.
 pub use catalog_rel::table_relation_oid;
 pub use commit::{Committer, LocalCommitter};
-use crabka_pgkv::{FjallKv, Kv, MemKv};
-use crabka_pgwire::engine::Engine;
-use crabka_units::convert::{ByteSizeExt as _, TimeExt as _};
 pub use error::{
     DependentForeignKey, DroppedObject, ExecError, ForeignKeyDependents, ForeignKeyTypeMismatch,
     ForeignKeyViolation, ForeignKeyViolationSide, GucRangeViolation, VirtualGeneratedSubcommand,
@@ -173,6 +170,9 @@ pub use hlc::{Hlc, HybridLogicalClock};
 pub use hlc_source::{
     HlcTimestampSource, ManualWallClock, SkewedWallClock, SystemWallClock, WallClock,
 };
+use krabka_pgkv::{FjallKv, Kv, MemKv};
+use krabka_pgwire::engine::Engine;
+use krabka_units::convert::{ByteSizeExt as _, TimeExt as _};
 pub use local_sequence::LocalSequence;
 pub use read_gate::{Linearizer, LocalLinearizer};
 pub use scanner::{
@@ -417,14 +417,14 @@ pub(crate) enum PersistMode {
 /// timestamp-version reclamation.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RuntimePolicy {
-    pub blocking_query_memory: crabka_units::ByteSize,
-    pub result_page_max: crabka_units::ByteSize,
-    pub join_broadcast_threshold: crabka_units::ByteSize,
+    pub blocking_query_memory: krabka_units::ByteSize,
+    pub result_page_max: krabka_units::ByteSize,
+    pub join_broadcast_threshold: krabka_units::ByteSize,
     pub notify_queue_capacity: usize,
     pub xid_reservation: u64,
     pub rowid_reservation: u64,
     pub ts_prune_versions_per_row: usize,
-    pub ts_gc_floor_lag: crabka_units::Time,
+    pub ts_gc_floor_lag: krabka_units::Time,
     /// When the stuck-statement watchdog reports an in-flight statement, and how
     /// often it looks. Diagnostic only — see [`watchdog`].
     pub stuck_statement: watchdog::StuckStatementPolicy,
@@ -435,7 +435,7 @@ impl Default for RuntimePolicy {
         Self {
             blocking_query_memory: scanner::BLOCKING_QUERY_MEMORY,
             result_page_max: session::RESULT_PAGE_MAX,
-            join_broadcast_threshold: crabka_units::ByteSize::from_bytes(
+            join_broadcast_threshold: krabka_units::ByteSize::from_bytes(
                 plan_dist::PlannerConfig::default().broadcast_threshold_bytes,
             ),
             notify_queue_capacity: notify::NOTIFY_QUEUE_CAPACITY,
@@ -456,12 +456,12 @@ impl RuntimePolicy {
     /// by the engine's whole-millisecond clock.
     pub fn validate(self) -> Result<Self, ExecError> {
         let floor_lag_millis = self.ts_gc_floor_lag.millis_i64();
-        let whole_positive_bytes = |value: crabka_units::ByteSize| {
+        let whole_positive_bytes = |value: krabka_units::ByteSize| {
             let bytes = value.bytes_usize();
             bytes > 0
                 && value.bytes_f64().is_finite()
                 && u64::try_from(bytes)
-                    .is_ok_and(|bytes| crabka_units::ByteSize::from_bytes(bytes) == value)
+                    .is_ok_and(|bytes| krabka_units::ByteSize::from_bytes(bytes) == value)
         };
         if !whole_positive_bytes(self.blocking_query_memory)
             || !whole_positive_bytes(self.result_page_max)
@@ -472,7 +472,7 @@ impl RuntimePolicy {
             || self.ts_prune_versions_per_row == 0
             || !self.ts_gc_floor_lag.secs_f64().is_finite()
             || floor_lag_millis < 0
-            || crabka_units::Time::from_millis(floor_lag_millis) != self.ts_gc_floor_lag
+            || krabka_units::Time::from_millis(floor_lag_millis) != self.ts_gc_floor_lag
         {
             return Err(ExecError::Unsupported(
                 "PgExec byte limits and counts must be positive whole values and GC lag must be finite, nonnegative, and whole milliseconds"
@@ -571,8 +571,8 @@ pub struct SqlEngine {
     pub(crate) range_scanner: Arc<dyn scanner::RangeScanner>,
     pub(crate) join_stats: Arc<dyn plan_dist::Stats>,
     pub(crate) join_strategy_config: plan_dist::PlannerConfig,
-    pub(crate) blocking_query_memory: crabka_units::ByteSize,
-    pub(crate) result_page_max: crabka_units::ByteSize,
+    pub(crate) blocking_query_memory: krabka_units::ByteSize,
+    pub(crate) result_page_max: krabka_units::ByteSize,
     /// Timestamp oracle backing the sharded timestamp transaction path.
     pub(crate) timestamp_oracle: Arc<dyn timestamp_txn::TimestampSource>,
     /// Cached durable-timestamp horizon over `kv`/`catalog_kv`. Seeded lazily
@@ -593,7 +593,7 @@ pub struct SqlEngine {
     /// Snapshot pins and the cached decided floor that back the garbage horizon.
     /// Sessions pin their snapshots here so neither write-path pruning, `vacuum`,
     /// nor checkpoint compaction can reclaim a version a live snapshot still sees.
-    pub(crate) gc_horizon: Arc<crabka_pgmvcc::gc::GcHorizon>,
+    pub(crate) gc_horizon: Arc<krabka_pgmvcc::gc::GcHorizon>,
     /// Timestamp-domain dead-version reclamation state (read pins, reclaim
     /// floor) for sharded tables; see [`ts_gc::TsVersionGc`]. Every
     /// `clone_handle` handle of one range shares it, like the local sequence.
@@ -699,16 +699,16 @@ pub(crate) struct VacuumDemand {
 impl VacuumDemand {
     /// Table ids of every ordinary primary-version Put in `ops` (duplicates
     /// kept: each Put counts once).
-    fn version_put_tables(ops: &[crabka_pgkv::WriteOp]) -> Vec<u32> {
+    fn version_put_tables(ops: &[krabka_pgkv::WriteOp]) -> Vec<u32> {
         ops.iter()
             .filter_map(|op| {
-                let (crabka_pgkv::WriteOp::Put { key, .. }
-                | crabka_pgkv::WriteOp::ConditionalPut { key, .. }) = op
+                let (krabka_pgkv::WriteOp::Put { key, .. }
+                | krabka_pgkv::WriteOp::ConditionalPut { key, .. }) = op
                 else {
                     return None;
                 };
-                match crabka_pgkv::key::classify_key(key) {
-                    crabka_pgkv::key::KeyClass::PrimaryVersion { table_id, .. } => Some(table_id),
+                match krabka_pgkv::key::classify_key(key) {
+                    krabka_pgkv::key::KeyClass::PrimaryVersion { table_id, .. } => Some(table_id),
                     _ => None,
                 }
             })
@@ -752,7 +752,7 @@ struct VacuumDemandObservingCommitter {
 
 #[async_trait::async_trait]
 impl crate::commit::Committer for VacuumDemandObservingCommitter {
-    async fn commit(&self, ops: Vec<crabka_pgkv::WriteOp>) -> Result<(), ExecError> {
+    async fn commit(&self, ops: Vec<krabka_pgkv::WriteOp>) -> Result<(), ExecError> {
         let touched = VacuumDemand::version_put_tables(&ops);
         self.inner.commit(ops).await?;
         self.demand.record(&touched);
@@ -850,15 +850,15 @@ struct VacuumIntervalOutcome {
 fn vacuum_stamp_is_clearable(
     xmax: u64,
     horizon: u64,
-    clog_status: &impl Fn(u64) -> Result<crabka_pgmvcc::clog::XidStatus, crabka_pgkv::KvError>,
-) -> Result<bool, crabka_pgkv::KvError> {
-    if xmax == crabka_pgmvcc::xid::INVALID_XID {
+    clog_status: &impl Fn(u64) -> Result<krabka_pgmvcc::clog::XidStatus, krabka_pgkv::KvError>,
+) -> Result<bool, krabka_pgkv::KvError> {
+    if xmax == krabka_pgmvcc::xid::INVALID_XID {
         return Ok(false);
     }
     Ok(match clog_status(xmax)? {
-        crabka_pgmvcc::clog::XidStatus::Aborted => true,
-        crabka_pgmvcc::clog::XidStatus::InProgress => xmax < horizon,
-        crabka_pgmvcc::clog::XidStatus::Committed | crabka_pgmvcc::clog::XidStatus::Prepared(_) => {
+        krabka_pgmvcc::clog::XidStatus::Aborted => true,
+        krabka_pgmvcc::clog::XidStatus::InProgress => xmax < horizon,
+        krabka_pgmvcc::clog::XidStatus::Committed | krabka_pgmvcc::clog::XidStatus::Prepared(_) => {
             false
         }
     })
@@ -981,7 +981,7 @@ impl SqlEngine {
             timestamp_oracle: Arc::new(timestamp_txn::LocalTimestampSource::default()),
             timestamp_horizon,
             local_sequence,
-            gc_horizon: Arc::new(crabka_pgmvcc::gc::GcHorizon::new()),
+            gc_horizon: Arc::new(krabka_pgmvcc::gc::GcHorizon::new()),
             ts_gc,
             sweep_committer,
             vacuum_demand,
@@ -1043,7 +1043,7 @@ impl SqlEngine {
     ///
     /// A version is dead iff its creator aborted (or crashed below the
     /// horizon), or a transaction that committed below the garbage horizon
-    /// deleted or superseded it ([`crabka_pgmvcc::gc::version_is_dead`]).
+    /// deleted or superseded it ([`krabka_pgmvcc::gc::version_is_dead`]).
     /// Running writers, registered snapshot pins, and the first non-terminal
     /// clog entry cap the horizon, so the sweep touches nothing any live or
     /// future snapshot can see. A freeze rewrites a surviving committed
@@ -1149,8 +1149,8 @@ impl SqlEngine {
         let horizon = self.checkpoint_garbage_horizon()?;
         // Timestamp/sharded tables use ts tuples with their own resolution
         // rules; only ordinary xid-MVCC tables are swept.
-        let mut tables: Vec<crabka_pgcatalog::Table> =
-            crabka_pgcatalog::list_tables(self.catalog_kv.as_ref())?
+        let mut tables: Vec<krabka_pgcatalog::Table> =
+            krabka_pgcatalog::list_tables(self.catalog_kv.as_ref())?
                 .into_iter()
                 .filter(|table| !table.sharded && table.sharding.is_none())
                 .collect();
@@ -1210,7 +1210,7 @@ impl SqlEngine {
     async fn vacuum_step_chunks(
         &self,
         progress: &mut VacuumProgress,
-        tables: &[crabka_pgcatalog::Table],
+        tables: &[krabka_pgcatalog::Table],
         horizon: u64,
         vacuum_xid: &mut Option<u64>,
         key_budget: usize,
@@ -1301,7 +1301,7 @@ impl SqlEngine {
     /// (see `vacuum`). Allocates the sweep's lock-owner xid on first use.
     async fn vacuum_interval(
         &self,
-        table: &crabka_pgcatalog::Table,
+        table: &krabka_pgcatalog::Table,
         horizon: u64,
         vacuum_xid: &mut Option<u64>,
         interval: std::ops::Range<u64>,
@@ -1311,10 +1311,10 @@ impl SqlEngine {
         // rewrites the whole table under the exclusive half) serializes with
         // the sweep, exactly like an ordinary writer.
         let _gate = Arc::clone(&self.table_write_gate).read_owned().await;
-        let clog_status = |xid| crabka_pgmvcc::clog::get(self.kv.as_ref(), xid);
+        let clog_status = |xid| krabka_pgmvcc::clog::get(self.kv.as_ref(), xid);
         let scan = self.kv.scan_range(
-            &crabka_pgkv::key::row_key(table.id, interval.start),
-            &crabka_pgkv::key::row_key(table.id, interval.end),
+            &krabka_pgkv::key::row_key(table.id, interval.start),
+            &krabka_pgkv::key::row_key(table.id, interval.end),
         )?;
         outcome.keys = scan.len();
         // Lock-free candidate pre-scan: deadness, freezability, and stamp
@@ -1327,27 +1327,27 @@ impl SqlEngine {
         let mut candidates: std::collections::BTreeMap<u64, bool> =
             std::collections::BTreeMap::new();
         for (key, value) in scan {
-            let (xmin, xmax, _row) = crabka_pgmvcc::version::decode_tuple(&value)?;
-            let dead = crabka_pgmvcc::gc::version_is_dead(xmin, xmax, horizon, &clog_status)?;
+            let (xmin, xmax, _row) = krabka_pgmvcc::version::decode_tuple(&value)?;
+            let dead = krabka_pgmvcc::gc::version_is_dead(xmin, xmax, horizon, &clog_status)?;
             let freezable = !dead
-                && xmin != crabka_pgmvcc::xid::FROZEN_XID
+                && xmin != krabka_pgmvcc::xid::FROZEN_XID
                 && xmin < horizon
                 && matches!(
                     clog_status(xmin)?,
-                    crabka_pgmvcc::clog::XidStatus::Committed
+                    krabka_pgmvcc::clog::XidStatus::Committed
                 );
             let clearable = !dead && vacuum_stamp_is_clearable(xmax, horizon, &clog_status)?;
             if dead || freezable || clearable {
-                let prefix = crabka_pgmvcc::version::row_prefix_of(&key)?;
+                let prefix = krabka_pgmvcc::version::row_prefix_of(&key)?;
                 *candidates
-                    .entry(crabka_pgkv::key::rowid_of(table.id, prefix)?)
+                    .entry(krabka_pgkv::key::rowid_of(table.id, prefix)?)
                     .or_insert(false) |= clearable;
             }
             // Count survivors this pass will NOT leave fully settled: they
             // keep the table on the sweep schedule for the next cycle.
             if !dead
-                && !((xmin == crabka_pgmvcc::xid::FROZEN_XID || freezable)
-                    && (xmax == crabka_pgmvcc::xid::INVALID_XID || clearable))
+                && !((xmin == krabka_pgmvcc::xid::FROZEN_XID || freezable)
+                    && (xmax == krabka_pgmvcc::xid::INVALID_XID || clearable))
             {
                 outcome.unsettled += 1;
             }
@@ -1355,10 +1355,10 @@ impl SqlEngine {
         if candidates.is_empty() {
             return Ok(outcome);
         }
-        let local_indexes: Vec<crabka_pgcatalog::Index> =
-            crabka_pgcatalog::list_table_indexes(self.catalog_kv.as_ref(), &table.name)?
+        let local_indexes: Vec<krabka_pgcatalog::Index> =
+            krabka_pgcatalog::list_table_indexes(self.catalog_kv.as_ref(), &table.name)?
                 .into_iter()
-                .filter(|index| index.placement == crabka_pgcatalog::IndexPlacement::Local)
+                .filter(|index| index.placement == krabka_pgcatalog::IndexPlacement::Local)
                 .collect();
         let owner_xid = match *vacuum_xid {
             Some(xid) => xid,
@@ -1461,33 +1461,33 @@ impl SqlEngine {
         horizon: u64,
         prune: &mut crate::exec::ChainPrune,
     ) -> Result<u64, ExecError> {
-        let clog_status = |xid| crabka_pgmvcc::clog::get(self.kv.as_ref(), xid);
+        let clog_status = |xid| krabka_pgmvcc::clog::get(self.kv.as_ref(), xid);
         let mut cleared: u64 = 0;
         for (key, value) in self
             .kv
-            .scan_prefix(&crabka_pgkv::key::row_key(table_id, rowid))?
+            .scan_prefix(&krabka_pgkv::key::row_key(table_id, rowid))?
         {
             // Versions the batch already deletes need no stamp rewrite.
             if prune.ops.iter().any(
-                |op| matches!(op, crabka_pgkv::WriteOp::Delete { key: deleted } if *deleted == key),
+                |op| matches!(op, krabka_pgkv::WriteOp::Delete { key: deleted } if *deleted == key),
             ) {
                 continue;
             }
-            let (_, xmax, _) = crabka_pgmvcc::version::decode_tuple(&value)?;
+            let (_, xmax, _) = krabka_pgmvcc::version::decode_tuple(&value)?;
             if !vacuum_stamp_is_clearable(xmax, horizon, &clog_status)? {
                 continue;
             }
             // Rebase on the batch's own freeze rewrite of the same key, if
             // any, so both header rewrites land in one Put.
             if let Some(pending) = prune.ops.iter_mut().find_map(|op| match op {
-                crabka_pgkv::WriteOp::Put { key: frozen, value } if *frozen == key => Some(value),
+                krabka_pgkv::WriteOp::Put { key: frozen, value } if *frozen == key => Some(value),
                 _ => None,
             }) {
-                *pending = crabka_pgmvcc::version::clear_tuple_xmax(pending)?;
+                *pending = krabka_pgmvcc::version::clear_tuple_xmax(pending)?;
             } else {
-                prune.ops.push(crabka_pgkv::WriteOp::Put {
+                prune.ops.push(krabka_pgkv::WriteOp::Put {
                     key,
-                    value: crabka_pgmvcc::version::clear_tuple_xmax(&value)?,
+                    value: krabka_pgmvcc::version::clear_tuple_xmax(&value)?,
                 });
             }
             cleared += 1;
@@ -1499,12 +1499,12 @@ impl SqlEngine {
     /// Callers must have frozen/pruned every version referencing those xids.
     async fn truncate_clog_below(&self, horizon: u64) -> Result<u64, ExecError> {
         let mut deleted: u64 = 0;
-        let mut batch: Vec<crabka_pgkv::WriteOp> = Vec::new();
+        let mut batch: Vec<krabka_pgkv::WriteOp> = Vec::new();
         for (key, _) in self.kv.scan_range(
-            &crabka_pgkv::key::clog_key(0),
-            &crabka_pgkv::key::clog_key(horizon),
+            &krabka_pgkv::key::clog_key(0),
+            &krabka_pgkv::key::clog_key(horizon),
         )? {
-            batch.push(crabka_pgkv::WriteOp::Delete { key });
+            batch.push(krabka_pgkv::WriteOp::Delete { key });
             if batch.len() == 4096 {
                 deleted += batch.len() as u64;
                 self.committer.commit(std::mem::take(&mut batch)).await?;
@@ -1607,7 +1607,7 @@ impl SqlEngine {
             timestamp_oracle: Arc::new(timestamp_txn::LocalTimestampSource::default()),
             timestamp_horizon,
             local_sequence,
-            gc_horizon: Arc::new(crabka_pgmvcc::gc::GcHorizon::new()),
+            gc_horizon: Arc::new(krabka_pgmvcc::gc::GcHorizon::new()),
             ts_gc,
             vacuum_demand: Arc::new(VacuumDemand::default()),
             vacuum_progress: Arc::new(tokio::sync::Mutex::new(VacuumProgress::default())),
@@ -1712,7 +1712,7 @@ impl SqlEngine {
     /// node sets it, a committing transaction appends nothing and the notify
     /// path is exactly the in-process one. That covers a single-node engine and
     /// a range that does not host the notification log. The records are
-    /// WAL-only: every apply site drops them (`crabka_pgkv::is_notify_op`)
+    /// WAL-only: every apply site drops them (`krabka_pgkv::is_notify_op`)
     /// instead of writing them to a KV, so this belongs on a replicated engine.
     /// A local committer writes its batches straight to the store and has no
     /// such filter.
@@ -1808,9 +1808,9 @@ impl SqlEngine {
     /// Returns an error when the requested operation cannot be completed.
     pub fn scan_local_visible(
         &self,
-        table: &crabka_pgcatalog::Table,
-        global_snapshot: &crabka_pgmvcc::visibility::Snapshot,
-        snapshot: &crabka_pgmvcc::visibility::Snapshot,
+        table: &krabka_pgcatalog::Table,
+        global_snapshot: &krabka_pgmvcc::visibility::Snapshot,
+        snapshot: &krabka_pgmvcc::visibility::Snapshot,
         own_xid: Option<u64>,
         read_ts: Option<timestamp_txn::ReadTimestamp>,
         interval: scanner::RowInterval,
@@ -1836,9 +1836,9 @@ impl SqlEngine {
     /// underlying visibility scan fails.
     pub fn scan_local_visible_with_timestamp_owner(
         &self,
-        table: &crabka_pgcatalog::Table,
-        global_snapshot: &crabka_pgmvcc::visibility::Snapshot,
-        snapshot: &crabka_pgmvcc::visibility::Snapshot,
+        table: &krabka_pgcatalog::Table,
+        global_snapshot: &krabka_pgmvcc::visibility::Snapshot,
+        snapshot: &krabka_pgmvcc::visibility::Snapshot,
         own_xid: Option<u64>,
         timestamp_owner: TimestampScanOwner,
         interval: scanner::RowInterval,
@@ -1886,20 +1886,20 @@ impl SqlEngine {
     /// # Errors
     ///
     /// Returns an error when the requested operation cannot be completed.
-    pub fn scan_local_terminal(&self, table: &crabka_pgcatalog::Table) -> Result<u64, ExecError> {
+    pub fn scan_local_terminal(&self, table: &krabka_pgcatalog::Table) -> Result<u64, ExecError> {
         let sequence = crate::exec::read_seq_kv(self.kv.as_ref(), table.id)?;
         let physical_max =
             crate::exec::scan_table_interval(self.kv.as_ref(), table.id, RowInterval::ALL)?
                 .into_iter()
                 .try_fold(None, |maximum, (key, _)| {
-                    let prefix = crabka_pgmvcc::version::row_prefix_of(&key)?;
+                    let prefix = krabka_pgmvcc::version::row_prefix_of(&key)?;
                     let rowid = if matches!(
                         table.sharding,
-                        Some(crabka_pgcatalog::ShardingStrategy::Hash(_))
+                        Some(krabka_pgcatalog::ShardingStrategy::Hash(_))
                     ) {
-                        crabka_pgkv::key::bucket_rowid_of(table.id, prefix)?.1
+                        krabka_pgkv::key::bucket_rowid_of(table.id, prefix)?.1
                     } else {
-                        crabka_pgkv::key::rowid_of(table.id, prefix)?
+                        krabka_pgkv::key::rowid_of(table.id, prefix)?
                     };
                     Ok::<_, ExecError>(Some(
                         maximum.map_or(rowid, |current: u64| current.max(rowid)),
@@ -1914,9 +1914,9 @@ impl SqlEngine {
     /// Returns an error when the requested operation cannot be completed.
     pub fn table_uses_global_visibility(
         &self,
-        name: &crabka_pgcatalog::RelationName,
+        name: &krabka_pgcatalog::RelationName,
     ) -> Result<bool, ExecError> {
-        let table = crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), name)?;
+        let table = krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), name)?;
         Ok(crate::exec::table_uses_global_visibility(&table))
     }
 
@@ -1926,9 +1926,9 @@ impl SqlEngine {
     /// Returns an error when the requested operation cannot be completed.
     pub fn table_sharding(
         &self,
-        name: &crabka_pgcatalog::RelationName,
-    ) -> Result<Option<crabka_pgcatalog::ShardingStrategy>, ExecError> {
-        let table = crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), name)?;
+        name: &krabka_pgcatalog::RelationName,
+    ) -> Result<Option<krabka_pgcatalog::ShardingStrategy>, ExecError> {
+        let table = krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), name)?;
         Ok(table.sharding)
     }
 
@@ -1938,16 +1938,16 @@ impl SqlEngine {
     /// Returns an error when the requested operation cannot be completed.
     pub async fn convert_table_to_sharded_metadata(
         &self,
-        name: &crabka_pgcatalog::RelationName,
-        sharding: Option<&crabka_pgcatalog::ShardingStrategy>,
+        name: &krabka_pgcatalog::RelationName,
+        sharding: Option<&krabka_pgcatalog::ShardingStrategy>,
     ) -> Result<(), ExecError> {
         let _xid_writer_fence = self.writer_fence.conversion().await;
         let _writer_fence = Arc::clone(&self.table_write_gate).write_owned().await;
         let _catalog_lock = self.catalog_lock.lock().await;
-        let table = crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), name)?;
+        let table = krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), name)?;
         let rewrite_ops =
             timestamp_conversion_ops(self.kv.as_ref(), self.catalog_kv.as_ref(), &table)?;
-        let ops = crabka_pgcatalog::complete_table_conversion_ops(
+        let ops = krabka_pgcatalog::complete_table_conversion_ops(
             self.catalog_kv.as_ref(),
             name,
             sharding,
@@ -1962,9 +1962,9 @@ impl SqlEngine {
     /// Returns an error when the requested operation cannot be completed.
     pub fn catalog_table(
         &self,
-        name: &crabka_pgcatalog::RelationName,
-    ) -> Result<crabka_pgcatalog::Table, ExecError> {
-        crabka_pgcatalog::get_table(self.catalog_kv.as_ref(), name).map_err(Into::into)
+        name: &krabka_pgcatalog::RelationName,
+    ) -> Result<krabka_pgcatalog::Table, ExecError> {
+        krabka_pgcatalog::get_table(self.catalog_kv.as_ref(), name).map_err(Into::into)
     }
 
     /// Validate the physical bucket identity carried by a timestamp operation.
@@ -1976,22 +1976,22 @@ impl SqlEngine {
         table_id: u32,
         bucket: Option<u32>,
     ) -> Result<(), ExecError> {
-        let Some(table) = crabka_pgcatalog::list_tables(self.catalog_kv.as_ref())?
+        let Some(table) = krabka_pgcatalog::list_tables(self.catalog_kv.as_ref())?
             .into_iter()
             .find(|table| table.id == table_id)
         else {
             return Ok(());
         };
         match (&table.sharding, bucket) {
-            (Some(crabka_pgcatalog::ShardingStrategy::Hash(spec)), Some(bucket))
+            (Some(krabka_pgcatalog::ShardingStrategy::Hash(spec)), Some(bucket))
                 if bucket < spec.buckets =>
             {
                 Ok(())
             }
-            (Some(crabka_pgcatalog::ShardingStrategy::Hash(_)), None) => Err(
+            (Some(krabka_pgcatalog::ShardingStrategy::Hash(_)), None) => Err(
                 ExecError::Unsupported("hash timestamp operation is missing its bucket".into()),
             ),
-            (Some(crabka_pgcatalog::ShardingStrategy::Hash(spec)), Some(bucket)) => {
+            (Some(krabka_pgcatalog::ShardingStrategy::Hash(spec)), Some(bucket)) => {
                 Err(ExecError::Unsupported(format!(
                     "hash timestamp bucket {bucket} is outside 0..{}",
                     spec.buckets
@@ -2041,7 +2041,7 @@ impl SqlEngine {
     fn plan_timestamp_write_parts(
         &self,
         sql: &str,
-    ) -> Result<(crate::exec::TimestampWritePlan, Vec<crabka_pgkv::WriteOp>), ExecError> {
+    ) -> Result<(crate::exec::TimestampWritePlan, Vec<krabka_pgkv::WriteOp>), ExecError> {
         let pending = Arc::new(std::sync::Mutex::new(
             crate::seq::PendingSequences::default(),
         ));
@@ -2055,7 +2055,7 @@ impl SqlEngine {
         sql: &str,
         pending: &Arc<std::sync::Mutex<crate::seq::PendingSequences>>,
     ) -> Result<crate::exec::TimestampWritePlan, ExecError> {
-        let statements = crabka_pgparser::parse(sql)?;
+        let statements = krabka_pgparser::parse(sql)?;
         let [statement] = statements.as_slice() else {
             return Err(ExecError::Unsupported(
                 "timestamp scatter requires exactly one DML statement".into(),
@@ -2066,12 +2066,12 @@ impl SqlEngine {
             now,
             stmt_now: now,
             time_zone: jiff::tz::TimeZone::UTC,
-            date_order: crabka_pgtypes::datetime::DateOrder::default(),
-            date_style: crabka_pgtypes::datetime::DateStyle::default(),
-            interval_style: crabka_pgtypes::datetime::IntervalStyle::default(),
+            date_order: krabka_pgtypes::datetime::DateOrder::default(),
+            date_style: krabka_pgtypes::datetime::DateStyle::default(),
+            interval_style: krabka_pgtypes::datetime::IntervalStyle::default(),
             extra_float_digits: 1,
-            bytea_output: crabka_pgtypes::encoding::ByteaOutput::default(),
-            xml_option: crabka_pgtypes::xml::XmlOption::Content,
+            bytea_output: krabka_pgtypes::encoding::ByteaOutput::default(),
+            xml_option: krabka_pgtypes::xml::XmlOption::Content,
             xml_binary: crate::clock::XmlBinary::default(),
             current_user: "public".into(),
             session_user: "public".into(),
@@ -2560,7 +2560,7 @@ impl SqlEngine {
         receipt: &str,
     ) -> Result<Option<Vec<u8>>, ExecError> {
         self.kv
-            .get(&crabka_pgkv::key::range_control_receipt_key(
+            .get(&krabka_pgkv::key::range_control_receipt_key(
                 tenant, receipt,
             ))
             .map_err(Into::into)
@@ -2572,7 +2572,7 @@ impl SqlEngine {
     /// Returns an error when the requested operation cannot be completed.
     pub fn range_control_receipts(&self, tenant: &str) -> Result<Vec<Vec<u8>>, ExecError> {
         self.kv
-            .scan_prefix(&crabka_pgkv::key::range_control_receipt_prefix(tenant))
+            .scan_prefix(&krabka_pgkv::key::range_control_receipt_prefix(tenant))
             .map(|pairs| pairs.into_iter().map(|(_, value)| value).collect())
             .map_err(Into::into)
     }
@@ -2588,8 +2588,8 @@ impl SqlEngine {
         expected: Option<Vec<u8>>,
         value: Vec<u8>,
     ) -> Result<bool, ExecError> {
-        let key = crabka_pgkv::key::range_control_receipt_key(tenant, receipt);
-        let operation = crabka_pgkv::WriteOp::ConditionalPut {
+        let key = krabka_pgkv::key::range_control_receipt_key(tenant, receipt);
+        let operation = krabka_pgkv::WriteOp::ConditionalPut {
             key: key.clone(),
             expected: expected.clone(),
             value: value.clone(),
@@ -2617,7 +2617,7 @@ impl SqlEngine {
         operation_id: &str,
     ) -> Result<Option<Vec<u8>>, ExecError> {
         self.kv
-            .get(&crabka_pgkv::key::topology_activation_receipt_key(
+            .get(&krabka_pgkv::key::topology_activation_receipt_key(
                 tenant,
                 operation_id,
             ))
@@ -2630,7 +2630,7 @@ impl SqlEngine {
     /// Returns an error when the requested operation cannot be completed.
     pub fn topology_activation_receipts(&self, tenant: &str) -> Result<Vec<Vec<u8>>, ExecError> {
         self.kv
-            .scan_prefix(&crabka_pgkv::key::topology_activation_receipt_prefix(
+            .scan_prefix(&krabka_pgkv::key::topology_activation_receipt_prefix(
                 tenant,
             ))
             .map(|pairs| pairs.into_iter().map(|(_, value)| value).collect())
@@ -2648,8 +2648,8 @@ impl SqlEngine {
         expected: Option<Vec<u8>>,
         value: Vec<u8>,
     ) -> Result<bool, ExecError> {
-        let key = crabka_pgkv::key::topology_activation_receipt_key(tenant, operation_id);
-        let operation = crabka_pgkv::WriteOp::ConditionalPut {
+        let key = krabka_pgkv::key::topology_activation_receipt_key(tenant, operation_id);
+        let operation = krabka_pgkv::WriteOp::ConditionalPut {
             key: key.clone(),
             expected: expected.clone(),
             value: value.clone(),
@@ -2747,7 +2747,7 @@ impl SqlEngine {
     /// Returns an error when the requested operation cannot be completed.
     pub async fn commit_timestamp_statement_ops(
         &self,
-        ops: Vec<crabka_pgkv::WriteOp>,
+        ops: Vec<krabka_pgkv::WriteOp>,
     ) -> Result<(), ExecError> {
         if ops.is_empty() {
             return Ok(());
@@ -2772,7 +2772,7 @@ impl SqlEngine {
         }
         let mut ops = Vec::new();
         for (table_id, max_rowid) in maxima {
-            let key = crabka_pgkv::key::seq_key(table_id);
+            let key = krabka_pgkv::key::seq_key(table_id);
             let current = self
                 .kv
                 .get(&key)?
@@ -2783,7 +2783,7 @@ impl SqlEngine {
                 ExecError::Unsupported("row id exhausted during timestamp recovery".into())
             })?;
             if next > current {
-                ops.push(crabka_pgkv::WriteOp::Put {
+                ops.push(krabka_pgkv::WriteOp::Put {
                     key,
                     value: next.to_be_bytes().to_vec(),
                 });
@@ -2937,15 +2937,15 @@ impl SqlEngine {
     pub async fn commit_global_decision(
         &self,
         g: u64,
-        status: crabka_pgmvcc::clog::XidStatus,
-    ) -> Result<crabka_pgmvcc::clog::XidStatus, ExecError> {
+        status: krabka_pgmvcc::clog::XidStatus,
+    ) -> Result<krabka_pgmvcc::clog::XidStatus, ExecError> {
         let gtm = self
             .gtm
             .as_ref()
             .expect("commit_global_decision on a non-GTM engine");
         self.committer
             .commit(vec![
-                crabka_pgmvcc::clog::put_op(g, status),
+                krabka_pgmvcc::clog::put_op(g, status),
                 gtm.next_global_xid_op(),
             ])
             .await?;
@@ -2953,7 +2953,7 @@ impl SqlEngine {
         // decision (what is actually recorded) may differ from `status` if a
         // participant won an abort-race. `commit` guarantees applied-on-leader, and
         // `self.kv` is range 0's applied store, so this read-back is authoritative.
-        Ok(crabka_pgmvcc::clog::get(self.kv.as_ref(), g)?)
+        Ok(krabka_pgmvcc::clog::get(self.kv.as_ref(), g)?)
     }
 
     /// Scan THIS range's clog from `scan_lo` for in-doubt `Prepared(Li -> g)` markers.
@@ -2981,18 +2981,18 @@ impl SqlEngine {
         let mut first_undecided: Option<u64> = None;
         let mut max_li: Option<u64> = None;
         for (k, v) in self.kv.scan_range(
-            &crabka_pgkv::key::clog_key(scan_lo),
-            &crabka_pgkv::key::clog_key(crabka_pgmvcc::xid::GLOBAL_XID_BASE),
+            &krabka_pgkv::key::clog_key(scan_lo),
+            &krabka_pgkv::key::clog_key(krabka_pgmvcc::xid::GLOBAL_XID_BASE),
         )? {
-            let Some(li) = crabka_pgkv::key::clog_xid_of(&k) else {
+            let Some(li) = krabka_pgkv::key::clog_xid_of(&k) else {
                 continue;
             };
             max_li = Some(li);
-            if let crabka_pgmvcc::clog::XidStatus::Prepared(g) = crabka_pgmvcc::clog::decode(&v)? {
+            if let krabka_pgmvcc::clog::XidStatus::Prepared(g) = krabka_pgmvcc::clog::decode(&v)? {
                 let terminal = matches!(
-                    crabka_pgmvcc::clog::get(self.catalog_kv.as_ref(), g)?,
-                    crabka_pgmvcc::clog::XidStatus::Committed
-                        | crabka_pgmvcc::clog::XidStatus::Aborted
+                    krabka_pgmvcc::clog::get(self.catalog_kv.as_ref(), g)?,
+                    krabka_pgmvcc::clog::XidStatus::Committed
+                        | krabka_pgmvcc::clog::XidStatus::Aborted
                 );
                 if !terminal {
                     gs.insert(g);
@@ -3026,12 +3026,12 @@ impl SqlEngine {
     pub fn prepared_globals(&self) -> Result<Vec<u64>, ExecError> {
         let mut globals = std::collections::BTreeSet::new();
         for (key, value) in self.kv.scan_range(
-            &crabka_pgkv::key::clog_key(0),
-            &crabka_pgkv::key::clog_key(crabka_pgmvcc::xid::GLOBAL_XID_BASE),
+            &krabka_pgkv::key::clog_key(0),
+            &krabka_pgkv::key::clog_key(krabka_pgmvcc::xid::GLOBAL_XID_BASE),
         )? {
-            if crabka_pgkv::key::clog_xid_of(&key).is_some()
-                && let crabka_pgmvcc::clog::XidStatus::Prepared(global_xid) =
-                    crabka_pgmvcc::clog::decode(&value)?
+            if krabka_pgkv::key::clog_xid_of(&key).is_some()
+                && let krabka_pgmvcc::clog::XidStatus::Prepared(global_xid) =
+                    krabka_pgmvcc::clog::decode(&value)?
             {
                 globals.insert(global_xid);
             }
@@ -3077,17 +3077,17 @@ impl SqlEngine {
         let scan_lo = self.clog_scan_lo()?;
         let mut in_doubt: BTreeMap<u64, u64> = BTreeMap::new();
         for (k, v) in self.kv.scan_range(
-            &crabka_pgkv::key::clog_key(scan_lo),
-            &crabka_pgkv::key::clog_key(crabka_pgmvcc::xid::GLOBAL_XID_BASE),
+            &krabka_pgkv::key::clog_key(scan_lo),
+            &krabka_pgkv::key::clog_key(krabka_pgmvcc::xid::GLOBAL_XID_BASE),
         )? {
-            let Some(li) = crabka_pgkv::key::clog_xid_of(&k) else {
+            let Some(li) = krabka_pgkv::key::clog_xid_of(&k) else {
                 continue;
             };
-            if let crabka_pgmvcc::clog::XidStatus::Prepared(g) = crabka_pgmvcc::clog::decode(&v)? {
+            if let krabka_pgmvcc::clog::XidStatus::Prepared(g) = krabka_pgmvcc::clog::decode(&v)? {
                 let terminal = matches!(
-                    crabka_pgmvcc::clog::get(self.catalog_kv.as_ref(), g)?,
-                    crabka_pgmvcc::clog::XidStatus::Committed
-                        | crabka_pgmvcc::clog::XidStatus::Aborted
+                    krabka_pgmvcc::clog::get(self.catalog_kv.as_ref(), g)?,
+                    krabka_pgmvcc::clog::XidStatus::Committed
+                        | krabka_pgmvcc::clog::XidStatus::Aborted
                 );
                 if !terminal {
                     in_doubt.insert(li, g);
@@ -3102,7 +3102,7 @@ impl SqlEngine {
         //    in-doubt `Li`, re-acquire `(table, rowid)` exclusively under `Li`. User
         //    tables start at id 1 (`SYSTEM_TABLE_ID == 0`), so scan from `table_prefix(1)`
         //    onward; `table_rowid_of` filters non-primary/system keys.
-        let start = crabka_pgkv::key::table_prefix(crabka_pgkv::key::SYSTEM_TABLE_ID + 1);
+        let start = krabka_pgkv::key::table_prefix(krabka_pgkv::key::SYSTEM_TABLE_ID + 1);
         // Upper bound above every primary-index version key. A version key is
         // `put_u32(table) ++ put_u32(INDEX_PRIMARY=1) ++ put_u64(rowid) ++ put_u64(xid)`;
         // its 5th byte is the high byte of `INDEX_PRIMARY`, i.e. `0x00`, so any key
@@ -3110,10 +3110,10 @@ impl SqlEngine {
         // real version key regardless of table id.
         let end = [0xFFu8; 5];
         for (k, _v) in self.kv.scan_range(&start, &end)? {
-            let Some((table, rowid)) = crabka_pgkv::key::table_rowid_of(&k) else {
+            let Some((table, rowid)) = krabka_pgkv::key::table_rowid_of(&k) else {
                 continue;
             };
-            let Ok(li) = crabka_pgmvcc::version::xid_of_key(&k) else {
+            let Ok(li) = krabka_pgmvcc::version::xid_of_key(&k) else {
                 continue;
             };
             if in_doubt.contains_key(&li) {
@@ -3156,13 +3156,13 @@ impl SqlEngine {
     pub async fn staged_local_for(&self, g: u64) -> Result<Option<u64>, ExecError> {
         let scan_lo = self.clog_scan_lo()?;
         for (k, v) in self.kv.scan_range(
-            &crabka_pgkv::key::clog_key(scan_lo),
-            &crabka_pgkv::key::clog_key(crabka_pgmvcc::xid::GLOBAL_XID_BASE),
+            &krabka_pgkv::key::clog_key(scan_lo),
+            &krabka_pgkv::key::clog_key(krabka_pgmvcc::xid::GLOBAL_XID_BASE),
         )? {
-            let Some(li) = crabka_pgkv::key::clog_xid_of(&k) else {
+            let Some(li) = krabka_pgkv::key::clog_xid_of(&k) else {
                 continue;
             };
-            if let crabka_pgmvcc::clog::XidStatus::Prepared(pg) = crabka_pgmvcc::clog::decode(&v)?
+            if let krabka_pgmvcc::clog::XidStatus::Prepared(pg) = krabka_pgmvcc::clog::decode(&v)?
                 && pg == g
             {
                 return Ok(Some(li));
@@ -3179,7 +3179,7 @@ impl SqlEngine {
     ///
     /// Returns an error when the requested operation cannot be completed.
     pub fn clog_scan_lo(&self) -> Result<u64, ExecError> {
-        match self.kv.get(&crabka_pgkv::key::clog_scan_lo_key())? {
+        match self.kv.get(&krabka_pgkv::key::clog_scan_lo_key())? {
             Some(b) if b.len() == 8 => Ok(u64::from_be_bytes(b[..8].try_into().expect("8 bytes"))),
             _ => Ok(0),
         }
@@ -3203,8 +3203,8 @@ impl SqlEngine {
             return Ok(());
         }
         self.committer
-            .commit(vec![crabka_pgkv::store::WriteOp::Put {
-                key: crabka_pgkv::key::clog_scan_lo_key(),
+            .commit(vec![krabka_pgkv::store::WriteOp::Put {
+                key: krabka_pgkv::key::clog_scan_lo_key(),
                 value: lo.to_be_bytes().to_vec(),
             }])
             .await
@@ -3236,9 +3236,9 @@ fn exclusive_cursor_terminal(sequence: u64, physical_max: Option<u64>) -> Result
 
 #[cfg(test)]
 mod cursor_terminal_tests {
-    use crabka_pgcatalog::RelationName;
-    use crabka_pgkv::WriteOp;
-    use crabka_pgwire::engine::{Engine, Session};
+    use krabka_pgcatalog::RelationName;
+    use krabka_pgkv::WriteOp;
+    use krabka_pgwire::engine::{Engine, Session};
 
     use super::{SqlEngine, exclusive_cursor_terminal};
 
@@ -3266,7 +3266,7 @@ mod cursor_terminal_tests {
         engine
             .kv_handle()
             .write_batch(&[WriteOp::Put {
-                key: crabka_pgmvcc::version::hash_version_key_ts(table.id, 15, 7, 1),
+                key: krabka_pgmvcc::version::hash_version_key_ts(table.id, 15, 7, 1),
                 value: vec![0],
             }])
             .expect("seed high-bucket physical key");
@@ -3277,7 +3277,7 @@ mod cursor_terminal_tests {
 
 #[cfg(test)]
 mod point_type_tests {
-    use crabka_pgwire::engine::{Engine, QueryResult, Session};
+    use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
     use super::SqlEngine;
 
@@ -3483,9 +3483,9 @@ mod point_type_tests {
 pub(crate) fn checkpoint_garbage_horizon(
     procarray: &ProcArray,
     kv: &dyn Kv,
-    gc_horizon: &crabka_pgmvcc::gc::GcHorizon,
+    gc_horizon: &krabka_pgmvcc::gc::GcHorizon,
 ) -> Result<u64, ExecError> {
-    use crabka_pgmvcc::{clog::XidStatus, xid::FIRST_NORMAL_XID};
+    use krabka_pgmvcc::{clog::XidStatus, xid::FIRST_NORMAL_XID};
 
     // The horizon cap: no higher than the oldest running writer xid AND the
     // lowest registered snapshot pin. Writers register in the ProcArray;
@@ -3504,7 +3504,7 @@ pub(crate) fn checkpoint_garbage_horizon(
     // `cap` never appear in the scan: an absent xid below the active xmin is
     // not running, so it is a crash leftover that can never commit
     // (aborted-equivalent) — exactly the existing recovery semantics.
-    let scan_lo = match kv.get(&crabka_pgkv::key::clog_scan_lo_key())? {
+    let scan_lo = match kv.get(&krabka_pgkv::key::clog_scan_lo_key())? {
         Some(bytes) if bytes.len() == 8 => {
             u64::from_be_bytes(bytes[..8].try_into().expect("checked length"))
         }
@@ -3514,14 +3514,14 @@ pub(crate) fn checkpoint_garbage_horizon(
     .max(gc_horizon.decided_floor())
     .min(cap);
     for (key, value) in kv.scan_range(
-        &crabka_pgkv::key::clog_key(scan_lo),
-        &crabka_pgkv::key::clog_key(cap),
+        &krabka_pgkv::key::clog_key(scan_lo),
+        &krabka_pgkv::key::clog_key(cap),
     )? {
-        let Some(xid) = crabka_pgkv::key::clog_xid_of(&key) else {
+        let Some(xid) = krabka_pgkv::key::clog_xid_of(&key) else {
             continue;
         };
         if matches!(
-            crabka_pgmvcc::clog::decode(&value)?,
+            krabka_pgmvcc::clog::decode(&value)?,
             XidStatus::InProgress | XidStatus::Prepared(_)
         ) {
             let horizon = xid.min(cap);
@@ -3537,9 +3537,9 @@ pub(crate) fn checkpoint_garbage_horizon(
 /// treats any global xid `g >= xmax` as InProgress, but no `Prepared` tuples
 /// ever exist on a single-range engine, so the Prepared branch is unreachable.
 #[allow(non_snake_case)]
-pub(crate) fn NO_GLOBAL_SNAPSHOT() -> crabka_pgmvcc::visibility::Snapshot {
-    use crabka_pgmvcc::xid::GLOBAL_XID_BASE;
-    crabka_pgmvcc::visibility::Snapshot {
+pub(crate) fn NO_GLOBAL_SNAPSHOT() -> krabka_pgmvcc::visibility::Snapshot {
+    use krabka_pgmvcc::xid::GLOBAL_XID_BASE;
+    krabka_pgmvcc::visibility::Snapshot {
         xmin: GLOBAL_XID_BASE,
         xmax: GLOBAL_XID_BASE,
         xip: vec![],
@@ -3554,8 +3554,8 @@ pub(crate) fn NO_GLOBAL_SNAPSHOT() -> crabka_pgmvcc::visibility::Snapshot {
 fn timestamp_conversion_ops(
     kv: &dyn Kv,
     catalog_kv: &dyn Kv,
-    table: &crabka_pgcatalog::Table,
-) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
+    table: &krabka_pgcatalog::Table,
+) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
     if table.sharded {
         return Ok(Vec::new());
     }
@@ -3564,27 +3564,27 @@ fn timestamp_conversion_ops(
         ExecError::Unsupported("timestamp conversion exhausted timestamp space".into())
     })?;
     let start_ts = commit_ts - 1;
-    let snapshot = crabka_pgmvcc::visibility::Snapshot {
+    let snapshot = krabka_pgmvcc::visibility::Snapshot {
         xmin: 1,
         xmax: u64::MAX,
         xip: Vec::new(),
     };
     let visible = crate::exec::scan_live(kv, catalog_kv, &snapshot, &snapshot, None, table)?;
-    let old_versions = kv.scan_prefix(&crabka_pgkv::key::table_prefix(table.id))?;
+    let old_versions = kv.scan_prefix(&krabka_pgkv::key::table_prefix(table.id))?;
     let mut ops = Vec::with_capacity(old_versions.len() + visible.len());
     ops.extend(
         old_versions
             .into_iter()
-            .map(|(key, _)| crabka_pgkv::WriteOp::Delete { key }),
+            .map(|(key, _)| krabka_pgkv::WriteOp::Delete { key }),
     );
     ops.extend(
         visible
             .into_iter()
-            .map(|(rowid, _, row)| crabka_pgkv::WriteOp::Put {
-                key: crabka_pgmvcc::version::version_key_ts(table.id, rowid, start_ts),
-                value: crabka_pgmvcc::version::encode_ts_tuple(
+            .map(|(rowid, _, row)| krabka_pgkv::WriteOp::Put {
+                key: krabka_pgmvcc::version::version_key_ts(table.id, rowid, start_ts),
+                value: krabka_pgmvcc::version::encode_ts_tuple(
                     start_ts,
-                    crabka_pgmvcc::version::TsVersionState::Committed { commit_ts },
+                    krabka_pgmvcc::version::TsVersionState::Committed { commit_ts },
                     &row,
                 ),
             }),
@@ -3593,8 +3593,8 @@ fn timestamp_conversion_ops(
         // Preserve an explicit physical-rewrite proof for an empty table. The
         // key cannot name a real tuple (tuple keys include an index and rowid),
         // so this is a durable no-op in the atomic conversion batch.
-        ops.push(crabka_pgkv::WriteOp::Delete {
-            key: crabka_pgkv::key::table_prefix(table.id),
+        ops.push(krabka_pgkv::WriteOp::Delete {
+            key: krabka_pgkv::key::table_prefix(table.id),
         });
     }
     Ok(ops)
@@ -3609,7 +3609,7 @@ fn timestamp_conversion_ops(
 pub fn describe_fields(
     catalog_kv: &dyn Kv,
     sql: &str,
-) -> Result<Vec<crabka_pgwire::engine::FieldDescription>, ExecError> {
+) -> Result<Vec<krabka_pgwire::engine::FieldDescription>, ExecError> {
     crate::exec::describe(
         catalog_kv,
         catalog_kv,
@@ -3626,7 +3626,7 @@ impl Engine for SqlEngine {
     /// process-wide counter the wire layer announces from, so `pg_backend_pid()`
     /// identifies it as distinctly as a connected session's does.
     fn connect(&self) -> SqlSession {
-        self.connect_with_pid(crabka_pgwire::server::next_backend_pid())
+        self.connect_with_pid(krabka_pgwire::server::next_backend_pid())
     }
 
     fn connect_with_pid(&self, pid: i32) -> SqlSession {
@@ -3670,9 +3670,9 @@ impl Engine for SqlEngine {
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgcatalog::RelationName;
-    use crabka_pgwire::engine::Session;
-    use crabka_units::convert::{ByteSizeExt as _, TimeExt as _};
+    use krabka_pgcatalog::RelationName;
+    use krabka_pgwire::engine::Session;
+    use krabka_units::convert::{ByteSizeExt as _, TimeExt as _};
     use tokio::sync::{Barrier, Notify};
 
     use super::*;
@@ -3682,15 +3682,15 @@ mod tests {
         let defaults = RuntimePolicy::default();
         for policy in [
             RuntimePolicy {
-                blocking_query_memory: crabka_units::ByteSize::ZERO,
+                blocking_query_memory: krabka_units::ByteSize::ZERO,
                 ..defaults
             },
             RuntimePolicy {
-                result_page_max: crabka_units::ByteSize::from_bytes_f64(0.5),
+                result_page_max: krabka_units::ByteSize::from_bytes_f64(0.5),
                 ..defaults
             },
             RuntimePolicy {
-                join_broadcast_threshold: crabka_units::ByteSize::ZERO,
+                join_broadcast_threshold: krabka_units::ByteSize::ZERO,
                 ..defaults
             },
             RuntimePolicy {
@@ -3710,11 +3710,11 @@ mod tests {
                 ..defaults
             },
             RuntimePolicy {
-                ts_gc_floor_lag: crabka_units::Time::from_millis(-1),
+                ts_gc_floor_lag: krabka_units::Time::from_millis(-1),
                 ..defaults
             },
             RuntimePolicy {
-                ts_gc_floor_lag: crabka_units::Time::from_micros(500),
+                ts_gc_floor_lag: krabka_units::Time::from_micros(500),
                 ..defaults
             },
         ] {
@@ -3722,7 +3722,7 @@ mod tests {
         }
         assert!(
             RuntimePolicy {
-                ts_gc_floor_lag: crabka_units::secs(0),
+                ts_gc_floor_lag: krabka_units::secs(0),
                 ..defaults
             }
             .validate()
@@ -3733,15 +3733,15 @@ mod tests {
     #[test]
     fn runtime_query_policy_reaches_engine_and_planner() {
         let policy = RuntimePolicy {
-            blocking_query_memory: crabka_units::bytes(34),
-            result_page_max: crabka_units::bytes(35),
-            join_broadcast_threshold: crabka_units::bytes(36),
+            blocking_query_memory: krabka_units::bytes(34),
+            result_page_max: krabka_units::bytes(35),
+            join_broadcast_threshold: krabka_units::bytes(36),
             ..Default::default()
         };
         let engine = SqlEngine::new_with_policy(policy).expect("policy");
 
-        assert_eq!(engine.blocking_query_memory, crabka_units::bytes(34));
-        assert_eq!(engine.result_page_max, crabka_units::bytes(35));
+        assert_eq!(engine.blocking_query_memory, krabka_units::bytes(34));
+        assert_eq!(engine.result_page_max, krabka_units::bytes(35));
         assert_eq!(engine.join_strategy_config.broadcast_threshold_bytes, 36);
         let clone = engine.clone_handle();
         assert_eq!(clone.blocking_query_memory, engine.blocking_query_memory);
@@ -3750,7 +3750,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn in_doubt_globals_lists_undecided_prepared_markers() {
-        use crabka_pgmvcc::{
+        use krabka_pgmvcc::{
             clog::{XidStatus, put_op},
             xid::GLOBAL_XID_BASE,
         };
@@ -3792,9 +3792,9 @@ mod tests {
             .await
             .expect("create local table");
 
-        let sharded = crabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("sharded_t"))
+        let sharded = krabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("sharded_t"))
             .expect("sharded table catalog row");
-        let local = crabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("local_t"))
+        let local = krabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("local_t"))
             .expect("local table catalog row");
 
         assert!(sharded.sharded);
@@ -3814,13 +3814,13 @@ mod tests {
             .await
             .expect("create hash sharded table");
 
-        let table = crabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("hash_t"))
+        let table = krabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("hash_t"))
             .expect("table");
         assert!(table.sharded);
         assert_eq!(
             table.sharding,
-            Some(crabka_pgcatalog::ShardingStrategy::Hash(
-                crabka_pgcatalog::HashSharding {
+            Some(krabka_pgcatalog::ShardingStrategy::Hash(
+                krabka_pgcatalog::HashSharding {
                     columns: vec!["id".into()],
                     buckets: 16,
                     co_location_group: Some("users".into()),
@@ -3891,7 +3891,7 @@ mod tests {
             .simple_query("CREATE TABLE convert_t (id int4, value text)")
             .await
             .expect("create table");
-        let sharding = crabka_pgcatalog::ShardingStrategy::Hash(crabka_pgcatalog::HashSharding {
+        let sharding = krabka_pgcatalog::ShardingStrategy::Hash(krabka_pgcatalog::HashSharding {
             columns: vec!["id".into()],
             buckets: 8,
             co_location_group: None,
@@ -3902,7 +3902,7 @@ mod tests {
             .await
             .expect("convert metadata");
 
-        let table = crabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("convert_t"))
+        let table = krabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("convert_t"))
             .expect("table");
         assert!(table.sharded);
         assert_eq!(table.sharding, Some(sharding));
@@ -3988,14 +3988,14 @@ mod tests {
             .expect("convert table");
 
         let table =
-            crabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("conversion_fence"))
+            krabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("conversion_fence"))
                 .expect("table");
         for (_, value) in kv
-            .scan_prefix(&crabka_pgkv::key::table_prefix(table.id))
+            .scan_prefix(&krabka_pgkv::key::table_prefix(table.id))
             .expect("scan converted tuples")
         {
             assert!(
-                crabka_pgmvcc::version::decode_ts_tuple(&value).is_ok(),
+                krabka_pgmvcc::version::decode_ts_tuple(&value).is_ok(),
                 "conversion leaves no xid tuple behind"
             );
         }
@@ -4062,17 +4062,17 @@ mod tests {
             .expect("conversion task")
             .expect("convert table");
 
-        let table = crabka_pgcatalog::get_table(
+        let table = krabka_pgcatalog::get_table(
             kv.as_ref(),
             &RelationName::public("shared_conversion_fence"),
         )
         .expect("table");
         assert!(table.sharded);
         for (_, value) in kv
-            .scan_prefix(&crabka_pgkv::key::table_prefix(table.id))
+            .scan_prefix(&krabka_pgkv::key::table_prefix(table.id))
             .expect("scan converted tuples")
         {
-            assert!(crabka_pgmvcc::version::decode_ts_tuple(&value).is_ok());
+            assert!(krabka_pgmvcc::version::decode_ts_tuple(&value).is_ok());
         }
         let mut reader = writing_engine.connect();
         let rows = reader
@@ -4201,7 +4201,7 @@ mod tests {
             .expect("insert 2");
 
         let table =
-            crabka_pgcatalog::get_table(engine.catalog_kv(), &RelationName::public("local_t"))
+            krabka_pgcatalog::get_table(engine.catalog_kv(), &RelationName::public("local_t"))
                 .expect("table");
         let snapshot = engine.procarray.snapshot();
         let direct_rows = engine
@@ -4239,7 +4239,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn staged_local_for_finds_an_existing_prepared_marker() {
-        use crabka_pgmvcc::{
+        use krabka_pgmvcc::{
             clog::{XidStatus, put_op},
             xid::GLOBAL_XID_BASE,
         };
@@ -4268,15 +4268,15 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn in_doubt_globals_from_bounds_the_scan_and_advances_past_terminal() {
-        use crabka_pgmvcc::{
+        use krabka_pgmvcc::{
             clog::{XidStatus, put_op},
             xid::GLOBAL_XID_BASE,
         };
         // Two stores: sm_kv = this data range's local clog; catalog_kv = range 0's global-G clog.
-        let sm_kv: std::sync::Arc<dyn crabka_pgkv::Kv> =
-            std::sync::Arc::new(crabka_pgkv::MemKv::new());
-        let catalog_kv: std::sync::Arc<dyn crabka_pgkv::Kv> =
-            std::sync::Arc::new(crabka_pgkv::MemKv::new());
+        let sm_kv: std::sync::Arc<dyn krabka_pgkv::Kv> =
+            std::sync::Arc::new(krabka_pgkv::MemKv::new());
+        let catalog_kv: std::sync::Arc<dyn krabka_pgkv::Kv> =
+            std::sync::Arc::new(krabka_pgkv::MemKv::new());
         let committer = std::sync::Arc::new(crate::commit::LocalCommitter {
             kv: std::sync::Arc::clone(&sm_kv),
         });
@@ -4341,11 +4341,11 @@ mod tests {
     /// per-session fence cannot give under apply lag.
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn reacquire_in_doubt_locks_blocks_a_concurrent_writer_until_released() {
-        use crabka_pgmvcc::{
+        use krabka_pgmvcc::{
             clog::{XidStatus, put_op},
             xid::GLOBAL_XID_BASE,
         };
-        use crabka_pgwire::engine::{Engine, Session};
+        use krabka_pgwire::engine::{Engine, Session};
 
         use crate::lockmgr::{LockMode, LockOwner};
 
@@ -4382,7 +4382,7 @@ mod tests {
         };
         // The dropped session freed li's lock (presumed-abort), so the inherited in-doubt
         // row now has NO live lock holder — exactly the wiped-lock-table condition.
-        let table = crabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("t"))
+        let table = krabka_pgcatalog::get_table(kv.as_ref(), &RelationName::public("t"))
             .expect("t")
             .id;
         // g is still in-doubt (no global decision written): recovery re-acquires li's lock.
@@ -4442,11 +4442,11 @@ mod tests {
     /// genuinely in-doubt pairs.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn reacquire_in_doubt_locks_skips_terminal_g() {
-        use crabka_pgmvcc::{
+        use krabka_pgmvcc::{
             clog::{XidStatus, put_op},
             xid::GLOBAL_XID_BASE,
         };
-        use crabka_pgwire::engine::{Engine, Session};
+        use krabka_pgwire::engine::{Engine, Session};
         let kv = Arc::new(MemKv::new());
         let engine = SqlEngine::with_kv(Arc::clone(&kv) as Arc<dyn Kv>).expect("engine");
         {
@@ -4485,18 +4485,18 @@ mod tests {
 
     #[tokio::test]
     async fn in_doubt_scan_watermark_stays_below_global_xid_base_on_range_0() {
-        use crabka_pgmvcc::xid::GLOBAL_XID_BASE;
-        let kv: std::sync::Arc<dyn crabka_pgkv::Kv> =
-            std::sync::Arc::new(crabka_pgkv::MemKv::new());
+        use krabka_pgmvcc::xid::GLOBAL_XID_BASE;
+        let kv: std::sync::Arc<dyn krabka_pgkv::Kv> =
+            std::sync::Arc::new(krabka_pgkv::MemKv::new());
         // A terminal LOCAL entry (so the scan has a local row) and a GLOBAL-decision entry keyed
         // high in the global-xid space (range 0 mixes participant markers with the global clog).
         // NO in-doubt local marker → first_undecided == None → the watermark is max_li+1, which the
         // bound must keep below GLOBAL_XID_BASE.
         kv.write_batch(&[
-            crabka_pgmvcc::clog::put_op(5, crabka_pgmvcc::clog::XidStatus::Committed),
-            crabka_pgmvcc::clog::put_op(
+            krabka_pgmvcc::clog::put_op(5, krabka_pgmvcc::clog::XidStatus::Committed),
+            krabka_pgmvcc::clog::put_op(
                 GLOBAL_XID_BASE + 3,
-                crabka_pgmvcc::clog::XidStatus::Committed,
+                krabka_pgmvcc::clog::XidStatus::Committed,
             ),
         ])
         .expect("seed");
@@ -4511,15 +4511,15 @@ mod tests {
 
     #[tokio::test]
     async fn in_doubt_scan_returns_only_local_participant_markers_on_range_0() {
-        use crabka_pgmvcc::xid::GLOBAL_XID_BASE;
-        let kv: std::sync::Arc<dyn crabka_pgkv::Kv> =
-            std::sync::Arc::new(crabka_pgkv::MemKv::new());
+        use krabka_pgmvcc::xid::GLOBAL_XID_BASE;
+        let kv: std::sync::Arc<dyn krabka_pgkv::Kv> =
+            std::sync::Arc::new(krabka_pgkv::MemKv::new());
         let g_indoubt = GLOBAL_XID_BASE + 7; // its decision is absent → in-doubt
         kv.write_batch(&[
-            crabka_pgmvcc::clog::put_op(5, crabka_pgmvcc::clog::XidStatus::Prepared(g_indoubt)),
-            crabka_pgmvcc::clog::put_op(
+            krabka_pgmvcc::clog::put_op(5, krabka_pgmvcc::clog::XidStatus::Prepared(g_indoubt)),
+            krabka_pgmvcc::clog::put_op(
                 GLOBAL_XID_BASE + 3,
-                crabka_pgmvcc::clog::XidStatus::Committed,
+                krabka_pgmvcc::clog::XidStatus::Committed,
             ),
         ])
         .expect("seed");
@@ -4534,10 +4534,10 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn clog_scan_lo_persists_and_is_monotone() {
-        let sm_kv: std::sync::Arc<dyn crabka_pgkv::Kv> =
-            std::sync::Arc::new(crabka_pgkv::MemKv::new());
-        let catalog_kv: std::sync::Arc<dyn crabka_pgkv::Kv> =
-            std::sync::Arc::new(crabka_pgkv::MemKv::new());
+        let sm_kv: std::sync::Arc<dyn krabka_pgkv::Kv> =
+            std::sync::Arc::new(krabka_pgkv::MemKv::new());
+        let catalog_kv: std::sync::Arc<dyn krabka_pgkv::Kv> =
+            std::sync::Arc::new(krabka_pgkv::MemKv::new());
         let committer = std::sync::Arc::new(crate::commit::LocalCommitter {
             kv: std::sync::Arc::clone(&sm_kv),
         });
@@ -4564,8 +4564,8 @@ mod tests {
         engine
             .kv
             .write_batch(&[
-                crabka_pgmvcc::clog::put_op(committed, crabka_pgmvcc::clog::XidStatus::Committed),
-                crabka_pgmvcc::clog::put_op(prepared, crabka_pgmvcc::clog::XidStatus::Prepared(99)),
+                krabka_pgmvcc::clog::put_op(committed, krabka_pgmvcc::clog::XidStatus::Committed),
+                krabka_pgmvcc::clog::put_op(prepared, krabka_pgmvcc::clog::XidStatus::Prepared(99)),
             ])
             .expect("seed clog");
         engine.procarray.finish(committed);

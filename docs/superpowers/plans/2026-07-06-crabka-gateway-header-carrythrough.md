@@ -42,6 +42,7 @@ The three `DecodedConsumerRecord {` construction sites (verified: `consume.rs:80
 ## Task 1: `DecodedConsumerRecord.headers` + Subscribe-egress population
 
 **Files:**
+
 - Modify: `crates/grpc-gateway/src/consume.rs:16-25` (struct), `crates/grpc-gateway/src/consume.rs:80-89` (`poll()`)
 - Modify: `crates/grpc-gateway/src/streaming.rs:146-160` (`inbound_from_decoded_record`), `crates/grpc-gateway/src/streaming.rs:485-517` (test mod)
 
@@ -81,7 +82,7 @@ Add to the `#[cfg(test)] mod tests` in `streaming.rs` (after `inbound_carries_st
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-grpc-gateway --lib streaming::tests::inbound_carries_record_headers`
+Run: `cargo test -p krabka-grpc-gateway --lib streaming::tests::inbound_carries_record_headers`
 Expected: FAIL to compile — `DecodedConsumerRecord` has no field `headers`.
 
 - [ ] **Step 3: Implement**
@@ -134,7 +135,7 @@ pub struct DecodedConsumerRecord {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-grpc-gateway --lib streaming::tests`
+Run: `cargo test -p krabka-grpc-gateway --lib streaming::tests`
 Expected: PASS (both `inbound_carries_record_headers` and the updated existing test).
 
 - [ ] **Step 5: Commit**
@@ -149,11 +150,12 @@ git commit -m "feat(gateway): carry record headers on the Subscribe egress path"
 ## Task 2: Outbound envelope header array
 
 **Files:**
+
 - Modify: `crates/grpc-gateway/src/outbound.rs:280-296` (`render_envelope`), `crates/grpc-gateway/src/outbound.rs:488-532` (test mod)
 
 - [ ] **Step 1: Write the failing test**
 
-Add to the `#[cfg(test)] mod tests` in `outbound.rs` (after `envelope_null_value_when_empty`, `:532`). Import `Header` from `crabka_client_consumer` in the test mod (`ConsumerRecord` is already imported; add `Header` alongside it).
+Add to the `#[cfg(test)] mod tests` in `outbound.rs` (after `envelope_null_value_when_empty`, `:532`). Import `Header` from `krabka_client_consumer` in the test mod (`ConsumerRecord` is already imported; add `Header` alongside it).
 
 ```rust
     #[test]
@@ -176,7 +178,7 @@ Add to the `#[cfg(test)] mod tests` in `outbound.rs` (after `envelope_null_value
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-grpc-gateway --lib outbound::tests::envelope_carries_headers`
+Run: `cargo test -p krabka-grpc-gateway --lib outbound::tests::envelope_carries_headers`
 Expected: FAIL — `v["headers"]` is `Null` (no `headers` key), `.as_array()` panics.
 
 - [ ] **Step 3: Implement**
@@ -208,7 +210,7 @@ fn render_envelope(event_id: &str, rec: &ConsumerRecord) -> Vec<u8> {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-grpc-gateway --lib outbound::tests`
+Run: `cargo test -p krabka-grpc-gateway --lib outbound::tests`
 Expected: PASS (the new test + the three existing envelope tests, which now also emit an empty `headers` array).
 
 - [ ] **Step 5: Commit**
@@ -223,6 +225,7 @@ git commit -m "feat(gateway): carry record headers on the outbound webhook envel
 ## Task 3: End-to-end header round-trip (behavior lock)
 
 **Files:**
+
 - Modify: `crates/grpc-gateway/tests/integration_consume.rs`
 
 - [ ] **Step 1: Write the behavior test**
@@ -252,9 +255,9 @@ async fn poll_carries_record_headers() {
     let core = ProduceCore::new(&bootstrap, "gw-h", Arc::new(RawCodec), None)
         .await
         .unwrap();
-    let anon = crabka_security::Principal {
+    let anon = krabka_security::Principal {
         name: "ANONYMOUS".into(),
-        auth_method: crabka_security::AuthMethod::Anonymous,
+        auth_method: krabka_security::AuthMethod::Anonymous,
         groups: vec![],
     };
     core.produce(
@@ -304,7 +307,7 @@ async fn poll_carries_record_headers() {
 
 - [ ] **Step 2: Run to verify**
 
-Run: `cargo test -p crabka-grpc-gateway --test integration_consume poll_carries_record_headers`
+Run: `cargo test -p krabka-grpc-gateway --test integration_consume poll_carries_record_headers`
 Expected: PASS — the produced header survives the native consumer into `DecodedConsumerRecord.headers` (this locks the `poll()` copy from Task 1 against real records; if Task 1's copy regresses, this fails).
 
 - [ ] **Step 3: Commit**
@@ -319,8 +322,8 @@ git commit -m "test(gateway): end-to-end record-header round-trip through consum
 ## Task 4: Final gate
 
 - [ ] **Step 1:** `cargo +nightly fmt --check` — no diff.
-- [ ] **Step 2:** `cargo clippy -p crabka-grpc-gateway --all-targets -- -D warnings` — no warnings.
-- [ ] **Step 3:** `cargo nextest run -p crabka-grpc-gateway` (or `cargo test -p crabka-grpc-gateway`) — PASS, including the two transform unit tests + the end-to-end round-trip.
+- [ ] **Step 2:** `cargo clippy -p krabka-grpc-gateway --all-targets -- -D warnings` — no warnings.
+- [ ] **Step 3:** `cargo nextest run -p krabka-grpc-gateway` (or `cargo test -p krabka-grpc-gateway`) — PASS, including the two transform unit tests + the end-to-end round-trip.
 - [ ] **Step 4:** Commit any formatting.
 
 ---

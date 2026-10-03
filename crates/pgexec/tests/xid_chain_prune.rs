@@ -6,10 +6,10 @@
 use std::sync::Arc;
 
 use assert2::assert;
-use crabka_pgcatalog::RelationName;
-use crabka_pgexec::{Committer, ExecError, LocalLinearizer, SqlEngine};
-use crabka_pgkv::{Kv, MemKv, WriteOp};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgcatalog::RelationName;
+use krabka_pgexec::{Committer, ExecError, LocalLinearizer, SqlEngine};
+use krabka_pgkv::{Kv, MemKv, WriteOp};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 /// Applies batches straight to the store, and stands in for the replicated
 /// state machine, which applies exactly the same batches in WAL order.
@@ -28,10 +28,10 @@ impl Committer for StoreCommitter {
 /// Count the stored xid tuple versions of `table_id` (the whole physical
 /// chain across every row and version key).
 fn xid_version_count(kv: &dyn Kv, table_id: u32) -> usize {
-    kv.scan_prefix(&crabka_pgkv::key::table_prefix(table_id))
+    kv.scan_prefix(&krabka_pgkv::key::table_prefix(table_id))
         .expect("scan")
         .iter()
-        .filter(|(_, value)| crabka_pgmvcc::version::decode_tuple(value).is_ok())
+        .filter(|(_, value)| krabka_pgmvcc::version::decode_tuple(value).is_ok())
         .count()
 }
 
@@ -80,7 +80,7 @@ async fn replicated_engine_update_loop_keeps_version_chain_bounded() {
     // the physical chain stays O(1) instead of holding all 100 versions.
     // (Each statement keeps the version it supersedes — its deleter commits
     // only with the batch — plus the new version, so a handful survive.)
-    let table = crabka_pgcatalog::get_table(engine.catalog_kv(), &RelationName::public("hot"))
+    let table = krabka_pgcatalog::get_table(engine.catalog_kv(), &RelationName::public("hot"))
         .expect("table");
     let versions = xid_version_count(kv.as_ref(), table.id);
     assert!(versions <= 3, "chain grew to {versions} versions");

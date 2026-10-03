@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A new sans-IO crate `crabka-postgres-wal` that decodes Postgres 17 physical WAL (segment/page framing, contrecords, CRC-32C, block refs, FPIs with hole reconstruction) and shards decoded records by `(RelTag, block) @ LSN`, verified line-for-line against committed `pg_waldump` output.
+**Goal:** A new sans-IO crate `krabka-postgres-wal` that decodes Postgres 17 physical WAL (segment/page framing, contrecords, CRC-32C, block refs, FPIs with hole reconstruction) and shards decoded records by `(RelTag, block) @ LSN`, verified line-for-line against committed `pg_waldump` output.
 
 **Architecture:** A pull parser (`feed(lsn, bytes)` / `poll_record()`) with internal contrecord buffering; a pure `shard_record` fan-out. Fixtures are real 1 MB WAL segments generated once from stock Postgres 17 and committed with their `pg_waldump` oracle text — CI is hermetic (no Postgres).
 
-**Tech Stack:** Rust 2024 (pinned stable 1.96.0), `bytes`, `thiserror`, CRC-32C (reuse `crabka-protocol`'s if exported, else the `crc32c` crate), **no tokio**, `assert2`/`nextest`, `cargo +nightly fmt`, `clippy::pedantic`.
+**Tech Stack:** Rust 2024 (pinned stable 1.96.0), `bytes`, `thiserror`, CRC-32C (reuse `krabka-protocol`'s if exported, else the `crc32c` crate), **no tokio**, `assert2`/`nextest`, `cargo +nightly fmt`, `clippy::pedantic`.
 
 **Spec:** [`docs/superpowers/specs/2026-07-06-crabka-pg2-wal-decode-design.md`](../specs/2026-07-06-crabka-pg2-wal-decode-design.md).
 
@@ -34,7 +34,7 @@
 ## File Structure
 
 - **`tools/gen-pg-wal-fixtures.sh`** (new) — one-shot corpus generator (needs local PG 17).
-- **`crates/postgres-wal/`** (new crate `crabka-postgres-wal`):
+- **`crates/postgres-wal/`** (new crate `krabka-postgres-wal`):
   - `Cargo.toml` (`publish = false`), `src/lib.rs`
   - `src/lsn.rs` — `Lsn` newtype + segment/page arithmetic
   - `src/framing.rs` — page headers, contrecord reassembly (`WalStreamDecoder`)
@@ -52,6 +52,7 @@ Tasks 3–5 all touch the decoder core and run **sequentially**; Task 6 (`shard.
 ## Task 1: Fixture corpus + generation script
 
 **Files:**
+
 - Create: `tools/gen-pg-wal-fixtures.sh`, `crates/postgres-wal/tests/fixtures/{*.wal,oracle.waldump,manifest.toml}`
 
 - [ ] **Step 1: Write the generator**
@@ -103,6 +104,7 @@ git commit -m "test(postgres-wal): committed PG-17 WAL fixture corpus + generato
 ## Task 2: Crate scaffold + `Lsn`
 
 **Files:**
+
 - Create: `crates/postgres-wal/Cargo.toml`, `src/lib.rs`, `src/lsn.rs`
 - Modify: `release-plz.toml` (private entry, alphabetical slot)
 
@@ -125,11 +127,11 @@ git commit -m "test(postgres-wal): committed PG-17 WAL fixture corpus + generato
 
 - [ ] **Step 2: Run to verify it fails, then implement**
 
-`Cargo.toml`: `publish = false` (comment: internal; see the publish allowlist), workspace lints, deps `bytes`, `thiserror`; dev-deps `assert2`. `Lsn(pub u64)` with `segment_number`/`segment_offset`/`page_offset`/`Display`. Add the release-plz private entry (`name = "crabka-postgres-wal"`, `publish = false`, `release = false`) in its alphabetical slot.
+`Cargo.toml`: `publish = false` (comment: internal; see the publish allowlist), workspace lints, deps `bytes`, `thiserror`; dev-deps `assert2`. `Lsn(pub u64)` with `segment_number`/`segment_offset`/`page_offset`/`Display`. Add the release-plz private entry (`name = "krabka-postgres-wal"`, `publish = false`, `release = false`) in its alphabetical slot.
 
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-postgres-wal --lib` → PASS; `./tools/check-publish-allowlist.sh` → exit 0.
+Run: `cargo test -p krabka-postgres-wal --lib` → PASS; `./tools/check-publish-allowlist.sh` → exit 0.
 
 ```bash
 git add crates/postgres-wal release-plz.toml
@@ -141,9 +143,10 @@ git commit -m "feat(postgres-wal): scaffold sans-IO crate + Lsn"
 ## Task 3: Page framing (headers + magic)
 
 **Files:**
+
 - Create: `src/framing.rs`, `src/consts_v17.rs`
 
-- [ ] **Step 1: Write the failing tests** — read fixture segment 0 in the test (`include_bytes!` of the *fixture*, which is test data, not source text):
+- [ ] **Step 1: Write the failing tests** — read fixture segment 0 in the test (`include_bytes!` of the _fixture_, which is test data, not source text):
 
 ```rust
     #[test]
@@ -171,7 +174,7 @@ git commit -m "feat(postgres-wal): scaffold sans-IO crate + Lsn"
 
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-postgres-wal` → PASS.
+Run: `cargo test -p krabka-postgres-wal` → PASS.
 
 ```bash
 git add crates/postgres-wal/src
@@ -183,6 +186,7 @@ git commit -m "feat(postgres-wal): WAL page framing with versioned magic validat
 ## Task 4: Record assembly — `WalStreamDecoder` (contrecords + CRC)
 
 **Files:**
+
 - Modify: `src/framing.rs` (the decoder), `src/record.rs` (header + CRC)
 
 - [ ] **Step 1: Write the failing tests**
@@ -212,11 +216,11 @@ git commit -m "feat(postgres-wal): WAL page framing with versioned magic validat
 
 - [ ] **Step 2: Implement**
 
-`record.rs`: `XLogRecordHeader` (24 bytes LE: `xl_tot_len:u32, xl_xid:u32, xl_prev:u64, xl_info:u8, xl_rmid:u8, pad:2, xl_crc:u32`). **CRC-32C recipe (exact):** `crc = crc32c(&record[24..tot_len])`, then `crc = crc32c_append(crc, &record[0..20])` (header up to but excluding `xl_crc`), compare to `xl_crc`. Reuse `crabka-protocol`'s Castagnoli functions if `pub`; else add the workspace-pinned `crc32c` crate. `framing.rs`: the decoder walks pages, skips headers, buffers `xlp_rem_len` continuation bytes across page/segment boundaries (`XLP_FIRST_IS_CONTRECORD` validation both directions: a continuation expected but absent, or present but unexpected, is a framing error), records are MAXALIGN(8)-padded to the next record start.
+`record.rs`: `XLogRecordHeader` (24 bytes LE: `xl_tot_len:u32, xl_xid:u32, xl_prev:u64, xl_info:u8, xl_rmid:u8, pad:2, xl_crc:u32`). **CRC-32C recipe (exact):** `crc = crc32c(&record[24..tot_len])`, then `crc = crc32c_append(crc, &record[0..20])` (header up to but excluding `xl_crc`), compare to `xl_crc`. Reuse `krabka-protocol`'s Castagnoli functions if `pub`; else add the workspace-pinned `crc32c` crate. `framing.rs`: the decoder walks pages, skips headers, buffers `xlp_rem_len` continuation bytes across page/segment boundaries (`XLP_FIRST_IS_CONTRECORD` validation both directions: a continuation expected but absent, or present but unexpected, is a framing error), records are MAXALIGN(8)-padded to the next record start.
 
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-postgres-wal` → PASS.
+Run: `cargo test -p krabka-postgres-wal` → PASS.
 
 ```bash
 git add crates/postgres-wal/src crates/postgres-wal/tests
@@ -228,6 +232,7 @@ git commit -m "feat(postgres-wal): record assembly with contrecord reassembly + 
 ## Task 5: Body grammar — block refs, FPIs, data
 
 **Files:**
+
 - Modify: `src/record.rs`
 
 - [ ] **Step 1: Write the failing tests** — pick, from the oracle text, one known multi-block record (a btree split) and one known FPI record (post-checkpoint):
@@ -260,7 +265,7 @@ Body walk (all LE): repeat block headers while `id <= 32` — `XLogRecordBlockHe
 
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-postgres-wal` → PASS.
+Run: `cargo test -p krabka-postgres-wal` → PASS.
 
 ```bash
 git add crates/postgres-wal/src
@@ -272,6 +277,7 @@ git commit -m "feat(postgres-wal): full record-body grammar with FPI hole recons
 ## Task 6: The page-shard router
 
 **Files:**
+
 - Create: `src/shard.rs`
 
 - [ ] **Step 1: Write the failing tests**
@@ -300,7 +306,7 @@ git commit -m "feat(postgres-wal): full record-body grammar with FPI hole recons
 
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-postgres-wal --lib shard` → PASS.
+Run: `cargo test -p krabka-postgres-wal --lib shard` → PASS.
 
 ```bash
 git add crates/postgres-wal/src/shard.rs crates/postgres-wal/src/lib.rs
@@ -312,6 +318,7 @@ git commit -m "feat(postgres-wal): page-shard router over decoded records"
 ## Task 7: The differential gate
 
 **Files:**
+
 - Create: `crates/postgres-wal/tests/differential.rs`
 
 - [ ] **Step 1: Write the gate test**
@@ -320,7 +327,7 @@ Parse **all** committed fixture segments through `WalStreamDecoder`; parse `orac
 
 - [ ] **Step 2: Run to verify it passes**
 
-Run: `cargo test -p crabka-postgres-wal --test differential`
+Run: `cargo test -p krabka-postgres-wal --test differential`
 Expected: PASS — line-for-line agreement. Any failure here is a real grammar/CRC/framing bug: fix the decoder, never the oracle.
 
 - [ ] **Step 3: Commit**
@@ -335,8 +342,8 @@ git commit -m "test(postgres-wal): pg_waldump differential gate over the committ
 ## Task 8: Final gate
 
 - [ ] **Step 1:** `cargo +nightly fmt --check` — no diff.
-- [ ] **Step 2:** `cargo clippy -p crabka-postgres-wal --all-targets -- -D warnings` — no warnings.
-- [ ] **Step 3:** `cargo nextest run -p crabka-postgres-wal` — PASS (framing, assembly, body, shard, differential).
+- [ ] **Step 2:** `cargo clippy -p krabka-postgres-wal --all-targets -- -D warnings` — no warnings.
+- [ ] **Step 3:** `cargo nextest run -p krabka-postgres-wal` — PASS (framing, assembly, body, shard, differential).
 - [ ] **Step 4:** `./tools/check-publish-allowlist.sh` — exit 0 (the new crate is private).
 - [ ] **Step 5:** Commit any formatting.
 

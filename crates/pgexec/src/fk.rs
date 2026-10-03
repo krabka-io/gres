@@ -68,7 +68,7 @@
 //!
 //! `PostgreSQL` stores both column lists in the order the `FOREIGN KEY` clause
 //! writes them, paired positionally, and matches the referenced *index* by
-//! column set. `crabka_pgkv::key::secondary_index_entry_prefix` length-prefixes
+//! column set. `krabka_pgkv::key::secondary_index_entry_prefix` length-prefixes
 //! the whole encoded tuple. So key bytes are order-sensitive, and a partial
 //! value list is not a byte prefix of a full key. A composite foreign key whose
 //! column order differs from the referenced key's would probe the wrong bytes,
@@ -90,14 +90,14 @@ use std::{
     sync::Arc,
 };
 
-use crabka_pgcatalog::{
+use krabka_pgcatalog::{
     Column, ForeignKey, ForeignKeyId, Index, IndexConstraint, MatchType, ReferentialAction,
     RelationName, Table, TableId,
 };
-use crabka_pgkv::{Kv, WriteOp};
-use crabka_pgmvcc::visibility::Snapshot;
-use crabka_pgparser::ast::{ConstraintAttributes, ForeignKeyRef};
-use crabka_pgtypes::{ColumnType, Datum};
+use krabka_pgkv::{Kv, WriteOp};
+use krabka_pgmvcc::visibility::Snapshot;
+use krabka_pgparser::ast::{ConstraintAttributes, ForeignKeyRef};
+use krabka_pgtypes::{ColumnType, Datum};
 use tracing::Instrument as _;
 
 use crate::{
@@ -176,7 +176,7 @@ impl ParentSource<'_> {
 /// `ALTER TABLE … ADD CONSTRAINT` both present it.
 pub struct ForeignKeyRequest<'a> {
     /// The creation-order id to stamp the constraint with, from the statement's
-    /// [`crabka_pgcatalog::ForeignKeyIds`] cursor. It decides which of two
+    /// [`krabka_pgcatalog::ForeignKeyIds`] cursor. It decides which of two
     /// constraints acts first, so it has to ascend with the order the clauses
     /// are written. Use one cursor per statement, not one read per clause.
     pub id: ForeignKeyId,
@@ -259,7 +259,7 @@ pub fn resolve_foreign_key(
     // self-reference cannot go through search-path lookup.
     let temporary_self_reference = request.self_reference.filter(|relation| {
         request.reference.table.schema.is_none()
-            && crabka_pgcatalog::is_temp_schema(&relation.name.schema)
+            && krabka_pgcatalog::is_temp_schema(&relation.name.schema)
             && relation.name.name == request.reference.table.name
     });
     let (referenced_name, self_reference) = match temporary_self_reference {
@@ -373,11 +373,11 @@ pub fn resolve_foreign_key(
 ///   42P16  constraints on temporary tables may reference only temporary tables
 /// ```
 fn persistence_boundary(
-    child: &crabka_pgcatalog::RelationName,
-    parent: &crabka_pgcatalog::RelationName,
+    child: &krabka_pgcatalog::RelationName,
+    parent: &krabka_pgcatalog::RelationName,
 ) -> Result<(), ExecError> {
-    let child_temp = crabka_pgcatalog::is_temp_schema(&child.schema);
-    if child_temp == crabka_pgcatalog::is_temp_schema(&parent.schema) {
+    let child_temp = krabka_pgcatalog::is_temp_schema(&child.schema);
+    if child_temp == krabka_pgcatalog::is_temp_schema(&parent.schema) {
         return Ok(());
     }
     let message = if child_temp {
@@ -411,7 +411,7 @@ fn load_referenced_relation(
     if let Some(error) = crate::exec::system_catalog_wrong_kind(name) {
         return Err(error);
     }
-    match crabka_pgcatalog::get_table(catalog_kv, name) {
+    match krabka_pgcatalog::get_table(catalog_kv, name) {
         // A materialized view is stored under the table key, so the fetched
         // record has to be asked what it is: referencing one built a foreign
         // key `PostgreSQL` refuses outright.
@@ -419,7 +419,7 @@ fn load_referenced_relation(
             Err(ExecError::ReferencedRelationNotATable(name.name.clone()))
         }
         Ok(table) => {
-            let indexes = crabka_pgcatalog::list_table_indexes(catalog_kv, name)?;
+            let indexes = krabka_pgcatalog::list_table_indexes(catalog_kv, name)?;
             Ok((table, indexes))
         }
         Err(error) => {
@@ -458,7 +458,7 @@ fn primary_key_columns(parent: &FkRelation<'_>) -> Result<Vec<String>, ExecError
 /// of the referencing statement and a probe against it proves nothing.
 /// `PostgreSQL` refuses this for the same reason, and says so per the SQL spec.
 fn deferrable_referent(parent: &FkRelation<'_>, message: &str) -> ExecError {
-    ExecError::Remote(crabka_pgwire::error::PgError::error(
+    ExecError::Remote(krabka_pgwire::error::PgError::error(
         "55000",
         format!("{message} \"{}\"", parent.name.name),
     ))
@@ -569,15 +569,15 @@ fn types_are_comparable(child: ColumnType, parent: ColumnType) -> bool {
     type_family(child) == type_family(parent)
 }
 
-fn match_type_of(parsed: crabka_pgparser::ast::MatchType) -> MatchType {
+fn match_type_of(parsed: krabka_pgparser::ast::MatchType) -> MatchType {
     match parsed {
-        crabka_pgparser::ast::MatchType::Simple => MatchType::Simple,
-        crabka_pgparser::ast::MatchType::Full => MatchType::Full,
+        krabka_pgparser::ast::MatchType::Simple => MatchType::Simple,
+        krabka_pgparser::ast::MatchType::Full => MatchType::Full,
     }
 }
 
-fn action_of(parsed: crabka_pgparser::ast::ReferentialAction) -> ReferentialAction {
-    use crabka_pgparser::ast::ReferentialAction as Parsed;
+fn action_of(parsed: krabka_pgparser::ast::ReferentialAction) -> ReferentialAction {
+    use krabka_pgparser::ast::ReferentialAction as Parsed;
     match parsed {
         Parsed::NoAction => ReferentialAction::NoAction,
         Parsed::Restrict => ReferentialAction::Restrict,
@@ -728,7 +728,7 @@ fn datum_text(value: &Datum, ctx: &EvalCtx) -> String {
     if value.is_null() {
         return "null".to_string();
     }
-    String::from_utf8_lossy(&crabka_pgtypes::encoding::encode_text(
+    String::from_utf8_lossy(&krabka_pgtypes::encoding::encode_text(
         value,
         &ctx.time_zone,
     ))
@@ -816,7 +816,7 @@ impl StatementFkContext {
         truncate_set: &BTreeSet<TableId>,
     ) -> Result<Self, ExecError> {
         let mut child_side = Vec::new();
-        for fk in crabka_pgcatalog::list_table_foreign_keys(catalog_kv, table.id)? {
+        for fk in krabka_pgcatalog::list_table_foreign_keys(catalog_kv, table.id)? {
             let columns = column_ordinals(table, &fk.columns)?;
             child_side.push(FkSide {
                 fk: Arc::new(fk),
@@ -824,7 +824,7 @@ impl StatementFkContext {
             });
         }
         let mut parent_side = Vec::new();
-        for fk in crabka_pgcatalog::list_referencing_foreign_keys(catalog_kv, table.id)? {
+        for fk in krabka_pgcatalog::list_referencing_foreign_keys(catalog_kv, table.id)? {
             if truncate_set.contains(&fk.table_id) {
                 continue;
             }
@@ -1100,7 +1100,7 @@ impl DeferralModes {
     /// [`DeferralModes::is_named_deferred`] for the `PRIMARY KEY`/`UNIQUE`
     /// constraint one index enforces.
     #[must_use]
-    pub fn is_index_deferred(&self, index: &crabka_pgcatalog::Index) -> bool {
+    pub fn is_index_deferred(&self, index: &krabka_pgcatalog::Index) -> bool {
         self.is_named_deferred(
             index.table_id,
             &index.name,
@@ -1145,14 +1145,14 @@ impl DeferralModes {
 pub struct PendingUniqueCheck {
     /// The relation the row lives in, re-resolved at the check point so that a
     /// dropped relation simply drops its checks.
-    pub table: crabka_pgcatalog::RelationName,
+    pub table: krabka_pgcatalog::RelationName,
     /// The index whose key was claimed. Carried whole: the check reports the
     /// constraint by name and describes the key by the index's columns.
-    pub index: crabka_pgcatalog::Index,
+    pub index: krabka_pgcatalog::Index,
     /// The row that claimed the key.
     pub rowid: u64,
     /// The key values it claimed.
-    pub values: Vec<crabka_pgtypes::Datum>,
+    pub values: Vec<krabka_pgtypes::Datum>,
 }
 
 /// The transaction's deferred checks and deferral modes.
@@ -1274,7 +1274,7 @@ impl DeferredConstraints {
     /// exactly that with `cannot CLUSTER "…" because it has pending trigger
     /// events`.
     #[must_use]
-    pub fn touches_table(&self, table: crabka_pgcatalog::TableId) -> bool {
+    pub fn touches_table(&self, table: krabka_pgcatalog::TableId) -> bool {
         self.pending.iter().any(|check| {
             let fk = check.fk();
             fk.table_id == table || fk.referenced_table_id == table
@@ -1464,10 +1464,10 @@ impl FkExecContext<'_> {
         let mut best: Option<(u64, Vec<Datum>)> = None;
         for (_, value) in self
             .kv
-            .scan_prefix(&crabka_pgkv::key::row_key(table, rowid))?
+            .scan_prefix(&krabka_pgkv::key::row_key(table, rowid))?
         {
-            let (xmin, xmax, row) = crabka_pgmvcc::version::decode_tuple(&value)?;
-            if crabka_pgmvcc::visibility::satisfies_mvcc(
+            let (xmin, xmax, row) = krabka_pgmvcc::version::decode_tuple(&value)?;
+            if krabka_pgmvcc::visibility::satisfies_mvcc(
                 xmin,
                 xmax,
                 snapshot,
@@ -1493,12 +1493,12 @@ impl FkExecContext<'_> {
         index: &Index,
         values: &[Datum],
     ) -> Result<Vec<(u64, Vec<Datum>)>, ExecError> {
-        let prefix = crabka_pgkv::key::secondary_index_entry_prefix(table.id, index.id, values);
+        let prefix = krabka_pgkv::key::secondary_index_entry_prefix(table.id, index.id, values);
         let ordinals = column_ordinals(table, &index.columns)?;
         let snapshot = all_committed();
         let mut rowids = BTreeSet::new();
         for (key, _) in self.kv.scan_prefix(&prefix)? {
-            rowids.insert(crabka_pgkv::key::secondary_index_rowid_of(
+            rowids.insert(krabka_pgkv::key::secondary_index_rowid_of(
                 table.id, index.id, &key,
             )?);
         }
@@ -1545,7 +1545,7 @@ impl<'a> DrainCatalog<'a> {
         if let Some(table) = self.tables.get(name) {
             return Ok(Arc::clone(table));
         }
-        let table = Arc::new(crabka_pgcatalog::get_table(self.kv, name)?);
+        let table = Arc::new(krabka_pgcatalog::get_table(self.kv, name)?);
         self.tables.insert(name.clone(), Arc::clone(&table));
         Ok(table)
     }
@@ -1554,7 +1554,7 @@ impl<'a> DrainCatalog<'a> {
         if let Some(index) = self.indexes.get(name) {
             return Ok(Arc::clone(index));
         }
-        let index = Arc::new(crabka_pgcatalog::get_index(self.kv, name)?);
+        let index = Arc::new(krabka_pgcatalog::get_index(self.kv, name)?);
         self.indexes.insert(name.clone(), Arc::clone(&index));
         Ok(index)
     }
@@ -1563,7 +1563,7 @@ impl<'a> DrainCatalog<'a> {
         if let Some(indexes) = self.table_indexes.get(&table.id) {
             return Ok(Arc::clone(indexes));
         }
-        let indexes = Arc::new(crabka_pgcatalog::list_table_indexes(self.kv, &table.name)?);
+        let indexes = Arc::new(krabka_pgcatalog::list_table_indexes(self.kv, &table.name)?);
         self.table_indexes.insert(table.id, Arc::clone(&indexes));
         Ok(indexes)
     }
@@ -1630,7 +1630,7 @@ impl FkParts {
     /// an `integer` parent must not name a different byte string than the parent
     /// does.
     fn lock_bytes(&self, index_ordered: &[Datum]) -> Vec<u8> {
-        crabka_pgkv::key::secondary_index_entry_prefix(
+        krabka_pgkv::key::secondary_index_entry_prefix(
             self.parent.id,
             self.referenced_index.id,
             index_ordered,
@@ -2026,7 +2026,7 @@ fn find_referencing_rows(
     let indexes = catalog.indexes_of(&parts.child)?;
     let usable = indexes.iter().find(|index| {
         key_permutation(&fk.columns, &index.columns).is_some()
-            && index.placement == crabka_pgcatalog::IndexPlacement::Local
+            && index.placement == krabka_pgcatalog::IndexPlacement::Local
     });
     let candidates = match usable {
         Some(index) => {
@@ -2239,7 +2239,7 @@ pub fn validate_foreign_key_rows(
 ///
 /// As [`validate_foreign_key_rows`].
 pub fn validate_foreign_key(ctx: &FkExecContext<'_>, fk: &ForeignKey) -> Result<(), ExecError> {
-    let child = crabka_pgcatalog::get_table(ctx.catalog_kv, &fk.table)?;
+    let child = krabka_pgcatalog::get_table(ctx.catalog_kv, &fk.table)?;
     let rows: Vec<Vec<Datum>> = crate::exec::scan_live(
         ctx.kv,
         ctx.global,
@@ -2299,7 +2299,7 @@ pub fn expand_truncate_set(
     let mut ids: BTreeSet<TableId> = set.ids();
     let mut frontier: Vec<Table> = named.to_vec();
     while let Some(table) = frontier.pop() {
-        for fk in crabka_pgcatalog::list_referencing_foreign_keys(catalog_kv, table.id)? {
+        for fk in krabka_pgcatalog::list_referencing_foreign_keys(catalog_kv, table.id)? {
             if ids.contains(&fk.table_id) {
                 continue;
             }
@@ -2311,7 +2311,7 @@ pub fn expand_truncate_set(
                     referenced_table: table.name.name.clone(),
                 });
             }
-            let child = crabka_pgcatalog::get_table(catalog_kv, &fk.table)?;
+            let child = krabka_pgcatalog::get_table(catalog_kv, &fk.table)?;
             ids.insert(child.id);
             set.cascaded.push(child.name.clone());
             frontier.push(child.clone());
@@ -2334,7 +2334,7 @@ pub fn dependents_blocking_table_drop(
     table: &Table,
 ) -> Result<Vec<DependentForeignKey>, ExecError> {
     Ok(
-        crabka_pgcatalog::list_referencing_foreign_keys(catalog_kv, table.id)?
+        krabka_pgcatalog::list_referencing_foreign_keys(catalog_kv, table.id)?
             .into_iter()
             .filter(|fk| fk.table_id != table.id)
             .map(|fk| DependentForeignKey {
@@ -2356,7 +2356,7 @@ pub fn dependents_blocking_index_drop(
     index: &Index,
 ) -> Result<Vec<DependentForeignKey>, ExecError> {
     Ok(
-        crabka_pgcatalog::list_referencing_foreign_keys(catalog_kv, index.table_id)?
+        krabka_pgcatalog::list_referencing_foreign_keys(catalog_kv, index.table_id)?
             .into_iter()
             .filter(|fk| fk.referenced_index_id == index.id)
             .map(|fk| DependentForeignKey {
@@ -2370,10 +2370,10 @@ pub fn dependents_blocking_index_drop(
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgcatalog::{IndexMethod, IndexPlacement, NewIndex};
-    use crabka_pgkv::MemKv;
-    use crabka_pgparser::ast::{MatchType as AstMatchType, ReferentialAction as AstAction};
-    use crabka_pgwire::error::PgError;
+    use krabka_pgcatalog::{IndexMethod, IndexPlacement, NewIndex};
+    use krabka_pgkv::MemKv;
+    use krabka_pgparser::ast::{MatchType as AstMatchType, ReferentialAction as AstAction};
+    use krabka_pgwire::error::PgError;
 
     use super::*;
 
@@ -2388,7 +2388,7 @@ mod tests {
         NewIndex {
             name: name.to_string(),
             columns: cols.iter().map(|c| (*c).to_string()).collect(),
-            key_options: crabka_pgcatalog::default_index_key_options(cols.len()),
+            key_options: krabka_pgcatalog::default_index_key_options(cols.len()),
             include: Vec::new(),
             predicate: None,
             nulls_not_distinct: false,
@@ -2397,7 +2397,7 @@ mod tests {
             placement: IndexPlacement::Local,
             constraint,
             without_overlaps: false,
-            deferral: crabka_pgcatalog::ConstraintDeferral::Immediate,
+            deferral: krabka_pgcatalog::ConstraintDeferral::Immediate,
         }
     }
 
@@ -2415,7 +2415,7 @@ mod tests {
     /// A catalog with one parent relation keyed `(x, y)` and no children.
     fn catalog_with_parent(indexes: &[NewIndex]) -> (MemKv, Table) {
         let kv = MemKv::default();
-        crabka_pgcatalog::create_table(
+        krabka_pgcatalog::create_table(
             &kv,
             &PARENT,
             columns(&[
@@ -2425,8 +2425,8 @@ mod tests {
             ]),
         )
         .expect("create parent");
-        let parent = crabka_pgcatalog::get_table(&kv, &PARENT).expect("parent");
-        let ops = crabka_pgcatalog::create_indexes_on_table_ops(&kv, &parent, indexes)
+        let parent = krabka_pgcatalog::get_table(&kv, &PARENT).expect("parent");
+        let ops = krabka_pgcatalog::create_indexes_on_table_ops(&kv, &parent, indexes)
             .expect("index ops");
         kv.write_batch(&ops).expect("write indexes");
         (kv, parent)
@@ -2434,7 +2434,7 @@ mod tests {
 
     fn reference(table: &str, cols: &[&str]) -> ForeignKeyRef {
         ForeignKeyRef {
-            table: crabka_pgparser::ast::RelationRef::bare(table),
+            table: krabka_pgparser::ast::RelationRef::bare(table),
             columns: cols.iter().map(|c| (*c).to_string()).collect(),
             period: false,
             match_type: AstMatchType::Simple,
@@ -2502,12 +2502,12 @@ mod tests {
         // from the parent row in INDEX order, so a clause-ordered probe reads a
         // different byte string entirely.
         let index_order =
-            crabka_pgkv::key::secondary_index_entry_prefix(1, 2, &[Datum::Int4(2), Datum::Int4(1)]);
+            krabka_pgkv::key::secondary_index_entry_prefix(1, 2, &[Datum::Int4(2), Datum::Int4(1)]);
         let clause_order =
-            crabka_pgkv::key::secondary_index_entry_prefix(1, 2, &[Datum::Int4(1), Datum::Int4(2)]);
+            krabka_pgkv::key::secondary_index_entry_prefix(1, 2, &[Datum::Int4(1), Datum::Int4(2)]);
         assert!(index_order != clause_order);
         let permutation = key_permutation(&names(&["y", "x"]), &names(&["x", "y"])).expect("perm");
-        let probed = crabka_pgkv::key::secondary_index_entry_prefix(
+        let probed = krabka_pgkv::key::secondary_index_entry_prefix(
             1,
             2,
             &permute_key(&[Datum::Int4(1), Datum::Int4(2)], &permutation),
@@ -2570,7 +2570,7 @@ mod tests {
             new_index("aaa_uq", &["y", "x"], Some(IndexConstraint::Unique)),
             new_index("bare_uq", &["x", "y"], None),
         ]);
-        let indexes = crabka_pgcatalog::list_table_indexes(&kv, &PARENT).expect("indexes");
+        let indexes = krabka_pgcatalog::list_table_indexes(&kv, &PARENT).expect("indexes");
         let relation = FkRelation::of(&parent, &indexes);
         let chosen = select_referenced_index(&relation, &names(&["x", "y"])).expect("chosen");
         assert!(chosen.name == "pperm_pkey");
@@ -2582,7 +2582,7 @@ mod tests {
             new_index("aaa_bare", &["x"], None),
             new_index("zzz_uq", &["x"], Some(IndexConstraint::Unique)),
         ]);
-        let indexes = crabka_pgcatalog::list_table_indexes(&kv, &PARENT).expect("indexes");
+        let indexes = krabka_pgcatalog::list_table_indexes(&kv, &PARENT).expect("indexes");
         let relation = FkRelation::of(&parent, &indexes);
         let chosen = select_referenced_index(&relation, &names(&["x"])).expect("chosen");
         assert!(chosen.name == "zzz_uq");
@@ -2594,7 +2594,7 @@ mod tests {
             new_index("b_uq", &["x"], Some(IndexConstraint::Unique)),
             new_index("a_uq", &["x"], Some(IndexConstraint::Unique)),
         ]);
-        let indexes = crabka_pgcatalog::list_table_indexes(&kv, &PARENT).expect("indexes");
+        let indexes = krabka_pgcatalog::list_table_indexes(&kv, &PARENT).expect("indexes");
         let relation = FkRelation::of(&parent, &indexes);
         let chosen = select_referenced_index(&relation, &names(&["x"])).expect("chosen");
         assert!(chosen.name == "a_uq");
@@ -2607,7 +2607,7 @@ mod tests {
             &["x", "y"],
             Some(IndexConstraint::PrimaryKey),
         )]);
-        let indexes = crabka_pgcatalog::list_table_indexes(&kv, &PARENT).expect("indexes");
+        let indexes = krabka_pgcatalog::list_table_indexes(&kv, &PARENT).expect("indexes");
         let relation = FkRelation::of(&parent, &indexes);
         let chosen = select_referenced_index(&relation, &names(&["y", "x"])).expect("chosen");
         assert!(chosen.name == "pperm_pkey");
@@ -2629,7 +2629,7 @@ mod tests {
         let resolved = resolve_foreign_key(&kv, scope(), &child, &request(&clause, &reference))
             .expect("resolve");
         let index =
-            crabka_pgcatalog::get_index(&kv, &RelationName::public("pperm_pkey")).expect("index");
+            krabka_pgcatalog::get_index(&kv, &RelationName::public("pperm_pkey")).expect("index");
         assert!(
             resolved
                 == ForeignKey {
@@ -2682,7 +2682,7 @@ mod tests {
             table: self_name.clone(),
             table_id: 9,
             columns: names(&["id"]),
-            key_options: crabka_pgcatalog::default_index_key_options(1),
+            key_options: krabka_pgcatalog::default_index_key_options(1),
             include: Vec::new(),
             predicate: None,
             nulls_not_distinct: false,
@@ -2692,7 +2692,7 @@ mod tests {
             constraint: Some(IndexConstraint::PrimaryKey),
             without_overlaps: false,
             clustered: false,
-            deferral: crabka_pgcatalog::ConstraintDeferral::Immediate,
+            deferral: krabka_pgcatalog::ConstraintDeferral::Immediate,
         }];
         let relation = FkRelation {
             id: 9,
@@ -2736,13 +2736,13 @@ mod tests {
             new_index("pperm_pkey", &["x", "y"], Some(IndexConstraint::PrimaryKey)),
             new_index("pperm_z_key", &["z"], Some(IndexConstraint::Unique)),
         ]);
-        crabka_pgcatalog::create_view(
+        krabka_pgcatalog::create_view(
             &kv,
             &RelationName::public("aview"),
             "SELECT 1".into(),
             columns(&[("one", ColumnType::Int4)]),
-            crabka_pgcatalog::ViewOptions::default(),
-            crabka_pgcatalog::BOOTSTRAP_ROLE,
+            krabka_pgcatalog::ViewOptions::default(),
+            krabka_pgcatalog::BOOTSTRAP_ROLE,
         )
         .expect("create view");
         let child_columns = columns(&[
@@ -3178,9 +3178,9 @@ mod tests {
     fn a_relation_in_no_foreign_key_resolves_to_the_empty_context() {
         let kv = MemKv::default();
         let lonely = RelationName::public("lonely");
-        crabka_pgcatalog::create_table(&kv, &lonely, columns(&[("a", ColumnType::Int4)]))
+        krabka_pgcatalog::create_table(&kv, &lonely, columns(&[("a", ColumnType::Int4)]))
             .expect("create");
-        let table = crabka_pgcatalog::get_table(&kv, &lonely).expect("table");
+        let table = krabka_pgcatalog::get_table(&kv, &lonely).expect("table");
         let ctx = StatementFkContext::resolve(&kv, &table).expect("resolve");
         assert!(ctx.is_empty());
     }
@@ -3230,7 +3230,7 @@ mod tests {
     fn one_constraint_writes_a_row_once_and_another_constraint_still_writes_it() {
         let table = Table {
             id: 4,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public("c"),
             columns: columns(&[("a", ColumnType::Int4)]),
             sharded: false,

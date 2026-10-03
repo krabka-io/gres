@@ -1,5 +1,5 @@
 //! An in-test OTLP collector: a real gRPC `TraceService` the spawned
-//! `crabka-gres` processes export to.
+//! `krabka-gres` processes export to.
 //!
 //! This exists because no test inside one process can check the cross-process
 //! propagation claim. Every other layer of the tracing suite installs a
@@ -10,7 +10,7 @@
 //! that attribute is what says *which process* emitted a span.
 //!
 //! This module implements `LogsService` beside `TraceService`, because
-//! `crabka_telemetry::init` always builds a log exporter next to the span
+//! `krabka_telemetry::init` always builds a log exporter next to the span
 //! exporter. An unimplemented `LogsService` would make every log batch fail.
 //! The SDK reports an export failure through `tracing`, which feeds the log
 //! bridge, which fails again. To accept the log batches and discard them cuts
@@ -133,7 +133,7 @@ impl OtlpCollector {
         })
     }
 
-    /// The `CRABKA_OTLP_ENDPOINT` value pointing at this collector.
+    /// The `KRABKA_OTLP_ENDPOINT` value pointing at this collector.
     #[must_use]
     pub fn endpoint(&self) -> &str {
         &self.endpoint

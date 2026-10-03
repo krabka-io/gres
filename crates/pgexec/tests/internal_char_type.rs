@@ -13,8 +13,8 @@
 //! `src/test/regress/expected/char.out` and `src/backend/utils/adt/char.c`.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 // ---------------------------------------------------------------------------
 // Harness

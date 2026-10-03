@@ -26,7 +26,7 @@ pub(crate) fn inheritance_merge_notices(
         // failure would hand back `relation does not exist` for a name the
         // definition refuses by kind — which is how `INHERITS (<view>)` came to
         // claim the view was absent.
-        let Ok(table) = crabka_pgcatalog::get_table(kv, &name) else {
+        let Ok(table) = krabka_pgcatalog::get_table(kv, &name) else {
             continue;
         };
         for column in table.columns {
@@ -69,7 +69,7 @@ pub(crate) fn add_column_merge_notices(
     resolution: &crate::relname::ResolutionScope,
     stmt: &Statement,
 ) -> Result<Vec<(String, String)>, ExecError> {
-    use crabka_pgparser::ast::AlterTableAction as Action;
+    use krabka_pgparser::ast::AlterTableAction as Action;
 
     let Statement::AlterTable {
         table,
@@ -83,7 +83,7 @@ pub(crate) fn add_column_merge_notices(
     let Ok(root) = resolve_relation(kv, resolution, table, SchemaDisposition::Reference) else {
         return Ok(Vec::new());
     };
-    let Ok(altered) = crabka_pgcatalog::get_table(kv, &root) else {
+    let Ok(altered) = krabka_pgcatalog::get_table(kv, &root) else {
         return Ok(Vec::new());
     };
     let mut notices = Vec::new();
@@ -116,16 +116,16 @@ pub(crate) fn add_column_merge_notices(
 /// second arrival recognisable.
 pub(crate) fn collect_merge_notices(
     kv: &dyn Kv,
-    root: &crabka_pgcatalog::RelationName,
+    root: &krabka_pgcatalog::RelationName,
     column: &str,
     notices: &mut Vec<(String, String)>,
 ) -> Result<(), ExecError> {
-    let mut given: HashSet<crabka_pgcatalog::RelationName> = HashSet::new();
+    let mut given: HashSet<krabka_pgcatalog::RelationName> = HashSet::new();
     let mut pending = direct_children(kv, root)?;
     pending.reverse();
     while let Some(child) = pending.pop() {
         let present = given.contains(&child)
-            || crabka_pgcatalog::get_table(kv, &child)
+            || krabka_pgcatalog::get_table(kv, &child)
                 .is_ok_and(|table| table.column_index(column).is_some());
         if present {
             notices.push((column.to_string(), child.name.clone()));
@@ -143,11 +143,11 @@ pub(crate) fn collect_merge_notices(
 /// carrying inherited checks into the child's own catalog schema.
 pub(crate) fn inherited_table_definition(
     kv: &dyn Kv,
-    name: &crabka_pgcatalog::RelationName,
-    parents: &[crabka_pgcatalog::RelationName],
-    columns: &[crabka_pgparser::ast::ColumnDef],
-    constraints: &[crabka_pgparser::ast::TableConstraint],
-    like: &[crabka_pgparser::ast::LikeClause],
+    name: &krabka_pgcatalog::RelationName,
+    parents: &[krabka_pgcatalog::RelationName],
+    columns: &[krabka_pgparser::ast::ColumnDef],
+    constraints: &[krabka_pgparser::ast::TableConstraint],
+    like: &[krabka_pgparser::ast::LikeClause],
     ctx: &crate::clock::EvalCtx,
 ) -> Result<TableDefinition, ExecError> {
     // The parents are read before the local definition, because a `CHECK`
@@ -158,13 +158,13 @@ pub(crate) fn inherited_table_definition(
     let mut merged = Vec::<Column>::new();
     let mut inherited_checks = Vec::new();
     for parent_name in parents {
-        let fetched = crabka_pgcatalog::get_table(kv, parent_name);
+        let fetched = krabka_pgcatalog::get_table(kv, parent_name);
         // A materialized view arrives through the `Ok` side, so the fetched
         // record is asked for its kind rather than the lookup being trusted to
         // have answered only for tables.
         let kind = match &fetched {
             Ok(table) => Some(stored_relation_kind(table)),
-            Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => {
+            Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => {
                 relation_kind(kv, parent_name)
             }
             Err(_) => None,

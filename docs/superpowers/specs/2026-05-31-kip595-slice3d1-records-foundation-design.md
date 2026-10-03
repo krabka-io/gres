@@ -5,15 +5,15 @@ Status: Approved (brainstorming) — pending spec review
 
 ## Context
 
-Slice 3d migrates the live metadata path off the wincode `crabka_metadata::MetadataRecord`
-enum onto the real KIP-631 `crabka_protocol::records::metadata::KraftMetadataRecord`
+Slice 3d migrates the live metadata path off the wincode `krabka_metadata::MetadataRecord`
+enum onto the real KIP-631 `krabka_protocol::records::metadata::KraftMetadataRecord`
 (full handler migration — the chosen end-state: handlers speak genuine Kafka
 records, no wincode enum, fully byte-real log for the mixed JVM+Crabka quorum,
 Slice 6). That is a 4-part mini-program (incremental, tree green at each step):
 
 - **3d-1 — records foundation (this doc):** generate the missing record schemas
-  + extend the `KraftMetadataRecord` dispatch to cover all 17 `MetadataRecord`
-  equivalents. Pure additive.
+  - extend the `KraftMetadataRecord` dispatch to cover all 17 `MetadataRecord`
+    equivalents. Pure additive.
 - 3d-2 — rewrite `MetadataImage::{validate,apply,to_records}` + engine submit/
   apply + snapshot onto `KraftMetadataRecord`; change `submit_change` to
   `Vec<KraftMetadataRecord>`.
@@ -49,17 +49,17 @@ Fetched verbatim from apache/kafka at the pinned sha
 `a9ce3221537b8653448750697915607dc7936cf3` (same as the existing schema set),
 mapping the unmapped `MetadataRecord` variants:
 
-| MetadataRecord variant(s) | Kafka schema |
-|---------------------------|--------------|
-| `V1TopicConfig`, `V1BrokerConfig` | `ConfigRecord` |
-| `V1AccessControlEntry` | `AccessControlEntryRecord` |
-| `V1DeleteAccessControlEntry` | `RemoveAccessControlEntryRecord` |
-| `V1ClientQuota` | `ClientQuotaRecord` |
-| `V1ScramCredential` | `UserScramCredentialRecord` |
-| `V1DeleteScramCredential` | `RemoveUserScramCredentialRecord` |
-| `V1DelegationToken` | `DelegationTokenRecord` |
-| `V1DeleteDelegationToken` | `RemoveDelegationTokenRecord` |
-| `V1UnregisterBroker` | `UnregisterBrokerRecord` |
+| MetadataRecord variant(s)         | Kafka schema                      |
+| --------------------------------- | --------------------------------- |
+| `V1TopicConfig`, `V1BrokerConfig` | `ConfigRecord`                    |
+| `V1AccessControlEntry`            | `AccessControlEntryRecord`        |
+| `V1DeleteAccessControlEntry`      | `RemoveAccessControlEntryRecord`  |
+| `V1ClientQuota`                   | `ClientQuotaRecord`               |
+| `V1ScramCredential`               | `UserScramCredentialRecord`       |
+| `V1DeleteScramCredential`         | `RemoveUserScramCredentialRecord` |
+| `V1DelegationToken`               | `DelegationTokenRecord`           |
+| `V1DeleteDelegationToken`         | `RemoveDelegationTokenRecord`     |
+| `V1UnregisterBroker`              | `UnregisterBrokerRecord`          |
 
 (`V1Voters`→`VotersRecord` and `V1KRaftVersion`→`KRaftVersionRecord` were
 generated in Slice 1; Topic/Partition/RegisterBroker/RemoveTopic/FeatureLevel

@@ -7,6 +7,7 @@
 **Branch:** `feature/controller-mutation-rate-16c`, stacked on top of `feature/ip-quotas-16b`. When 16b merges, rebase onto main.
 
 **Out of scope:**
+
 - IP entity for this quota (KIP-599 only applies to user/client-id)
 - Other admin operations (ACL CRUD, IncrementalAlterConfigs, AlterPartitionReassignments, etc.)
 - Slice 16 known follow-ups (client_id through HandlerTable still applies — `(user, client-id)` tuples don't fire from these handlers either)
@@ -73,7 +74,7 @@ Co-located in a new `crates/broker/src/quota/controller_mutation.rs` to avoid du
 
 use std::time::Duration;
 
-use crabka_metadata::MetadataImage;
+use krabka_metadata::MetadataImage;
 
 use super::buckets::QuotaBuckets;
 use super::lookup::lookup_quota_with_key;
@@ -185,11 +186,13 @@ All three response types (`CreateTopicsResponse`, `CreatePartitionsResponse`, `D
 ### Unit tests (~4 new)
 
 **`crates/broker/src/quota/controller_mutation.rs` (3 tests):**
+
 - `zero_mutations_returns_zero_delay`
 - `under_rate_returns_zero_delay` — mutations <= rate, no overage
 - `overage_returns_capped_delay` — mutations >> rate, expect 1-second cap
 
 **`crates/broker/src/handlers/alter_client_quotas.rs` (1 test):**
+
 - `controller_mutation_rate_key_accepted` — `KNOWN_QUOTA_KEYS` allowlist test
 
 ### Broker integration tests (`crates/broker/tests/controller_mutation_quota.rs`, 3 tests)

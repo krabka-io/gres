@@ -7,13 +7,13 @@
 `configuration_expose` from unit-suffixed primitives to explicit UOM values,
 with zero unresolved branch-diff audit results.
 
-**Architecture:** Reuse `crabka-units` parsing, human serde adapters, and UOM
+**Architecture:** Reuse `krabka-units` parsing, human serde adapters, and UOM
 types at CLI, environment, file-config, CRD, Compose, and manifest boundaries.
 Lower quantities once into refined protocol integers where exact wire domains
 require them. Migrate by owner so each commit is independently testable.
 
 **Tech Stack:** Rust 2024, Clap, Serde, Schemars, `uom` through
-`crabka-units`, `refined_type`, Kubernetes CRDs, Docker Compose.
+`krabka-units`, `refined_type`, Kubernetes CRDs, Docker Compose.
 
 ## Global Constraints
 
@@ -63,8 +63,8 @@ initial count remains stable.
 - `crates/schema-registry/src/config_value.rs`
 - `crates/schema-registry/src/bin/schema-registry.rs`
 
-- [ ] Add failing `crabka-units` tests for reusable positive/nonnegative parsers
-  over `Time`, `ByteSize`, `ByteRate`, and `Ratio`.
+- [ ] Add failing `krabka-units` tests for reusable positive/nonnegative parsers
+      over `Time`, `ByteSize`, `ByteRate`, and `Ratio`.
 
 - [ ] Prove:
 
@@ -78,27 +78,27 @@ initial count remains stable.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-units config_quantity --locked
+  cargo test -p krabka-units config_quantity --locked
 ```
 
 - [ ] Add only the shared helpers actually required by the owner inventory.
-  Build them from the existing `parse::{time, byte_size, byte_rate, ratio}`
-  functions; do not add a configuration framework.
+      Build them from the existing `parse::{time, byte_size, byte_rate, ratio}`
+      functions; do not add a configuration framework.
 
 - [ ] Replace gateway-local duplicate CLI parsers where the shared helper is
-  identical. Convert schema-registry `PositiveTime` and `PositiveSize` CLI
-  wrappers to direct UOM fields if doing so deletes code without weakening
-  validation. Retain refined protocol integer types.
+      identical. Convert schema-registry `PositiveTime` and `PositiveSize` CLI
+      wrappers to direct UOM fields if doing so deletes code without weakening
+      validation. Retain refined protocol integer types.
 
 - [ ] Verify:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test --locked -p crabka-units -p crabka-grpc-gateway \
-  -p crabka-schema-registry --all-targets
+  cargo test --locked -p krabka-units -p krabka-grpc-gateway \
+  -p krabka-schema-registry --all-targets
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy --locked -p crabka-units -p crabka-grpc-gateway \
-  -p crabka-schema-registry --all-targets -- -D warnings
+  cargo clippy --locked -p krabka-units -p krabka-grpc-gateway \
+  -p krabka-schema-registry --all-targets -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 git diff --check
 git diff -- Cargo.lock
@@ -124,9 +124,9 @@ git commit -m "feat(units): validate config quantities"
 - [ ] Add failing CLI/environment tests for:
 
 ```text
-CRABKA_ADMIN_UI_MUTATION_JSON_BODY_LIMIT=1MiB
-CRABKA_ADMIN_UI_SESSION_TTL=8h
-CRABKA_ADMIN_UI_TOPIC_MUTATION_TIMEOUT=30s
+KRABKA_ADMIN_UI_MUTATION_JSON_BODY_LIMIT=1MiB
+KRABKA_ADMIN_UI_SESSION_TTL=8h
+KRABKA_ADMIN_UI_TOPIC_MUTATION_TIMEOUT=30s
 PGDOG_RELOAD_BACKOFF=100ms
 PGDOG_RELOAD_REQUEUE=15s
 PGDOG_ADMIN_TIMEOUT=20s
@@ -135,17 +135,17 @@ CONTROLLER_ERROR_REQUEUE=15s
 ```
 
 - [ ] Prove defaults, CLI-over-environment precedence, explicit-unit
-  enforcement, positivity, and protocol lowering for the topic-admin timeout.
+      enforcement, positivity, and protocol lowering for the topic-admin timeout.
 
 - [ ] Replace the admin UI time/size primitive wrappers with direct `Time` and
-  `ByteSize`. Keep monotonic-clock representability and Kafka `i32`
-  millisecond checks at their use sites.
+      `ByteSize`. Keep monotonic-clock representability and Kafka `i32`
+      millisecond checks at their use sites.
 
 - [ ] Replace operator runtime millisecond wrappers with `Time`. Rename Rust
-  fields, flags, variables, manifests, and tests without aliases.
+      fields, flags, variables, manifests, and tests without aliases.
 
 - [ ] Verify both packages, strict Clippy, help output, formatting, and lockfile
-  stability.
+      stability.
 
 - [ ] Commit:
 
@@ -182,8 +182,8 @@ BENCH_SAMPLE_INTERVAL=1s
 ```
 
 - [ ] Replace time-suffixed bench newtypes with direct `Time` where no
-  primitive protocol domain is being modeled. Preserve retry-policy ordering
-  and deadline checks.
+      primitive protocol domain is being modeled. Preserve retry-policy ordering
+      and deadline checks.
 
 - [ ] Add failing demo tests and migrate:
 
@@ -195,7 +195,7 @@ BENCH_SAMPLE_INTERVAL=1s
 - [ ] Keep queue capacity and all other counts refined/dimensionless.
 
 - [ ] Update Compose and benchmark manifests to explicit units, verify rendered
-  defaults and overrides, then run affected tests and strict Clippy.
+      defaults and overrides, then run affected tests and strict Clippy.
 
 - [ ] Commit:
 
@@ -211,9 +211,9 @@ git commit -m "feat(config): use UOM for bench and demo"
 - `crates/blockstore/src/index_snapshot.rs`
 - `crates/blockstore/src/reader.rs`
 - `crates/client-consumer/src/consumer.rs`
-- `crates/traces/src/bin/crabka-traces.rs`
+- `crates/traces/src/bin/krabka-traces.rs`
 - `crates/traces/src/querier/store.rs`
-- `crates/profiles/src/bin/crabka-profiles.rs`
+- `crates/profiles/src/bin/krabka-profiles.rs`
 - `crates/profiles/src/blockbuilder.rs`
 - `crates/observability-demo-app/tests/observability_demo_config.rs`
 - `demo/observability/docker-compose.yml`
@@ -221,35 +221,35 @@ git commit -m "feat(config): use UOM for bench and demo"
 - [ ] Add failing CLI/environment tests for:
 
 ```text
-CRABKA_TRACES_WAL_FETCH_MAX=2MiB
-CRABKA_TRACES_WAL_FETCH_PARTITION_MAX=256KiB
-CRABKA_TRACES_INDEX_SNAPSHOT_MAX=256MiB
-CRABKA_TRACES_BLOCK_READ_MAX=1GiB
-CRABKA_TRACES_SCAN_CONCAT_MAX=1.5GB
-CRABKA_PROFILES_WAL_FETCH_MAX=2MiB
-CRABKA_PROFILES_WAL_FETCH_PARTITION_MAX=256KiB
-CRABKA_PROFILES_INDEX_SNAPSHOT_MAX=256MiB
-CRABKA_PROFILES_WAL_POLL_TIMEOUT=500ms
+KRABKA_TRACES_WAL_FETCH_MAX=2MiB
+KRABKA_TRACES_WAL_FETCH_PARTITION_MAX=256KiB
+KRABKA_TRACES_INDEX_SNAPSHOT_MAX=256MiB
+KRABKA_TRACES_BLOCK_READ_MAX=1GiB
+KRABKA_TRACES_SCAN_CONCAT_MAX=1.5GB
+KRABKA_PROFILES_WAL_FETCH_MAX=2MiB
+KRABKA_PROFILES_WAL_FETCH_PARTITION_MAX=256KiB
+KRABKA_PROFILES_INDEX_SNAPSHOT_MAX=256MiB
+KRABKA_PROFILES_WAL_POLL_TIMEOUT=500ms
 ```
 
 - [ ] Make CLI fields `ByteSize` or `Time`. Remove the recently added
-  primitive-backed size wrappers where they have no protocol role.
+      primitive-backed size wrappers where they have no protocol role.
 
 - [ ] Keep classic consumer fetch newtypes only as exact positive-`i32` Kafka
-  lowering types. Add `TryFrom<ByteSize>` or equivalent checked constructors
-  and reject fractional bytes or overflow before consumer construction.
+      lowering types. Add `TryFrom<ByteSize>` or equivalent checked constructors
+      and reject fractional bytes or overflow before consumer construction.
 
 - [ ] Keep the 1.5-GB scan-concatenation ceiling invariant while storing the
-  configured cap as `ByteSize`.
+      configured cap as `ByteSize`.
 
 - [ ] Add the approved profiles WAL poll timeout to block-builder, querier, and
-  query-frontend paths as `Time`.
+      query-frontend paths as `Time`.
 
 - [ ] Update only the demo services that own each setting. Verify exact
-  defaults, overrides, help entries, and the existing exact-cap behavior.
+      defaults, overrides, help entries, and the existing exact-cap behavior.
 
 - [ ] Run all-target tests and strict Clippy for blockstore, consumer, traces,
-  profiles, and demo.
+      profiles, and demo.
 
 - [ ] Commit:
 
@@ -274,11 +274,11 @@ git commit -m "feat(observability): use UOM config values"
 - broker examples and deployment manifests
 
 - [ ] Generate a focused list of every branch-added broker field or variable
-  ending in `_ms`, `_secs`, or `_seconds`, plus semantic names containing
-  timeout, interval, delay, deadline, backoff, TTL, linger, or window.
+      ending in `_ms`, `_secs`, or `_seconds`, plus semantic names containing
+      timeout, interval, delay, deadline, backoff, TTL, linger, or window.
 
 - [ ] Add table-driven failing boundary tests covering each name and every
-  distinct validation domain:
+      distinct validation domain:
 
   - positive arbitrary `Time`;
   - nonnegative `Time`;
@@ -287,28 +287,28 @@ git commit -m "feat(observability): use UOM config values"
   - ordered min/max pairs.
 
 - [ ] Convert `RuntimeArgs` to direct `Time` and unitless flags/environment
-  names. Replace `PositiveMillis` use at the CLI boundary.
+      names. Replace `PositiveMillis` use at the CLI boundary.
 
 - [ ] Convert branch-added human file-config fields to `Time` with human serde
-  adapters and unitless keys. Preserve compatibility-only external Kafka
-  record fields as documented exceptions.
+      adapters and unitless keys. Preserve compatibility-only external Kafka
+      record fields as documented exceptions.
 
 - [ ] Convert time fields in `BrokerTuning` to `Time` string-valued CRD fields.
-  Update controller rendering to unitless environment names and human values.
+      Update controller rendering to unitless environment names and human values.
 
 - [ ] Preserve runtime `BrokerConfig` UOM values and existing cross-field
-  validation. Lower only at protocol/verified arithmetic seams.
+      validation. Lower only at protocol/verified arithmetic seams.
 
 - [ ] Regenerate the Kafka CRD with:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run --locked -p crabka-operator -- gen-crds deploy/crds
+  cargo run --locked -p krabka-operator -- gen-crds deploy/crds
 ```
 
 - [ ] Verify broker/operator all-target tests, strict Clippy, generated CRD
-  cleanliness, representative config-file round trips, help output, and
-  manifests.
+      cleanliness, representative config-file round trips, help output, and
+      manifests.
 
 - [ ] Commit:
 
@@ -322,20 +322,20 @@ git commit -m "feat(broker): use UOM time configuration"
 Use the same Task 5 files and inventory.
 
 - [ ] Add table-driven failing tests for every branch-added tunable byte cap,
-  buffer, chunk, body, snapshot, fetch, and output bound.
+      buffer, chunk, body, snapshot, fetch, and output bound.
 
 - [ ] Convert CLI/environment, file-config, and `BrokerTuning` values to
-  `ByteSize` with unitless names and human CRD/config serialization.
+      `ByteSize` with unitless names and human CRD/config serialization.
 
 - [ ] Convert throughput values to `ByteRate` and decompression proportions to
-  `Ratio`. Keep entry capacities and offset windows dimensionless.
+      `Ratio`. Keep entry capacities and offset windows dimensionless.
 
 - [ ] Preserve exact `i32`, `u32`, and `usize` constraints at socket, Kafka
-  protocol, allocator, and collection seams. Reject fractional bytes and
-  overflow during config validation.
+      protocol, allocator, and collection seams. Reject fractional bytes and
+      overflow during config validation.
 
 - [ ] Regenerate CRDs and verify broker/operator tests, strict Clippy, config
-  round trips, help, manifests, formatting, and lockfile changes.
+      round trips, help, manifests, formatting, and lockfile changes.
 
 - [ ] Commit:
 
@@ -360,7 +360,7 @@ git commit -m "feat(broker): use UOM size configuration"
 - Gres manifests/examples/docs selected by `rg`
 
 - [ ] Inventory every branch-added Gres `_MS` boundary once, deduplicating the
-  shared registry settings repeated across binaries.
+      shared registry settings repeated across binaries.
 
 - [ ] Add failing tests for unit-bearing:
 
@@ -373,17 +373,17 @@ git commit -m "feat(broker): use UOM size configuration"
   - range-zero follower polling.
 
 - [ ] Convert CLI and runtime boundary fields to `Time`, remove suffixes from
-  environment/flag names, and reuse the same registry policy conversion in all
-  binaries.
+      environment/flag names, and reuse the same registry policy conversion in all
+      binaries.
 
 - [ ] Convert Gres and Kafka Gres-registry CRD time fields to human `Time`
-  strings. Preserve Kubernetes probe seconds and absolute timestamps.
+      strings. Preserve Kubernetes probe seconds and absolute timestamps.
 
 - [ ] Lower whole-millisecond Kafka fields through existing refined policy
-  constructors and reject fractional/overflow values.
+      constructors and reject fractional/overflow values.
 
 - [ ] Regenerate CRDs, render manifests, and run all-target tests plus strict
-  Clippy for Gres, CLI, activator, loadtest, Gres control, and operator.
+      Clippy for Gres, CLI, activator, loadtest, Gres control, and operator.
 
 - [ ] Commit:
 
@@ -398,16 +398,16 @@ git commit -m "feat(gres): use UOM time configuration"
 Use the Task 7 owner files.
 
 - [ ] Add failing tests for unit-bearing fetch caps, producer batches,
-  checkpoint totals/parts, and Gres sizing thresholds.
+      checkpoint totals/parts, and Gres sizing thresholds.
 
 - [ ] Convert every tunable size boundary to `ByteSize`, remove `_BYTES` from
-  branch-added external names, and use human CRD/config serialization.
+      branch-added external names, and use human CRD/config serialization.
 
 - [ ] Keep frame counts, key budgets, retries, replication factors, and record
-  counts dimensionless.
+      counts dimensionless.
 
 - [ ] Lower Kafka fetch/batch sizes to exact positive `i32`/`usize` values only
-  at policy or protocol seams.
+      at policy or protocol seams.
 
 - [ ] Regenerate CRDs and repeat the Task 7 package/manifests quality gates.
 
@@ -432,19 +432,19 @@ git commit -m "feat(gres): use UOM size configuration"
 - generated CRDs and examples
 
 - [ ] Convert remaining schema-registry runtime CRD millisecond and byte fields
-  to `Time`/`ByteSize` human strings with unitless field names.
+      to `Time`/`ByteSize` human strings with unitless field names.
 
 - [ ] Convert gateway basis-point configuration to `Ratio` where it is an
-  operator-selected proportion. Keep Kubernetes health-check seconds primitive.
+      operator-selected proportion. Keep Kubernetes health-check seconds primitive.
 
 - [ ] Verify controller-rendered environment names match the already-unitized
-  binaries and values render with explicit units.
+      binaries and values render with explicit units.
 
 - [ ] Remove superseded wrappers, conversion helpers, and primitive schema
-  ranges only when no caller remains.
+      ranges only when no caller remains.
 
 - [ ] Regenerate CRDs; run schema-registry, gateway, Kafka/Gres CRD, and
-  operator tests plus strict Clippy.
+      operator tests plus strict Clippy.
 
 - [ ] Commit:
 
@@ -457,19 +457,19 @@ git commit -m "feat(operator): use UOM runtime fields"
 ## Task 10: Branch-wide deployment and documentation reconciliation
 
 - [ ] Search every changed file from the recorded merge-base for old
-  unit-suffixed names. Update remaining Compose, Kubernetes, shell, CI,
-  examples, specs, plans, and audit references that describe the live
-  configuration contract.
+      unit-suffixed names. Update remaining Compose, Kubernetes, shell, CI,
+      examples, specs, plans, and audit references that describe the live
+      configuration contract.
 
 - [ ] Do not rewrite historical prose that only records a superseded audit
-  count unless it would mislead a current operator. Mark deliberate historical
-  references as such.
+      count unless it would mislead a current operator. Mark deliberate historical
+      references as such.
 
 - [ ] Render every checked-in Compose file changed by the branch and run
-  operator manifest/CRD generation checks.
+      operator manifest/CRD generation checks.
 
 - [ ] Verify `--help` once per changed binary and assert each renamed flag
-  appears exactly once.
+      appears exactly once.
 
 - [ ] Commit:
 
@@ -481,7 +481,7 @@ git commit -m "docs(config): reconcile UOM names"
 ## Task 11: Zero-unresolved audit and final verification
 
 - [ ] Recreate the branch diff from the recorded merge-base and inventory all
-  added configuration definitions:
+      added configuration definitions:
 
 ```bash
 base=1d171e99ac73cebdb944479d0d249b816e55a454
@@ -516,9 +516,9 @@ Ratio
 ```
 
 - [ ] Classify every result as UOM configuration flow, dimensionless,
-  external-contract exception, invariant, historical documentation, or
-  unresolved. Record every exception by field and reason. Require zero
-  unresolved results.
+      external-contract exception, invariant, historical documentation, or
+      unresolved. Record every exception by field and reason. Require zero
+      unresolved results.
 
 - [ ] Update `docs/configuration-audit.md` with:
 
@@ -538,15 +538,15 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo clippy --workspace --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run --locked -p crabka-operator -- gen-crds /tmp/crabka-uom-crds
-diff -ru /tmp/crabka-uom-crds deploy/crds
+  cargo run --locked -p krabka-operator -- gen-crds /tmp/krabka-uom-crds
+diff -ru /tmp/krabka-uom-crds deploy/crds
 git diff --check
 git diff -- Cargo.lock
 tools/audit-runtime-values.sh
 ```
 
 - [ ] Run all changed Compose rendering checks and representative default and
-  override renders for every renamed environment variable family.
+      override renders for every renamed environment variable family.
 
 - [ ] Commit the audit:
 
@@ -556,8 +556,8 @@ git commit -m "docs(audit): record branch-wide UOM boundaries"
 ```
 
 - [ ] Fetch `origin/configuration_expose`. Rebase only if it advanced, rerun
-  affected verification after any conflict, push, fetch again, and verify local
-  and remote HEADs match.
+      affected verification after any conflict, push, fetch again, and verify local
+      and remote HEADs match.
 
 ## Review Checkpoints
 

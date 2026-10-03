@@ -12,7 +12,7 @@ Crabka already lays most of the KIP-516 groundwork: topic UUIDs are generated at
 `CreateTopicsResponse` (v7+), carried in the Produce/Fetch/OffsetCommit/OffsetFetch wire
 schemas, and resolved `topic_id → name` (by linear scan) inside several handlers.
 
-This work completes KIP-516 by adding the *correctness and completeness* layer:
+This work completes KIP-516 by adding the _correctness and completeness_ layer:
 
 1. An efficient `topic_id → topic` index in `MetadataImage` (replaces O(topics) scans).
 2. The KIP-516 wire error codes and **strict** topic-id validation.
@@ -47,11 +47,13 @@ topic_ids: HashMap<uuid::Uuid, String>,   // topic_id -> topic name
 ```
 
 Maintained in `apply()`:
+
 - `MetadataRecord::V1Topic(t)` → `topic_ids.insert(t.topic_id, t.name.clone())`
 - `MetadataRecord::V1DeleteTopic(d)` → remove the entry whose name == `d.name`
   (look up the topic's id from `self.topics` before the name is removed, or retain by value).
 
 New query methods:
+
 - `pub fn topic_by_id(&self, id: &uuid::Uuid) -> Option<&TopicRecord>`
 - `pub fn topic_name_by_id(&self, id: &uuid::Uuid) -> Option<&str>`
 
@@ -61,7 +63,7 @@ which is the single path through which all records (including snapshot installs)
 **Cleanup:** the existing `image.topics().find(|t| t.topic_id.into_bytes() == ...)` scans in
 the Fetch/Produce/Metadata/DeleteTopics handlers are replaced with `topic_by_id` lookups.
 (The metadata layer keys on `uuid::Uuid`; the wire layer uses
-`crabka_protocol::primitives::uuid::Uuid` = `[u8; 16]`. Convert with
+`krabka_protocol::primitives::uuid::Uuid` = `[u8; 16]`. Convert with
 `uuid::Uuid::from_bytes(wire.0)` / `topic_id.into_bytes()`.)
 
 ## Component 2 — Error codes
@@ -105,6 +107,7 @@ pub fn resolve<'a>(
 ```
 
 Rules (the "full strictness" choice):
+
 - non-zero id, unknown ⇒ `UNKNOWN_TOPIC_ID`
 - non-zero id + non-empty name that disagrees with the stored name ⇒ `INCONSISTENT_TOPIC_ID`
 - zero id, name resolves ⇒ name path; name unknown ⇒ `UNKNOWN_TOPIC_OR_PARTITION`
@@ -165,12 +168,14 @@ references an id that no longer resolves.
 ## Testing (TDD)
 
 Unit:
+
 - `MetadataImage::topic_by_id` returns the right record; index stays consistent across
   create then delete (deleted id no longer resolves).
 - `topic_resolve::resolve` strictness matrix: unknown id ⇒ `UNKNOWN_TOPIC_ID`; non-empty name
   disagreeing with stored ⇒ `INCONSISTENT_TOPIC_ID`; name-only resolves; zero/zero invalid.
 
 Integration (`crates/broker/tests/`):
+
 - Fetch v13 and Produce v13 by topic_id, including unknown id ⇒ `UNKNOWN_TOPIC_ID`.
 - Metadata request by unknown id ⇒ topic entry with `UNKNOWN_TOPIC_ID`.
 - DeleteTopics by unknown id ⇒ `UNKNOWN_TOPIC_ID`.
@@ -189,6 +194,6 @@ Per CLAUDE.md: subagent-driven development in parallel batches with non-overlapp
   Depends on both Batch 1 outputs.
 - **Batch 2** (parallel, disjoint files): Fetch (`fetch.rs`) ‖ Produce (`produce.rs`) ‖
   Metadata (`metadata.rs`) ‖ DeleteTopics (`delete_topics.rs`) ‖ Offsets (`offset_commit.rs`
-  + `offset_fetch.rs` + `api_catalog.rs` + `api_versions.rs` test assertions).
+  - `offset_fetch.rs` + `api_catalog.rs` + `api_versions.rs` test assertions).
 
 Each batch is followed by review, `cargo fmt`, build, and the relevant tests before moving on.

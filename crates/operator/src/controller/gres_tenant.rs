@@ -2,23 +2,6 @@
 
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
-use crabka_client_admin::{
-    AclEntry, AclEntryFilter, AclOperation, CreateTopicSpec, PatternType, PermissionType,
-    ResourceType, ScramDeletion, ScramIterations, ScramUpsertion,
-};
-use crabka_gres_control::{
-    DEFAULT_CHECKPOINT_BYTES, DEFAULT_CHECKPOINT_FRAMES, RangeBoundary, RangeLayoutEntry, SqlUser,
-    TenantId, TenantName, TenantRecord, TenantState, tenant_config_topic,
-};
-use crabka_security::{
-    ca::{SubjectAltName, generate_cluster_ca, issue_broker_cert},
-    scram::PgScramVerifier,
-};
-use crabka_units::{
-    ByteSize, Time,
-    convert::{ByteSizeExt as _, TimeExt as _},
-    fmt::Human as _,
-};
 use futures::StreamExt as _;
 use k8s_openapi::{
     ByteString,
@@ -31,6 +14,23 @@ use k8s_openapi::{
         },
     },
     apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
+};
+use krabka_client_admin::{
+    AclEntry, AclEntryFilter, AclOperation, CreateTopicSpec, PatternType, PermissionType,
+    ResourceType, ScramDeletion, ScramIterations, ScramUpsertion,
+};
+use krabka_gres_control::{
+    DEFAULT_CHECKPOINT_BYTES, DEFAULT_CHECKPOINT_FRAMES, RangeBoundary, RangeLayoutEntry, SqlUser,
+    TenantId, TenantName, TenantRecord, TenantState, tenant_config_topic,
+};
+use krabka_security::{
+    ca::{SubjectAltName, generate_cluster_ca, issue_broker_cert},
+    scram::PgScramVerifier,
+};
+use krabka_units::{
+    ByteSize, Time,
+    convert::{ByteSizeExt as _, TimeExt as _},
+    fmt::Human as _,
 };
 use kube::{
     Resource, ResourceExt as _,
@@ -67,8 +67,8 @@ use crate::{
 
 const FINALIZER: &str = "crabka.io/gres-tenant-finalizer";
 
-const APP_NAME: &str = "crabka-gres";
-const DEFAULT_IMAGE: &str = concat!("ghcr.io/robot-head/crabka-gres:", env!("CARGO_PKG_VERSION"));
+const APP_NAME: &str = "krabka-gres";
+const DEFAULT_IMAGE: &str = concat!("ghcr.io/robot-head/krabka-gres:", env!("CARGO_PKG_VERSION"));
 pub(super) const COMPUTE_PORT: i32 = 5432;
 const RANGE_PORT: i32 = 7432;
 const RANGE_TLS_DIR: &str = "/etc/crabka/range-tls";
@@ -124,7 +124,7 @@ struct ReadyTenant {
     tenant_name: TenantName,
     cluster: String,
     bootstrap: String,
-    policy: crabka_gres_control::RegistryPolicy,
+    policy: krabka_gres_control::RegistryPolicy,
     defaults: EffectiveDefaults,
     compute_image: String,
     compute_policy: EffectiveGresComputePolicy,
@@ -247,7 +247,7 @@ async fn prepare_tenant(
         .gres_registry
         .as_ref()
         .map_or_else(
-            || Ok(crabka_gres_control::RegistryPolicy::default()),
+            || Ok(krabka_gres_control::RegistryPolicy::default()),
             crate::crd::GresRegistrySpec::policy,
         )
         .map_err(ReconcileError::Malformed)?;
@@ -532,7 +532,7 @@ async fn reconcile_inner(
 fn reconcile_tenant_ranges(
     current_record: Option<&TenantRecord>,
     spec_ranges: &[GresTenantRangeSpec],
-    active_split: Option<&crabka_gres_control::SplitOperationRecord>,
+    active_split: Option<&krabka_gres_control::SplitOperationRecord>,
 ) -> Vec<GresTenantRangeSpec> {
     active_split
         .filter(|operation| successors_may_be_deployed(operation))
@@ -598,7 +598,7 @@ struct TenantResourceConfig<'a> {
 }
 
 async fn provision_tenant_resources(
-    admin: &mut tokio::sync::MutexGuard<'_, dyn crabka_client_admin::AdminClientLike + Send>,
+    admin: &mut tokio::sync::MutexGuard<'_, dyn krabka_client_admin::AdminClientLike + Send>,
     config: &TenantResourceConfig<'_>,
 ) -> Result<String, ReconcileError> {
     let mut topic_specs = vec![CreateTopicSpec {
@@ -703,12 +703,12 @@ struct ComputeStatusConfig<'a> {
     name: &'a str,
     tenant_api: &'a Api<GresTenant>,
     control: &'a crate::context::GresControlHandle,
-    active_split: Option<&'a crabka_gres_control::SplitOperationRecord>,
+    active_split: Option<&'a krabka_gres_control::SplitOperationRecord>,
     tenant_ranges: &'a [GresTenantRangeSpec],
     bootstrap: &'a str,
     wal_topic: &'a str,
     config_topic: &'a str,
-    policy: &'a crabka_gres_control::RegistryPolicy,
+    policy: &'a krabka_gres_control::RegistryPolicy,
     image: &'a str,
     compute_policy: EffectiveGresComputePolicy,
     record: &'a TenantRecord,
@@ -750,7 +750,7 @@ async fn reconcile_compute_and_status(
     if deployments_ready && let Some(operation) = config.active_split {
         let mutation_client =
             operator_control_mutation_client(config.ctx, config.namespace, config.obj).await?;
-        if operation.phase == crabka_gres_control::SplitOperationPhase::Activated {
+        if operation.phase == krabka_gres_control::SplitOperationPhase::Activated {
             verify_target_topology_ready(&mutation_client, operation)
                 .await
                 .map_err(|error| ReconcileError::Malformed(error.to_string()))?;
@@ -839,7 +839,7 @@ async fn operator_control_mutation_client(
                 ReconcileError::Malformed(format!("operator control TLS secret is missing {key}"))
             })
     };
-    let client = crabka_gres_ranges::FramedTcpClient::with_tls_pem(
+    let client = krabka_gres_ranges::FramedTcpClient::with_tls_pem(
         bytes("tls.crt")?,
         bytes("tls.key")?,
         bytes("ca.crt")?,
@@ -854,7 +854,7 @@ struct ComputeDeploymentConfig<'a> {
     bootstrap: &'a str,
     wal_topic: &'a str,
     config_topic: &'a str,
-    policy: &'a crabka_gres_control::RegistryPolicy,
+    policy: &'a krabka_gres_control::RegistryPolicy,
     image: &'a str,
     compute_policy: EffectiveGresComputePolicy,
     lifecycle_state: TenantState,
@@ -951,7 +951,7 @@ fn deployment_is_ready(deployment: &Deployment, desired: i32) -> bool {
 
 async fn park_suspended_tenant_wal(
     control: &crate::context::GresControlHandle,
-    admin: &mut tokio::sync::MutexGuard<'_, dyn crabka_client_admin::AdminClientLike + Send>,
+    admin: &mut tokio::sync::MutexGuard<'_, dyn krabka_client_admin::AdminClientLike + Send>,
     ranges: &[GresTenantRangeSpec],
     tenant: &TenantName,
     record: &mut TenantRecord,
@@ -1039,7 +1039,7 @@ async fn park_suspended_tenant_wal(
 
 async fn park_retiring_ranges(
     control: &crate::context::GresControlHandle,
-    admin: &mut tokio::sync::MutexGuard<'_, dyn crabka_client_admin::AdminClientLike + Send>,
+    admin: &mut tokio::sync::MutexGuard<'_, dyn krabka_client_admin::AdminClientLike + Send>,
     tenant: &TenantName,
     record: &mut TenantRecord,
     current: Option<&TenantRecord>,
@@ -1047,7 +1047,7 @@ async fn park_retiring_ranges(
 ) -> Result<ParkingProgress, ReconcileError> {
     if let Some(current) = current.filter(|current| {
         current.range_retirements.iter().any(|retirement| {
-            retirement.phase == crabka_gres_control::RangeRetirementPhase::Parking
+            retirement.phase == krabka_gres_control::RangeRetirementPhase::Parking
         })
     }) {
         *record = current.clone();
@@ -1055,7 +1055,7 @@ async fn park_retiring_ranges(
     let split_retirements = record
         .range_retirements
         .iter()
-        .filter(|retirement| retirement.phase == crabka_gres_control::RangeRetirementPhase::Parking)
+        .filter(|retirement| retirement.phase == krabka_gres_control::RangeRetirementPhase::Parking)
         .map(|retirement| {
             (
                 retirement.operation_id.clone(),
@@ -1097,14 +1097,14 @@ async fn park_retiring_ranges(
         current
             .ranges
             .iter()
-            .any(|range| range.lifecycle == crabka_gres_control::RangeLifecycle::Parking)
+            .any(|range| range.lifecycle == krabka_gres_control::RangeLifecycle::Parking)
     }) {
         *record = current.clone();
     }
     let retiring = record
         .ranges
         .iter()
-        .filter(|range| range.lifecycle == crabka_gres_control::RangeLifecycle::Parking)
+        .filter(|range| range.lifecycle == krabka_gres_control::RangeLifecycle::Parking)
         .map(|range| {
             let retirement = range
                 .retirement
@@ -1162,33 +1162,33 @@ pub trait RangeRetirementAdmin: Send {
     async fn metadata(
         &mut self,
         topics: &[&str],
-    ) -> Result<crabka_client_admin::TopicMetadata, crabka_client_admin::AdminError>;
+    ) -> Result<krabka_client_admin::TopicMetadata, krabka_client_admin::AdminError>;
 
     async fn delete_topics(
         &mut self,
         names: &[&str],
         timeout: Time,
-    ) -> Result<Vec<crabka_client_admin::DeleteTopicOutcome>, crabka_client_admin::AdminError>;
+    ) -> Result<Vec<krabka_client_admin::DeleteTopicOutcome>, krabka_client_admin::AdminError>;
 }
 
 #[async_trait::async_trait]
 impl<T> RangeRetirementAdmin for T
 where
-    T: crabka_client_admin::AdminClientLike + Send + ?Sized,
+    T: krabka_client_admin::AdminClientLike + Send + ?Sized,
 {
     async fn metadata(
         &mut self,
         topics: &[&str],
-    ) -> Result<crabka_client_admin::TopicMetadata, crabka_client_admin::AdminError> {
-        crabka_client_admin::AdminClientLike::metadata(self, topics).await
+    ) -> Result<krabka_client_admin::TopicMetadata, krabka_client_admin::AdminError> {
+        krabka_client_admin::AdminClientLike::metadata(self, topics).await
     }
 
     async fn delete_topics(
         &mut self,
         names: &[&str],
         timeout: Time,
-    ) -> Result<Vec<crabka_client_admin::DeleteTopicOutcome>, crabka_client_admin::AdminError> {
-        crabka_client_admin::AdminClientLike::delete_topics(self, names, timeout).await
+    ) -> Result<Vec<krabka_client_admin::DeleteTopicOutcome>, krabka_client_admin::AdminError> {
+        krabka_client_admin::AdminClientLike::delete_topics(self, names, timeout).await
     }
 }
 
@@ -1209,7 +1209,7 @@ pub async fn reconcile_one_retiring_range_wal(
     let Some(retirement) = record
         .range_retirements
         .iter()
-        .find(|retirement| retirement.phase == crabka_gres_control::RangeRetirementPhase::Parking)
+        .find(|retirement| retirement.phase == krabka_gres_control::RangeRetirementPhase::Parking)
     else {
         return Ok(true);
     };
@@ -1239,7 +1239,7 @@ pub async fn reconcile_one_retiring_range_wal(
 }
 
 async fn wal_topics_remain(
-    admin: &mut tokio::sync::MutexGuard<'_, dyn crabka_client_admin::AdminClientLike + Send>,
+    admin: &mut tokio::sync::MutexGuard<'_, dyn krabka_client_admin::AdminClientLike + Send>,
     tenant: &TenantName,
     ranges: &[GresTenantRangeSpec],
     generation: u64,
@@ -1301,7 +1301,7 @@ async fn cleanup_tenant(
     namespace: &str,
     kafka_name: &str,
     bootstrap: &str,
-    policy: &crabka_gres_control::RegistryPolicy,
+    policy: &krabka_gres_control::RegistryPolicy,
     tenant: &TenantName,
     _tenant_name: &str,
 ) {
@@ -1381,7 +1381,7 @@ fn effective_defaults(
 }
 
 async fn missing_topics(
-    admin: &mut tokio::sync::MutexGuard<'_, dyn crabka_client_admin::AdminClientLike + Send>,
+    admin: &mut tokio::sync::MutexGuard<'_, dyn krabka_client_admin::AdminClientLike + Send>,
     specs: &[CreateTopicSpec],
 ) -> Result<Vec<CreateTopicSpec>, ReconcileError> {
     let names: Vec<_> = specs.iter().map(|spec| spec.name.as_str()).collect();
@@ -1978,7 +1978,7 @@ fn operator_control_tls_is_current(secret: &Secret, range_hash: &str, identity: 
     let Ok((_, pem)) = x509_parser::pem::parse_x509_pem(cert_pem.as_bytes()) else {
         return false;
     };
-    crabka_security::extract_principal_from_cert(&pem.contents)
+    krabka_security::extract_principal_from_cert(&pem.contents)
         .is_some_and(|principal| principal == identity)
         && crate::controller::cluster_ca::cert_not_after(cert_pem).is_ok_and(|not_after| {
             not_after > time::OffsetDateTime::now_utc() + time::Duration::days(30)
@@ -2060,7 +2060,7 @@ fn range_layout_for_ranges(
                 obj.namespace().unwrap_or_else(|| "default".into())
             ),
             wal_generation: 0,
-            lifecycle: crabka_gres_control::RangeLifecycle::default(),
+            lifecycle: krabka_gres_control::RangeLifecycle::default(),
             retirement: None,
         })
         .collect()
@@ -2070,7 +2070,7 @@ fn meta_labels(obj: &GresTenant) -> BTreeMap<String, String> {
     let mut labels = selector_labels(obj);
     labels.insert(
         "app.kubernetes.io/managed-by".into(),
-        "crabka-operator".into(),
+        "krabka-operator".into(),
     );
     labels
 }
@@ -2105,7 +2105,7 @@ struct DeploymentRenderConfig<'a> {
     bootstrap: &'a str,
     wal_topic: &'a str,
     config_topic: &'a str,
-    policy: &'a crabka_gres_control::RegistryPolicy,
+    policy: &'a krabka_gres_control::RegistryPolicy,
     compute_policy: EffectiveGresComputePolicy,
     replicas: i32,
     operator_config: &'a crate::config::OperatorConfig,
@@ -2115,35 +2115,35 @@ struct DeploymentRenderConfig<'a> {
     tracing: Option<&'a Tracing>,
 }
 
-/// Append the `CRABKA_OTLP_*` and `OTEL_SERVICE_NAME` env that a compute
+/// Append the `KRABKA_OTLP_*` and `OTEL_SERVICE_NAME` env that a compute
 /// container needs to export traces. This function reads the fleet's
 /// `Gres.spec.tracing`.
 ///
 /// The shape is the same as the broker renderer in
 /// [`super::kafka_node_pool`]. Both ends use the one `OtlpConfig::from_env`
-/// contract, so the env names, the implicit `CRABKA_OTLP_ENABLED=true`, and
+/// contract, so the env names, the implicit `KRABKA_OTLP_ENABLED=true`, and
 /// the "only render what was configured" rule must agree.
 ///
 /// This function appends nothing when the fleet has no `spec.tracing`. That
 /// rule is load-bearing and not tidiness. `OtlpConfig::from_env` counts
-/// `CRABKA_OTLP_ENDPOINT=""` as an endpoint, so a renderer that always wrote
+/// `KRABKA_OTLP_ENDPOINT=""` as an endpoint, so a renderer that always wrote
 /// the pair would start an exporter that can never reach a collector.
 fn push_otlp_env(env: &mut Vec<serde_json::Value>, tracing: Option<&Tracing>) {
     if let Some(tracing) = tracing
         && let TracingType::Otlp = tracing.kind
         && let Some(otlp) = tracing.otlp.as_ref()
     {
-        env.push(json!({ "name": "CRABKA_OTLP_ENABLED", "value": "true" }));
-        env.push(json!({ "name": "CRABKA_OTLP_ENDPOINT", "value": otlp.endpoint }));
+        env.push(json!({ "name": "KRABKA_OTLP_ENABLED", "value": "true" }));
+        env.push(json!({ "name": "KRABKA_OTLP_ENDPOINT", "value": otlp.endpoint }));
         if let Some(protocol) = otlp.protocol {
             env.push(json!({
-                "name": "CRABKA_OTLP_PROTOCOL",
+                "name": "KRABKA_OTLP_PROTOCOL",
                 "value": protocol.as_env_value(),
             }));
         }
         if let Some(ratio) = otlp.sample_ratio {
             env.push(json!({
-                "name": "CRABKA_OTLP_SAMPLE_RATIO",
+                "name": "KRABKA_OTLP_SAMPLE_RATIO",
                 "value": ratio.to_string(),
             }));
         }
@@ -2152,7 +2152,7 @@ fn push_otlp_env(env: &mut Vec<serde_json::Value>, tracing: Option<&Tracing>) {
         }
         if let Some(timeout) = otlp.timeout {
             env.push(json!({
-                "name": "CRABKA_OTLP_TIMEOUT",
+                "name": "KRABKA_OTLP_TIMEOUT",
                 "value": timeout.human().to_string(),
             }));
         }
@@ -2163,7 +2163,7 @@ fn push_otlp_env(env: &mut Vec<serde_json::Value>, tracing: Option<&Tracing>) {
 ///
 /// The policy holds quantities and the compute binary accepts human-readable
 /// quantities, so this boundary discards no unit information.
-fn registry_policy_args(policy: &crabka_gres_control::RegistryPolicy) -> [String; 14] {
+fn registry_policy_args(policy: &krabka_gres_control::RegistryPolicy) -> [String; 14] {
     [
         "--registry-replication-factor".to_owned(),
         policy.replication_factor().to_string(),
@@ -2257,7 +2257,7 @@ fn wal_consumer_admin_args(policy: &EffectiveGresComputePolicy) -> [String; 28] 
     ]
 }
 
-fn range_runtime_args(policy: crabka_gres_ranges::RangeRuntimePolicy) -> Vec<String> {
+fn range_runtime_args(policy: krabka_gres_ranges::RangeRuntimePolicy) -> Vec<String> {
     vec![
         "--range-join-key-columns".to_owned(),
         policy.join.key_columns.to_string(),
@@ -2270,7 +2270,7 @@ fn range_runtime_args(policy: crabka_gres_ranges::RangeRuntimePolicy) -> Vec<Str
         "--range-join-broadcast-rows".to_owned(),
         policy.join.broadcast_rows.to_string(),
         "--range-join-row-max".to_owned(),
-        crabka_units::ByteSize::from_bytes(
+        krabka_units::ByteSize::from_bytes(
             u64::try_from(policy.join.row_bytes).expect("validated row limit fits u64"),
         )
         .human()
@@ -2594,14 +2594,14 @@ fn render_deployment(
     }))?)
 }
 
-fn wal_producer_flush_args(policy: crabka_client_producer::ProducerFlushTimeout) -> [String; 2] {
+fn wal_producer_flush_args(policy: krabka_client_producer::ProducerFlushTimeout) -> [String; 2] {
     [
         "--wal-producer-flush-timeout".to_owned(),
         Time::from_std(policy.duration()).human().to_string(),
     ]
 }
 
-fn wal_producer_dns_args(timeout: crabka_client_core::ClientDnsTimeout) -> [String; 2] {
+fn wal_producer_dns_args(timeout: krabka_client_core::ClientDnsTimeout) -> [String; 2] {
     [
         "--wal-producer-dns-timeout".to_owned(),
         timeout.time().human().to_string(),
@@ -2650,7 +2650,7 @@ fn wal_producer_args(policy: &EffectiveGresComputePolicy) -> Vec<String> {
 }
 
 fn wal_producer_throughput_args(
-    policy: crabka_client_producer::ProducerThroughputPolicy,
+    policy: krabka_client_producer::ProducerThroughputPolicy,
 ) -> [String; 6] {
     [
         "--wal-producer-compression".to_owned(),
@@ -2769,8 +2769,8 @@ fn render_range_compute_network_policy(obj: &GresTenant) -> Result<NetworkPolicy
                 },
                 NetworkPolicyIngressRule {
                     from: Some(vec![
-                        fleet_peer("pgdog", "crabka-pgdog"),
-                        fleet_peer("gres-activator", "crabka-gres-activator"),
+                        fleet_peer("pgdog", "krabka-pgdog"),
+                        fleet_peer("gres-activator", "krabka-gres-activator"),
                     ]),
                     ports: Some(vec![NetworkPolicyPort {
                         protocol: Some("TCP".into()),
@@ -2932,7 +2932,7 @@ mod tests {
 
     #[test]
     fn configured_pgdog_grace_drives_active_transition_deadline() {
-        let grace = Some(crabka_units::secs(7));
+        let grace = Some(krabka_units::secs(7));
         // (previous phase, existing grace, next phase, now, grace extent, expected)
         for (previous_phase, existing_grace, lifecycle_phase, now, extent, expected) in [
             // A wake from any non-active phase arms the grace.
@@ -3131,7 +3131,7 @@ mod tests {
                 bootstrap: "k:9092",
                 wal_topic: &wal_topic,
                 config_topic: "__gres_cfg.tenant-a",
-                policy: &crabka_gres_control::RegistryPolicy::default(),
+                policy: &krabka_gres_control::RegistryPolicy::default(),
                 compute_policy,
                 replicas: 1,
                 operator_config: &operator_config,
@@ -3168,22 +3168,22 @@ mod tests {
                 DEFAULT_CHECKPOINT_BYTES,
             ),
             (
-                Some(defaults(None, Some(crabka_units::bytes(12)))),
+                Some(defaults(None, Some(krabka_units::bytes(12)))),
                 None,
                 DEFAULT_CHECKPOINT_FRAMES,
-                crabka_units::bytes(12),
+                krabka_units::bytes(12),
             ),
             (
-                Some(defaults(Some(11), Some(crabka_units::bytes(12)))),
+                Some(defaults(Some(11), Some(krabka_units::bytes(12)))),
                 Some(defaults(Some(21), None)),
                 21,
-                crabka_units::bytes(12),
+                krabka_units::bytes(12),
             ),
             (
-                Some(defaults(Some(11), Some(crabka_units::bytes(12)))),
-                Some(defaults(None, Some(crabka_units::bytes(22)))),
+                Some(defaults(Some(11), Some(krabka_units::bytes(12)))),
+                Some(defaults(None, Some(krabka_units::bytes(22)))),
                 11,
-                crabka_units::bytes(22),
+                krabka_units::bytes(22),
             ),
         ] {
             let effective = effective_defaults(base.as_ref(), override_.as_ref()).unwrap();
@@ -3204,7 +3204,7 @@ mod tests {
         };
         let fallback = effective_defaults(None, None).unwrap();
         assert!(
-            fallback.scram_iterations.into_value() == crabka_client_admin::DEFAULT_SCRAM_ITERATIONS
+            fallback.scram_iterations.into_value() == krabka_client_admin::DEFAULT_SCRAM_ITERATIONS
         );
         let fleet = defaults(Some(8_192));
         assert!(
@@ -3241,7 +3241,7 @@ mod tests {
                 .any(|acl| acl.resource_name == "__gres_cfg.tenant-a")
         );
         assert!(!acls.iter().any(|acl| acl.resource_name
-            == crabka_gres_control::TENANT_REGISTRY_TOPIC
+            == krabka_gres_control::TENANT_REGISTRY_TOPIC
             && acl.operation == AclOperation::Read));
         assert!(
             acls.iter()
@@ -3266,8 +3266,8 @@ mod tests {
         )
         .unwrap();
 
-        assert!(rendered.contains("crabka-pgdog"));
-        assert!(rendered.contains("crabka-gres-activator"));
+        assert!(rendered.contains("krabka-pgdog"));
+        assert!(rendered.contains("krabka-gres-activator"));
         assert!(rendered.contains("fleet"));
     }
 
@@ -3277,7 +3277,7 @@ mod tests {
         let password = fixture_password();
         let defaults = EffectiveDefaults {
             wal_replication: 1,
-            scram_iterations: crabka_client_admin::ScramIterations::new(12_288).unwrap(),
+            scram_iterations: krabka_client_admin::ScramIterations::new(12_288).unwrap(),
             checkpoint_frames: Some(37),
             checkpoint_size: None,
             suspend_max_checkpoint_size: None,
@@ -3310,7 +3310,7 @@ mod tests {
 
         let mut changed_defaults = defaults;
         changed_defaults.scram_iterations =
-            crabka_client_admin::ScramIterations::new(8_192).unwrap();
+            krabka_client_admin::ScramIterations::new(8_192).unwrap();
         let changed = build_tenant_record(
             &obj,
             &TenantName::try_from("tenant-a").unwrap(),
@@ -3434,13 +3434,13 @@ mod tests {
             ),
             (
                 crate::crd::gres::GresComputeSpec {
-                    wal_recovery_fetch_max_wait: Some(crabka_units::millis(11)),
-                    wal_recovery_fetch_partition_max: Some(crabka_units::bytes(22)),
-                    wal_recovery_fetch_response_max: Some(crabka_units::bytes(33)),
+                    wal_recovery_fetch_max_wait: Some(krabka_units::millis(11)),
+                    wal_recovery_fetch_partition_max: Some(krabka_units::bytes(22)),
+                    wal_recovery_fetch_response_max: Some(krabka_units::bytes(33)),
                     wal_recovery_empty_fetch_retries: Some(44),
-                    wal_recovery_dns_timeout: Some(crabka_units::millis(77)),
-                    wal_recovery_connect_timeout: Some(crabka_units::millis(55)),
-                    wal_recovery_request_timeout: Some(crabka_units::millis(66)),
+                    wal_recovery_dns_timeout: Some(krabka_units::millis(77)),
+                    wal_recovery_connect_timeout: Some(krabka_units::millis(55)),
+                    wal_recovery_request_timeout: Some(krabka_units::millis(66)),
                     ..crate::crd::gres::GresComputeSpec::default()
                 },
                 ["11ms", "22B", "33B", "44", "77ms", "55ms", "66ms"],
@@ -3458,7 +3458,7 @@ mod tests {
                         bootstrap: "k:9092",
                         wal_topic: "__gres_wal.tenant-a.r0",
                         config_topic: "__gres_cfg.tenant-a",
-                        policy: &crabka_gres_control::RegistryPolicy::default(),
+                        policy: &krabka_gres_control::RegistryPolicy::default(),
                         compute_policy,
                         replicas: 1,
                         operator_config: &operator_config,
@@ -3508,39 +3508,39 @@ mod tests {
             end_key: None,
         }];
         let operator_config = ConfigArgs::parse_from(["operator"]).config;
-        let registry_policy = crabka_gres_control::RegistryPolicy::default()
+        let registry_policy = krabka_gres_control::RegistryPolicy::default()
             .with_client_resource_policy(
-                crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-                crabka_client_core::ClientFrameMax::default(),
-                crabka_client_core::FetchMinBytes::try_from(crabka_units::bytes(4))
+                krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+                krabka_client_core::ClientFrameMax::default(),
+                krabka_client_core::FetchMinBytes::try_from(krabka_units::bytes(4))
                     .expect("registry fetch minimum"),
             );
         let mut configured = crate::crd::gres::GresComputeSpec {
             client_dispatch_queue_capacity: Some(7),
-            client_frame_max: Some(crabka_units::kibibytes(32)),
-            pgwire_max_message_size: Some(crabka_units::bytes(37)),
+            client_frame_max: Some(krabka_units::kibibytes(32)),
+            pgwire_max_message_size: Some(krabka_units::bytes(37)),
             pgexec_notify_queue_capacity: Some(38),
-            pgexec_blocking_query_memory: Some(crabka_units::bytes(35)),
-            pgexec_result_page_max: Some(crabka_units::bytes(36)),
-            pgexec_join_broadcast_threshold: Some(crabka_units::bytes(37)),
+            pgexec_blocking_query_memory: Some(krabka_units::bytes(35)),
+            pgexec_result_page_max: Some(krabka_units::bytes(36)),
+            pgexec_join_broadcast_threshold: Some(krabka_units::bytes(37)),
             pgexec_xid_reservation: Some(39),
             pgexec_rowid_reservation: Some(40),
             pgexec_ts_prune_versions_per_row: Some(41),
-            pgexec_ts_gc_floor_lag: Some(crabka_units::millis(42)),
-            fdw_fetch_min: Some(crabka_units::bytes(2)),
-            fdw_fetch_max_wait: Some(crabka_units::millis(41)),
-            fdw_fetch_partition_max: Some(crabka_units::bytes(43)),
-            fdw_connect_timeout: Some(crabka_units::millis(47)),
-            fdw_request_timeout: Some(crabka_units::millis(53)),
-            fdw_schema_fetch_timeout: Some(crabka_units::millis(59)),
-            fdw_schema_fetch_poll: Some(crabka_units::millis(17)),
-            wal_recovery_fetch_min: Some(crabka_units::bytes(3)),
+            pgexec_ts_gc_floor_lag: Some(krabka_units::millis(42)),
+            fdw_fetch_min: Some(krabka_units::bytes(2)),
+            fdw_fetch_max_wait: Some(krabka_units::millis(41)),
+            fdw_fetch_partition_max: Some(krabka_units::bytes(43)),
+            fdw_connect_timeout: Some(krabka_units::millis(47)),
+            fdw_request_timeout: Some(krabka_units::millis(53)),
+            fdw_schema_fetch_timeout: Some(krabka_units::millis(59)),
+            fdw_schema_fetch_poll: Some(krabka_units::millis(17)),
+            wal_recovery_fetch_min: Some(krabka_units::bytes(3)),
             ..crate::crd::gres::GresComputeSpec::default()
         }
         .effective_policy()
         .expect("compute policy");
         configured.registry_reader_fetch_min = Some(
-            crabka_client_core::FetchMinBytes::try_from(crabka_units::bytes(4))
+            krabka_client_core::FetchMinBytes::try_from(krabka_units::bytes(4))
                 .expect("registry fetch minimum"),
         );
 
@@ -3612,7 +3612,7 @@ mod tests {
                 bootstrap: "k:9092",
                 wal_topic: "__gres_wal.tenant-a.r0",
                 config_topic: "__gres_cfg.tenant-a",
-                policy: &crabka_gres_control::RegistryPolicy::default(),
+                policy: &krabka_gres_control::RegistryPolicy::default(),
                 compute_policy: defaults,
                 replicas: 1,
                 operator_config: &operator_config,
@@ -3660,13 +3660,13 @@ mod tests {
             ),
             (
                 crate::crd::gres::GresComputeSpec {
-                    wal_producer_request_timeout: Some(crabka_units::millis(11)),
+                    wal_producer_request_timeout: Some(krabka_units::millis(11)),
                     wal_producer_retries: Some(12),
-                    wal_producer_retry_backoff: Some(crabka_units::millis(13)),
-                    wal_producer_routing_retry_budget: Some(crabka_units::millis(14)),
-                    wal_producer_init_retry_timeout: Some(crabka_units::millis(15)),
-                    wal_producer_init_max_backoff: Some(crabka_units::millis(16)),
-                    wal_producer_transaction_timeout: Some(crabka_units::millis(17)),
+                    wal_producer_retry_backoff: Some(krabka_units::millis(13)),
+                    wal_producer_routing_retry_budget: Some(krabka_units::millis(14)),
+                    wal_producer_init_retry_timeout: Some(krabka_units::millis(15)),
+                    wal_producer_init_max_backoff: Some(krabka_units::millis(16)),
+                    wal_producer_transaction_timeout: Some(krabka_units::millis(17)),
                     ..crate::crd::gres::GresComputeSpec::default()
                 },
                 ["11ms", "12", "13ms", "14ms", "15ms", "16ms", "17ms"],
@@ -3684,7 +3684,7 @@ mod tests {
                         bootstrap: "k:9092",
                         wal_topic: "__gres_wal.tenant-a.r0",
                         config_topic: "__gres_cfg.tenant-a",
-                        policy: &crabka_gres_control::RegistryPolicy::default(),
+                        policy: &krabka_gres_control::RegistryPolicy::default(),
                         compute_policy,
                         replicas: 1,
                         operator_config: &operator_config,
@@ -3745,7 +3745,7 @@ mod tests {
         ];
         let operator_config = ConfigArgs::parse_from(["operator"]).config;
         let compute_policy = crate::crd::gres::GresComputeSpec {
-            wal_producer_flush_timeout: Some(crabka_units::millis(12_345)),
+            wal_producer_flush_timeout: Some(krabka_units::millis(12_345)),
             ..crate::crd::gres::GresComputeSpec::default()
         }
         .effective_policy()
@@ -3764,7 +3764,7 @@ mod tests {
                         bootstrap: "k:9092",
                         wal_topic: &wal_topic,
                         config_topic: "__gres_cfg.tenant-a",
-                        policy: &crabka_gres_control::RegistryPolicy::default(),
+                        policy: &krabka_gres_control::RegistryPolicy::default(),
                         compute_policy,
                         replicas: 1,
                         operator_config: &operator_config,
@@ -3816,7 +3816,7 @@ mod tests {
             ),
             (
                 crate::crd::gres::GresComputeSpec {
-                    wal_producer_dns_timeout: Some(crabka_units::millis(37)),
+                    wal_producer_dns_timeout: Some(krabka_units::millis(37)),
                     ..crate::crd::gres::GresComputeSpec::default()
                 },
                 ["--wal-producer-dns-timeout", "37ms"],
@@ -3838,7 +3838,7 @@ mod tests {
                             bootstrap: "k:9092",
                             wal_topic: &wal_topic,
                             config_topic: "__gres_cfg.tenant-a",
-                            policy: &crabka_gres_control::RegistryPolicy::default(),
+                            policy: &krabka_gres_control::RegistryPolicy::default(),
                             compute_policy,
                             replicas: 1,
                             operator_config: &operator_config,
@@ -3890,7 +3890,7 @@ mod tests {
             ),
             (
                 crate::crd::gres::GresComputeSpec {
-                    fdw_broker_dns_timeout: Some(crabka_units::millis(37)),
+                    fdw_broker_dns_timeout: Some(krabka_units::millis(37)),
                     ..crate::crd::gres::GresComputeSpec::default()
                 },
                 ["--fdw-broker-dns-timeout", "37ms"],
@@ -3912,7 +3912,7 @@ mod tests {
                             bootstrap: "k:9092",
                             wal_topic: &wal_topic,
                             config_topic: "__gres_cfg.tenant-a",
-                            policy: &crabka_gres_control::RegistryPolicy::default(),
+                            policy: &krabka_gres_control::RegistryPolicy::default(),
                             compute_policy,
                             replicas: 1,
                             operator_config: &operator_config,
@@ -3957,8 +3957,8 @@ mod tests {
         ];
         let operator_config = ConfigArgs::parse_from(["operator"]).config;
         let compute_policy = crate::crd::gres::GresComputeSpec {
-            schema_fetch_retry_initial_backoff: Some(crabka_units::millis(37)),
-            schema_fetch_retry_max_backoff: Some(crabka_units::millis(91)),
+            schema_fetch_retry_initial_backoff: Some(krabka_units::millis(37)),
+            schema_fetch_retry_max_backoff: Some(krabka_units::millis(91)),
             ..crate::crd::gres::GresComputeSpec::default()
         }
         .effective_policy()
@@ -3977,7 +3977,7 @@ mod tests {
                         bootstrap: "k:9092",
                         wal_topic: &wal_topic,
                         config_topic: "__gres_cfg.tenant-a",
-                        policy: &crabka_gres_control::RegistryPolicy::default(),
+                        policy: &krabka_gres_control::RegistryPolicy::default(),
                         compute_policy,
                         replicas: 1,
                         operator_config: &operator_config,
@@ -4034,10 +4034,10 @@ mod tests {
             (
                 crate::crd::gres::GresComputeSpec {
                     wal_producer_compression: Some(crate::crd::gres::WalProducerCompression::Zstd),
-                    wal_producer_linger: Some(crabka_units::millis(18)),
-                    wal_producer_batch: Some(crabka_units::bytes(19)),
-                    wal_frame_max_size: Some(crabka_units::bytes(20)),
-                    pgkv_max_memtable_size: Some(crabka_units::bytes(21)),
+                    wal_producer_linger: Some(krabka_units::millis(18)),
+                    wal_producer_batch: Some(krabka_units::bytes(19)),
+                    wal_frame_max_size: Some(krabka_units::bytes(20)),
+                    pgkv_max_memtable_size: Some(krabka_units::bytes(21)),
                     pgkv_rotate_after_ops: Some(22),
                     ..crate::crd::gres::GresComputeSpec::default()
                 },
@@ -4060,7 +4060,7 @@ mod tests {
                             bootstrap: "k:9092",
                             wal_topic: &wal_topic,
                             config_topic: "__gres_cfg.tenant-a",
-                            policy: &crabka_gres_control::RegistryPolicy::default(),
+                            policy: &krabka_gres_control::RegistryPolicy::default(),
                             compute_policy,
                             replicas: 1,
                             operator_config: &operator_config,
@@ -4111,9 +4111,9 @@ mod tests {
             (
                 crate::crd::gres::GresComputeSpec {
                     wal_topic_replication_factor: Some(11),
-                    wal_topic_ensure_timeout: Some(crabka_units::millis(22)),
-                    wal_admin_connect_timeout: Some(crabka_units::millis(33)),
-                    wal_admin_request_timeout: Some(crabka_units::millis(44)),
+                    wal_topic_ensure_timeout: Some(krabka_units::millis(22)),
+                    wal_admin_connect_timeout: Some(krabka_units::millis(33)),
+                    wal_admin_request_timeout: Some(krabka_units::millis(44)),
                     ..crate::crd::gres::GresComputeSpec::default()
                 },
                 ["11", "22ms", "33ms", "44ms"],
@@ -4131,7 +4131,7 @@ mod tests {
                         bootstrap: "k:9092",
                         wal_topic: "__gres_wal.tenant-a.r0",
                         config_topic: "__gres_cfg.tenant-a",
-                        policy: &crabka_gres_control::RegistryPolicy::default(),
+                        policy: &krabka_gres_control::RegistryPolicy::default(),
                         compute_policy,
                         replicas: 1,
                         operator_config: &operator_config,
@@ -4188,33 +4188,33 @@ mod tests {
         operator_config.gres_checkpoint_store = Some(crate::config::GresCheckpointStoreKind::S3);
         operator_config.gres_checkpoint_bucket = Some("checkpoints".to_owned());
         let compute_policy = crate::crd::gres::GresComputeSpec {
-            checkpoint_part_size: Some(crabka_units::bytes(8_388_608)),
+            checkpoint_part_size: Some(krabka_units::bytes(8_388_608)),
             checkpoint_retain: Some(4),
-            checkpoint_delete_records_timeout: Some(crabka_units::millis(12_345)),
-            checkpoint_poll_interval: Some(crabka_units::millis(2_345)),
-            idle_suspend_poll_interval: Some(crabka_units::millis(3_456)),
-            range0_follower_poll_interval: Some(crabka_units::millis(5_678)),
-            range0_follower_rebuild_backoff_floor: Some(crabka_units::millis(6_789)),
-            range0_follower_rebuild_backoff_ceiling: Some(crabka_units::millis(7_890)),
-            durable_inspection_timeout: Some(crabka_units::millis(8_901)),
+            checkpoint_delete_records_timeout: Some(krabka_units::millis(12_345)),
+            checkpoint_poll_interval: Some(krabka_units::millis(2_345)),
+            idle_suspend_poll_interval: Some(krabka_units::millis(3_456)),
+            range0_follower_poll_interval: Some(krabka_units::millis(5_678)),
+            range0_follower_rebuild_backoff_floor: Some(krabka_units::millis(6_789)),
+            range0_follower_rebuild_backoff_ceiling: Some(krabka_units::millis(7_890)),
+            durable_inspection_timeout: Some(krabka_units::millis(8_901)),
             durable_inspection_fold_max_records: Some(9_012),
-            durable_inspection_fold_max_size: Some(crabka_units::bytes(10_123)),
-            lifecycle_requeue: Some(crabka_units::millis(4_567)),
+            durable_inspection_fold_max_size: Some(krabka_units::bytes(10_123)),
+            lifecycle_requeue: Some(krabka_units::millis(4_567)),
             ..crate::crd::gres::GresComputeSpec::default()
         }
         .effective_policy()
         .expect("compute policy");
-        let policy = crabka_gres_control::RegistryPolicy::new(
+        let policy = krabka_gres_control::RegistryPolicy::new(
             2,
-            crabka_units::millis(15_001),
-            crabka_units::millis(251),
-            crabka_units::millis(501),
-            crabka_units::bytes(1_048_577),
+            krabka_units::millis(15_001),
+            krabka_units::millis(251),
+            krabka_units::millis(501),
+            krabka_units::bytes(1_048_577),
         )
         .expect("policy")
-        .with_producer_dns_timeout(crabka_units::millis(37))
+        .with_producer_dns_timeout(krabka_units::millis(37))
         .expect("DNS timeout")
-        .with_reader_admin_dns_timeout(crabka_units::millis(37))
+        .with_reader_admin_dns_timeout(krabka_units::millis(37))
         .expect("reader/admin DNS timeout");
         let deployment = render_deployment(
             &obj,
@@ -4311,7 +4311,7 @@ mod tests {
         );
         assert!(
             lifecycle_requeue(&compute_policy)
-                == Action::requeue(crabka_units::millis(4_567).to_std())
+                == Action::requeue(krabka_units::millis(4_567).to_std())
         );
         let readiness = deployment
             .spec
@@ -4775,14 +4775,14 @@ mod tests {
 
     #[test]
     fn range_runtime_policy_renders_every_gres_flag() {
-        let policy = crabka_gres_ranges::RangeRuntimePolicy {
-            join: crabka_pgexec::scanner::JoinPolicy {
+        let policy = krabka_gres_ranges::RangeRuntimePolicy {
+            join: krabka_pgexec::scanner::JoinPolicy {
                 key_columns: 3,
                 row_bytes: 8192,
                 ..Default::default()
             },
-            rpc_frame_max: crabka_units::mebibytes(2),
-            remote_session_max: crabka_gres_ranges::PositiveUsize::new(17).unwrap(),
+            rpc_frame_max: krabka_units::mebibytes(2),
+            remote_session_max: krabka_gres_ranges::PositiveUsize::new(17).unwrap(),
             ..Default::default()
         };
         let args = range_runtime_args(policy);
@@ -4818,7 +4818,7 @@ mod tests {
             protocol: Some(crate::crd::kafka::OtlpProtocol::HttpProtobuf),
             sample_ratio: Some(0.25),
             service_name: Some("gres-analytics".into()),
-            timeout: Some(crabka_units::secs(7)),
+            timeout: Some(krabka_units::secs(7)),
         }
     }
 
@@ -4881,12 +4881,12 @@ mod tests {
         let mut expected = base_compute_env();
         expected.extend(
             [
-                ("CRABKA_OTLP_ENABLED", "true"),
-                ("CRABKA_OTLP_ENDPOINT", "http://otel:4317"),
-                ("CRABKA_OTLP_PROTOCOL", "http/protobuf"),
-                ("CRABKA_OTLP_SAMPLE_RATIO", "0.25"),
+                ("KRABKA_OTLP_ENABLED", "true"),
+                ("KRABKA_OTLP_ENDPOINT", "http://otel:4317"),
+                ("KRABKA_OTLP_PROTOCOL", "http/protobuf"),
+                ("KRABKA_OTLP_SAMPLE_RATIO", "0.25"),
                 ("OTEL_SERVICE_NAME", "gres-analytics"),
-                ("CRABKA_OTLP_TIMEOUT", "7s"),
+                ("KRABKA_OTLP_TIMEOUT", "7s"),
             ]
             .into_iter()
             .map(|(name, value)| (name.to_owned(), Some(value.to_owned()))),
@@ -4910,8 +4910,8 @@ mod tests {
         let mut expected = base_compute_env();
         expected.extend(
             [
-                ("CRABKA_OTLP_ENABLED", "true"),
-                ("CRABKA_OTLP_ENDPOINT", "http://otel:4317"),
+                ("KRABKA_OTLP_ENABLED", "true"),
+                ("KRABKA_OTLP_ENDPOINT", "http://otel:4317"),
             ]
             .into_iter()
             .map(|(name, value)| (name.to_owned(), Some(value.to_owned()))),
@@ -4921,7 +4921,7 @@ mod tests {
     }
 
     /// This test pins the failure of an always-on renderer that emits
-    /// `CRABKA_OTLP_ENDPOINT=""`. `OtlpConfig::from_env` reads any set endpoint
+    /// `KRABKA_OTLP_ENDPOINT=""`. `OtlpConfig::from_env` reads any set endpoint
     /// as "export enabled", so the pod would start an exporter that always
     /// fails instead of staying quiet.
     #[test]

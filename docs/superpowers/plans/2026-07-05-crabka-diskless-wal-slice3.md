@@ -2,15 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A per-broker background flusher that batches acked WAL tails from many diskless partitions into one immutable object-storage object (Crabka-private framing), records a `WalFlushRecord` offset→object index on a new `__diskless_wal_index` internal topic, and derives a `flushed` frontier — with the trim seam built but gated off. Async/background, *after* the ack; the produce path is untouched.
+**Goal:** A per-broker background flusher that batches acked WAL tails from many diskless partitions into one immutable object-storage object (Crabka-private framing), records a `WalFlushRecord` offset→object index on a new `__diskless_wal_index` internal topic, and derives a `flushed` frontier — with the trim seam built but gated off. Async/background, _after_ the ack; the produce path is untouched.
 
-**Architecture:** The flusher (modeled on `remote_log_manager::run`/`tick_all`) reads each led diskless partition's tail via `Log::read_raw(flushed_frontier, high_watermark, budget)` (byte-exact v2 batches, `< hw` so always acked), concatenates the runs into one object with a footer manifest, PUTs it on the raw `Arc<dyn ObjectStore>` from `build_object_store`, then publishes one `WalFlushRecord` to `__diskless_wal_index` via the record-agnostic `KafkaMetadataEventLog`. A projection consumes the topic into a `WalIndexCache` (per-`(tp)` `BTreeMap` floor lookup) whose frontier *is* the `flushed` cursor. No fetch-from-object and no trimming yet.
+**Architecture:** The flusher (modeled on `remote_log_manager::run`/`tick_all`) reads each led diskless partition's tail via `Log::read_raw(flushed_frontier, high_watermark, budget)` (byte-exact v2 batches, `< hw` so always acked), concatenates the runs into one object with a footer manifest, PUTs it on the raw `Arc<dyn ObjectStore>` from `build_object_store`, then publishes one `WalFlushRecord` to `__diskless_wal_index` via the record-agnostic `KafkaMetadataEventLog`. A projection consumes the topic into a `WalIndexCache` (per-`(tp)` `BTreeMap` floor lookup) whose frontier _is_ the `flushed` cursor. No fetch-from-object and no trimming yet.
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `object_store` 0.13 (via `build_object_store`), `serde`/`serde_wincode`, `tokio`, `bytes`, `uuid`, `assert2`, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
 **Spec:** [`docs/superpowers/specs/2026-07-05-crabka-diskless-wal-slice3-design.md`](../specs/2026-07-05-crabka-diskless-wal-slice3-design.md).
 
-**PREREQUISITES (unlanded):** Slices 1 (`WalStore`/`LocalFsyncWal`/fsync-gated HW/`diskless` flag) and 2 (KRaft offsets). Also depends on `crabka-object-store` (`build_object_store`, landed/executing) and `crabka-remote-storage-topic` (`KafkaMetadataEventLog`). Land Slices 1–2 first; this plan reuses their `high_watermark()`-from-WAL-durable and the `diskless` per-topic flag.
+**PREREQUISITES (unlanded):** Slices 1 (`WalStore`/`LocalFsyncWal`/fsync-gated HW/`diskless` flag) and 2 (KRaft offsets). Also depends on `krabka-object-store` (`build_object_store`, landed/executing) and `krabka-remote-storage-topic` (`KafkaMetadataEventLog`). Land Slices 1–2 first; this plan reuses their `high_watermark()`-from-WAL-durable and the `diskless` per-topic flag.
 
 ---
 
@@ -26,7 +26,7 @@
 ## Scope boundary
 
 - **In scope:** the combined-object framing codec; `WalFlushRecord`/`WalIndexEntry` + `WalIndexCache` projection; the `__diskless_wal_index` event-log wiring; the per-broker flush worker; the (gated-off) trim seam; the recoverability/monotonicity/ack-untouched tests.
-- **Deferred:** fetch-from-object + enabling trim (Slice 4); crash-mid-flush atomicity + orphan GC (Slice 5); extracting the S3 PUT primitives into `crabka-object-store`; diskless+tiered coexistence on one partition.
+- **Deferred:** fetch-from-object + enabling trim (Slice 4); crash-mid-flush atomicity + orphan GC (Slice 5); extracting the S3 PUT primitives into `krabka-object-store`; diskless+tiered coexistence on one partition.
 
 ---
 
@@ -37,7 +37,7 @@
 - **`crates/broker/src/diskless/index_log.rs`** (new) — `__diskless_wal_index` event-log wiring + the projection pump. One responsibility: the durable index transport.
 - **`crates/broker/src/diskless/flusher.rs`** (new) — the per-broker flush worker. One responsibility: tick → read → PUT → publish.
 - **`crates/broker/src/diskless/mod.rs`** (new) + **`crates/broker/src/lib.rs`** — module wiring.
-- **`crates/broker/Cargo.toml`** — add `crabka-object-store`, `crabka-remote-storage-topic`, `serde_wincode`, `uuid` deps if absent.
+- **`crates/broker/Cargo.toml`** — add `krabka-object-store`, `krabka-remote-storage-topic`, `serde_wincode`, `uuid` deps if absent.
 
 ---
 
@@ -46,6 +46,7 @@
 A self-contained builder + parser for the object body: `[MAGIC · version] · concatenated runs · [manifest] · [footer_len · MAGIC]`.
 
 **Files:**
+
 - Create: `crates/broker/src/diskless/wal_object.rs`
 - Create: `crates/broker/src/diskless/mod.rs`; Modify: `crates/broker/src/lib.rs`
 
@@ -93,7 +94,7 @@ mod tests {
 
 - [ ] **Step 3: Run to verify it fails**
 
-Run: `cargo test -p crabka-broker wal_object`
+Run: `cargo test -p krabka-broker wal_object`
 Expected: FAIL — codec undefined.
 
 - [ ] **Step 4: Implement the codec**
@@ -258,7 +259,7 @@ pub fn run_bytes(obj: &Bytes, e: &WalObjectEntry) -> Bytes {
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-broker wal_object`
+Run: `cargo test -p krabka-broker wal_object`
 Expected: PASS — round-trip byte-exact; corrupt trailer rejected.
 
 - [ ] **Step 6: Commit**
@@ -275,6 +276,7 @@ git commit -m "feat(broker): diskless WAL combined-object framing codec"
 The durable index record + the in-memory projection with the `segment_for`-style floor lookup and the derived `flushed` frontier.
 
 **Files:**
+
 - Create: `crates/broker/src/diskless/wal_index.rs`; Modify: `crates/broker/src/diskless/mod.rs`
 
 - [ ] **Step 1: Write the failing tests**
@@ -326,7 +328,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify they fail**
 
-Run: `cargo test -p crabka-broker wal_index`
+Run: `cargo test -p krabka-broker wal_index`
 Expected: FAIL — types undefined.
 
 - [ ] **Step 3: Implement the record + cache**
@@ -424,7 +426,7 @@ impl WalIndexCache {
 
 - [ ] **Step 4: Run to verify they pass**
 
-Run: `cargo test -p crabka-broker wal_index`
+Run: `cargo test -p krabka-broker wal_index`
 Expected: PASS. (Add `serde_wincode`, `uuid`, `serde` to `crates/broker/Cargo.toml` if the build reports them missing — all are workspace deps.)
 
 - [ ] **Step 5: Commit**
@@ -441,6 +443,7 @@ git commit -m "feat(broker): WalFlushRecord + WalIndexCache floor-lookup project
 Reuse the record-agnostic `KafkaMetadataEventLog` to publish `WalFlushRecord` bytes and consume them into a shared `WalIndexCache`, behind a fail-closed boot facade.
 
 **Files:**
+
 - Create: `crates/broker/src/diskless/index_log.rs`; Modify: `crates/broker/src/diskless/mod.rs`, `crates/broker/Cargo.toml`
 
 - [ ] **Step 1: Study the transport API**
@@ -467,6 +470,7 @@ mod tests {
 - [ ] **Step 3: Implement `DisklessIndexLog`**
 
 Create `crates/broker/src/diskless/index_log.rs` with a struct that:
+
 - holds an `Arc<KafkaMetadataEventLog>` (from `KafkaMetadataEventLog::start` against `__diskless_wal_index`, provisioned like `ensure_topic` with `cleanup.policy=compact`),
 - exposes `async fn publish_flush(&self, partition: i32, rec: &WalFlushRecord) -> Result<i64, ...>` = `event_log.publish(partition, rec.to_bytes()?.into())`,
 - runs a projection pump (mirror `manager.rs` `pump_loop`) that consumes each partition's events, `WalFlushRecord::from_bytes`, and `cache.lock().apply(&rec)` into a shared `Arc<Mutex<WalIndexCache>>`,
@@ -482,11 +486,11 @@ pub const DISKLESS_WAL_INDEX_TOPIC: &str = "__diskless_wal_index";
 // struct DisklessIndexLog { event_log, cache: Arc<Mutex<WalIndexCache>> } + publish_flush + pump + ready-gate
 ```
 
-(Concrete field types: `event_log: Arc<crabka_remote_storage_topic::KafkaMetadataEventLog>`; add `crabka-remote-storage-topic` to `crates/broker/Cargo.toml` if absent — the broker already depends on it for the RSM path, confirm with `grep remote-storage-topic crates/broker/Cargo.toml`.)
+(Concrete field types: `event_log: Arc<krabka_remote_storage_topic::KafkaMetadataEventLog>`; add `krabka-remote-storage-topic` to `crates/broker/Cargo.toml` if absent — the broker already depends on it for the RSM path, confirm with `grep remote-storage-topic crates/broker/Cargo.toml`.)
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-broker index_log`
+Run: `cargo test -p krabka-broker index_log`
 Expected: PASS — publish → project → floor-lookup resolves.
 
 - [ ] **Step 5: Commit**
@@ -503,6 +507,7 @@ git commit -m "feat(broker): __diskless_wal_index event-log + projection pump"
 Tie it together: tick → led diskless partitions → `read_raw` tail → build object → PUT → publish `WalFlushRecord`.
 
 **Files:**
+
 - Create: `crates/broker/src/diskless/flusher.rs`; Modify: `crates/broker/src/diskless/mod.rs`
 
 - [ ] **Step 1: Constants + a single-partition flush unit test**
@@ -511,7 +516,7 @@ Define `FLUSH_INTERVAL = Duration::from_millis(250)` and `FLUSH_MAX_BYTES: usize
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-broker flusher`
+Run: `cargo test -p krabka-broker flusher`
 Expected: FAIL — flusher undefined.
 
 - [ ] **Step 3: Implement the worker**
@@ -537,6 +542,7 @@ index.publish_flush(part_of(&key), &WalFlushRecord { object_key: key, format_ver
 ```
 
 Notes:
+
 - `last_offset_of(&run)` = the last batch's `base_offset + last_offset_delta` in the verbatim bytes; compute it while reading (the `RawRead` gives `start_offset`; the last offset is `read_raw`'s `current-1` — expose it, or derive from the final batch header). Simplest: have the flusher request `read_raw` and also capture the partition's `hw - 1` as the run's `last_offset` only when the run reaches `hw` (it does, since the upper bound is `hw`); otherwise parse the last batch header. Prefer capturing from `read_raw` — add a `last_offset` to `RawRead` if not present (it tracks `current` internally at `log.rs:853`).
 - `flush_uuid`: generate per flush (the codebase forbids `Math.random`; use `uuid::Uuid::new_v4()` — `uuid` is a normal dep, not the workflow sandbox).
 - Build on the raw `Arc<dyn ObjectStore>` from `build_object_store(&cfg)`; `store.put`/`put_multipart` are `object_store` 0.13 trait methods.
@@ -544,7 +550,7 @@ Notes:
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-broker flusher`
+Run: `cargo test -p krabka-broker flusher`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -561,6 +567,7 @@ git commit -m "feat(broker): per-broker diskless flush worker (read->object->ind
 Wire the flush frontier to trimming, but default it off.
 
 **Files:**
+
 - Modify: `crates/broker/src/diskless/flusher.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -576,7 +583,7 @@ Wire the flush frontier to trimming, but default it off.
 
 - [ ] **Step 2: Run to verify it fails / passes vacuously**
 
-Run: `cargo test -p crabka-broker default_config_issues_no_trim`
+Run: `cargo test -p krabka-broker default_config_issues_no_trim`
 Expected: FAIL only if a trim path exists prematurely; otherwise implement the (disabled) gate to make the intent explicit.
 
 - [ ] **Step 3: Implement the gated trim**
@@ -585,7 +592,7 @@ Add a `FlushConfig { interval, max_bytes, trim_safety_lag: Option<i64> }` with `
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-broker default_config_issues_no_trim`
+Run: `cargo test -p krabka-broker default_config_issues_no_trim`
 Expected: PASS — no trim under default config.
 
 - [ ] **Step 5: Commit**
@@ -600,6 +607,7 @@ git commit -m "feat(broker): gated (default-off) diskless local-WAL trim seam"
 ## Task 6: Cross-cutting proof tests
 
 **Files:**
+
 - Modify: `crates/broker/src/diskless/flusher.rs` (or a `diskless/tests.rs`)
 
 - [ ] **Step 1: Recoverability round-trip (behavior, not source)**
@@ -620,7 +628,7 @@ Assert produce/ack latency and semantics are unchanged with a flush in flight (d
 
 - [ ] **Step 5: Run + commit**
 
-Run: `cargo test -p crabka-broker diskless`
+Run: `cargo test -p krabka-broker diskless`
 Expected: PASS across all diskless tests.
 
 ```bash
@@ -634,7 +642,7 @@ git commit -m "test(broker): diskless flush recoverability, coverage, and ack-un
 
 - [ ] **Step 1:** `cargo +nightly fmt` then `--check` — no diff.
 - [ ] **Step 2:** `cargo clippy --workspace --all-targets -- -D warnings` — no warnings.
-- [ ] **Step 3:** `cargo nextest run -p crabka-broker` (or `cargo test`) — PASS.
+- [ ] **Step 3:** `cargo nextest run -p krabka-broker` (or `cargo test`) — PASS.
 - [ ] **Step 4:** Commit any formatting.
 
 ---
@@ -649,4 +657,4 @@ git commit -m "test(broker): diskless flush recoverability, coverage, and ack-un
 
 **4. Invariant check:** ack path untouched — no edits to produce/WalStore, flusher reads only `< hw` (Task 4/6); verbatim byte-exact via `read_raw` + no transform (Task 1/6); `flushed` advances only post-commit, PUT-fail → no advance (Task 4 note + Task 6); trim gated off by default (Task 5); transport reused, no RLMM fork (Task 3). Each task ends green.
 
-**5. Prerequisites flagged:** Slices 1-2 unlanded + `crabka-object-store`/`crabka-remote-storage-topic` deps — stated in the header.
+**5. Prerequisites flagged:** Slices 1-2 unlanded + `krabka-object-store`/`krabka-remote-storage-topic` deps — stated in the header.

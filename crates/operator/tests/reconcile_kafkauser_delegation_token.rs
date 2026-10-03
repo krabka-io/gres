@@ -13,14 +13,16 @@
 //!
 //! These tests use a mock and not a real broker because the operator's
 //! per-resource reconcile path is unit-isolated from broker I/O. The
-//! `DelegationTokenAdmin` trait gives a substitution seam. The `crabka_broker`
+//! `DelegationTokenAdmin` trait gives a substitution seam. The `krabka_broker`
 //! integration tests cover the broker-side act-as wire path.
 
 use std::{collections::BTreeMap, sync::Arc};
 
 use assert2::{assert, check};
-use crabka_client_admin::{AclEntry, AclOperation, PatternType, PermissionType, ResourceType};
-use crabka_operator::{
+use http::Method;
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
+use krabka_client_admin::{AclEntry, AclOperation, PatternType, PermissionType, ResourceType};
+use krabka_operator::{
     controller::user::reconcile,
     crd::{
         AclOp, AclPatternType, AclPermission, AclResource, AclResourceKind, AclRule,
@@ -28,8 +30,6 @@ use crabka_operator::{
         KafkaUserQuotas, KafkaUserSimpleAuthorization as SimpleAuthorization, KafkaUserSpec,
     },
 };
-use http::Method;
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 use serde_json::json;
 
 #[path = "shared/mod.rs"]
@@ -172,9 +172,9 @@ async fn delegation_token_user_reconcile_creates_secret_and_status() {
     let client = mock_client(&state, NS);
     let mut ctx = fixture_ctx(client, NS);
     let config = Arc::get_mut(&mut ctx.config).expect("fixture owns operator config");
-    config.delegation_token_min_requeue = crabka_units::days(1);
-    config.delegation_token_max_requeue = crabka_units::days(1);
-    config.controller_drift_requeue = crabka_units::millis(1_234);
+    config.delegation_token_min_requeue = krabka_units::days(1);
+    config.delegation_token_max_requeue = krabka_units::days(1);
+    config.controller_drift_requeue = krabka_units::millis(1_234);
     let ctx = Arc::new(ctx);
 
     let fake = Arc::new(tokio::sync::Mutex::new(FakeAdminClient::new()));
@@ -316,8 +316,8 @@ async fn delegation_token_user_reconciles_acls_without_replacing_token_status_or
     let client = mock_client(&state, NS);
     let mut ctx = fixture_ctx(client, NS);
     let config = Arc::get_mut(&mut ctx.config).expect("fixture owns operator config");
-    config.delegation_token_min_requeue = crabka_units::millis(2_345);
-    config.delegation_token_max_requeue = crabka_units::millis(2_345);
+    config.delegation_token_min_requeue = krabka_units::millis(2_345);
+    config.delegation_token_max_requeue = krabka_units::millis(2_345);
     let ctx = Arc::new(ctx);
 
     let fake = Arc::new(tokio::sync::Mutex::new(FakeAdminClient::new()));
@@ -441,9 +441,9 @@ async fn delegation_token_user_acl_failure_never_publishes_ready_or_observed_gen
     let client = mock_client(&state, NS);
     let mut ctx = fixture_ctx(client, NS);
     let config = Arc::get_mut(&mut ctx.config).expect("fixture owns operator config");
-    config.delegation_token_min_requeue = crabka_units::millis(2_000);
-    config.delegation_token_max_requeue = crabka_units::millis(2_000);
-    config.controller_error_requeue = crabka_units::millis(15_000);
+    config.delegation_token_min_requeue = krabka_units::millis(2_000);
+    config.delegation_token_max_requeue = krabka_units::millis(2_000);
+    config.controller_error_requeue = krabka_units::millis(15_000);
     let ctx = Arc::new(ctx);
 
     let fake_admin = FakeAdminClient::new();
@@ -555,7 +555,7 @@ async fn delegation_token_user_reconcile_renews_when_within_threshold() {
     let auth = DelegationTokenAuth {
         renewers: vec![],
         max_lifetime: None,
-        renew_before_expiry: Some(crabka_units::days(7)),
+        renew_before_expiry: Some(krabka_units::days(7)),
     };
 
     // ── Pass 1: Create + status patch ──────────────────────────────

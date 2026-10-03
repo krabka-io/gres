@@ -14,7 +14,7 @@ pub(crate) fn reject_nested_relation_locking(s: &SelectStmt) -> Result<(), ExecE
 /// would be no base-table row left to lock.
 fn check_select_locking(
     s: &SelectStmt,
-    strength: crabka_pgparser::ast::RowLockStrength,
+    strength: krabka_pgparser::ast::RowLockStrength,
 ) -> Result<(), ExecError> {
     let refuse = |what: &str| {
         Err(ExecError::Unsupported(format!(
@@ -50,8 +50,8 @@ fn check_select_locking(
 /// `PostgreSQL` lets proceed concurrently still does, except that `FOR KEY
 /// SHARE` blocks against `FOR NO KEY UPDATE` here where `PostgreSQL` lets both
 /// through.
-fn lock_mode_for(strength: crabka_pgparser::ast::RowLockStrength) -> crate::lockmgr::LockMode {
-    use crabka_pgparser::ast::RowLockStrength;
+fn lock_mode_for(strength: krabka_pgparser::ast::RowLockStrength) -> crate::lockmgr::LockMode {
+    use krabka_pgparser::ast::RowLockStrength;
     match strength {
         RowLockStrength::ForUpdate | RowLockStrength::ForNoKeyUpdate => {
             crate::lockmgr::LockMode::Exclusive
@@ -182,7 +182,7 @@ pub(super) async fn execute_read_locking_relation(
     }
     let (t, qualifier, only) = match s.from.as_slice() {
         [
-            crabka_pgparser::ast::TableExpr::Table {
+            krabka_pgparser::ast::TableExpr::Table {
                 name,
                 only,
                 alias,
@@ -190,7 +190,7 @@ pub(super) async fn execute_read_locking_relation(
                 sample: None,
             },
         ] if name.schema.is_none() && read_ctx.ctes.lookup(&name.name).is_none() => {
-            let table = crabka_pgcatalog::get_table(
+            let table = krabka_pgcatalog::get_table(
                 catalog_kv,
                 &resolve_relation(catalog_kv, resolution, name, SchemaDisposition::Reference)?,
             )?;
@@ -211,7 +211,7 @@ pub(super) async fn execute_read_locking_relation(
         // A FROM with nothing lockable — no FROM at all, a set-returning
         // function, a derived table — just runs the query, as in PostgreSQL.
         [] => return locking_read_body_relation(read_ctx, original),
-        [item] if !matches!(item, crabka_pgparser::ast::TableExpr::Table { .. }) => {
+        [item] if !matches!(item, krabka_pgparser::ast::TableExpr::Table { .. }) => {
             return locking_read_body_relation(read_ctx, original);
         }
         _ => {
@@ -297,7 +297,7 @@ pub(super) async fn execute_read_locking_relation(
         let scanned = if *relation == t.name {
             None
         } else {
-            let child = crabka_pgcatalog::get_table(catalog_kv, relation)?;
+            let child = krabka_pgcatalog::get_table(catalog_kv, relation)?;
             let ordinals = column_mapping(&t, &child)?;
             Some((child, ordinals))
         };
@@ -370,7 +370,7 @@ pub(super) async fn execute_read_locking_relation(
             //    that is skipped. The lock names the relation the row lives in,
             //    never the parent it is reported under.
             match locking.wait {
-                crabka_pgparser::ast::LockWaitPolicy::Wait => {
+                krabka_pgparser::ast::LockWaitPolicy::Wait => {
                     lockmgr
                         .acquire_as(from.id, rowid, mode, lock_owner, lock_wait_cap)
                         .await
@@ -380,7 +380,7 @@ pub(super) async fn execute_read_locking_relation(
                     if let crate::lockmgr::Acquire::Conflict(_) =
                         lockmgr.try_acquire_as(from.id, rowid, mode, lock_owner)
                     {
-                        if policy == crabka_pgparser::ast::LockWaitPolicy::SkipLocked {
+                        if policy == krabka_pgparser::ast::LockWaitPolicy::SkipLocked {
                             continue;
                         }
                         return Err(ExecError::FunctionError {

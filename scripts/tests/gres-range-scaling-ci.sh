@@ -25,10 +25,10 @@ def validate(source, benchmark=script):
         'runs-on: ubuntu-latest', 'timeout-minutes: 30',
         'dtolnay/rust-toolchain@stable', 'Swatinem/rust-cache@v2',
         'postgresql-client', 'bash scripts/tests/gres-range-scaling-ci.sh',
-        'CRABKA_GRES_RANGE_SCALING_MODE=fast',
-        'CRABKA_GRES_RANGE_SCALING_FLOOR=2.1',
-        'CRABKA_GRES_SHARDED_SCALING_FLOOR=2.1',
-        'CRABKA_GRES_DECISION_CEILING_MIN_RATIO=0.5',
+        'KRABKA_GRES_RANGE_SCALING_MODE=fast',
+        'KRABKA_GRES_RANGE_SCALING_FLOOR=2.1',
+        'KRABKA_GRES_SHARDED_SCALING_FLOOR=2.1',
+        'KRABKA_GRES_DECISION_CEILING_MIN_RATIO=0.5',
         './scripts/gres-range-scaling.sh', 'artifact["mode"] == "live"',
         '"range4_vs_range1_min": 2.1',
         '"sharded_range4_vs_range1_min": 2.1',
@@ -69,11 +69,11 @@ def validate(source, benchmark=script):
     ]
     for needle in required_script:
         assert needle in benchmark, f'missing benchmark/gate contract: {needle}'
-    fast_marker = 'elif [ "${MODE_REQUEST}" = "fast" ] || [ "${CRABKA_GRES_RANGE_SCALING_FAST:-0}" = "1" ]; then'
+    fast_marker = 'elif [ "${MODE_REQUEST}" = "fast" ] || [ "${KRABKA_GRES_RANGE_SCALING_FAST:-0}" = "1" ]; then'
     fast_start = benchmark.index(fast_marker)
     fast_end = benchmark.index('\nelse\n', fast_start)
     fast_block = benchmark[fast_start:fast_end]
-    assert 'SESSIONS_PER_RANGE="${CRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE:-1}"' in fast_block, \
+    assert 'SESSIONS_PER_RANGE="${KRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE:-1}"' in fast_block, \
         'fast mode must use one persistent session per range so the live curve measures range scaling'
     sharded_result = 'result-sharded-${range_count}-trial-${trial}.json'
     sharded_start = benchmark.index(sharded_result)
@@ -87,10 +87,10 @@ mutations = [
     ('script path', workflow.replace('./scripts/gres-range-scaling.sh', './scripts/not-the-scaling-script.sh', 1)),
     ('live artifact', workflow.replace('artifact["mode"] == "live"', 'artifact["mode"] == "dry-run"', 1)),
     ('continue on error', workflow.replace('  gres-range-scaling:\n', '  gres-range-scaling:\n    continue-on-error: ${{ true }}\n', 1)),
-    ('fast mode', workflow.replace('CRABKA_GRES_RANGE_SCALING_MODE=fast', '# fast mode removed', 1)),
-    ('hosted range floor', workflow.replace('CRABKA_GRES_RANGE_SCALING_FLOOR=2.1', 'CRABKA_GRES_RANGE_SCALING_FLOOR=2.0', 1)),
-    ('hosted sharded floor', workflow.replace('CRABKA_GRES_SHARDED_SCALING_FLOOR=2.1', 'CRABKA_GRES_SHARDED_SCALING_FLOOR=2.0', 1)),
-    ('hosted decision floor', workflow.replace('CRABKA_GRES_DECISION_CEILING_MIN_RATIO=0.5', 'CRABKA_GRES_DECISION_CEILING_MIN_RATIO=0.4', 1)),
+    ('fast mode', workflow.replace('KRABKA_GRES_RANGE_SCALING_MODE=fast', '# fast mode removed', 1)),
+    ('hosted range floor', workflow.replace('KRABKA_GRES_RANGE_SCALING_FLOOR=2.1', 'KRABKA_GRES_RANGE_SCALING_FLOOR=2.0', 1)),
+    ('hosted sharded floor', workflow.replace('KRABKA_GRES_SHARDED_SCALING_FLOOR=2.1', 'KRABKA_GRES_SHARDED_SCALING_FLOOR=2.0', 1)),
+    ('hosted decision floor', workflow.replace('KRABKA_GRES_DECISION_CEILING_MIN_RATIO=0.5', 'KRABKA_GRES_DECISION_CEILING_MIN_RATIO=0.4', 1)),
 ]
 for label, mutated in mutations:
     try:
@@ -102,14 +102,14 @@ for label, mutated in mutations:
 
 sharded_start = script.index('result-sharded-${range_count}-trial-${trial}.json')
 missing_re = script[:sharded_start] + script[sharded_start:].replace('import re\n', '', 1)
-fast_marker = 'elif [ "${MODE_REQUEST}" = "fast" ] || [ "${CRABKA_GRES_RANGE_SCALING_FAST:-0}" = "1" ]; then'
+fast_marker = 'elif [ "${MODE_REQUEST}" = "fast" ] || [ "${KRABKA_GRES_RANGE_SCALING_FAST:-0}" = "1" ]; then'
 fast_start = script.index(fast_marker)
 fast_end = script.index('\nelse\n', fast_start)
 fast_block = script[fast_start:fast_end]
 two_fast_sessions = (
     script[:fast_start]
-    + fast_block.replace('SESSIONS_PER_RANGE="${CRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE:-1}"',
-                         'SESSIONS_PER_RANGE="${CRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE:-2}"')
+    + fast_block.replace('SESSIONS_PER_RANGE="${KRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE:-1}"',
+                         'SESSIONS_PER_RANGE="${KRABKA_GRES_RANGE_SCALING_SESSIONS_PER_RANGE:-2}"')
     + script[fast_end:]
 )
 benchmark_mutations = [

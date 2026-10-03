@@ -2,19 +2,19 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Vendor the crabgresql engine into the Crabka workspace as ten `crabka-pg*`/`crabka-gres*` crates, with the conformance corpus + oracle harness gating parity against a recorded donor baseline in CI, and a `crabka-gres` binary serving a single tenant on local fjall.
+**Goal:** Vendor the crabgresql engine into the Crabka workspace as ten `krabka-pg*`/`krabka-gres*` crates, with the conformance corpus + oracle harness gating parity against a recorded donor baseline in CI, and a `krabka-gres` binary serving a single tenant on local fjall.
 
-**Architecture:** One-time source import from the donor repo at a pinned SHA. Batch 0 lays down all ten crate skeletons with their *final* manifests plus every new workspace dependency, so `Cargo.toml`/`Cargo.lock` are settled once and the per-crate import tasks touch only their own crate directory (safe to run in parallel). Each crate task copies donor sources, applies the crate-rename sed, satisfies workspace pedantic lints, and lands with its donor test suite green. New code is limited to: a `--baseline` parity gate in the conformance harness, the `crabka-gres` binary (donor serve mode minus the cluster subcommand), a CLI smoke test, two smoke scripts, and CI wiring.
+**Architecture:** One-time source import from the donor repo at a pinned SHA. Batch 0 lays down all ten crate skeletons with their _final_ manifests plus every new workspace dependency, so `Cargo.toml`/`Cargo.lock` are settled once and the per-crate import tasks touch only their own crate directory (safe to run in parallel). Each crate task copies donor sources, applies the crate-rename sed, satisfies workspace pedantic lints, and lands with its donor test suite green. New code is limited to: a `--baseline` parity gate in the conformance harness, the `krabka-gres` binary (donor serve mode minus the cluster subcommand), a CLI smoke test, two smoke scripts, and CI wiring.
 
 **Tech Stack:** Rust 1.96.0 (edition 2024), tokio, fjall (pure-Rust LSM), rustls + rustls-rustcrypto, cargo-nextest, cargo-llvm-cov, dorny/paths-filter CI, postgres:18 oracle container.
 
 ## Global Constraints
 
 - **Donor pin:** all sources come from `https://github.com/robot-head/crabgresql` at commit `93f3d17168d056a28b4abe60af3b489d4bf62f1d`. The clone is read-only; never edit it.
-- **Spec:** [docs/superpowers/specs/2026-07-09-crabka-gres-chapter-design.md](../specs/2026-07-09-crabka-gres-chapter-design.md). G-1 gate: donor parity baseline reproduced in Crabka CI; `crabka-gres` serves a single tenant on local fjall.
+- **Spec:** [docs/superpowers/specs/2026-07-09-crabka-gres-chapter-design.md](../specs/2026-07-09-crabka-gres-chapter-design.md). G-1 gate: donor parity baseline reproduced in Crabka CI; `krabka-gres` serves a single tenant on local fjall.
 - **No behavior changes.** Vendoring must not change observable engine behavior; the conformance baseline (exact statement count, match count ≥ donor's) is the arbiter. Lint fixes must be behavior-preserving.
-- **Naming:** package `crabka-<name>`, directory `crates/<name>`, imports `crabka_<name>::`. Sibling path deps are declared `crabka-x = { version = "0.3.9", path = "../x" }` (broker style), never renamed.
-- **Publish set:** `crabka-pgtypes`, `crabka-pgparser`, `crabka-pgwire`, `crabka-pgkv`, `crabka-pgmvcc`, `crabka-pgcatalog`, `crabka-pgexec` are published (allowlist + release-plz `publish = true`); `crabka-gres`, `crabka-gres-fdw`, `crabka-gres-conformance` are `publish = false`.
+- **Naming:** package `krabka-<name>`, directory `crates/<name>`, imports `krabka_<name>::`. Sibling path deps are declared `krabka-x = { version = "0.3.9", path = "../x" }` (broker style), never renamed.
+- **Publish set:** `krabka-pgtypes`, `krabka-pgparser`, `krabka-pgwire`, `krabka-pgkv`, `krabka-pgmvcc`, `krabka-pgcatalog`, `krabka-pgexec` are published (allowlist + release-plz `publish = true`); `krabka-gres`, `krabka-gres-fdw`, `krabka-gres-conformance` are `publish = false`.
 - **Lints:** workspace lints apply (`unsafe_code = "forbid"`, `clippy::pedantic` warn, CI runs `cargo clippy --workspace --all-targets -- -D warnings`). Pedantic cleanup policy: prefer a real fix; for a false positive or a fix that would risk behavior, use a narrowly scoped `#[expect(clippy::<lint>, reason = "…")]` on the item. Never add crate-level lint configuration.
 - **Format:** `cargo +nightly fmt` (workspace rustfmt.toml: `group_imports = "StdExternalCrate"`, `imports_granularity = "Crate"`).
 - **Tests:** run under `cargo nextest run -p <crate>`; doctests via `cargo test -p <crate> --doc` (donor crates have none). Vendored tests keep their assertion style (no `assert2` sweep); **new** tests use `assert2` and condition-driven bounded waits, never bare settle-sleeps.
@@ -24,37 +24,37 @@
 
 ## Reference: crate mapping
 
-| Donor crate | Crabka dir | Package | Publish | lib/bin |
-|---|---|---|---|---|
-| `crates/pgtypes` | `crates/pgtypes` | `crabka-pgtypes` | yes | lib |
-| `crates/pgparser` | `crates/pgparser` | `crabka-pgparser` | yes | lib |
-| `crates/pgwire` | `crates/pgwire` | `crabka-pgwire` | yes | lib |
-| `crates/kv` | `crates/pgkv` | `crabka-pgkv` | yes | lib |
-| `crates/mvcc` | `crates/pgmvcc` | `crabka-pgmvcc` | yes | lib |
-| `crates/catalog` | `crates/pgcatalog` | `crabka-pgcatalog` | yes | lib |
-| `crates/executor` | `crates/pgexec` | `crabka-pgexec` | yes | lib |
-| `crates/kafka_fdw` | `crates/gres-fdw` | `crabka-gres-fdw` | no | lib |
-| `crates/conformance` | `crates/gres-conformance` | `crabka-gres-conformance` | no | lib + 2 bins |
-| `crates/crabgresql` (serve mode only) | `crates/gres` | `crabka-gres` | no | bin |
+| Donor crate                           | Crabka dir                | Package                   | Publish | lib/bin      |
+| ------------------------------------- | ------------------------- | ------------------------- | ------- | ------------ |
+| `crates/pgtypes`                      | `crates/pgtypes`          | `krabka-pgtypes`          | yes     | lib          |
+| `crates/pgparser`                     | `crates/pgparser`         | `krabka-pgparser`         | yes     | lib          |
+| `crates/pgwire`                       | `crates/pgwire`           | `krabka-pgwire`           | yes     | lib          |
+| `crates/kv`                           | `crates/pgkv`             | `krabka-pgkv`             | yes     | lib          |
+| `crates/mvcc`                         | `crates/pgmvcc`           | `krabka-pgmvcc`           | yes     | lib          |
+| `crates/catalog`                      | `crates/pgcatalog`        | `krabka-pgcatalog`        | yes     | lib          |
+| `crates/executor`                     | `crates/pgexec`           | `krabka-pgexec`           | yes     | lib          |
+| `crates/kafka_fdw`                    | `crates/gres-fdw`         | `krabka-gres-fdw`         | no      | lib          |
+| `crates/conformance`                  | `crates/gres-conformance` | `krabka-gres-conformance` | no      | lib + 2 bins |
+| `crates/crabgresql` (serve mode only) | `crates/gres`             | `krabka-gres`             | no      | bin          |
 
 **NOT vendored:** `crates/cluster` (openraft/2PC — the substrate replaces it), the donor bin's `node` subcommand, `fuzz/`.
 
 ## Reference: the rename sed
 
-Run inside a vendored crate directory after copying sources. Order matters (`crabka_pgkv::` contains `kv::` but `\b` guards it — verify with the grep below anyway):
+Run inside a vendored crate directory after copying sources. Order matters (`krabka_pgkv::` contains `kv::` but `\b` guards it — verify with the grep below anyway):
 
 ```bash
 find src tests -name '*.rs' 2>/dev/null | xargs -r sed -i \
-  -e 's/\bpgtypes::/crabka_pgtypes::/g' \
-  -e 's/\bpgparser::/crabka_pgparser::/g' \
-  -e 's/\bpgwire::/crabka_pgwire::/g' \
-  -e 's/\bkv::/crabka_pgkv::/g' \
-  -e 's/\bmvcc::/crabka_pgmvcc::/g' \
-  -e 's/\bcatalog::/crabka_pgcatalog::/g' \
-  -e 's/\bexecutor::/crabka_pgexec::/g' \
-  -e 's/\bkafka_fdw::/crabka_gres_fdw::/g'
+  -e 's/\bpgtypes::/krabka_pgtypes::/g' \
+  -e 's/\bpgparser::/krabka_pgparser::/g' \
+  -e 's/\bpgwire::/krabka_pgwire::/g' \
+  -e 's/\bkv::/krabka_pgkv::/g' \
+  -e 's/\bmvcc::/krabka_pgmvcc::/g' \
+  -e 's/\bcatalog::/krabka_pgcatalog::/g' \
+  -e 's/\bexecutor::/krabka_pgexec::/g' \
+  -e 's/\bkafka_fdw::/krabka_gres_fdw::/g'
 # Sanity: no double-renames or misses.
-grep -rn 'crabka_crabka\|crabka_pgcrabka' src tests && echo "BAD DOUBLE RENAME" && exit 1
+grep -rn 'krabka_crabka\|krabka_pgcrabka' src tests && echo "BAD DOUBLE RENAME" && exit 1
 grep -rnE '^use (pgtypes|pgparser|pgwire|kv|mvcc|catalog|executor|kafka_fdw)::' src tests && echo "MISSED RENAME" && exit 1
 echo "rename clean"
 ```
@@ -97,11 +97,13 @@ Apache-2.0. Derived from [crabgresql](https://github.com/robot-head/crabgresql)
 Settles every shared file (`Cargo.toml`, `Cargo.lock`, `NOTICE`, `.cargo/mutants.toml`) once, so Tasks 2–11 never touch a shared file and parallel batches cannot conflict.
 
 **Files:**
+
 - Create: `/tmp/crabgresql-donor` (clone, outside the repo)
 - Modify: `Cargo.toml` (workspace deps), `NOTICE`, `.cargo/mutants.toml`, `Cargo.lock` (regenerated)
 - Create: `crates/{pgtypes,pgparser,pgwire,pgkv,pgmvcc,pgcatalog,pgexec,gres,gres-fdw,gres-conformance}/Cargo.toml` + stub `src/` files
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: final manifests for all ten crates (later tasks replace stub sources only); workspace dep entries `fjall`, `jiff`, `bigdecimal`, `dashu-float`, `num-bigint`, `rand`, `rustls-rustcrypto`, `rustls-pemfile`, `pg_query`, `sqlx`.
 
@@ -144,16 +146,16 @@ For each crate below: `mkdir -p crates/<dir>/src`, write the manifest exactly, a
 
 ```toml
 [package]
-name = "crabka-pgtypes"
+name = "krabka-pgtypes"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "PostgreSQL value layer for the Crabka Gres engine: Datum, column types, text and binary wire encodings, casts, and operator semantics"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-pgtypes"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-pgtypes"
 readme = "README.md"
 keywords = ["postgres", "types", "datum", "crabka", "gres"]
 categories = ["database-implementations"]
@@ -175,16 +177,16 @@ proptest = { workspace = true }
 
 ```toml
 [package]
-name = "crabka-pgparser"
+name = "krabka-pgparser"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "Hand-written PostgreSQL SQL lexer and parser producing the Crabka Gres AST"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-pgparser"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-pgparser"
 readme = "README.md"
 keywords = ["postgres", "sql", "parser", "crabka", "gres"]
 categories = ["database-implementations", "parser-implementations"]
@@ -199,7 +201,7 @@ oracle = ["dep:pg_query"]
 
 [dependencies]
 thiserror = { workspace = true }
-crabka-pgtypes = { version = "0.3.9", path = "../pgtypes" }
+krabka-pgtypes = { version = "0.3.9", path = "../pgtypes" }
 pg_query = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -210,16 +212,16 @@ proptest = { workspace = true }
 
 ```toml
 [package]
-name = "crabka-pgwire"
+name = "krabka-pgwire"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "PostgreSQL v3 wire-protocol server: simple and extended query protocols, SCRAM-SHA-256, TLS, and CancelRequest"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-pgwire"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-pgwire"
 readme = "README.md"
 keywords = ["postgres", "wire-protocol", "scram", "crabka", "gres"]
 categories = ["database-implementations", "network-programming"]
@@ -255,16 +257,16 @@ sqlx = { workspace = true }
 
 ```toml
 [package]
-name = "crabka-pgkv"
+name = "krabka-pgkv"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "Ordered key-value storage seam for the Crabka Gres engine with order-preserving key encoding and versioned row encoding"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-pgkv"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-pgkv"
 readme = "README.md"
 keywords = ["postgres", "storage", "kv", "crabka", "gres"]
 categories = ["database-implementations"]
@@ -274,7 +276,7 @@ workspace = true
 
 [dependencies]
 thiserror = { workspace = true }
-crabka-pgtypes = { version = "0.3.9", path = "../pgtypes" }
+krabka-pgtypes = { version = "0.3.9", path = "../pgtypes" }
 serde = { workspace = true }
 fjall = { workspace = true }
 zerocopy = { workspace = true }
@@ -289,16 +291,16 @@ jiff = { workspace = true }
 
 ```toml
 [package]
-name = "crabka-pgmvcc"
+name = "krabka-pgmvcc"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "PostgreSQL-faithful MVCC for the Crabka Gres engine: xids, clog, snapshots, and HeapTupleSatisfiesMVCC visibility"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-pgmvcc"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-pgmvcc"
 readme = "README.md"
 keywords = ["postgres", "mvcc", "transactions", "crabka", "gres"]
 categories = ["database-implementations"]
@@ -308,8 +310,8 @@ workspace = true
 
 [dependencies]
 thiserror = { workspace = true }
-crabka-pgkv = { version = "0.3.9", path = "../pgkv" }
-crabka-pgtypes = { version = "0.3.9", path = "../pgtypes" }
+krabka-pgkv = { version = "0.3.9", path = "../pgkv" }
+krabka-pgtypes = { version = "0.3.9", path = "../pgtypes" }
 zerocopy = { workspace = true }
 
 [dev-dependencies]
@@ -320,16 +322,16 @@ proptest = { workspace = true }
 
 ```toml
 [package]
-name = "crabka-pgcatalog"
+name = "krabka-pgcatalog"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "System catalog for the Crabka Gres engine: tables, columns, and FDW metadata as a stateless view over the KV storage seam"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-pgcatalog"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-pgcatalog"
 readme = "README.md"
 keywords = ["postgres", "catalog", "crabka", "gres"]
 categories = ["database-implementations"]
@@ -339,8 +341,8 @@ workspace = true
 
 [dependencies]
 thiserror = { workspace = true }
-crabka-pgtypes = { version = "0.3.9", path = "../pgtypes" }
-crabka-pgkv = { version = "0.3.9", path = "../pgkv" }
+krabka-pgtypes = { version = "0.3.9", path = "../pgtypes" }
+krabka-pgkv = { version = "0.3.9", path = "../pgkv" }
 zerocopy = { workspace = true }
 
 [dev-dependencies]
@@ -352,16 +354,16 @@ tempfile = { workspace = true }
 
 ```toml
 [package]
-name = "crabka-pgexec"
+name = "krabka-pgexec"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "SQL execution engine for Crabka Gres: turns parsed SQL into catalog and KV operations under MVCC and implements the pgwire Engine trait"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-pgexec"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-pgexec"
 readme = "README.md"
 keywords = ["postgres", "sql", "executor", "crabka", "gres"]
 categories = ["database-implementations"]
@@ -371,12 +373,12 @@ workspace = true
 
 [dependencies]
 thiserror = { workspace = true }
-crabka-pgtypes = { version = "0.3.9", path = "../pgtypes" }
-crabka-pgkv = { version = "0.3.9", path = "../pgkv" }
-crabka-pgmvcc = { version = "0.3.9", path = "../pgmvcc" }
-crabka-pgcatalog = { version = "0.3.9", path = "../pgcatalog" }
-crabka-pgparser = { version = "0.3.9", path = "../pgparser" }
-crabka-pgwire = { version = "0.3.9", path = "../pgwire" }
+krabka-pgtypes = { version = "0.3.9", path = "../pgtypes" }
+krabka-pgkv = { version = "0.3.9", path = "../pgkv" }
+krabka-pgmvcc = { version = "0.3.9", path = "../pgmvcc" }
+krabka-pgcatalog = { version = "0.3.9", path = "../pgcatalog" }
+krabka-pgparser = { version = "0.3.9", path = "../pgparser" }
+krabka-pgwire = { version = "0.3.9", path = "../pgwire" }
 bytes = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync"] }
 async-trait = { workspace = true }
@@ -394,7 +396,7 @@ tempfile = { workspace = true }
 
 ```toml
 [package]
-name = "crabka-gres-fdw"
+name = "krabka-gres-fdw"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -402,9 +404,9 @@ license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "Foreign-data wrapper exposing Kafka topics as SQL tables inside Crabka Gres tenant databases"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-gres-fdw"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-gres-fdw"
 readme = "README.md"
 keywords = ["kafka", "postgres", "fdw", "crabka", "gres"]
 categories = ["database", "asynchronous"]
@@ -413,17 +415,17 @@ categories = ["database", "asynchronous"]
 workspace = true
 
 [dependencies]
-crabka-pgcatalog = { version = "0.3.9", path = "../pgcatalog" }
-crabka-pgtypes = { version = "0.3.9", path = "../pgtypes" }
-crabka-pgexec = { version = "0.3.9", path = "../pgexec" }
-crabka-pgkv = { version = "0.3.9", path = "../pgkv" }
+krabka-pgcatalog = { version = "0.3.9", path = "../pgcatalog" }
+krabka-pgtypes = { version = "0.3.9", path = "../pgtypes" }
+krabka-pgexec = { version = "0.3.9", path = "../pgexec" }
+krabka-pgkv = { version = "0.3.9", path = "../pgkv" }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync"] }
 thiserror = { workspace = true }
-crabka-client-core = { version = "0.3.9", path = "../client-core" }
-crabka-client-admin = { version = "0.3.9", path = "../client-admin" }
-crabka-protocol = { version = "0.3.9", path = "../protocol" }
-crabka-schema-serde = { version = "0.3.9", path = "../schema-serde", features = ["avro", "json", "protobuf"] }
-crabka-security = { workspace = true }
+krabka-client-core = { version = "0.3.9", path = "../client-core" }
+krabka-client-admin = { version = "0.3.9", path = "../client-admin" }
+krabka-protocol = { version = "0.3.9", path = "../protocol" }
+krabka-schema-serde = { version = "0.3.9", path = "../schema-serde", features = ["avro", "json", "protobuf"] }
+krabka-security = { workspace = true }
 apache-avro = { workspace = true }
 serde_json = { workspace = true }
 rustls = { workspace = true }
@@ -435,23 +437,23 @@ prost-reflect = { workspace = true }
 
 [dev-dependencies]
 protox = { workspace = true }
-crabka-broker = { version = "0.3.9", path = "../broker" }
-crabka-schema-registry = { version = "0.3.9", path = "../schema-registry" }
-crabka-client-producer = { version = "0.3.9", path = "../client-producer" }
-crabka-pgwire = { version = "0.3.9", path = "../pgwire" }
+krabka-broker = { version = "0.3.9", path = "../broker" }
+krabka-schema-registry = { version = "0.3.9", path = "../schema-registry" }
+krabka-client-producer = { version = "0.3.9", path = "../client-producer" }
+krabka-pgwire = { version = "0.3.9", path = "../pgwire" }
 tokio-postgres = { workspace = true }
 tokio-util = { workspace = true }
 tempfile = { workspace = true }
 bytes = { workspace = true }
 ```
 
-(Note vs donor: the `kafka` feature and all `optional = true` markers are gone; the unused `crabka-client-consumer` dev-dep is dropped; `crabka-security` uses the existing workspace entry. If `crabka-broker`/`crabka-schema-registry` manifests declare `publish = false` without a `version` field, drop the `version = "0.3.9"` from those two dev-dep lines and keep only `path`.)
+(Note vs donor: the `kafka` feature and all `optional = true` markers are gone; the unused `krabka-client-consumer` dev-dep is dropped; `krabka-security` uses the existing workspace entry. If `krabka-broker`/`krabka-schema-registry` manifests declare `publish = false` without a `version` field, drop the `version = "0.3.9"` from those two dev-dep lines and keep only `path`.)
 
 `crates/gres-conformance/Cargo.toml`:
 
 ```toml
 [package]
-name = "crabka-gres-conformance"
+name = "krabka-gres-conformance"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -459,9 +461,9 @@ license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "Differential conformance harness diffing Crabka Gres against a real PostgreSQL oracle over the wire"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-gres-conformance"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-gres-conformance"
 readme = "README.md"
 keywords = ["postgres", "conformance", "testing", "crabka", "gres"]
 categories = ["development-tools::testing"]
@@ -470,7 +472,7 @@ categories = ["development-tools::testing"]
 workspace = true
 
 [[bin]]
-name = "crabka-gres-record"
+name = "krabka-gres-record"
 path = "src/bin/record.rs"
 
 [dependencies]
@@ -484,13 +486,13 @@ clap = { workspace = true }
 assert2 = { workspace = true }
 ```
 
-(The default bin auto-discovers `src/main.rs` as `crabka-gres-conformance`. This crate's skeleton needs three stub sources: `src/lib.rs`, `src/main.rs` with `fn main() {}`, and `src/bin/record.rs` with `fn main() {}`.)
+(The default bin auto-discovers `src/main.rs` as `krabka-gres-conformance`. This crate's skeleton needs three stub sources: `src/lib.rs`, `src/main.rs` with `fn main() {}`, and `src/bin/record.rs` with `fn main() {}`.)
 
 `crates/gres/Cargo.toml`:
 
 ```toml
 [package]
-name = "crabka-gres"
+name = "krabka-gres"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -498,9 +500,9 @@ license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "Crabka Gres service: a pure-Rust Postgres-compatible tenant compute for the Crabka substrate"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-gres"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-gres"
 readme = "README.md"
 keywords = ["postgres", "database", "serverless", "crabka", "gres"]
 categories = ["database-implementations"]
@@ -509,13 +511,13 @@ categories = ["database-implementations"]
 workspace = true
 
 [[bin]]
-name = "crabka-gres"
+name = "krabka-gres"
 path = "src/main.rs"
 
 [dependencies]
-crabka-pgexec = { version = "0.3.9", path = "../pgexec" }
-crabka-pgwire = { version = "0.3.9", path = "../pgwire" }
-crabka-gres-fdw = { path = "../gres-fdw" }
+krabka-pgexec = { version = "0.3.9", path = "../pgexec" }
+krabka-pgwire = { version = "0.3.9", path = "../pgwire" }
+krabka-gres-fdw = { path = "../gres-fdw" }
 clap = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net"] }
 tracing-subscriber = { workspace = true }
@@ -601,15 +603,17 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ## Batch 1 — leaf crates (run Tasks 2, 3, 4 in parallel)
 
-### Task 2: Vendor `crabka-pgtypes`
+### Task 2: Vendor `krabka-pgtypes`
 
 **Files:**
+
 - Replace: `crates/pgtypes/src/` (from `$DONOR/crates/pgtypes/src/`)
 - Create: `crates/pgtypes/tests/` (from donor), `crates/pgtypes/README.md`
 
 **Interfaces:**
+
 - Consumes: nothing (leaf crate).
-- Produces: `crabka_pgtypes::{Datum, ColumnType, …}` — donor public API unchanged; every later engine crate imports it as `crabka_pgtypes::`.
+- Produces: `krabka_pgtypes::{Datum, ColumnType, …}` — donor public API unchanged; every later engine crate imports it as `krabka_pgtypes::`.
 
 - [ ] **Step 1: Copy sources and tests**
 
@@ -624,14 +628,14 @@ cp -r $DONOR/crates/pgtypes/tests crates/pgtypes/
 - [ ] **Step 3: Add the docs.rs root URL** — insert immediately after the crate-level `//!` block at the top of `crates/pgtypes/src/lib.rs` (matching the placement in `crates/protocol/src/lib.rs`):
 
 ```rust
-#![doc(html_root_url = "https://docs.rs/crabka-pgtypes/0.3.9")]
+#![doc(html_root_url = "https://docs.rs/krabka-pgtypes/0.3.9")]
 ```
 
 - [ ] **Step 4: Format, build, and commit the import**
 
 ```bash
-cargo +nightly fmt -p crabka-pgtypes
-cargo check -p crabka-pgtypes --all-targets
+cargo +nightly fmt -p krabka-pgtypes
+cargo check -p krabka-pgtypes --all-targets
 git add crates/pgtypes && git commit -m "feat(pgtypes): vendor pgtypes from crabgresql@93f3d17
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
@@ -642,7 +646,7 @@ Expected: `cargo check` green (pedantic warnings are allowed at this commit; `-D
 - [ ] **Step 5: Pedantic lint pass**
 
 ```bash
-cargo clippy -p crabka-pgtypes --all-targets -- -D warnings
+cargo clippy -p krabka-pgtypes --all-targets -- -D warnings
 ```
 
 Fix per the Global Constraints lint policy until clean. This crate is numeric/datetime-heavy — expect `clippy::cast_possible_truncation`/`cast_sign_loss` sites; where a cast is provably in-range, prefer `usize::try_from(x).expect("reason")` or a scoped `#[expect(clippy::cast_possible_truncation, reason = "…")]`; never change numeric behavior to appease a lint.
@@ -650,35 +654,37 @@ Fix per the Global Constraints lint policy until clean. This crate is numeric/da
 - [ ] **Step 6: Run the crate tests**
 
 ```bash
-cargo nextest run -p crabka-pgtypes
-cargo test -p crabka-pgtypes --doc
+cargo nextest run -p krabka-pgtypes
+cargo test -p krabka-pgtypes --doc
 ```
 
 Expected: all tests pass, zero failures; the 2 `#[ignore]` oracle tests in `tests/numeric_transcendental_oracle.rs` stay skipped (they shell out to a local Windows psql — they remain local-only tooling; do not wire them into CI).
 
 - [ ] **Step 7: Write `crates/pgtypes/README.md`** from the README template with:
-  - `{CRATE}` = `crabka-pgtypes`
+  - `{CRATE}` = `krabka-pgtypes`
   - `{ONELINER}` = "PostgreSQL value layer for the Crabka Gres engine: `Datum`, column types, text and binary wire encodings, casts, and operator semantics."
   - `{OVERVIEW}` = "Implements the PostgreSQL-faithful value semantics the Gres engine executes over: the `Datum` and `ColumnType` enums, numeric (arbitrary precision) and date/time arithmetic, cast rules, operator semantics, and both wire encodings. It is the root of the engine crate graph and has no sibling dependencies."
 
 - [ ] **Step 8: Commit the cleanup**
 
 ```bash
-cargo +nightly fmt -p crabka-pgtypes
+cargo +nightly fmt -p krabka-pgtypes
 git add crates/pgtypes && git commit -m "chore(pgtypes): satisfy workspace pedantic lints
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
-### Task 3: Vendor `crabka-pgwire`
+### Task 3: Vendor `krabka-pgwire`
 
 **Files:**
+
 - Replace: `crates/pgwire/src/` (from `$DONOR/crates/pgwire/src/`)
 - Create: `crates/pgwire/tests/` **including `tests/fixtures/`** (PEM certs + `psql-select1.trace`), `crates/pgwire/README.md`
 
 **Interfaces:**
+
 - Consumes: nothing (standalone; defines the engine seam).
-- Produces: `crabka_pgwire::engine::{Engine, Session}`, `crabka_pgwire::server::{serve, serve_tls, serve_conn}`, `crabka_pgwire::session::{SessionConfig, AuthMode}`, `crabka_pgwire::scram::ScramVerifier` — donor API unchanged. Task 9 (pgexec) implements `Engine`; Task 11 (gres bin) calls `serve_tls`.
+- Produces: `krabka_pgwire::engine::{Engine, Session}`, `krabka_pgwire::server::{serve, serve_tls, serve_conn}`, `krabka_pgwire::session::{SessionConfig, AuthMode}`, `krabka_pgwire::scram::ScramVerifier` — donor API unchanged. Task 9 (pgexec) implements `Engine`; Task 11 (gres bin) calls `serve_tls`.
 
 - [ ] **Step 1: Copy sources, tests, and fixtures**
 
@@ -696,52 +702,54 @@ Expected: fixtures listing includes `test-ca.pem`, `test-ca-key.pem`, `test-serv
 - [ ] **Step 3: Add the docs.rs root URL** after the `//!` block in `crates/pgwire/src/lib.rs`:
 
 ```rust
-#![doc(html_root_url = "https://docs.rs/crabka-pgwire/0.3.9")]
+#![doc(html_root_url = "https://docs.rs/krabka-pgwire/0.3.9")]
 ```
 
 - [ ] **Step 4: Format, build, commit the import**
 
 ```bash
-cargo +nightly fmt -p crabka-pgwire
-cargo check -p crabka-pgwire --all-targets
+cargo +nightly fmt -p krabka-pgwire
+cargo check -p krabka-pgwire --all-targets
 git add crates/pgwire && git commit -m "feat(pgwire): vendor pgwire from crabgresql@93f3d17
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 5: Pedantic lint pass** — `cargo clippy -p crabka-pgwire --all-targets -- -D warnings`; fix per policy. SCRAM/protocol code: never weaken constant-time comparisons (`subtle`) or wire bounds-checks to satisfy a lint.
+- [ ] **Step 5: Pedantic lint pass** — `cargo clippy -p krabka-pgwire --all-targets -- -D warnings`; fix per policy. SCRAM/protocol code: never weaken constant-time comparisons (`subtle`) or wire bounds-checks to satisfy a lint.
 
 - [ ] **Step 6: Run the crate tests**
 
 ```bash
-cargo nextest run -p crabka-pgwire
+cargo nextest run -p krabka-pgwire
 ```
 
 Expected: all pass — including `tls` (rustcrypto provider + PEM fixtures), `scram_auth`, `extended_query`, `cancel`, `golden_trace`, `simple_query`, `sqlx_driver` (both real drivers connect against the in-crate `StubEngine`).
 
 - [ ] **Step 7: Write `crates/pgwire/README.md`** from the template with:
-  - `{CRATE}` = `crabka-pgwire`
+  - `{CRATE}` = `krabka-pgwire`
   - `{ONELINER}` = "PostgreSQL v3 wire-protocol server: simple and extended query protocols, SCRAM-SHA-256, TLS, and CancelRequest."
   - `{OVERVIEW}` = "A standalone pgwire server that any engine can sit behind via the `Engine`/`Session` traits: startup + SSLRequest negotiation (rustls), Trust and SCRAM-SHA-256 auth (RustCrypto, with anti-username-enumeration mock verifiers), Parse/Bind/Describe/Execute portals, per-column format codes, and CancelRequest semantics. Verified against tokio-postgres, sqlx, and recorded psql byte traces."
 
 - [ ] **Step 8: Commit the cleanup**
 
 ```bash
-cargo +nightly fmt -p crabka-pgwire
+cargo +nightly fmt -p krabka-pgwire
 git add crates/pgwire && git commit -m "chore(pgwire): satisfy workspace pedantic lints
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
-### Task 4: Vendor `crabka-gres-conformance` + add the `--baseline` parity gate
+### Task 4: Vendor `krabka-gres-conformance` + add the `--baseline` parity gate
 
 **Files:**
+
 - Replace: `crates/gres-conformance/src/` (from `$DONOR/crates/conformance/src/`)
 - Create: `crates/gres-conformance/corpus/` (25 `.sql` files from donor), `crates/gres-conformance/README.md`
 
 **Interfaces:**
+
 - Consumes: nothing (black-box harness; connects over the wire only).
-- Produces: bins `crabka-gres-conformance` (runner; args `--oracle-url`, `--subject-url`, `--corpus`, `--out`, `--summary`, **new** `--baseline`) and `crabka-gres-record`; lib types `Report { total, matched, parity_percent, cases }`, **new** `Baseline { total, matched }` and `Report::check_baseline(&Baseline) -> Result<(), String>`. Task 12 records `crates/gres-conformance/baseline.json`; Task 13's CI job passes `--baseline`.
+- Produces: bins `krabka-gres-conformance` (runner; args `--oracle-url`, `--subject-url`, `--corpus`, `--out`, `--summary`, **new** `--baseline`) and `krabka-gres-record`; lib types `Report { total, matched, parity_percent, cases }`, **new** `Baseline { total, matched }` and `Report::check_baseline(&Baseline) -> Result<(), String>`. Task 12 records `crates/gres-conformance/baseline.json`; Task 13's CI job passes `--baseline`.
 
 - [ ] **Step 1: Copy sources and corpus**
 
@@ -756,8 +764,8 @@ Expected: 25 corpus files.
 
 - [ ] **Step 2: Rename-adjust the copied sources** (this crate imports no siblings, so the sed is not needed; three manual edits):
   1. `src/main.rs`: the `--corpus` default `crates/conformance/corpus` → `crates/gres-conformance/corpus`.
-  2. `src/lib.rs` `markdown_summary()`: report title `# crabgresql conformance report` → `# crabka-gres conformance report` (adjust any unit test asserting the old title).
-  3. `src/main.rs` + `src/bin/record.rs`: references to the lib crate by name (`conformance::…` / `use conformance::`) → `crabka_gres_conformance::…`.
+  2. `src/lib.rs` `markdown_summary()`: report title `# crabgresql conformance report` → `# krabka-gres conformance report` (adjust any unit test asserting the old title).
+  3. `src/main.rs` + `src/bin/record.rs`: references to the lib crate by name (`conformance::…` / `use conformance::`) → `krabka_gres_conformance::…`.
 
 - [ ] **Step 3: Write the failing baseline-gate tests** — append to the `#[cfg(test)] mod tests` in `crates/gres-conformance/src/lib.rs` (create the module if the donor keeps tests elsewhere):
 
@@ -810,7 +818,7 @@ fn report_with(total: usize, matched: usize) -> Report {
 - [ ] **Step 4: Run the tests to verify they fail**
 
 ```bash
-cargo nextest run -p crabka-gres-conformance
+cargo nextest run -p krabka-gres-conformance
 ```
 
 Expected: FAIL to compile — `Baseline` and `check_baseline` not defined.
@@ -862,7 +870,7 @@ and, after the reports are written (donor `main` prints the parity line last):
 ```rust
     if let Some(path) = &args.baseline {
         let text = std::fs::read_to_string(path)?;
-        let baseline: crabka_gres_conformance::Baseline = serde_json::from_str(&text)?;
+        let baseline: krabka_gres_conformance::Baseline = serde_json::from_str(&text)?;
         match report.check_baseline(&baseline) {
             Ok(()) => println!(
                 "baseline gate passed: {}/{} matched (floor {})",
@@ -881,15 +889,15 @@ and, after the reports are written (donor `main` prints the parity line last):
 - [ ] **Step 6: Run tests to verify they pass**
 
 ```bash
-cargo nextest run -p crabka-gres-conformance
-cargo clippy -p crabka-gres-conformance --all-targets -- -D warnings
-cargo +nightly fmt -p crabka-gres-conformance
+cargo nextest run -p krabka-gres-conformance
+cargo clippy -p krabka-gres-conformance --all-targets -- -D warnings
+cargo +nightly fmt -p krabka-gres-conformance
 ```
 
 Expected: all green (fix pedantic per policy).
 
 - [ ] **Step 7: Write `crates/gres-conformance/README.md`** — template (internal variant, no badges) with:
-  - `{CRATE}` = `crabka-gres-conformance`
+  - `{CRATE}` = `krabka-gres-conformance`
   - `{ONELINER}` = "Differential conformance harness diffing Crabka Gres against a real PostgreSQL oracle over the wire."
   - `{OVERVIEW}` = "Runs every statement in `corpus/*.sql` through both a real PostgreSQL (the oracle) and a Crabka Gres subject via the simple query protocol, diffing rows and SQLSTATEs into `parity.json`/`parity.md`. `--baseline baseline.json` turns the report into a CI gate: the statement total is pinned and the match count may only ratchet up. `baseline.json` records the parity of the vendored engine as measured against the donor repository at import (crabgresql@93f3d17, postgres:18 oracle); update it only deliberately — e.g. a corpus change, an engine improvement, or a documented postgres:18 minor-version drift — never to absorb a regression."
 
@@ -910,15 +918,17 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ## Batch 2 — depends on pgtypes (run Tasks 5, 6 in parallel)
 
-### Task 5: Vendor `crabka-pgkv`
+### Task 5: Vendor `krabka-pgkv`
 
 **Files:**
+
 - Replace: `crates/pgkv/src/` (from `$DONOR/crates/kv/src/`)
 - Create: `crates/pgkv/README.md` (donor has no `tests/` dir — unit tests are in-src)
 
 **Interfaces:**
-- Consumes: `crabka_pgtypes` (Task 2).
-- Produces: `crabka_pgkv::{Kv, MemKv, FjallKv, WriteOp, …}` — donor API unchanged; the permanent storage seam (G-2's `SubstrateKv` will implement `Kv` behind it).
+
+- Consumes: `krabka_pgtypes` (Task 2).
+- Produces: `krabka_pgkv::{Kv, MemKv, FjallKv, WriteOp, …}` — donor API unchanged; the permanent storage seam (G-2's `SubstrateKv` will implement `Kv` behind it).
 
 - [ ] **Step 1: Copy sources**
 
@@ -932,52 +942,54 @@ cp -r $DONOR/crates/kv/src crates/pgkv/
 - [ ] **Step 3: Add the docs.rs root URL** after the `//!` block in `crates/pgkv/src/lib.rs`:
 
 ```rust
-#![doc(html_root_url = "https://docs.rs/crabka-pgkv/0.3.9")]
+#![doc(html_root_url = "https://docs.rs/krabka-pgkv/0.3.9")]
 ```
 
 - [ ] **Step 4: Format, build, commit the import**
 
 ```bash
-cargo +nightly fmt -p crabka-pgkv
-cargo check -p crabka-pgkv --all-targets
+cargo +nightly fmt -p krabka-pgkv
+cargo check -p krabka-pgkv --all-targets
 git add crates/pgkv && git commit -m "feat(pgkv): vendor kv from crabgresql@93f3d17
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 5: Pedantic lint pass** — `cargo clippy -p crabka-pgkv --all-targets -- -D warnings`; fix per policy (key-encoding code: never change byte layouts).
+- [ ] **Step 5: Pedantic lint pass** — `cargo clippy -p krabka-pgkv --all-targets -- -D warnings`; fix per policy (key-encoding code: never change byte layouts).
 
 - [ ] **Step 6: Run the crate tests**
 
 ```bash
-cargo nextest run -p crabka-pgkv
+cargo nextest run -p krabka-pgkv
 ```
 
 Expected: all pass (in-src unit + proptest suites, including the fjall store round-trips under `tempfile`).
 
 - [ ] **Step 7: Write `crates/pgkv/README.md`** from the template with:
-  - `{CRATE}` = `crabka-pgkv`
+  - `{CRATE}` = `krabka-pgkv`
   - `{ONELINER}` = "Ordered key-value storage seam for the Crabka Gres engine with order-preserving key encoding and versioned row encoding."
   - `{OVERVIEW}` = "Defines the `Kv` trait (`get`/`put`/`delete`/`scan_prefix`/`scan_range`/`write_batch`, with `write_batch` atomic and durable) that the whole Gres engine consumes, plus two local backends: `MemKv` (ephemeral) and `FjallKv` (pure-Rust LSM). It is the disposable per-tenant working store; Chapter Gres G-2 makes the tenant's durable truth a Crabka WAL topic behind the executor's `Committer` seam, with this store as the replayed read model."
 
 - [ ] **Step 8: Commit the cleanup**
 
 ```bash
-cargo +nightly fmt -p crabka-pgkv
+cargo +nightly fmt -p krabka-pgkv
 git add crates/pgkv && git commit -m "chore(pgkv): satisfy workspace pedantic lints
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
-### Task 6: Vendor `crabka-pgparser`
+### Task 6: Vendor `krabka-pgparser`
 
 **Files:**
+
 - Replace: `crates/pgparser/src/` (from `$DONOR/crates/pgparser/src/`)
 - Create: `crates/pgparser/tests/` (from donor; the `libpg_query_oracle.rs` file is `#![cfg(feature = "oracle")]`), `crates/pgparser/README.md`
 
 **Interfaces:**
-- Consumes: `crabka_pgtypes` (Task 2).
-- Produces: `crabka_pgparser::{parse, ast::Statement, …}` — donor API unchanged; Task 9 (pgexec) consumes the AST.
+
+- Consumes: `krabka_pgtypes` (Task 2).
+- Produces: `krabka_pgparser::{parse, ast::Statement, …}` — donor API unchanged; Task 9 (pgexec) consumes the AST.
 
 - [ ] **Step 1: Copy sources and tests**
 
@@ -992,38 +1004,38 @@ cp -r $DONOR/crates/pgparser/tests crates/pgparser/
 - [ ] **Step 3: Add the docs.rs root URL** after the `//!` block in `crates/pgparser/src/lib.rs`:
 
 ```rust
-#![doc(html_root_url = "https://docs.rs/crabka-pgparser/0.3.9")]
+#![doc(html_root_url = "https://docs.rs/krabka-pgparser/0.3.9")]
 ```
 
 - [ ] **Step 4: Format, build, commit the import**
 
 ```bash
-cargo +nightly fmt -p crabka-pgparser
-cargo check -p crabka-pgparser --all-targets
+cargo +nightly fmt -p krabka-pgparser
+cargo check -p krabka-pgparser --all-targets
 git add crates/pgparser && git commit -m "feat(pgparser): vendor pgparser from crabgresql@93f3d17
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 5: Pedantic lint pass** — `cargo clippy -p crabka-pgparser --all-targets -- -D warnings`; fix per policy. Do NOT enable the `oracle` feature in this pass (it builds C; local-only tooling).
+- [ ] **Step 5: Pedantic lint pass** — `cargo clippy -p krabka-pgparser --all-targets -- -D warnings`; fix per policy. Do NOT enable the `oracle` feature in this pass (it builds C; local-only tooling).
 
 - [ ] **Step 6: Run the crate tests**
 
 ```bash
-cargo nextest run -p crabka-pgparser
+cargo nextest run -p krabka-pgparser
 ```
 
 Expected: all pass (lexer/parser unit + proptest suites; the libpg_query oracle test compiles out without the feature).
 
 - [ ] **Step 7: Write `crates/pgparser/README.md`** from the template with:
-  - `{CRATE}` = `crabka-pgparser`
+  - `{CRATE}` = `krabka-pgparser`
   - `{ONELINER}` = "Hand-written PostgreSQL SQL lexer and parser producing the Crabka Gres AST."
   - `{OVERVIEW}` = "An original recursive-descent/Pratt parser (no third-party SQL engine) producing the `Statement` AST the Gres executor consumes. The optional `oracle` feature (never default; C build dep) enables a differential accept/reject test against libpg_query for local verification."
 
 - [ ] **Step 8: Commit the cleanup**
 
 ```bash
-cargo +nightly fmt -p crabka-pgparser
+cargo +nightly fmt -p krabka-pgparser
 git add crates/pgparser && git commit -m "chore(pgparser): satisfy workspace pedantic lints
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
@@ -1033,15 +1045,17 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ## Batch 3 — depends on pgkv (run Tasks 7, 8 in parallel)
 
-### Task 7: Vendor `crabka-pgmvcc`
+### Task 7: Vendor `krabka-pgmvcc`
 
 **Files:**
+
 - Replace: `crates/pgmvcc/src/` (from `$DONOR/crates/mvcc/src/`)
 - Create: `crates/pgmvcc/README.md` (no `tests/` dir in donor)
 
 **Interfaces:**
-- Consumes: `crabka_pgkv` (Task 5), `crabka_pgtypes` (Task 2).
-- Produces: `crabka_pgmvcc::{Xid, Snapshot, visibility::satisfies_mvcc, clog, …}` — donor API unchanged; Task 9 consumes it.
+
+- Consumes: `krabka_pgkv` (Task 5), `krabka_pgtypes` (Task 2).
+- Produces: `krabka_pgmvcc::{Xid, Snapshot, visibility::satisfies_mvcc, clog, …}` — donor API unchanged; Task 9 consumes it.
 
 - [ ] **Step 1: Copy sources**
 
@@ -1055,52 +1069,54 @@ cp -r $DONOR/crates/mvcc/src crates/pgmvcc/
 - [ ] **Step 3: Add the docs.rs root URL** after the `//!` block in `crates/pgmvcc/src/lib.rs`:
 
 ```rust
-#![doc(html_root_url = "https://docs.rs/crabka-pgmvcc/0.3.9")]
+#![doc(html_root_url = "https://docs.rs/krabka-pgmvcc/0.3.9")]
 ```
 
 - [ ] **Step 4: Format, build, commit the import**
 
 ```bash
-cargo +nightly fmt -p crabka-pgmvcc
-cargo check -p crabka-pgmvcc --all-targets
+cargo +nightly fmt -p krabka-pgmvcc
+cargo check -p krabka-pgmvcc --all-targets
 git add crates/pgmvcc && git commit -m "feat(pgmvcc): vendor mvcc from crabgresql@93f3d17
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 5: Pedantic lint pass** — `cargo clippy -p crabka-pgmvcc --all-targets -- -D warnings`; fix per policy (visibility logic is a faithful `HeapTupleSatisfiesMVCC` port — structure must not change).
+- [ ] **Step 5: Pedantic lint pass** — `cargo clippy -p krabka-pgmvcc --all-targets -- -D warnings`; fix per policy (visibility logic is a faithful `HeapTupleSatisfiesMVCC` port — structure must not change).
 
 - [ ] **Step 6: Run the crate tests**
 
 ```bash
-cargo nextest run -p crabka-pgmvcc
+cargo nextest run -p krabka-pgmvcc
 ```
 
 Expected: all pass.
 
 - [ ] **Step 7: Write `crates/pgmvcc/README.md`** from the template with:
-  - `{CRATE}` = `crabka-pgmvcc`
+  - `{CRATE}` = `krabka-pgmvcc`
   - `{ONELINER}` = "PostgreSQL-faithful MVCC for the Crabka Gres engine: xids, clog, snapshots, and `HeapTupleSatisfiesMVCC` visibility."
   - `{OVERVIEW}` = "Snapshot-isolation machinery ported faithfully from PostgreSQL: transaction ids, the clog (pg_xact) status store over the KV seam, xid-list `Snapshot`s, and tuple `(xmin, xmax)` visibility."
 
 - [ ] **Step 8: Commit the cleanup**
 
 ```bash
-cargo +nightly fmt -p crabka-pgmvcc
+cargo +nightly fmt -p krabka-pgmvcc
 git add crates/pgmvcc && git commit -m "chore(pgmvcc): satisfy workspace pedantic lints
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
-### Task 8: Vendor `crabka-pgcatalog`
+### Task 8: Vendor `krabka-pgcatalog`
 
 **Files:**
+
 - Replace: `crates/pgcatalog/src/` (from `$DONOR/crates/catalog/src/`)
 - Create: `crates/pgcatalog/README.md` (no `tests/` dir in donor)
 
 **Interfaces:**
-- Consumes: `crabka_pgkv` (Task 5), `crabka_pgtypes` (Task 2).
-- Produces: `crabka_pgcatalog::{Table, TableId, Column, ForeignDataWrapper, ForeignServer, UserMapping, ForeignTableMeta, …}` — donor API unchanged; Tasks 9 and 10 consume it.
+
+- Consumes: `krabka_pgkv` (Task 5), `krabka_pgtypes` (Task 2).
+- Produces: `krabka_pgcatalog::{Table, TableId, Column, ForeignDataWrapper, ForeignServer, UserMapping, ForeignTableMeta, …}` — donor API unchanged; Tasks 9 and 10 consume it.
 
 - [ ] **Step 1: Copy sources**
 
@@ -1114,38 +1130,38 @@ cp -r $DONOR/crates/catalog/src crates/pgcatalog/
 - [ ] **Step 3: Add the docs.rs root URL** after the `//!` block in `crates/pgcatalog/src/lib.rs`:
 
 ```rust
-#![doc(html_root_url = "https://docs.rs/crabka-pgcatalog/0.3.9")]
+#![doc(html_root_url = "https://docs.rs/krabka-pgcatalog/0.3.9")]
 ```
 
 - [ ] **Step 4: Format, build, commit the import**
 
 ```bash
-cargo +nightly fmt -p crabka-pgcatalog
-cargo check -p crabka-pgcatalog --all-targets
+cargo +nightly fmt -p krabka-pgcatalog
+cargo check -p krabka-pgcatalog --all-targets
 git add crates/pgcatalog && git commit -m "feat(pgcatalog): vendor catalog from crabgresql@93f3d17
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 5: Pedantic lint pass** — `cargo clippy -p crabka-pgcatalog --all-targets -- -D warnings`; fix per policy (the versioned byte encodings in `serde.rs` must not change layout).
+- [ ] **Step 5: Pedantic lint pass** — `cargo clippy -p krabka-pgcatalog --all-targets -- -D warnings`; fix per policy (the versioned byte encodings in `serde.rs` must not change layout).
 
 - [ ] **Step 6: Run the crate tests**
 
 ```bash
-cargo nextest run -p crabka-pgcatalog
+cargo nextest run -p krabka-pgcatalog
 ```
 
 Expected: all pass.
 
 - [ ] **Step 7: Write `crates/pgcatalog/README.md`** from the template with:
-  - `{CRATE}` = `crabka-pgcatalog`
+  - `{CRATE}` = `krabka-pgcatalog`
   - `{ONELINER}` = "System catalog for the Crabka Gres engine: tables, columns, and FDW metadata as a stateless view over the KV storage seam."
   - `{OVERVIEW}` = "OID-style table ids, column definitions, and foreign-data-wrapper metadata (`FOREIGN DATA WRAPPER`/`SERVER`/`USER MAPPING`/`FOREIGN TABLE`), persisted through the `Kv` trait with PostgreSQL error codes on CRUD."
 
 - [ ] **Step 8: Commit the cleanup**
 
 ```bash
-cargo +nightly fmt -p crabka-pgcatalog
+cargo +nightly fmt -p krabka-pgcatalog
 git add crates/pgcatalog && git commit -m "chore(pgcatalog): satisfy workspace pedantic lints
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
@@ -1155,17 +1171,19 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ## Batch 4 — the engine (serial)
 
-### Task 9: Vendor `crabka-pgexec`
+### Task 9: Vendor `krabka-pgexec`
 
 The largest crate (~16k src lines, 23 end-to-end integration test files that each spawn an in-process pgwire server and drive it with tokio-postgres).
 
 **Files:**
+
 - Replace: `crates/pgexec/src/` (from `$DONOR/crates/executor/src/`)
 - Create: `crates/pgexec/tests/` (from donor), `crates/pgexec/README.md`
 
 **Interfaces:**
-- Consumes: `crabka_pgtypes`, `crabka_pgkv`, `crabka_pgmvcc`, `crabka_pgcatalog`, `crabka_pgparser`, `crabka_pgwire` (Tasks 2–8).
-- Produces: `crabka_pgexec::SqlEngine` with `new()` (ephemeral MemKv), `open(path) -> Result<Self, ExecError>` (durable fjall), `with_kv(Arc<dyn Kv>)`, `set_foreign_scanner(Arc<dyn ForeignScanner>)`, plus `crabka_pgexec::foreign::{ForeignScanner, ImportFilter, ImportedTable, ScanBounds}` and the `Committer`/`Linearizer` seams. `SqlEngine` implements `crabka_pgwire::engine::Engine`. Tasks 10 and 11 consume this. **Note:** the donor's `SqlEngine::replicated(…)` constructor exists solely for the non-vendored cluster crate — it must still compile (its `Committer`/`Linearizer` args are executor-local traits), so keep it; it is the seam G-2 implements.
+
+- Consumes: `krabka_pgtypes`, `krabka_pgkv`, `krabka_pgmvcc`, `krabka_pgcatalog`, `krabka_pgparser`, `krabka_pgwire` (Tasks 2–8).
+- Produces: `krabka_pgexec::SqlEngine` with `new()` (ephemeral MemKv), `open(path) -> Result<Self, ExecError>` (durable fjall), `with_kv(Arc<dyn Kv>)`, `set_foreign_scanner(Arc<dyn ForeignScanner>)`, plus `krabka_pgexec::foreign::{ForeignScanner, ImportFilter, ImportedTable, ScanBounds}` and the `Committer`/`Linearizer` seams. `SqlEngine` implements `krabka_pgwire::engine::Engine`. Tasks 10 and 11 consume this. **Note:** the donor's `SqlEngine::replicated(…)` constructor exists solely for the non-vendored cluster crate — it must still compile (its `Committer`/`Linearizer` args are executor-local traits), so keep it; it is the seam G-2 implements.
 
 - [ ] **Step 1: Copy sources and tests**
 
@@ -1183,38 +1201,38 @@ Expected: the count matches `ls $DONOR/crates/executor/tests | wc -l` exactly (t
 - [ ] **Step 3: Add the docs.rs root URL** after the `//!` block in `crates/pgexec/src/lib.rs`:
 
 ```rust
-#![doc(html_root_url = "https://docs.rs/crabka-pgexec/0.3.9")]
+#![doc(html_root_url = "https://docs.rs/krabka-pgexec/0.3.9")]
 ```
 
 - [ ] **Step 4: Format, build, commit the import**
 
 ```bash
-cargo +nightly fmt -p crabka-pgexec
-cargo check -p crabka-pgexec --all-targets
+cargo +nightly fmt -p krabka-pgexec
+cargo check -p krabka-pgexec --all-targets
 git add crates/pgexec && git commit -m "feat(pgexec): vendor executor from crabgresql@93f3d17
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 5: Pedantic lint pass** — `cargo clippy -p crabka-pgexec --all-targets -- -D warnings`. This is the bulk of the chapter's lint work; budget accordingly, apply the policy mechanically, and keep fixes behavior-preserving (the conformance baseline in Task 12 is the backstop).
+- [ ] **Step 5: Pedantic lint pass** — `cargo clippy -p krabka-pgexec --all-targets -- -D warnings`. This is the bulk of the chapter's lint work; budget accordingly, apply the policy mechanically, and keep fixes behavior-preserving (the conformance baseline in Task 12 is the backstop).
 
 - [ ] **Step 6: Run the crate tests**
 
 ```bash
-cargo nextest run -p crabka-pgexec
+cargo nextest run -p krabka-pgexec
 ```
 
 Expected: all pass, zero failures, none ignored.
 
 - [ ] **Step 7: Write `crates/pgexec/README.md`** from the template with:
-  - `{CRATE}` = `crabka-pgexec`
+  - `{CRATE}` = `krabka-pgexec`
   - `{ONELINER}` = "SQL execution engine for Crabka Gres: turns parsed SQL into catalog and KV operations under MVCC and implements the pgwire `Engine` trait."
-  - `{OVERVIEW}` = "The engine behind a Gres tenant: session management, transactions (Read Committed / Repeatable Read), row-level locking for concurrent writers, joins, aggregates, subqueries, CTEs, set operations, and the PostgreSQL function library, executing over the `Kv` seam with `crabka-pgmvcc` visibility. The `Committer`/`Linearizer` seams are where Chapter Gres G-2 attaches substrate-backed durability; `foreign::ForeignScanner` is the FDW seam."
+  - `{OVERVIEW}` = "The engine behind a Gres tenant: session management, transactions (Read Committed / Repeatable Read), row-level locking for concurrent writers, joins, aggregates, subqueries, CTEs, set operations, and the PostgreSQL function library, executing over the `Kv` seam with `krabka-pgmvcc` visibility. The `Committer`/`Linearizer` seams are where Chapter Gres G-2 attaches substrate-backed durability; `foreign::ForeignScanner` is the FDW seam."
 
 - [ ] **Step 8: Commit the cleanup**
 
 ```bash
-cargo +nightly fmt -p crabka-pgexec
+cargo +nightly fmt -p krabka-pgexec
 git add crates/pgexec && git commit -m "chore(pgexec): satisfy workspace pedantic lints
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
@@ -1224,16 +1242,18 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ## Batch 5 — FDW (serial)
 
-### Task 10: Vendor `crabka-gres-fdw` (un-gated, path-dep rewire)
+### Task 10: Vendor `krabka-gres-fdw` (un-gated, path-dep rewire)
 
 **Files:**
+
 - Replace: `crates/gres-fdw/src/` (from `$DONOR/crates/kafka_fdw/src/`)
 - Create: `crates/gres-fdw/tests/` (from donor), `crates/gres-fdw/README.md`
 - Modify: `.config/nextest.toml` (new test group — no other task touches this file)
 
 **Interfaces:**
-- Consumes: `crabka_pgexec::foreign::ForeignScanner` (Task 9), `crabka_pgcatalog`, `crabka_pgkv`, `crabka_pgtypes`; workspace crates `crabka-client-core`, `crabka-client-admin`, `crabka-protocol`, `crabka-schema-serde`, `crabka-security` (path deps now, previously published 0.3.7).
-- Produces: `crabka_gres_fdw::KafkaFdw` (implements `ForeignScanner`) and `crabka_gres_fdw::provider::install_default_provider()`. Task 11 wires both into the binary.
+
+- Consumes: `krabka_pgexec::foreign::ForeignScanner` (Task 9), `krabka_pgcatalog`, `krabka_pgkv`, `krabka_pgtypes`; workspace crates `krabka-client-core`, `krabka-client-admin`, `krabka-protocol`, `krabka-schema-serde`, `krabka-security` (path deps now, previously published 0.3.7).
+- Produces: `krabka_gres_fdw::KafkaFdw` (implements `ForeignScanner`) and `krabka_gres_fdw::provider::install_default_provider()`. Task 11 wires both into the binary.
 
 - [ ] **Step 1: Copy sources and tests**
 
@@ -1258,7 +1278,7 @@ cp -r $DONOR/crates/kafka_fdw/tests crates/gres-fdw/
 
 ```rust
 let reg = store
-    .register(crabka_schema_registry::kafkastore::RegisterSchema {
+    .register(krabka_schema_registry::kafkastore::RegisterSchema {
         subject: &subject,
         ty: SchemaType::Avro,
         schema: schema_json,
@@ -1277,9 +1297,9 @@ let id = u32::try_from(reg.id.0).expect("schema id fits u32");
 - [ ] **Step 5: Format, build, commit the import**
 
 ```bash
-cargo +nightly fmt -p crabka-gres-fdw
-cargo check -p crabka-gres-fdw --all-targets
-git add crates/gres-fdw && git commit -m "feat(gres): vendor kafka_fdw as crabka-gres-fdw on workspace path deps
+cargo +nightly fmt -p krabka-gres-fdw
+cargo check -p krabka-gres-fdw --all-targets
+git add crates/gres-fdw && git commit -m "feat(gres): vendor kafka_fdw as krabka-gres-fdw on workspace path deps
 
 Drops the donor's off-by-default kafka feature gate (pure-Rust is ambient in
 this workspace) and adapts to two published-API drifts: schema_by_id's
@@ -1288,7 +1308,7 @@ FetchedSchema return and KafkaStore::register's RegisterSchema struct.
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 6: Pedantic lint pass** — `cargo clippy -p crabka-gres-fdw --all-targets -- -D warnings`; fix per policy.
+- [ ] **Step 6: Pedantic lint pass** — `cargo clippy -p krabka-gres-fdw --all-targets -- -D warnings`; fix per policy.
 
 - [ ] **Step 7: Add the nextest test group** — in `.config/nextest.toml`, append to `[test-groups]`:
 
@@ -1302,28 +1322,28 @@ and after the existing `[[profile.default.overrides]]` blocks:
 
 ```toml
 [[profile.default.overrides]]
-# crabka-gres-fdw's integration tests boot an in-process broker + registry.
-filter = 'package(crabka-gres-fdw) & kind(test)'
+# krabka-gres-fdw's integration tests boot an in-process broker + registry.
+filter = 'package(krabka-gres-fdw) & kind(test)'
 test-group = 'gres-fdw'
 ```
 
 - [ ] **Step 8: Run the crate tests**
 
 ```bash
-cargo nextest run -p crabka-gres-fdw
+cargo nextest run -p krabka-gres-fdw
 ```
 
 Expected: all pass — unit suites (source-bounds clamping, config resolution, Avro/JSON/protobuf projection) plus `kafka_fdw_roundtrip_avro_and_raw_fallback`, which boots an in-process Crabka broker + schema registry (no Docker) and round-trips `CREATE SERVER` / `IMPORT FOREIGN SCHEMA` / `SELECT`.
 
 - [ ] **Step 9: Write `crates/gres-fdw/README.md`** — template (internal variant, no badges) with:
-  - `{CRATE}` = `crabka-gres-fdw`
+  - `{CRATE}` = `krabka-gres-fdw`
   - `{ONELINER}` = "Foreign-data wrapper exposing Kafka topics as SQL tables inside Crabka Gres tenant databases."
   - `{OVERVIEW}` = "Implements the executor's `ForeignScanner` seam over the workspace's own Rust Kafka clients: bounded per-partition snapshot reads at `READ_COMMITTED`, envelope columns (`_partition`, `_offset`, `_timestamp`, `_key`, `_headers`), Avro/JSON/Protobuf value decoding via Schema Registry, and `IMPORT FOREIGN SCHEMA` from registered schemas."
 
 - [ ] **Step 10: Commit the cleanup**
 
 ```bash
-cargo +nightly fmt -p crabka-gres-fdw
+cargo +nightly fmt -p krabka-gres-fdw
 git add crates/gres-fdw .config/nextest.toml
 git commit -m "chore(gres): gres-fdw pedantic lints and nextest concurrency group
 
@@ -1334,14 +1354,16 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ## Batch 6 — the service binary (serial)
 
-### Task 11: `crabka-gres` binary, CLI smoke test, smoke scripts
+### Task 11: `krabka-gres` binary, CLI smoke test, smoke scripts
 
 **Files:**
+
 - Create: `crates/gres/src/main.rs` (donor serve mode, adapted), `crates/gres/tests/cli_smoke.rs`, `crates/gres/README.md`, `scripts/gres-psql-smoke.sh`, `scripts/gres-durable-restart-smoke.sh`
 
 **Interfaces:**
-- Consumes: `crabka_pgexec::SqlEngine`, `crabka_pgwire::{server::serve_tls, session::{SessionConfig, AuthMode}, scram::ScramVerifier}`, `crabka_gres_fdw::{KafkaFdw, provider::install_default_provider}`.
-- Produces: the `crabka-gres` binary — CLI: `--listen` (default `127.0.0.1:5433`), `--data-dir` (optional; absent = ephemeral), `--tls-cert`/`--tls-key` (paired), `--auth trust|scram`, `--user-cred USER=PASSWORD` (repeatable). Tasks 12 and 13 run it.
+
+- Consumes: `krabka_pgexec::SqlEngine`, `krabka_pgwire::{server::serve_tls, session::{SessionConfig, AuthMode}, scram::ScramVerifier}`, `krabka_gres_fdw::{KafkaFdw, provider::install_default_provider}`.
+- Produces: the `krabka-gres` binary — CLI: `--listen` (default `127.0.0.1:5433`), `--data-dir` (optional; absent = ephemeral), `--tls-cert`/`--tls-key` (paired), `--auth trust|scram`, `--user-cred USER=PASSWORD` (repeatable). Tasks 12 and 13 run it.
 
 - [ ] **Step 1: Copy the donor bin and cut it down**
 
@@ -1350,23 +1372,23 @@ cp $DONOR/crates/crabgresql/src/main.rs crates/gres/src/main.rs
 ```
 
 Then edit `crates/gres/src/main.rs`:
+
 1. Delete everything cluster-related: the `enum Command { Node(NodeArgs) }` declaration, the `NodeArgs` struct, the whole `run_node()` function, the `Some(Command::Node(args)) => …` match arm and the `subcommand` field it matches on, and every `use cluster::…`/`cluster::` reference. After this, `main` unconditionally runs the serve path.
 2. Un-gate the FDW wiring: the `#[cfg(feature = "kafka")]`-gated statements in the serve path become unconditional (delete the attribute/gating, keep the bodies), ending up as:
 
 ```rust
-crabka_gres_fdw::provider::install_default_provider();
-engine.set_foreign_scanner(Arc::new(crabka_gres_fdw::KafkaFdw));
+krabka_gres_fdw::provider::install_default_provider();
+engine.set_foreign_scanner(Arc::new(krabka_gres_fdw::KafkaFdw));
 ```
 
-(placed exactly where the donor's gated versions sat: after the engine is constructed, before `Arc::new(engine)`).
-3. Update the clap command attribute to `#[command(name = "crabka-gres", version, about = "Crabka Gres — pure-Rust Postgres-compatible tenant compute")]`.
+(placed exactly where the donor's gated versions sat: after the engine is constructed, before `Arc::new(engine)`). 3. Update the clap command attribute to `#[command(name = "krabka-gres", version, about = "Crabka Gres — pure-Rust Postgres-compatible tenant compute")]`.
 
 - [ ] **Step 2: Apply the rename sed** (from `crates/gres/`; renames `executor::`, `pgwire::`, `kafka_fdw::` references). Expected: `rename clean`.
 
 - [ ] **Step 3: Build and run it manually once**
 
 ```bash
-cargo run -p crabka-gres -- --listen 127.0.0.1:54399 &
+cargo run -p krabka-gres -- --listen 127.0.0.1:54399 &
 sleep 1 && psql "host=127.0.0.1 port=54399 user=crab dbname=crab sslmode=prefer" -tAc 'SELECT 1'; kill %1
 ```
 
@@ -1375,7 +1397,7 @@ Expected: prints `1`. (If psql is not installed locally, skip this step — the 
 - [ ] **Step 4: Write the failing CLI smoke test** — `crates/gres/tests/cli_smoke.rs`:
 
 ```rust
-//! Boots the real `crabka-gres` binary and drives it over the Postgres wire.
+//! Boots the real `krabka-gres` binary and drives it over the Postgres wire.
 
 use std::process::{Child, Command};
 use std::time::Duration;
@@ -1405,10 +1427,10 @@ fn free_port() -> u16 {
 async fn select_one_roundtrips_through_the_real_binary() {
     let port = free_port();
     let _server = KillOnDrop(
-        Command::new(env!("CARGO_BIN_EXE_crabka-gres"))
+        Command::new(env!("CARGO_BIN_EXE_krabka-gres"))
             .args(["--listen", &format!("127.0.0.1:{port}")])
             .spawn()
-            .expect("spawn crabka-gres"),
+            .expect("spawn krabka-gres"),
     );
 
     let conn_str = format!("host=127.0.0.1 port={port} user=crab dbname=crab");
@@ -1432,14 +1454,14 @@ async fn select_one_roundtrips_through_the_real_binary() {
             }
         }
     }
-    panic!("crabka-gres never became ready after 10s: {last_err}");
+    panic!("krabka-gres never became ready after 10s: {last_err}");
 }
 ```
 
 - [ ] **Step 5: Run the smoke test**
 
 ```bash
-cargo nextest run -p crabka-gres
+cargo nextest run -p krabka-gres
 ```
 
 Expected: PASS (1 test). If it fails, the binary is broken — fix `main.rs`, not the test.
@@ -1447,16 +1469,16 @@ Expected: PASS (1 test). If it fails, the binary is broken — fix `main.rs`, no
 - [ ] **Step 6: Lint and format**
 
 ```bash
-cargo clippy -p crabka-gres --all-targets -- -D warnings
-cargo +nightly fmt -p crabka-gres
+cargo clippy -p krabka-gres --all-targets -- -D warnings
+cargo +nightly fmt -p krabka-gres
 ```
 
-- [ ] **Step 7: Write the smoke scripts** — both are the donor scripts with three substitutions: build/run `crabka-gres` (package `-p crabka-gres`, binary `./target/debug/crabka-gres`) instead of `crabgresql`; everything else (ports, cert fixture paths under `crates/pgwire/tests/fixtures`, readiness loops, TLS/SCRAM legs) is kept verbatim.
+- [ ] **Step 7: Write the smoke scripts** — both are the donor scripts with three substitutions: build/run `krabka-gres` (package `-p krabka-gres`, binary `./target/debug/krabka-gres`) instead of `crabgresql`; everything else (ports, cert fixture paths under `crates/pgwire/tests/fixtures`, readiness loops, TLS/SCRAM legs) is kept verbatim.
 
 `scripts/gres-psql-smoke.sh` — copy `$DONOR/scripts/psql-smoke.sh`, then:
 
 ```bash
-sed -i -e 's/-p crabgresql/-p crabka-gres/' -e 's#/target/debug/crabgresql#/target/debug/crabka-gres#g' -e 's#\./target/debug/crabgresql#./target/debug/crabka-gres#g' scripts/gres-psql-smoke.sh
+sed -i -e 's/-p crabgresql/-p krabka-gres/' -e 's#/target/debug/crabgresql#/target/debug/krabka-gres#g' -e 's#\./target/debug/crabgresql#./target/debug/krabka-gres#g' scripts/gres-psql-smoke.sh
 chmod +x scripts/gres-psql-smoke.sh
 ```
 
@@ -1472,15 +1494,15 @@ chmod +x scripts/gres-psql-smoke.sh
 Expected: `PASS: psql SELECT 1 -> 1` (+ TLS and TLS+SCRAM legs, since the pgwire fixtures exist) and `PASS: data survived restart -> durable`.
 
 - [ ] **Step 9: Write `crates/gres/README.md`** — template (internal variant, no badges) with:
-  - `{CRATE}` = `crabka-gres`
+  - `{CRATE}` = `krabka-gres`
   - `{ONELINER}` = "Crabka Gres service: a pure-Rust Postgres-compatible tenant compute for the Crabka substrate."
-  - `{OVERVIEW}` = "Serves one tenant database over the Postgres v3 wire protocol (TLS and SCRAM-SHA-256 optional): ephemeral by default, durable on local fjall with `--data-dir`. Kafka topics are queryable as foreign tables via `crabka-gres-fdw`. Substrate-backed durability (WAL topic + object-store checkpoints) arrives in Chapter Gres G-2/G-3; the PgDog front door and lifecycle in G-4/G-5."
-  Plus a `## Quick Start` section after Overview:
+  - `{OVERVIEW}` = "Serves one tenant database over the Postgres v3 wire protocol (TLS and SCRAM-SHA-256 optional): ephemeral by default, durable on local fjall with `--data-dir`. Kafka topics are queryable as foreign tables via `krabka-gres-fdw`. Substrate-backed durability (WAL topic + object-store checkpoints) arrives in Chapter Gres G-2/G-3; the PgDog front door and lifecycle in G-4/G-5."
+    Plus a `## Quick Start` section after Overview:
 
 ```markdown
 ## Quick Start
 
-    cargo run -p crabka-gres -- --listen 127.0.0.1:5433 --data-dir /tmp/gres-data
+    cargo run -p krabka-gres -- --listen 127.0.0.1:5433 --data-dir /tmp/gres-data
     psql "host=127.0.0.1 port=5433 user=crab dbname=crab"
 ```
 
@@ -1488,7 +1510,7 @@ Expected: `PASS: psql SELECT 1 -> 1` (+ TLS and TLS+SCRAM legs, since the pgwire
 
 ```bash
 git add crates/gres scripts/gres-psql-smoke.sh scripts/gres-durable-restart-smoke.sh
-git commit -m "feat(gres): crabka-gres tenant compute binary with psql and durability smokes
+git commit -m "feat(gres): krabka-gres tenant compute binary with psql and durability smokes
 
 The donor's serve mode (pgwire + SqlEngine on MemKv/fjall, TLS, SCRAM) minus
 the cluster node subcommand, with the FDW always wired; adds a CLI smoke test
@@ -1506,10 +1528,12 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 The G-1 gate: prove the vendored engine reproduces the donor's conformance results exactly, then pin those numbers. Requires Docker locally.
 
 **Files:**
+
 - Create: `crates/gres-conformance/baseline.json`
 
 **Interfaces:**
-- Consumes: `crabka-gres` + `crabka-gres-conformance` binaries; the donor clone.
+
+- Consumes: `krabka-gres` + `krabka-gres-conformance` binaries; the donor clone.
 - Produces: `crates/gres-conformance/baseline.json` (`{"total": T, "matched": M}`) consumed by Task 13's CI job via `--baseline`.
 
 - [ ] **Step 1: Run the DONOR harness against a fresh postgres:18 oracle**
@@ -1532,7 +1556,7 @@ kill $DONOR_PID
 docker rm -f gres-oracle
 ```
 
-Expected: `parity: NN.N% (M / T) -> …` on stdout. (The donor build resolves published `crabka-*` 0.3 crates from crates.io — expected, that is how the donor pins them.)
+Expected: `parity: NN.N% (M / T) -> …` on stdout. (The donor build resolves published `krabka-*` 0.3 crates from crates.io — expected, that is how the donor pins them.)
 
 - [ ] **Step 2: Run OUR harness against a fresh identical oracle** (fresh container — the corpus creates tables, so an oracle cannot be reused across runs)
 
@@ -1541,11 +1565,11 @@ docker run -d --name gres-oracle -e POSTGRES_HOST_AUTH_METHOD=trust -p 54320:543
 until docker exec gres-oracle pg_isready -U postgres >/dev/null 2>&1; do sleep 0.5; done
 
 cd <repo root>
-cargo build -p crabka-gres -p crabka-gres-conformance
-./target/debug/crabka-gres --listen 127.0.0.1:54342 &
+cargo build -p krabka-gres -p krabka-gres-conformance
+./target/debug/krabka-gres --listen 127.0.0.1:54342 &
 GRES_PID=$!
 until bash -c 'exec 3<>/dev/tcp/127.0.0.1/54342' 2>/dev/null; do sleep 0.3; done
-./target/debug/crabka-gres-conformance \
+./target/debug/krabka-gres-conformance \
   --oracle-url "host=127.0.0.1 port=54320 user=postgres dbname=postgres" \
   --subject-url "host=127.0.0.1 port=54342 user=crab dbname=crab" \
   --corpus crates/gres-conformance/corpus \
@@ -1585,120 +1609,122 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 13: CI wiring — conformance job, integration job, codecov
 
 **Files:**
+
 - Modify: `.github/workflows/ci.yml` (changes-filter, two new jobs, gatekeeper needs), `codecov.yml`
 
 **Interfaces:**
+
 - Consumes: `scripts/gres-*.sh`, the three gres binaries, `crates/gres-conformance/baseline.json` (Task 12).
 - Produces: CI jobs `gres-conformance` and `gres-integration`; codecov flag `gres-integration`.
 
 - [ ] **Step 1: Add the paths filter** — in the `changes` job of `.github/workflows/ci.yml`, add an output `gres: ${{ steps.filter.outputs.gres }}` alongside the existing outputs, and in the `filters:` block (mirroring the existing entries' style):
 
 ```yaml
-          gres:
-            - "crates/pgtypes/**"
-            - "crates/pgparser/**"
-            - "crates/pgwire/**"
-            - "crates/pgkv/**"
-            - "crates/pgmvcc/**"
-            - "crates/pgcatalog/**"
-            - "crates/pgexec/**"
-            - "crates/gres/**"
-            - "crates/gres-fdw/**"
-            - "crates/gres-conformance/**"
-            - "scripts/gres-psql-smoke.sh"
-            - "scripts/gres-durable-restart-smoke.sh"
+gres:
+  - "crates/pgtypes/**"
+  - "crates/pgparser/**"
+  - "crates/pgwire/**"
+  - "crates/pgkv/**"
+  - "crates/pgmvcc/**"
+  - "crates/pgcatalog/**"
+  - "crates/pgexec/**"
+  - "crates/gres/**"
+  - "crates/gres-fdw/**"
+  - "crates/gres-conformance/**"
+  - "scripts/gres-psql-smoke.sh"
+  - "scripts/gres-durable-restart-smoke.sh"
 ```
 
 - [ ] **Step 2: Add the `gres-conformance` job** (modeled on `metrics-conformance` + the donor's oracle service; place it near the other `*-conformance` jobs; use the same toolchain value the sibling jobs use):
 
 ```yaml
-  gres-conformance:
-    needs: changes
-    if: ${{ needs.changes.outputs.gres == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    services:
-      oracle:
-        image: postgres:18
-        env:
-          POSTGRES_HOST_AUTH_METHOD: trust
-        ports:
-          - 54320:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s --health-timeout 5s --health-retries 10
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.96.0"
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: gres-conformance
-      - name: Install psql 18 (pgdg)
-        run: |
-          sudo install -d /usr/share/postgresql-common/pgdg
-          sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
-          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
-          sudo apt-get update && sudo apt-get install -y postgresql-client-18
-      - run: cargo build --locked -p crabka-gres -p crabka-gres-conformance
-      - run: ./scripts/gres-psql-smoke.sh
-      - name: Durable restart smoke
-        run: ./scripts/gres-durable-restart-smoke.sh
-      - name: Conformance harness against the parity baseline
-        run: |
-          ./target/debug/crabka-gres --listen 127.0.0.1:54333 &
-          for _ in $(seq 30); do
-            if psql "host=127.0.0.1 port=54333 user=crab dbname=crab sslmode=prefer" -tAc 'SELECT 1' >/dev/null 2>&1; then break; fi
-            sleep 0.3
-          done
-          ./target/debug/crabka-gres-conformance \
-            --oracle-url "host=127.0.0.1 port=54320 user=postgres dbname=postgres" \
-            --subject-url "host=127.0.0.1 port=54333 user=crab dbname=crab" \
-            --corpus crates/gres-conformance/corpus \
-            --baseline crates/gres-conformance/baseline.json \
-            --out parity.json --summary parity.md
-      - name: Publish parity summary
-        if: ${{ !cancelled() }}
-        run: cat parity.md >> "$GITHUB_STEP_SUMMARY"
-      - name: Upload parity report
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: gres-parity-report
-          path: |
-            parity.json
-            parity.md
-          if-no-files-found: warn
+gres-conformance:
+  needs: changes
+  if: ${{ needs.changes.outputs.gres == 'true' }}
+  runs-on: ubuntu-latest
+  timeout-minutes: 45
+  services:
+    oracle:
+      image: postgres:18
+      env:
+        POSTGRES_HOST_AUTH_METHOD: trust
+      ports:
+        - 54320:5432
+      options: >-
+        --health-cmd "pg_isready -U postgres"
+        --health-interval 5s --health-timeout 5s --health-retries 10
+  steps:
+    - uses: actions/checkout@v7
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: "1.96.0"
+    - uses: Swatinem/rust-cache@v2
+      with:
+        key: gres-conformance
+    - name: Install psql 18 (pgdg)
+      run: |
+        sudo install -d /usr/share/postgresql-common/pgdg
+        sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+        echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+        sudo apt-get update && sudo apt-get install -y postgresql-client-18
+    - run: cargo build --locked -p krabka-gres -p krabka-gres-conformance
+    - run: ./scripts/gres-psql-smoke.sh
+    - name: Durable restart smoke
+      run: ./scripts/gres-durable-restart-smoke.sh
+    - name: Conformance harness against the parity baseline
+      run: |
+        ./target/debug/krabka-gres --listen 127.0.0.1:54333 &
+        for _ in $(seq 30); do
+          if psql "host=127.0.0.1 port=54333 user=crab dbname=crab sslmode=prefer" -tAc 'SELECT 1' >/dev/null 2>&1; then break; fi
+          sleep 0.3
+        done
+        ./target/debug/krabka-gres-conformance \
+          --oracle-url "host=127.0.0.1 port=54320 user=postgres dbname=postgres" \
+          --subject-url "host=127.0.0.1 port=54333 user=crab dbname=crab" \
+          --corpus crates/gres-conformance/corpus \
+          --baseline crates/gres-conformance/baseline.json \
+          --out parity.json --summary parity.md
+    - name: Publish parity summary
+      if: ${{ !cancelled() }}
+      run: cat parity.md >> "$GITHUB_STEP_SUMMARY"
+    - name: Upload parity report
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: gres-parity-report
+        path: |
+          parity.json
+          parity.md
+        if-no-files-found: warn
 ```
 
 - [ ] **Step 3: Add the `gres-integration` job** (modeled on `client-consumer-integration`; mirror that job's coverage-upload step verbatim — same action version, token/secret handling, and flags key — substituting the flag name):
 
 ```yaml
-  gres-integration:
-    needs: changes
-    if: ${{ needs.changes.outputs.gres == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.96.0"
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: gres-integration
-      - uses: taiki-e/install-action@nextest
-      - uses: taiki-e/install-action@cargo-llvm-cov
-      - name: Gres engine integration tests
-        run: |
-          cargo llvm-cov nextest -p crabka-pgwire -p crabka-pgexec -p crabka-gres-fdw -p crabka-gres \
-            --profile ci --tests --lcov --output-path lcov.info
-      - name: Upload coverage
-        uses: codecov/codecov-action@v5   # ← mirror the sibling job's exact upload step
-        with:
-          files: lcov.info
-          flags: gres-integration
+gres-integration:
+  needs: changes
+  if: ${{ needs.changes.outputs.gres == 'true' }}
+  runs-on: ubuntu-latest
+  timeout-minutes: 60
+  steps:
+    - uses: actions/checkout@v7
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: "1.96.0"
+    - uses: Swatinem/rust-cache@v2
+      with:
+        key: gres-integration
+    - uses: taiki-e/install-action@nextest
+    - uses: taiki-e/install-action@cargo-llvm-cov
+    - name: Gres engine integration tests
+      run: |
+        cargo llvm-cov nextest -p krabka-pgwire -p krabka-pgexec -p krabka-gres-fdw -p krabka-gres \
+          --profile ci --tests --lcov --output-path lcov.info
+    - name: Upload coverage
+      uses: codecov/codecov-action@v5 # ← mirror the sibling job's exact upload step
+      with:
+        files: lcov.info
+        flags: gres-integration
 ```
 
 - [ ] **Step 4: Gate it** — add `gres-conformance` and `gres-integration` to the `gatekeeper-ci` job's `needs:` list.
@@ -1706,8 +1732,8 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - [ ] **Step 5: codecov.yml** — bump `after_n_builds: 11` → `12` in **both** places (`codecov.notify` and `comment`), and add to the `flags:` section:
 
 ```yaml
-  gres-integration:
-    carryforward: true
+gres-integration:
+  carryforward: true
 ```
 
 - [ ] **Step 6: Validate and commit**
@@ -1728,9 +1754,11 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 14: Registration — release-plz, publish allowlist, Bazel manifests, root README
 
 **Files:**
+
 - Modify: `release-plz.toml`, `tools/check-publish-allowlist.sh`, `MODULE.bazel`, `README.md`
 
 **Interfaces:**
+
 - Consumes: all ten crates existing in `cargo metadata` (the allowlist script rejects release-plz entries for unknown packages — this is why registration is last).
 - Produces: a green `tools/check-publish-allowlist.sh`; release-plz coverage for all ten crates.
 
@@ -1738,37 +1766,37 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ```toml
 [[package]]
-name = "crabka-pgcatalog"
+name = "krabka-pgcatalog"
 publish = true
 release = true
 
 [[package]]
-name = "crabka-pgexec"
+name = "krabka-pgexec"
 publish = true
 release = true
 
 [[package]]
-name = "crabka-pgkv"
+name = "krabka-pgkv"
 publish = true
 release = true
 
 [[package]]
-name = "crabka-pgmvcc"
+name = "krabka-pgmvcc"
 publish = true
 release = true
 
 [[package]]
-name = "crabka-pgparser"
+name = "krabka-pgparser"
 publish = true
 release = true
 
 [[package]]
-name = "crabka-pgtypes"
+name = "krabka-pgtypes"
 publish = true
 release = true
 
 [[package]]
-name = "crabka-pgwire"
+name = "krabka-pgwire"
 publish = true
 release = true
 ```
@@ -1777,17 +1805,17 @@ and in the internal group:
 
 ```toml
 [[package]]
-name = "crabka-gres"
+name = "krabka-gres"
 publish = false
 release = false
 
 [[package]]
-name = "crabka-gres-conformance"
+name = "krabka-gres-conformance"
 publish = false
 release = false
 
 [[package]]
-name = "crabka-gres-fdw"
+name = "krabka-gres-fdw"
 publish = false
 release = false
 ```
@@ -1797,13 +1825,13 @@ release = false
 - [ ] **Step 2: Publish allowlist** — in `tools/check-publish-allowlist.sh`, add the seven published names to the `allowlist = { … }` set (keep it sorted):
 
 ```python
-    "crabka-pgcatalog",
-    "crabka-pgexec",
-    "crabka-pgkv",
-    "crabka-pgmvcc",
-    "crabka-pgparser",
-    "crabka-pgtypes",
-    "crabka-pgwire",
+    "krabka-pgcatalog",
+    "krabka-pgexec",
+    "krabka-pgkv",
+    "krabka-pgmvcc",
+    "krabka-pgparser",
+    "krabka-pgtypes",
+    "krabka-pgwire",
 ```
 
 - [ ] **Step 3: Run the allowlist check**
@@ -1828,7 +1856,7 @@ Run the script exactly as the `rust` CI job invokes it (see `.github/workflows/c
 - [ ] **Step 5: Root README workspace table** — add one row to the "Workspace" layer table in `README.md`:
 
 ```markdown
-| Postgres-compatible engine (Chapter Gres) | [`crabka-gres`](crates/gres), [`crabka-pgexec`](crates/pgexec), [`crabka-pgwire`](crates/pgwire), [`crabka-pgtypes`](crates/pgtypes), [`crabka-pgparser`](crates/pgparser), [`crabka-pgkv`](crates/pgkv), [`crabka-pgmvcc`](crates/pgmvcc), [`crabka-pgcatalog`](crates/pgcatalog), [`crabka-gres-fdw`](crates/gres-fdw) |
+| Postgres-compatible engine (Chapter Gres) | [`krabka-gres`](crates/gres), [`krabka-pgexec`](crates/pgexec), [`krabka-pgwire`](crates/pgwire), [`krabka-pgtypes`](crates/pgtypes), [`krabka-pgparser`](crates/pgparser), [`krabka-pgkv`](crates/pgkv), [`krabka-pgmvcc`](crates/pgmvcc), [`krabka-pgcatalog`](crates/pgcatalog), [`krabka-gres-fdw`](crates/gres-fdw) |
 ```
 
 - [ ] **Step 6: Full-workspace verification**

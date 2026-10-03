@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) fn view_write_qualifier<'a>(
-    name: &'a crabka_pgcatalog::RelationName,
+    name: &'a krabka_pgcatalog::RelationName,
     alias: Option<&'a str>,
 ) -> &'a str {
     alias.unwrap_or(&name.name)
@@ -18,7 +18,7 @@ pub(super) fn view_write_alias(stmt: &Statement) -> Option<&str> {
 }
 
 pub(super) fn view_writes(stmt: &Statement) -> Vec<crate::viewwrite::ViewWrite> {
-    use crabka_pgparser::ast::MergeAction;
+    use krabka_pgparser::ast::MergeAction;
 
     use crate::viewwrite::{ViewCommand, ViewWrite};
 

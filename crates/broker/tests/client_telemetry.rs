@@ -29,7 +29,7 @@
 use assert2::{assert, check};
 mod support;
 
-use crabka_protocol::{
+use krabka_protocol::{
     owned::{
         api_versions_request::ApiVersionsRequest,
         get_telemetry_subscriptions_request::GetTelemetrySubscriptionsRequest,
@@ -53,8 +53,8 @@ const CONFIG_OP_SET: i8 = 0;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-async fn build_client(addr: std::net::SocketAddr) -> crabka_client_core::Client {
-    crabka_client_core::Client::builder()
+async fn build_client(addr: std::net::SocketAddr) -> krabka_client_core::Client {
+    krabka_client_core::Client::builder()
         .bootstrap(format!("127.0.0.1:{}", addr.port()))
         .client_id("client-telemetry-test")
         .build()
@@ -65,7 +65,7 @@ async fn build_client(addr: std::net::SocketAddr) -> crabka_client_core::Client 
 /// Configures a match-all `CLIENT_METRICS` subscription with
 /// `IncrementalAlterConfigs`.
 async fn configure_match_all_subscription(
-    client: &crabka_client_core::Client,
+    client: &krabka_client_core::Client,
     name: &str,
     interval_ms: &str,
 ) {
@@ -151,7 +151,7 @@ async fn api_versions_advertises_telemetry_apis() {
     let resp = p
         .client
         .send(ApiVersionsRequest {
-            client_software_name: "crabka-test".into(),
+            client_software_name: "krabka-test".into(),
             client_software_version: "0.0.0".into(),
             ..Default::default()
         })

@@ -254,7 +254,7 @@ pub fn secondary_index_prefix(table_id: u32, index_id: u32) -> Vec<u8> {
 ///
 /// Index lookups, and unique-constraint enforcement, are equality **by these
 /// bytes**, so the values go first through
-/// [`crabka_pgtypes::canonicalize_row_for_key`]. Two values that compare equal
+/// [`krabka_pgtypes::canonicalize_row_for_key`]. Two values that compare equal
 /// must produce the same key. Examples are `numeric` `1.0` and `1.00`, `-0.0`
 /// and `0.0`, `interval` `1 mon` and `30 days`, and the same values inside
 /// `jsonb` or an array. Canonicalization stays on this key path. `encode_row`
@@ -268,9 +268,9 @@ pub fn secondary_index_prefix(table_id: u32, index_id: u32) -> Vec<u8> {
 pub fn secondary_index_entry_prefix(
     table_id: u32,
     index_id: u32,
-    indexed_values: &[crabka_pgtypes::Datum],
+    indexed_values: &[krabka_pgtypes::Datum],
 ) -> Vec<u8> {
-    let canonical = crabka_pgtypes::canonicalize_row_for_key(indexed_values);
+    let canonical = krabka_pgtypes::canonicalize_row_for_key(indexed_values);
     let encoded_values = crate::rowenc::encode_row(&canonical);
     let mut k = secondary_index_prefix(table_id, index_id);
     k.push(SECONDARY_INDEX_EQUALITY);
@@ -299,7 +299,7 @@ pub fn secondary_index_ordered_prefix(table_id: u32, index_id: u32) -> Vec<u8> {
 pub fn secondary_index_ordered_entry_key(
     table_id: u32,
     index_id: u32,
-    indexed_values: &[crabka_pgtypes::Datum],
+    indexed_values: &[krabka_pgtypes::Datum],
     descending: &[bool],
     nulls_first: &[bool],
     rowid: u64,
@@ -307,7 +307,7 @@ pub fn secondary_index_ordered_entry_key(
     if indexed_values.len() != descending.len() || indexed_values.len() != nulls_first.len() {
         return None;
     }
-    let canonical = crabka_pgtypes::canonicalize_row_for_key(indexed_values);
+    let canonical = krabka_pgtypes::canonicalize_row_for_key(indexed_values);
     let mut key = secondary_index_ordered_prefix(table_id, index_id);
     for ((value, descending), nulls_first) in canonical.iter().zip(descending).zip(nulls_first) {
         let mut component = ordered_index_component(value, *nulls_first)?;
@@ -322,8 +322,8 @@ pub fn secondary_index_ordered_entry_key(
     Some(key)
 }
 
-fn ordered_index_component(value: &crabka_pgtypes::Datum, nulls_first: bool) -> Option<Vec<u8>> {
-    use crabka_pgtypes::Datum;
+fn ordered_index_component(value: &krabka_pgtypes::Datum, nulls_first: bool) -> Option<Vec<u8>> {
+    use krabka_pgtypes::Datum;
 
     if value.is_null() {
         return Some(vec![if nulls_first { 0 } else { u8::MAX }]);
@@ -347,7 +347,7 @@ fn ordered_index_component(value: &crabka_pgtypes::Datum, nulls_first: bool) -> 
     Some(out)
 }
 
-fn ordered_array_component(out: &mut Vec<u8>, value: &crabka_pgtypes::ArrayValue) -> Option<()> {
+fn ordered_array_component(out: &mut Vec<u8>, value: &krabka_pgtypes::ArrayValue) -> Option<()> {
     // `array_cmp` compares elements first, then the shape. A zero byte sorts
     // before every non-NULL element component and a NULL's 0xff tag, so it
     // correctly ends a common element prefix.
@@ -394,7 +394,7 @@ fn ordered_float8(value: f64) -> u64 {
 pub fn secondary_index_entry_key(
     table_id: u32,
     index_id: u32,
-    indexed_values: &[crabka_pgtypes::Datum],
+    indexed_values: &[krabka_pgtypes::Datum],
     rowid: u64,
 ) -> Vec<u8> {
     let mut k = secondary_index_entry_prefix(table_id, index_id, indexed_values);
@@ -994,12 +994,12 @@ mod tests {
     #[test]
     fn equal_index_values_build_identical_keys() {
         use assert2::assert;
-        use crabka_pgtypes::{ArrayValue, Datum, ElemType};
+        use krabka_pgtypes::{ArrayValue, Datum, ElemType};
 
-        let num = |s: &str| Datum::Numeric(crabka_pgtypes::numeric::parse(s).expect("numeric"));
-        let json = |s: &str| Datum::Jsonb(crabka_pgtypes::jsonb::parse(s).expect("jsonb"));
+        let num = |s: &str| Datum::Numeric(krabka_pgtypes::numeric::parse(s).expect("numeric"));
+        let json = |s: &str| Datum::Jsonb(krabka_pgtypes::jsonb::parse(s).expect("jsonb"));
         let iv = |s: &str| {
-            Datum::Interval(crabka_pgtypes::datetime::parse_interval(s).expect("interval"))
+            Datum::Interval(krabka_pgtypes::datetime::parse_interval(s).expect("interval"))
         };
         let pairs: &[(Datum, Datum)] = &[
             // Plain numeric scale.
@@ -1052,7 +1052,7 @@ mod tests {
 
     #[test]
     fn ordered_index_entries_follow_direction_and_null_order() {
-        use crabka_pgtypes::Datum;
+        use krabka_pgtypes::Datum;
 
         let ascending = |value| {
             secondary_index_ordered_entry_key(7, 1, &[value], &[false], &[false], 1)
@@ -1086,7 +1086,7 @@ mod tests {
 
     #[test]
     fn ordered_array_index_entries_follow_array_comparison() {
-        use crabka_pgtypes::{ArrayDim, ArrayValue, Datum, ElemType};
+        use krabka_pgtypes::{ArrayDim, ArrayValue, Datum, ElemType};
 
         let key = |array| {
             secondary_index_ordered_entry_key(7, 1, &[Datum::Array(array)], &[false], &[false], 1)
@@ -1134,7 +1134,7 @@ mod tests {
     #[test]
     fn a_vector_and_an_array_of_the_same_numbers_build_different_index_keys() {
         use assert2::assert;
-        use crabka_pgtypes::{ArrayDim, ArrayValue, Datum, ElemType};
+        use krabka_pgtypes::{ArrayDim, ArrayValue, Datum, ElemType};
 
         let value = ArrayValue::with_dims(
             ElemType::Int4,
@@ -1177,16 +1177,16 @@ mod tests {
     #[test]
     fn canonicalization_is_key_only_and_never_rewrites_stored_rows() {
         use assert2::assert;
-        use crabka_pgtypes::Datum;
+        use krabka_pgtypes::Datum;
 
-        let parse = |s: &str| crabka_pgtypes::datetime::parse_interval(s).expect("interval");
+        let parse = |s: &str| krabka_pgtypes::datetime::parse_interval(s).expect("interval");
         // Fields + rendering of a decoded interval, or `None` for any other datum.
         let stored = |d: &Datum| match d {
             Datum::Interval(i) => Some((
                 i.months,
                 i.days,
                 i.micros,
-                crabka_pgtypes::datetime::interval_to_text(*i),
+                krabka_pgtypes::datetime::interval_to_text(*i),
             )),
             _ => None,
         };

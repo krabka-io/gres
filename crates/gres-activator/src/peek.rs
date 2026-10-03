@@ -1,7 +1,7 @@
 use std::fmt;
 
 use bytes::{BufMut, BytesMut};
-use crabka_pgwire::messages::frontend::{self, StartupPacket};
+use krabka_pgwire::messages::frontend::{self, StartupPacket};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::ActivatorError;

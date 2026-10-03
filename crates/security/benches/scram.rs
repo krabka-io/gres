@@ -1,4 +1,4 @@
-//! `CodSpeed` microbenchmarks for `crabka-security`.
+//! `CodSpeed` microbenchmarks for `krabka-security`.
 //!
 //! These benchmarks cover the security primitives that every authenticated
 //! connection hits: SASL/PLAIN verification with a constant-time compare, SCRAM
@@ -7,8 +7,8 @@
 
 use std::collections::HashMap;
 
-use crabka_security::{SaslMechanism, scram, verify_plain};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use krabka_security::{SaslMechanism, scram, verify_plain};
 
 // ---------------------------------------------------------------------------
 // PBKDF2 — the dominant cost in a SCRAM login.

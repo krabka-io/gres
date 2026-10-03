@@ -25,10 +25,12 @@
 ### Task 1: Shared enum parsing
 
 **Files:**
+
 - Modify: `crates/client-consumer/src/builder.rs`
 - Modify: `crates/client-consumer/src/assignor/mod.rs`
 
 **Interfaces:**
+
 - Produces: `FromStr<Err = String>` for `AutoOffsetReset`, `IsolationLevel`, and `Assignor`.
 - Accepted values: `latest`, `earliest`, `none`, `read-uncommitted`, `read-committed`, `range`, and `cooperative-sticky`.
 
@@ -90,7 +92,7 @@ Run:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-consumer consumer_behavior_values_parse_exact_spellings --locked
+  cargo test -p krabka-client-consumer consumer_behavior_values_parse_exact_spellings --locked
 ```
 
 Expected: compilation fails because the three enums do not implement
@@ -145,9 +147,9 @@ Run:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-consumer --all-targets --locked
+  cargo test -p krabka-client-consumer --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-client-consumer --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-client-consumer --all-targets --locked -- -D warnings
 cargo +nightly fmt --all
 git diff --check
 ```
@@ -162,12 +164,14 @@ git commit -m "feat(consumer): parse behavior choices"
 ### Task 2: Demo CLI, propagation, and Compose
 
 **Files:**
+
 - Modify: `crates/observability-demo-app/src/main.rs`
 - Create: `crates/observability-demo-app/tests/consumer_behavior_config.rs`
 - Modify: `crates/observability-demo-app/tests/observability_demo_config.rs`
 - Modify: `demo/observability/docker-compose.yml`
 
 **Interfaces:**
+
 - Consumes: the three `FromStr` implementations from Task 1.
 - Produces: `effective_consumer_behavior(&Cli) -> io::Result<(AutoOffsetReset, IsolationLevel, Assignor)>`.
 - Propagates: resolved values into the matching existing Consumer builder setters.
@@ -184,7 +188,7 @@ Assert:
 
 ```rust
 // Environment values are accepted before any connection attempt.
-command.env("CRABKA_DEMO_CONSUMER_ASSIGNOR", "cooperative-sticky");
+command.env("KRABKA_DEMO_CONSUMER_ASSIGNOR", "cooperative-sticky");
 
 // CLI wins over environment.
 command.args(["--consumer-assignor", "range"]);
@@ -200,9 +204,9 @@ Extend `consumer_behavior_is_configurable_only_on_the_consume_role` in
 under `demo-consume`, with defaults:
 
 ```yaml
-CRABKA_DEMO_CONSUMER_AUTO_OFFSET_RESET: ${CRABKA_DEMO_CONSUMER_AUTO_OFFSET_RESET:-latest}
-CRABKA_DEMO_CONSUMER_ISOLATION_LEVEL: ${CRABKA_DEMO_CONSUMER_ISOLATION_LEVEL:-read-uncommitted}
-CRABKA_DEMO_CONSUMER_ASSIGNOR: ${CRABKA_DEMO_CONSUMER_ASSIGNOR:-range}
+KRABKA_DEMO_CONSUMER_AUTO_OFFSET_RESET: ${KRABKA_DEMO_CONSUMER_AUTO_OFFSET_RESET:-latest}
+KRABKA_DEMO_CONSUMER_ISOLATION_LEVEL: ${KRABKA_DEMO_CONSUMER_ISOLATION_LEVEL:-read-uncommitted}
+KRABKA_DEMO_CONSUMER_ASSIGNOR: ${KRABKA_DEMO_CONSUMER_ASSIGNOR:-range}
 ```
 
 - [x] **Step 3: Run focused tests and verify the red state**
@@ -282,10 +286,12 @@ git commit -m "feat(demo): expose consumer behavior"
 ### Task 3: Audit and close the slice
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 - Modify: `docs/superpowers/plans/2026-07-31-observability-demo-consumer-behavior.md`
 
 **Interfaces:**
+
 - Consumes: verified implementation and exact test counts from Tasks 1 and 2.
 - Produces: a completed plan and permanent audit record.
 

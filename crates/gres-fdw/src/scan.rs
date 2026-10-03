@@ -4,13 +4,13 @@
 //! The five envelope columns `_partition`, `_offset`, `_timestamp`, `_key`,
 //! and `_headers` come first. The decoded value columns
 //! (`table.columns[5..]`) follow, exactly as
-//! [`crabka_pgcatalog::create_foreign_table`] lays them out.
+//! [`krabka_pgcatalog::create_foreign_table`] lays them out.
 
 use std::{fmt::Write as _, sync::Arc};
 
-use crabka_pgcatalog::Table;
-use crabka_pgtypes::Datum;
-use crabka_schema_serde::SchemaCache;
+use krabka_pgcatalog::Table;
+use krabka_pgtypes::Datum;
+use krabka_schema_serde::SchemaCache;
 
 use crate::{
     config::ConnProfile,
@@ -20,7 +20,7 @@ use crate::{
     types::project,
 };
 
-/// Number of envelope columns that [`crabka_pgcatalog::create_foreign_table`]
+/// Number of envelope columns that [`krabka_pgcatalog::create_foreign_table`]
 /// prepends to every foreign table. The value columns start at this index.
 const ENVELOPE_COLS: usize = 5;
 
@@ -163,8 +163,8 @@ fn to_hex_text(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgcatalog::{Column, ForeignTableMeta};
-    use crabka_pgtypes::ColumnType;
+    use krabka_pgcatalog::{Column, ForeignTableMeta};
+    use krabka_pgtypes::ColumnType;
 
     use super::*;
     use crate::decode::Wire;
@@ -174,8 +174,8 @@ mod tests {
     fn raw_value_table() -> Table {
         Table {
             id: 1,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
-            name: crabka_pgcatalog::RelationName::public("events"),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            name: krabka_pgcatalog::RelationName::public("events"),
             columns: vec![
                 Column::new("_partition", ColumnType::Int4),
                 Column::new("_offset", ColumnType::Int8),
@@ -213,8 +213,8 @@ mod tests {
     /// and makes no registry access.
     fn dummy_cache() -> Arc<SchemaCache> {
         SchemaCache::new(
-            crabka_schema_serde::RegistryClient::new("http://unused"),
-            crabka_schema_serde::CacheConfig::default(),
+            krabka_schema_serde::RegistryClient::new("http://unused"),
+            krabka_schema_serde::CacheConfig::default(),
         )
     }
 

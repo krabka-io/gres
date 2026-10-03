@@ -174,7 +174,7 @@ new field.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer subscription_metadata_refresh --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer subscription_metadata_refresh --locked
 ```
 
 Expected: compilation fails because the semantic type, constant, builder
@@ -357,8 +357,8 @@ precision.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer subscription_metadata_refresh --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-integration-tests --test consumer_integration cold_start_rejoins_when_subscribed_topic_appears --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer subscription_metadata_refresh --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-integration-tests --test consumer_integration cold_start_rejoins_when_subscribed_topic_appears --locked
 ```
 
 Expected: all focused unit tests pass, and the single-member consumer recovers
@@ -369,9 +369,9 @@ after its subscribed topic appears while using the distinctive override.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-client-consumer --all-targets --locked -- -D warnings
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-integration-tests --test consumer_integration --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-client-consumer --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-integration-tests --test consumer_integration --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all -- --check
 git diff --check
 git diff -- Cargo.lock
@@ -465,10 +465,10 @@ slice and the repository-wide hardcoded-operational-value objective open.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-integration-tests --test consumer_integration cold_start_rejoins_when_subscribed_topic_appears --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-client-consumer --all-targets --locked -- -D warnings
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-integration-tests --test consumer_integration --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-integration-tests --test consumer_integration cold_start_rejoins_when_subscribed_topic_appears --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-client-consumer --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-integration-tests --test consumer_integration --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all -- --check
 git diff --check
 git diff -- Cargo.lock

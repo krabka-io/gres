@@ -14,7 +14,7 @@ already-supported process flags only when configured. Keep the shared registry
 fetch minimum in Kafka registry policy while activator and compute retain
 separate process-wide queue/frame pairs.
 
-**Tech Stack:** Rust, Clap, `kube`, `schemars`, `serde`, `crabka-units`,
+**Tech Stack:** Rust, Clap, `kube`, `schemars`, `serde`, `krabka-units`,
 `refined_type`, Cargo.
 
 ## Global Constraints
@@ -36,9 +36,11 @@ separate process-wide queue/frame pairs.
 ### Task 1: Add the Activator Process Surface
 
 **Files:**
+
 - Modify: `crates/gres-activator/src/main.rs`
 
 **Interfaces:**
+
 - Consumes:
   `ConnectionDispatchQueueCapacity`, `ClientFrameMax`, `FetchMinBytes`
 - Produces: `RegistryOptions::policy() -> Result<RegistryPolicy, String>` with
@@ -59,11 +61,11 @@ assert_eq!(
 );
 assert_eq!(
     configured.registry.policy().unwrap().frame_max().size(),
-    crabka_units::kibibytes(32)
+    krabka_units::kibibytes(32)
 );
 assert_eq!(
     configured.registry.policy().unwrap().reader_fetch_min().size(),
-    crabka_units::bytes(3)
+    krabka_units::bytes(3)
 );
 ```
 
@@ -73,7 +75,7 @@ Cover zero queue, `0B`, `1.5B`, and `101MiB` rejection before network I/O.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-activator --all-targets --locked
+  cargo test -p krabka-gres-activator --all-targets --locked
 ```
 
 Expected: parser fields or policy getters are absent.
@@ -85,21 +87,21 @@ Add:
 ```rust
 #[arg(
     long = "client-dispatch-queue-capacity",
-    env = "CRABKA_GRES_ACTIVATOR_CLIENT_DISPATCH_QUEUE_CAPACITY",
-    default_value_t = crabka_client_core::DEFAULT_CONNECTION_DISPATCH_QUEUE_CAPACITY
+    env = "KRABKA_GRES_ACTIVATOR_CLIENT_DISPATCH_QUEUE_CAPACITY",
+    default_value_t = krabka_client_core::DEFAULT_CONNECTION_DISPATCH_QUEUE_CAPACITY
 )]
 client_dispatch_queue_capacity: usize,
 
 #[arg(
     long = "client-frame-max",
-    env = "CRABKA_GRES_ACTIVATOR_CLIENT_FRAME_MAX",
+    env = "KRABKA_GRES_ACTIVATOR_CLIENT_FRAME_MAX",
     default_value = "100MiB"
 )]
 client_frame_max: ByteSize,
 
 #[arg(
     long = "registry-reader-fetch-min",
-    env = "CRABKA_GRES_REGISTRY_READER_FETCH_MIN",
+    env = "KRABKA_GRES_REGISTRY_READER_FETCH_MIN",
     default_value = "1B"
 )]
 reader_fetch_min: ByteSize,
@@ -113,9 +115,9 @@ instead of using `expect`.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-activator --all-targets --locked
+  cargo test -p krabka-gres-activator --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-gres-activator --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-gres-activator --all-targets --locked -- -D warnings
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo +nightly fmt --all
 git diff --check
@@ -133,10 +135,12 @@ git commit -m "feat(gres-activator): expose client policy"
 ### Task 2: Add Gres Registry, Activator, and Compute CRD Fields
 
 **Files:**
+
 - Modify: `crates/operator/src/crd/kafka.rs`
 - Modify: `crates/operator/src/crd/gres.rs`
 
 **Interfaces:**
+
 - Produces:
   - `GresRegistrySpec.reader_fetch_min: Option<ByteSize>`
   - `GresActivatorSpec.client_dispatch_queue_capacity: Option<usize>`
@@ -167,9 +171,9 @@ over-ceiling values.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator crd::gres --lib --locked
+  cargo test -p krabka-operator crd::gres --lib --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator crd::kafka --lib --locked
+  cargo test -p krabka-operator crd::kafka --lib --locked
 ```
 
 - [x] **Step 3: Add optional fields with existing serializers**
@@ -188,7 +192,7 @@ Byte fields use:
 #[serde(
     default,
     skip_serializing_if = "Option::is_none",
-    with = "crabka_units::serde_units::human::option_byte_size"
+    with = "krabka_units::serde_units::human::option_byte_size"
 )]
 #[schemars(with = "Option<String>")]
 pub client_frame_max: Option<ByteSize>,
@@ -215,9 +219,9 @@ byte or integer duplicates.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator crd::gres --lib --locked
+  cargo test -p krabka-operator crd::gres --lib --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator crd::kafka --lib --locked
+  cargo test -p krabka-operator crd::kafka --lib --locked
 git diff --check
 git add crates/operator/src/crd/gres.rs crates/operator/src/crd/kafka.rs
 git commit -m "feat(operator): add Gres client policy fields"
@@ -228,10 +232,12 @@ git commit -m "feat(operator): add Gres client policy fields"
 ### Task 3: Render Gres Policy Exactly Once
 
 **Files:**
+
 - Modify: `crates/operator/src/controller/gres.rs`
 - Modify: `crates/operator/src/controller/gres_tenant.rs`
 
 **Interfaces:**
+
 - Consumes: typed optional fields from Task 2
 - Produces:
   - activator flags for activator queue/frame and shared reader fetch minimum
@@ -258,9 +264,9 @@ receive the correct process pair.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator controller::gres --lib --locked
+  cargo test -p krabka-operator controller::gres --lib --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator controller::gres_tenant --lib --locked
+  cargo test -p krabka-operator controller::gres_tenant --lib --locked
 ```
 
 - [x] **Step 3: Extend existing argument builders**
@@ -274,11 +280,11 @@ arguments using typed getters and `ByteSize::human()` or explicit whole-byte
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator controller::gres --lib --locked
+  cargo test -p krabka-operator controller::gres --lib --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator controller::gres_tenant --lib --locked
+  cargo test -p krabka-operator controller::gres_tenant --lib --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-operator --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-operator --all-targets --locked -- -D warnings
 git diff --check
 git add crates/operator/src/controller/gres.rs crates/operator/src/controller/gres_tenant.rs
 git commit -m "feat(operator): render Gres client policy"
@@ -289,10 +295,12 @@ git commit -m "feat(operator): render Gres client policy"
 ### Task 4: Wire KafkaNodePool Broker Policy
 
 **Files:**
+
 - Modify: `crates/operator/src/crd/kafka_node_pool.rs`
 - Modify: `crates/operator/src/controller/kafka_node_pool.rs`
 
 **Interfaces:**
+
 - Produces optional `clientDispatchQueueCapacity` and `clientFrameMax` fields
   rendered as broker CLI flags
 
@@ -312,7 +320,7 @@ Cover both metrics-disabled and metrics-enabled main scripts.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator kafka_node_pool --lib --locked
+  cargo test -p krabka-operator kafka_node_pool --lib --locked
 ```
 
 - [x] **Step 3: Add fields, validation, and minimal script rendering**
@@ -326,7 +334,7 @@ byte-for-byte constant when both are absent.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator kafka_node_pool --lib --locked
+  cargo test -p krabka-operator kafka_node_pool --lib --locked
 git diff --check
 git add crates/operator/src/crd/kafka_node_pool.rs crates/operator/src/controller/kafka_node_pool.rs
 git commit -m "feat(operator): render broker client policy"
@@ -337,10 +345,12 @@ git commit -m "feat(operator): render broker client policy"
 ### Task 5: Wire Gateway Policy
 
 **Files:**
+
 - Modify: `crates/operator/src/crd/grpc_gateway.rs`
 - Modify: `crates/operator/src/controller/grpc_gateway.rs`
 
 **Interfaces:**
+
 - Adds optional queue/frame fields to `GatewayTuning`
 - Renders existing gateway CLI flags from `gateway_args`
 
@@ -353,7 +363,7 @@ errors, and exactly one configured queue/frame flag in the Deployment.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator grpc_gateway --lib --locked
+  cargo test -p krabka-operator grpc_gateway --lib --locked
 ```
 
 - [x] **Step 3: Implement fields and render through existing seams**
@@ -366,7 +376,7 @@ configured values in `gateway_args`. Render frame maximum as whole bytes with
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator grpc_gateway --lib --locked
+  cargo test -p krabka-operator grpc_gateway --lib --locked
 git diff --check
 git add crates/operator/src/crd/grpc_gateway.rs crates/operator/src/controller/grpc_gateway.rs
 git commit -m "feat(operator): render gateway client policy"
@@ -377,10 +387,12 @@ git commit -m "feat(operator): render gateway client policy"
 ### Task 6: Wire Schema Registry Policy
 
 **Files:**
+
 - Modify: `crates/operator/src/crd/schema_registry.rs`
 - Modify: `crates/operator/src/controller/schema_registry.rs`
 
 **Interfaces:**
+
 - Adds optional queue/frame fields to `SchemaRegistryRuntime`
 - Renders existing Schema Registry CLI flags through `build_args_and_mounts`
 
@@ -393,7 +405,7 @@ from `build_args_and_mounts`.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator schema_registry --lib --locked
+  cargo test -p krabka-operator schema_registry --lib --locked
 ```
 
 - [x] **Step 3: Add fields, validation, and rendering**
@@ -407,7 +419,7 @@ path to append `--client-dispatch-queue-capacity` and
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator schema_registry --lib --locked
+  cargo test -p krabka-operator schema_registry --lib --locked
 git diff --check
 git add crates/operator/src/crd/schema_registry.rs crates/operator/src/controller/schema_registry.rs
 git commit -m "feat(operator): render registry client policy"
@@ -418,11 +430,13 @@ git commit -m "feat(operator): render registry client policy"
 ### Task 7: Regenerate Schemas, Audit, and Verify
 
 **Files:**
+
 - Modify: generated files under `deploy/crds/`
 - Modify: `docs/configuration-audit.md`
 - Modify: this plan's checkboxes
 
 **Interfaces:**
+
 - Proves checked-in OpenAPI schemas and all runtime render paths match the
   approved design
 
@@ -443,14 +457,14 @@ Classify every production hit as schema, validation, or exact rendering.
 crd_first=$(mktemp -d)
 crd_second=$(mktemp -d)
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-operator -- gen-crds "$crd_first"
+  cargo run -q -p krabka-operator -- gen-crds "$crd_first"
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-operator -- gen-crds "$crd_second"
+  cargo run -q -p krabka-operator -- gen-crds "$crd_second"
 diff -ru "$crd_first" "$crd_second"
 cp "$crd_first"/* deploy/crds/
 crd_verify=$(mktemp -d)
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-operator -- gen-crds "$crd_verify"
+  cargo run -q -p krabka-operator -- gen-crds "$crd_verify"
 diff -ru deploy/crds "$crd_verify"
 ```
 
@@ -458,7 +472,7 @@ diff -ru deploy/crds "$crd_verify"
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-activator -p crabka-operator --all-targets --locked
+  cargo test -p krabka-gres-activator -p krabka-operator --all-targets --locked
 ```
 
 - [x] **Step 4: Run workspace gates**
@@ -477,7 +491,7 @@ git diff --check
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-activator -p crabka-operator --all-targets --locked
+  cargo test -p krabka-gres-activator -p krabka-operator --all-targets --locked
 ```
 
 - [x] **Step 6: Update the audit and commit**

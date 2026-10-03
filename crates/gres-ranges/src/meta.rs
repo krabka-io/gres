@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crabka_pgexec::{ExecError, Linearizer};
+use krabka_pgexec::{ExecError, Linearizer};
 use tokio::sync::Mutex;
 
 use crate::RangeMap;
@@ -231,7 +231,7 @@ mod tests {
     };
 
     use assert2::assert;
-    use crabka_pgexec::Linearizer;
+    use krabka_pgexec::Linearizer;
 
     use super::*;
     use crate::{MapEpoch, RangeId, RangeSpec, TableId, TenantName};

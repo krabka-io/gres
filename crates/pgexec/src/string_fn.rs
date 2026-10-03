@@ -9,8 +9,8 @@
 //! one row's already-evaluated Datums. `func::is_scalar` routes the names in, so
 //! `eval` needs no new dispatch point.
 
-use crabka_pgparser::ast::{Expr, FuncArgs, FuncCall};
-use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
+use krabka_pgparser::ast::{Expr, FuncArgs, FuncCall};
+use krabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
 use unicode_normalization::{UnicodeNormalization, is_nfc, is_nfd, is_nfkc, is_nfkd};
 
 use crate::{
@@ -456,7 +456,7 @@ fn conversion_bytes(value: &Datum, ctx: &EvalCtx) -> Result<Vec<u8>, ExecError> 
     match value {
         Datum::Bytea(bytes) => Ok(bytes.clone()),
         Datum::Text(_) => {
-            match crabka_pgtypes::cast::cast(value, ColumnType::Bytea, &ctx.time_zone)? {
+            match krabka_pgtypes::cast::cast(value, ColumnType::Bytea, &ctx.time_zone)? {
                 Datum::Bytea(bytes) => Ok(bytes),
                 _ => unreachable!("text to bytea cast returns bytea"),
             }
@@ -589,7 +589,7 @@ fn bytea_input_arg<'a>(
 ) -> Result<std::borrow::Cow<'a, [u8]>, ExecError> {
     match d {
         Datum::Bytea(bytes) => Ok(std::borrow::Cow::Borrowed(bytes)),
-        Datum::Text(_) => match crabka_pgtypes::cast::cast(d, ColumnType::Bytea, &ctx.time_zone)? {
+        Datum::Text(_) => match krabka_pgtypes::cast::cast(d, ColumnType::Bytea, &ctx.time_zone)? {
             Datum::Bytea(bytes) => Ok(std::borrow::Cow::Owned(bytes)),
             _ => unreachable!("a cast to bytea yields bytea"),
         },
@@ -1234,7 +1234,7 @@ fn format_sql(fmt: &str, args: &[Datum], ctx: &EvalCtx) -> Result<String, ExecEr
                 .ok_or_else(|| format_error("22023", "too few arguments for format()"))?;
             if !value.is_null() {
                 let width_arg = i32::try_from(int_arg(value)?)
-                    .map_err(|_| ExecError::Type(crabka_pgtypes::TypeError::Overflow))?;
+                    .map_err(|_| ExecError::Type(krabka_pgtypes::TypeError::Overflow))?;
                 left_align |= width_arg.is_negative();
                 width = width_arg.unsigned_abs() as usize;
             }

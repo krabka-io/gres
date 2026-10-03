@@ -158,7 +158,7 @@ pub trait TimestampSource: Send + Sync {
 
     /// The maximum clock offset, in the packed timestamp domain, that a reader
     /// must treat as uncertain above its read timestamp (see
-    /// [`crabka_pgmvcc::visibility::read_verdict`]).
+    /// [`krabka_pgmvcc::visibility::read_verdict`]).
     ///
     /// The default is `0`, an empty window. A centralized source such as
     /// `LogicalTso` is the sole authority, so a commit above the read timestamp
@@ -166,7 +166,7 @@ pub trait TimestampSource: Send + Sync {
     /// overrides this with its configured `max_offset`, and only that non-zero
     /// value can ever give an [`Uncertain`] verdict.
     ///
-    /// [`Uncertain`]: crabka_pgmvcc::visibility::ReadVerdict::Uncertain
+    /// [`Uncertain`]: krabka_pgmvcc::visibility::ReadVerdict::Uncertain
     fn uncertainty_window(&self) -> u64 {
         0
     }
@@ -543,7 +543,7 @@ pub struct TimestampWrite {
     /// MVCC row id.
     pub rowid: u64,
     /// New row payload.
-    pub row: Vec<crabka_pgtypes::Datum>,
+    pub row: Vec<krabka_pgtypes::Datum>,
     /// Whether this write is a delete tombstone rather than an inserted/updated row.
     pub delete: bool,
     /// Global-index entries that must be maintained in the same timestamp txn.
@@ -552,13 +552,13 @@ pub struct TimestampWrite {
 
 fn timestamp_version_key(write: &TimestampWrite, start_ts: TimestampTransactionId) -> Vec<u8> {
     match write.bucket {
-        Some(bucket) => crabka_pgmvcc::version::hash_version_key_ts(
+        Some(bucket) => krabka_pgmvcc::version::hash_version_key_ts(
             write.table_id,
             bucket,
             write.rowid,
             start_ts.get(),
         ),
-        None => crabka_pgmvcc::version::version_key_ts(write.table_id, write.rowid, start_ts.get()),
+        None => krabka_pgmvcc::version::version_key_ts(write.table_id, write.rowid, start_ts.get()),
     }
 }
 
@@ -568,7 +568,7 @@ pub struct GlobalIndexIntent {
     /// Catalog index id.
     pub index_id: u32,
     /// Indexed column values in index-definition order.
-    pub indexed_values: Vec<crabka_pgtypes::Datum>,
+    pub indexed_values: Vec<krabka_pgtypes::Datum>,
     /// Base table id this index entry points back to.
     pub base_table_id: u32,
     /// Base MVCC row id this index entry points back to.
@@ -667,8 +667,8 @@ pub struct DurableTimestampIntentIdentity {
 ///
 /// Returns an error when the requested operation cannot be completed.
 pub fn timestamp_intent_identities(
-    kv: &dyn crabka_pgkv::Kv,
-) -> Result<Vec<DurableTimestampIntentIdentity>, crabka_pgkv::KvError> {
+    kv: &dyn krabka_pgkv::Kv,
+) -> Result<Vec<DurableTimestampIntentIdentity>, krabka_pgkv::KvError> {
     let mut identities = std::collections::BTreeSet::new();
     for (_, value) in kv.scan_prefix(b"\0\0\0\0meta/ts_intent/")? {
         if value.len() != 24 {
@@ -839,8 +839,8 @@ pub fn timestamp_txn_descriptor_key(start_ts: TimestampTransactionId) -> Vec<u8>
 
 /// Encode a descriptor for one atomic range-0 commit batch.
 #[must_use]
-pub fn timestamp_txn_descriptor_op(descriptor: &TimestampTxnDescriptor) -> crabka_pgkv::WriteOp {
-    crabka_pgkv::WriteOp::Put {
+pub fn timestamp_txn_descriptor_op(descriptor: &TimestampTxnDescriptor) -> krabka_pgkv::WriteOp {
+    krabka_pgkv::WriteOp::Put {
         key: timestamp_txn_descriptor_key(descriptor.start_ts),
         value: encode_timestamp_txn_descriptor(descriptor),
     }
@@ -851,8 +851,8 @@ pub fn timestamp_txn_descriptor_op(descriptor: &TimestampTxnDescriptor) -> crabk
 pub fn timestamp_txn_descriptor_cas_op(
     descriptor: &TimestampTxnDescriptor,
     expected: Option<&TimestampTxnDescriptor>,
-) -> crabka_pgkv::WriteOp {
-    crabka_pgkv::WriteOp::ConditionalPut {
+) -> krabka_pgkv::WriteOp {
+    krabka_pgkv::WriteOp::ConditionalPut {
         key: timestamp_txn_descriptor_key(descriptor.start_ts),
         expected: expected.map(encode_timestamp_txn_descriptor),
         value: encode_timestamp_txn_descriptor(descriptor),
@@ -906,9 +906,9 @@ fn encode_timestamp_txn_descriptor(descriptor: &TimestampTxnDescriptor) -> Vec<u
 ///
 /// Returns an error when the requested operation cannot be completed.
 pub fn read_timestamp_txn_descriptor(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     start_ts: TimestampTransactionId,
-) -> Result<Option<TimestampTxnDescriptor>, crabka_pgkv::KvError> {
+) -> Result<Option<TimestampTxnDescriptor>, krabka_pgkv::KvError> {
     let Some(value) = kv.get(&timestamp_txn_descriptor_key(start_ts))? else {
         return Ok(None);
     };
@@ -925,24 +925,24 @@ pub fn read_timestamp_txn_descriptor(
 pub fn decode_timestamp_txn_descriptor_value(
     start_ts: TimestampTransactionId,
     value: &[u8],
-) -> Result<TimestampTxnDescriptor, crabka_pgkv::KvError> {
+) -> Result<TimestampTxnDescriptor, krabka_pgkv::KvError> {
     let (operation_width, value) = if let Some(rest) = value.strip_prefix(b"TXD2") {
         (22, rest)
     } else {
         (17, value)
     };
     let Some((global_xid, rest)) = take_u64(value) else {
-        return Err(crabka_pgkv::KvError::CorruptRow(
+        return Err(krabka_pgkv::KvError::CorruptRow(
             "short timestamp transaction descriptor".into(),
         ));
     };
     let Some((generation, rest)) = take_u64(rest) else {
-        return Err(crabka_pgkv::KvError::CorruptRow(
+        return Err(krabka_pgkv::KvError::CorruptRow(
             "short timestamp transaction descriptor generation".into(),
         ));
     };
     let Some((participant_count, rest)) = take_u32(rest) else {
-        return Err(crabka_pgkv::KvError::CorruptRow(
+        return Err(krabka_pgkv::KvError::CorruptRow(
             "short timestamp transaction participants".into(),
         ));
     };
@@ -950,10 +950,10 @@ pub fn decode_timestamp_txn_descriptor_value(
         .expect("u32 fits usize")
         .checked_mul(4)
         .ok_or_else(|| {
-            crabka_pgkv::KvError::CorruptRow("timestamp transaction participant overflow".into())
+            krabka_pgkv::KvError::CorruptRow("timestamp transaction participant overflow".into())
         })?;
     let Some((participant_bytes, rest)) = rest.split_at_checked(participant_bytes) else {
-        return Err(crabka_pgkv::KvError::CorruptRow(
+        return Err(krabka_pgkv::KvError::CorruptRow(
             "short timestamp transaction participants".into(),
         ));
     };
@@ -962,7 +962,7 @@ pub fn decode_timestamp_txn_descriptor_value(
         .map(|raw| u32::from_be_bytes(raw.try_into().expect("4 bytes")))
         .collect();
     let Some((prepared_count, rest)) = take_u32(rest) else {
-        return Err(crabka_pgkv::KvError::CorruptRow(
+        return Err(krabka_pgkv::KvError::CorruptRow(
             "short timestamp transaction prepared set".into(),
         ));
     };
@@ -970,10 +970,10 @@ pub fn decode_timestamp_txn_descriptor_value(
         .expect("u32 fits usize")
         .checked_mul(4)
         .ok_or_else(|| {
-            crabka_pgkv::KvError::CorruptRow("timestamp transaction prepared overflow".into())
+            krabka_pgkv::KvError::CorruptRow("timestamp transaction prepared overflow".into())
         })?;
     let Some((prepared_bytes, rest)) = rest.split_at_checked(prepared_bytes) else {
-        return Err(crabka_pgkv::KvError::CorruptRow(
+        return Err(krabka_pgkv::KvError::CorruptRow(
             "short timestamp transaction prepared set".into(),
         ));
     };
@@ -982,7 +982,7 @@ pub fn decode_timestamp_txn_descriptor_value(
         .map(|raw| u32::from_be_bytes(raw.try_into().expect("4 bytes")))
         .collect();
     let Some((operation_count, rest)) = take_u32(rest) else {
-        return Err(crabka_pgkv::KvError::CorruptRow(
+        return Err(krabka_pgkv::KvError::CorruptRow(
             "short timestamp transaction operation count".into(),
         ));
     };
@@ -990,10 +990,10 @@ pub fn decode_timestamp_txn_descriptor_value(
         .expect("u32 fits usize")
         .checked_mul(operation_width)
         .ok_or_else(|| {
-            crabka_pgkv::KvError::CorruptRow("timestamp transaction operation overflow".into())
+            krabka_pgkv::KvError::CorruptRow("timestamp transaction operation overflow".into())
         })?;
     let Some((operation_bytes, decision)) = rest.split_at_checked(operation_bytes) else {
-        return Err(crabka_pgkv::KvError::CorruptRow(
+        return Err(krabka_pgkv::KvError::CorruptRow(
             "short timestamp transaction operations".into(),
         ));
     };
@@ -1005,7 +1005,7 @@ pub fn decode_timestamp_txn_descriptor_value(
                     0 if raw[9..13] == [0; 4] => None,
                     1 => Some(u32::from_be_bytes(raw[9..13].try_into().expect("4 bytes"))),
                     _ => {
-                        return Err(crabka_pgkv::KvError::CorruptRow(
+                        return Err(krabka_pgkv::KvError::CorruptRow(
                             "bad timestamp transaction bucket operation".into(),
                         ));
                     }
@@ -1027,7 +1027,7 @@ pub fn decode_timestamp_txn_descriptor_value(
                     0 => false,
                     1 => true,
                     _ => {
-                        return Err(crabka_pgkv::KvError::CorruptRow(
+                        return Err(krabka_pgkv::KvError::CorruptRow(
                             "bad timestamp transaction delete operation".into(),
                         ));
                     }
@@ -1039,7 +1039,7 @@ pub fn decode_timestamp_txn_descriptor_value(
     if let PrimaryTxnDecision::Committed(commit_ts) = decision
         && commit_ts.get() <= start_ts.get()
     {
-        return Err(crabka_pgkv::KvError::CorruptRow(
+        return Err(krabka_pgkv::KvError::CorruptRow(
             "timestamp transaction commit timestamp does not follow start timestamp".into(),
         ));
     }
@@ -1062,29 +1062,29 @@ pub fn decode_timestamp_txn_descriptor_value(
 ///
 /// Returns an error when the requested operation cannot be completed.
 pub fn timestamp_txn_descriptors(
-    kv: &dyn crabka_pgkv::Kv,
-) -> Result<Vec<TimestampTxnDescriptor>, crabka_pgkv::KvError> {
+    kv: &dyn krabka_pgkv::Kv,
+) -> Result<Vec<TimestampTxnDescriptor>, krabka_pgkv::KvError> {
     const PREFIX: &[u8] = b"\0\0\0\0meta/ts_txn/";
     kv.scan_prefix(PREFIX)?
         .into_iter()
         .map(|(key, _)| {
             let Some(raw) = key.strip_prefix(PREFIX) else {
-                return Err(crabka_pgkv::KvError::CorruptRow(
+                return Err(krabka_pgkv::KvError::CorruptRow(
                     "timestamp transaction descriptor has invalid key prefix".into(),
                 ));
             };
             let raw: [u8; 8] = raw.try_into().map_err(|_| {
-                crabka_pgkv::KvError::CorruptRow(
+                krabka_pgkv::KvError::CorruptRow(
                     "timestamp transaction descriptor has invalid key length".into(),
                 )
             })?;
             let start_ts = TimestampTransactionId::new(u64::from_be_bytes(raw)).map_err(|_| {
-                crabka_pgkv::KvError::CorruptRow(
+                krabka_pgkv::KvError::CorruptRow(
                     "timestamp transaction descriptor has zero start timestamp".into(),
                 )
             })?;
             read_timestamp_txn_descriptor(kv, start_ts)?.ok_or_else(|| {
-                crabka_pgkv::KvError::CorruptRow(
+                krabka_pgkv::KvError::CorruptRow(
                     "timestamp transaction descriptor disappeared during recovery".into(),
                 )
             })
@@ -1101,22 +1101,22 @@ pub fn timestamp_txn_descriptors(
 /// # Errors
 ///
 /// Returns an error when the requested operation cannot be completed.
-pub fn durable_timestamp_horizon(kv: &dyn crabka_pgkv::Kv) -> Result<u64, crabka_pgkv::KvError> {
-    let start = crabka_pgkv::key::table_prefix(crabka_pgkv::key::SYSTEM_TABLE_ID + 1);
+pub fn durable_timestamp_horizon(kv: &dyn krabka_pgkv::Kv) -> Result<u64, krabka_pgkv::KvError> {
+    let start = krabka_pgkv::key::table_prefix(krabka_pgkv::key::SYSTEM_TABLE_ID + 1);
     let end = [0xFF_u8; 5];
     let mut horizon = 0;
     for (_key, bytes) in kv.scan_range(&start, &end)? {
-        let Ok(version) = crabka_pgmvcc::version::decode_ts_tuple(&bytes) else {
+        let Ok(version) = krabka_pgmvcc::version::decode_ts_tuple(&bytes) else {
             continue;
         };
         horizon = horizon.max(version.start_ts);
         match version.state {
-            crabka_pgmvcc::version::TsVersionState::Committed { commit_ts }
-            | crabka_pgmvcc::version::TsVersionState::Deleted { commit_ts } => {
+            krabka_pgmvcc::version::TsVersionState::Committed { commit_ts }
+            | krabka_pgmvcc::version::TsVersionState::Deleted { commit_ts } => {
                 horizon = horizon.max(commit_ts);
             }
-            crabka_pgmvcc::version::TsVersionState::Intent
-            | crabka_pgmvcc::version::TsVersionState::Aborted => {}
+            krabka_pgmvcc::version::TsVersionState::Intent
+            | krabka_pgmvcc::version::TsVersionState::Aborted => {}
         }
     }
     for descriptor in timestamp_txn_descriptors(kv)? {
@@ -1134,9 +1134,9 @@ pub fn durable_timestamp_horizon(kv: &dyn crabka_pgkv::Kv) -> Result<u64, crabka
 ///
 /// Returns an error when the requested operation cannot be completed.
 pub fn durable_timestamp_horizon_with_catalog(
-    local_kv: &dyn crabka_pgkv::Kv,
-    catalog_kv: &dyn crabka_pgkv::Kv,
-) -> Result<u64, crabka_pgkv::KvError> {
+    local_kv: &dyn krabka_pgkv::Kv,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+) -> Result<u64, krabka_pgkv::KvError> {
     Ok(durable_timestamp_horizon(local_kv)?.max(durable_timestamp_horizon(catalog_kv)?))
 }
 
@@ -1177,7 +1177,7 @@ impl StoreHorizonCache {
 
     /// Return the cached horizon, seeding it from one full store scan when the
     /// cache is cold or was invalidated.
-    fn current(&self, kv: &dyn crabka_pgkv::Kv) -> Result<u64, crabka_pgkv::KvError> {
+    fn current(&self, kv: &dyn krabka_pgkv::Kv) -> Result<u64, krabka_pgkv::KvError> {
         let epoch = self.epoch.load(Ordering::Acquire);
         if self.seeded_epoch.load(Ordering::Acquire) != epoch {
             let scanned = durable_timestamp_horizon(kv)?;
@@ -1198,7 +1198,7 @@ impl StoreHorizonCache {
 ///
 /// Every strong holder of the returned cache also holds the store `Arc`, so a
 /// live registry entry can never alias a new store that reuses the allocation.
-fn store_horizon_cache(kv: &Arc<dyn crabka_pgkv::Kv>) -> Arc<StoreHorizonCache> {
+fn store_horizon_cache(kv: &Arc<dyn krabka_pgkv::Kv>) -> Arc<StoreHorizonCache> {
     static CACHES: OnceLock<Mutex<HashMap<usize, Weak<StoreHorizonCache>>>> = OnceLock::new();
 
     let identity = Arc::as_ptr(kv).cast::<()>() as usize;
@@ -1231,8 +1231,8 @@ fn store_horizon_cache(kv: &Arc<dyn crabka_pgkv::Kv>) -> Arc<StoreHorizonCache> 
 /// not through a local committer.
 #[derive(Clone)]
 pub(crate) struct TimestampHorizonSource {
-    kv: Arc<dyn crabka_pgkv::Kv>,
-    catalog_kv: Arc<dyn crabka_pgkv::Kv>,
+    kv: Arc<dyn krabka_pgkv::Kv>,
+    catalog_kv: Arc<dyn krabka_pgkv::Kv>,
     kv_cache: Arc<StoreHorizonCache>,
     catalog_cache: Arc<StoreHorizonCache>,
     rescan_catalog: bool,
@@ -1243,8 +1243,8 @@ impl TimestampHorizonSource {
     /// `catalog_applied_externally` marks a catalog replica whose contents are
     /// applied by another process, forcing a per-lookup rescan of that store.
     pub(crate) fn new(
-        kv: Arc<dyn crabka_pgkv::Kv>,
-        catalog_kv: Arc<dyn crabka_pgkv::Kv>,
+        kv: Arc<dyn krabka_pgkv::Kv>,
+        catalog_kv: Arc<dyn krabka_pgkv::Kv>,
         catalog_applied_externally: bool,
     ) -> Self {
         let kv_cache = store_horizon_cache(&kv);
@@ -1260,7 +1260,7 @@ impl TimestampHorizonSource {
 
     /// The read/transaction-timestamp floor, which is the greatest durable
     /// timestamp on either store.
-    pub(crate) fn current(&self) -> Result<u64, crabka_pgkv::KvError> {
+    pub(crate) fn current(&self) -> Result<u64, krabka_pgkv::KvError> {
         let local = self.kv_cache.current(self.kv.as_ref())?;
         if Arc::ptr_eq(&self.kv_cache, &self.catalog_cache) {
             return Ok(local);
@@ -1296,7 +1296,7 @@ pub(crate) struct HorizonObservingCommitter {
     inner: Arc<dyn Committer>,
     /// Pins the store so the registry entry cannot alias a new store that
     /// reuses the same allocation.
-    _kv: Arc<dyn crabka_pgkv::Kv>,
+    _kv: Arc<dyn krabka_pgkv::Kv>,
     cache: Arc<StoreHorizonCache>,
 }
 
@@ -1304,7 +1304,7 @@ impl HorizonObservingCommitter {
     /// Wrap `inner` and observe every batch it commits into `kv`'s store.
     pub(crate) fn wrap(
         inner: Arc<dyn Committer>,
-        kv: &Arc<dyn crabka_pgkv::Kv>,
+        kv: &Arc<dyn krabka_pgkv::Kv>,
     ) -> Arc<dyn Committer> {
         Arc::new(Self {
             inner,
@@ -1316,7 +1316,7 @@ impl HorizonObservingCommitter {
 
 #[async_trait::async_trait]
 impl Committer for HorizonObservingCommitter {
-    async fn commit(&self, ops: Vec<crabka_pgkv::WriteOp>) -> Result<(), ExecError> {
+    async fn commit(&self, ops: Vec<krabka_pgkv::WriteOp>) -> Result<(), ExecError> {
         let observed = max_timestamp_in_ops(&ops);
         self.inner.commit(ops).await?;
         if let Some(timestamp) = observed {
@@ -1332,21 +1332,21 @@ impl Committer for HorizonObservingCommitter {
 /// newly discover: start and commit timestamps of timestamp tuple versions, plus
 /// start timestamps and committed commit timestamps of range-0 transaction
 /// descriptors.
-fn max_timestamp_in_ops(ops: &[crabka_pgkv::WriteOp]) -> Option<u64> {
+fn max_timestamp_in_ops(ops: &[krabka_pgkv::WriteOp]) -> Option<u64> {
     const DESCRIPTOR_PREFIX: &[u8] = b"\0\0\0\0meta/ts_txn/";
 
     fn fold(horizon: &mut Option<u64>, timestamp: u64) {
         *horizon = Some(horizon.map_or(timestamp, |current| current.max(timestamp)));
     }
 
-    let tuple_start = crabka_pgkv::key::table_prefix(crabka_pgkv::key::SYSTEM_TABLE_ID + 1);
+    let tuple_start = krabka_pgkv::key::table_prefix(krabka_pgkv::key::SYSTEM_TABLE_ID + 1);
     let tuple_end = [0xFF_u8; 5];
     let mut horizon = None;
     for op in ops {
         let (key, value) = match op {
-            crabka_pgkv::WriteOp::Put { key, value }
-            | crabka_pgkv::WriteOp::ConditionalPut { key, value, .. } => (key, value),
-            crabka_pgkv::WriteOp::Delete { .. } => continue,
+            krabka_pgkv::WriteOp::Put { key, value }
+            | krabka_pgkv::WriteOp::ConditionalPut { key, value, .. } => (key, value),
+            krabka_pgkv::WriteOp::Delete { .. } => continue,
         };
         if let Some(raw) = key.strip_prefix(DESCRIPTOR_PREFIX) {
             let Ok(raw) = <[u8; 8]>::try_from(raw) else {
@@ -1365,17 +1365,17 @@ fn max_timestamp_in_ops(ops: &[crabka_pgkv::WriteOp]) -> Option<u64> {
         if key.as_slice() < tuple_start.as_slice() || key.as_slice() >= tuple_end.as_slice() {
             continue;
         }
-        let Ok(version) = crabka_pgmvcc::version::decode_ts_tuple(value) else {
+        let Ok(version) = krabka_pgmvcc::version::decode_ts_tuple(value) else {
             continue;
         };
         fold(&mut horizon, version.start_ts);
         match version.state {
-            crabka_pgmvcc::version::TsVersionState::Committed { commit_ts }
-            | crabka_pgmvcc::version::TsVersionState::Deleted { commit_ts } => {
+            krabka_pgmvcc::version::TsVersionState::Committed { commit_ts }
+            | krabka_pgmvcc::version::TsVersionState::Deleted { commit_ts } => {
                 fold(&mut horizon, commit_ts);
             }
-            crabka_pgmvcc::version::TsVersionState::Intent
-            | crabka_pgmvcc::version::TsVersionState::Aborted => {}
+            krabka_pgmvcc::version::TsVersionState::Intent
+            | krabka_pgmvcc::version::TsVersionState::Aborted => {}
         }
     }
     horizon
@@ -1390,26 +1390,26 @@ fn max_timestamp_in_ops(ops: &[crabka_pgkv::WriteOp]) -> Option<u64> {
 ///
 /// Returns an error when the requested operation cannot be completed.
 pub fn abort_timestamp_intent_ops(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     start_ts: TimestampTransactionId,
-) -> Result<Vec<crabka_pgkv::WriteOp>, crabka_pgkv::KvError> {
-    let start = crabka_pgkv::key::table_prefix(crabka_pgkv::key::SYSTEM_TABLE_ID + 1);
+) -> Result<Vec<krabka_pgkv::WriteOp>, krabka_pgkv::KvError> {
+    let start = krabka_pgkv::key::table_prefix(krabka_pgkv::key::SYSTEM_TABLE_ID + 1);
     let end = [0xFF_u8; 5];
     let mut ops: Vec<_> = kv
         .scan_range(&start, &end)?
         .into_iter()
         .filter_map(|(key, bytes)| {
-            let version = crabka_pgmvcc::version::decode_ts_tuple(&bytes).ok()?;
+            let version = krabka_pgmvcc::version::decode_ts_tuple(&bytes).ok()?;
             if version.start_ts != start_ts.get()
-                || version.state != crabka_pgmvcc::version::TsVersionState::Intent
+                || version.state != krabka_pgmvcc::version::TsVersionState::Intent
             {
                 return None;
             }
-            Some(crabka_pgkv::WriteOp::Put {
+            Some(krabka_pgkv::WriteOp::Put {
                 key,
-                value: crabka_pgmvcc::version::encode_ts_tuple(
+                value: krabka_pgmvcc::version::encode_ts_tuple(
                     start_ts.get(),
-                    crabka_pgmvcc::version::TsVersionState::Aborted,
+                    krabka_pgmvcc::version::TsVersionState::Aborted,
                     &version.row,
                 ),
             })
@@ -1420,13 +1420,13 @@ pub fn abort_timestamp_intent_ops(
         kv.scan_prefix(b"\0\0\0\0meta/ts_prewrite/")?
             .into_iter()
             .filter(|(_, value)| value.as_slice() == expected_reservation)
-            .map(|(key, _)| crabka_pgkv::WriteOp::Delete { key }),
+            .map(|(key, _)| krabka_pgkv::WriteOp::Delete { key }),
     );
     ops.extend(
         kv.scan_prefix(b"\0\0\0\0meta/ts_intent/")?
             .into_iter()
             .filter(|(key, _)| key.ends_with(&expected_reservation))
-            .map(|(key, _)| crabka_pgkv::WriteOp::Delete { key }),
+            .map(|(key, _)| krabka_pgkv::WriteOp::Delete { key }),
     );
     ops.extend(
         kv.scan_prefix(b"\0\0\0\0index/ts_intent/")?
@@ -1435,7 +1435,7 @@ pub fn abort_timestamp_intent_ops(
                 take_u64(value)
                     .is_some_and(|(intent_start_ts, _)| intent_start_ts == start_ts.get())
             })
-            .map(|(key, _)| crabka_pgkv::WriteOp::Delete { key }),
+            .map(|(key, _)| krabka_pgkv::WriteOp::Delete { key }),
     );
     Ok(ops)
 }
@@ -1454,9 +1454,9 @@ impl PrimaryTxnDecision {
         }
     }
 
-    fn decode(bytes: &[u8]) -> Result<Self, crabka_pgkv::KvError> {
+    fn decode(bytes: &[u8]) -> Result<Self, krabka_pgkv::KvError> {
         let Some((&tag, rest)) = bytes.split_first() else {
-            return Err(crabka_pgkv::KvError::CorruptRow(
+            return Err(krabka_pgkv::KvError::CorruptRow(
                 "empty timestamp primary decision".into(),
             ));
         };
@@ -1467,9 +1467,9 @@ impl PrimaryTxnDecision {
                 let commit_ts = u64::from_be_bytes(raw.try_into().expect("8 bytes"));
                 CommitTimestamp::new(commit_ts)
                     .map(Self::Committed)
-                    .map_err(|_| crabka_pgkv::KvError::CorruptRow("bad commit timestamp".into()))
+                    .map_err(|_| krabka_pgkv::KvError::CorruptRow("bad commit timestamp".into()))
             }
-            _ => Err(crabka_pgkv::KvError::CorruptRow(
+            _ => Err(krabka_pgkv::KvError::CorruptRow(
                 "bad timestamp primary decision".into(),
             )),
         }
@@ -1479,8 +1479,8 @@ impl PrimaryTxnDecision {
 /// Minimal participant seam for G-9 timestamp transactions.
 #[derive(Clone)]
 pub struct TimestampTxnParticipant {
-    kv: std::sync::Arc<dyn crabka_pgkv::Kv>,
-    primary_kv: std::sync::Arc<dyn crabka_pgkv::Kv>,
+    kv: std::sync::Arc<dyn krabka_pgkv::Kv>,
+    primary_kv: std::sync::Arc<dyn krabka_pgkv::Kv>,
     committer: std::sync::Arc<dyn Committer>,
     primary_barrier: Option<std::sync::Arc<dyn crate::read_gate::Linearizer>>,
     sequence: Option<std::sync::Arc<crate::seq::SequenceManager>>,
@@ -1503,8 +1503,8 @@ impl TimestampTxnParticipant {
     /// Build a participant over the local range store and durable committer.
     #[must_use]
     pub fn new(
-        kv: std::sync::Arc<dyn crabka_pgkv::Kv>,
-        primary_kv: std::sync::Arc<dyn crabka_pgkv::Kv>,
+        kv: std::sync::Arc<dyn krabka_pgkv::Kv>,
+        primary_kv: std::sync::Arc<dyn krabka_pgkv::Kv>,
         committer: std::sync::Arc<dyn Committer>,
         range_id: u32,
     ) -> Self {
@@ -1537,7 +1537,7 @@ impl TimestampTxnParticipant {
         &self,
         decision: TimestampTxnDecision,
         writes: &[TimestampWrite],
-    ) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
+    ) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
         let Some(ts_gc) = &self.ts_gc else {
             return Ok(Vec::new());
         };
@@ -1806,7 +1806,7 @@ impl TimestampTxnParticipant {
         start_ts: TimestampTransactionId,
         commit_ts: CommitTimestamp,
         writes: &[TimestampWrite],
-        extra_ops: Vec<crabka_pgkv::WriteOp>,
+        extra_ops: Vec<krabka_pgkv::WriteOp>,
     ) -> Result<(), ExecError> {
         let mut ops = vec![primary_decision_op(
             start_ts,
@@ -2056,7 +2056,7 @@ impl TimestampTxnParticipant {
             writes,
         )
         .map_err(map_ts_error)?;
-        ops.extend(writes.iter().map(|write| crabka_pgkv::WriteOp::Delete {
+        ops.extend(writes.iter().map(|write| krabka_pgkv::WriteOp::Delete {
             key: timestamp_intent_identity_key(write, identity.start_ts),
         }));
         ops.extend(delete_global_index_intent_ops(identity.start_ts, writes));
@@ -2076,11 +2076,11 @@ impl TimestampTxnParticipant {
 }
 
 fn resolve_ops_idempotent_legacy(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     start_ts: TimestampTransactionId,
     decision: TimestampTxnDecision,
     writes: &[TimestampWrite],
-) -> Result<Vec<crabka_pgkv::WriteOp>, TimestampTxnError> {
+) -> Result<Vec<krabka_pgkv::WriteOp>, TimestampTxnError> {
     let mut ops = Vec::with_capacity(writes.len());
     for write in writes {
         ops.extend(resolve_ops_idempotent_for_write(
@@ -2091,12 +2091,12 @@ fn resolve_ops_idempotent_legacy(
 }
 
 fn resolve_ops_idempotent(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     identity: TimestampTxnIdentity,
     range_id: u32,
     decision: TimestampTxnDecision,
     writes: &[TimestampWrite],
-) -> Result<Vec<crabka_pgkv::WriteOp>, TimestampTxnError> {
+) -> Result<Vec<krabka_pgkv::WriteOp>, TimestampTxnError> {
     let mut ops = Vec::with_capacity(writes.len());
     for write in writes {
         let stored_identity = kv
@@ -2111,7 +2111,7 @@ fn resolve_ops_idempotent(
                 write,
             )?);
             if decision != TimestampTxnDecision::Pending {
-                ops.push(crabka_pgkv::WriteOp::Delete {
+                ops.push(krabka_pgkv::WriteOp::Delete {
                     key: timestamp_intent_identity_key(write, identity.start_ts),
                 });
             }
@@ -2128,7 +2128,7 @@ fn resolve_ops_idempotent(
 }
 
 fn write_is_resolved_to(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     start_ts: TimestampTransactionId,
     decision: TimestampTxnDecision,
     write: &TimestampWrite,
@@ -2140,18 +2140,18 @@ fn write_is_resolved_to(
     else {
         return Ok(false);
     };
-    let version = crabka_pgmvcc::version::decode_ts_tuple(&bytes)
+    let version = krabka_pgmvcc::version::decode_ts_tuple(&bytes)
         .map_err(|_| TimestampTxnError::IdentityFenced)?;
     let expected_state = match decision {
-        TimestampTxnDecision::Pending => crabka_pgmvcc::version::TsVersionState::Intent,
-        TimestampTxnDecision::Aborted => crabka_pgmvcc::version::TsVersionState::Aborted,
+        TimestampTxnDecision::Pending => krabka_pgmvcc::version::TsVersionState::Intent,
+        TimestampTxnDecision::Aborted => krabka_pgmvcc::version::TsVersionState::Aborted,
         TimestampTxnDecision::Committed(commit_ts) => {
-            crabka_pgmvcc::version::TsVersionState::Committed {
+            krabka_pgmvcc::version::TsVersionState::Committed {
                 commit_ts: commit_ts.get(),
             }
         }
         TimestampTxnDecision::Deleted(commit_ts) => {
-            crabka_pgmvcc::version::TsVersionState::Deleted {
+            krabka_pgmvcc::version::TsVersionState::Deleted {
                 commit_ts: commit_ts.get(),
             }
         }
@@ -2160,7 +2160,7 @@ fn write_is_resolved_to(
 }
 
 pub(crate) fn timestamp_operations_are_resolved(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     range_id: u32,
     identity: TimestampTxnIdentity,
     decision: PrimaryTxnDecision,
@@ -2199,11 +2199,11 @@ pub(crate) fn timestamp_operations_are_resolved(
 }
 
 fn resolve_ops_idempotent_for_write(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     start_ts: TimestampTransactionId,
     decision: TimestampTxnDecision,
     write: &TimestampWrite,
-) -> Result<Vec<crabka_pgkv::WriteOp>, TimestampTxnError> {
+) -> Result<Vec<krabka_pgkv::WriteOp>, TimestampTxnError> {
     let key = timestamp_version_key(write, start_ts);
     let Some(bytes) = kv.get(&key).map_err(|_| TimestampTxnError::MissingIntent {
         table_id: write.table_id,
@@ -2213,7 +2213,7 @@ fn resolve_ops_idempotent_for_write(
     else {
         return Ok(Vec::new());
     };
-    let version = crabka_pgmvcc::version::decode_ts_tuple(&bytes).map_err(|_| {
+    let version = krabka_pgmvcc::version::decode_ts_tuple(&bytes).map_err(|_| {
         TimestampTxnError::MissingIntent {
             table_id: write.table_id,
             rowid: write.rowid,
@@ -2221,23 +2221,23 @@ fn resolve_ops_idempotent_for_write(
         }
     })?;
     let requested_state = match decision {
-        TimestampTxnDecision::Aborted => crabka_pgmvcc::version::TsVersionState::Aborted,
+        TimestampTxnDecision::Aborted => krabka_pgmvcc::version::TsVersionState::Aborted,
         TimestampTxnDecision::Committed(commit_ts) => {
-            crabka_pgmvcc::version::TsVersionState::Committed {
+            krabka_pgmvcc::version::TsVersionState::Committed {
                 commit_ts: commit_ts.get(),
             }
         }
         TimestampTxnDecision::Deleted(commit_ts) => {
-            crabka_pgmvcc::version::TsVersionState::Deleted {
+            krabka_pgmvcc::version::TsVersionState::Deleted {
                 commit_ts: commit_ts.get(),
             }
         }
-        TimestampTxnDecision::Pending => crabka_pgmvcc::version::TsVersionState::Intent,
+        TimestampTxnDecision::Pending => krabka_pgmvcc::version::TsVersionState::Intent,
     };
     if version.state == requested_state {
         return Ok(Vec::new());
     }
-    if version.state != crabka_pgmvcc::version::TsVersionState::Intent {
+    if version.state != krabka_pgmvcc::version::TsVersionState::Intent {
         return Err(TimestampTxnError::MissingIntent {
             table_id: write.table_id,
             rowid: write.rowid,
@@ -2245,29 +2245,29 @@ fn resolve_ops_idempotent_for_write(
         });
     }
     Ok(vec![
-        crabka_pgkv::WriteOp::Put {
+        krabka_pgkv::WriteOp::Put {
             key,
-            value: crabka_pgmvcc::version::encode_ts_tuple(
+            value: krabka_pgmvcc::version::encode_ts_tuple(
                 start_ts.get(),
                 requested_state,
                 &version.row,
             ),
         },
-        crabka_pgkv::WriteOp::Delete {
+        krabka_pgkv::WriteOp::Delete {
             key: timestamp_prewrite_reservation_key(write),
         },
     ])
 }
 
 fn prewrite_with_identity_ops(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     identity: TimestampTxnIdentity,
     range_id: u32,
     writes: &[TimestampWrite],
-) -> Result<Vec<crabka_pgkv::WriteOp>, TimestampTxnError> {
+) -> Result<Vec<krabka_pgkv::WriteOp>, TimestampTxnError> {
     let mut ops = prewrite_ops(kv, identity.start_ts, writes)?;
     for write in writes {
-        ops.push(crabka_pgkv::WriteOp::ConditionalPut {
+        ops.push(krabka_pgkv::WriteOp::ConditionalPut {
             key: timestamp_intent_identity_key(write, identity.start_ts),
             expected: None,
             value: encode_timestamp_intent_identity(identity, range_id),
@@ -2277,7 +2277,7 @@ fn prewrite_with_identity_ops(
 }
 
 fn verify_local_prewrite(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     identity: TimestampTxnIdentity,
     range_id: u32,
     writes: &[TimestampWrite],
@@ -2301,7 +2301,7 @@ fn verify_local_prewrite(
 }
 
 fn verify_prewrite_reservations(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     start_ts: TimestampTransactionId,
     writes: &[TimestampWrite],
 ) -> Result<(), TimestampTxnError> {
@@ -2324,7 +2324,7 @@ fn verify_prewrite_reservations(
 }
 
 fn validate_primary_identity(
-    primary_kv: &dyn crabka_pgkv::Kv,
+    primary_kv: &dyn krabka_pgkv::Kv,
     identity: TimestampTxnIdentity,
     participant_range: u32,
 ) -> Result<(), TimestampTxnError> {
@@ -2344,7 +2344,7 @@ fn validate_primary_identity(
 }
 
 fn validate_primary_identity_for_resolution(
-    primary_kv: &dyn crabka_pgkv::Kv,
+    primary_kv: &dyn krabka_pgkv::Kv,
     identity: TimestampTxnIdentity,
     decision: TimestampTxnDecision,
 ) -> Result<(), TimestampTxnError> {
@@ -2382,9 +2382,9 @@ fn timestamp_intent_identity_key(
 }
 
 fn scan_terminal_ops(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     rows: impl Iterator<Item = (u32, u64)>,
-) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
+) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
     let mut maxima = std::collections::BTreeMap::<u32, u64>::new();
     for (table_id, rowid) in rows {
         maxima
@@ -2397,14 +2397,14 @@ fn scan_terminal_ops(
         let next = maximum.checked_add(1).ok_or_else(|| {
             ExecError::Unsupported("row id exhausted during timestamp resolution".into())
         })?;
-        let key = crabka_pgkv::key::seq_key(table_id);
+        let key = krabka_pgkv::key::seq_key(table_id);
         let current = kv
             .get(&key)?
             .and_then(|bytes| <[u8; 8]>::try_from(bytes).ok())
             .map(u64::from_be_bytes)
             .unwrap_or(1);
         if next > current {
-            ops.push(crabka_pgkv::WriteOp::Put {
+            ops.push(krabka_pgkv::WriteOp::Put {
                 key,
                 value: next.to_be_bytes().to_vec(),
             });
@@ -2439,12 +2439,12 @@ fn encode_timestamp_intent_identity(identity: TimestampTxnIdentity, range_id: u3
 /// This function deliberately does not treat a missing or malformed intent
 /// identity as a legacy version.
 pub(crate) fn local_intent_matches_descriptor(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     descriptor: &TimestampTxnDescriptor,
     table_id: u32,
     bucket: Option<u32>,
     rowid: u64,
-) -> Result<bool, crabka_pgkv::KvError> {
+) -> Result<bool, krabka_pgkv::KvError> {
     let write = TimestampWrite {
         table_id,
         bucket,
@@ -2515,10 +2515,10 @@ pub(crate) fn local_terminal_operation_matches_descriptor(
 ///
 /// Returns an error when the requested operation cannot be completed.
 pub fn prewrite_ops(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     start_ts: TimestampTransactionId,
     writes: &[TimestampWrite],
-) -> Result<Vec<crabka_pgkv::WriteOp>, TimestampTxnError> {
+) -> Result<Vec<krabka_pgkv::WriteOp>, TimestampTxnError> {
     // Fence against reclaimed history: a transaction starting below the
     // published reclaim floor could run its first-committer-wins check over a
     // chain whose covering committed versions were already pruned. Timestamps
@@ -2545,21 +2545,21 @@ pub fn prewrite_ops(
     let mut ops = Vec::with_capacity((writes.len() * 2) + index_intent_count);
     for write in writes {
         ensure_prewrite_can_win(kv, start_ts, write)?;
-        ops.push(crabka_pgkv::WriteOp::ConditionalPut {
+        ops.push(krabka_pgkv::WriteOp::ConditionalPut {
             key: timestamp_prewrite_reservation_key(write),
             expected: None,
             value: start_ts.get().to_be_bytes().to_vec(),
         });
-        ops.push(crabka_pgkv::WriteOp::Put {
+        ops.push(krabka_pgkv::WriteOp::Put {
             key: timestamp_version_key(write, start_ts),
-            value: crabka_pgmvcc::version::encode_ts_tuple(
+            value: krabka_pgmvcc::version::encode_ts_tuple(
                 start_ts.get(),
-                crabka_pgmvcc::version::TsVersionState::Intent,
+                krabka_pgmvcc::version::TsVersionState::Intent,
                 &write.row,
             ),
         });
         for intent in &write.global_index_intents {
-            ops.push(crabka_pgkv::WriteOp::Put {
+            ops.push(krabka_pgkv::WriteOp::Put {
                 key: global_index_intent_key(start_ts, intent),
                 value: global_index_intent_value(start_ts, intent),
             });
@@ -2584,11 +2584,11 @@ pub fn base_index_intents_match(writes: &[TimestampWrite]) -> bool {
 ///
 /// Returns an error when the requested operation cannot be completed.
 pub fn resolve_ops(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     start_ts: TimestampTransactionId,
     decision: TimestampTxnDecision,
     writes: &[TimestampWrite],
-) -> Result<Vec<crabka_pgkv::WriteOp>, TimestampTxnError> {
+) -> Result<Vec<krabka_pgkv::WriteOp>, TimestampTxnError> {
     let mut ops = Vec::with_capacity(writes.len());
     for write in writes {
         let key = timestamp_version_key(write, start_ts);
@@ -2604,7 +2604,7 @@ pub fn resolve_ops(
                 start_ts: start_ts.get(),
             });
         };
-        let version = crabka_pgmvcc::version::decode_ts_tuple(&bytes).map_err(|_| {
+        let version = krabka_pgmvcc::version::decode_ts_tuple(&bytes).map_err(|_| {
             TimestampTxnError::MissingIntent {
                 table_id: write.table_id,
                 rowid: write.rowid,
@@ -2612,7 +2612,7 @@ pub fn resolve_ops(
             }
         })?;
         if version.start_ts != start_ts.get()
-            || version.state != crabka_pgmvcc::version::TsVersionState::Intent
+            || version.state != krabka_pgmvcc::version::TsVersionState::Intent
         {
             return Err(TimestampTxnError::MissingIntent {
                 table_id: write.table_id,
@@ -2621,24 +2621,24 @@ pub fn resolve_ops(
             });
         }
         let state = match decision {
-            TimestampTxnDecision::Pending => crabka_pgmvcc::version::TsVersionState::Intent,
-            TimestampTxnDecision::Aborted => crabka_pgmvcc::version::TsVersionState::Aborted,
+            TimestampTxnDecision::Pending => krabka_pgmvcc::version::TsVersionState::Intent,
+            TimestampTxnDecision::Aborted => krabka_pgmvcc::version::TsVersionState::Aborted,
             TimestampTxnDecision::Committed(commit_ts) => {
-                crabka_pgmvcc::version::TsVersionState::Committed {
+                krabka_pgmvcc::version::TsVersionState::Committed {
                     commit_ts: commit_ts.get(),
                 }
             }
             TimestampTxnDecision::Deleted(commit_ts) => {
-                crabka_pgmvcc::version::TsVersionState::Deleted {
+                krabka_pgmvcc::version::TsVersionState::Deleted {
                     commit_ts: commit_ts.get(),
                 }
             }
         };
-        ops.push(crabka_pgkv::WriteOp::Put {
+        ops.push(krabka_pgkv::WriteOp::Put {
             key,
-            value: crabka_pgmvcc::version::encode_ts_tuple(start_ts.get(), state, &version.row),
+            value: krabka_pgmvcc::version::encode_ts_tuple(start_ts.get(), state, &version.row),
         });
-        ops.push(crabka_pgkv::WriteOp::Delete {
+        ops.push(krabka_pgkv::WriteOp::Delete {
             key: timestamp_prewrite_reservation_key(write),
         });
     }
@@ -2646,11 +2646,11 @@ pub fn resolve_ops(
 }
 
 fn resolve_commit_ops(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     start_ts: TimestampTransactionId,
     commit_ts: CommitTimestamp,
     writes: &[TimestampWrite],
-) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
+) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
     let index_intent_count = writes
         .iter()
         .map(|write| write.global_index_intents.len())
@@ -2674,17 +2674,17 @@ fn resolve_global_index_intent_ops(
     start_ts: TimestampTransactionId,
     commit_ts: CommitTimestamp,
     write: &TimestampWrite,
-) -> Vec<crabka_pgkv::WriteOp> {
+) -> Vec<krabka_pgkv::WriteOp> {
     write
         .global_index_intents
         .iter()
         .flat_map(|intent| {
             [
-                crabka_pgkv::WriteOp::Put {
+                krabka_pgkv::WriteOp::Put {
                     key: global_index_entry_key(commit_ts, intent),
                     value: global_index_entry_value(commit_ts, intent),
                 },
-                crabka_pgkv::WriteOp::Delete {
+                krabka_pgkv::WriteOp::Delete {
                     key: global_index_intent_key(start_ts, intent),
                 },
             ]
@@ -2695,21 +2695,21 @@ fn resolve_global_index_intent_ops(
 fn delete_global_index_intent_ops(
     start_ts: TimestampTransactionId,
     writes: &[TimestampWrite],
-) -> Vec<crabka_pgkv::WriteOp> {
+) -> Vec<krabka_pgkv::WriteOp> {
     writes
         .iter()
         .flat_map(|write| &write.global_index_intents)
-        .map(|intent| crabka_pgkv::WriteOp::Delete {
+        .map(|intent| krabka_pgkv::WriteOp::Delete {
             key: global_index_intent_key(start_ts, intent),
         })
         .collect()
 }
 
 fn resolve_recovered_global_index_intents(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     start_ts: TimestampTransactionId,
     decision: TimestampTxnDecision,
-) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
+) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
     const INTENT_PREFIX: &[u8] = b"\0\0\0\0index/ts_intent/";
     const ENTRY_PREFIX: &[u8] = b"\0\0\0\0index/ts_entry/";
     let mut ops = Vec::new();
@@ -2724,7 +2724,7 @@ fn resolve_recovered_global_index_intents(
         }
         match decision {
             TimestampTxnDecision::Aborted => {
-                ops.push(crabka_pgkv::WriteOp::Delete { key: intent_key });
+                ops.push(krabka_pgkv::WriteOp::Delete { key: intent_key });
             }
             TimestampTxnDecision::Committed(commit_ts)
             | TimestampTxnDecision::Deleted(commit_ts) => {
@@ -2766,11 +2766,11 @@ fn resolve_recovered_global_index_intents(
                 entry_value.push(delete);
                 entry_value.extend_from_slice(&commit_ts.get().to_be_bytes());
                 entry_value.extend_from_slice(&rest[0..12]);
-                ops.push(crabka_pgkv::WriteOp::Put {
+                ops.push(krabka_pgkv::WriteOp::Put {
                     key: entry_key,
                     value: entry_value,
                 });
-                ops.push(crabka_pgkv::WriteOp::Delete { key: intent_key });
+                ops.push(krabka_pgkv::WriteOp::Delete { key: intent_key });
             }
             TimestampTxnDecision::Pending => {
                 return Err(ExecError::Unsupported(
@@ -2790,22 +2790,22 @@ fn resolve_recovered_global_index_intents(
 ///
 /// Returns an error when the requested operation cannot be completed.
 pub fn read_visible_ts_row(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     table_id: u32,
     rowid: u64,
     read_ts: ReadTimestamp,
-) -> Result<Option<Vec<crabka_pgtypes::Datum>>, ExecError> {
-    let prefix = crabka_pgkv::key::row_key(table_id, rowid);
-    let mut visible: Option<(u64, Option<Vec<crabka_pgtypes::Datum>>)> = None;
+) -> Result<Option<Vec<krabka_pgtypes::Datum>>, ExecError> {
+    let prefix = krabka_pgkv::key::row_key(table_id, rowid);
+    let mut visible: Option<(u64, Option<Vec<krabka_pgtypes::Datum>>)> = None;
     for (_key, value) in kv.scan_prefix(&prefix)? {
-        let version = crabka_pgmvcc::version::decode_ts_tuple(&value)?;
+        let version = krabka_pgmvcc::version::decode_ts_tuple(&value)?;
         let candidate = match version.state {
-            crabka_pgmvcc::version::TsVersionState::Committed { commit_ts }
+            krabka_pgmvcc::version::TsVersionState::Committed { commit_ts }
                 if commit_ts <= read_ts.get() =>
             {
                 Some((commit_ts, Some(version.row)))
             }
-            crabka_pgmvcc::version::TsVersionState::Deleted { commit_ts }
+            krabka_pgmvcc::version::TsVersionState::Deleted { commit_ts }
                 if commit_ts <= read_ts.get() =>
             {
                 Some((commit_ts, None))
@@ -2831,9 +2831,9 @@ pub fn read_visible_ts_row(
 ///
 /// Returns an error when the requested operation cannot be completed.
 pub fn read_visible_global_index_entries(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     index_id: u32,
-    indexed_values: &[crabka_pgtypes::Datum],
+    indexed_values: &[krabka_pgtypes::Datum],
     read_ts: ReadTimestamp,
 ) -> Result<Vec<VisibleGlobalIndexEntry>, ExecError> {
     let prefix = global_index_entry_prefix(index_id, indexed_values);
@@ -2868,8 +2868,8 @@ pub fn read_visible_global_index_entries(
 pub fn primary_decision_op(
     start_ts: TimestampTransactionId,
     decision: PrimaryTxnDecision,
-) -> crabka_pgkv::WriteOp {
-    crabka_pgkv::WriteOp::Put {
+) -> krabka_pgkv::WriteOp {
+    krabka_pgkv::WriteOp::Put {
         key: primary_decision_key(start_ts),
         value: decision.encode(),
     }
@@ -2880,9 +2880,9 @@ pub fn primary_decision_op(
 ///
 /// Returns an error when the requested operation cannot be completed.
 pub fn read_primary_decision(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     start_ts: TimestampTransactionId,
-) -> Result<PrimaryTxnDecision, crabka_pgkv::KvError> {
+) -> Result<PrimaryTxnDecision, krabka_pgkv::KvError> {
     let Some(bytes) = kv.get(&primary_decision_key(start_ts))? else {
         return Ok(PrimaryTxnDecision::Pending);
     };
@@ -2923,7 +2923,7 @@ fn global_index_intent_value(
     value
 }
 
-fn global_index_entry_prefix(index_id: u32, indexed_values: &[crabka_pgtypes::Datum]) -> Vec<u8> {
+fn global_index_entry_prefix(index_id: u32, indexed_values: &[krabka_pgtypes::Datum]) -> Vec<u8> {
     let mut key = b"\0\0\0\0index/ts_entry/".to_vec();
     key.extend_from_slice(&index_id.to_be_bytes());
     for value in indexed_values {
@@ -2958,9 +2958,9 @@ struct GlobalIndexEntryValue {
 
 fn decode_global_index_entry_value(
     value: &[u8],
-) -> Result<Option<GlobalIndexEntryValue>, crabka_pgkv::KvError> {
+) -> Result<Option<GlobalIndexEntryValue>, krabka_pgkv::KvError> {
     let [delete, rest @ ..] = value else {
-        return Err(crabka_pgkv::KvError::CorruptRow(
+        return Err(krabka_pgkv::KvError::CorruptRow(
             "empty timestamp global index entry".into(),
         ));
     };
@@ -2968,13 +2968,13 @@ fn decode_global_index_entry_value(
         0 => false,
         1 => true,
         _ => {
-            return Err(crabka_pgkv::KvError::CorruptRow(
+            return Err(krabka_pgkv::KvError::CorruptRow(
                 "bad timestamp global index entry state".into(),
             ));
         }
     };
     let Some((commit_ts, rest)) = take_u64(rest) else {
-        return Err(crabka_pgkv::KvError::CorruptRow(
+        return Err(krabka_pgkv::KvError::CorruptRow(
             "short timestamp global index entry commit timestamp".into(),
         ));
     };
@@ -2982,12 +2982,12 @@ fn decode_global_index_entry_value(
         return Ok(None);
     }
     let Some((base_table_id, rest)) = take_u32(rest) else {
-        return Err(crabka_pgkv::KvError::CorruptRow(
+        return Err(krabka_pgkv::KvError::CorruptRow(
             "short timestamp global index entry table id".into(),
         ));
     };
     let Some((base_rowid, [])) = take_u64(rest) else {
-        return Err(crabka_pgkv::KvError::CorruptRow(
+        return Err(krabka_pgkv::KvError::CorruptRow(
             "bad timestamp global index entry row id".into(),
         ));
     };
@@ -3009,12 +3009,12 @@ fn take_u64(bytes: &[u8]) -> Option<(u64, &[u8])> {
     Some((u64::from_be_bytes(head.try_into().expect("8 bytes")), tail))
 }
 
-fn append_datum_key_part(out: &mut Vec<u8>, datum: &crabka_pgtypes::Datum) {
+fn append_datum_key_part(out: &mut Vec<u8>, datum: &krabka_pgtypes::Datum) {
     match datum {
-        crabka_pgtypes::Datum::Null => out.push(0),
+        krabka_pgtypes::Datum::Null => out.push(0),
         value => {
             out.push(1);
-            let binary = crabka_pgtypes::encoding::encode_binary(value);
+            let binary = krabka_pgtypes::encoding::encode_binary(value);
             out.extend_from_slice(
                 &u32::try_from(binary.len())
                     .expect("index datum length must fit in u32")
@@ -3026,11 +3026,11 @@ fn append_datum_key_part(out: &mut Vec<u8>, datum: &crabka_pgtypes::Datum) {
 }
 
 fn ensure_prewrite_can_win(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     start_ts: TimestampTransactionId,
     write: &TimestampWrite,
 ) -> Result<(), TimestampTxnError> {
-    let prefix = crabka_pgkv::key::row_key(write.table_id, write.rowid);
+    let prefix = krabka_pgkv::key::row_key(write.table_id, write.rowid);
     let versions = kv
         .scan_prefix(&prefix)
         .map_err(|_| TimestampTxnError::WriteConflict {
@@ -3038,11 +3038,11 @@ fn ensure_prewrite_can_win(
             rowid: write.rowid,
         })?;
     for (_key, value) in versions {
-        let Ok(version) = crabka_pgmvcc::version::decode_ts_tuple(&value) else {
+        let Ok(version) = krabka_pgmvcc::version::decode_ts_tuple(&value) else {
             continue;
         };
         match version.state {
-            crabka_pgmvcc::version::TsVersionState::Intent
+            krabka_pgmvcc::version::TsVersionState::Intent
                 if version.start_ts != start_ts.get() =>
             {
                 return Err(TimestampTxnError::WriteConflict {
@@ -3050,8 +3050,8 @@ fn ensure_prewrite_can_win(
                     rowid: write.rowid,
                 });
             }
-            crabka_pgmvcc::version::TsVersionState::Committed { commit_ts }
-            | crabka_pgmvcc::version::TsVersionState::Deleted { commit_ts }
+            krabka_pgmvcc::version::TsVersionState::Committed { commit_ts }
+            | krabka_pgmvcc::version::TsVersionState::Deleted { commit_ts }
                 if commit_ts > start_ts.get() =>
             {
                 return Err(TimestampTxnError::WriteConflict {
@@ -3154,23 +3154,23 @@ impl TimestampVersionState {
 mod tests {
     use std::sync::Arc;
 
-    use crabka_pgkv::Kv;
+    use krabka_pgkv::Kv;
 
     use super::*;
 
     struct DropDescriptorCasCommitter {
-        kv: Arc<dyn crabka_pgkv::Kv>,
+        kv: Arc<dyn krabka_pgkv::Kv>,
     }
 
     #[async_trait::async_trait]
     impl crate::Committer for DropDescriptorCasCommitter {
-        async fn commit(&self, ops: Vec<crabka_pgkv::WriteOp>) -> Result<(), crate::ExecError> {
+        async fn commit(&self, ops: Vec<krabka_pgkv::WriteOp>) -> Result<(), crate::ExecError> {
             let ops = ops
                 .into_iter()
                 .filter(|op| {
                     !matches!(
                         op,
-                        crabka_pgkv::WriteOp::ConditionalPut { key, expected: Some(_), .. }
+                        krabka_pgkv::WriteOp::ConditionalPut { key, expected: Some(_), .. }
                             if key.starts_with(b"\0\0\0\0meta/ts_txn/")
                     )
                 })
@@ -3185,7 +3185,7 @@ mod tests {
             table_id: 7,
             bucket: None,
             rowid,
-            row: vec![crabka_pgtypes::Datum::Int4(1)],
+            row: vec![krabka_pgtypes::Datum::Int4(1)],
             delete: false,
             global_index_intents: Vec::new(),
         }
@@ -3225,22 +3225,22 @@ mod tests {
     fn committed_batch_timestamps_mirror_the_horizon_scan() {
         use assert2::assert;
 
-        let row = vec![crabka_pgtypes::Datum::Int4(1)];
-        let intent_only = vec![crabka_pgkv::WriteOp::Put {
-            key: crabka_pgmvcc::version::version_key_ts(7, 1, 10),
-            value: crabka_pgmvcc::version::encode_ts_tuple(
+        let row = vec![krabka_pgtypes::Datum::Int4(1)];
+        let intent_only = vec![krabka_pgkv::WriteOp::Put {
+            key: krabka_pgmvcc::version::version_key_ts(7, 1, 10),
+            value: krabka_pgmvcc::version::encode_ts_tuple(
                 10,
-                crabka_pgmvcc::version::TsVersionState::Intent,
+                krabka_pgmvcc::version::TsVersionState::Intent,
                 &row,
             ),
         }];
         assert!(max_timestamp_in_ops(&intent_only) == Some(10));
 
-        let committed_tuple = vec![crabka_pgkv::WriteOp::Put {
-            key: crabka_pgmvcc::version::version_key_ts(7, 1, 10),
-            value: crabka_pgmvcc::version::encode_ts_tuple(
+        let committed_tuple = vec![krabka_pgkv::WriteOp::Put {
+            key: krabka_pgmvcc::version::version_key_ts(7, 1, 10),
+            value: krabka_pgmvcc::version::encode_ts_tuple(
                 10,
-                crabka_pgmvcc::version::TsVersionState::Committed { commit_ts: 15 },
+                krabka_pgmvcc::version::TsVersionState::Committed { commit_ts: 15 },
                 &row,
             ),
         }];
@@ -3260,14 +3260,14 @@ mod tests {
         assert!(max_timestamp_in_ops(&[timestamp_txn_descriptor_op(&descriptor)]) == Some(25));
 
         let ignored = vec![
-            crabka_pgkv::WriteOp::Delete {
-                key: crabka_pgmvcc::version::version_key_ts(7, 1, 99),
+            krabka_pgkv::WriteOp::Delete {
+                key: krabka_pgmvcc::version::version_key_ts(7, 1, 99),
             },
-            crabka_pgkv::WriteOp::Put {
-                key: crabka_pgkv::key::row_key(7, 1),
-                value: crabka_pgmvcc::version::encode_tuple(4, 0, &row),
+            krabka_pgkv::WriteOp::Put {
+                key: krabka_pgkv::key::row_key(7, 1),
+                value: krabka_pgmvcc::version::encode_tuple(4, 0, &row),
             },
-            crabka_pgkv::WriteOp::Put {
+            krabka_pgkv::WriteOp::Put {
                 key: b"\0\0\0\0meta/ts_prewrite/anything".to_vec(),
                 value: 42_u64.to_be_bytes().to_vec(),
             },
@@ -3277,7 +3277,7 @@ mod tests {
 
     #[tokio::test]
     async fn prewrite_on_primary_fences_a_conditional_descriptor_noop() {
-        let kv: Arc<dyn crabka_pgkv::Kv> = Arc::new(crabka_pgkv::MemKv::new());
+        let kv: Arc<dyn krabka_pgkv::Kv> = Arc::new(krabka_pgkv::MemKv::new());
         let identity = TimestampTxnIdentity {
             start_ts: TimestampTransactionId::new(200).expect("start timestamp"),
             global_xid: 201,
@@ -3313,7 +3313,7 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_as_primary_fences_a_conditional_descriptor_noop() {
-        let kv: Arc<dyn crabka_pgkv::Kv> = Arc::new(crabka_pgkv::MemKv::new());
+        let kv: Arc<dyn krabka_pgkv::Kv> = Arc::new(krabka_pgkv::MemKv::new());
         let identity = TimestampTxnIdentity {
             start_ts: TimestampTransactionId::new(210).expect("start timestamp"),
             global_xid: 211,
@@ -3356,7 +3356,7 @@ mod tests {
 
     #[tokio::test]
     async fn primary_prewrite_atomically_persists_pending_record_on_first_write_range() {
-        let kv: Arc<dyn crabka_pgkv::Kv> = Arc::new(crabka_pgkv::MemKv::new());
+        let kv: Arc<dyn krabka_pgkv::Kv> = Arc::new(krabka_pgkv::MemKv::new());
         let start_ts = TimestampTransactionId::new(10).expect("start timestamp");
         let identity = TimestampTxnIdentity {
             start_ts,
@@ -3375,7 +3375,7 @@ mod tests {
             table_id: 7,
             bucket: None,
             rowid: 9,
-            row: vec![crabka_pgtypes::Datum::Int4(1)],
+            row: vec![krabka_pgtypes::Datum::Int4(1)],
             delete: false,
             global_index_intents: Vec::new(),
         };
@@ -3394,7 +3394,7 @@ mod tests {
     }
 
     struct PublishingPrimaryBarrier {
-        primary: Arc<dyn crabka_pgkv::Kv>,
+        primary: Arc<dyn krabka_pgkv::Kv>,
         descriptor: TimestampTxnDescriptor,
     }
 
@@ -3409,8 +3409,8 @@ mod tests {
 
     #[tokio::test]
     async fn primary_prewrite_waits_for_range0_replica_barrier() {
-        let local: Arc<dyn crabka_pgkv::Kv> = Arc::new(crabka_pgkv::MemKv::new());
-        let primary: Arc<dyn crabka_pgkv::Kv> = Arc::new(crabka_pgkv::MemKv::new());
+        let local: Arc<dyn krabka_pgkv::Kv> = Arc::new(krabka_pgkv::MemKv::new());
+        let primary: Arc<dyn krabka_pgkv::Kv> = Arc::new(krabka_pgkv::MemKv::new());
         let start_ts = TimestampTransactionId::new(10).expect("start timestamp");
         let identity = TimestampTxnIdentity {
             start_ts,
@@ -3433,7 +3433,7 @@ mod tests {
             table_id: 7,
             bucket: None,
             rowid: 9,
-            row: vec![crabka_pgtypes::Datum::Int4(1)],
+            row: vec![krabka_pgtypes::Datum::Int4(1)],
             delete: false,
             global_index_intents: Vec::new(),
         };
@@ -3483,7 +3483,7 @@ mod tests {
 
         assert_eq!(
             local
-                .get(&crabka_pgkv::key::seq_key(7))
+                .get(&krabka_pgkv::key::seq_key(7))
                 .expect("scan terminal")
                 .map(|bytes| u64::from_be_bytes(bytes.try_into().expect("u64 terminal"))),
             Some(10)
@@ -3492,7 +3492,7 @@ mod tests {
 
     #[tokio::test]
     async fn bare_prewrite_reports_a_memkv_reservation_collision() {
-        let kv: Arc<dyn crabka_pgkv::Kv> = Arc::new(crabka_pgkv::MemKv::new());
+        let kv: Arc<dyn krabka_pgkv::Kv> = Arc::new(krabka_pgkv::MemKv::new());
         let participant = TimestampTxnParticipant::new(
             Arc::clone(&kv),
             Arc::clone(&kv),
@@ -3505,7 +3505,7 @@ mod tests {
             table_id: 7,
             bucket: None,
             rowid: 9,
-            row: vec![crabka_pgtypes::Datum::Int4(1)],
+            row: vec![krabka_pgtypes::Datum::Int4(1)],
             delete: false,
             global_index_intents: Vec::new(),
         };
@@ -3514,7 +3514,7 @@ mod tests {
             .prewrite(first_start, std::slice::from_ref(&write))
             .await
             .expect("first reservation");
-        kv.delete(&crabka_pgmvcc::version::version_key_ts(
+        kv.delete(&krabka_pgmvcc::version::version_key_ts(
             write.table_id,
             write.rowid,
             first_start.get(),
@@ -3529,7 +3529,7 @@ mod tests {
 
         assert!(matches!(error, ExecError::SerializationFailure));
         assert!(
-            kv.get(&crabka_pgmvcc::version::version_key_ts(
+            kv.get(&krabka_pgmvcc::version::version_key_ts(
                 write.table_id,
                 write.rowid,
                 second_start.get(),
@@ -3619,14 +3619,14 @@ mod tests {
 
     #[test]
     fn prewrite_commit_and_abort_control_read_ts_visibility() {
-        let kv = std::sync::Arc::new(crabka_pgkv::MemKv::new());
+        let kv = std::sync::Arc::new(krabka_pgkv::MemKv::new());
         let start = TimestampTransactionId::new(5).expect("start");
         let commit = CommitTimestamp::after_start(start, 8).expect("commit");
         let write = TimestampWrite {
             table_id: 11,
             bucket: None,
             rowid: 42,
-            row: vec![crabka_pgtypes::Datum::Int4(7)],
+            row: vec![krabka_pgtypes::Datum::Int4(7)],
             delete: false,
             global_index_intents: Vec::new(),
         };
@@ -3659,12 +3659,12 @@ mod tests {
         assert_eq!(
             read_visible_ts_row(kv.as_ref(), 11, 42, ReadTimestamp::new(8).expect("at"))
                 .expect("read at"),
-            Some(vec![crabka_pgtypes::Datum::Int4(7)])
+            Some(vec![krabka_pgtypes::Datum::Int4(7)])
         );
 
         let abort_start = TimestampTransactionId::new(9).expect("abort start");
         let abort_write = TimestampWrite {
-            row: vec![crabka_pgtypes::Datum::Int4(9)],
+            row: vec![krabka_pgtypes::Datum::Int4(9)],
             ..write
         };
         kv.write_batch(
@@ -3685,20 +3685,20 @@ mod tests {
         assert_eq!(
             read_visible_ts_row(kv.as_ref(), 11, 42, ReadTimestamp::new(100).expect("after"))
                 .expect("read after abort"),
-            Some(vec![crabka_pgtypes::Datum::Int4(7)])
+            Some(vec![krabka_pgtypes::Datum::Int4(7)])
         );
     }
 
     #[test]
     fn prewrite_conflict_excludes_in_doubt_intent() {
-        let kv = crabka_pgkv::MemKv::new();
+        let kv = krabka_pgkv::MemKv::new();
         let first = TimestampTransactionId::new(5).expect("first");
         let second = TimestampTransactionId::new(6).expect("second");
         let write = TimestampWrite {
             table_id: 11,
             bucket: None,
             rowid: 42,
-            row: vec![crabka_pgtypes::Datum::Int4(7)],
+            row: vec![krabka_pgtypes::Datum::Int4(7)],
             delete: false,
             global_index_intents: Vec::new(),
         };
@@ -3718,20 +3718,20 @@ mod tests {
 
     #[test]
     fn prewrite_carries_global_index_intents_with_base_write() {
-        let kv = crabka_pgkv::MemKv::new();
+        let kv = krabka_pgkv::MemKv::new();
         let start = TimestampTransactionId::new(5).expect("start");
         let write = TimestampWrite {
             table_id: 11,
             bucket: None,
             rowid: 42,
             row: vec![
-                crabka_pgtypes::Datum::Int4(7),
-                crabka_pgtypes::Datum::Text("a".into()),
+                krabka_pgtypes::Datum::Int4(7),
+                krabka_pgtypes::Datum::Text("a".into()),
             ],
             delete: false,
             global_index_intents: vec![GlobalIndexIntent {
                 index_id: 3,
-                indexed_values: vec![crabka_pgtypes::Datum::Text("a".into())],
+                indexed_values: vec![krabka_pgtypes::Datum::Text("a".into())],
                 base_table_id: 11,
                 base_rowid: 42,
                 unique: true,
@@ -3747,8 +3747,8 @@ mod tests {
 
     #[tokio::test]
     async fn abort_deletes_prewritten_non_unique_global_index_intents() {
-        let kv: std::sync::Arc<dyn crabka_pgkv::Kv> =
-            std::sync::Arc::new(crabka_pgkv::MemKv::new());
+        let kv: std::sync::Arc<dyn krabka_pgkv::Kv> =
+            std::sync::Arc::new(krabka_pgkv::MemKv::new());
         let committer = std::sync::Arc::new(crate::commit::LocalCommitter {
             kv: std::sync::Arc::clone(&kv),
         });
@@ -3778,8 +3778,8 @@ mod tests {
 
     #[tokio::test]
     async fn aborted_resolution_deletes_prewritten_global_index_intents() {
-        let kv: std::sync::Arc<dyn crabka_pgkv::Kv> =
-            std::sync::Arc::new(crabka_pgkv::MemKv::new());
+        let kv: std::sync::Arc<dyn krabka_pgkv::Kv> =
+            std::sync::Arc::new(krabka_pgkv::MemKv::new());
         let committer = std::sync::Arc::new(crate::commit::LocalCommitter {
             kv: std::sync::Arc::clone(&kv),
         });
@@ -3821,8 +3821,8 @@ mod tests {
 
     #[tokio::test]
     async fn abort_keeps_existing_global_index_entries_for_update_and_delete_intents() {
-        let kv: std::sync::Arc<dyn crabka_pgkv::Kv> =
-            std::sync::Arc::new(crabka_pgkv::MemKv::new());
+        let kv: std::sync::Arc<dyn krabka_pgkv::Kv> =
+            std::sync::Arc::new(krabka_pgkv::MemKv::new());
         let committer = std::sync::Arc::new(crate::commit::LocalCommitter {
             kv: std::sync::Arc::clone(&kv),
         });
@@ -3854,7 +3854,7 @@ mod tests {
             table_id: 11,
             bucket: None,
             rowid: 42,
-            row: vec![crabka_pgtypes::Datum::Text("beta".into())],
+            row: vec![krabka_pgtypes::Datum::Text("beta".into())],
             delete: false,
             global_index_intents: vec![
                 global_index_test_intent(42, "alpha", true),
@@ -3903,7 +3903,7 @@ mod tests {
             table_id: 11,
             bucket: None,
             rowid,
-            row: vec![crabka_pgtypes::Datum::Text(indexed_value.into())],
+            row: vec![krabka_pgtypes::Datum::Text(indexed_value.into())],
             delete,
             global_index_intents: vec![global_index_test_intent(
                 rowid,
@@ -3920,7 +3920,7 @@ mod tests {
     ) -> GlobalIndexIntent {
         GlobalIndexIntent {
             index_id: 3,
-            indexed_values: vec![crabka_pgtypes::Datum::Text(indexed_value.into())],
+            indexed_values: vec![krabka_pgtypes::Datum::Text(indexed_value.into())],
             base_table_id: 11,
             base_rowid,
             unique: false,
@@ -3928,21 +3928,21 @@ mod tests {
         }
     }
 
-    fn global_index_intent_count(kv: &dyn crabka_pgkv::Kv) -> usize {
+    fn global_index_intent_count(kv: &dyn krabka_pgkv::Kv) -> usize {
         kv.scan_prefix(b"\0\0\0\0index/ts_intent/")
             .expect("scan global index intents")
             .len()
     }
 
     fn assert_visible_global_index_entries(
-        kv: &dyn crabka_pgkv::Kv,
+        kv: &dyn krabka_pgkv::Kv,
         indexed_value: &str,
         expected_rowids: &[u64],
     ) {
         let entries = read_visible_global_index_entries(
             kv,
             3,
-            &[crabka_pgtypes::Datum::Text(indexed_value.into())],
+            &[krabka_pgtypes::Datum::Text(indexed_value.into())],
             ReadTimestamp::MAX,
         )
         .expect("read visible global index entries");
@@ -3959,11 +3959,11 @@ mod tests {
             table_id: 11,
             bucket: None,
             rowid: 42,
-            row: vec![crabka_pgtypes::Datum::Int4(7)],
+            row: vec![krabka_pgtypes::Datum::Int4(7)],
             delete: false,
             global_index_intents: vec![GlobalIndexIntent {
                 index_id: 3,
-                indexed_values: vec![crabka_pgtypes::Datum::Int4(7)],
+                indexed_values: vec![krabka_pgtypes::Datum::Int4(7)],
                 base_table_id: 11,
                 base_rowid: 99,
                 unique: false,
@@ -3976,7 +3976,7 @@ mod tests {
 
     #[test]
     fn primary_decision_defaults_pending_then_roundtrips_terminal() {
-        let kv = crabka_pgkv::MemKv::new();
+        let kv = krabka_pgkv::MemKv::new();
         let start = TimestampTransactionId::new(5).expect("start");
         let commit = CommitTimestamp::after_start(start, 8).expect("commit");
 

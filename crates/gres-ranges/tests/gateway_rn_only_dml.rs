@@ -14,19 +14,19 @@ use std::{
 
 use assert2::assert;
 use async_trait::async_trait;
-use crabka_gres_control::{
+use krabka_gres_control::{
     HashPlacement, RangeBoundary, RangeLayoutEntry, RangeLifecycle, SqlUser, TenantId,
     TenantRecord, TenantState,
 };
-use crabka_gres_ranges::{
+use krabka_gres_ranges::{
     BarrierError, FramedTcpClient, HostedRangeService, MemoryTsoHorizon, MultiRangeTenant,
     MultiRangeTenantConfig, Range0EndSampler, Range0Tail, RangeId, RangeRegistry, RangeService,
     RangeTlsClientConfig, RangeTlsServerConfig, ReadOnlyRange0Replica, TenantName, serve_tls,
     tso_rpc_from_horizon,
 };
-use crabka_pgexec::SqlEngine;
-use crabka_pgkv::{Kv, MemKv};
-use crabka_pgwire::engine::{Engine, QueryResult, Session, TxStatus};
+use krabka_pgexec::SqlEngine;
+use krabka_pgkv::{Kv, MemKv};
+use krabka_pgwire::engine::{Engine, QueryResult, Session, TxStatus};
 
 /// Hash-sharded table whose buckets straddle the r1/r2 boundary.
 const SHARDED_TABLE: &str = "t80";
@@ -59,12 +59,12 @@ impl MtlsFixture {
             _dir: dir,
             server: RangeTlsServerConfig {
                 tenant: "tenant_rn_only_dml".to_string(),
-                tls: crabka_security::TlsConfig {
+                tls: krabka_security::TlsConfig {
                     cert_chain_path: server_cert.clone(),
                     private_key_path: server_key,
                     trust_roots_path: Some(server_cert.clone()),
                     client_ca_path: Some(client_ca),
-                    client_auth: crabka_security::ClientAuthMode::Required,
+                    client_auth: krabka_security::ClientAuthMode::Required,
                 },
                 range_rpc_principals: BTreeSet::from([
                     "CN=test-client,OU=integration,O=crabka".to_string()
@@ -74,14 +74,14 @@ impl MtlsFixture {
                 ]),
             },
             client: RangeTlsClientConfig {
-                tls: crabka_security::TlsConfig {
+                tls: krabka_security::TlsConfig {
                     cert_chain_path: client_cert,
                     private_key_path: client_key,
                     trust_roots_path: Some(server_cert),
                     client_ca_path: None,
-                    client_auth: crabka_security::ClientAuthMode::Disabled,
+                    client_auth: krabka_security::ClientAuthMode::Disabled,
                 },
-                server_name: "crabka-dev".to_string(),
+                server_name: "krabka-dev".to_string(),
             },
         }
     }
@@ -230,7 +230,7 @@ fn tenant_record(record_tenant: &str) -> TenantRecord {
     TenantRecord::new(
         1,
         TenantId::try_from(record_tenant).expect("tenant id"),
-        crabka_gres_control::TenantName::try_from(record_tenant).expect("record tenant"),
+        krabka_gres_control::TenantName::try_from(record_tenant).expect("record tenant"),
         TenantState::Active,
         SqlUser::try_from("alice").expect("user"),
         "SCRAM-SHA-256$4096:salt$stored:server".to_string(),
@@ -274,7 +274,7 @@ fn tenant_record(record_tenant: &str) -> TenantRecord {
 }
 
 fn bucket_of(id: i32) -> u32 {
-    crabka_pgkv::key::hash_bucket(&id.to_be_bytes(), HASH_BUCKET_COUNT)
+    krabka_pgkv::key::hash_bucket(&id.to_be_bytes(), HASH_BUCKET_COUNT)
         .expect("power-of-two bucket count")
 }
 
@@ -322,7 +322,7 @@ fn expected_rows(rows: &[&[i32]]) -> Vec<Vec<Option<String>>> {
 }
 
 fn catalog_table_id(engine: &SqlEngine, name: &str) -> u32 {
-    crabka_pgcatalog::list_tables(engine.catalog_kv())
+    krabka_pgcatalog::list_tables(engine.catalog_kv())
         .expect("list catalog tables")
         .into_iter()
         .find(|table| table.name.name == name)
@@ -335,17 +335,17 @@ fn committed_hash_buckets(kv: &dyn Kv, table_id: u32) -> Vec<u32> {
     kv.scan_range(&[], &[u8::MAX])
         .expect("scan storage")
         .into_iter()
-        .filter_map(|(key, value)| match crabka_pgkv::key::classify_key(&key) {
-            crabka_pgkv::key::KeyClass::HashPrimaryVersion {
+        .filter_map(|(key, value)| match krabka_pgkv::key::classify_key(&key) {
+            krabka_pgkv::key::KeyClass::HashPrimaryVersion {
                 table_id: version_table,
                 bucket,
                 ..
             } if version_table == table_id => {
                 let version =
-                    crabka_pgmvcc::version::decode_ts_tuple(&value).expect("decode ts tuple");
+                    krabka_pgmvcc::version::decode_ts_tuple(&value).expect("decode ts tuple");
                 matches!(
                     version.state,
-                    crabka_pgmvcc::version::TsVersionState::Committed { .. }
+                    krabka_pgmvcc::version::TsVersionState::Committed { .. }
                 )
                 .then_some(bucket)
             }
@@ -541,10 +541,10 @@ async fn rn_only_gateway_forwarded_update_loop_keeps_owner_chain_bounded() {
     let versions = topology
         .remote_engine
         .kv_handle()
-        .scan_prefix(&crabka_pgkv::key::table_prefix(table_id))
+        .scan_prefix(&krabka_pgkv::key::table_prefix(table_id))
         .expect("scan owner store")
         .iter()
-        .filter(|(_, value)| crabka_pgmvcc::version::decode_tuple(value).is_ok())
+        .filter(|(_, value)| krabka_pgmvcc::version::decode_tuple(value).is_ok())
         .count();
     assert!(versions <= 3, "owner chain grew to {versions} versions");
 }

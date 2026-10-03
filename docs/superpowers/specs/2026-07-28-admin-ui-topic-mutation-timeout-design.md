@@ -13,7 +13,7 @@ broker request behavior.
 
 ## Scope
 
-This slice changes only the timeout passed by `crabka-admin-ui` to
+This slice changes only the timeout passed by `krabka-admin-ui` to
 `AdminClient::create_topics`, `AdminClient::delete_topics`, and
 `AdminClient::create_partitions`.
 
@@ -29,7 +29,7 @@ The compiled default remains exactly 30,000 milliseconds.
 The binary accepts:
 
 - `--topic-mutation-timeout-ms`
-- `CRABKA_ADMIN_UI_TOPIC_MUTATION_TIMEOUT_MS`
+- `KRABKA_ADMIN_UI_TOPIC_MUTATION_TIMEOUT_MS`
 
 The command-line value wins when both sources are present. When neither is
 present, the compiled default is used.
@@ -46,7 +46,7 @@ implementation validate with `refined_type::rule::GreaterI32<0>`.
 exposes its validated `i32` only at the three `AdminClient` call sites.
 
 The default is a named `DEFAULT_TOPIC_MUTATION_TIMEOUT_MS` constant. No new
-dependency or lockfile change is needed because `crabka-admin-ui` already
+dependency or lockfile change is needed because `krabka-admin-ui` already
 directly depends on the workspace-pinned `refined_type`.
 
 ## Input Resolution

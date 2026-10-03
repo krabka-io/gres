@@ -26,11 +26,11 @@ generated Kubernetes CRDs.
   `CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0`.
 - Every lock-aware Cargo command must use `--locked`; add no dependency.
 - RED precedes production edits.
-- Reuse `crabka_client_core::ClientDnsTimeout`; add no registry-specific
+- Reuse `krabka_client_core::ClientDnsTimeout`; add no registry-specific
   timeout type or second reader/admin policy.
 - Default to `ClientDnsTimeout::default()` (10 seconds).
 - Use exactly `--registry-reader-admin-dns-timeout-ms`,
-  `CRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT_MS`, and
+  `KRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT_MS`, and
   `spec.gresRegistry.readerAdminDnsTimeoutMs`.
 - CLI precedence is command line, environment, then the 10-second default.
 - The CRD setting governs operator-internal registry control, Gres compute,
@@ -53,10 +53,10 @@ generated Kubernetes CRDs.
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo test \
-  -p crabka-client-admin -p crabka-gres-control \
-  -p crabka-gres -p crabka-cli \
-  -p crabka-gres-activator -p crabka-gres-loadtest \
-  -p crabka-operator --all-targets --locked
+  -p krabka-client-admin -p krabka-gres-control \
+  -p krabka-gres -p krabka-cli \
+  -p krabka-gres-activator -p krabka-gres-loadtest \
+  -p krabka-operator --all-targets --locked
 ```
 
 - Use a fresh implementer per task and independent spec-compliance and quality
@@ -67,11 +67,13 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
 ### Task 1: Make AdminClient honor its DNS timeout
 
 **Files:**
+
 - Modify: `crates/client-admin/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes:
-  `crabka_client_core::ClientDnsTimeout`
+  `krabka_client_core::ClientDnsTimeout`
 - Produces:
   `AdminClient::connect_with_dns_timeout(&[String], ClientDnsTimeout) -> Result<AdminClient, AdminError>`
 - Preserves:
@@ -88,7 +90,7 @@ depending on external DNS:
 ```rust
 #[tokio::test(start_paused = true)]
 async fn dns_lookup_stops_at_connection_option_deadline() {
-    let timeout = crabka_client_core::ClientDnsTimeout::new(
+    let timeout = krabka_client_core::ClientDnsTimeout::new(
         Duration::from_millis(37),
     )
     .expect("positive timeout");
@@ -110,7 +112,7 @@ Add a separate live test beside `custom_options_are_observable_on_initial_dial`:
 #[tokio::test]
 async fn connect_with_dns_timeout_preserves_admin_defaults() {
     let live = ObservedAdminBroker::start(Duration::ZERO).await;
-    let timeout = crabka_client_core::ClientDnsTimeout::new(
+    let timeout = krabka_client_core::ClientDnsTimeout::new(
         Duration::from_millis(37),
     )
     .expect("positive timeout");
@@ -122,7 +124,7 @@ async fn connect_with_dns_timeout_preserves_admin_defaults() {
     .expect("admin connects");
 
     assert2::assert!(admin.options.dns_timeout == timeout);
-    assert2::assert!(admin.options.client_id == "crabka-operator");
+    assert2::assert!(admin.options.client_id == "krabka-operator");
     assert2::assert!(admin.options.connect_timeout == Duration::from_secs(5));
     assert2::assert!(admin.options.request_timeout == Duration::from_secs(30));
     live.stop();
@@ -133,10 +135,10 @@ async fn connect_with_dns_timeout_preserves_admin_defaults() {
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-admin \
+  cargo test -p krabka-client-admin \
   dns_lookup_stops_at_connection_option_deadline --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-admin \
+  cargo test -p krabka-client-admin \
   connect_with_dns_timeout --lib --locked
 ```
 
@@ -151,7 +153,7 @@ paused-clock test exercise the same timeout:
 ```rust
 async fn lookup_first<F, I>(
     host_port: &str,
-    dns_timeout: crabka_client_core::ClientDnsTimeout,
+    dns_timeout: krabka_client_core::ClientDnsTimeout,
     lookup: F,
 ) -> Result<std::net::SocketAddr, AdminError>
 where
@@ -200,7 +202,7 @@ Add beside `connect_secured`:
 /// Returns `AdminError::Connect { tried }` if no bootstrap address connects.
 pub async fn connect_with_dns_timeout(
     bootstrap_addrs: &[String],
-    dns_timeout: crabka_client_core::ClientDnsTimeout,
+    dns_timeout: krabka_client_core::ClientDnsTimeout,
 ) -> Result<Self, AdminError> {
     let mut options = Self::opts(None);
     options.dns_timeout = dns_timeout;
@@ -215,13 +217,13 @@ not make `opts` public and do not create an admin policy type.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-admin dns_lookup --lib --locked
+  cargo test -p krabka-client-admin dns_lookup --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-admin connect_with_dns_timeout --lib --locked
+  cargo test -p krabka-client-admin connect_with_dns_timeout --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-admin --all-targets --locked
+  cargo test -p krabka-client-admin --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-client-admin --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-client-admin --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo fmt --all -- --check
 git diff --check
@@ -243,9 +245,11 @@ timeout behavior changed.
 ### Task 2: Carry reader/admin DNS policy through Registry
 
 **Files:**
+
 - Modify: `crates/gres-control/src/registry.rs`
 
 **Interfaces:**
+
 - Consumes:
   `AdminClient::connect_with_dns_timeout(&[String], ClientDnsTimeout)`
 - Produces:
@@ -265,7 +269,7 @@ fn registry_reader_admin_dns_defaults_and_replaces_exactly() {
     let defaults = RegistryPolicy::default();
     assert!(
         defaults.reader_admin_dns_timeout()
-            == crabka_client_core::ClientDnsTimeout::default()
+            == krabka_client_core::ClientDnsTimeout::default()
     );
 
     let policy = defaults
@@ -298,10 +302,10 @@ async fn registry_bootstrap_resolver_accepts_typed_deadline() {
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-control \
+  cargo test -p krabka-gres-control \
   registry_reader_admin_dns --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-control \
+  cargo test -p krabka-gres-control \
   registry_bootstrap_resolver_accepts_typed_deadline --lib --locked
 ```
 
@@ -433,15 +437,15 @@ defaults.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-control \
+  cargo test -p krabka-gres-control \
   registry_reader_admin_dns --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-control \
+  cargo test -p krabka-gres-control \
   registry_bootstrap_resolver --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-control --all-targets --locked
+  cargo test -p krabka-gres-control --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-gres-control --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-gres-control --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo fmt --all -- --check
 git diff --check
@@ -462,6 +466,7 @@ topic creation, and metadata admin paths while producer DNS remains unchanged.
 ### Task 3: Expose every standalone registry surface
 
 **Files:**
+
 - Modify: `crates/gres/src/lib.rs`
 - Modify: `crates/cli/src/gres.rs`
 - Modify: `crates/gres-activator/src/main.rs`
@@ -469,12 +474,13 @@ topic creation, and metadata admin paths while producer DNS remains unchanged.
 - Modify: `crates/gres-loadtest/src/cluster.rs`
 
 **Interfaces:**
+
 - Consumes:
   `RegistryPolicy::with_reader_admin_dns_timeout_ms(u64) -> Result<RegistryPolicy, String>`
 - Produces on all four parsers:
   `--registry-reader-admin-dns-timeout-ms`
 - Produces on all four parsers:
-  `CRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT_MS`
+  `KRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT_MS`
 - Produces from the load-test child renderer:
   one `--registry-reader-admin-dns-timeout-ms VALUE` pair
 
@@ -490,7 +496,7 @@ Add this environment value:
 
 ```rust
 (
-    "CRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT_MS",
+    "KRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT_MS",
     "37",
 ),
 ```
@@ -542,12 +548,12 @@ assert!(
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo test \
-  -p crabka-gres -p crabka-cli -p crabka-gres-loadtest \
+  -p krabka-gres -p krabka-cli -p krabka-gres-loadtest \
   registry_policy_options --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-activator validated_input_ --locked
+  cargo test -p krabka-gres-activator validated_input_ --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-loadtest \
+  cargo test -p krabka-gres-loadtest \
   node_specs_wire_topology_flags --lib --locked
 ```
 
@@ -561,7 +567,7 @@ Add immediately after the producer DNS option in all four parser structs:
 ```rust
 #[arg(
     long = "registry-reader-admin-dns-timeout-ms",
-    env = "CRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT_MS"
+    env = "KRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT_MS"
 )]
 reader_admin_dns_timeout_ms: Option<PositiveMillis>,
 ```
@@ -604,23 +610,23 @@ policy.reader_admin_dns_timeout().milliseconds().to_string(),
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo test \
-  -p crabka-gres -p crabka-cli -p crabka-gres-loadtest \
+  -p krabka-gres -p krabka-cli -p krabka-gres-loadtest \
   registry_policy_options --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-activator validated_input_ --locked
+  cargo test -p krabka-gres-activator validated_input_ --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-loadtest \
+  cargo test -p krabka-gres-loadtest \
   node_specs_wire_topology_flags --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo test \
-  -p crabka-gres -p crabka-cli -p crabka-gres-activator \
-  -p crabka-gres-loadtest --all-targets --locked
+  -p krabka-gres -p krabka-cli -p krabka-gres-activator \
+  -p krabka-gres-loadtest --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo clippy \
-  -p crabka-gres -p crabka-cli -p crabka-gres-activator \
-  -p crabka-gres-loadtest --all-targets --locked -- -D warnings
+  -p krabka-gres -p krabka-cli -p krabka-gres-activator \
+  -p krabka-gres-loadtest --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-gres --locked -- --help |
+  cargo run -q -p krabka-gres --locked -- --help |
   rg -- '--registry-reader-admin-dns-timeout-ms'
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo fmt --all -- --check
@@ -644,6 +650,7 @@ precedence, zero rejection, and load-test child propagation.
 ### Task 4: Expose Kafka CRD and operator paths
 
 **Files:**
+
 - Modify: `crates/operator/src/crd/kafka.rs`
 - Modify: `crates/operator/src/context.rs`
 - Modify: `crates/operator/src/controller/gres.rs`
@@ -652,6 +659,7 @@ precedence, zero rejection, and load-test child propagation.
 - Modify generated: `deploy/crds/crabka.io_kafkas.yaml`
 
 **Interfaces:**
+
 - Produces:
   `GresRegistrySpec::reader_admin_dns_timeout_ms: Option<u64>`
 - Produces:
@@ -744,14 +752,14 @@ assert!(
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator gres_registry --lib --locked
+  cargo test -p krabka-operator gres_registry --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator \
+  cargo test -p krabka-operator \
   gres_control_cache_tracks_inputs_without_locking_during_build --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator activator_workload_ --lib --locked
+  cargo test -p krabka-operator activator_workload_ --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator \
+  cargo test -p krabka-operator \
   compute_workload_renders_custom_policy --lib --locked
 ```
 
@@ -774,7 +782,7 @@ Resolve the typed default:
 ```rust
 let reader_admin_dns_timeout_ms =
     self.reader_admin_dns_timeout_ms.unwrap_or_else(|| {
-        crabka_gres_control::RegistryPolicy::default()
+        krabka_gres_control::RegistryPolicy::default()
             .reader_admin_dns_timeout()
             .milliseconds()
     });
@@ -811,9 +819,9 @@ is now rendered. Do not create a renderer helper or range-mode branch.
 crd_a=$(mktemp -d)
 crd_b=$(mktemp -d)
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-operator --locked -- gen-crds "$crd_a"
+  cargo run -q -p krabka-operator --locked -- gen-crds "$crd_a"
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-operator --locked -- gen-crds "$crd_b"
+  cargo run -q -p krabka-operator --locked -- gen-crds "$crd_b"
 test "$(find "$crd_a" -maxdepth 1 -type f | wc -l)" -eq 9
 test "$(find "$crd_b" -maxdepth 1 -type f | wc -l)" -eq 9
 diff -ru "$crd_a" "$crd_b"
@@ -828,19 +836,19 @@ two exact temporary directories after comparison.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator gres_registry --lib --locked
+  cargo test -p krabka-operator gres_registry --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator \
+  cargo test -p krabka-operator \
   gres_control_cache_tracks_inputs_without_locking_during_build --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator activator_workload_ --lib --locked
+  cargo test -p krabka-operator activator_workload_ --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator \
+  cargo test -p krabka-operator \
   compute_workload_renders_custom_policy --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator --all-targets --locked
+  cargo test -p krabka-operator --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-operator --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-operator --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo fmt --all -- --check
 git diff --check
@@ -866,9 +874,11 @@ cache behavior, compute and activator rendering, and generated schema.
 ### Task 5: Audit, verify, publish, and continue
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes:
   reviewed admin boundary, registry policy, standalone surfaces, and operator paths
 - Produces:
@@ -934,18 +944,18 @@ review until clean.
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo test \
-  -p crabka-client-admin -p crabka-gres-control \
-  -p crabka-gres -p crabka-cli \
-  -p crabka-gres-activator -p crabka-gres-loadtest \
-  -p crabka-operator --all-targets --locked
+  -p krabka-client-admin -p krabka-gres-control \
+  -p krabka-gres -p krabka-cli \
+  -p krabka-gres-activator -p krabka-gres-loadtest \
+  -p krabka-operator --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo clippy \
-  -p crabka-client-admin -p crabka-gres-control \
-  -p crabka-gres -p crabka-cli \
-  -p crabka-gres-activator -p crabka-gres-loadtest \
-  -p crabka-operator --all-targets --locked -- -D warnings
+  -p krabka-client-admin -p krabka-gres-control \
+  -p krabka-gres -p krabka-cli \
+  -p krabka-gres-activator -p krabka-gres-loadtest \
+  -p krabka-operator --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-gres --locked -- --help |
+  cargo run -q -p krabka-gres --locked -- --help |
   rg -- '--registry-reader-admin-dns-timeout-ms'
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo fmt --all -- --check

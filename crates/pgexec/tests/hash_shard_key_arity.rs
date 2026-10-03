@@ -10,11 +10,11 @@
 use std::sync::Arc;
 
 use assert2::assert;
-use crabka_pgcatalog::{Column, HashSharding, RelationName, ShardingStrategy, TableOptions};
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgkv::{Kv, MemKv};
-use crabka_pgtypes::ColumnType;
-use crabka_pgwire::engine::{Engine, Session};
+use krabka_pgcatalog::{Column, HashSharding, RelationName, ShardingStrategy, TableOptions};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgkv::{Kv, MemKv};
+use krabka_pgtypes::ColumnType;
+use krabka_pgwire::engine::{Engine, Session};
 
 const BUCKETS: u32 = 16;
 
@@ -29,12 +29,12 @@ fn hash_sharding(columns: &[&str]) -> ShardingStrategy {
 // The bucket the single stored row of a table physically lives in.
 fn stored_bucket(kv: &dyn Kv, table_id: u32) -> u32 {
     let buckets = kv
-        .scan_prefix(&crabka_pgkv::key::table_prefix(table_id))
+        .scan_prefix(&krabka_pgkv::key::table_prefix(table_id))
         .expect("scan table prefix")
         .into_iter()
         .map(|(key, _)| {
-            let prefix = crabka_pgmvcc::version::row_prefix_of(&key).expect("version key");
-            crabka_pgkv::key::bucket_rowid_of(table_id, prefix)
+            let prefix = krabka_pgmvcc::version::row_prefix_of(&key).expect("version key");
+            krabka_pgkv::key::bucket_rowid_of(table_id, prefix)
                 .expect("hash row key")
                 .0
         })
@@ -55,7 +55,7 @@ fn engine_with_catalog_sharding(
 ) -> (Arc<dyn Kv>, SqlEngine, SqlSession) {
     let kv: Arc<dyn Kv> = Arc::new(MemKv::new());
     let engine = SqlEngine::with_kv(Arc::clone(&kv)).expect("in-memory engine");
-    let (_, ops) = crabka_pgcatalog::create_table_with_sharding_ops(
+    let (_, ops) = krabka_pgcatalog::create_table_with_sharding_ops(
         kv.as_ref(),
         &RelationName::public("t"),
         columns,
@@ -66,7 +66,7 @@ fn engine_with_catalog_sharding(
         },
         Some(sharding),
         Vec::new(),
-        crabka_pgcatalog::TableCreation::bootstrap(),
+        krabka_pgcatalog::TableCreation::bootstrap(),
     )
     .expect("catalog write batch");
     kv.write_batch(&ops).expect("attach sharding");
@@ -139,7 +139,7 @@ async fn stored_bucket_is_the_hash_of_the_single_shard_column() {
             .catalog_table(&RelationName::public("t"))
             .expect("catalog");
         let expected =
-            crabka_pgkv::key::hash_bucket(&key_bytes, BUCKETS).expect("power-of-two buckets");
+            krabka_pgkv::key::hash_bucket(&key_bytes, BUCKETS).expect("power-of-two buckets");
         assert!(
             stored_bucket(engine.kv_handle().as_ref(), table.id) == expected,
             "{ty} shard key"
@@ -172,7 +172,7 @@ async fn a_regclass_shard_key_hashes_on_the_relation_oid() {
 
     // A `regclass` value carries the table's `pg_class` oid, which is its
     // catalog id inside the table oid band — not the bare id.
-    let target_oid = crabka_pgexec::table_relation_oid(
+    let target_oid = krabka_pgexec::table_relation_oid(
         engine
             .catalog_table(&RelationName::public("target"))
             .expect("catalog")
@@ -182,7 +182,7 @@ async fn a_regclass_shard_key_hashes_on_the_relation_oid() {
     let table = engine
         .catalog_table(&RelationName::public("t"))
         .expect("catalog");
-    let expected = crabka_pgkv::key::hash_bucket(&target_oid.to_be_bytes(), BUCKETS)
+    let expected = krabka_pgkv::key::hash_bucket(&target_oid.to_be_bytes(), BUCKETS)
         .expect("power-of-two buckets");
     assert!(stored_bucket(engine.kv_handle().as_ref(), table.id) == expected);
 }
@@ -198,7 +198,7 @@ fn the_catalog_api_refuses_a_multi_column_hash_shard_key() {
         Column::new("a", ColumnType::Int4),
         Column::new("b", ColumnType::Int4),
     ];
-    crabka_pgcatalog::create_table_with_options(
+    krabka_pgcatalog::create_table_with_options(
         &kv,
         &RelationName::public("existing"),
         columns.clone(),
@@ -211,7 +211,7 @@ fn the_catalog_api_refuses_a_multi_column_hash_shard_key() {
     .expect("create the table the sharding is attached to");
 
     for error in [
-        crabka_pgcatalog::create_table_with_sharding_ops(
+        krabka_pgcatalog::create_table_with_sharding_ops(
             &kv,
             &RelationName::public("t"),
             columns,
@@ -222,10 +222,10 @@ fn the_catalog_api_refuses_a_multi_column_hash_shard_key() {
             },
             Some(&hash_sharding(&["a", "b"])),
             Vec::new(),
-            crabka_pgcatalog::TableCreation::bootstrap(),
+            krabka_pgcatalog::TableCreation::bootstrap(),
         )
         .expect_err("a multi-column hash shard key has no row encoding"),
-        crabka_pgcatalog::set_table_sharding_ops(
+        krabka_pgcatalog::set_table_sharding_ops(
             &kv,
             &RelationName::public("existing"),
             Some(&hash_sharding(&["a", "b"])),
@@ -261,6 +261,6 @@ async fn writing_a_row_accepts_catalog_attached_single_column_sharding() {
         .catalog_table(&RelationName::public("t"))
         .expect("catalog");
     let expected =
-        crabka_pgkv::key::hash_bucket(&1_i32.to_be_bytes(), BUCKETS).expect("power-of-two buckets");
+        krabka_pgkv::key::hash_bucket(&1_i32.to_be_bytes(), BUCKETS).expect("power-of-two buckets");
     assert!(stored_bucket(kv.as_ref(), table.id) == expected);
 }

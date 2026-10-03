@@ -158,7 +158,7 @@ Focused tests prove:
   configured paused-time boundary.
 
 Existing metadata-growth and monotonic-merge tests continue to prove recovery
-semantics. Final gates run the complete `crabka-client-consumer` all-target
+semantics. Final gates run the complete `krabka-client-consumer` all-target
 suite under the locked dependency graph, strict all-target Clippy, nightly
 formatting, and `git diff --check`. `Cargo.lock` must remain unchanged.
 

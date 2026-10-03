@@ -19,11 +19,11 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use assert2::{assert, check};
-use crabka_operator::{
+use http::{Method, Response};
+use krabka_operator::{
     controller::grpc_gateway::reconcile,
     crd::grpc_gateway::{KafkaGrpcGateway, KafkaGrpcGatewaySpec},
 };
-use http::{Method, Response};
 
 #[path = "shared/mod.rs"]
 mod shared;
@@ -292,7 +292,7 @@ fn assert_ready_status(observed: &[http::Request<hyper::body::Bytes>]) {
 async fn happy_path_all_objects_created_ready() {
     // Generate a real cluster CA so ensure_serving_cert can sign with it.
     let cluster_ca =
-        crabka_security::ca::generate_cluster_ca("demo-cluster-ca", 365).expect("CA gen");
+        krabka_security::ca::generate_cluster_ca("demo-cluster-ca", 365).expect("CA gen");
 
     let broker_user_name = format!("{GW}-broker");
     let serving_name = format!("{GW}-serving");
@@ -386,7 +386,7 @@ async fn happy_path_all_objects_created_ready() {
     ];
 
     let mut config = shared::op_config(NS);
-    config.controller_dependency_requeue = crabka_units::millis(1_234);
+    config.controller_dependency_requeue = krabka_units::millis(1_234);
     let (ctx, state) = build_ctx_with_config(NS, rules, config);
     let gw = gw_cr(GW);
     let action = reconcile(Arc::new(gw), ctx).await.expect("reconcile ok");
@@ -476,15 +476,15 @@ async fn happy_path_all_objects_created_ready() {
     // the broker headless-svc SAN.
     for (needle, want) in [
         (
-            "--broker-tls-cert=/etc/crabka-gw/broker-client/user.crt",
+            "--broker-tls-cert=/etc/krabka-gw/broker-client/user.crt",
             true,
         ),
         (
-            "--broker-tls-key=/etc/crabka-gw/broker-client/user.key",
+            "--broker-tls-key=/etc/krabka-gw/broker-client/user.key",
             true,
         ),
-        ("--broker-tls-ca=/etc/crabka-gw/cluster-ca/ca.crt", true),
-        ("--tls-cert=/etc/crabka-gw/serving/tls.crt", true),
+        ("--broker-tls-ca=/etc/krabka-gw/cluster-ca/ca.crt", true),
+        ("--tls-cert=/etc/krabka-gw/serving/tls.crt", true),
         (
             "--bootstrap-servers=demo-broker-headless.default.svc.cluster.local:9093",
             true,
@@ -532,7 +532,7 @@ async fn happy_path_all_objects_created_ready() {
 #[tokio::test]
 async fn no_tls_listener_blocks_with_degraded_and_no_deployment() {
     let cluster_ca =
-        crabka_security::ca::generate_cluster_ca("demo-cluster-ca", 365).expect("CA gen");
+        krabka_security::ca::generate_cluster_ca("demo-cluster-ca", 365).expect("CA gen");
 
     let broker_user_name = format!("{GW}-broker");
     let serving_name = format!("{GW}-serving");

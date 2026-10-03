@@ -1,26 +1,26 @@
-# `crabka-log` (slice 3) — Design
+# `krabka-log` (slice 3) — Design
 
 **Status:** Draft for review
 **Date:** 2026-05-11
 **Author:** Matthew Stone (with Claude)
 **Predecessor:** project meta-spec
-(`2026-05-10-crabka-rust-rewrite-design.md`). Slice 1 (`crabka-protocol`
+(`2026-05-10-crabka-rust-rewrite-design.md`). Slice 1 (`krabka-protocol`
 and friends) fully shipped via 1a–1e.
 
 ## Summary
 
-`crabka-log` reads and writes the Apache Kafka on-disk log format
+`krabka-log` reads and writes the Apache Kafka on-disk log format
 byte-compatibly: append-only segments, sparse offset + time indexes,
 retention by time and size. Self-contained — no network, no protocol
 versioning, just `std::fs` and `std::io`. Built on top of
-`crabka-protocol::records::RecordBatch` for batch parsing.
+`krabka-protocol::records::RecordBatch` for batch parsing.
 
 **No log compaction in slice 3.** Compaction is an offline rewriter
 process that deserves its own subsystem; deferred to a later sub-plan.
 
 ## North star (acceptance gate for slice 3)
 
-1. New crate `crabka-log` exists in the workspace.
+1. New crate `krabka-log` exists in the workspace.
 2. `Log::open` recovers correctly from common corruption patterns
    (missing index, partial trailing batch, bad CRC, index past EOF).
 3. `Log::append` rolls segments per `segment.bytes` and `segment.ms`.
@@ -74,7 +74,7 @@ offset in the segment).
 Concatenation of `RecordBatch` v2 byte streams. Each batch begins with
 the 12-byte on-disk length prefix Kafka uses (`base_offset:i64 +
 batch_length:i32`) followed by the rest of the v2 header and the
-record body. This matches the wire format `crabka-protocol::records`
+record body. This matches the wire format `krabka-protocol::records`
 already reads and writes, so the log layer calls into the existing
 codec for batch parsing.
 
@@ -229,7 +229,7 @@ pub enum LogError {
     OffsetTooHigh { requested: i64, log_end: i64 },
 
     #[error("records: {0}")]
-    Records(#[from] crabka_protocol::records::RecordsError),
+    Records(#[from] krabka_protocol::records::RecordsError),
 
     #[error("invalid segment filename: {0}")]
     BadSegmentName(String),
@@ -269,7 +269,7 @@ Recovery is single-pass; no separate fsck tool.
 ```
 1. Roll check: if size >= segment_bytes OR age >= segment_ms, seal + start new segment.
 2. Assign offsets: batch.base_offset = log_end_offset().
-3. Encode via crabka_protocol::records::RecordBatch::encode.
+3. Encode via krabka_protocol::records::RecordBatch::encode.
 4. Write bytes to active .log at current end position.
 5. Maybe add (relative_offset, position) to .index and (max_timestamp, relative_offset) to .timeindex if interval exceeded.
 6. Update log_end_offset and max_timestamp.
@@ -296,7 +296,7 @@ Recovery is single-pass; no separate fsck tool.
 1. Force-roll the active segment if its age exceeds `segment_ms` (so
    even idle logs rotate).
 2. Time-based deletion: oldest first, while `max_timestamp +
-   retention_ms < now`.
+retention_ms < now`.
 3. Size-based deletion: oldest first, while total `.log` size >
    `retention_bytes`.
 4. Never delete the active segment; never delete the only segment;
@@ -355,10 +355,10 @@ Shared `arb_batches(range)` strategy in `tests/support/strategies.rs`.
 `crates/log/tests/integration.rs`, `#[ignore]`-gated:
 
 - **JVM writes, Rust reads.** Boot a Kafka container, produce records
-  via `kafka-console-producer` (or `crabka-client-core` if slice 2 is
+  via `kafka-console-producer` (or `krabka-client-core` if slice 2 is
   merged), copy the partition's log dir out of the container, open
-  with `crabka-log`, assert byte-equal records.
-- **Rust writes, JVM reads.** Build a log dir with `crabka-log`. Mount
+  with `krabka-log`, assert byte-equal records.
+- **Rust writes, JVM reads.** Build a log dir with `krabka-log`. Mount
   into a fresh Kafka container. Consume via `kafka-console-consumer`;
   assert records match.
 
@@ -415,7 +415,7 @@ The slice ships when **all** of these hold:
 10. CodSpeed bench file added with at least four benchmarks.
 11. No regressions in any prior slice's tests.
 12. `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D
-    warnings` clean.
+warnings` clean.
 13. Rustdoc on every public type; crate-level doc explains the on-disk
     layout + recovery story.
 
@@ -445,4 +445,4 @@ None block this design.
 # 7. Next step
 
 Invoke `writing-plans` to produce a detailed implementation plan for
-slice 3. Slice 2 (`crabka-client-core`) is being developed in parallel.
+slice 3. Slice 2 (`krabka-client-core`) is being developed in parallel.

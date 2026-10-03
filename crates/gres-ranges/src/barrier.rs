@@ -2,10 +2,10 @@
 
 use std::sync::Arc;
 
-use crabka_pgexec::{ExecError, Linearizer};
+use krabka_pgexec::{ExecError, Linearizer};
 #[cfg(test)]
-use crabka_units::secs;
-use crabka_units::{Time, convert::TimeExt as _, fmt::Human as _};
+use krabka_units::secs;
+use krabka_units::{Time, convert::TimeExt as _, fmt::Human as _};
 use tokio::sync::{Mutex, Notify, watch};
 use tracing::{Instrument as _, Span, field::Empty};
 
@@ -363,8 +363,8 @@ mod tests {
     };
 
     use assert2::assert;
-    use crabka_pgkv::{Kv, MemKv, WriteOp};
-    use crabka_units::millis;
+    use krabka_pgkv::{Kv, MemKv, WriteOp};
+    use krabka_units::millis;
     use tokio::sync::{Mutex as TokioMutex, Notify};
 
     use super::*;

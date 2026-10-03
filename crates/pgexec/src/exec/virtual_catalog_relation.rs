@@ -2,7 +2,7 @@ use super::*;
 
 pub(crate) fn virtual_catalog_relation(
     catalog_kv: &dyn Kv,
-    name: &crabka_pgcatalog::RelationName,
+    name: &krabka_pgcatalog::RelationName,
     alias: Option<&str>,
     ctx: &crate::clock::EvalCtx,
     refs: Option<&crate::scope::StatementRefs>,
@@ -37,7 +37,7 @@ pub(crate) fn virtual_catalog_relation(
 
 pub(crate) fn virtual_catalog_relation_schema(
     catalog_kv: &dyn Kv,
-    name: &crabka_pgcatalog::RelationName,
+    name: &krabka_pgcatalog::RelationName,
     alias: Option<&str>,
     refs: Option<&crate::scope::StatementRefs>,
 ) -> Result<Option<Relation>, ExecError> {
@@ -57,9 +57,9 @@ pub(crate) fn relation_scope(
     table: &Table,
     qualifier: &str,
 ) -> Result<Scope, ExecError> {
-    let typed_row_type = crabka_pgcatalog::typed_table_type(catalog_kv, &table.name)?
+    let typed_row_type = krabka_pgcatalog::typed_table_type(catalog_kv, &table.name)?
         .map(|oid| {
-            crabka_pgcatalog::list_user_types(catalog_kv)?
+            krabka_pgcatalog::list_user_types(catalog_kv)?
                 .into_iter()
                 .find(|ty| ty.oid == oid)
                 .and_then(|ty| match ty.column_type() {
@@ -81,15 +81,15 @@ pub(crate) fn relation_scope(
             &table.name,
         )?),
     );
-    let indexes = match crabka_pgcatalog::list_table_indexes(catalog_kv, &table.name) {
+    let indexes = match krabka_pgcatalog::list_table_indexes(catalog_kv, &table.name) {
         Ok(indexes) => indexes,
-        Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => return Ok(scope),
+        Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => return Ok(scope),
         Err(error) => return Err(error.into()),
     };
     if let Some(primary_key) = indexes.into_iter().find(|index| {
         matches!(
             index.constraint,
-            Some(crabka_pgcatalog::IndexConstraint::PrimaryKey)
+            Some(krabka_pgcatalog::IndexConstraint::PrimaryKey)
         )
     }) {
         scope.set_primary_key(qualifier, primary_key.columns);
@@ -100,7 +100,7 @@ pub(crate) fn relation_scope(
 fn virtual_catalog_scope(
     catalog_kv: &dyn Kv,
     described: &Table,
-    name: &crabka_pgcatalog::RelationName,
+    name: &krabka_pgcatalog::RelationName,
     alias: Option<&str>,
     refs: Option<&crate::scope::StatementRefs>,
 ) -> Result<(Scope, crate::scope::SystemColumns), ExecError> {

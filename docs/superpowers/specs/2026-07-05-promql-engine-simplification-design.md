@@ -60,7 +60,7 @@ compatibility shims or alternate code paths.
 Run these checks after the first slice:
 
 - `cargo +nightly fmt --check`
-- `cargo test -p crabka-promql`
+- `cargo test -p krabka-promql`
 
 If time permits, also run the workspace clippy command used by the project. If the full PromQL
 test suite is too slow or blocked by an unrelated environment issue, run the most targeted

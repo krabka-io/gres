@@ -29,7 +29,7 @@ environment input.
 
 ## Configuration Types
 
-`crabka-client-streams` adds two semantic newtypes:
+`krabka-client-streams` adds two semantic newtypes:
 
 - `StreamsPollInterval`
 - `StreamsCommitInterval`
@@ -73,10 +73,10 @@ use the validated types directly.
 
 The observability demo adds Stream-role-only inputs:
 
-| Policy | CLI | Environment | Default |
-| --- | --- | --- | --- |
-| Poll interval | `--streams-poll-interval-ms` | `CRABKA_DEMO_STREAMS_POLL_INTERVAL_MS` | `200` |
-| Commit interval | `--streams-commit-interval-ms` | `CRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS` | `5000` |
+| Policy          | CLI                            | Environment                              | Default |
+| --------------- | ------------------------------ | ---------------------------------------- | ------- |
+| Poll interval   | `--streams-poll-interval-ms`   | `KRABKA_DEMO_STREAMS_POLL_INTERVAL_MS`   | `200`   |
+| Commit interval | `--streams-commit-interval-ms` | `KRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS` | `5000`  |
 
 Each optional CLI field uses `std::num::NonZeroU64`. Clap provides
 CLI-over-environment precedence; absence selects the corresponding typed
@@ -141,7 +141,7 @@ Focused tests cover:
 - both exact help flags appearing once;
 - Compose pass-through existing only on `demo-stream`.
 
-Final gates run all targets for `crabka-client-streams` and
+Final gates run all targets for `krabka-client-streams` and
 `observability-demo-app`, strict Clippy, formatting, and `git diff --check`.
 The runtime-value scanner and a focused cadence search are recorded in
 `docs/configuration-audit.md`.

@@ -4,15 +4,15 @@
 //! `Kafka` as a secondary resource, so that a cluster that becomes Ready
 //! wakes the topic reconciles that wait for it. The reconciler diffs the
 //! spec against the live cluster and applies the difference with
-//! `crabka_client_admin::AdminClient`.
+//! `krabka_client_admin::AdminClient`.
 
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
-use crabka_client_admin::{
+use futures::StreamExt as _;
+use krabka_client_admin::{
     AdminClientLike, CreatePartitionsOp, CreateTopicSpec, IncrementalAlterOp,
     TopicReplicationStatus,
 };
-use futures::StreamExt as _;
 use kube::{
     Resource, ResourceExt as _,
     api::{Api, Patch, PatchParams},
@@ -121,7 +121,7 @@ async fn create_topic(
         Ok(mut outcomes) => outcomes.pop().expect("one spec produces one outcome"),
         Err(error) => {
             tracing::warn!(%error, "CreateTopics transport failure");
-            if matches!(error, crabka_client_admin::AdminError::Transport(_)) {
+            if matches!(error, krabka_client_admin::AdminError::Transport(_)) {
                 ctx.drop_admin_client(cluster).await;
             }
             return Ok(common::requeue(ctx.config.controller_error_requeue));
@@ -268,7 +268,7 @@ async fn reconcile_replication_factor(
     let status = match result {
         Ok(TopicReplicationStatus::InSync) => return Ok(None),
         Ok(status) => status,
-        Err(crabka_client_admin::AdminError::Broker {
+        Err(krabka_client_admin::AdminError::Broker {
             api,
             code,
             name: error_name,
@@ -301,7 +301,7 @@ async fn reconcile_replication_factor(
         }
         Err(error) => {
             tracing::warn!(%error, "topic replication-factor reconciliation failed");
-            if matches!(error, crabka_client_admin::AdminError::Transport(_)) {
+            if matches!(error, krabka_client_admin::AdminError::Transport(_)) {
                 ctx.drop_admin_client(cluster).await;
             }
             return Ok(Some(common::requeue(ctx.config.controller_error_requeue)));
@@ -363,7 +363,7 @@ async fn reconcile_inner(
         Ok(m) => m,
         Err(e) => {
             tracing::warn!(error = %e, %topic_name, "Metadata failed");
-            let is_transport = matches!(e, crabka_client_admin::AdminError::Transport(_));
+            let is_transport = matches!(e, krabka_client_admin::AdminError::Transport(_));
             drop(admin);
             if is_transport {
                 ctx.drop_admin_client(&cluster).await;
@@ -443,7 +443,7 @@ async fn reconcile_inner(
                     Err(e) => {
                         tracing::warn!(error = %e, "CreatePartitions transport failure");
                         let is_transport =
-                            matches!(e, crabka_client_admin::AdminError::Transport(_));
+                            matches!(e, krabka_client_admin::AdminError::Transport(_));
                         drop(admin);
                         if is_transport {
                             ctx.drop_admin_client(&cluster).await;
@@ -476,7 +476,7 @@ async fn reconcile_inner(
                     .unwrap_or_default(),
                 Err(e) => {
                     tracing::warn!(error = %e, "DescribeConfigs failed");
-                    let is_transport = matches!(e, crabka_client_admin::AdminError::Transport(_));
+                    let is_transport = matches!(e, krabka_client_admin::AdminError::Transport(_));
                     drop(admin);
                     if is_transport {
                         ctx.drop_admin_client(&cluster).await;
@@ -511,7 +511,7 @@ async fn reconcile_inner(
                     Err(e) => {
                         tracing::warn!(error = %e, "IncrementalAlterConfigs failure");
                         let is_transport =
-                            matches!(e, crabka_client_admin::AdminError::Transport(_));
+                            matches!(e, krabka_client_admin::AdminError::Transport(_));
                         drop(admin);
                         if is_transport {
                             ctx.drop_admin_client(&cluster).await;

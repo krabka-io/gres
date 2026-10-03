@@ -51,7 +51,7 @@ pub(super) fn plan_correlated_row_exprs(
             item.expr = marker;
         }
     }
-    if let crabka_pgparser::ast::DistinctClause::On(on) = &mut rewritten.distinct {
+    if let krabka_pgparser::ast::DistinctClause::On(on) = &mut rewritten.distinct {
         for expr in on {
             if let Some(marker) = plan.defer(read_ctx, expr, outer)? {
                 *expr = marker;
@@ -278,7 +278,7 @@ pub(super) fn expression_contains_correlated_subquery(
         .any(|child| expression_contains_correlated_subquery(read_ctx, child, outer))
 }
 
-pub(super) fn direct_subquery(expr: &Expr) -> Option<&crabka_pgparser::ast::QueryExpr> {
+pub(super) fn direct_subquery(expr: &Expr) -> Option<&krabka_pgparser::ast::QueryExpr> {
     match expr {
         Expr::ScalarSubquery(query) | Expr::ArraySubquery(query) | Expr::Exists(query) => {
             Some(query)
@@ -426,7 +426,7 @@ fn fold_correlated_lazy_expressions(
             for (when, then) in whens {
                 let candidate = eval_correlated_child(read_ctx, when, scope, row, binder)?;
                 if crate::eval::apply_binary(
-                    crabka_pgparser::ast::BinaryOp::Eq,
+                    krabka_pgparser::ast::BinaryOp::Eq,
                     &value,
                     &candidate,
                     read_ctx.eval_ctx,
@@ -555,7 +555,7 @@ pub(super) fn replace_subqueries_with_typed_nulls(
     read_ctx: &crate::subquery::SubCtx<'_>,
     expr: &Expr,
 ) -> Result<Expr, ExecError> {
-    let typed_null = |query: &crabka_pgparser::ast::QueryExpr| {
+    let typed_null = |query: &krabka_pgparser::ast::QueryExpr| {
         let fields = crate::query::describe_query_expr_with_ctes(
             read_ctx.catalog_kv,
             read_ctx.fctx.resolution,
@@ -576,7 +576,7 @@ pub(super) fn replace_subqueries_with_typed_nulls(
             let ty = typed_null(query)?;
             let elem = match ty {
                 ColumnType::Array(elem) => elem,
-                ty => crabka_pgtypes::ElemType::from_column_type(ty).ok_or_else(|| {
+                ty => krabka_pgtypes::ElemType::from_column_type(ty).ok_or_else(|| {
                     ExecError::Unsupported(format!("arrays of {} are not supported", ty.name()))
                 })?,
             };

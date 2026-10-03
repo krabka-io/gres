@@ -14,12 +14,12 @@ mod shared;
 use std::sync::Arc;
 
 use base64::Engine as _;
-use crabka_operator::{
+use http::{Method, Response};
+use krabka_operator::{
     controller::kafka::reconcile,
     crd::{Kafka, KafkaSpec},
 };
-use crabka_security::ca::{generate_clients_ca, generate_cluster_ca};
-use http::{Method, Response};
+use krabka_security::ca::{generate_clients_ca, generate_cluster_ca};
 use serde_json::{Value, json};
 use shared::{
     MockRule, build_ctx, fake_configmap_body, fake_converged_sts_body, fake_kafka_body,
@@ -644,7 +644,7 @@ async fn clients_key_promotion_reissues_users_before_marking_converged() {
     let old = generate_clients_ca("c4-clients-ca", 365).expect("old clients CA");
     let new = generate_clients_ca("c4-clients-ca", 365).expect("new clients CA");
     let old_user =
-        crabka_security::ca::issue_user_cert(&old.cert_pem, &old.key_pem, user_name, 365)
+        krabka_security::ca::issue_user_cert(&old.cert_pem, &old.key_pem, user_name, 365)
             .expect("old user cert");
     let bundle = format!("{}{}", old.cert_pem, new.cert_pem);
     let mut pool = fake_pool_list_item("brokers", ns, c, 1, 1);
@@ -820,7 +820,7 @@ async fn clients_ca_prune_removes_old_root_from_user_secrets_before_returning() 
     let cluster = generate_cluster_ca("c5-cluster-ca", 365).expect("cluster CA");
     let old = generate_clients_ca("c5-clients-ca", 365).expect("old clients CA");
     let new = generate_clients_ca("c5-clients-ca", 365).expect("new clients CA");
-    let user = crabka_security::ca::issue_user_cert(&new.cert_pem, &new.key_pem, user_name, 365)
+    let user = krabka_security::ca::issue_user_cert(&new.cert_pem, &new.key_pem, user_name, 365)
         .expect("new-key user cert");
     let bundle = format!("{}{}", new.cert_pem, old.cert_pem);
     let mut pool = fake_pool_list_item("brokers", ns, c, 1, 1);

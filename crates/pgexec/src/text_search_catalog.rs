@@ -2,8 +2,8 @@
 
 use std::collections::BTreeSet;
 
-use crabka_pgkv::{Kv, WriteOp};
-use crabka_pgparser::ast::{OptionList, TextSearchDdl, TextSearchObjectKind};
+use krabka_pgkv::{Kv, WriteOp};
+use krabka_pgparser::ast::{OptionList, TextSearchDdl, TextSearchObjectKind};
 
 use crate::error::ExecError;
 
@@ -796,7 +796,7 @@ pub(crate) fn catalog_rows(
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     use super::*;
 

@@ -17,7 +17,7 @@
 - [x] Pass the same policy into split-operation discovery and use its `fetch_max_wait_ms()` and `fetch_partition_max_bytes()` getters.
 - [x] Remove `TENANT_CONFIG_FETCH_MAX_WAIT_MS` and `TENANT_CONFIG_FETCH_PARTITION_MAX_BYTES`; leave zero production references.
 - [x] Preserve security, client IDs, topic/partition protocol invariants, and in-memory behavior.
-- [x] Run focused tests, full `crabka-gres` nextest, strict all-target/all-feature Clippy, nightly formatting, and `git diff --check`.
+- [x] Run focused tests, full `krabka-gres` nextest, strict all-target/all-feature Clippy, nightly formatting, and `git diff --check`.
 - [x] Commit only implementation files.
 
 ## Task 2: Independent review and audit closure

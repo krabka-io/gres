@@ -62,7 +62,7 @@ The demo Stream role exposes:
 
 - CLI: `--streams-interactive-query-queue-capacity`
 - environment:
-  `CRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY`
+  `KRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY`
 
 Precedence is CLI over environment over the typed default of 64. Clap parses a
 `NonZeroUsize`, then the resolver constructs
@@ -74,7 +74,7 @@ early role-specific error. `run_stream` accepts the typed value and forwards
 it to `StreamsApp`.
 
 Only the `demo-stream` Compose service receives
-`CRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY`, with `${...:-64}` as
+`KRABKA_DEMO_STREAMS_INTERACTIVE_QUERY_QUEUE_CAPACITY`, with `${...:-64}` as
 its deployment default.
 
 There is no CRD field because the operator does not own or render a Client

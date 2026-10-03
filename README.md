@@ -16,23 +16,22 @@ continue. It does not promise storage compatibility between releases yet.
 
 ## Architecture
 
-| Area | Crates |
-| --- | --- |
-| Server | [`gres`](crates/gres) |
-| Wire protocol | [`pgwire`](crates/pgwire) |
-| Parser and values | [`pgparser`](crates/pgparser), [`pgtypes`](crates/pgtypes) |
-| Execution | [`pgexec`](crates/pgexec), [`pgcatalog`](crates/pgcatalog) |
-| Storage and MVCC | [`pgkv`](crates/pgkv), [`pgmvcc`](crates/pgmvcc) |
-| Distributed runtime | [`gres-substrate`](crates/gres-substrate), [`gres-ranges`](crates/gres-ranges), [`gres-control`](crates/gres-control) |
-| PostgreSQL differential tests | [`gres-conformance`](crates/gres-conformance) |
+| Area                          | Crates                                                                                                                |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Server                        | [`gres`](crates/gres)                                                                                                 |
+| Wire protocol                 | [`pgwire`](crates/pgwire)                                                                                             |
+| Parser and values             | [`pgparser`](crates/pgparser), [`pgtypes`](crates/pgtypes)                                                            |
+| Execution                     | [`pgexec`](crates/pgexec), [`pgcatalog`](crates/pgcatalog)                                                            |
+| Storage and MVCC              | [`pgkv`](crates/pgkv), [`pgmvcc`](crates/pgmvcc)                                                                      |
+| Distributed runtime           | [`gres-substrate`](crates/gres-substrate), [`gres-ranges`](crates/gres-ranges), [`gres-control`](crates/gres-control) |
+| PostgreSQL differential tests | [`gres-conformance`](crates/gres-conformance)                                                                         |
 
 The local server runs either in memory or on a durable local data directory.
 The optional substrate mode stores tenant WAL in an external replicated log and
 rebuilds a disposable local read model during recovery.
 
-Rust package names and environment variables retain their existing
-`crabka-` and `CRABKA_` prefixes for compatibility. In prose, the parent project
-is named krabka.
+Rust package names use the `krabka-` prefix, and environment variables use
+`KRABKA_`. This release replaces the deprecated Crabka package names.
 
 ## Quick start
 
@@ -42,8 +41,8 @@ The pinned Rust toolchain is declared in
 ```bash
 git clone https://github.com/krabka-io/gres.git
 cd gres
-cargo build --locked -p crabka-gres
-cargo run --locked -p crabka-gres -- --listen 127.0.0.1:5433 --auth trust
+cargo build --locked -p krabka-gres
+cargo run --locked -p krabka-gres -- --listen 127.0.0.1:5433 --auth trust
 ```
 
 Connect with any PostgreSQL client:
@@ -55,7 +54,7 @@ psql -h 127.0.0.1 -p 5433 -U postgres
 `--auth trust` is for local development only. To test password authentication:
 
 ```bash
-cargo run --locked -p crabka-gres -- \
+cargo run --locked -p krabka-gres -- \
   --listen 127.0.0.1:5433 \
   --auth scram \
   --user-cred app=change-me
@@ -64,7 +63,7 @@ cargo run --locked -p crabka-gres -- \
 Persist the local database across restarts with `--data-dir`:
 
 ```bash
-cargo run --locked -p crabka-gres -- \
+cargo run --locked -p krabka-gres -- \
   --listen 127.0.0.1:5433 \
   --auth trust \
   --data-dir target/gres-data
@@ -73,7 +72,7 @@ cargo run --locked -p crabka-gres -- \
 An in-process substrate is available for development without an external log:
 
 ```bash
-cargo run --locked -p crabka-gres -- \
+cargo run --locked -p krabka-gres -- \
   --listen 127.0.0.1:5433 \
   --substrate-bootstrap memory:// \
   --tenant demo \
@@ -81,7 +80,7 @@ cargo run --locked -p crabka-gres -- \
   --cache-dir target/gres-cache
 ```
 
-Run `cargo run -p crabka-gres -- --help` for TLS, SCRAM, checkpoint,
+Run `cargo run -p krabka-gres -- --help` for TLS, SCRAM, checkpoint,
 multi-range, and runtime-limit options.
 
 ## Compatibility
@@ -117,10 +116,10 @@ Run the same core checks used by CI:
 ```bash
 cargo +nightly-2026-08-14 fmt --all -- --check
 cargo clippy \
-  -p crabka-units -p crabka-trace-context -p crabka-pgtypes \
-  -p crabka-pgparser -p crabka-pgwire -p crabka-pgkv \
-  -p crabka-pgmvcc -p crabka-pgcatalog -p crabka-pgexec \
-  -p crabka-gres-conformance --all-targets
+  -p krabka-units -p krabka-trace-context -p krabka-pgtypes \
+  -p krabka-pgparser -p krabka-pgwire -p krabka-pgkv \
+  -p krabka-pgmvcc -p krabka-pgcatalog -p krabka-pgexec \
+  -p krabka-gres-conformance --all-targets
 
 bazel test \
   //crates/units/... //crates/trace-context/... //crates/pgtypes/... \
@@ -128,7 +127,7 @@ bazel test \
   //crates/pgmvcc/... //crates/pgcatalog/... //crates/pgexec/... \
   //crates/gres-conformance/...
 
-cargo nextest run -p crabka-pgexec --test telemetry --test telemetry_exec
+cargo nextest run -p krabka-pgexec --test telemetry --test telemetry_exec
 ```
 
 The telemetry suites use Nextest because each test needs its own process-global

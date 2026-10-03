@@ -8,8 +8,8 @@
 //! `name(argtype, …)` identity. That is exactly the identity `PostgreSQL` uses
 //! for `DROP FUNCTION f(int)`.
 
-use crabka_pgkv::{Kv, KvError, WriteOp};
-use crabka_pgtypes::ColumnType;
+use krabka_pgkv::{Kv, KvError, WriteOp};
+use krabka_pgtypes::ColumnType;
 use zerocopy::{FromBytes, IntoBytes, byteorder::big_endian::U32};
 
 use crate::{
@@ -842,7 +842,7 @@ pub fn deserialize_routine(bytes: &[u8]) -> Result<Routine, KvError> {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgkv::MemKv;
+    use krabka_pgkv::MemKv;
 
     use super::*;
 

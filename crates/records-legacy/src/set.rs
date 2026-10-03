@@ -13,9 +13,9 @@
 //! single layer for the caller.
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use crabka_compression::{CompressionType, RecordDecompressionPolicy};
-use crabka_ids::Offset;
-use crabka_units::prelude::{ByteSize, ByteSizeExt as _};
+use krabka_compression::{CompressionType, RecordDecompressionPolicy};
+use krabka_ids::Offset;
+use krabka_units::prelude::{ByteSize, ByteSizeExt as _};
 
 use crate::{
     error::LegacyRecordsError,
@@ -135,7 +135,7 @@ fn decode_into(
             // Bound decompressed output to guard against a decompression bomb
             // in a legacy compressed wrapper.
             let max_output = policy.output_limit(size_of_slice(&inner_compressed));
-            let inner_bytes = crabka_compression::decompress(codec, &inner_compressed, max_output)?;
+            let inner_bytes = krabka_compression::decompress(codec, &inner_compressed, max_output)?;
 
             // Parse the inner set (no nested compression allowed).
             let start_len = out.len();
@@ -246,7 +246,7 @@ pub fn encode_compressed_message_set<B: BufMut>(
     }
 
     // Compress.
-    let compressed = crabka_compression::compress(codec, &inner)?;
+    let compressed = krabka_compression::compress(codec, &inner)?;
 
     // Wrapper message.
     let wrapper_attributes = attrs_with_compression(0, codec);
@@ -285,8 +285,8 @@ pub fn encode_compressed_message_set<B: BufMut>(
 #[cfg(test)]
 mod tests {
 
-    use crabka_compression::{CompressionError, RecordDecompressionPolicy};
-    use crabka_units::prelude::{bytes, kibibytes};
+    use krabka_compression::{CompressionError, RecordDecompressionPolicy};
+    use krabka_units::prelude::{bytes, kibibytes};
 
     use super::*;
 
@@ -311,7 +311,7 @@ mod tests {
         decode_message_set(&mut &wire[..], wire.len()).unwrap();
 
         let policy =
-            RecordDecompressionPolicy::new(crabka_units::fraction(1.0), bytes(1), bytes(32))
+            RecordDecompressionPolicy::new(krabka_units::fraction(1.0), bytes(1), bytes(32))
                 .unwrap();
         assert2::assert!(matches!(
             decode_message_set_with_policy(&mut &wire[..], wire.len(), policy),
@@ -394,7 +394,7 @@ mod tests {
 
         // Now wrap that bytestream as the value of another compressed wrapper.
         let outer_compressed =
-            crabka_compression::compress(CompressionType::Gzip, &inner_outer).unwrap();
+            krabka_compression::compress(CompressionType::Gzip, &inner_outer).unwrap();
         let outer_msg = Message {
             magic: Magic::V1,
             attributes: attrs_with_compression(0, CompressionType::Gzip),

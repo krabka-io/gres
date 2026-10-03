@@ -73,7 +73,7 @@ fn producer_final_drain_timeout_rejects_invalid_values() {
 ```
 
 - [ ] Add failing CLI tests for the 10-second default, invalid values, and a
-  child-process environment/CLI precedence check using:
+      child-process environment/CLI precedence check using:
 
 ```text
 BENCH_PRODUCER_FINAL_DRAIN_TIMEOUT_SECONDS=11
@@ -84,7 +84,7 @@ BENCH_PRODUCER_FINAL_DRAIN_TIMEOUT_SECONDS=11
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-bench-driver producer_final_drain --locked
+  cargo test -p krabka-bench-driver producer_final_drain --locked
 ```
 
 - [ ] In `workload.rs`, replace the fixed constant with:
@@ -111,9 +111,9 @@ producer_final_drain_timeout_seconds: ProducerFinalDrainTimeoutSeconds,
 ```
 
 - [ ] Add `producer_final_drain_timeout` to `DriverConfig` and `ProducerTask`.
-  Copy it at task spawn and destructure it in `run_producer`. Remove the
-  producer loop's redundant `sid` local and use `cfg.scenario_id` directly so
-  the existing `run` function does not cross its strict line-count limit.
+      Copy it at task spawn and destructure it in `run_producer`. Remove the
+      producer loop's redundant `sid` local and use `cfg.scenario_id` directly so
+      the existing `run` function does not cross its strict line-count limit.
 
 - [ ] Replace only:
 
@@ -133,7 +133,7 @@ Instant::now() + final_drain_timeout.duration()
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-bench-driver producer_final_drain --locked
+  cargo test -p krabka-bench-driver producer_final_drain --locked
 test "$(rg -o 'Instant::now\\(\\) \\+ final_drain_timeout\\.duration\\(\\)' \
   crates/bench-driver/src/workload.rs | wc -l)" -eq 1
 if rg -n '^const PRODUCER_FINAL_DRAIN_TIMEOUT' crates/bench-driver/src/workload.rs; then
@@ -145,12 +145,12 @@ fi
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-bench-driver --all-targets --locked
+  cargo test -p krabka-bench-driver --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-bench-driver --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-bench-driver --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -p crabka-bench-driver --bin crabka-bench-driver --locked -- --help
-test "$(target/debug/crabka-bench-driver --help | rg -c -- '--producer-final-drain-timeout-seconds')" -eq 1
+  cargo run -p krabka-bench-driver --bin krabka-bench-driver --locked -- --help
+test "$(target/debug/krabka-bench-driver --help | rg -c -- '--producer-final-drain-timeout-seconds')" -eq 1
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 git diff --check
 git diff -- Cargo.lock
@@ -218,12 +218,12 @@ Classify every bench-driver scanner and focused-search line into mutually
 exclusive categories and identify the next real unresolved owner.
 
 - [ ] Append `## Bench Driver Producer Final-Drain Timeout` to
-  `docs/configuration-audit.md`, recording default, validation, precedence,
-  value/deployment flows, preserved behavior, exact counts, gates, and the
-  next unresolved owner.
+      `docs/configuration-audit.md`, recording default, validation, precedence,
+      value/deployment flows, preserved behavior, exact counts, gates, and the
+      next unresolved owner.
 
 - [ ] Re-run the package, Clippy, nightly format, help-entry, shell/render,
-  diff, lockfile, and scanner gates.
+      diff, lockfile, and scanner gates.
 
 - [ ] Commit only the audit:
 

@@ -15,7 +15,7 @@ DNS resolution is an independently tunable operation because cluster DNS latency
 
 ## Configuration Surface
 
-Standalone Gres accepts `--wal-recovery-dns-timeout-ms`, backed by `CRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT_MS`.
+Standalone Gres accepts `--wal-recovery-dns-timeout-ms`, backed by `KRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT_MS`.
 
 The optional value is a positive whole number of milliseconds and requires `--substrate-bootstrap`. Its default is 10,000 milliseconds. Zero and malformed values fail during CLI or environment parsing before network I/O.
 
@@ -31,7 +31,7 @@ The optional field has a schema minimum of one. The operator resolves the defaul
 
 ## Architecture Overview
 
-`crabka-gres-substrate` owns `DEFAULT_WAL_RECOVERY_DNS_TIMEOUT_MS` and stores the validated duration in the existing `RecoveryReadPolicy`. A source-compatible `with_dns_timeout` builder validates positive milliseconds with `refined_type`; no new policy object or dependency is introduced.
+`krabka-gres-substrate` owns `DEFAULT_WAL_RECOVERY_DNS_TIMEOUT_MS` and stores the validated duration in the existing `RecoveryReadPolicy`. A source-compatible `with_dns_timeout` builder validates positive milliseconds with `refined_type`; no new policy object or dependency is introduced.
 
 `LiveRecoveryConfig` already carries `RecoveryReadPolicy` through every raw WAL path. The existing `open_wal_connection` boundary applies the configured deadline to `tokio::net::lookup_host` before selecting the first returned address and opening the broker connection.
 

@@ -29,8 +29,8 @@
 
 use std::collections::BTreeMap;
 
-use crabka_pgcatalog::RelationName;
-use crabka_pgkv::{Kv, WriteOp, key::push_key_part};
+use krabka_pgcatalog::RelationName;
+use krabka_pgkv::{Kv, WriteOp, key::push_key_part};
 
 use crate::error::ExecError;
 
@@ -323,14 +323,14 @@ fn key_part(cur: &mut &[u8]) -> Result<String, ExecError> {
 }
 
 fn corrupt(message: &str) -> ExecError {
-    ExecError::Kv(crabka_pgkv::KvError::CorruptRow(message.into()))
+    ExecError::Kv(krabka_pgkv::KvError::CorruptRow(message.into()))
 }
 
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgcatalog::RelationName;
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgcatalog::RelationName;
+    use krabka_pgkv::{Kv, MemKv};
 
     use super::{
         RelStats, UNKNOWN_TUPLES, all, clear_has_subclass_op, drop_metadata_ops, of, rename_ops,
@@ -342,7 +342,7 @@ mod tests {
         RelationName::new(schema.to_string(), name.to_string())
     }
 
-    fn apply(kv: &MemKv, ops: Vec<crabka_pgkv::WriteOp>) {
+    fn apply(kv: &MemKv, ops: Vec<krabka_pgkv::WriteOp>) {
         kv.write_batch(&ops).expect("write batch");
     }
 

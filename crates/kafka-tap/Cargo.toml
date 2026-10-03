@@ -1,5 +1,5 @@
 [package]
-name = "crabka-kafka-tap"
+name = "krabka-kafka-tap"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +8,7 @@ publish = false
 description = "Test-only TCP tap that records Kafka wire frames for corpus capture."
 
 [lib]
-name = "crabka_kafka_tap"
+name = "krabka_kafka_tap"
 
 [[bin]]
 name = "kafka-tap"
@@ -16,4 +16,4 @@ path = "src/main.rs"
 
 [dependencies]
 assert2 = { workspace = true }
-crabka-ids = { version = "0.4.1", path = "../ids" }
+krabka-ids = { version = "0.4.2", path = "../ids" }

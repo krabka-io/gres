@@ -20,20 +20,20 @@
 
 ## Runtime Field Table
 
-| Field | Type | Direct/operator default | Constraint |
-|---|---:|---:|---|
-| `election_session_timeout_ms` | `i32` | `10000` | `>= 1` |
-| `election_rebalance_timeout_ms` | `i32` | `30000` | `>= session` |
-| `election_heartbeat_interval_ms` | `u64` | `3000` | `1..session` |
-| `election_reconnect_backoff_ms` | `u64` | `500` | `>= 1` |
-| `store_reader_retry_backoff_ms` | `u64` | `250` | `>= 1` |
-| `store_reader_fetch_max_wait_ms` | `i32` | `500` | `>= 1` |
-| `store_reader_fetch_max_bytes` | `i32` | `1048576` | `>= 1` |
-| `schemas_topic_create_timeout_ms` | `i32` | `15000` | `>= 1` |
-| `default_compatibility_level` | enum string | `BACKWARD` | existing compatibility enum |
-| `default_mode` | enum string | `READWRITE` | `READWRITE`, `READONLY`, or `IMPORT` |
+| Field                             |        Type | Direct/operator default | Constraint                           |
+| --------------------------------- | ----------: | ----------------------: | ------------------------------------ |
+| `election_session_timeout_ms`     |       `i32` |                 `10000` | `>= 1`                               |
+| `election_rebalance_timeout_ms`   |       `i32` |                 `30000` | `>= session`                         |
+| `election_heartbeat_interval_ms`  |       `u64` |                  `3000` | `1..session`                         |
+| `election_reconnect_backoff_ms`   |       `u64` |                   `500` | `>= 1`                               |
+| `store_reader_retry_backoff_ms`   |       `u64` |                   `250` | `>= 1`                               |
+| `store_reader_fetch_max_wait_ms`  |       `i32` |                   `500` | `>= 1`                               |
+| `store_reader_fetch_max_bytes`    |       `i32` |               `1048576` | `>= 1`                               |
+| `schemas_topic_create_timeout_ms` |       `i32` |                 `15000` | `>= 1`                               |
+| `default_compatibility_level`     | enum string |              `BACKWARD` | existing compatibility enum          |
+| `default_mode`                    | enum string |             `READWRITE` | `READWRITE`, `READONLY`, or `IMPORT` |
 
-Direct-only existing setting: `admin_listen_addr`, default `0.0.0.0:9404`, gains `--admin-listen-addr` backed by `CRABKA_ADMIN_LISTEN_ADDR`. The operator has no admin Service, so a CRD field would be inert.
+Direct-only existing setting: `admin_listen_addr`, default `0.0.0.0:9404`, gains `--admin-listen-addr` backed by `KRABKA_ADMIN_LISTEN_ADDR`. The operator has no admin Service, so a CRD field would be inert.
 
 ---
 
@@ -99,8 +99,8 @@ fn runtime_relations_are_rejected() {
 Run:
 
 ```bash
-cargo test -p crabka-schema-registry runtime_scalar_boundaries_and_defaults
-cargo test -p crabka-schema-registry runtime_relations_are_rejected
+cargo test -p krabka-schema-registry runtime_scalar_boundaries_and_defaults
+cargo test -p krabka-schema-registry runtime_relations_are_rejected
 ```
 
 Expected: compilation fails because the input types and runtime config do not exist.
@@ -177,7 +177,7 @@ Repeat for every field in the table using the exact `SCHEMA_REGISTRY_<UPPER_FIEL
 ```rust
 #[arg(
     long,
-    env = "CRABKA_ADMIN_LISTEN_ADDR",
+    env = "KRABKA_ADMIN_LISTEN_ADDR",
     default_value = "0.0.0.0:9404"
 )]
 admin_listen_addr: std::net::SocketAddr,
@@ -194,10 +194,10 @@ Add `runtime: RegistryRuntimeConfig::default()` to every existing `RegistryConfi
 Run:
 
 ```bash
-cargo test -p crabka-schema-registry config_value
-cargo test -p crabka-schema-registry runtime_
-cargo test -p crabka-schema-registry --bin crabka-schema-registry
-cargo clippy -p crabka-schema-registry --all-targets -- -D warnings
+cargo test -p krabka-schema-registry config_value
+cargo test -p krabka-schema-registry runtime_
+cargo test -p krabka-schema-registry --bin krabka-schema-registry
+cargo clippy -p krabka-schema-registry --all-targets -- -D warnings
 ```
 
 Commit only Task 1 files:
@@ -256,9 +256,9 @@ The helpers must be called by the real election loop, reader task, and topic cre
 Run:
 
 ```bash
-cargo test -p crabka-schema-registry election_policy
-cargo test -p crabka-schema-registry reader_policy
-cargo test -p crabka-schema-registry schemas_topic_spec
+cargo test -p krabka-schema-registry election_policy
+cargo test -p krabka-schema-registry reader_policy
+cargo test -p krabka-schema-registry schemas_topic_spec
 ```
 
 Expected: compilation fails until the helpers and production wiring exist.
@@ -284,10 +284,10 @@ pub fn with_defaults(compatibility: String, mode: String) -> Self;
 Run:
 
 ```bash
-cargo test -p crabka-schema-registry election
-cargo test -p crabka-schema-registry kafkastore
-cargo test -p crabka-schema-registry store
-cargo clippy -p crabka-schema-registry --all-targets -- -D warnings
+cargo test -p krabka-schema-registry election
+cargo test -p krabka-schema-registry kafkastore
+cargo test -p krabka-schema-registry store
+cargo clippy -p krabka-schema-registry --all-targets -- -D warnings
 ```
 
 Commit:
@@ -332,7 +332,7 @@ Assert exact container flags and Probe timing values. Add invalid cases for zero
 Run:
 
 ```bash
-cargo test -p crabka-operator --test reconcile_schema_registry runtime_
+cargo test -p krabka-operator --test reconcile_schema_registry runtime_
 ```
 
 Expected: compilation fails because the CRD types and fields do not exist.
@@ -376,11 +376,11 @@ Also validate existing `schemas_topic_replication_factor`, `jwks_refresh_ms`, an
 Run:
 
 ```bash
-cargo test -p crabka-operator --test reconcile_schema_registry
-cargo test -p crabka-operator --lib crd::schema_registry
-cargo run -p crabka-operator -- gen-crds /tmp/crabka-schema-registry-crds
-diff -u deploy/crds/crabka.io_schemaregistries.yaml /tmp/crabka-schema-registry-crds/crabka.io_schemaregistries.yaml
-cargo clippy -p crabka-operator --all-targets -- -D warnings
+cargo test -p krabka-operator --test reconcile_schema_registry
+cargo test -p krabka-operator --lib crd::schema_registry
+cargo run -p krabka-operator -- gen-crds /tmp/krabka-schema-registry-crds
+diff -u deploy/crds/crabka.io_schemaregistries.yaml /tmp/krabka-schema-registry-crds/crabka.io_schemaregistries.yaml
+cargo clippy -p krabka-operator --all-targets -- -D warnings
 ```
 
 Commit:
@@ -403,7 +403,7 @@ git commit -m "feat(operator): expose registry tuning"
 Run:
 
 ```bash
-tools/audit-runtime-values.sh | rg '^crates/schema-registry/' > /tmp/crabka-schema-registry-runtime-values.txt
+tools/audit-runtime-values.sh | rg '^crates/schema-registry/' > /tmp/krabka-schema-registry-runtime-values.txt
 ```
 
 Classify every line. Fixed groups must include Kafka error codes, Schema Registry protocol/content-type/header/enums, `_schemas` ordered single-partition and compacted-log invariants, idempotence/acks durability, and test fixtures. Configure any remaining production policy before continuing.
@@ -414,11 +414,11 @@ Run:
 
 ```bash
 cargo +nightly fmt --all -- --check
-cargo clippy -p crabka-schema-registry -p crabka-operator --all-targets -- -D warnings
-cargo nextest run -p crabka-schema-registry -p crabka-operator
-cargo run -p crabka-schema-registry -- --help | rg 'election-session|store-reader|schemas-topic-create|default-compatibility|admin-listen'
-cargo run -p crabka-operator -- gen-crds /tmp/crabka-schema-registry-crds
-diff -u deploy/crds/crabka.io_schemaregistries.yaml /tmp/crabka-schema-registry-crds/crabka.io_schemaregistries.yaml
+cargo clippy -p krabka-schema-registry -p krabka-operator --all-targets -- -D warnings
+cargo nextest run -p krabka-schema-registry -p krabka-operator
+cargo run -p krabka-schema-registry -- --help | rg 'election-session|store-reader|schemas-topic-create|default-compatibility|admin-listen'
+cargo run -p krabka-operator -- gen-crds /tmp/krabka-schema-registry-crds
+diff -u deploy/crds/crabka.io_schemaregistries.yaml /tmp/krabka-schema-registry-crds/crabka.io_schemaregistries.yaml
 git diff --check
 ```
 

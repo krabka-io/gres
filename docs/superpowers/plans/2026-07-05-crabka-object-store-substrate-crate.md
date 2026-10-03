@@ -1,10 +1,10 @@
-# `crabka-object-store` Substrate Crate — Implementation Plan
+# `krabka-object-store` Substrate Crate — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Extract a new `crabka-object-store` crate that owns the object-store *construction* layer (typed config → `object_store::ObjectStore` handle) and make both `crabka-remote-storage` (KIP-405 tiered storage) and `crabka-blockstore` (observability) consume it, so the two stacks stop each owning a private copy of the builder wiring.
+**Goal:** Extract a new `krabka-object-store` crate that owns the object-store _construction_ layer (typed config → `object_store::ObjectStore` handle) and make both `krabka-remote-storage` (KIP-405 tiered storage) and `krabka-blockstore` (observability) consume it, so the two stacks stop each owning a private copy of the builder wiring.
 
-**Architecture:** Today the two stacks "share only the `object_store` dependency, not a substrate": `crabka-remote-storage` hand-builds `AmazonS3Builder`/`GoogleCloudStorageBuilder` from `S3Config`/`GcsConfig` in `s3.rs`/`gcs.rs`, and `crabka-blockstore` receives an already-built `Arc<dyn ObjectStore>`. This plan moves the config types and the builder wiring into one publishable crate exposing `build_object_store(&ObjectStoreConfig) -> Result<Arc<dyn ObjectStore>, ObjectStoreError>`. `remote-storage` routes its `from_s3_config`/`from_gcs_config` through it (and re-exports the moved types so downstream imports don't break); `blockstore` gains an additive `BlockStore::from_config`. **Scope is object-store PLUMBING only** — no data-representation code (verbatim Kafka segment bytes, Parquet/Arrow, key layout, DataFusion registration) moves.
+**Architecture:** Today the two stacks "share only the `object_store` dependency, not a substrate": `krabka-remote-storage` hand-builds `AmazonS3Builder`/`GoogleCloudStorageBuilder` from `S3Config`/`GcsConfig` in `s3.rs`/`gcs.rs`, and `krabka-blockstore` receives an already-built `Arc<dyn ObjectStore>`. This plan moves the config types and the builder wiring into one publishable crate exposing `build_object_store(&ObjectStoreConfig) -> Result<Arc<dyn ObjectStore>, ObjectStoreError>`. `remote-storage` routes its `from_s3_config`/`from_gcs_config` through it (and re-exports the moved types so downstream imports don't break); `blockstore` gains an additive `BlockStore::from_config`. **Scope is object-store PLUMBING only** — no data-representation code (verbatim Kafka segment bytes, Parquet/Arrow, key layout, DataFusion registration) moves.
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `object_store` 0.13 (features `aws`, `gcp`, workspace-pinned), `thiserror`, `tokio`, `assert2` + `nextest` for tests, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
@@ -15,10 +15,10 @@
 ## Invariants (do not violate — each is a real, verified risk)
 
 1. **`object_store` is workspace-pinned at 0.13 (`aws`, `gcp`).** The new crate MUST declare `object_store = { workspace = true }` and never pin its own version. `parquet` 59 + the git-pinned DataFusion pass `ObjectStore`/`Path` across boundaries; a lone bump to 0.14 splits the graph and fails to compile (root `Cargo.toml` renovate hold; a prior auto-merged bump already broke `main` this way).
-2. **The new crate must be publishable to crates.io.** `crabka-remote-storage` IS published; `crabka-blockstore` is `publish = false` (git DataFusion dep). Therefore **no `datafusion`/`parquet`/blockstore-only type may leak into the new crate's public API**, or it becomes unpublishable and breaks `remote-storage`'s release. Depend only on crates.io deps (`object_store`, `thiserror`).
+2. **The new crate must be publishable to crates.io.** `krabka-remote-storage` IS published; `krabka-blockstore` is `publish = false` (git DataFusion dep). Therefore **no `datafusion`/`parquet`/blockstore-only type may leak into the new crate's public API**, or it becomes unpublishable and breaks `remote-storage`'s release. Depend only on crates.io deps (`object_store`, `thiserror`).
 3. **No data-representation code moves.** The verbatim-Kafka-bytes key layout (`segment_key`/`log_key`/`index_key` in `s3.rs`), the `block()` sync↔async bridge (`s3.rs`), Parquet/Arrow paths, and DataFusion `register_object_store` all STAY in their current crates. This milestone unifies construction only.
 4. **Credential redaction must survive the move.** `S3Config`/`GcsConfig` hand-write `Debug` to redact credentials to `***`. Move the impls verbatim; never regress to `#[derive(Debug)]` on the secret-bearing structs. The redaction tests move with them.
-5. **`remote-storage`'s public re-exports stay stable.** The broker imports `crabka_remote_storage::{S3Config, GcsConfig, DEFAULT_MULTIPART_THRESHOLD, DEFAULT_MULTIPART_CHUNK_SIZE, S3RemoteStorage, RemoteStorageManager, RemoteStorageError}`. After the move these must still resolve (via re-export from the new crate) so `cargo test --workspace` stays green.
+5. **`remote-storage`'s public re-exports stay stable.** The broker imports `krabka_remote_storage::{S3Config, GcsConfig, DEFAULT_MULTIPART_THRESHOLD, DEFAULT_MULTIPART_CHUNK_SIZE, S3RemoteStorage, RemoteStorageManager, RemoteStorageError}`. After the move these must still resolve (via re-export from the new crate) so `cargo test --workspace` stays green.
 6. **Auth / retry behavior is byte-identical.** The `AmazonS3Builder`/`GoogleCloudStorageBuilder` calls are moved verbatim (same credential-chain fallback, same absence of an explicit `RetryConfig`). No behavioral change.
 7. **Every task leaves the workspace compiling and tests green** before its commit.
 
@@ -34,7 +34,8 @@
 
 ## File Structure
 
-**New crate `crates/object-store/` (`crabka-object-store`):**
+**New crate `crates/object-store/` (`krabka-object-store`):**
+
 - `Cargo.toml` — publishable; deps `object_store` (workspace), `thiserror` (workspace).
 - `src/lib.rs` — module wiring + public re-exports. One responsibility: the crate's public surface.
 - `src/config.rs` — `S3Config`, `GcsConfig` (moved verbatim, redacting `Debug` + `Default`), `DEFAULT_MULTIPART_*` consts, and the `ObjectStoreConfig` enum. One responsibility: config types.
@@ -42,22 +43,25 @@
 - `src/build.rs` — `build_object_store` + private `build_s3`/`build_gcs`. One responsibility: config → handle construction.
 
 **Modified — `crates/remote-storage/`:**
-- `Cargo.toml` — add path dep on `crabka-object-store`.
+
+- `Cargo.toml` — add path dep on `krabka-object-store`.
 - `src/s3.rs` — delete `S3Config` + `DEFAULT_MULTIPART_*` + their tests; rewrite `from_s3_config` to call `build_object_store`.
 - `src/gcs.rs` — delete `GcsConfig` + its builder tests; rewrite `from_gcs_config` to call `build_object_store`.
-- `src/lib.rs` — re-export the moved types from `crabka_object_store`.
+- `src/lib.rs` — re-export the moved types from `krabka_object_store`.
 
 **Modified — `crates/blockstore/`:**
-- `Cargo.toml` — add path dep on `crabka-object-store`.
+
+- `Cargo.toml` — add path dep on `krabka-object-store`.
 - `src/store.rs` — add additive `BlockStore::from_config`.
 
 ---
 
-## Task 1: Scaffold the `crabka-object-store` crate
+## Task 1: Scaffold the `krabka-object-store` crate
 
-*Infrastructure task (no failing test — the workspace `members = ["crates/*"]` glob picks the crate up; the "test" is that it compiles and is wired into the workspace).*
+_Infrastructure task (no failing test — the workspace `members = ["crates/*"]` glob picks the crate up; the "test" is that it compiles and is wired into the workspace)._
 
 **Files:**
+
 - Create: `crates/object-store/Cargo.toml`
 - Create: `crates/object-store/src/lib.rs`
 
@@ -67,16 +71,16 @@ Create `crates/object-store/Cargo.toml`:
 
 ```toml
 [package]
-name = "crabka-object-store"
+name = "krabka-object-store"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "Unified object-store construction (typed config -> object_store handle) shared by Crabka's KIP-405 tiered storage and observability blockstore"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-object-store"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-object-store"
 readme = "README.md"
 keywords = ["kafka", "object-store", "s3", "gcs", "crabka"]
 categories = ["database-implementations", "filesystem"]
@@ -99,9 +103,9 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 Create `crates/object-store/src/lib.rs`:
 
 ```rust
-//! `crabka-object-store` — unified object-store construction shared by Crabka's
-//! KIP-405 tiered storage (`crabka-remote-storage`) and observability blockstore
-//! (`crabka-blockstore`).
+//! `krabka-object-store` — unified object-store construction shared by Crabka's
+//! KIP-405 tiered storage (`krabka-remote-storage`) and observability blockstore
+//! (`krabka-blockstore`).
 //!
 //! Scope is the object-store access/plumbing layer only: turning a typed
 //! [`ObjectStoreConfig`] into an `object_store::ObjectStore` handle. Data
@@ -114,7 +118,7 @@ Create `crates/object-store/src/lib.rs`:
 Create `crates/object-store/README.md`:
 
 ```markdown
-# crabka-object-store
+# krabka-object-store
 
 Unified object-store construction (typed config → `object_store` handle) shared
 by Crabka's KIP-405 tiered storage and observability blockstore.
@@ -122,14 +126,14 @@ by Crabka's KIP-405 tiered storage and observability blockstore.
 
 - [ ] **Step 4: Verify it builds and joins the workspace**
 
-Run: `cargo build -p crabka-object-store`
-Expected: compiles clean; `crabka-object-store` resolves as a workspace member.
+Run: `cargo build -p krabka-object-store`
+Expected: compiles clean; `krabka-object-store` resolves as a workspace member.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add crates/object-store/Cargo.toml crates/object-store/src/lib.rs crates/object-store/README.md
-git commit -m "feat(object-store): scaffold crabka-object-store crate"
+git commit -m "feat(object-store): scaffold krabka-object-store crate"
 ```
 
 ---
@@ -139,6 +143,7 @@ git commit -m "feat(object-store): scaffold crabka-object-store crate"
 Move `S3Config` (from `crates/remote-storage/src/s3.rs:84-161`), `GcsConfig` (from `crates/remote-storage/src/gcs.rs:41-123`), and the two multipart constants (`s3.rs:44-57`) **verbatim**, including the credential-redacting `Debug` and the placeholder `Default`. Add the `ObjectStoreConfig` enum. Leave the originals in `remote-storage` untouched for now (removed in Task 5) — the two same-named types coexist harmlessly in different crates until then.
 
 **Files:**
+
 - Create: `crates/object-store/src/config.rs`
 - Modify: `crates/object-store/src/lib.rs`
 
@@ -213,7 +218,7 @@ mod tests {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cargo test -p crabka-object-store`
+Run: `cargo test -p krabka-object-store`
 Expected: FAIL — `S3Config`, `GcsConfig`, `ObjectStoreConfig`, and the constants are not defined.
 
 - [ ] **Step 3: Add the implementation above the test module**
@@ -384,7 +389,7 @@ pub use config::{
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `cargo test -p crabka-object-store`
+Run: `cargo test -p krabka-object-store`
 Expected: PASS — all six config tests green.
 
 - [ ] **Step 6: Commit**
@@ -399,6 +404,7 @@ git commit -m "feat(object-store): move S3Config/GcsConfig + multipart consts in
 ## Task 3: `ObjectStoreError` + `From<object_store::Error>`
 
 **Files:**
+
 - Create: `crates/object-store/src/error.rs`
 - Modify: `crates/object-store/src/lib.rs`
 
@@ -436,7 +442,7 @@ mod tests {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cargo test -p crabka-object-store error::`
+Run: `cargo test -p krabka-object-store error::`
 Expected: FAIL — `ObjectStoreError` is not defined.
 
 - [ ] **Step 3: Add the implementation above the test module**
@@ -485,7 +491,7 @@ pub use error::ObjectStoreError;
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `cargo test -p crabka-object-store error::`
+Run: `cargo test -p krabka-object-store error::`
 Expected: PASS — both mapping tests green.
 
 - [ ] **Step 6: Commit**
@@ -502,6 +508,7 @@ git commit -m "feat(object-store): add ObjectStoreError with structured NotFound
 Move the `AmazonS3Builder`/`GoogleCloudStorageBuilder` wiring (currently in `remote-storage`'s `from_s3_config` at `s3.rs:197-217` and `from_gcs_config` at `gcs.rs:138-160`) into a single free function.
 
 **Files:**
+
 - Create: `crates/object-store/src/build.rs`
 - Modify: `crates/object-store/src/lib.rs`
 
@@ -582,7 +589,7 @@ mod tests {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cargo test -p crabka-object-store build::`
+Run: `cargo test -p krabka-object-store build::`
 Expected: FAIL — `build_object_store` is not defined.
 
 - [ ] **Step 3: Add the implementation above the test module**
@@ -679,12 +686,12 @@ pub use build::build_object_store;
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `cargo test -p crabka-object-store`
+Run: `cargo test -p krabka-object-store`
 Expected: PASS — all config, error, and build tests green.
 
 - [ ] **Step 6: Lint the new crate before it gets consumers**
 
-Run: `cargo clippy -p crabka-object-store -- -D warnings`
+Run: `cargo clippy -p krabka-object-store -- -D warnings`
 Expected: no warnings (pedantic is on via workspace lints).
 
 - [ ] **Step 7: Commit**
@@ -696,11 +703,12 @@ git commit -m "feat(object-store): add build_object_store config->handle constru
 
 ---
 
-## Task 5: Migrate `crabka-remote-storage` onto the substrate
+## Task 5: Migrate `krabka-remote-storage` onto the substrate
 
 Delete the now-duplicated `S3Config`/`GcsConfig`/`DEFAULT_MULTIPART_*` from `remote-storage`, route the two production constructors through `build_object_store`, and re-export the moved types so downstream (broker) imports keep working. The engine (copy/fetch/delete, `block()` bridge, key layout) is **untouched** — this keeps the byte semantics identical and the full existing test suite green.
 
 **Files:**
+
 - Modify: `crates/remote-storage/Cargo.toml`
 - Modify: `crates/remote-storage/src/s3.rs`
 - Modify: `crates/remote-storage/src/gcs.rs`
@@ -711,7 +719,7 @@ Delete the now-duplicated `S3Config`/`GcsConfig`/`DEFAULT_MULTIPART_*` from `rem
 In `crates/remote-storage/Cargo.toml`, under `[dependencies]`, add:
 
 ```toml
-crabka-object-store = { version = "0.3.8", path = "../object-store" }
+krabka-object-store = { version = "0.3.8", path = "../object-store" }
 ```
 
 - [ ] **Step 2: Rewrite `from_s3_config` and delete the moved items in `s3.rs`**
@@ -723,7 +731,7 @@ In `crates/remote-storage/src/s3.rs`:
 2. **Add** to the imports at the top of the file:
 
 ```rust
-use crabka_object_store::{
+use krabka_object_store::{
     DEFAULT_MULTIPART_CHUNK_SIZE, DEFAULT_MULTIPART_THRESHOLD, ObjectStoreConfig, S3Config,
     build_object_store,
 };
@@ -751,7 +759,7 @@ In `crates/remote-storage/src/gcs.rs`:
 2. **Replace** the imports block (currently `use object_store::{ClientOptions, gcp::GoogleCloudStorageBuilder};` and `use crate::{error::RemoteStorageError, s3::{DEFAULT_MULTIPART_CHUNK_SIZE, DEFAULT_MULTIPART_THRESHOLD, S3RemoteStorage}};`) with:
 
 ```rust
-use crabka_object_store::{GcsConfig, ObjectStoreConfig, build_object_store};
+use krabka_object_store::{GcsConfig, ObjectStoreConfig, build_object_store};
 
 use crate::{error::RemoteStorageError, s3::S3RemoteStorage};
 ```
@@ -781,7 +789,7 @@ pub use s3::S3RemoteStorage;
 - **Add** (next to the other `pub use`s):
 
 ```rust
-pub use crabka_object_store::{
+pub use krabka_object_store::{
     DEFAULT_MULTIPART_CHUNK_SIZE, DEFAULT_MULTIPART_THRESHOLD, GcsConfig, ObjectStoreConfig,
     S3Config,
 };
@@ -789,14 +797,14 @@ pub use crabka_object_store::{
 
 - [ ] **Step 5: Run the full `remote-storage` suite to verify green (behavior preserved)**
 
-Run: `cargo test -p crabka-remote-storage`
+Run: `cargo test -p krabka-remote-storage`
 Expected: PASS — the existing InMemory-backed suite (copy-then-fetch, partial/ranged fetch, each index type, idempotent delete, cluster-prefix isolation, multipart threshold + partial tail) all stay green, proving construction moved without changing behavior.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add crates/remote-storage/Cargo.toml crates/remote-storage/src/s3.rs crates/remote-storage/src/gcs.rs crates/remote-storage/src/lib.rs
-git commit -m "refactor(remote-storage): construct object stores via crabka-object-store"
+git commit -m "refactor(remote-storage): construct object stores via krabka-object-store"
 ```
 
 ---
@@ -809,8 +817,8 @@ No new code — a verification checkpoint proving the re-exports kept every down
 
 - [ ] **Step 1: Build the broker (primary downstream consumer)**
 
-Run: `cargo build -p crabka-broker`
-Expected: compiles clean. If it fails on `unresolved import crabka_remote_storage::{S3Config|GcsConfig|DEFAULT_MULTIPART_*}`, re-check Task 5 Step 4 (a re-export is missing) and fix, then re-run.
+Run: `cargo build -p krabka-broker`
+Expected: compiles clean. If it fails on `unresolved import krabka_remote_storage::{S3Config|GcsConfig|DEFAULT_MULTIPART_*}`, re-check Task 5 Step 4 (a re-export is missing) and fix, then re-run.
 
 - [ ] **Step 2: Run the whole workspace test suite**
 
@@ -828,11 +836,12 @@ git commit -m "fix(remote-storage): restore object-store re-exports for downstre
 
 ---
 
-## Task 7: Migrate `crabka-blockstore` onto the substrate (additive `from_config`)
+## Task 7: Migrate `krabka-blockstore` onto the substrate (additive `from_config`)
 
 Add a second genuine consumer. `BlockStore::from_config` builds the store via `build_object_store` while the caller keeps supplying the DataFusion base `Url` (a query-engine concern that stays in the consumer). The existing `new(store, base)` is untouched, so no data-representation code moves.
 
 **Files:**
+
 - Modify: `crates/blockstore/Cargo.toml`
 - Modify: `crates/blockstore/src/store.rs`
 
@@ -841,7 +850,7 @@ Add a second genuine consumer. `BlockStore::from_config` builds the store via `b
 In `crates/blockstore/Cargo.toml`, under `[dependencies]`, add:
 
 ```toml
-crabka-object-store = { path = "../object-store" }
+krabka-object-store = { path = "../object-store" }
 ```
 
 - [ ] **Step 2: Write the failing test**
@@ -851,7 +860,7 @@ In `crates/blockstore/src/store.rs`, inside the existing `#[cfg(test)] mod tests
 ```rust
     #[tokio::test]
     async fn from_config_inmemory_builds_usable_store() {
-        use crabka_object_store::ObjectStoreConfig;
+        use krabka_object_store::ObjectStoreConfig;
 
         let base = url::Url::parse("memory:///").unwrap();
         let bs = BlockStore::from_config(&ObjectStoreConfig::InMemory, base).unwrap();
@@ -868,7 +877,7 @@ In `crates/blockstore/src/store.rs`, inside the existing `#[cfg(test)] mod tests
 
 - [ ] **Step 3: Run the test to verify it fails**
 
-Run: `cargo test -p crabka-blockstore from_config_inmemory_builds_usable_store`
+Run: `cargo test -p krabka-blockstore from_config_inmemory_builds_usable_store`
 Expected: FAIL — `BlockStore::from_config` is not defined.
 
 - [ ] **Step 4: Implement `from_config`**
@@ -877,17 +886,17 @@ In `crates/blockstore/src/store.rs`, add to the `impl BlockStore` block (e.g. ju
 
 ```rust
     /// Build a `BlockStore` whose object store is constructed from `cfg` via the
-    /// shared `crabka-object-store` substrate. `base` remains the caller's
+    /// shared `krabka-object-store` substrate. `base` remains the caller's
     /// `DataFusion` registration URL (a query-engine concern owned by the caller).
     ///
     /// # Errors
     ///
     /// Returns [`BlockStoreError::ObjectStore`] if the backend builder rejects `cfg`.
     pub fn from_config(
-        cfg: &crabka_object_store::ObjectStoreConfig,
+        cfg: &krabka_object_store::ObjectStoreConfig,
         base: Url,
     ) -> Result<Self> {
-        let store = crabka_object_store::build_object_store(cfg)
+        let store = krabka_object_store::build_object_store(cfg)
             .map_err(|e| BlockStoreError::ObjectStore(e.to_string()))?;
         Ok(Self::new(store, base))
     }
@@ -897,19 +906,19 @@ In `crates/blockstore/src/store.rs`, add to the `impl BlockStore` block (e.g. ju
 
 - [ ] **Step 5: Run the test to verify it passes**
 
-Run: `cargo test -p crabka-blockstore from_config_inmemory_builds_usable_store`
+Run: `cargo test -p krabka-blockstore from_config_inmemory_builds_usable_store`
 Expected: PASS.
 
 - [ ] **Step 6: Run the full blockstore suite**
 
-Run: `cargo test -p crabka-blockstore`
+Run: `cargo test -p krabka-blockstore`
 Expected: PASS — the new constructor is additive; everything else is unchanged.
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add crates/blockstore/Cargo.toml crates/blockstore/src/store.rs
-git commit -m "feat(blockstore): add BlockStore::from_config via crabka-object-store"
+git commit -m "feat(blockstore): add BlockStore::from_config via krabka-object-store"
 ```
 
 ---
@@ -950,7 +959,8 @@ git commit -m "style(object-store): cargo +nightly fmt"
 ## Self-Review
 
 **1. Spec coverage (Ch. 0 M3, first increment — "extract a shared substrate crate owning object_store construction, consumed by both the KIP-405 remote tier and blockstore"):**
-- New crate owning construction → Tasks 1-4 (`crabka-object-store`: config, error, `build_object_store`). ✅
+
+- New crate owning construction → Tasks 1-4 (`krabka-object-store`: config, error, `build_object_store`). ✅
 - Consumed by the KIP-405 remote tier → Task 5 (`remote-storage`'s `from_s3_config`/`from_gcs_config` route through `build_object_store`). ✅
 - Consumed by blockstore → Task 7 (`BlockStore::from_config`). ✅
 - "path/prefix layout … index conventions" from the roadmap prose are **data representation** and are explicitly deferred (Invariant 3 / Deferred list) — the honest first increment is construction only. Documented, not silently dropped. ✅

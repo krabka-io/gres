@@ -14,7 +14,7 @@ Creusot verifies synchronous, mostly-safe Rust only (no async, no trait objects,
 atomics, limited std). Crabka's broker paths are heavily async, so verification targets
 extracted pure kernels — the deductive counterpart to the existing stateright
 model-checking program: stateright explores concurrent interleavings; Creusot proves
-sequential functional contracts over the *entire* input space.
+sequential functional contracts over the _entire_ input space.
 
 ## Scope
 
@@ -28,12 +28,12 @@ patching — are explicitly out of scope for this iteration):
 
 ## Architecture
 
-### New crate `crates/verified` (package `crabka-verified`)
+### New crate `crates/verified` (package `krabka-verified`)
 
 Holds the five kraft-core/log kernels as **pure free functions over primitive types**
 (`u64`/`i64`/`u32`/slices) plus the small plain data types `retain_decision` needs
 (`RecordMeta`, `BatchMeta`, `TxnDataState`, `RetainDecision`, moved from
-`crabka-log`). No dependency on `kraft-core` or `log` types, so the crate is trivially
+`krabka-log`). No dependency on `kraft-core` or `log` types, so the crate is trivially
 translatable by Creusot. Sole dependency: `creusot-std` (the renamed successor of the
 deprecated `creusot-contracts`; its macros erase to no-ops under normal rustc, so
 stable builds/clippy/tests are unaffected).
@@ -48,7 +48,7 @@ Host crates **call through** — original bodies are deleted, never duplicated:
 - `log`: `OffsetIndex::lookup` delegates over `&self.entries`; `compact` imports the
   moved types and delegates `retain_decision`.
 
-### `crabka-throttle` verified in place
+### `krabka-throttle` verified in place
 
 The crate has no async/IO, and `plan_consume` is already a pure free function. The
 `TokenBucket` runtime shell (struct + impl + `clock_nanos`, which use `AtomicU64` and
@@ -58,7 +58,7 @@ the pure arithmetic. The crate adds the `creusot-std` dependency.
 
 ### Verification targets
 
-`cargo creusot` runs on exactly two packages: `crabka-verified` and `crabka-throttle`.
+`cargo creusot` runs on exactly two packages: `krabka-verified` and `krabka-throttle`.
 No other crate ever sees the Creusot toolchain.
 
 ## Contracts
@@ -80,7 +80,7 @@ Total; no preconditions. Ensures (⊕ = saturating add, `capped = min(available 
 
 ### `log_is_up_to_date(my_epoch, my_end, cand_epoch, cand_offset) -> bool`
 
-Full functional spec — the ensures clause *is* the KIP-595 rule:
+Full functional spec — the ensures clause _is_ the KIP-595 rule:
 `result == (cand_epoch > my_epoch ∨ (cand_epoch == my_epoch ∧ cand_offset ≥ my_end))`.
 Stated once in logic and once in code so a transposed operator cannot slip through
 either alone.
@@ -98,7 +98,7 @@ Ensures:
 - **(a)** `result ≥ current_hwm` — the HWM never regresses
 - **(b)** `result ≤ log_end`
 - **(c)** `result > current_hwm ⟹ result > epoch_start_offset ∧
-  |{ m ∈ {log_end} ∪ follower_offsets : m ≥ result }| ≥ majority` — the Raft-Fig.8 /
+|{ m ∈ {log_end} ∪ follower_offsets : m ≥ result }| ≥ majority` — the Raft-Fig.8 /
   KIP-595 leader-completeness gate with an explicit majority-replication witness.
 
 ### `offset_index_lookup(entries: &[(u32, u32)], target: u32) -> u32`
@@ -145,7 +145,7 @@ development on Windows and by CI:
   where available, upstream release binaries otherwise), and installs rustup with
   Creusot's pinned nightly preloaded.
 - **`packaging/apko/creusot-toolchain.yaml`**: assembles the image (tagged with the
-  Creusot pin, e.g. `crabka-creusot:v0.12.0`) with `git`, `build-base`, and a
+  Creusot pin, e.g. `krabka-creusot:v0.12.0`) with `git`, `build-base`, and a
   non-root user matching the bench-driver image conventions.
 - **`tools/build-creusot-image.sh`**: mirrors `tools/build-image.sh` (melange build →
   apko build, `MELANGE_RUNNER=docker` on Windows).
@@ -153,7 +153,7 @@ development on Windows and by CI:
   the pin or the recipes change.
 
 **Windows dev flow**: `docker run` the image with the workspace bind-mounted, e.g.
-`docker run --rm -v ${PWD}:/work -w /work crabka-creusot:v0.12.0 cargo creusot ...`
+`docker run --rm -v ${PWD}:/work -w /work krabka-creusot:v0.12.0 cargo creusot ...`
 (a thin wrapper script/justfile recipe provides this). `CARGO_TARGET_DIR` inside the
 container points at a named Docker volume so verification builds never collide with
 the host's MSVC target dir; proof sessions are written back through the bind mount so
@@ -163,10 +163,10 @@ stays a documented Linux/WSLg option; day-to-day proving and replay are headless
 ## CI
 
 New Linux job `creusot-verify`, a **required check**, running **in the toolchain
-image** (`container: ghcr.io/.../crabka-creusot:<pin>`) so CI and local dev share one
+image** (`container: ghcr.io/.../krabka-creusot:<pin>`) so CI and local dev share one
 environment and there is no opam install or cache to manage in the job:
 
-1. Replay checked-in proof sessions for `crabka-verified` and `crabka-throttle`
+1. Replay checked-in proof sessions for `krabka-verified` and `krabka-throttle`
    (`cargo creusot` replay mode); red if any contract no longer proves.
 2. The job **always runs** but short-circuits to success when the PR touches neither
    the two crates, the proof sessions, the version pin, nor the toolchain image
@@ -191,7 +191,7 @@ environment and there is no opam install or cache to manage in the job:
 Slice 1 is deliberately `plan_consume` end-to-end — toolchain image built and
 published, contract, proof authored via the image on Windows, checked-in session,
 CI job green in the image — before any extraction work, to de-risk the rest.
-Then the `crabka-verified` crate + kernel extractions + their proofs.
+Then the `krabka-verified` crate + kernel extractions + their proofs.
 
 ## Known risks
 

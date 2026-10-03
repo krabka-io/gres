@@ -1,7 +1,7 @@
 //! Row-level security: the one place raw rows of a stored relation may be
 //! turned into a relation the rest of the executor can see.
 //!
-//! Every decision keys off [`crabka_pgcatalog::Table::row_security`], which
+//! Every decision keys off [`krabka_pgcatalog::Table::row_security`], which
 //! `ALTER TABLE … ENABLE ROW LEVEL SECURITY` sets and `CREATE POLICY` fills in
 //! around. Reads pass through [`apply_row_security`]; writes pass through
 //! [`RowSecurityUsing`] on the rows they may act on and [`RowSecurityCheck`] on
@@ -48,13 +48,13 @@
 
 use std::sync::Mutex;
 
-use crabka_pgcatalog::{
+use krabka_pgcatalog::{
     RoleAttribute, Table, TableId,
     policy::{Policy, PolicyCommand},
 };
-use crabka_pgkv::Kv;
-use crabka_pgparser::ast::{BinaryOp, Expr};
-use crabka_pgtypes::Datum;
+use krabka_pgkv::Kv;
+use krabka_pgparser::ast::{BinaryOp, Expr};
+use krabka_pgtypes::Datum;
 
 use crate::{error::ExecError, join::Relation, scope::Scope};
 
@@ -63,7 +63,7 @@ use crate::{error::ExecError, join::Relation, scope::Scope};
 /// Deliberately narrow: the catalog handle, the role whose policies apply, and
 /// the `row_security` GUC. Nothing else takes part in the decision, so nothing
 /// else can accidentally change it, and a unit test can build one over a bare
-/// [`crabka_pgkv::MemKv`].
+/// [`krabka_pgkv::MemKv`].
 #[derive(Clone, Copy)]
 pub struct RlsCtx<'a> {
     catalog_kv: &'a dyn Kv,
@@ -497,14 +497,14 @@ pub(crate) fn describe_row(
     ) {
         return None;
     }
-    let field = |ordinal: usize, column: &crabka_pgcatalog::Column| {
+    let field = |ordinal: usize, column: &krabka_pgcatalog::Column| {
         // A virtual generated column is never stored; the row carries a NULL
         // placeholder at its position, and upstream prints the word rather than
         // that placeholder.
         if column
             .generated
             .as_ref()
-            .is_some_and(|generated| generated.kind == crabka_pgcatalog::GeneratedKind::Virtual)
+            .is_some_and(|generated| generated.kind == krabka_pgcatalog::GeneratedKind::Virtual)
         {
             return "virtual".to_string();
         }
@@ -611,7 +611,7 @@ pub(crate) fn describe_index_key(
 fn key_field_text(value: &Datum, ctx: &crate::clock::EvalCtx) -> String {
     match value {
         Datum::Null => "null".to_string(),
-        other => String::from_utf8_lossy(&crabka_pgtypes::encoding::encode_text_in(
+        other => String::from_utf8_lossy(&krabka_pgtypes::encoding::encode_text_in(
             other,
             ctx.output_style(),
         ))
@@ -683,7 +683,7 @@ fn bypass_applies(ctx: &RlsCtx<'_>, table: &Table) -> Result<bool, ExecError> {
     // is the predicate PostgreSQL matches roles with — `role_can_set` counts
     // roles the session may merely `SET ROLE` to, which is a wider set.
     if !table.force_row_security
-        && crabka_pgcatalog::role_has_privs_of(ctx.catalog_kv, ctx.role, &table.owner)?
+        && krabka_pgcatalog::role_has_privs_of(ctx.catalog_kv, ctx.role, &table.owner)?
     {
         return Ok(true);
     }
@@ -709,15 +709,15 @@ pub(crate) fn row_security_active(
 fn role_is_exempt(ctx: &RlsCtx<'_>) -> Result<bool, ExecError> {
     // The bootstrap role is the cluster's superuser by definition and has no
     // `pg_authid` row to read the attribute from.
-    if ctx.role == crabka_pgcatalog::BOOTSTRAP_ROLE {
+    if ctx.role == krabka_pgcatalog::BOOTSTRAP_ROLE {
         return Ok(true);
     }
-    let attributes = match crabka_pgcatalog::get_role(ctx.catalog_kv, ctx.role) {
+    let attributes = match krabka_pgcatalog::get_role(ctx.catalog_kv, ctx.role) {
         Ok(role) => role.attributes,
         // A role that does not exist holds no attributes, so it is exempt from
         // nothing. Erroring here would turn a dropped role into a hard failure
         // on every read instead of a filtered one.
-        Err(crabka_pgcatalog::CatalogError::UndefinedObject(_)) => return Ok(false),
+        Err(krabka_pgcatalog::CatalogError::UndefinedObject(_)) => return Ok(false),
         Err(error) => return Err(error.into()),
     };
     Ok(attributes.has(RoleAttribute::Superuser) || attributes.has(RoleAttribute::BypassRls))
@@ -735,12 +735,12 @@ fn role_is_exempt(ctx: &RlsCtx<'_>) -> Result<bool, ExecError> {
 ///
 /// Returns storage/corruption errors from the catalog KV seam.
 pub(crate) fn role_is_superuser(kv: &dyn Kv, role: &str) -> Result<bool, ExecError> {
-    if role == crabka_pgcatalog::BOOTSTRAP_ROLE {
+    if role == krabka_pgcatalog::BOOTSTRAP_ROLE {
         return Ok(true);
     }
-    match crabka_pgcatalog::get_role(kv, role) {
+    match krabka_pgcatalog::get_role(kv, role) {
         Ok(role) => Ok(role.attributes.has(RoleAttribute::Superuser)),
-        Err(crabka_pgcatalog::CatalogError::UndefinedObject(_)) => Ok(false),
+        Err(krabka_pgcatalog::CatalogError::UndefinedObject(_)) => Ok(false),
         Err(error) => Err(error.into()),
     }
 }
@@ -766,7 +766,7 @@ fn applicable_policies(
     command: PolicyCommand,
 ) -> Result<Vec<Policy>, ExecError> {
     let mut applicable = Vec::new();
-    for policy in crabka_pgcatalog::policy::policies_for_table(ctx.catalog_kv, table.id)? {
+    for policy in krabka_pgcatalog::policy::policies_for_table(ctx.catalog_kv, table.id)? {
         if policy_applies(ctx, &policy, command)? {
             applicable.push(policy);
         }
@@ -792,7 +792,7 @@ fn policy_applies(
         return Ok(true);
     }
     for role in &policy.roles {
-        if crabka_pgcatalog::role_has_privs_of(ctx.catalog_kv, ctx.role, role)? {
+        if krabka_pgcatalog::role_has_privs_of(ctx.catalog_kv, ctx.role, role)? {
             return Ok(true);
         }
     }
@@ -846,7 +846,7 @@ fn compile_qual(source: &str) -> Result<Expr, ExecError> {
             "row-level-security policy qual uses {probe}, which is not enforced yet"
         )));
     }
-    Ok(crabka_pgparser::parser::parse_expression(source)?)
+    Ok(krabka_pgparser::parser::parse_expression(source)?)
 }
 
 /// The privilege functions a policy qual still may not name.
@@ -1346,8 +1346,8 @@ impl Describer {
     /// for every relation in the database.
     pub(crate) fn seen_by(role: &str, row_security: bool) -> Self {
         Self::new(
-            if role == crabka_pgcatalog::PUBLIC_ROLE {
-                crabka_pgcatalog::BOOTSTRAP_ROLE
+            if role == krabka_pgcatalog::PUBLIC_ROLE {
+                krabka_pgcatalog::BOOTSTRAP_ROLE
             } else {
                 role
             },
@@ -1481,12 +1481,12 @@ fn fold_permissive_checks(permissive: Vec<PolicyCheckQual>) -> PolicyCheckQual {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgcatalog::{
+    use krabka_pgcatalog::{
         Column, RelationName, RoleAttributes, Table,
         policy::{Policy, PolicyCommand},
     };
-    use crabka_pgkv::{Kv, MemKv};
-    use crabka_pgtypes::ColumnType;
+    use krabka_pgkv::{Kv, MemKv};
+    use krabka_pgtypes::ColumnType;
 
     use super::{
         RlsCtx, RowSecurity, RowSecurityCheck, UnrestrictedTable, combine_policy_quals, decide,
@@ -1527,7 +1527,7 @@ mod tests {
     fn store(policies: &[Policy]) -> MemKv {
         let kv = MemKv::new();
         for policy in policies {
-            let ops = crabka_pgcatalog::policy::create_policy_ops(&kv, policy).expect("create");
+            let ops = krabka_pgcatalog::policy::create_policy_ops(&kv, policy).expect("create");
             kv.write_batch(&ops).expect("apply");
         }
         kv
@@ -1539,7 +1539,7 @@ mod tests {
 
     fn member_role(kv: &MemKv, name: &str, attributes: RoleAttributes, member_of: &[&str]) {
         let member_of: Vec<String> = member_of.iter().map(|role| (*role).to_string()).collect();
-        let ops = crabka_pgcatalog::create_role_with_memberships_ops(
+        let ops = krabka_pgcatalog::create_role_with_memberships_ops(
             kv, name, true, attributes, &member_of,
         )
         .expect("create role");
@@ -1619,12 +1619,12 @@ mod tests {
         }
         let superuser = {
             let mut attributes = RoleAttributes::default();
-            attributes.set(crabka_pgcatalog::RoleAttribute::Superuser, true);
+            attributes.set(krabka_pgcatalog::RoleAttribute::Superuser, true);
             attributes
         };
         let bypass = {
             let mut attributes = RoleAttributes::default();
-            attributes.set(crabka_pgcatalog::RoleAttribute::BypassRls, true);
+            attributes.set(krabka_pgcatalog::RoleAttribute::BypassRls, true);
             attributes
         };
         let cases = [
@@ -1773,7 +1773,7 @@ mod tests {
             let mut stored = policy("visible", true, "id > 0", &[]);
             stored.command = policy_command;
             let kv = store(&[stored]);
-            role(&kv, "stranger", crabka_pgcatalog::RoleAttributes::default());
+            role(&kv, "stranger", krabka_pgcatalog::RoleAttributes::default());
             let ctx = RlsCtx::new(&kv, "stranger", true);
             let RowSecurity::Restricted { qual, .. } =
                 decide(&ctx, &table(true, false), statement).expect("decide")
@@ -1784,8 +1784,8 @@ mod tests {
         }
     }
 
-    fn qual(sql: &str) -> crabka_pgparser::ast::Expr {
-        crabka_pgparser::parser::parse_expression(sql).expect("parse")
+    fn qual(sql: &str) -> krabka_pgparser::ast::Expr {
+        krabka_pgparser::parser::parse_expression(sql).expect("parse")
     }
 
     /// The fold, stated as the four facts that make default-deny structural.
@@ -1849,7 +1849,7 @@ mod tests {
                     crate::exec::row_matches(
                         Some(&folded),
                         &scope,
-                        &[crabka_pgtypes::Datum::Int4(*id)],
+                        &[krabka_pgtypes::Datum::Int4(*id)],
                         &ctx,
                     )
                     .expect("evaluate")
@@ -1871,7 +1871,7 @@ mod tests {
             !crate::exec::row_matches(
                 Some(&folded),
                 &scope,
-                &[crabka_pgtypes::Datum::Int4(1)],
+                &[krabka_pgtypes::Datum::Int4(1)],
                 &ctx
             )
             .expect("evaluate")
@@ -1914,7 +1914,7 @@ mod tests {
         ];
         for case in cases {
             let kv = store(&[policy("probe", true, case.source, &[])]);
-            role(&kv, "stranger", crabka_pgcatalog::RoleAttributes::default());
+            role(&kv, "stranger", krabka_pgcatalog::RoleAttributes::default());
             let ctx = RlsCtx::new(&kv, "stranger", true);
             let decided = decide(&ctx, &table(true, false), PolicyCommand::Select);
             match decided {
@@ -1935,7 +1935,7 @@ mod tests {
             crate::scanner::PredicatePushdown::Conjunctive(vec![crate::scanner::ColumnPredicate {
                 column: 0,
                 op: crate::scanner::PredicateOp::Eq,
-                value: crabka_pgtypes::Datum::Int4(7),
+                value: krabka_pgtypes::Datum::Int4(7),
             }]);
         let plan = crate::plan_dist::DistributedScanPlan {
             predicate: predicate.clone(),
@@ -1979,7 +1979,7 @@ mod tests {
     #[test]
     fn write_check_falls_back_to_using() {
         let kv = store(&[policy("visible", true, "id > 2", &[])]);
-        role(&kv, "stranger", crabka_pgcatalog::RoleAttributes::default());
+        role(&kv, "stranger", krabka_pgcatalog::RoleAttributes::default());
         let ctx = RlsCtx::new(&kv, "stranger", true);
         let table = table(true, false);
         // The plan rather than the folded check: this policy's qual holds no
@@ -1997,7 +1997,7 @@ mod tests {
         );
         let eval = crate::clock::EvalCtx::test_default();
         let rejected = check
-            .permit_row(&table, &[crabka_pgtypes::Datum::Int4(1)], &eval)
+            .permit_row(&table, &[krabka_pgtypes::Datum::Int4(1)], &eval)
             .expect_err("a row the USING qual hides may not be written");
         assert!(
             rejected.into_pg().message
@@ -2005,7 +2005,7 @@ mod tests {
         );
         assert!(
             check
-                .permit_row(&table, &[crabka_pgtypes::Datum::Int4(3)], &eval)
+                .permit_row(&table, &[krabka_pgtypes::Datum::Int4(3)], &eval)
                 .is_ok()
         );
     }

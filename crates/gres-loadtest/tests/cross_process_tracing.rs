@@ -7,8 +7,8 @@
 //! installed propagator, and an in-process test would still see the right
 //! context, because the span never really left. Here the context must survive
 //! a longer path. The client writes it into a sqlcommenter tag. One
-//! `crabka-gres` process parses it and serialises it into a `RangeEnvelope` on
-//! the mTLS range RPC. A *different* `crabka-gres` process reconstitutes it.
+//! `krabka-gres` process parses it and serialises it into a `RangeEnvelope` on
+//! the mTLS range RPC. A *different* `krabka-gres` process reconstitutes it.
 //! Both processes then export it over OTLP to the collector that this test
 //! runs.
 //!
@@ -27,8 +27,8 @@ mod support;
 use std::collections::{BTreeMap, BTreeSet};
 
 use assert2::{assert, check};
-use crabka_gres_control::RegistryPolicy;
-use crabka_gres_loadtest::{
+use krabka_gres_control::RegistryPolicy;
+use krabka_gres_loadtest::{
     cluster::{Binaries, Cluster, ClusterOptions, SqlEndpoint},
     config::LoadtestRuntimePolicy,
     scenario::{ModeSpec, TopologySpec},
@@ -55,7 +55,7 @@ const OWNER_NODE: &str = "node1";
 /// The `tracing` target attribute every exported span carries.
 const TARGET: &str = "target";
 /// The target the pgwire session and statement spans are emitted on.
-const SESSION_TARGET: &str = "crabka_pgwire::session";
+const SESSION_TARGET: &str = "krabka_pgwire::session";
 
 /// The sharded table whose range is *not* hosted by the gateway node.
 const REMOTE_TABLE: &str = "t1000000";
@@ -82,7 +82,7 @@ async fn client_trace_context_survives_across_gres_processes() {
         Err(error) => {
             eprintln!(
                 "skipping cross-process tracing test: {error:#}\n\
-                 build them with `cargo build -p crabka-gres -p crabka-broker -p crabka-cli`"
+                 build them with `cargo build -p krabka-gres -p krabka-broker -p krabka-cli`"
             );
             return;
         }
@@ -119,16 +119,16 @@ async fn client_trace_context_survives_across_gres_processes() {
 
 /// Environment every spawned node gets.
 ///
-/// `CRABKA_OTLP_SAMPLE_RATIO=1.0` covers both samplers that could otherwise
+/// `KRABKA_OTLP_SAMPLE_RATIO=1.0` covers both samplers that could otherwise
 /// drop the trace. Those are the SDK's `ParentBased(TraceIdRatioBased)` head
 /// sampler, and the ingress `Resample` policy that recomputes the client's
 /// sampled flag locally. At 1.0 both keep everything, so a missing span means
 /// a missing span and not an unlucky trace id.
 fn tracing_env(endpoint: &str) -> BTreeMap<String, String> {
     BTreeMap::from([
-        ("CRABKA_OTLP_ENDPOINT".to_owned(), endpoint.to_owned()),
-        ("CRABKA_OTLP_PROTOCOL".to_owned(), "grpc".to_owned()),
-        ("CRABKA_OTLP_SAMPLE_RATIO".to_owned(), "1.0".to_owned()),
+        ("KRABKA_OTLP_ENDPOINT".to_owned(), endpoint.to_owned()),
+        ("KRABKA_OTLP_PROTOCOL".to_owned(), "grpc".to_owned()),
+        ("KRABKA_OTLP_SAMPLE_RATIO".to_owned(), "1.0".to_owned()),
         // Shorten the batch exporter's flush cadence from its 5s default so the
         // test waits seconds rather than tens of seconds.
         ("OTEL_BSP_SCHEDULE_DELAY".to_owned(), "500".to_owned()),

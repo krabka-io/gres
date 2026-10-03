@@ -3,7 +3,7 @@
 **Date:** 2026-06-17
 **Status:** Design approved
 **Workstream:** Connect framework, Postgres CDC source connector
-**Predecessors:** `crabka-connect` embeddable connector runtime + lifecycle; connector config + secrets SPI; `schema-serde` Protobuf framing
+**Predecessors:** `krabka-connect` embeddable connector runtime + lifecycle; connector config + secrets SPI; `schema-serde` Protobuf framing
 
 ## Goal
 
@@ -12,7 +12,7 @@ logical-decoding source connector for Crabka Connect. The connector consumes
 Postgres WAL through a logical replication slot, converts row-level changes
 into an `EntityDifference` CDC envelope, emits Protobuf-framed Kafka records,
 and resumes from durable LSN checkpoints through the existing
-`crabka_connect::SourceOffset` contract.
+`krabka_connect::SourceOffset` contract.
 
 This replaces the planned in-memory `Broadcaster` shape for Postgres-backed
 CDC with a durable, LSN-tracked source that can survive process restarts and
@@ -20,8 +20,8 @@ continue from the last committed WAL position.
 
 ## Requirements
 
-- Provide a new `crabka-connect-postgres` crate under `crates/connect-postgres`.
-- Implement `crabka_connect::Source<bytes::Bytes, bytes::Bytes>` so the
+- Provide a new `krabka-connect-postgres` crate under `crates/connect-postgres`.
+- Implement `krabka_connect::Source<bytes::Bytes, bytes::Bytes>` so the
   existing runtime can drive the connector without runtime changes.
 - Expose typed CDC domain structs internally and publicly enough for tests and
   downstream users: `EntityDifference`, `EntityKey`, `Operation`,
@@ -32,10 +32,10 @@ continue from the last committed WAL position.
 - Resume from the last committed LSN when `seek` receives a valid checkpoint.
 - Emit tombstones on DELETE: key is present, value is `None`.
 - Emit Protobuf-framed bytes for keys and non-delete values, reusing
-  `prost-reflect` and `crabka-schema-serde` framing conventions.
+  `prost-reflect` and `krabka-schema-serde` framing conventions.
 - Handle basic schema metadata/DDL by refreshing relation metadata when WAL
   relation messages show a changed table shape.
-- Keep the Postgres-specific dependencies out of `crabka-connect`.
+- Keep the Postgres-specific dependencies out of `krabka-connect`.
 
 ## Non-Goals
 
@@ -99,7 +99,7 @@ pub struct PostgresSourceConfig {
     #[config(required)]
     pub slot_name: String,
 
-    #[config(default = "crabka_connect")]
+    #[config(default = "krabka_connect")]
     pub publication_name: String,
 
     #[config(default = "public")]
@@ -156,7 +156,7 @@ The connector constructs dynamic Protobuf descriptors for:
 Encoding uses `prost-reflect::DynamicMessage` so table-specific columns do not
 require generated Rust types. The wire bytes are framed using the same
 Confluent-compatible Protobuf framing conventions already implemented by
-`crabka-schema-serde`: magic byte, schema id, Protobuf message index, and body.
+`krabka-schema-serde`: magic byte, schema id, Protobuf message index, and body.
 
 The source exposes key/value bytes directly as `ConnectRecord<Bytes, Bytes>`.
 This keeps the generic runtime unchanged and leaves schema-aware registration
@@ -195,7 +195,7 @@ Offsets use `SourceOffset` as:
 {
   "partition": {
     "database": "app",
-    "slot": "crabka_slot"
+    "slot": "krabka_slot"
   },
   "position": {
     "lsn": "16/B374D848"
@@ -257,7 +257,7 @@ with logical replication enabled.
 
 ## Success Criteria
 
-- `crabka-connect-postgres` builds as a workspace member.
+- `krabka-connect-postgres` builds as a workspace member.
 - The connector can be constructed from typed config.
 - It implements `Source<Bytes, Bytes>`.
 - It emits Protobuf-framed insert/update values and DELETE tombstones.

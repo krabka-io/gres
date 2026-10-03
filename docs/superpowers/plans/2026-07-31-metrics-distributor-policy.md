@@ -4,9 +4,9 @@
 
 **Goal:** Expose the metrics distributor's HA failover timeout, ingestion-rate tenant bucket cap, and decompressed request cap through CLI options backed by environment variables without changing defaults.
 
-**Architecture:** Keep policy ownership in the existing `HaTracker`, `IngestEnforcer`, and `DistributorState` paths. Add only the state setters needed to inject configured values, then parse the three values in the standalone `crabka-metrics` binary and apply them during distributor construction.
+**Architecture:** Keep policy ownership in the existing `HaTracker`, `IngestEnforcer`, and `DistributorState` paths. Add only the state setters needed to inject configured values, then parse the three values in the standalone `krabka-metrics` binary and apply them during distributor construction.
 
-**Tech Stack:** Rust, Clap, `refined_type`, `crabka-units`, Tokio, Cargo.
+**Tech Stack:** Rust, Clap, `refined_type`, `krabka-units`, Tokio, Cargo.
 
 ## Global Constraints
 
@@ -27,6 +27,7 @@
 ### Task 1: Inject distributor policies through existing library paths
 
 **Files:**
+
 - Modify: `crates/metrics/src/distributor/ha.rs`
 - Modify: `crates/metrics/src/distributor/mod.rs`
 - Modify: `crates/metrics/src/limits/enforce.rs`
@@ -34,6 +35,7 @@
 - Modify: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
+
 - Produces: public `DEFAULT_MAX_RATE_BUCKETS: usize`.
 - Produces: public `DEFAULT_DISTRIBUTOR_MAX_DECOMPRESSED: ByteSize`.
 - Produces: `DistributorState::with_ha_failover_timeout(self, Time) -> Self`.
@@ -120,10 +122,10 @@ Run:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-metrics configured_failover_timeout_controls_takeover \
+  cargo test -p krabka-metrics configured_failover_timeout_controls_takeover \
   --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-metrics distributor_state_stores_configured_runtime_policy \
+  cargo test -p krabka-metrics distributor_state_stores_configured_runtime_policy \
   --locked
 ```
 
@@ -210,11 +212,11 @@ Run:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-metrics distributor::ha --locked
+  cargo test -p krabka-metrics distributor::ha --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-metrics rate_bucket_map_stays_bounded --locked
+  cargo test -p krabka-metrics rate_bucket_map_stays_bounded --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-metrics distributor_state_stores_configured_runtime_policy \
+  cargo test -p krabka-metrics distributor_state_stores_configured_runtime_policy \
   --locked
 ```
 
@@ -235,11 +237,13 @@ git commit -m "feat(metrics): inject distributor policy"
 ### Task 2: Add CLI and environment configuration
 
 **Files:**
+
 - Modify: `Cargo.lock`
 - Modify: `crates/metrics/Cargo.toml`
-- Modify: `crates/metrics/src/bin/crabka-metrics.rs`
+- Modify: `crates/metrics/src/bin/krabka-metrics.rs`
 
 **Interfaces:**
+
 - Consumes: `DEFAULT_HA_FAILOVER_TIMEOUT`, `DEFAULT_MAX_RATE_BUCKETS`, and `DEFAULT_DISTRIBUTOR_MAX_DECOMPRESSED`.
 - Consumes: `DistributorState::with_ha_failover_timeout`, `DistributorState::with_max_rate_buckets`, and `DistributorState::with_max_decompressed`.
 - Produces: CLI/environment options named in the approved design.
@@ -253,13 +257,13 @@ Add one default/override/validation test:
 #[test]
 fn distributor_policy_parses_defaults_overrides_and_boundaries() {
     let defaults =
-        Cli::try_parse_from(["crabka-metrics", "--target", "distributor"]).unwrap();
+        Cli::try_parse_from(["krabka-metrics", "--target", "distributor"]).unwrap();
     check!(defaults.ha_failover_timeout == secs(30));
     check!(defaults.ingest_rate_bucket_cap == 100_000);
     check!(defaults.distributor_max_decompressed == mebibytes(32));
 
     let configured = Cli::try_parse_from([
-        "crabka-metrics",
+        "krabka-metrics",
         "--target",
         "distributor",
         "--ha-failover-timeout",
@@ -280,7 +284,7 @@ fn distributor_policy_parses_defaults_overrides_and_boundaries() {
         ["--distributor-max-decompressed", "1.5B"],
     ] {
         let input = [
-            "crabka-metrics",
+            "krabka-metrics",
             "--target",
             "distributor",
             args[0],
@@ -297,7 +301,7 @@ because Clap environment reads can race other tests:
 ```rust
 #[test]
 fn distributor_policy_reads_environment_and_prefers_cli() {
-    const CHILD: &str = "CRABKA_METRICS_DISTRIBUTOR_POLICY_CHILD";
+    const CHILD: &str = "KRABKA_METRICS_DISTRIBUTOR_POLICY_CHILD";
 
     if std::env::var_os(CHILD).is_none() {
         let status =
@@ -307,9 +311,9 @@ fn distributor_policy_reads_environment_and_prefers_cli() {
                     "tests::distributor_policy_reads_environment_and_prefers_cli",
                 ])
                 .env(CHILD, "1")
-                .env("CRABKA_METRICS_HA_FAILOVER_TIMEOUT", "-1s")
-                .env("CRABKA_METRICS_INGEST_RATE_BUCKET_CAP", "7")
-                .env("CRABKA_METRICS_DISTRIBUTOR_MAX_DECOMPRESSED", "64KiB")
+                .env("KRABKA_METRICS_HA_FAILOVER_TIMEOUT", "-1s")
+                .env("KRABKA_METRICS_INGEST_RATE_BUCKET_CAP", "7")
+                .env("KRABKA_METRICS_DISTRIBUTOR_MAX_DECOMPRESSED", "64KiB")
                 .status()
                 .expect("child test");
         assert!(status.success());
@@ -317,13 +321,13 @@ fn distributor_policy_reads_environment_and_prefers_cli() {
     }
 
     let from_env =
-        Cli::try_parse_from(["crabka-metrics", "--target", "distributor"]).unwrap();
+        Cli::try_parse_from(["krabka-metrics", "--target", "distributor"]).unwrap();
     check!(from_env.ha_failover_timeout == Time::from_millis(-1_000));
     check!(from_env.ingest_rate_bucket_cap == 7);
     check!(from_env.distributor_max_decompressed == kibibytes(64));
 
     let from_cli = Cli::try_parse_from([
-        "crabka-metrics",
+        "krabka-metrics",
         "--target",
         "distributor",
         "--ha-failover-timeout",
@@ -346,7 +350,7 @@ Run:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-metrics --bin crabka-metrics \
+  cargo test -p krabka-metrics --bin krabka-metrics \
   distributor_policy_parses_defaults_overrides_and_boundaries --locked
 ```
 
@@ -406,7 +410,7 @@ Add the three fields to `Cli`:
 ```rust
 #[arg(
     long,
-    env = "CRABKA_METRICS_HA_FAILOVER_TIMEOUT",
+    env = "KRABKA_METRICS_HA_FAILOVER_TIMEOUT",
     default_value = "30s",
     value_parser = parse::time,
     allow_hyphen_values = true
@@ -414,14 +418,14 @@ Add the three fields to `Cli`:
 ha_failover_timeout: Time,
 #[arg(
     long,
-    env = "CRABKA_METRICS_INGEST_RATE_BUCKET_CAP",
+    env = "KRABKA_METRICS_INGEST_RATE_BUCKET_CAP",
     default_value_t = DEFAULT_MAX_RATE_BUCKETS,
     value_parser = parse_ingest_rate_bucket_cap
 )]
 ingest_rate_bucket_cap: usize,
 #[arg(
     long,
-    env = "CRABKA_METRICS_DISTRIBUTOR_MAX_DECOMPRESSED",
+    env = "KRABKA_METRICS_DISTRIBUTOR_MAX_DECOMPRESSED",
     default_value = "32MiB",
     value_parser = parse_distributor_max_decompressed
 )]
@@ -444,9 +448,9 @@ Run:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-metrics --bin crabka-metrics distributor_policy --locked
+  cargo test -p krabka-metrics --bin krabka-metrics distributor_policy --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-metrics --lib --locked
+  cargo test -p krabka-metrics --lib --locked
 ```
 
 Expected: all metrics binary policy tests and all metrics library tests pass.
@@ -455,7 +459,7 @@ Expected: all metrics binary policy tests and all metrics library tests pass.
 
 ```bash
 git add -- Cargo.lock crates/metrics/Cargo.toml \
-  crates/metrics/src/bin/crabka-metrics.rs
+  crates/metrics/src/bin/krabka-metrics.rs
 git commit -m "feat(metrics): configure distributor policy"
 ```
 
@@ -464,10 +468,12 @@ git commit -m "feat(metrics): configure distributor policy"
 ### Task 3: Close the audit slice and verify
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 - Modify: `docs/superpowers/plans/2026-07-31-metrics-distributor-policy.md`
 
 **Interfaces:**
+
 - Consumes: the completed library and binary configuration surface.
 - Produces: audit evidence that the three distributor policies are no longer pending.
 
@@ -477,10 +483,10 @@ Run:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-metrics --all-targets --locked
+  cargo test -p krabka-metrics --all-targets --locked
 ```
 
-Expected: every non-ignored `crabka-metrics` target passes.
+Expected: every non-ignored `krabka-metrics` target passes.
 
 - [x] **Step 2: Run repository verification gates**
 
@@ -503,9 +509,9 @@ In the metrics distributor section of `docs/configuration-audit.md`, replace
 the pending-design paragraph with a completed statement that names:
 
 ```text
-CRABKA_METRICS_HA_FAILOVER_TIMEOUT
-CRABKA_METRICS_INGEST_RATE_BUCKET_CAP
-CRABKA_METRICS_DISTRIBUTOR_MAX_DECOMPRESSED
+KRABKA_METRICS_HA_FAILOVER_TIMEOUT
+KRABKA_METRICS_INGEST_RATE_BUCKET_CAP
+KRABKA_METRICS_DISTRIBUTOR_MAX_DECOMPRESSED
 ```
 
 State that defaults remain `30s`, `100000`, and `32MiB`; timeout and byte

@@ -1,5 +1,5 @@
-use crabka_gres_ranges::{MultiRangeTenant, MultiRangeTenantConfig, TenantName};
-use crabka_pgwire::engine::{Engine, QueryResult, Session};
+use krabka_gres_ranges::{MultiRangeTenant, MultiRangeTenantConfig, TenantName};
+use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
 #[tokio::test]
 async fn durable_multirange_reopens_range_local_state() {

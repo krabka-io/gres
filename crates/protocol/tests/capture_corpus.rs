@@ -4,7 +4,7 @@
 //! JVM-client traffic through an in-process `kafka-tap`. It captures one frame
 //! per `(api_key, version, direction)`, then synthesizes the remainder with the
 //! JVM oracle. Run it manually:
-//!   `cargo test -p crabka-protocol --test capture_corpus -- --ignored --nocapture`
+//!   `cargo test -p krabka-protocol --test capture_corpus -- --ignored --nocapture`
 mod support;
 use std::{
     collections::BTreeMap,
@@ -12,7 +12,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crabka_kafka_tap::{Recorder, frame::CapturedFrame, spawn};
+use krabka_kafka_tap::{Recorder, frame::CapturedFrame, spawn};
 use support::{driver, oracle};
 
 include!(concat!(
@@ -24,7 +24,7 @@ include!(concat!(
 type CaptureMap = Arc<Mutex<BTreeMap<(i16, i16, bool), Vec<u8>>>>;
 
 const IMAGE: &str = "mirror.gcr.io/apache/kafka:4.3.0";
-const CONTAINER: &str = "crabka-corpus-capture";
+const CONTAINER: &str = "krabka-corpus-capture";
 const BROKER_HOST_PORT: u16 = 19092;
 const TAP_PORT: u16 = 19091;
 

@@ -2,13 +2,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-cargo build --locked -p crabka-cli -p crabka-gres
+cargo build --locked -p krabka-cli -p krabka-gres
 mkdir -p target/g8-topology-process-nemesis
 for kill_point in retiring_before_delete retiring_after_delete retiring_parked resuming; do
-  CRABKA_G8_PROCESS_NEMESIS=1 \
-  CRABKA_G8_RETIREMENT_KILL_POINT="$kill_point" \
-  CRABKA_G8_KILL_EVIDENCE="$PWD/target/g8-topology-process-nemesis/retirement-${kill_point}-kill.json" \
-  timeout 180s cargo test --locked -p crabka-gres --test topology_process_nemesis \
+  KRABKA_G8_PROCESS_NEMESIS=1 \
+  KRABKA_G8_RETIREMENT_KILL_POINT="$kill_point" \
+  KRABKA_G8_KILL_EVIDENCE="$PWD/target/g8-topology-process-nemesis/retirement-${kill_point}-kill.json" \
+  timeout 180s cargo test --locked -p krabka-gres --test topology_process_nemesis \
     -- --exact real_process_move_source_phase_sigkill_with_exact_ack_ledger --nocapture
 done
 

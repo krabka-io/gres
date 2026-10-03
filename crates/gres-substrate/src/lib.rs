@@ -1,7 +1,7 @@
 //! Substrate-backed durability for Crabka Gres tenant computes.
 //!
-//! This crate implements the engine's [`crabka_pgexec::Committer`] and
-//! [`crabka_pgexec::Linearizer`] seams over a per-range WAL topic named
+//! This crate implements the engine's [`krabka_pgexec::Committer`] and
+//! [`krabka_pgexec::Linearizer`] seams over a per-range WAL topic named
 //! `__gres_wal.<tenant>.r<range>`. A single writer task group-commits framed
 //! batches inside Kafka transactions, and the broker's coordinator-checked
 //! producer epoch is the zombie fence. Recovery replays the topic before

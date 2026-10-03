@@ -9,7 +9,7 @@
 //! the qualifier and decides nothing.
 
 use assert2::assert;
-use crabka_pgparser::{
+use krabka_pgparser::{
     ast::{RelationRef, Statement, TableExpr},
     parse,
 };
@@ -48,7 +48,7 @@ fn named_relation(sql: &str) -> RelationRef {
             tables: mut names, ..
         } => names.remove(0),
         Statement::Query(query) => match query.body {
-            crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Select(
+            krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Select(
                 select,
             )) => match select.from.into_iter().next() {
                 Some(TableExpr::Table { name, .. }) => name,
@@ -153,7 +153,7 @@ fn a_qualified_from_item_with_arguments_is_a_function_call() {
     let Statement::Query(query) = one("SELECT * FROM pg_catalog.generate_series(1, 3)") else {
         panic!("expected a query");
     };
-    let crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Select(select)) =
+    let krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Select(select)) =
         query.body
     else {
         panic!("expected a SELECT");
@@ -173,7 +173,7 @@ fn the_sequence_spelling_keeps_its_qualifier() {
         panic!("expected the CREATE SEQUENCE spelling");
     };
     assert!(name == Some(RelationRef::qualified("s1", "seq")));
-    assert!(table == RelationRef::bare("__crabka_sequence__"));
+    assert!(table == RelationRef::bare("__krabka_sequence__"));
 
     let Statement::DropTable { names, .. } = one("DROP SEQUENCE s1.seq, seq2") else {
         panic!("expected the DROP SEQUENCE spelling");
@@ -181,8 +181,8 @@ fn the_sequence_spelling_keeps_its_qualifier() {
     assert!(
         names
             == vec![
-                RelationRef::qualified("s1", "__crabka_sequence__:seq"),
-                RelationRef::bare("__crabka_sequence__:seq2"),
+                RelationRef::qualified("s1", "__krabka_sequence__:seq"),
+                RelationRef::bare("__krabka_sequence__:seq2"),
             ]
     );
 }

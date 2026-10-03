@@ -3,17 +3,17 @@
 ## Goal
 
 Expose the deployment-owned limits and pacing currently embedded in
-`crabka-gres-ranges`, preserving all defaults and keeping protocol, format,
+`krabka-gres-ranges`, preserving all defaults and keeping protocol, format,
 sentinel, and derived values fixed.
 
 ## Configuration ownership
 
-`crabka-gres-ranges` owns one validated `RangeRuntimePolicy`. It contains UOM
+`krabka-gres-ranges` owns one validated `RangeRuntimePolicy`. It contains UOM
 `Time` and `ByteSize` values plus positive refined count/stride newtypes. It
 does not depend on Clap or Kubernetes.
 
-The existing `crabka-gres` `ServeArgs` surface accepts optional flags backed by
-`CRABKA_GRES_RANGE_*` environment variables. `SubstrateRuntimeConfig` resolves
+The existing `krabka-gres` `ServeArgs` surface accepts optional flags backed by
+`KRABKA_GRES_RANGE_*` environment variables. `SubstrateRuntimeConfig` resolves
 omissions to `RangeRuntimePolicy::default()` and carries the policy to the
 existing tenant, transport, forwarder, barrier, and timestamp-oracle owners.
 
@@ -23,27 +23,27 @@ configuration subtree or environment reader is needed.
 
 ## Policy
 
-| Setting | Default |
-|---|---:|
-| RPC frame maximum | `1MiB` |
-| RPC request timeout | `5s` |
-| RPC server idle timeout | `1m` |
-| RPC pool idle TTL | `5s` |
-| RPC pool idle connections per endpoint | `32` |
-| hosted remote-session idle retention | `1m` |
-| hosted remote-session maximum | `1024` |
-| range-0 wait timeout | `10s` |
-| range-0 barrier reply budget | `4s` |
-| cross-range lock-wait cap | `2s` |
-| durable-inspection records | `4096` |
-| durable-inspection bytes | `128KiB` |
-| decision-release lag retries | `10` |
-| decision-release retry backoff | `200ms` |
-| timestamp-oracle heartbeat | `10ms` |
-| logical persistence minimum interval | `100ms` |
-| logical persistence base stride | `1024` |
-| logical persistence maximum stride | `16777216` |
-| HLC horizon headroom | `128ms` |
+| Setting                                |    Default |
+| -------------------------------------- | ---------: |
+| RPC frame maximum                      |     `1MiB` |
+| RPC request timeout                    |       `5s` |
+| RPC server idle timeout                |       `1m` |
+| RPC pool idle TTL                      |       `5s` |
+| RPC pool idle connections per endpoint |       `32` |
+| hosted remote-session idle retention   |       `1m` |
+| hosted remote-session maximum          |     `1024` |
+| range-0 wait timeout                   |      `10s` |
+| range-0 barrier reply budget           |       `4s` |
+| cross-range lock-wait cap              |       `2s` |
+| durable-inspection records             |     `4096` |
+| durable-inspection bytes               |   `128KiB` |
+| decision-release lag retries           |       `10` |
+| decision-release retry backoff         |    `200ms` |
+| timestamp-oracle heartbeat             |     `10ms` |
+| logical persistence minimum interval   |    `100ms` |
+| logical persistence base stride        |     `1024` |
+| logical persistence maximum stride     | `16777216` |
+| HLC horizon headroom                   |    `128ms` |
 
 The SQL chunk target remains derived from the configured frame maximum and its
 fixed encoding envelope. Internal topic names, range identifiers, format/wire

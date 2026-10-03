@@ -31,13 +31,13 @@ separate policy owner.
 The standalone process accepts four positive values:
 
 - `--wal-recovery-fetch-max-wait-ms`,
-  `CRABKA_GRES_WAL_RECOVERY_FETCH_MAX_WAIT_MS`
+  `KRABKA_GRES_WAL_RECOVERY_FETCH_MAX_WAIT_MS`
 - `--wal-recovery-fetch-partition-max-bytes`,
-  `CRABKA_GRES_WAL_RECOVERY_FETCH_PARTITION_MAX_BYTES`
+  `KRABKA_GRES_WAL_RECOVERY_FETCH_PARTITION_MAX_BYTES`
 - `--wal-recovery-fetch-response-max-bytes`,
-  `CRABKA_GRES_WAL_RECOVERY_FETCH_RESPONSE_MAX_BYTES`
+  `KRABKA_GRES_WAL_RECOVERY_FETCH_RESPONSE_MAX_BYTES`
 - `--wal-recovery-empty-fetch-retries`,
-  `CRABKA_GRES_WAL_RECOVERY_EMPTY_FETCH_RETRIES`
+  `KRABKA_GRES_WAL_RECOVERY_EMPTY_FETCH_RETRIES`
 
 The parser fields are optional so compiled defaults remain distinguishable
 from explicit process configuration. Explicit settings require
@@ -61,7 +61,7 @@ single-range and multi-range deployments.
 
 ## Ownership and Data Flow
 
-`crabka-gres-substrate` owns the four defaults and a small
+`krabka-gres-substrate` owns the four defaults and a small
 `RecoveryReadPolicy`. Its constructor validates the raw protocol and retry
 values with `refined_type`; fields remain private and are exposed only through
 typed accessors. `Default` uses the four compiled defaults.
@@ -70,7 +70,7 @@ typed accessors. `Default` uses the four compiled defaults.
 `with_read_policy` builder permits configured callers without changing the
 existing constructor signature or test callers.
 
-`crabka-client-core::IsolatedFetch` gains `max_bytes`, replacing its hidden
+`krabka-client-core::IsolatedFetch` gains `max_bytes`, replacing its hidden
 50 MiB request constant. The older positional `fetch_partition` helper keeps
 the same behavior by supplying a named client-core default. Existing
 `IsolatedFetch` callers explicitly preserve their current 50 MiB response
@@ -85,7 +85,7 @@ multi-range construction.
 
 `GresComputeSpec::effective_policy` validates the CRD fields through the same
 existing positive wrappers and resolves omitted fields through the defaults
-owned by `crabka-gres-substrate`.
+owned by `krabka-gres-substrate`.
 
 ## Retry Semantics
 

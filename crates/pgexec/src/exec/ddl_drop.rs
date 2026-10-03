@@ -8,11 +8,11 @@ use super::*;
 pub(crate) fn ensure_schema_ops(
     kv: &dyn Kv,
     schema: &str,
-) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
-    if crabka_pgcatalog::schema_exists(kv, schema)? {
+) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
+    if krabka_pgcatalog::schema_exists(kv, schema)? {
         return Ok(Vec::new());
     }
-    Ok(vec![crabka_pgcatalog::create_temp_schema_op(schema)])
+    Ok(vec![krabka_pgcatalog::create_temp_schema_op(schema)])
 }
 
 /// The batch that removes every relation and user type `schema` holds, whatever
@@ -34,21 +34,21 @@ pub(crate) fn ensure_schema_ops(
 pub(crate) fn drop_schema_contents_ops(
     kv: &dyn Kv,
     schema: &str,
-) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
-    let contents = crabka_pgcatalog::schema_contents(kv, schema)?;
+) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
+    let contents = krabka_pgcatalog::schema_contents(kv, schema)?;
     // The partitions of a table in `schema` go with their parent even when they
     // live outside it, so they are part of the batch and have to be known before
     // any of it is emitted: a foreign key whose child is in that set neither
     // blocks the drop nor needs an op of its own.
     let mut partitions = HashSet::new();
     for relation in &contents {
-        if crabka_pgcatalog::get_table(kv, relation).is_ok() {
+        if krabka_pgcatalog::get_table(kv, relation).is_ok() {
             partitions.extend(crate::partition::descendants(kv, relation)?);
         }
     }
     let dropping: HashSet<_> = contents.iter().chain(partitions.iter()).cloned().collect();
     let mut ops = Vec::new();
-    let mut handled: HashSet<crabka_pgcatalog::RelationName> = HashSet::new();
+    let mut handled: HashSet<krabka_pgcatalog::RelationName> = HashSet::new();
     // Parents first, striking off each partition they carry. Whatever still
     // stands afterwards is emitted on its own account — a partition whose parent
     // is in another schema, or a cycle in the partition metadata that leaves the
@@ -59,13 +59,13 @@ pub(crate) fn drop_schema_contents_ops(
                 continue;
             }
             handled.insert(relation.clone());
-            if crabka_pgcatalog::get_view(kv, relation).is_ok() {
+            if krabka_pgcatalog::get_view(kv, relation).is_ok() {
                 ops.extend(drop_view_with_triggers_ops(kv, relation)?);
-            } else if let Ok(table) = crabka_pgcatalog::get_table(kv, relation) {
+            } else if let Ok(table) = krabka_pgcatalog::get_table(kv, relation) {
                 handled.extend(crate::partition::descendants(kv, relation)?);
                 ops.extend(drop_table_and_dependents_ops(kv, &table, &dropping, true)?);
             } else {
-                ops.extend(crabka_pgcatalog::drop_sequence_ops(kv, relation)?);
+                ops.extend(krabka_pgcatalog::drop_sequence_ops(kv, relation)?);
             }
         }
     }
@@ -104,11 +104,11 @@ pub(crate) fn drop_schema_contents_ops(
 pub(crate) fn drop_table_and_dependents_ops(
     kv: &dyn Kv,
     table: &Table,
-    dropping: &HashSet<crabka_pgcatalog::RelationName>,
+    dropping: &HashSet<krabka_pgcatalog::RelationName>,
     cascade: bool,
-) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
+) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
     let name = &table.name;
-    let table_ops = crabka_pgcatalog::drop_table_ops(kv, name)?;
+    let table_ops = krabka_pgcatalog::drop_table_ops(kv, name)?;
     let mut ops = Vec::new();
     let dependents: Vec<_> = dependent_view_chain(kv, name, None)?
         .into_iter()
@@ -131,13 +131,13 @@ pub(crate) fn drop_table_and_dependents_ops(
     }
     ops.extend(drop_blocking_foreign_keys(kv, table, dropping, cascade)?);
     for descendant in crate::partition::descendants(kv, name)? {
-        if let Ok(descendant_table) = crabka_pgcatalog::get_table(kv, &descendant) {
-            ops.extend(crabka_pgcatalog::trigger::drop_triggers_for_table_ops(
+        if let Ok(descendant_table) = krabka_pgcatalog::get_table(kv, &descendant) {
+            ops.extend(krabka_pgcatalog::trigger::drop_triggers_for_table_ops(
                 kv,
                 descendant_table.id,
             )?);
         }
-        ops.extend(crabka_pgcatalog::drop_table_ops(kv, &descendant)?);
+        ops.extend(krabka_pgcatalog::drop_table_ops(kv, &descendant)?);
         ops.extend(crate::partition::drop_metadata_ops(kv, &descendant)?);
         // Only the departing relation's own statistics go. A parent losing its
         // last child keeps its `relhassubclass` latch, which is the stale
@@ -146,28 +146,28 @@ pub(crate) fn drop_table_and_dependents_ops(
     }
     ops.extend(crate::partition::drop_metadata_ops(kv, name)?);
     ops.extend(crate::relstats::drop_metadata_ops(name));
-    ops.extend(crabka_pgcatalog::trigger::drop_triggers_for_table_ops(
+    ops.extend(krabka_pgcatalog::trigger::drop_triggers_for_table_ops(
         kv, table.id,
     )?);
     ops.extend(table_ops);
     Ok(ops)
 }
 
-/// A materialized view seen as the [`crabka_pgcatalog::View`] the dependency
+/// A materialized view seen as the [`krabka_pgcatalog::View`] the dependency
 /// machinery understands, or `None` for any other stored relation.
 ///
 /// The synthesized record is not stored and is never written back — it exists so
 /// one walker can answer "what does this relation's query read" for both kinds.
 pub(crate) fn materialized_as_view(
-    table: crabka_pgcatalog::Table,
-) -> Option<crabka_pgcatalog::View> {
+    table: krabka_pgcatalog::Table,
+) -> Option<krabka_pgcatalog::View> {
     let matview = table.materialized?;
-    Some(crabka_pgcatalog::View {
+    Some(krabka_pgcatalog::View {
         name: table.name,
         definition: matview.definition,
         owner: table.owner,
         columns: table.columns,
-        options: crabka_pgcatalog::ViewOptions::default(),
+        options: krabka_pgcatalog::ViewOptions::default(),
     })
 }
 
@@ -181,13 +181,13 @@ pub(crate) fn materialized_as_view(
 /// each having to know.
 pub(crate) fn drop_dependent_relation_ops(
     kv: &dyn Kv,
-    name: &crabka_pgcatalog::RelationName,
-) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
-    if let Ok(table) = crabka_pgcatalog::get_table(kv, name)
+    name: &krabka_pgcatalog::RelationName,
+) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
+    if let Ok(table) = krabka_pgcatalog::get_table(kv, name)
         && table.materialized.is_some()
     {
-        let mut ops = crabka_pgcatalog::trigger::drop_triggers_for_table_ops(kv, table.id)?;
-        ops.extend(crabka_pgcatalog::drop_table_ops(kv, name)?);
+        let mut ops = krabka_pgcatalog::trigger::drop_triggers_for_table_ops(kv, table.id)?;
+        ops.extend(krabka_pgcatalog::drop_table_ops(kv, name)?);
         return Ok(ops);
     }
     drop_view_with_triggers_ops(kv, name)
@@ -195,18 +195,18 @@ pub(crate) fn drop_dependent_relation_ops(
 
 pub(crate) fn drop_view_with_triggers_ops(
     kv: &dyn Kv,
-    name: &crabka_pgcatalog::RelationName,
-) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
+    name: &krabka_pgcatalog::RelationName,
+) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
     let view_id = crate::catalog_rel::view_oids(kv)?
         .get(name)
         .copied()
         .and_then(|oid| u32::try_from(oid).ok());
-    let mut ops = crabka_pgcatalog::drop_view_ops(kv, name)?;
+    let mut ops = krabka_pgcatalog::drop_view_ops(kv, name)?;
     if let Some(view_id) = view_id {
-        ops.extend(crabka_pgcatalog::trigger::drop_triggers_for_table_ops(
+        ops.extend(krabka_pgcatalog::trigger::drop_triggers_for_table_ops(
             kv, view_id,
         )?);
-        ops.extend(crabka_pgcatalog::rule::drop_rules_for_table_ops(
+        ops.extend(krabka_pgcatalog::rule::drop_rules_for_table_ops(
             kv, view_id,
         )?);
     }
@@ -274,11 +274,11 @@ pub(crate) fn ddl_table_id_demand(stmt: &Statement) -> TableIdDemand {
 
 pub(crate) fn ddl_unique_local_relation(
     stmt: &Statement,
-) -> Option<&crabka_pgparser::ast::RelationRef> {
+) -> Option<&krabka_pgparser::ast::RelationRef> {
     match stmt {
         Statement::CreateIndex {
             unique: true,
-            placement: crabka_pgparser::ast::IndexPlacement::Local,
+            placement: krabka_pgparser::ast::IndexPlacement::Local,
             table,
             ..
         }
@@ -290,10 +290,10 @@ pub(crate) fn ddl_unique_local_relation(
             if actions.iter().any(|action| {
                 matches!(
                 action,
-                crabka_pgparser::ast::AlterTableAction::AddConstraint(
-                    crabka_pgparser::ast::TableConstraint {
-                        kind: crabka_pgparser::ast::TableConstraintKind::PrimaryKey { .. }
-                            | crabka_pgparser::ast::TableConstraintKind::Unique { .. },
+                krabka_pgparser::ast::AlterTableAction::AddConstraint(
+                    krabka_pgparser::ast::TableConstraint {
+                        kind: krabka_pgparser::ast::TableConstraintKind::PrimaryKey { .. }
+                            | krabka_pgparser::ast::TableConstraintKind::Unique { .. },
                         ..
                     }
                 )
@@ -353,7 +353,7 @@ pub(crate) fn cascade_drop_notice(
             ..
         } => {
             let mut lines = Vec::new();
-            for server in crabka_pgcatalog::list_servers(kv)?
+            for server in krabka_pgcatalog::list_servers(kv)?
                 .into_iter()
                 .filter(|server| server.wrapper == *name)
             {
@@ -422,7 +422,7 @@ pub(crate) fn cascade_drop_notice(
             let dropped: Vec<&String> = actions
                 .iter()
                 .filter_map(|action| match action {
-                    crabka_pgparser::ast::AlterTableAction::DropColumn {
+                    krabka_pgparser::ast::AlterTableAction::DropColumn {
                         column,
                         cascade: true,
                         ..
@@ -437,7 +437,7 @@ pub(crate) fn cascade_drop_notice(
             else {
                 return Ok(None);
             };
-            let Ok(relation) = crabka_pgcatalog::get_table(kv, &name) else {
+            let Ok(relation) = krabka_pgcatalog::get_table(kv, &name) else {
                 return Ok(None);
             };
             let mut lines = Vec::new();
@@ -476,7 +476,7 @@ pub(crate) fn cascade_drop_notice(
 /// The foreign objects a cascading server drop takes with it, in the same order
 /// its catalog operation removes them.
 fn foreign_server_cascade_lines(kv: &dyn Kv, server: &str) -> Result<Vec<String>, ExecError> {
-    let mut lines = crabka_pgcatalog::list_user_mappings(kv)?
+    let mut lines = krabka_pgcatalog::list_user_mappings(kv)?
         .into_iter()
         .filter(|mapping| mapping.server == server)
         .map(|mapping| {
@@ -487,7 +487,7 @@ fn foreign_server_cascade_lines(kv: &dyn Kv, server: &str) -> Result<Vec<String>
         })
         .collect::<Vec<_>>();
     lines.extend(
-        crabka_pgcatalog::list_tables(kv)?
+        krabka_pgcatalog::list_tables(kv)?
             .into_iter()
             .filter(|table| {
                 table
@@ -517,11 +517,11 @@ pub(crate) fn skipped_create_notice(
     current_user: &str,
     session_user: &str,
     stmt: &Statement,
-) -> Result<Option<crabka_pgwire::error::PgError>, ExecError> {
+) -> Result<Option<krabka_pgwire::error::PgError>, ExecError> {
     /// The relation the skip names, spelled as `PostgreSQL` spells it: bare,
     /// because the statement named it bare too.
-    fn skipped(name: &crabka_pgcatalog::RelationName) -> crabka_pgwire::error::PgError {
-        crabka_pgwire::error::PgError::notice(format!(
+    fn skipped(name: &krabka_pgcatalog::RelationName) -> krabka_pgwire::error::PgError {
+        krabka_pgwire::error::PgError::notice(format!(
             "relation \"{}\" already exists, skipping",
             name.name
         ))
@@ -534,8 +534,8 @@ pub(crate) fn skipped_create_notice(
             if stats.if_not_exists && !stats.name.name.is_empty() =>
         {
             let resolution = resolution();
-            let name = if stats.name.schema.as_deref() == Some(crabka_pgcatalog::PG_TEMP_ALIAS) {
-                crabka_pgcatalog::RelationName::new(
+            let name = if stats.name.schema.as_deref() == Some(krabka_pgcatalog::PG_TEMP_ALIAS) {
+                krabka_pgcatalog::RelationName::new(
                     resolution.temp_schema(),
                     stats.name.name.clone(),
                 )
@@ -547,10 +547,10 @@ pub(crate) fn skipped_create_notice(
                 };
                 name
             };
-            return Ok(crabka_pgcatalog::statistics::get(kv, &name)?
+            return Ok(krabka_pgcatalog::statistics::get(kv, &name)?
                 .is_some()
                 .then(|| {
-                    crabka_pgwire::error::PgError::notice(format!(
+                    krabka_pgwire::error::PgError::notice(format!(
                         "statistics object \"{}\" already exists, skipping",
                         name.name
                     ))
@@ -562,8 +562,8 @@ pub(crate) fn skipped_create_notice(
             elements,
             ..
         } if elements.is_empty() => {
-            return Ok(crabka_pgcatalog::schema_exists(kv, name)?.then(|| {
-                crabka_pgwire::error::PgError::notice(format!(
+            return Ok(krabka_pgcatalog::schema_exists(kv, name)?.then(|| {
+                krabka_pgwire::error::PgError::notice(format!(
                     "schema \"{name}\" already exists, skipping"
                 ))
             }));
@@ -573,8 +573,8 @@ pub(crate) fn skipped_create_notice(
             if_not_exists: true,
             ..
         } => {
-            return Ok(crabka_pgcatalog::get_server(kv, name).is_ok().then(|| {
-                crabka_pgwire::error::PgError::notice(format!(
+            return Ok(krabka_pgcatalog::get_server(kv, name).is_ok().then(|| {
+                krabka_pgwire::error::PgError::notice(format!(
                     "server \"{name}\" already exists, skipping"
                 ))
             }));
@@ -585,22 +585,22 @@ pub(crate) fn skipped_create_notice(
             if_not_exists: true,
             ..
         } => {
-            use crabka_pgparser::ast::RoleSpec;
+            use krabka_pgparser::ast::RoleSpec;
             let user = match user {
                 RoleSpec::Name(name) => name.as_str(),
                 RoleSpec::CurrentUser | RoleSpec::CurrentRole => current_user,
                 RoleSpec::SessionUser => session_user,
-                RoleSpec::Public => crabka_pgcatalog::PUBLIC_ROLE,
+                RoleSpec::Public => krabka_pgcatalog::PUBLIC_ROLE,
             };
-            if !crabka_pgcatalog::role_is_nameable(kv, user)?
-                || crabka_pgcatalog::get_server(kv, server).is_err()
+            if !krabka_pgcatalog::role_is_nameable(kv, user)?
+                || krabka_pgcatalog::get_server(kv, server).is_err()
             {
                 return Ok(None);
             }
-            return Ok(crabka_pgcatalog::get_user_mapping(kv, user, server)
+            return Ok(krabka_pgcatalog::get_user_mapping(kv, user, server)
                 .is_ok()
                 .then(|| {
-                    crabka_pgwire::error::PgError::notice(format!(
+                    krabka_pgwire::error::PgError::notice(format!(
                         "user mapping for \"{user}\" already exists for server \"{server}\", skipping"
                     ))
                 }));
@@ -612,13 +612,13 @@ pub(crate) fn skipped_create_notice(
             table,
             if_not_exists: true,
             ..
-        } if table.schema.is_none() && table.name == "__crabka_sequence__" => {
+        } if table.schema.is_none() && table.name == "__krabka_sequence__" => {
             let resolution = &resolution();
             let Ok(name) = resolve_relation(kv, resolution, name, SchemaDisposition::Creation)
             else {
                 return Ok(None);
             };
-            return Ok(crabka_pgcatalog::get_sequence(kv, &name)
+            return Ok(krabka_pgcatalog::get_sequence(kv, &name)
                 .is_ok()
                 .then(|| skipped(&name)));
         }
@@ -638,7 +638,7 @@ pub(crate) fn skipped_create_notice(
                 return Ok(None);
             };
             let index = table.sibling(&index.name);
-            return Ok(crabka_pgcatalog::get_index(kv, &index)
+            return Ok(krabka_pgcatalog::get_index(kv, &index)
                 .is_ok()
                 .then(|| skipped(&index)));
         }
@@ -663,7 +663,7 @@ pub(crate) fn skipped_create_notice(
     else {
         return Ok(None);
     };
-    Ok(crabka_pgcatalog::get_table(kv, &name)
+    Ok(krabka_pgcatalog::get_table(kv, &name)
         .is_ok()
         .then(|| skipped(&name)))
 }
@@ -676,9 +676,9 @@ pub(crate) fn skipped_drop_notice(
     current_user: &str,
     session_user: &str,
     stmt: &Statement,
-) -> Result<Option<crabka_pgwire::error::PgError>, ExecError> {
+) -> Result<Option<krabka_pgwire::error::PgError>, ExecError> {
     let missing = |kind: &str, name: &str| {
-        crabka_pgwire::error::PgError::notice(format!("{kind} \"{name}\" does not exist, skipping"))
+        krabka_pgwire::error::PgError::notice(format!("{kind} \"{name}\" does not exist, skipping"))
     };
     match stmt {
         Statement::AlterStatistics {
@@ -691,7 +691,7 @@ pub(crate) fn skipped_drop_notice(
             else {
                 return Ok(None);
             };
-            Ok(crabka_pgcatalog::statistics::get(kv, &name)?
+            Ok(krabka_pgcatalog::statistics::get(kv, &name)?
                 .is_none()
                 .then(|| missing("statistics object", &name.name)))
         }
@@ -701,8 +701,8 @@ pub(crate) fn skipped_drop_notice(
         } => {
             let resolution = resolution();
             for written in names {
-                let name = if written.schema.as_deref() == Some(crabka_pgcatalog::PG_TEMP_ALIAS) {
-                    crabka_pgcatalog::RelationName::new(
+                let name = if written.schema.as_deref() == Some(krabka_pgcatalog::PG_TEMP_ALIAS) {
+                    krabka_pgcatalog::RelationName::new(
                         resolution.temp_schema(),
                         written.name.clone(),
                     )
@@ -714,7 +714,7 @@ pub(crate) fn skipped_drop_notice(
                     };
                     name
                 };
-                if crabka_pgcatalog::statistics::get(kv, &name)?.is_none() {
+                if krabka_pgcatalog::statistics::get(kv, &name)?.is_none() {
                     return Ok(Some(missing("statistics object", &name.name)));
                 }
             }
@@ -724,14 +724,14 @@ pub(crate) fn skipped_drop_notice(
             name,
             if_exists: true,
             ..
-        } => Ok(crabka_pgcatalog::get_fdw(kv, name)
+        } => Ok(krabka_pgcatalog::get_fdw(kv, name)
             .is_err()
             .then(|| missing("foreign-data wrapper", name))),
         Statement::DropServer {
             name,
             if_exists: true,
             ..
-        } => Ok(crabka_pgcatalog::get_server(kv, name)
+        } => Ok(krabka_pgcatalog::get_server(kv, name)
             .is_err()
             .then(|| missing("server", name))),
         Statement::DropForeignTable {
@@ -765,7 +765,7 @@ pub(crate) fn skipped_drop_notice(
                         return Ok((*if_exists).then(|| missing("relation", &name.name)));
                     }
                     let needs_table = actions.iter().any(|action| {
-                        use crabka_pgparser::ast::AlterTableAction;
+                        use krabka_pgparser::ast::AlterTableAction;
                         matches!(
                             action,
                             AlterTableAction::AddColumn {
@@ -783,22 +783,22 @@ pub(crate) fn skipped_drop_notice(
                     if !needs_table {
                         return Ok(None);
                     }
-                    let table = match crabka_pgcatalog::get_table(kv, &name) {
+                    let table = match krabka_pgcatalog::get_table(kv, &name) {
                         Ok(table) => table,
-                        Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => {
+                        Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => {
                             return Ok(None);
                         }
                         Err(error) => return Err(error.into()),
                     };
                     for action in actions {
-                        use crabka_pgparser::ast::AlterTableAction;
+                        use krabka_pgparser::ast::AlterTableAction;
                         match action {
                             AlterTableAction::AddColumn {
                                 if_not_exists: true,
                                 column,
                                 ..
                             } if table.column_index(&column.name).is_some() => {
-                                return Ok(Some(crabka_pgwire::error::PgError::notice(format!(
+                                return Ok(Some(krabka_pgwire::error::PgError::notice(format!(
                                     "column \"{}\" of relation \"{}\" already exists, skipping",
                                     column.name, name.name
                                 ))));
@@ -808,7 +808,7 @@ pub(crate) fn skipped_drop_notice(
                                 if_exists: true,
                                 ..
                             } if table.column_index(column).is_none() => {
-                                return Ok(Some(crabka_pgwire::error::PgError::notice(format!(
+                                return Ok(Some(krabka_pgwire::error::PgError::notice(format!(
                                     "column \"{column}\" of relation \"{}\" does not exist, skipping",
                                     name.name
                                 ))));
@@ -818,7 +818,7 @@ pub(crate) fn skipped_drop_notice(
                                 if_exists: true,
                                 ..
                             } if !table.checks.iter().any(|check| check.name == *constraint) => {
-                                return Ok(Some(crabka_pgwire::error::PgError::notice(format!(
+                                return Ok(Some(krabka_pgwire::error::PgError::notice(format!(
                                     "constraint \"{constraint}\" of relation \"{}\" does not exist, skipping",
                                     name.name
                                 ))));
@@ -837,23 +837,23 @@ pub(crate) fn skipped_drop_notice(
             if_exists: true,
             ..
         } => {
-            use crabka_pgparser::ast::RoleSpec;
+            use krabka_pgparser::ast::RoleSpec;
             let user = match user {
                 RoleSpec::Name(name) => name.as_str(),
                 RoleSpec::CurrentUser | RoleSpec::CurrentRole => current_user,
                 RoleSpec::SessionUser => session_user,
-                RoleSpec::Public => crabka_pgcatalog::PUBLIC_ROLE,
+                RoleSpec::Public => krabka_pgcatalog::PUBLIC_ROLE,
             };
-            if !crabka_pgcatalog::role_is_nameable(kv, user)? {
+            if !krabka_pgcatalog::role_is_nameable(kv, user)? {
                 return Ok(Some(missing("role", user)));
             }
-            if crabka_pgcatalog::get_server(kv, server).is_err() {
+            if krabka_pgcatalog::get_server(kv, server).is_err() {
                 return Ok(Some(missing("server", server)));
             }
-            Ok(crabka_pgcatalog::get_user_mapping(kv, user, server)
+            Ok(krabka_pgcatalog::get_user_mapping(kv, user, server)
                 .is_err()
                 .then(|| {
-                    crabka_pgwire::error::PgError::notice(format!(
+                    krabka_pgwire::error::PgError::notice(format!(
                         "user mapping for \"{user}\" does not exist for server \"{server}\", skipping"
                     ))
                 }))
@@ -905,7 +905,7 @@ pub(crate) fn cascade_notice(mut lines: Vec<String>) -> Option<(String, Option<S
 pub(crate) fn cascade_line(
     kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
-    name: &crabka_pgcatalog::RelationName,
+    name: &krabka_pgcatalog::RelationName,
 ) -> String {
     format!(
         "drop cascades to {} {}",
@@ -921,9 +921,9 @@ pub(crate) fn cascade_line(
 pub(crate) fn message_relation_name(
     kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
-    name: &crabka_pgcatalog::RelationName,
+    name: &krabka_pgcatalog::RelationName,
 ) -> String {
-    let bare = crabka_pgparser::ast::RelationRef::bare(name.name.clone());
+    let bare = krabka_pgparser::ast::RelationRef::bare(name.name.clone());
     let visible = resolve_relation(kv, resolution, &bare, SchemaDisposition::Reference)
         .is_ok_and(|resolved| resolved == *name);
     let printed = crate::catalog_fn::quote_identifier(&name.name);
@@ -950,10 +950,10 @@ pub(crate) fn schema_cascade_lines(
     resolution: &crate::relname::ResolutionScope,
     schema: &str,
 ) -> Result<Vec<String>, ExecError> {
-    if !crabka_pgcatalog::schema_exists(kv, schema)? {
+    if !krabka_pgcatalog::schema_exists(kv, schema)? {
         return Ok(Vec::new());
     }
-    let contents = crabka_pgcatalog::schema_contents(kv, schema)?;
+    let contents = krabka_pgcatalog::schema_contents(kv, schema)?;
     let mut roots = Vec::new();
     // A `SERIAL` or identity column's sequence belongs to the column rather
     // than to the schema: upstream records it as an *internal* dependency, and
@@ -962,7 +962,7 @@ pub(crate) fn schema_cascade_lines(
     // reported like any other relation.
     let mut owned = HashSet::new();
     for name in &contents {
-        if let Ok(table) = crabka_pgcatalog::get_table(kv, name) {
+        if let Ok(table) = krabka_pgcatalog::get_table(kv, name) {
             owned.extend(table.columns.iter().filter_map(
                 |column| match column.default.as_ref()? {
                     ColumnDefault::NextVal(sequence) => Some(sequence.clone()),
@@ -977,16 +977,16 @@ pub(crate) fn schema_cascade_lines(
             continue;
         }
         roots.push((
-            crabka_pgcatalog::creation_order(kv, name)?.unwrap_or(u64::MAX),
+            krabka_pgcatalog::creation_order(kv, name)?.unwrap_or(u64::MAX),
             name.clone(),
             cascade_line(kv, resolution, name),
         ));
     }
-    let mut seen: HashSet<crabka_pgcatalog::RelationName> = HashSet::new();
+    let mut seen: HashSet<krabka_pgcatalog::RelationName> = HashSet::new();
     // A composite, enum or domain type goes with its schema too, and every one
     // of the three is `type` in this message — `DROP SCHEMA` over a domain
     // reports `drop cascades to type s.d`, not `domain`.
-    let types = crabka_pgcatalog::list_user_types(kv)?;
+    let types = krabka_pgcatalog::list_user_types(kv)?;
     let visible = resolution.visible_schemas(kv)?;
     for user_type in types.iter().filter(|ty| ty.schema == schema) {
         // Type visibility is its own question — the search path is the same,
@@ -1007,9 +1007,9 @@ pub(crate) fn schema_cascade_lines(
                 crate::catalog_fn::quote_identifier(&user_type.schema)
             )
         };
-        let type_name = crabka_pgcatalog::RelationName::new(&user_type.schema, &user_type.name);
+        let type_name = krabka_pgcatalog::RelationName::new(&user_type.schema, &user_type.name);
         roots.push((
-            crabka_pgcatalog::creation_order(kv, &type_name)?.unwrap_or(u64::MAX),
+            krabka_pgcatalog::creation_order(kv, &type_name)?.unwrap_or(u64::MAX),
             type_name,
             format!("drop cascades to type {name}"),
         ));

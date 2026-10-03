@@ -42,13 +42,13 @@
 
 use std::fmt::Write as _;
 
-use crabka_pgparser::ast::{
+use krabka_pgparser::ast::{
     ArraySubscript, BinaryOp, DistinctClause, Expr, FrameBound, FrameExclusion, FrameMode,
     FuncArgs, FuncCall, GroupItem, JoinConstraint, JoinKind, OrderItem, QueryBody, QueryExpr,
     SelectItem, SelectStmt, SetExpr, SetOp, TableExpr, UnaryOp, ValuesStmt, WindowCall, WindowRef,
     WindowSpec,
 };
-use crabka_pgtypes::{ColumnType, Datum};
+use krabka_pgtypes::{ColumnType, Datum};
 
 use crate::catalog_fn::quote_identifier;
 
@@ -75,9 +75,9 @@ struct Ctx<'a> {
     /// `AS "?column?"`.
     colnames: bool,
     /// The `SELECT`'s window calls. Each one is held outside the expression
-    /// tree, with a [`crabka_pgparser::ast::window_placeholder`] standing in
+    /// tree, with a [`krabka_pgparser::ast::window_placeholder`] standing in
     /// for it, so rendering a select list needs them alongside.
-    window_calls: &'a [crabka_pgparser::ast::WindowCall],
+    window_calls: &'a [krabka_pgparser::ast::WindowCall],
     /// `ruleutils.c`'s `indentLevel` at this point in the tree. A query's
     /// clause keywords sit at the level it was *entered* with; writing `SELECT`
     /// deepens it by one step, which is why every sub-query — a derived table,
@@ -90,7 +90,7 @@ struct Ctx<'a> {
     /// `date` or `timestamptz` constant deparses to depends on `IntervalStyle`,
     /// `DateStyle` and `TimeZone` at the moment the definition is asked for —
     /// not at the moment it was stored.
-    style: crabka_pgtypes::encoding::OutputStyle<'a>,
+    style: krabka_pgtypes::encoding::OutputStyle<'a>,
 }
 
 /// `ruleutils.c`'s `PRETTYINDENT_STD`: one nesting step.
@@ -144,7 +144,7 @@ pub(crate) fn write_query(
     names: &[String],
     pretty: bool,
     wrap: Option<usize>,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) {
     let ctx = Ctx {
         pretty,
@@ -167,7 +167,7 @@ pub(crate) fn write_query_with_qualifiers(
     names: &[String],
     pretty: bool,
     wrap: Option<usize>,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) {
     let ctx = Ctx {
         pretty,
@@ -188,7 +188,7 @@ pub(crate) fn write_rule_query_with_qualifiers(
     query: &QueryExpr,
     names: &[String],
     pretty: bool,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) {
     write_query_at(
         out,
@@ -265,12 +265,12 @@ fn write_with_clause(out: &mut String, query: &QueryExpr, ctx: Ctx<'_>) {
         out.push('(');
         out.push_str(&clause_break(body.indent, 0));
         match &cte.body {
-            crabka_pgparser::ast::CteBody::Query(inner) => {
+            krabka_pgparser::ast::CteBody::Query(inner) => {
                 write_query_at(out, inner, &[], body);
             }
             // A data-modifying entry cannot reach a stored view — `CREATE VIEW`
             // refuses one — so its text is echoed rather than deparsed.
-            crabka_pgparser::ast::CteBody::Dml(_) => out.push_str("..."),
+            krabka_pgparser::ast::CteBody::Dml(_) => out.push_str("..."),
         }
         out.push_str(&clause_break(body.indent, 0));
         out.push(')');
@@ -328,7 +328,7 @@ fn write_with_clause(out: &mut String, query: &QueryExpr, ctx: Ctx<'_>) {
 /// it a level down.
 pub(crate) fn expression_text(
     expr: &Expr,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> String {
     expr_text(
         expr,
@@ -349,7 +349,7 @@ pub(crate) fn expression_text(
 /// view definition.
 pub(crate) fn expression_text_pretty(
     expr: &Expr,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> String {
     expr_text(
         expr,
@@ -372,7 +372,7 @@ pub(crate) fn expression_text_pretty(
 /// semantic rather than optional display noise.
 pub(crate) fn expression_text_with_qualifiers(
     expr: &Expr,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> String {
     expr_text(
         expr,
@@ -394,7 +394,7 @@ pub(crate) fn expression_text_with_qualifier(
     expr: &Expr,
     qualifier: &str,
     pretty: bool,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> String {
     expr_text(
         expr,
@@ -1099,7 +1099,7 @@ fn from_text(item: &TableExpr, ctx: Ctx<'_>) -> String {
 /// rule has to round-trip, so the list is part of the call, not part of the
 /// alias.
 fn func_item_text(
-    call: &crabka_pgparser::ast::TableFuncCall,
+    call: &krabka_pgparser::ast::TableFuncCall,
     with_defs: bool,
     ctx: Ctx<'_>,
 ) -> String {
@@ -1127,7 +1127,7 @@ fn func_item_text(
 }
 
 /// `a integer, b text` — a column-definition list's body.
-fn column_def_text(defs: &[crabka_pgparser::ast::TableFuncColumnDef]) -> String {
+fn column_def_text(defs: &[krabka_pgparser::ast::TableFuncColumnDef]) -> String {
     defs.iter()
         .map(|def| format!("{} {}", quote_identifier(&def.name), def.ty.name()))
         .collect::<Vec<_>>()
@@ -1139,7 +1139,7 @@ fn column_def_text(defs: &[crabka_pgparser::ast::TableFuncColumnDef]) -> String 
 /// `PostgreSQL` lays this out over many lines; crabka prints one, which
 /// round-trips through the parser — the property a stored rule actually needs —
 /// without claiming byte-identical rule text.
-fn json_table_text(table: &crabka_pgparser::ast::JsonTable, ctx: Ctx<'_>) -> String {
+fn json_table_text(table: &krabka_pgparser::ast::JsonTable, ctx: Ctx<'_>) -> String {
     let mut out = String::from("JSON_TABLE(");
     let _ = write!(out, "{}, ", expr_text(&table.context, ctx));
     out.push_str(&quote_json_path(&table.path));
@@ -1179,8 +1179,8 @@ fn json_table_text(table: &crabka_pgparser::ast::JsonTable, ctx: Ctx<'_>) -> Str
 }
 
 /// An `XMLTABLE(…)` FROM item, rendered in a compact form that round-trips.
-fn xml_table_text(table: &crabka_pgparser::ast::XmlTable, ctx: Ctx<'_>) -> String {
-    use crabka_pgparser::ast::XmlTableColumn;
+fn xml_table_text(table: &krabka_pgparser::ast::XmlTable, ctx: Ctx<'_>) -> String {
+    use krabka_pgparser::ast::XmlTableColumn;
 
     let mut out = String::from("XMLTABLE(");
     if !table.namespaces.is_empty() {
@@ -1243,10 +1243,10 @@ fn xml_table_text(table: &crabka_pgparser::ast::XmlTable, ctx: Ctx<'_>) -> Strin
 }
 
 fn json_table_columns_text(
-    columns: &[crabka_pgparser::ast::JsonTableColumn],
+    columns: &[krabka_pgparser::ast::JsonTableColumn],
     ctx: Ctx<'_>,
 ) -> String {
-    use crabka_pgparser::ast::JsonTableColumn;
+    use krabka_pgparser::ast::JsonTableColumn;
 
     columns
         .iter()
@@ -1287,10 +1287,10 @@ fn json_table_columns_text(
 }
 
 fn json_table_value_column_text(
-    column: &crabka_pgparser::ast::JsonTableValueColumn,
+    column: &krabka_pgparser::ast::JsonTableValueColumn,
     ctx: Ctx<'_>,
 ) -> String {
-    use crabka_pgparser::ast::JsonWrapper;
+    use krabka_pgparser::ast::JsonWrapper;
 
     let mut text = format!("{} {}", quote_identifier(&column.name), column.ty.name());
     if column.format_json {
@@ -1319,8 +1319,8 @@ fn json_table_value_column_text(
     text
 }
 
-fn json_behavior_text(behavior: &crabka_pgparser::ast::JsonBehavior, ctx: Ctx<'_>) -> String {
-    use crabka_pgparser::ast::JsonBehavior;
+fn json_behavior_text(behavior: &krabka_pgparser::ast::JsonBehavior, ctx: Ctx<'_>) -> String {
+    use krabka_pgparser::ast::JsonBehavior;
 
     match behavior {
         JsonBehavior::Error => "ERROR".into(),
@@ -1424,10 +1424,10 @@ fn expr_text(expr: &Expr, ctx: Ctx<'_>) -> String {
         // A window call is held beside the select list rather than in it, so the
         // placeholder standing in its place is written back as the call.
         Expr::Column { .. }
-            if crabka_pgparser::ast::window_placeholder_index(expr)
+            if krabka_pgparser::ast::window_placeholder_index(expr)
                 .is_some_and(|index| index < ctx.window_calls.len()) =>
         {
-            let index = crabka_pgparser::ast::window_placeholder_index(expr)
+            let index = krabka_pgparser::ast::window_placeholder_index(expr)
                 .expect("the guard already matched a placeholder");
             window_call_text(&ctx.window_calls[index], ctx)
         }
@@ -2131,7 +2131,7 @@ fn case_text(
 pub(crate) fn const_text(
     value: &Datum,
     ty: ColumnType,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> String {
     match value {
         Datum::Null => format!("NULL::{}", ty.name()),
@@ -2166,8 +2166,8 @@ fn binary_op_text(op: BinaryOp) -> &'static str {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgcatalog::{Column, RelationName, View};
-    use crabka_pgtypes::ColumnType;
+    use krabka_pgcatalog::{Column, RelationName, View};
+    use krabka_pgtypes::ColumnType;
 
     /// [`crate::catalog_fn::view_definition_text`] in a session that has left
     /// every output style at its default. A test that needs a *non*-default one
@@ -2177,7 +2177,7 @@ mod tests {
         crate::catalog_fn::view_definition_text(
             view,
             pretty,
-            crabka_pgtypes::encoding::OutputStyle::with_zone(&utc),
+            krabka_pgtypes::encoding::OutputStyle::with_zone(&utc),
         )
     }
 
@@ -2185,12 +2185,12 @@ mod tests {
         View {
             name: RelationName::public("v"),
             definition: definition.into(),
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             columns: columns
                 .iter()
                 .map(|name| Column::new(*name, ColumnType::Int4))
                 .collect(),
-            options: crabka_pgcatalog::ViewOptions::default(),
+            options: krabka_pgcatalog::ViewOptions::default(),
         }
     }
 
@@ -2570,24 +2570,24 @@ mod tests {
     #[test]
     fn a_typed_null_is_one_constant() {
         let utc = jiff::tz::TimeZone::UTC;
-        let expression = crabka_pgparser::ast::Expr::Cast {
-            expr: Box::new(crabka_pgparser::ast::Expr::NullLiteral),
+        let expression = krabka_pgparser::ast::Expr::Cast {
+            expr: Box::new(krabka_pgparser::ast::Expr::NullLiteral),
             ty: ColumnType::Int4,
         };
         assert!(
             super::expression_text(
                 &expression,
-                crabka_pgtypes::encoding::OutputStyle::with_zone(&utc),
+                krabka_pgtypes::encoding::OutputStyle::with_zone(&utc),
             ) == "NULL::integer"
         );
-        let modified_string = crabka_pgparser::ast::Expr::Cast {
-            expr: Box::new(crabka_pgparser::ast::Expr::StringLiteral("a".into())),
+        let modified_string = krabka_pgparser::ast::Expr::Cast {
+            expr: Box::new(krabka_pgparser::ast::Expr::StringLiteral("a".into())),
             ty: ColumnType::Varchar(Some(2)),
         };
         assert!(
             super::expression_text(
                 &modified_string,
-                crabka_pgtypes::encoding::OutputStyle::with_zone(&utc),
+                krabka_pgtypes::encoding::OutputStyle::with_zone(&utc),
             ) == "('a'::text)::character varying(2)"
         );
     }
@@ -2603,9 +2603,9 @@ mod tests {
             &["z"],
         );
         let utc = jiff::tz::TimeZone::UTC;
-        let verbose = crabka_pgtypes::encoding::OutputStyle {
-            interval_style: crabka_pgtypes::datetime::IntervalStyle::PostgresVerbose,
-            ..crabka_pgtypes::encoding::OutputStyle::with_zone(&utc)
+        let verbose = krabka_pgtypes::encoding::OutputStyle {
+            interval_style: krabka_pgtypes::datetime::IntervalStyle::PostgresVerbose,
+            ..krabka_pgtypes::encoding::OutputStyle::with_zone(&utc)
         };
         assert!(
             crate::catalog_fn::view_definition_text(&view, true, verbose)
@@ -2768,9 +2768,9 @@ mod tests {
             ),
         ];
         for (source, expected) in cases {
-            let expr = crabka_pgparser::parser::parse_expression(source).expect("parse");
+            let expr = krabka_pgparser::parser::parse_expression(source).expect("parse");
             let utc = jiff::tz::TimeZone::UTC;
-            let style = crabka_pgtypes::encoding::OutputStyle::with_zone(&utc);
+            let style = krabka_pgtypes::encoding::OutputStyle::with_zone(&utc);
             assert!(super::expression_text(&expr, style) == expected, "{source}");
         }
     }

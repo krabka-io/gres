@@ -142,7 +142,7 @@ pub enum AcquireError {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LockKey {
     /// A heap row: `(table, rowid)`.
-    Row(crabka_pgcatalog::TableId, u64),
+    Row(krabka_pgcatalog::TableId, u64),
     /// A unique local index key: the encoded index-entry prefix
     /// (`secondary_index_entry_prefix(table, index, values)`), a deterministic
     /// identity for `(table, index, key values)`. This serializes the
@@ -151,7 +151,7 @@ pub enum LockKey {
     /// A relation whose ordinary writes run SHARED with unique-index backfill
     /// running EXCLUSIVE. Session ownership makes same-transaction upgrades
     /// atomic and keeps its waits in the ordinary row-lock deadlock graph.
-    UniqueIndexRelation(crabka_pgcatalog::TableId),
+    UniqueIndexRelation(krabka_pgcatalog::TableId),
 }
 
 struct HeldLock {
@@ -197,7 +197,7 @@ impl RowLockManager {
     #[cfg(test)]
     pub(crate) fn try_acquire(
         &self,
-        table: crabka_pgcatalog::TableId,
+        table: krabka_pgcatalog::TableId,
         rowid: u64,
         mode: LockMode,
         my_xid: u64,
@@ -207,7 +207,7 @@ impl RowLockManager {
 
     pub(crate) fn try_acquire_as(
         &self,
-        table: crabka_pgcatalog::TableId,
+        table: krabka_pgcatalog::TableId,
         rowid: u64,
         mode: LockMode,
         owner: LockOwner,
@@ -239,7 +239,7 @@ impl RowLockManager {
     /// `effective_global_xid` fence cannot enforce under apply lag.
     pub(crate) fn reacquire_exclusive(
         &self,
-        table: crabka_pgcatalog::TableId,
+        table: krabka_pgcatalog::TableId,
         rowid: u64,
         my_xid: u64,
     ) {
@@ -267,7 +267,7 @@ impl RowLockManager {
     /// [`Self::acquire_key`].
     pub async fn acquire(
         &self,
-        table: crabka_pgcatalog::TableId,
+        table: krabka_pgcatalog::TableId,
         rowid: u64,
         mode: LockMode,
         my_xid: u64,
@@ -279,7 +279,7 @@ impl RowLockManager {
 
     pub(crate) async fn acquire_as(
         &self,
-        table: crabka_pgcatalog::TableId,
+        table: krabka_pgcatalog::TableId,
         rowid: u64,
         mode: LockMode,
         owner: LockOwner,
@@ -486,7 +486,7 @@ impl RowLockManager {
             .collect()
     }
 
-    pub(crate) fn row_holds(&self) -> Vec<(crabka_pgcatalog::TableId, u64, LockMode, LockOwner)> {
+    pub(crate) fn row_holds(&self) -> Vec<(krabka_pgcatalog::TableId, u64, LockMode, LockOwner)> {
         self.inner
             .lock()
             .expect("lockmgr")
@@ -623,8 +623,8 @@ pub struct SessionLockId(pub u64);
 /// The catalog relation an S3 relation lock protects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RelationLockTarget {
-    Table(crabka_pgcatalog::TableId),
-    Index(crabka_pgcatalog::IndexId),
+    Table(krabka_pgcatalog::TableId),
+    Index(krabka_pgcatalog::IndexId),
 }
 
 /// One live hold the `pg_locks` catalog can expose.
@@ -634,7 +634,7 @@ pub(crate) enum SessionLockSnapshot {
         session: SessionLockId,
         pid: i32,
         target: RelationLockTarget,
-        mode: crabka_pgparser::ast::TableLockMode,
+        mode: krabka_pgparser::ast::TableLockMode,
     },
     Advisory {
         session: SessionLockId,
@@ -645,7 +645,7 @@ pub(crate) enum SessionLockSnapshot {
     Tuple {
         session: SessionLockId,
         pid: i32,
-        table: crabka_pgcatalog::TableId,
+        table: krabka_pgcatalog::TableId,
         rowid: u64,
         shared: bool,
     },
@@ -656,7 +656,7 @@ pub(crate) enum SessionLockSnapshot {
 #[derive(Debug, Clone, Copy)]
 struct TableHold {
     session: SessionLockId,
-    mode: crabka_pgparser::ast::TableLockMode,
+    mode: krabka_pgparser::ast::TableLockMode,
 }
 
 /// S3: relation-level locks with `PostgreSQL`'s eight modes and conflict matrix.
@@ -689,7 +689,7 @@ impl TableLockManager {
         holds: &[(RelationLockTarget, TableHold)],
         target: RelationLockTarget,
         session: SessionLockId,
-        mode: crabka_pgparser::ast::TableLockMode,
+        mode: krabka_pgparser::ast::TableLockMode,
     ) -> Option<SessionLockId> {
         holds
             .iter()
@@ -706,9 +706,9 @@ impl TableLockManager {
     /// conflicting mode.
     pub fn acquire(
         &self,
-        table: crabka_pgcatalog::TableId,
+        table: krabka_pgcatalog::TableId,
         session: SessionLockId,
-        mode: crabka_pgparser::ast::TableLockMode,
+        mode: krabka_pgparser::ast::TableLockMode,
     ) -> Result<(), TableLockError> {
         self.acquire_relation(RelationLockTarget::Table(table), session, mode)
     }
@@ -717,7 +717,7 @@ impl TableLockManager {
         &self,
         target: RelationLockTarget,
         session: SessionLockId,
-        mode: crabka_pgparser::ast::TableLockMode,
+        mode: krabka_pgparser::ast::TableLockMode,
     ) -> Result<(), TableLockError> {
         let mut holds = self.holds.lock().expect("table lock manager");
         if Self::conflicting_holder(&holds, target, session, mode).is_some() {
@@ -763,9 +763,9 @@ impl TableLockManager {
     #[must_use]
     pub fn held_modes(
         &self,
-        table: crabka_pgcatalog::TableId,
+        table: krabka_pgcatalog::TableId,
         session: SessionLockId,
-    ) -> Vec<crabka_pgparser::ast::TableLockMode> {
+    ) -> Vec<krabka_pgparser::ast::TableLockMode> {
         let mut modes: Vec<_> = self
             .holds
             .lock()
@@ -1024,7 +1024,7 @@ impl SessionLocks {
 #[cfg(test)]
 mod session_lock_tests {
     use assert2::assert;
-    use crabka_pgparser::ast::TableLockMode;
+    use krabka_pgparser::ast::TableLockMode;
 
     use super::*;
 

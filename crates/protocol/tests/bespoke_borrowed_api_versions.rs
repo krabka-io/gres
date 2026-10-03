@@ -3,7 +3,7 @@
 // wrapper.
 
 use bytes::BytesMut;
-use crabka_protocol::{
+use krabka_protocol::{
     DecodeBorrow, Encode, UnknownTaggedFields, borrowed::api_versions_request::ApiVersionsRequest,
 };
 
@@ -25,7 +25,7 @@ fn borrowed_api_versions_request_v3_roundtrip() {
 
 #[test]
 fn borrowed_api_versions_request_to_owned_matches_owned_codec() {
-    use crabka_protocol::Encode as OwnedEncode;
+    use krabka_protocol::Encode as OwnedEncode;
     let req = ApiVersionsRequest {
         client_software_name: "crabka",
         client_software_version: "0.0.0",

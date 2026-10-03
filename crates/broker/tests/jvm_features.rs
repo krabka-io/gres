@@ -22,8 +22,8 @@
 use std::process::Command;
 
 use assert2::assert;
-use crabka_broker::{Broker, BrokerConfig, BrokerHandle};
-use crabka_log::LogConfig;
+use krabka_broker::{Broker, BrokerConfig, BrokerHandle};
+use krabka_log::LogConfig;
 
 const BOOTSTRAP: &str = "host.docker.internal:9092";
 const LISTEN: &str = "0.0.0.0:9092";
@@ -44,7 +44,7 @@ async fn start_host_broker() -> (BrokerHandle, tempfile::TempDir) {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("crabka_broker=info,warn")),
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("krabka_broker=info,warn")),
         )
         .with_test_writer()
         .try_init();
@@ -57,19 +57,19 @@ async fn start_host_broker() -> (BrokerHandle, tempfile::TempDir) {
         advertised_listener: BOOTSTRAP.into(),
         log_dir: dir.path().to_path_buf(),
         log_config: LogConfig::default(),
-        node_id: crabka_broker::NodeId(1),
+        node_id: krabka_broker::NodeId(1),
         directory_id: DIRECTORY_ID,
         controller_listen_addr: controller_addr,
         controller_quorum_voters: vec![(
-            crabka_broker::NodeId(1),
+            krabka_broker::NodeId(1),
             CONTROLLER_BOOTSTRAP.to_string(),
         )],
-        heartbeat_interval: crabka_units::millis(3_000),
-        heartbeat_timeout: crabka_units::millis(9_000),
-        replica_lag_time_max: crabka_units::millis(30_000),
-        controller_election_timeout: crabka_units::secs(5),
-        controller_heartbeat_interval: crabka_units::millis(500),
-        bootstrap_mode: crabka_broker::BootstrapMode::Bootstrap,
+        heartbeat_interval: krabka_units::millis(3_000),
+        heartbeat_timeout: krabka_units::millis(9_000),
+        replica_lag_time_max: krabka_units::millis(30_000),
+        controller_election_timeout: krabka_units::secs(5),
+        controller_heartbeat_interval: krabka_units::millis(500),
+        bootstrap_mode: krabka_broker::BootstrapMode::Bootstrap,
         ..BrokerConfig::default()
     };
     let handle = Broker::start(config).await.expect("start broker");
@@ -79,27 +79,27 @@ async fn start_host_broker() -> (BrokerHandle, tempfile::TempDir) {
 
 /// Start a caught-up controller observer without auto-join. The official JVM
 /// `add-controller` command promotes this exact live identity.
-async fn start_host_observer() -> (crabka_raft::ControllerHandle, tempfile::TempDir) {
+async fn start_host_observer() -> (krabka_raft::ControllerHandle, tempfile::TempDir) {
     let dir = tempfile::tempdir().expect("tempdir");
-    let mut config = crabka_raft::ControllerConfig::for_tests(
-        crabka_raft::NodeId(2),
+    let mut config = krabka_raft::ControllerConfig::for_tests(
+        krabka_raft::NodeId(2),
         dir.path().join("__cluster_metadata"),
     );
     config.directory_id = JOINER_DIRECTORY_ID;
     config.controller_listen_addr = "0.0.0.0:9094".parse().expect("static addr");
-    config.bootstrap_mode = crabka_raft::BootstrapMode::Join;
+    config.bootstrap_mode = krabka_raft::BootstrapMode::Join;
     config.cluster_id = Some(uuid::Uuid::nil());
-    config.initial_voters = crabka_metadata::VoterSet::from_voters([crabka_metadata::Voter {
-        id: crabka_raft::NodeId(1),
+    config.initial_voters = krabka_metadata::VoterSet::from_voters([krabka_metadata::Voter {
+        id: krabka_raft::NodeId(1),
         directory_id: DIRECTORY_ID,
-        endpoints: vec![crabka_metadata::VoterEndpoint {
+        endpoints: vec![krabka_metadata::VoterEndpoint {
             name: "CONTROLLER".into(),
             host: "127.0.0.1".into(),
             port: 9093,
         }],
-        kraft_version: crabka_metadata::KRaftVersionRange { min: 0, max: 1 },
+        kraft_version: krabka_metadata::KRaftVersionRange { min: 0, max: 1 },
     }]);
-    let handle = crabka_raft::Controller::start(config)
+    let handle = krabka_raft::Controller::start(config)
         .await
         .expect("start observer");
     (handle, dir)

@@ -73,7 +73,7 @@ pub(crate) fn resolve_copy_targets(
 /// script as SQL rather than as data.
 pub(crate) fn copy_generated_column(column: &str) -> ExecError {
     ExecError::Remote(
-        crabka_pgwire::error::PgError::error(
+        krabka_pgwire::error::PgError::error(
             "42P10",
             format!("column \"{column}\" is a generated column"),
         )
@@ -328,14 +328,14 @@ pub(super) fn copy_row_width(
         return Ok(());
     }
     let error = match target_idx.get(row.values.len()) {
-        Some(slot) => ExecError::Remote(crabka_pgwire::error::PgError::error(
+        Some(slot) => ExecError::Remote(krabka_pgwire::error::PgError::error(
             "22P04",
             format!(
                 "missing data for column \"{}\"",
                 table.columns[*slot].name.clone()
             ),
         )),
-        None => ExecError::Remote(crabka_pgwire::error::PgError::error(
+        None => ExecError::Remote(krabka_pgwire::error::PgError::error(
             "22P04",
             "extra data after last expected column",
         )),
@@ -469,7 +469,7 @@ pub(super) fn default_value(
         },
         ColumnDefault::Value(value) => Ok(value.clone()),
         ColumnDefault::Expression(source) => {
-            let expr = crabka_pgparser::parser::parse_expression(source)?;
+            let expr = krabka_pgparser::parser::parse_expression(source)?;
             let value = eval_assignment_value(&expr, column.ty, &Scope::empty(), &[], ctx)?;
             coerce_default(value, column.ty, ctx)
         }

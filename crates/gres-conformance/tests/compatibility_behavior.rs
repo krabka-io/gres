@@ -2,35 +2,35 @@ use std::sync::Arc;
 
 use assert2::assert;
 use bytes::Bytes;
-use crabka_gres_conformance::{
+use krabka_gres_conformance::{
     feature_manifest::{FEATURE_PROBES, FeatureBehavior},
     parser_command_report,
 };
-use crabka_pgexec::{
+use krabka_pgexec::{
     ExecError, SqlEngine,
     foreign::{ForeignScanner, ImportFilter, ImportedTable, ScanBounds},
 };
-use crabka_pgtypes::Datum;
-use crabka_pgwire::engine::{BoundParam, Engine, Session};
+use krabka_pgtypes::Datum;
+use krabka_pgwire::engine::{BoundParam, Engine, Session};
 
 struct EmptyImporter;
 
 impl ForeignScanner for EmptyImporter {
     fn scan(
         &self,
-        _table: &crabka_pgcatalog::Table,
-        _server: &crabka_pgcatalog::ForeignServer,
-        _mapping: Option<&crabka_pgcatalog::UserMapping>,
+        _table: &krabka_pgcatalog::Table,
+        _server: &krabka_pgcatalog::ForeignServer,
+        _mapping: Option<&krabka_pgcatalog::UserMapping>,
         _bounds: &ScanBounds,
-        _ctx: &crabka_pgexec::clock::EvalCtx,
+        _ctx: &krabka_pgexec::clock::EvalCtx,
     ) -> Result<Vec<Vec<Datum>>, ExecError> {
         Ok(Vec::new())
     }
 
     fn import_schema(
         &self,
-        _server: &crabka_pgcatalog::ForeignServer,
-        _mapping: Option<&crabka_pgcatalog::UserMapping>,
+        _server: &krabka_pgcatalog::ForeignServer,
+        _mapping: Option<&krabka_pgcatalog::UserMapping>,
         _filter: &ImportFilter,
     ) -> Result<Vec<ImportedTable>, ExecError> {
         Ok(Vec::new())
@@ -305,7 +305,7 @@ async fn every_major_feature_probe_matches_its_typed_behavior() {
     for probe in FEATURE_PROBES {
         if probe.behavior == FeatureBehavior::ParserRejectPending {
             assert!(
-                crabka_pgparser::parse(probe.sql).is_err(),
+                krabka_pgparser::parse(probe.sql).is_err(),
                 "pending feature unexpectedly parses: {}",
                 probe.item,
             );

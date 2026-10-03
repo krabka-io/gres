@@ -7,7 +7,7 @@ without changing its five-minute default.
 
 ## Design
 
-Add `max_time_skew: Time` to `crabka_security::gssapi::GssapiConfig` and pass
+Add `max_time_skew: Time` to `krabka_security::gssapi::GssapiConfig` and pass
 it explicitly to `SspiAcceptor::new`. The acceptor lowers the UOM value to
 `std::time::Duration` only when constructing SSPI `ServerProperties`. Zero is
 valid and means no clock-skew tolerance.

@@ -6,11 +6,11 @@
 use std::sync::Arc;
 
 use assert2::assert;
-use crabka_operator::{
+use http::{Method, Response};
+use krabka_operator::{
     controller::kafka::reconcile,
     crd::{Kafka, KafkaSpec, Listener, ListenerType},
 };
-use http::{Method, Response};
 
 #[path = "shared/mod.rs"]
 mod shared;
@@ -64,7 +64,7 @@ fn kafka_cr(name: &str, namespace: &str) -> Kafka {
 /// - `client_ca_path = "/etc/crabka/cluster-ca/ca.crt"`
 /// - `client_auth = "Required"`
 ///
-/// A parse with `toml::from_str::<crabka_broker::file_config::FileConfig>`
+/// A parse with `toml::from_str::<krabka_broker::file_config::FileConfig>`
 /// must succeed and return `tls_config.is_some() = true`.
 #[tokio::test]
 async fn rendered_broker_config_carries_controller_listener_protocol_ssl_and_tls_block() {
@@ -118,7 +118,7 @@ async fn rendered_broker_config_carries_controller_listener_protocol_ssl_and_tls
     }
 
     // Round-trip parse through the broker's own FileConfig.
-    let parsed: crabka_broker::file_config::FileConfig =
+    let parsed: krabka_broker::file_config::FileConfig =
         toml::from_str(toml_str).expect("broker-0.toml must parse as FileConfig");
     assert!(
         parsed.tls_config.is_some(),
@@ -213,8 +213,8 @@ fn pool_cr_labeled(
     pool_name: &str,
     namespace: &str,
     parent: &str,
-) -> crabka_operator::crd::KafkaNodePool {
-    use crabka_operator::crd::{KafkaNodePool, KafkaNodePoolSpec, NodeRole};
+) -> krabka_operator::crd::KafkaNodePool {
+    use krabka_operator::crd::{KafkaNodePool, KafkaNodePoolSpec, NodeRole};
     let mut pool = KafkaNodePool::new(
         pool_name,
         KafkaNodePoolSpec {
@@ -285,7 +285,7 @@ fn pool_reconcile_rules(parent: &str, pool_name: &str, ns: &str) -> Vec<MockRule
 /// `c1-clients-ca-cert`.
 #[tokio::test]
 async fn statefulset_mounts_cluster_ca_broker_tls_clients_ca() {
-    use crabka_operator::controller::kafka_node_pool::reconcile as pool_reconcile;
+    use krabka_operator::controller::kafka_node_pool::reconcile as pool_reconcile;
 
     let parent = "c1";
     let pool_name = "brokers";

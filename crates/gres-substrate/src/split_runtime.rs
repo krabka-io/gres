@@ -10,7 +10,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use crabka_gres_ranges::{
+use krabka_gres_ranges::{
     CheckpointManifest, InDoubtMarker, RangeId, RangeKey, SplitError, SplitHooks, SplitState,
     SplitStateStore, TableId,
     prologue::{
@@ -19,7 +19,7 @@ use crabka_gres_ranges::{
         SettleOutcome, recover_range,
     },
 };
-use crabka_pgkv::{Kv, MemKv, SnapshotKv, WriteOp, key};
+use krabka_pgkv::{Kv, MemKv, SnapshotKv, WriteOp, key};
 
 use crate::{
     CheckpointConfig, CheckpointFilter, CheckpointService, CheckpointSnapshotSource,
@@ -63,7 +63,7 @@ pub struct RawKvSplitRuntime {
     tenant: String,
     checkpoints: Arc<InMemoryCheckpointStore>,
     ranges: Mutex<BTreeMap<RangeId, Arc<RawKvRange>>>,
-    committed_map: Mutex<Option<crabka_gres_ranges::RangeMap>>,
+    committed_map: Mutex<Option<krabka_gres_ranges::RangeMap>>,
 }
 
 struct RawKvRange {
@@ -246,8 +246,8 @@ impl RawKvSplitRuntime {
                 self.checkpoint_tenant(range),
                 format!("raw-r{range}"),
                 1,
-                crabka_units::bytes(0),
-                crabka_units::kibibytes(1),
+                krabka_units::bytes(0),
+                krabka_units::kibibytes(1),
                 2,
                 std::time::Duration::from_secs(1),
             )

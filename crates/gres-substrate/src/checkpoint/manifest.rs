@@ -442,8 +442,8 @@ mod tests {
 
     #[test]
     fn range_key_layout_uses_range_checkpoint_prefix() {
-        let tenant = crabka_gres_ranges::TenantName::parse("tenant-a").expect("tenant");
-        let dir = ckpt_dir_for_range(&tenant, crabka_gres_ranges::RangeId::new(4), 2, 42, 3);
+        let tenant = krabka_gres_ranges::TenantName::parse("tenant-a").expect("tenant");
+        let dir = ckpt_dir_for_range(&tenant, krabka_gres_ranges::RangeId::new(4), 2, 42, 3);
 
         assert!(dir == "gres/tenant-a/r4/ckpt/0000000002-00000000000000000042-00003/");
         assert!(part_key(&dir, 9) == format!("{dir}part-00009"));

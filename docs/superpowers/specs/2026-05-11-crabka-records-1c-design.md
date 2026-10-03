@@ -7,8 +7,8 @@
 
 ## Summary
 
-Add a typed `RecordBatch` v2 decoder/encoder to `crabka-protocol` that
-consumes `crabka-compression`. After 1c ships, `records` fields in
+Add a typed `RecordBatch` v2 decoder/encoder to `krabka-protocol` that
+consumes `krabka-compression`. After 1c ships, `records` fields in
 generated messages (Produce, Fetch, …) move from opaque `Bytes` to a
 fully typed `RecordBatch` value with decompressed `Record`s exposed.
 
@@ -41,7 +41,7 @@ continue to use the existing owned/borrowed flavor pattern.
 ## Non-goals
 
 - **v0/v1 record batches.** Modern brokers reject them on the wire. Old
-  log segments are a `crabka-log` concern.
+  log segments are a `krabka-log` concern.
 - **Schema-registry / serdes / key-value typing.** Records carry
   `Option<Bytes>` / `Option<&[u8]>` for keys and values.
 - **Streaming / lazy iteration.** Decode materialises a `Vec<Record>`
@@ -134,7 +134,7 @@ flavor pattern remains correct):
 - Per-record bodies inside a `RecordBatch`.
 
 **1c's `RecordBatchHeader` is the canonical use case.** Future fixed-
-layout headers (e.g., RecordBatch v0/v1 in `crabka-log`) get the same
+layout headers (e.g., RecordBatch v0/v1 in `krabka-log`) get the same
 treatment from day one. Existing primitives, codegen-emitted messages,
 and `RequestHeader` are NOT retrofitted — they have variable parts in
 later versions, or are not the hot path.
@@ -157,9 +157,9 @@ crates/protocol/src/records/
 
 - `zerocopy = { workspace = true, features = ["derive"] }`
 - `crc32c = { workspace = true }`
-- `crabka-compression = { workspace = true }`
+- `krabka-compression = { workspace = true }`
 - Mirror-features: `gzip`/`snappy`/`lz4`/`zstd` each forwards to the
-  same feature on `crabka-compression`.
+  same feature on `krabka-compression`.
 
 ---
 
@@ -195,13 +195,13 @@ impl Attributes {
     pub const TRANSACTIONAL_BIT:  i16 = 1 << 4;
     pub const CONTROL_BIT:        i16 = 1 << 5;
 
-    #[must_use] pub fn compression(self) -> crabka_compression::CompressionType { /* low 3 bits */ }
+    #[must_use] pub fn compression(self) -> krabka_compression::CompressionType { /* low 3 bits */ }
     #[must_use] pub fn timestamp_type(self) -> TimestampType { /* bit 3 */ }
     #[must_use] pub fn is_transactional(self) -> bool        { self.0 & Self::TRANSACTIONAL_BIT != 0 }
     #[must_use] pub fn is_control_batch(self) -> bool        { self.0 & Self::CONTROL_BIT != 0 }
 
     // Builders return a new Attributes; chainable.
-    #[must_use] pub fn with_compression(self, c: crabka_compression::CompressionType) -> Self { /* … */ }
+    #[must_use] pub fn with_compression(self, c: krabka_compression::CompressionType) -> Self { /* … */ }
     #[must_use] pub fn with_timestamp_type(self, t: TimestampType) -> Self { /* … */ }
     #[must_use] pub fn with_transactional(self, b: bool) -> Self { /* … */ }
     #[must_use] pub fn with_control(self, b: bool) -> Self { /* … */ }
@@ -334,7 +334,7 @@ via `ref_from_bytes`, then slices the rest of the body as `&'a [u8]` for
 returned by `iter()` point into that same `&'a [u8]`. Pointer identity
 holds across the whole chain.
 
-For a compressed batch, `crabka_compression::decompress` returns a fresh
+For a compressed batch, `krabka_compression::decompress` returns a fresh
 `Bytes`. `RecordBody::Owned(bytes)` holds it; record slices are borrowed
 from the `Bytes`'s contents (which `Bytes::slice` keeps alive as long as
 any reference exists). Pointer identity holds within the decompressed
@@ -362,7 +362,7 @@ pub enum RecordsError {
     RecordParse(String),
 
     #[error("compression: {0}")]
-    Compression(#[from] crabka_compression::CompressionError),
+    Compression(#[from] krabka_compression::CompressionError),
 
     #[error("zerocopy reinterpretation failed")]
     ZerocopyFailure,
@@ -379,7 +379,7 @@ impl From<RecordsError> for crate::ProtocolError {
 
 # 5. Codegen integration
 
-`crabka-protocol-codegen`'s `type_map.rs` already routes the schema
+`krabka-protocol-codegen`'s `type_map.rs` already routes the schema
 type `records` to a Rust type. Update it:
 
 - Owned mapping: `::bytes::Bytes` → `crate::records::RecordBatch`.
@@ -578,11 +578,11 @@ The sub-plan ships when **all** of these hold:
 
 1. `crates/protocol/src/records/` module exists with `header`, `crc`,
    `owned`, `borrowed`, `error` modules.
-2. `crabka-protocol` depends on `crabka-compression` and `zerocopy` and
+2. `krabka-protocol` depends on `krabka-compression` and `zerocopy` and
    `crc32c`. Four mirror-features (`gzip`/`snappy`/`lz4`/`zstd`)
-   forward to `crabka-compression`.
+   forward to `krabka-compression`.
 3. `RecordBatchHeader` is a `zerocopy`-derived `#[repr(C)] FromBytes +
-   KnownLayout + Immutable + Unaligned` struct of size 61 bytes.
+KnownLayout + Immutable + Unaligned` struct of size 61 bytes.
 4. CRC-32C validation on decode (rejects mismatched batches), CRC
    computed correctly on encode (JVM byte-equal).
 5. v2 magic enforced; v0/v1 rejected with `UnsupportedMagic`.
@@ -603,7 +603,7 @@ The sub-plan ships when **all** of these hold:
 12. CodSpeed bench file added; per-codec decode + encode numbers
     recorded.
 13. `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D
-    warnings`, `cargo test --workspace -- --include-ignored` all green.
+warnings`, `cargo test --workspace -- --include-ignored` all green.
 14. CI matrix green on Linux/macOS/Windows.
 15. Rustdoc on every public type in `records::`; crate-level doc updated
     to mention typed RecordBatch.
@@ -624,7 +624,7 @@ The sub-plan ships when **all** of these hold:
   on `RecordBatch::iter()` can yield `(absolute_offset, record)` if
   consumers need it later.
 - **Decompression buffer sizing.** Whether to call
-  `crabka_compression::decompress` directly (allocates a fresh Bytes)
+  `krabka_compression::decompress` directly (allocates a fresh Bytes)
   or expose a pooled-allocator hook. Defer; current allocation behavior
   is good enough for 1c.
 

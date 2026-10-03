@@ -43,7 +43,7 @@ crates/protocol/schemas/
 Only the four schemas that declare wider version ranges in 3.6.2 are
 vendored. Each file is taken verbatim from `kafka.git@3.6.2`, so its
 `validVersions` is whatever 3.6.2 declared (overlap with the modern
-decoder is fine — the wire router only routes the *legacy-exclusive*
+decoder is fine — the wire router only routes the _legacy-exclusive_
 range Produce v0–2 / Fetch v0–3 to the legacy decoder; overlap
 versions go to the modern decoder). Everything else stays in the
 existing top-level layout. The `README.md` records the upstream tag
@@ -112,7 +112,7 @@ range, encode through the legacy response type.
 
 ```rust
 RecordsPayload::Legacy(bytes) => {
-    let batch = crabka_records_legacy::legacy_to_v2(&bytes)?;
+    let batch = krabka_records_legacy::legacy_to_v2(&bytes)?;
     // producer_id, producer_epoch, base_sequence default to -1;
     // is_transactional = false. The bridge sets these.
     // Fall through to the existing v2 storage path with `batch`.
@@ -122,7 +122,7 @@ RecordsPayload::Legacy(bytes) => {
 The match arm is dispatch-by-bytes, not by request version: a v3+
 client may still send a legacy-format payload inside the request, and
 this arm handles both that and the v0-2 path the wire router routed
-through us. `legacy_to_v2` already exists in `crabka-records-legacy`.
+through us. `legacy_to_v2` already exists in `krabka-records-legacy`.
 
 ### Down-conversion (Fetch path)
 
@@ -142,31 +142,31 @@ fn down_convert_for_fetch(batch: &RecordBatch, request_version: i16)
         batch.clone()
     };
     // Drop control records; all other records flow through.
-    let bytes = crabka_records_legacy::v2_to_legacy(&working,
+    let bytes = krabka_records_legacy::v2_to_legacy(&working,
         /* drop_control_records */ true)?;
     Ok(RecordsPayload::Legacy(bytes))
 }
 ```
 
-`v2_to_legacy` is already in `crabka-records-legacy`. Its current
+`v2_to_legacy` is already in `krabka-records-legacy`. Its current
 signature is verified against the crate before plan execution; if it
 does not already filter control records, this slice adds a
 `drop_control_records: bool` parameter (call sites in the broker pass
 `true`; existing call sites elsewhere, if any, pass `false`).
 
-`recompress_zstd_as_snappy` reuses `crabka-compression` codecs: decompress
+`recompress_zstd_as_snappy` reuses `krabka-compression` codecs: decompress
 to the inner v2 record stream, re-emit as a new `RecordBatch` with
 snappy compression set. The records themselves don't change.
 
 ### Error handling
 
-| Failure                                     | Response                          |
-|---------------------------------------------|------------------------------------|
-| `legacy_to_v2` returns parse error          | `CORRUPT_MESSAGE` per partition    |
-| `v2_to_legacy` returns error                | log + close connection (server bug)|
-| Zstd decompress fails during down-conv      | `CORRUPT_MESSAGE` per partition    |
-| Wrong-decoder for version (impossible)      | unreachable; wire router enforces  |
-| Snappy re-compress fails                    | log + close connection (server bug)|
+| Failure                                | Response                            |
+| -------------------------------------- | ----------------------------------- |
+| `legacy_to_v2` returns parse error     | `CORRUPT_MESSAGE` per partition     |
+| `v2_to_legacy` returns error           | log + close connection (server bug) |
+| Zstd decompress fails during down-conv | `CORRUPT_MESSAGE` per partition     |
+| Wrong-decoder for version (impossible) | unreachable; wire router enforces   |
+| Snappy re-compress fails               | log + close connection (server bug) |
 
 ## Testing
 
@@ -174,7 +174,7 @@ snappy compression set. The records themselves don't change.
   for each of the four adapter impls, including the modern-only fields
   that get defaulted.
 - **Codegen snapshot**: add `kafka_3_6_2/{ProduceRequest,ProduceResponse,
-  FetchRequest,FetchResponse}.{owned,borrowed}.rs` under
+FetchRequest,FetchResponse}.{owned,borrowed}.rs` under
   `crates/protocol-codegen/tests/snapshots/`. Driven by extending
   `CURATED` with the new spec set.
 - **Broker integration (`crates/broker/tests/legacy_protocol.rs`, new)**:

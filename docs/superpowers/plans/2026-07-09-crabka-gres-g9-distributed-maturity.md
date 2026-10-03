@@ -6,13 +6,13 @@
 
 **Architecture:** Per the [G-9 design](../specs/2026-07-09-crabka-gres-g9-distributed-maturity-design.md): range 0 becomes a batched monotone timestamp oracle (stride-ahead durable); sharded tables move wholesale to ts-visibility with durable intents and primary-range commit records (superseding their g-timeline path); a light planner seam adds equivalence-preserving pushdown and join strategies; hash sharding is a bucket key-prefix over the existing interval machinery; local then global indexes; a gres-balancer drives split/move/merge through the G-8b orchestrator.
 
-**Tech Stack:** everything G-7/G-8 built, `crabka-rebalancer` as the goal-framework precedent, stateright, the scaling-demo pipeline.
+**Tech Stack:** everything G-7/G-8 built, `krabka-rebalancer` as the goal-framework precedent, stateright, the scaling-demo pipeline.
 
 ## Global Constraints
 
 - **Prerequisites:** G-8a for 9a/9b; G-8b for 9c/9e; G-9a plus the G-6 index breadth cycle for 9d's global half. This is the furthest plan from the tree: **every task re-verifies the seams it names at execution time; the landed code wins over this text and divergences are recorded in commit messages.**
 - **The two invariants every task defends:** TSO grants are monotone across every crash and fence (stride-ahead is load-bearing; its absence must counterexample in the model), and no read ever observes an intent without resolving it through the primary (visibility is `commit_ts ≤ read_ts` — never a guess).
-- **Supersession is clean:** when 9a lands, the G-8a g-timeline path for sharded tables is *deleted* (greenfield rule — no dual stack, no flag); unsharded tables and G-7 cross-range txns are untouched.
+- **Supersession is clean:** when 9a lands, the G-8a g-timeline path for sharded tables is _deleted_ (greenfield rule — no dual stack, no flag); unsharded tables and G-7 cross-range txns are untouched.
 - **Every rewrite proves equivalence:** 9b/9c/9d query-path changes carry property tests against the unoptimized plan; the corpus-through-sharding gate runs continuously.
 - Lints/format/commit/test conventions as in the G-2 plan; ported/extended model and suite names keep their lineage.
 
@@ -24,7 +24,7 @@
 
 **Files:** Create `crates/gres-ranges/src/tso/{oracle,client}.rs`; extend `transport/protocol.rs` (`TsoRpc::Grant { count } → Granted { first_ts, count }`); the oracle runs on the range-0 writer's compute, persisting `max_ts` strides (`/0/meta/max_ts`, a new counter key with max-merge classification) through range 0's `SubstrateCommitter`.
 
-Steps: TDD the stride logic (grants served from memory below the durable stride; crossing it blocks on one append; crash/fence recovery resumes past the stride — an integration test kills the oracle mid-stride and asserts the successor's first grant exceeds every prior grant); TDD client batching (one in-flight Grant amortizing concurrent requests, the group-commit idiom); **TDD the epoch-liveness gate** *(panel amendment C6)*: heartbeat-per-batch/interval on the oracle's transactional session, grants refused after a fenced heartbeat — integration: fence the oracle from a successor while the deposed one still holds connections, assert its next grant errors within one heartbeat interval; Stateright model `tso_monotonicity_model.rs` with the stride-ahead teeth (no-stride variant must produce a regressed-grant counterexample across crash) **plus the live-zombie freshness action** (no-liveness-gate variant must counterexample "no granted read_ts precedes a commit acknowledged before the grant"). Commit `feat(gres): the timestamp oracle`.
+Steps: TDD the stride logic (grants served from memory below the durable stride; crossing it blocks on one append; crash/fence recovery resumes past the stride — an integration test kills the oracle mid-stride and asserts the successor's first grant exceeds every prior grant); TDD client batching (one in-flight Grant amortizing concurrent requests, the group-commit idiom); **TDD the epoch-liveness gate** _(panel amendment C6)_: heartbeat-per-batch/interval on the oracle's transactional session, grants refused after a fenced heartbeat — integration: fence the oracle from a successor while the deposed one still holds connections, assert its next grant errors within one heartbeat interval; Stateright model `tso_monotonicity_model.rs` with the stride-ahead teeth (no-stride variant must produce a regressed-grant counterexample across crash) **plus the live-zombie freshness action** (no-liveness-gate variant must counterexample "no granted read_ts precedes a commit acknowledged before the grant"). Commit `feat(gres): the timestamp oracle`.
 
 ### Task 2: ts-versions, intents, and the prewrite/commit protocol
 
@@ -90,7 +90,7 @@ Commit `feat(gres): range merges`.
 
 Commit `feat(gres): online auto-shard conversion`.
 
-### Task 9: `crabka-gres-balancer`
+### Task 9: `krabka-gres-balancer`
 
 **Files:** Create `crates/gres-balancer/` (internal-crate manifest; **verify the goal-framework shape against `crates/rebalancer` at execution time and mirror its idioms** — goals, plan, dry-run reporting); metrics aggregation into the registry (store size + checkpoint stats + commit rate + scan bytes — all already emitted, wired to records); goals: size ceiling/floor, load skew, **auto-shard conversion thresholds (Task 8b's operation; per-tenant/table disable knob)**, co-location integrity (9c), index placement (9d), compute anti-affinity; executor client calling the G-8b/Task-8/8b orchestrator under rate limits + cooldowns; CLI (`crabka gres balance [--dry-run]`) + operator knobs.
 

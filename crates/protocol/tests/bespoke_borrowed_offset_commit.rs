@@ -2,7 +2,7 @@
 // hand-written wrappers.
 
 use bytes::BytesMut;
-use crabka_protocol::{
+use krabka_protocol::{
     DecodeBorrow, Encode, UnknownTaggedFields,
     borrowed::{
         offset_commit_request::{MAX_VERSION, MIN_VERSION, OffsetCommitRequest},

@@ -8,7 +8,7 @@ replicas per partition via round-robin over registered brokers. Each
 follower broker runs a per-partition replication task that continually
 issues Kafka `Fetch` requests (api_key=1) to the leader with
 `replica_id = self.node_id` set, appending received batches to its
-local `crabka-log`. The on-disk log files on all replicas converge to
+local `krabka-log`. The on-disk log files on all replicas converge to
 byte-equal contents.
 
 This is the smallest slice that demonstrates multi-broker replication
@@ -29,7 +29,7 @@ cross-broker producer routing are each explicitly deferred — see
   proposals.
 - **Leader election on broker failure.** A failed leader's partition
   stays unavailable. Recovery requires the broker to come back. The
-  slice-7 metadata quorum *does* survive metadata-leader failure; this
+  slice-7 metadata quorum _does_ survive metadata-leader failure; this
   slice's deferral is only about **partition** leader failover.
 - **Cross-broker Rust producer routing.** The slice-6 producer still
   uses its bootstrap connection for all Produce requests. JVM clients
@@ -48,16 +48,16 @@ cross-broker producer routing are each explicitly deferred — see
 
 ## Crate layout
 
-No new crates. Everything lives in `crabka-broker`:
+No new crates. Everything lives in `krabka-broker`:
 
-| Module | Status | Responsibility |
-|---|---|---|
-| `handlers/create_topics.rs` | modified | Pre-Raft step: read `controller.current_image().brokers()`, compute round-robin replica assignment per partition, build `V1Topic + V1Partition` records with `replicas` + `leader` baked in. |
-| `handlers/fetch.rs` | modified | Branch on `replica_id`: `< 0` (consumer) → slice-4 path; `≥ 0` (follower) → serve from log without HW filtering (HW filtering is still a no-op in slice 8 either way). |
-| `replicator.rs` | **new** | Per-partition replication task: open a `Connection` to the leader's advertised `host:port`, loop on `Fetch`, append received batches to local log via `crabka-log`. Handle `OFFSET_OUT_OF_RANGE` by truncating to 0 and re-fetching. |
-| `replicator_supervisor.rs` | **new** | Subscribes to the controller's `watch_image()`. On each metadata apply, diffs the desired follower assignments against the running tasks: spawns new, cancels removed via per-task `CancellationToken`. |
-| `broker.rs` | modified | Construct + spawn the supervisor in `Broker::start`. Cancels supervisor in `BrokerHandle::shutdown`. |
-| `error.rs` | modified | Add `BrokerError::Replication(String)` for diagnostic logging. |
+| Module                      | Status   | Responsibility                                                                                                                                                                                                                       |
+| --------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `handlers/create_topics.rs` | modified | Pre-Raft step: read `controller.current_image().brokers()`, compute round-robin replica assignment per partition, build `V1Topic + V1Partition` records with `replicas` + `leader` baked in.                                         |
+| `handlers/fetch.rs`         | modified | Branch on `replica_id`: `< 0` (consumer) → slice-4 path; `≥ 0` (follower) → serve from log without HW filtering (HW filtering is still a no-op in slice 8 either way).                                                               |
+| `replicator.rs`             | **new**  | Per-partition replication task: open a `Connection` to the leader's advertised `host:port`, loop on `Fetch`, append received batches to local log via `krabka-log`. Handle `OFFSET_OUT_OF_RANGE` by truncating to 0 and re-fetching. |
+| `replicator_supervisor.rs`  | **new**  | Subscribes to the controller's `watch_image()`. On each metadata apply, diffs the desired follower assignments against the running tasks: spawns new, cancels removed via per-task `CancellationToken`.                              |
+| `broker.rs`                 | modified | Construct + spawn the supervisor in `Broker::start`. Cancels supervisor in `BrokerHandle::shutdown`.                                                                                                                                 |
+| `error.rs`                  | modified | Add `BrokerError::Replication(String)` for diagnostic logging.                                                                                                                                                                       |
 
 ## Architecture
 
@@ -221,13 +221,13 @@ loop {
 
 **Error handling inside the loop:**
 
-| Per-partition `error_code` | Action |
-|---|---|
-| 0 (`NONE`) | Append every returned batch to local log; loop. |
-| 1 (`OFFSET_OUT_OF_RANGE`) | Truncate local log to 0; re-fetch from `fetch_offset=0` next round. Log at WARN. |
+| Per-partition `error_code`       | Action                                                                                                |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 0 (`NONE`)                       | Append every returned batch to local log; loop.                                                       |
+| 1 (`OFFSET_OUT_OF_RANGE`)        | Truncate local log to 0; re-fetch from `fetch_offset=0` next round. Log at WARN.                      |
 | 3 (`UNKNOWN_TOPIC_OR_PARTITION`) | Leader hasn't materialized this partition yet (CreateTopics-vs-replicator race). Sleep 100 ms; retry. |
-| 6 (`NOT_LEADER_FOR_PARTITION`) | Stop the task; the next supervisor reconcile re-evaluates. Log at WARN. |
-| Transport error | Reconnect with exponential backoff (capped at 5 s). Cancellation aborts the sleep. |
+| 6 (`NOT_LEADER_FOR_PARTITION`)   | Stop the task; the next supervisor reconcile re-evaluates. Log at WARN.                               |
+| Transport error                  | Reconnect with exponential backoff (capped at 5 s). Cancellation aborts the sleep.                    |
 
 ### Leader-side `Fetch` handler
 
@@ -276,7 +276,7 @@ JVM admin client → broker N1: kafka-topics --create
 
 ## Errors
 
-`crabka-broker::BrokerError` gains:
+`krabka-broker::BrokerError` gains:
 
 ```rust
     #[error("replication: {0}")]
@@ -337,9 +337,9 @@ tuple — the tests assert on the recorded set.
 
 - `replication_factor_three_propagates_to_all_followers` — 3-broker
   cluster, `partitions=1, rf=3`. Produce 20 records via a
-  `crabka-client-producer` aimed at the partition leader. Poll all 3
+  `krabka-client-producer` aimed at the partition leader. Poll all 3
   brokers' on-disk `Log::log_end_offset()` until they match (10 s
-  deadline). Read records via each broker's local `crabka-log` API;
+  deadline). Read records via each broker's local `krabka-log` API;
   assert byte-equal.
 
 - `out_of_range_truncates_and_recovers` — same setup. Produce 50
@@ -361,7 +361,7 @@ the hosted Windows runner).
 1. 3-broker Crabka cluster on the slice-7 fixed-port pattern (client
    9192/9292/9392, controller 9193/9293/9393).
 2. `kafka-topics --create --topic <T> --partitions 1
-   --replication-factor 3 --bootstrap-server <node-1>`.
+--replication-factor 3 --bootstrap-server <node-1>`.
 3. Wait for metadata to converge (poll `kafka-topics --describe`
    until `Leader: N`, `Replicas: 1,2,3`, `Isr: 1,2,3`).
 4. `kafka-console-producer` writes 100 records via `<node-2>`. The
@@ -400,7 +400,7 @@ Slice 8 is shippable when:
 
 - **Per-partition fan-out.** 1000 partitions × 2 followers = 2000
   long-running tokio tasks. Tokio handles this fine, but per-task
-  connections would be wasteful. *Mitigation:* the supervisor caches
+  connections would be wasteful. _Mitigation:_ the supervisor caches
   `Connection` per leader (`DashMap<NodeId, Arc<Connection>>`); each
   per-partition task shares the per-leader connection.
   Batched ReplicaFetcherThread (Apache Kafka's approach) is a slice
@@ -408,19 +408,19 @@ Slice 8 is shippable when:
 - **Replicator races CreateTopics on the leader.** Between
   `V1Partition` apply and the leader broker materializing the on-disk
   partition, a follower's `Fetch` can hit
-  `UNKNOWN_TOPIC_OR_PARTITION (3)`. *Mitigation:* retry on code 3
+  `UNKNOWN_TOPIC_OR_PARTITION (3)`. _Mitigation:_ retry on code 3
   with 100 ms backoff. Cleanly resolves once the leader's
   `CreateTopics` handler finishes on-disk materialization (typically
   < 100 ms after Raft commit).
 - **`OFFSET_OUT_OF_RANGE` during normal operation.** Slice 8 doesn't
   implement retention-driven truncation, so this is rare in
-  practice. *Mitigation:* standard Apache Kafka behavior — follower
+  practice. _Mitigation:_ standard Apache Kafka behavior — follower
   truncates to 0 and re-fetches. Tested in
   `out_of_range_truncates_and_recovers`.
 - **Round-robin determinism vs broker churn.** `MetadataImage::brokers()`
   is keyed by `node_id` so it's deterministic. New brokers joining
-  mid-slice-8 don't trigger rebalancing of *existing* partitions —
-  they only appear in *future* `CreateTopics` assignments.
+  mid-slice-8 don't trigger rebalancing of _existing_ partitions —
+  they only appear in _future_ `CreateTopics` assignments.
   Rebalancing is a slice follow-up.
 
 ## Next step after this spec

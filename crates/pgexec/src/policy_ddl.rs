@@ -1,5 +1,5 @@
 //! `CREATE`/`ALTER`/`DROP POLICY` — the SQL surface over
-//! [`crabka_pgcatalog::policy`].
+//! [`krabka_pgcatalog::policy`].
 //!
 //! Two rules are enforced here rather than in the catalog, because both need
 //! the session:
@@ -22,13 +22,13 @@
 //! both forms over ([`ast::PolicyQual`]), so the text stored and the expression
 //! enforced cannot disagree.
 
-use crabka_pgcatalog::{
+use krabka_pgcatalog::{
     RelationName, Table,
     policy::{Policy, PolicyChange, PolicyCommand},
 };
-use crabka_pgkv::{Kv, WriteOp};
-use crabka_pgparser::ast;
-use crabka_pgwire::engine::QueryResult;
+use krabka_pgkv::{Kv, WriteOp};
+use krabka_pgparser::ast;
+use krabka_pgwire::engine::QueryResult;
 
 use crate::{error::ExecError, exec::ForeignCtx};
 
@@ -45,7 +45,7 @@ fn policy_target(
     name: &RelationName,
     fctx: ForeignCtx<'_>,
 ) -> Result<Table, ExecError> {
-    let table = crabka_pgcatalog::get_table(kv, name)?;
+    let table = krabka_pgcatalog::get_table(kv, name)?;
     require_owner(kv, &table, fctx)?;
     crate::rls::refuse_sharded_row_security(&table)?;
     Ok(table)
@@ -100,7 +100,7 @@ fn resolve_roles(
             }
             named => named.to_string(),
         };
-        if !crabka_pgcatalog::role_exists(kv, &role)? {
+        if !krabka_pgcatalog::role_exists(kv, &role)? {
             return Err(ExecError::UndefinedObject(format!(
                 "role \"{role}\" does not exist"
             )));
@@ -167,7 +167,7 @@ pub(crate) fn create(
         using: qual_source(policy.using.as_ref())?,
         with_check: qual_source(policy.with_check.as_ref())?,
     };
-    let ops = crabka_pgcatalog::policy::create_policy_ops(kv, &record)?;
+    let ops = krabka_pgcatalog::policy::create_policy_ops(kv, &record)?;
     Ok((command("CREATE POLICY"), ops))
 }
 
@@ -188,7 +188,7 @@ pub(crate) fn alter(
     let table = policy_target(kv, &relation, fctx)?;
     let ops = match action {
         ast::AlterPolicyAction::RenameTo(new_name) => {
-            crabka_pgcatalog::policy::rename_policy_ops(kv, table.id, name, new_name)?
+            krabka_pgcatalog::policy::rename_policy_ops(kv, table.id, name, new_name)?
         }
         ast::AlterPolicyAction::Change(change) => {
             let ast::AlterPolicyChange {
@@ -204,7 +204,7 @@ pub(crate) fn alter(
                 using: qual_source(using.as_ref())?,
                 with_check: qual_source(with_check.as_ref())?,
             };
-            crabka_pgcatalog::policy::alter_policy_ops(kv, table.id, name, &change)?
+            krabka_pgcatalog::policy::alter_policy_ops(kv, table.id, name, &change)?
         }
     };
     Ok((command("ALTER POLICY"), ops))
@@ -227,17 +227,17 @@ pub(crate) fn drop(
     // `DROP POLICY IF EXISTS` on a relation that does not exist is a notice in
     // PostgreSQL too, so the missing relation is answered before the missing
     // policy — and before the ownership test, which has nothing to test.
-    let table = match crabka_pgcatalog::get_table(kv, &relation) {
+    let table = match krabka_pgcatalog::get_table(kv, &relation) {
         Ok(table) => table,
-        Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) if if_exists => {
+        Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) if if_exists => {
             return Ok((command("DROP POLICY"), Vec::new()));
         }
         Err(error) => return Err(error.into()),
     };
     require_owner(kv, &table, fctx)?;
-    match crabka_pgcatalog::policy::drop_policy_ops(kv, table.id, name) {
+    match krabka_pgcatalog::policy::drop_policy_ops(kv, table.id, name) {
         Ok(ops) => Ok((command("DROP POLICY"), ops)),
-        Err(crabka_pgcatalog::CatalogError::UndefinedPolicy { .. }) if if_exists => {
+        Err(krabka_pgcatalog::CatalogError::UndefinedPolicy { .. }) if if_exists => {
             Ok((command("DROP POLICY"), Vec::new()))
         }
         Err(error) => Err(error.into()),

@@ -10,7 +10,7 @@
 
 ## Problem & framing
 
-Phase 1 de-flaked the broker's *consensus-correctness* integration tests by
+Phase 1 de-flaked the broker's _consensus-correctness_ integration tests by
 adding metadata-image `wait_*` awaiters to `BrokerHandle` and converting fixed
 `sleep`-poll loops to event-driven condition-waits. Those awaiters only observe
 the **metadata image** (partition presence, leader, ISR, broker registration,
@@ -38,7 +38,7 @@ they cannot flake on timing; they only fail if the condition never holds in 30 s
   `crates/broker/tests/{share_state, share_groups, share_consume, share_admin_offsets}.rs`.
 - **Batch B — group-state:** add group-state awaiters; convert
   `crates/broker/tests/{streams_groups, streams_classic_downgrade, streams_classic_upgrade,
-  consumer_group_next_gen_persistence, consumer_proactive_validation}.rs`.
+consumer_group_next_gen_persistence, consumer_proactive_validation}.rs`.
 
 The batches are independent (different hook families, different files) and are
 dispatched as two batches within one plan.
@@ -91,10 +91,10 @@ expose), then these `#[cfg(any(test, feature = "test-helpers"))]` awaiters on
   reset offsets" loops.
 - `wait_until_share_delivery_complete(group, topic_id, partition, min_dcc)` —
   await `delivery_complete_count` ≥ `min_dcc`. Replaces "dcc advanced to accept
-  count" loops (and the lock-timeout *archive* outcome, where dcc advances).
+  count" loops (and the lock-timeout _archive_ outcome, where dcc advances).
 - `wait_until_share_acquired_count(group, topic_id, partition, n)` — await the
   number of `Acquired` batches == `n`. Replaces "records acquired" /
-  "fragmented-window acquired" loops, and the lock-timeout *redelivery* outcome
+  "fragmented-window acquired" loops, and the lock-timeout _redelivery_ outcome
   (await re-acquirable: acquired count returns to the expected value).
 
 These cover the 26 share-state sites and the lock-timeout **outcome** sites: the
@@ -102,7 +102,7 @@ sweeper fires on its own (small configured `record_lock_duration`); the test
 awaits the resulting observable state (re-acquirable / dcc-incremented /
 archived) rather than sleeping a fixed duration.
 
-**Calibrated exceptions (kept as sleeps):** the 2–3 *precise renew-timing*
+**Calibrated exceptions (kept as sleeps):** the 2–3 _precise renew-timing_
 sub-tests in `share_consume.rs` (`renew_extends_lock`, `no_renew_redelivers`)
 prove a lock is **not** released before its deadline — proving a non-event
 inherently requires waiting through the deadline. Their sleeps are functions of
@@ -138,6 +138,7 @@ implementation by reading `DescribeView` + the streams tests' assertions.)
 ## Workstream applied — test conversions (both batches)
 
 For each of the 9 files, replace each sleep/poll site per its classification:
+
 - state-propagation share sleeps → the Workstream A awaiters;
 - group-state sleeps → the Workstream B awaiters;
 - partition-present / leader-ready / produce-retry sleeps → the **Phase 1**
@@ -151,16 +152,16 @@ All existing assertions are preserved; only the waiting changes.
 
 ## Verification plan
 
-- `cargo build -p crabka-broker --test <name>` per converted file (single test
+- `cargo build -p krabka-broker --test <name>` per converted file (single test
   binary — the Windows OS-1455 paging-file linker limit can fail an all-tests
   build; build/run binaries individually).
-- `cargo test -p crabka-broker --test <name> -- --test-threads=1` per file —
+- `cargo test -p krabka-broker --test <name> -- --test-threads=1` per file —
   PASS, then **stress ≈10×** (these are the known Windows flakes per project
   memory — stress is the primary acceptance signal; zero flakes required).
 - `grep` each file to confirm no state-guessing poll-`sleep` remains (only
   `consumer.poll()` and the calibrated `record_lock_duration`-derived sleeps).
-- `cargo fmt -p crabka-broker` (per-crate; Windows OS-206 path-length) and
-  `cargo clippy -p crabka-broker --features test-helpers --lib -- -D warnings`
+- `cargo fmt -p krabka-broker` (per-crate; Windows OS-206 path-length) and
+  `cargo clippy -p krabka-broker --features test-helpers --lib -- -D warnings`
   plus clippy on each converted test binary — clean.
 
 ## Risks & open questions (resolved during implementation)

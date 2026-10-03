@@ -10,8 +10,8 @@
 
 use std::cmp::Ordering;
 
-use crabka_pgparser::ast::{BinaryOp, Expr};
-use crabka_pgtypes::{ColumnType, Datum, RecordValue, ops};
+use krabka_pgparser::ast::{BinaryOp, Expr};
+use krabka_pgtypes::{ColumnType, Datum, RecordValue, ops};
 
 use crate::{error::ExecError, scope::Scope};
 
@@ -326,7 +326,7 @@ pub(crate) fn eval_in_list(
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgtypes::{ArrayDim, ArrayValue, ElemType};
+    use krabka_pgtypes::{ArrayDim, ArrayValue, ElemType};
 
     use super::*;
 
@@ -352,7 +352,7 @@ mod tests {
             (&[], "()"),
         ];
         for (values, expected) in cases {
-            let got = crabka_pgtypes::composite::record_out(values);
+            let got = krabka_pgtypes::composite::record_out(values);
             assert!(got == *expected, "{values:?}: {got} != {expected}");
         }
     }
@@ -462,7 +462,7 @@ mod tests {
                 true,
             ),
         ] {
-            let expr = crabka_pgparser::parser::parse_expr_for_test(sql).expect("parse");
+            let expr = krabka_pgparser::parser::parse_expr_for_test(sql).expect("parse");
             assert!(
                 crate::eval::eval(&expr, &Scope::empty(), &[], &ctx).expect("eval")
                     == Datum::Bool(expected),
@@ -472,11 +472,11 @@ mod tests {
                 crate::eval::infer_type(&expr, &Scope::empty()).expect("type") == ColumnType::Bool
             );
         }
-        let left = crabka_pgparser::parser::parse_expr_for_test(
+        let left = krabka_pgparser::parser::parse_expr_for_test(
             "ROW(date '2024-01-01', date '2024-01-02')",
         )
         .expect("left row");
-        let right = crabka_pgparser::parser::parse_expr_for_test("ROW(date '2024-01-01')")
+        let right = krabka_pgparser::parser::parse_expr_for_test("ROW(date '2024-01-01')")
             .expect("right row");
         assert!(
             eval_binary(BinaryOp::Overlaps, &left, &right, |expr| {

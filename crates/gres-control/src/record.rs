@@ -2,7 +2,7 @@
 
 use std::{collections::BTreeMap, fmt, str::FromStr};
 
-use crabka_units::ByteSize;
+use krabka_units::ByteSize;
 use serde::{Deserialize, Serialize};
 
 use crate::ControlError;
@@ -692,7 +692,7 @@ pub struct TenantRecord {
     /// Optional frame threshold for checkpointing.
     pub checkpoint_frames: Option<u64>,
     /// Optional size threshold for checkpointing.
-    #[serde(default, with = "crabka_units::serde_units::human::option_byte_size")]
+    #[serde(default, with = "krabka_units::serde_units::human::option_byte_size")]
     pub checkpoint_size: Option<ByteSize>,
     /// Idle seconds before G-5 suspension. `None` or `0` means never.
     pub idle_seconds: Option<u64>,
@@ -706,7 +706,7 @@ pub struct TenantRecord {
     /// Hash-sharding placement metadata and co-location constraints.
     pub hash_placements: Vec<HashPlacement>,
     /// Optional maximum checkpoint size that remains eligible for suspension.
-    #[serde(default, with = "crabka_units::serde_units::human::option_byte_size")]
+    #[serde(default, with = "krabka_units::serde_units::human::option_byte_size")]
     pub suspend_max_checkpoint_size: Option<ByteSize>,
     /// Final checkpoint manifest that made a suspended tenant safe to park.
     pub final_checkpoint: Option<FinalCheckpoint>,
@@ -2494,7 +2494,7 @@ mod tests {
             lifecycle: RangeLifecycle::default(),
             retirement: None,
         }];
-        input.suspend_max_checkpoint_size = Some(crabka_units::mebibytes(1));
+        input.suspend_max_checkpoint_size = Some(krabka_units::mebibytes(1));
         let (key, value) = encode_registry_record(&input).unwrap();
 
         assert!(RegistryKey::decode(&key).unwrap().name == input.name);

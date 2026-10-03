@@ -3,12 +3,12 @@ use super::*;
 pub(super) fn is_view_ref(
     kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
-    reference: &crabka_pgparser::ast::RelationRef,
+    reference: &krabka_pgparser::ast::RelationRef,
 ) -> Result<bool, ExecError> {
     let name = resolve_relation(kv, resolution, reference, SchemaDisposition::Reference)?;
-    match crabka_pgcatalog::get_view(kv, &name) {
+    match krabka_pgcatalog::get_view(kv, &name) {
         Ok(_) => Ok(true),
-        Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => Ok(false),
+        Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => Ok(false),
         Err(error) => Err(error.into()),
     }
 }
@@ -16,9 +16,9 @@ pub(super) fn is_view_ref(
 pub(super) fn has_instead_view_rule(
     kv: &dyn Kv,
     view: &Table,
-    event: crabka_pgcatalog::rule::RuleEvent,
+    event: krabka_pgcatalog::rule::RuleEvent,
 ) -> Result<bool, ExecError> {
-    Ok(crabka_pgcatalog::rule::rules_for_table(kv, view.id)?
+    Ok(krabka_pgcatalog::rule::rules_for_table(kv, view.id)?
         .into_iter()
         .any(|rule| rule_is_enabled(rule.enabled) && rule.event == event && rule.instead))
 }
@@ -31,7 +31,7 @@ pub(super) async fn execute_view_rewrite_rules(
     view: &Table,
     only_instead: bool,
     writes: &mut StatementWrites,
-) -> Result<(WriteOutcome, Vec<crabka_pgkv::WriteOp>), ExecError> {
+) -> Result<(WriteOutcome, Vec<krabka_pgkv::WriteOp>), ExecError> {
     let ctx = read_ctx.eval_ctx;
     match stmt {
         Statement::Insert {
@@ -86,8 +86,8 @@ pub(super) async fn execute_view_rewrite_rules(
         } => {
             let qualifier = table_qualifier(view, alias);
             let read = read_ctx.read_ctx(ctes);
-            let target_expr = crabka_pgparser::ast::TableExpr::Table {
-                name: crabka_pgparser::ast::RelationRef::qualified(
+            let target_expr = krabka_pgparser::ast::TableExpr::Table {
+                name: krabka_pgparser::ast::RelationRef::qualified(
                     &view.name.schema,
                     &view.name.name,
                 ),
@@ -143,7 +143,7 @@ pub(super) async fn execute_view_rewrite_rules(
                     action_ctx,
                     ctes,
                     view,
-                    crabka_pgcatalog::rule::RuleEvent::Update,
+                    krabka_pgcatalog::rule::RuleEvent::Update,
                     Some(&old),
                     Some(&proposed),
                     only_instead,
@@ -174,8 +174,8 @@ pub(super) async fn execute_view_rewrite_rules(
         } => {
             let qualifier = table_qualifier(view, alias);
             let read = read_ctx.read_ctx(ctes);
-            let target_expr = crabka_pgparser::ast::TableExpr::Table {
-                name: crabka_pgparser::ast::RelationRef::qualified(
+            let target_expr = krabka_pgparser::ast::TableExpr::Table {
+                name: krabka_pgparser::ast::RelationRef::qualified(
                     &view.name.schema,
                     &view.name.name,
                 ),
@@ -228,7 +228,7 @@ pub(super) async fn execute_view_rewrite_rules(
                     action_ctx,
                     ctes,
                     view,
-                    crabka_pgcatalog::rule::RuleEvent::Delete,
+                    krabka_pgcatalog::rule::RuleEvent::Delete,
                     Some(&old),
                     None,
                     only_instead,

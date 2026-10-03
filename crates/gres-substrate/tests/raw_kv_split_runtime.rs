@@ -5,12 +5,12 @@ use std::sync::{
 
 use assert2::assert;
 use async_trait::async_trait;
-use crabka_gres_ranges::{
+use krabka_gres_ranges::{
     MapEpoch, RangeId, RangeMap, RangeSpec, SplitCommand, SplitError, SplitHooks, SplitState,
     SplitStateStore, SplitStep, SuccessorDescriptor, TableId, TenantName, run_split,
 };
-use crabka_gres_substrate::{InMemorySplitStateStore, RawKvSplitRuntime};
-use crabka_pgkv::{Kv, key};
+use krabka_gres_substrate::{InMemorySplitStateStore, RawKvSplitRuntime};
+use krabka_pgkv::{Kv, key};
 
 #[tokio::test]
 async fn raw_kv_filtered_restore_replays_tail_and_keeps_successor_closed() {

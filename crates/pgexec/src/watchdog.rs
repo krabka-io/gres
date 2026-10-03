@@ -28,7 +28,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crabka_units::{Time, convert::TimeExt as _};
+use krabka_units::{Time, convert::TimeExt as _};
 
 /// How much of a statement's text the registry keeps.
 ///
@@ -121,9 +121,9 @@ pub struct StuckStatementPolicy {
 impl Default for StuckStatementPolicy {
     fn default() -> Self {
         Self {
-            threshold: crabka_units::secs(120),
-            poll_interval: crabka_units::secs(5),
-            repeat_interval: crabka_units::secs(600),
+            threshold: krabka_units::secs(120),
+            poll_interval: krabka_units::secs(5),
+            repeat_interval: krabka_units::secs(600),
         }
     }
 }
@@ -415,15 +415,15 @@ mod tests {
         assert!(StuckStatementPolicy::default().is_valid());
         let zeroed = [
             StuckStatementPolicy {
-                threshold: crabka_units::secs(0),
+                threshold: krabka_units::secs(0),
                 ..Default::default()
             },
             StuckStatementPolicy {
-                poll_interval: crabka_units::secs(0),
+                poll_interval: krabka_units::secs(0),
                 ..Default::default()
             },
             StuckStatementPolicy {
-                repeat_interval: crabka_units::secs(0),
+                repeat_interval: krabka_units::secs(0),
                 ..Default::default()
             },
         ];

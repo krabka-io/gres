@@ -3,11 +3,11 @@
 **Date:** 2026-06-16
 **Status:** Implemented
 **Workstream:** Connect framework, connector authoring SPI
-**Predecessor:** `crabka-connect` embeddable connector runtime + lifecycle
+**Predecessor:** `krabka-connect` embeddable connector runtime + lifecycle
 
 ## Goal
 
-Add a ConfigDef-style connector configuration SPI to `crabka-connect` so source
+Add a ConfigDef-style connector configuration SPI to `krabka-connect` so source
 and sink implementations can declare, validate, redact, and materialize typed
 configuration from JSON. Secret fields must be explicit, resolved through
 pluggable providers, and never exposed through normal formatting or logs.
@@ -33,7 +33,7 @@ portable SPI; Kubernetes and Vault integration plug into it later.
 
 ## Architecture
 
-Add a new `config` module to `crabka-connect` and export its public types from
+Add a new `config` module to `krabka-connect` and export its public types from
 `lib.rs`.
 
 The module owns these core types:
@@ -69,10 +69,10 @@ derive-generated `ConnectorConfig::from_resolved`.
 ## Proc Macro
 
 Add a sibling proc-macro crate, `crates/connect-derive`, and expose it from
-`crabka-connect` behind a default `derive` feature:
+`krabka-connect` behind a default `derive` feature:
 
 ```rust
-pub use crabka_connect_derive::ConnectorConfig;
+pub use krabka_connect_derive::ConnectorConfig;
 ```
 
 Connector authors write:
@@ -131,7 +131,7 @@ Reference forms:
 - Vault:
   `{ "from": "vault", "path": "secret/data/connect/pg", "key": "password" }`
 
-`crabka-connect` includes an environment-variable resolver because it has no
+`krabka-connect` includes an environment-variable resolver because it has no
 external service dependency. Kubernetes and Vault resolvers are not implemented
 in this slice; their reference variants are part of the portable contract so the
 future operator can populate them without changing connector code.
@@ -174,7 +174,7 @@ Runtime-visible errors must not include resolved secret bytes.
 
 ## Testing
 
-Unit tests in `crabka-connect`:
+Unit tests in `krabka-connect`:
 
 - required field validation
 - unknown key rejection
@@ -187,7 +187,7 @@ Unit tests in `crabka-connect`:
 - redacted `Debug` for `ResolvedConfig`
 - resolver failure includes field name but not secret value
 
-Macro tests in `crabka-connect-derive`:
+Macro tests in `krabka-connect-derive`:
 
 - derive emits a correct `ConfigDef`
 - derive constructs typed configs with defaults and secrets
@@ -208,7 +208,7 @@ see the expected path from raw JSON to typed config.
 
 ## Acceptance Criteria
 
-- `crabka-connect` exposes a usable direct config SPI.
+- `krabka-connect` exposes a usable direct config SPI.
 - `#[derive(ConnectorConfig)]` works for named structs with the supported field
   types and attributes.
 - Secret fields are resolved through `SecretResolver` and redacted in formatting.

@@ -1,16 +1,16 @@
 //! Map lower-crate error enums onto wire `PgError`s with the right SQLSTATE.
 
-use crabka_pgcatalog::CatalogError;
-use crabka_pgkv::KvError;
-use crabka_pgparser::ParseError;
-use crabka_pgtypes::TypeError;
-use crabka_pgwire::error::PgError;
+use krabka_pgcatalog::CatalogError;
+use krabka_pgkv::KvError;
+use krabka_pgparser::ParseError;
+use krabka_pgtypes::TypeError;
+use krabka_pgwire::error::PgError;
 
 /// Executor-level error. It converts to a non-fatal `PgError`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExecError {
     /// Deliberately recognized compatibility refusal with centralized wire metadata.
-    CompatibilityRefusal(crabka_pgparser::ast::RefusalCommand),
+    CompatibilityRefusal(krabka_pgparser::ast::RefusalCommand),
     /// An execution error returned by a remote range owner.
     Remote(PgError),
     Parse(ParseError),
@@ -251,7 +251,7 @@ pub enum ExecError {
     /// message. `left` and `right` stay for internal use, and the message does
     /// not print them.
     SetOpColumnCount {
-        op: crabka_pgparser::ast::SetOp,
+        op: krabka_pgparser::ast::SetOp,
         left: usize,
         right: usize,
     },
@@ -741,7 +741,7 @@ pub struct UniqueViolation {
     pub index: String,
     /// The relation the index is on, reported as the error's schema and table
     /// fields — `PostgreSQL`'s `errtableconstraint`, which names the *heap*.
-    pub table: crabka_pgcatalog::RelationName,
+    pub table: krabka_pgcatalog::RelationName,
     /// The `(a, b)=(1, 2)` body of the `DETAIL` line, already rendered and
     /// already judged against the caller's privileges by
     /// `crate::rls::describe_index_key`.
@@ -861,7 +861,7 @@ pub struct DependentForeignKey {
     /// The dependent constraint's name, unquoted in the `DETAIL`.
     pub constraint: String,
     /// The table that constraint is defined on, unquoted in the `DETAIL`.
-    pub table: crabka_pgcatalog::RelationName,
+    pub table: krabka_pgcatalog::RelationName,
 }
 
 impl DroppedObject {
@@ -1011,10 +1011,10 @@ impl ExecError {
             ExecError::Catalog(e) => {
                 let rendered = PgError::error(e.sqlstate(), e.to_string());
                 // The only catalog error PostgreSQL gives a DETAIL of its own.
-                if matches!(e, crabka_pgcatalog::CatalogError::ReservedSchemaName(_)) {
+                if matches!(e, krabka_pgcatalog::CatalogError::ReservedSchemaName(_)) {
                     rendered.with_detail(format!(
                         "The prefix \"{}\" is reserved for system schemas.",
-                        crabka_pgcatalog::RESERVED_SCHEMA_PREFIX
+                        krabka_pgcatalog::RESERVED_SCHEMA_PREFIX
                     ))
                 } else {
                     rendered
@@ -1039,19 +1039,19 @@ impl ExecError {
                 }
             }
             ExecError::Kv(e) => match e {
-                crabka_pgkv::KvError::Io(msg) => {
+                krabka_pgkv::KvError::Io(msg) => {
                     PgError::error("58030", format!("storage I/O error: {msg}"))
                 }
-                crabka_pgkv::KvError::CorruptRow(msg) => {
+                krabka_pgkv::KvError::CorruptRow(msg) => {
                     PgError::error("XX000", format!("corrupt storage: {msg}"))
                 }
-                crabka_pgkv::KvError::RestoreTargetNotEmpty => {
+                krabka_pgkv::KvError::RestoreTargetNotEmpty => {
                     PgError::error("XX000", "restore target is not empty")
                 }
-                crabka_pgkv::KvError::UnsortedSnapshot => {
+                krabka_pgkv::KvError::UnsortedSnapshot => {
                     PgError::error("XX000", "snapshot keys are not strictly ascending")
                 }
-                crabka_pgkv::KvError::ConditionalPutUnsupported => PgError::error(
+                krabka_pgkv::KvError::ConditionalPutUnsupported => PgError::error(
                     "0A000",
                     "the configured storage backend cannot fence timestamp transactions",
                 ),
@@ -1077,9 +1077,9 @@ impl ExecError {
                 // PG-exact: the message names the specific operator and has no count,
                 // e.g. "each UNION query must have the same number of columns".
                 let op_name = match op {
-                    crabka_pgparser::ast::SetOp::Union => "UNION",
-                    crabka_pgparser::ast::SetOp::Intersect => "INTERSECT",
-                    crabka_pgparser::ast::SetOp::Except => "EXCEPT",
+                    krabka_pgparser::ast::SetOp::Union => "UNION",
+                    krabka_pgparser::ast::SetOp::Intersect => "INTERSECT",
+                    krabka_pgparser::ast::SetOp::Except => "EXCEPT",
                 };
                 PgError::error(
                     "42601",
@@ -1769,7 +1769,7 @@ impl From<KvError> for ExecError {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgcatalog::RelationName;
+    use krabka_pgcatalog::RelationName;
 
     use super::*;
 

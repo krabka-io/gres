@@ -4,11 +4,11 @@
 use std::sync::Arc;
 
 use assert2::{assert, check};
-use crabka_operator::{
+use http::{Method, Response};
+use krabka_operator::{
     controller::kafka::reconcile,
     crd::{Kafka, KafkaSpec, Listener, ListenerAuthentication, ListenerType},
 };
-use http::{Method, Response};
 
 #[path = "shared/mod.rs"]
 mod shared;
@@ -380,7 +380,7 @@ fn assert_nodeport_san_digest(
     ext_node_ip: &str,
 ) {
     use base64::Engine as _;
-    use crabka_security::ca::SubjectAltName;
+    use krabka_security::ca::SubjectAltName;
     // Find the keystore PATCH.
     let ks_patch = observed
         .iter()
@@ -448,7 +448,7 @@ fn assert_nodeport_san_digest(
     let extra_sans = vec![SubjectAltName::Ip(ext_node_ip.parse().expect("valid IP"))];
 
     let expected_digest =
-        crabka_operator::controller::cluster_ca::compute_san_digest(&base_sans, &extra_sans);
+        krabka_operator::controller::cluster_ca::compute_san_digest(&base_sans, &extra_sans);
 
     // Verifies the digest in the Secret matches the expected SAN set (including the node's
     // ExternalIP). This proves the SAN computation reached the keystore-write path, but does

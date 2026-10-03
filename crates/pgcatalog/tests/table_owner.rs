@@ -5,15 +5,15 @@
 //! the same record and is checked here for the same reasons.
 
 use assert2::assert;
-use crabka_pgcatalog::{
+use krabka_pgcatalog::{
     BOOTSTRAP_ROLE, CheckConstraint, Column, ForeignTableMeta, MaterializedView, RelationName,
     Table, TableCreation, TableOptions, create_server, create_table_with_options_ops, get_table,
     is_materialized_view, replace_table_schema_ops,
     serde::{SCHEMA_VERSION, deserialize_schema, serialize_schema},
     set_materialized_populated_op,
 };
-use crabka_pgkv::{Kv, MemKv};
-use crabka_pgtypes::ColumnType;
+use krabka_pgkv::{Kv, MemKv};
+use krabka_pgtypes::ColumnType;
 
 fn columns() -> Vec<Column> {
     vec![
@@ -49,7 +49,7 @@ fn create_as(
         checks(),
         TableCreation {
             owner,
-            id: crabka_pgcatalog::TableIdSource::Counter,
+            id: krabka_pgcatalog::TableIdSource::Counter,
             materialized,
         },
     )
@@ -339,10 +339,10 @@ fn replacing_a_schema_record_writes_the_owner_it_is_given() {
 #[test]
 fn a_foreign_table_reads_back_owned_by_the_role_it_was_created_under() {
     let kv = MemKv::new();
-    crabka_pgcatalog::create_fdw(&kv, "kafka_fdw", Vec::new()).expect("create fdw");
+    krabka_pgcatalog::create_fdw(&kv, "kafka_fdw", Vec::new()).expect("create fdw");
     create_server(&kv, "kafka_srv", "kafka_fdw", Vec::new()).expect("create server");
     let remote = RelationName::public("remote");
-    let (_, ops) = crabka_pgcatalog::create_foreign_table_ops(
+    let (_, ops) = krabka_pgcatalog::create_foreign_table_ops(
         &kv,
         &remote,
         vec![Column::new("value", ColumnType::Text)],
@@ -352,7 +352,7 @@ fn a_foreign_table_reads_back_owned_by_the_role_it_was_created_under() {
         Vec::new(),
         TableCreation {
             owner: "regress_owner",
-            id: crabka_pgcatalog::TableIdSource::Counter,
+            id: krabka_pgcatalog::TableIdSource::Counter,
             materialized: None,
         },
     )

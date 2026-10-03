@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crabka_pgwire::{session::SessionConfig, stub::StubEngine};
+use krabka_pgwire::{session::SessionConfig, stub::StubEngine};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
@@ -10,7 +10,7 @@ use tokio_postgres::{NoTls, SimpleQueryMessage};
 async fn spawn_server() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
-    tokio::spawn(crabka_pgwire::server::serve(
+    tokio::spawn(krabka_pgwire::server::serve(
         listener,
         Arc::new(StubEngine::new()),
         Arc::new(SessionConfig::trust()),
@@ -31,15 +31,15 @@ async fn connect(port: u16) -> tokio_postgres::Client {
     client
 }
 
-/// Page one [`crabka_pgwire::engine::QueryResult`] into a sink, which is what
+/// Page one [`krabka_pgwire::engine::QueryResult`] into a sink, which is what
 /// the trait's own default does around [`Session::simple_query`].
-async fn send_one_result<S: crabka_pgwire::engine::ResultSink>(
+async fn send_one_result<S: krabka_pgwire::engine::ResultSink>(
     sink: &mut S,
     result_index: usize,
     page_rows: usize,
-    result: crabka_pgwire::engine::QueryResult,
-) -> Result<(), crabka_pgwire::error::PgError> {
-    use crabka_pgwire::engine::{QueryResult, ResultPage};
+    result: krabka_pgwire::engine::QueryResult,
+) -> Result<(), krabka_pgwire::error::PgError> {
+    use krabka_pgwire::engine::{QueryResult, ResultPage};
 
     match result {
         QueryResult::Rows { fields, rows, tag } => {
@@ -77,7 +77,7 @@ enum CopyTx {
     Failed,
 }
 
-impl crabka_pgwire::engine::Engine for CopyEngine {
+impl krabka_pgwire::engine::Engine for CopyEngine {
     type Session = CopySession;
 
     fn connect(&self) -> Self::Session {
@@ -85,62 +85,62 @@ impl crabka_pgwire::engine::Engine for CopyEngine {
     }
 }
 
-impl crabka_pgwire::engine::Session for CopySession {
+impl krabka_pgwire::engine::Session for CopySession {
     async fn simple_query(
         &mut self,
         sql: &str,
-    ) -> Result<Vec<crabka_pgwire::engine::QueryResult>, crabka_pgwire::error::PgError> {
+    ) -> Result<Vec<krabka_pgwire::engine::QueryResult>, krabka_pgwire::error::PgError> {
         if matches!(self.tx, CopyTx::Failed) && sql != "ROLLBACK" {
-            return Err(crabka_pgwire::error::PgError::error(
-                crabka_pgwire::error::sqlstate::IN_FAILED_SQL_TRANSACTION,
+            return Err(krabka_pgwire::error::PgError::error(
+                krabka_pgwire::error::sqlstate::IN_FAILED_SQL_TRANSACTION,
                 "current transaction is aborted, commands ignored until end of transaction block",
             ));
         }
         if sql == "BEGIN" {
             self.tx = CopyTx::InTransaction;
-            return Ok(vec![crabka_pgwire::engine::QueryResult::Command {
+            return Ok(vec![krabka_pgwire::engine::QueryResult::Command {
                 tag: "BEGIN".into(),
             }]);
         }
         if sql == "ROLLBACK" {
             self.tx = CopyTx::Idle;
-            return Ok(vec![crabka_pgwire::engine::QueryResult::Command {
+            return Ok(vec![krabka_pgwire::engine::QueryResult::Command {
                 tag: "ROLLBACK".into(),
             }]);
         }
         if sql == "SELECT 1" {
-            return Ok(vec![crabka_pgwire::engine::QueryResult::Rows {
-                fields: vec![crabka_pgwire::engine::FieldDescription {
+            return Ok(vec![krabka_pgwire::engine::QueryResult::Rows {
+                fields: vec![krabka_pgwire::engine::FieldDescription {
                     name: "?column?".into(),
                     table_oid: 0,
                     column_id: 0,
-                    type_oid: crabka_pgwire::engine::oids::INT4,
+                    type_oid: krabka_pgwire::engine::oids::INT4,
                     type_size: 4,
                     type_modifier: -1,
                     format: 0,
                 }],
-                rows: vec![vec![Some(crabka_pgwire::engine::Cell {
+                rows: vec![vec![Some(krabka_pgwire::engine::Cell {
                     text: bytes::Bytes::from_static(b"1"),
                     binary: bytes::Bytes::copy_from_slice(&1i32.to_be_bytes()),
                 })]],
                 tag: "SELECT 1".into(),
             }]);
         }
-        Err(crabka_pgwire::error::PgError::error(
-            crabka_pgwire::error::sqlstate::FEATURE_NOT_SUPPORTED,
+        Err(krabka_pgwire::error::PgError::error(
+            krabka_pgwire::error::sqlstate::FEATURE_NOT_SUPPORTED,
             "unsupported",
         ))
     }
 
     /// Split `sql` on `;` and run the statements from `from_statement` on,
     /// stopping at a `COPY t FROM STDIN` the way the real engine does.
-    async fn simple_query_batch_into<S: crabka_pgwire::engine::ResultSink>(
+    async fn simple_query_batch_into<S: krabka_pgwire::engine::ResultSink>(
         &mut self,
         sql: &str,
         from_statement: usize,
         page_rows: usize,
         sink: &mut S,
-    ) -> Result<crabka_pgwire::engine::SimpleQueryStop, crabka_pgwire::error::PgError> {
+    ) -> Result<krabka_pgwire::engine::SimpleQueryStop, krabka_pgwire::error::PgError> {
         let statements: Vec<&str> = sql.split(';').map(str::trim).collect();
         for (result_index, statement) in statements.iter().enumerate().skip(from_statement) {
             if *statement == "COPY t FROM STDIN" {
@@ -148,7 +148,7 @@ impl crabka_pgwire::engine::Session for CopySession {
                     .begin_copy_in(statement)
                     .await?
                     .expect("the stub answers this copy");
-                return Ok(crabka_pgwire::engine::SimpleQueryStop::CopyIn {
+                return Ok(krabka_pgwire::engine::SimpleQueryStop::CopyIn {
                     statement_index: result_index,
                     response,
                 });
@@ -157,7 +157,7 @@ impl crabka_pgwire::engine::Session for CopySession {
                 send_one_result(sink, result_index + offset, page_rows, result).await?;
             }
         }
-        Ok(crabka_pgwire::engine::SimpleQueryStop::Done)
+        Ok(krabka_pgwire::engine::SimpleQueryStop::Done)
     }
 
     async fn parse(
@@ -165,61 +165,61 @@ impl crabka_pgwire::engine::Session for CopySession {
         _: &str,
         _: &str,
         _: &[u32],
-    ) -> Result<crabka_pgwire::engine::PreparedDescription, crabka_pgwire::error::PgError> {
-        Err(crabka_pgwire::error::PgError::error("0A000", "unsupported"))
+    ) -> Result<krabka_pgwire::engine::PreparedDescription, krabka_pgwire::error::PgError> {
+        Err(krabka_pgwire::error::PgError::error("0A000", "unsupported"))
     }
     async fn bind(
         &mut self,
         _: &str,
         _: &str,
-        _: &[crabka_pgwire::engine::BoundParam],
+        _: &[krabka_pgwire::engine::BoundParam],
         _: &[i16],
-    ) -> Result<crabka_pgwire::engine::PortalDescription, crabka_pgwire::error::PgError> {
-        Err(crabka_pgwire::error::PgError::error("0A000", "unsupported"))
+    ) -> Result<krabka_pgwire::engine::PortalDescription, krabka_pgwire::error::PgError> {
+        Err(krabka_pgwire::error::PgError::error("0A000", "unsupported"))
     }
     async fn describe_statement(
         &mut self,
         _: &str,
-    ) -> Result<crabka_pgwire::engine::PreparedDescription, crabka_pgwire::error::PgError> {
-        Err(crabka_pgwire::error::PgError::error("0A000", "unsupported"))
+    ) -> Result<krabka_pgwire::engine::PreparedDescription, krabka_pgwire::error::PgError> {
+        Err(krabka_pgwire::error::PgError::error("0A000", "unsupported"))
     }
     async fn describe_portal(
         &mut self,
         _: &str,
-    ) -> Result<crabka_pgwire::engine::PortalDescription, crabka_pgwire::error::PgError> {
-        Err(crabka_pgwire::error::PgError::error("0A000", "unsupported"))
+    ) -> Result<krabka_pgwire::engine::PortalDescription, krabka_pgwire::error::PgError> {
+        Err(krabka_pgwire::error::PgError::error("0A000", "unsupported"))
     }
     async fn execute(
         &mut self,
         _: &str,
         _: u32,
-    ) -> Result<crabka_pgwire::engine::ExecuteOutcome, crabka_pgwire::error::PgError> {
-        Err(crabka_pgwire::error::PgError::error("0A000", "unsupported"))
+    ) -> Result<krabka_pgwire::engine::ExecuteOutcome, krabka_pgwire::error::PgError> {
+        Err(krabka_pgwire::error::PgError::error("0A000", "unsupported"))
     }
     async fn close(
         &mut self,
-        _: crabka_pgwire::engine::CloseTarget<'_>,
-    ) -> Result<(), crabka_pgwire::error::PgError> {
+        _: krabka_pgwire::engine::CloseTarget<'_>,
+    ) -> Result<(), krabka_pgwire::error::PgError> {
         Ok(())
     }
-    async fn sync(&mut self) -> Result<(), crabka_pgwire::error::PgError> {
+    async fn sync(&mut self) -> Result<(), krabka_pgwire::error::PgError> {
         Ok(())
     }
 
     async fn begin_copy_in(
         &mut self,
         sql: &str,
-    ) -> Result<Option<crabka_pgwire::engine::CopyInResponse>, crabka_pgwire::error::PgError> {
+    ) -> Result<Option<krabka_pgwire::engine::CopyInResponse>, krabka_pgwire::error::PgError> {
         if sql != "COPY t FROM STDIN" {
             return Ok(None);
         }
         if matches!(self.tx, CopyTx::Failed) {
-            return Err(crabka_pgwire::error::PgError::error(
-                crabka_pgwire::error::sqlstate::IN_FAILED_SQL_TRANSACTION,
+            return Err(krabka_pgwire::error::PgError::error(
+                krabka_pgwire::error::sqlstate::IN_FAILED_SQL_TRANSACTION,
                 "current transaction is aborted, commands ignored until end of transaction block",
             ));
         }
-        Ok(Some(crabka_pgwire::engine::CopyInResponse {
+        Ok(Some(krabka_pgwire::engine::CopyInResponse {
             overall_format: 0,
             column_formats: vec![0],
         }))
@@ -228,11 +228,11 @@ impl crabka_pgwire::engine::Session for CopySession {
     async fn begin_copy_out(
         &mut self,
         sql: &str,
-    ) -> Result<Option<crabka_pgwire::engine::CopyOutStream>, crabka_pgwire::error::PgError> {
+    ) -> Result<Option<krabka_pgwire::engine::CopyOutStream>, krabka_pgwire::error::PgError> {
         // A COPY whose query fails partway sends only ErrorResponse: Postgres
         // never emits a partial copy-out block.
         if sql == "COPY (SELECT 1/0) TO STDOUT" {
-            return Err(crabka_pgwire::error::PgError::error(
+            return Err(krabka_pgwire::error::PgError::error(
                 "22012",
                 "division by zero",
             ));
@@ -241,8 +241,8 @@ impl crabka_pgwire::engine::Session for CopySession {
             return Ok(None);
         }
         if matches!(self.tx, CopyTx::Failed) {
-            return Err(crabka_pgwire::error::PgError::error(
-                crabka_pgwire::error::sqlstate::IN_FAILED_SQL_TRANSACTION,
+            return Err(krabka_pgwire::error::PgError::error(
+                krabka_pgwire::error::sqlstate::IN_FAILED_SQL_TRANSACTION,
                 "current transaction is aborted, commands ignored until end of transaction block",
             ));
         }
@@ -254,22 +254,22 @@ impl crabka_pgwire::engine::Session for CopySession {
         _sql: &str,
         _statement_index: usize,
         data: Vec<bytes::Bytes>,
-    ) -> Result<crabka_pgwire::engine::QueryResult, crabka_pgwire::error::PgError> {
+    ) -> Result<krabka_pgwire::engine::QueryResult, krabka_pgwire::error::PgError> {
         let rows = data
             .iter()
             .flat_map(|chunk| chunk.iter())
             .filter(|byte| **byte == b'\n')
             .count();
-        Ok(crabka_pgwire::engine::QueryResult::Command {
+        Ok(krabka_pgwire::engine::QueryResult::Command {
             tag: format!("COPY {rows}"),
         })
     }
 
-    fn tx_status(&self) -> crabka_pgwire::engine::TxStatus {
+    fn tx_status(&self) -> krabka_pgwire::engine::TxStatus {
         match self.tx {
-            CopyTx::Idle => crabka_pgwire::engine::TxStatus::Idle,
-            CopyTx::InTransaction => crabka_pgwire::engine::TxStatus::InTransaction,
-            CopyTx::Failed => crabka_pgwire::engine::TxStatus::Failed,
+            CopyTx::Idle => krabka_pgwire::engine::TxStatus::Idle,
+            CopyTx::InTransaction => krabka_pgwire::engine::TxStatus::InTransaction,
+            CopyTx::Failed => krabka_pgwire::engine::TxStatus::Failed,
         }
     }
 
@@ -283,9 +283,9 @@ impl crabka_pgwire::engine::Session for CopySession {
 /// The copy a pinned `PostgreSQL` 18.4 backend produced for `COPY t TO STDOUT`
 /// over a two-column table holding `(1, 'one')`, `(2, NULL)` and
 /// `(3, 'th<tab>ree')`.
-fn postgres_copy_out() -> crabka_pgwire::engine::CopyOutStream {
-    crabka_pgwire::engine::CopyOutStream {
-        response: crabka_pgwire::engine::CopyOutResponse {
+fn postgres_copy_out() -> krabka_pgwire::engine::CopyOutStream {
+    krabka_pgwire::engine::CopyOutStream {
+        response: krabka_pgwire::engine::CopyOutResponse {
             overall_format: 0,
             column_formats: vec![0, 0],
         },
@@ -301,7 +301,7 @@ fn postgres_copy_out() -> crabka_pgwire::engine::CopyOutStream {
 async fn spawn_copy_server() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
-    tokio::spawn(crabka_pgwire::server::serve(
+    tokio::spawn(krabka_pgwire::server::serve(
         listener,
         Arc::new(CopyEngine),
         Arc::new(SessionConfig::trust()),

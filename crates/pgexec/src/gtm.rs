@@ -10,8 +10,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crabka_pgkv::Kv;
-use crabka_pgmvcc::{visibility::Snapshot, xid::GLOBAL_XID_BASE};
+use krabka_pgkv::Kv;
+use krabka_pgmvcc::{visibility::Snapshot, xid::GLOBAL_XID_BASE};
 use zerocopy::{FromBytes, IntoBytes, byteorder::big_endian::U64};
 
 use crate::error::ExecError;
@@ -63,10 +63,10 @@ pub(crate) struct Gtm {
 /// and `session::durable_global_snapshot`. An absent counter reads as
 /// `GLOBAL_XID_BASE`, and the value never regresses below the base.
 pub(crate) fn read_next_global(kv: &dyn Kv) -> Result<u64, ExecError> {
-    let next = match kv.get(&crabka_pgkv::key::meta_next_global_xid_key())? {
+    let next = match kv.get(&krabka_pgkv::key::meta_next_global_xid_key())? {
         Some(b) => {
             let (v, _) = U64::read_from_prefix(b.as_slice())
-                .map_err(|_| crabka_pgkv::KvError::CorruptRow("next_global_xid not u64".into()))?;
+                .map_err(|_| krabka_pgkv::KvError::CorruptRow("next_global_xid not u64".into()))?;
             v.get()
         }
         None => GLOBAL_XID_BASE,
@@ -103,25 +103,25 @@ impl Gtm {
         let mut g = self.inner.lock().expect("gtm");
         let start = g.next_global;
         let end = start.checked_add(count).ok_or_else(|| {
-            crabka_pgkv::KvError::CorruptRow("global xid lease overflows u64".into())
+            krabka_pgkv::KvError::CorruptRow("global xid lease overflows u64".into())
         })?;
         g.next_global = end;
         Ok(GlobalXidLease { next: start, end })
     }
 
-    pub fn next_global_xid_op(&self) -> crabka_pgkv::WriteOp {
+    pub fn next_global_xid_op(&self) -> krabka_pgkv::WriteOp {
         let next = self.inner.lock().expect("gtm").next_global;
-        crabka_pgkv::WriteOp::Put {
-            key: crabka_pgkv::key::meta_next_global_xid_key(),
+        krabka_pgkv::WriteOp::Put {
+            key: krabka_pgkv::key::meta_next_global_xid_key(),
             value: U64::new(next).as_bytes().to_vec(),
         }
     }
 
     pub fn reseed_from_applied(&self) -> Result<(), ExecError> {
-        let durable = match self.kv.get(&crabka_pgkv::key::meta_next_global_xid_key())? {
+        let durable = match self.kv.get(&krabka_pgkv::key::meta_next_global_xid_key())? {
             Some(b) => {
                 let (v, _) = U64::read_from_prefix(b.as_slice()).map_err(|_| {
-                    crabka_pgkv::KvError::CorruptRow("next_global_xid not u64".into())
+                    krabka_pgkv::KvError::CorruptRow("next_global_xid not u64".into())
                 })?;
                 v.get()
             }
@@ -154,7 +154,7 @@ impl Gtm {
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgkv::MemKv;
+    use krabka_pgkv::MemKv;
 
     use super::*;
 
@@ -174,7 +174,7 @@ mod tests {
         let gtm = Gtm::open(kv.clone() as Arc<dyn Kv>).expect("open");
         assert_eq!(gtm.begin_global(), GLOBAL_XID_BASE);
         kv.put(
-            crabka_pgkv::key::meta_next_global_xid_key(),
+            krabka_pgkv::key::meta_next_global_xid_key(),
             (GLOBAL_XID_BASE + 50).to_be_bytes().to_vec(),
         )
         .expect("put");
@@ -188,7 +188,7 @@ mod tests {
         let gtm = Gtm::open(kv.clone() as Arc<dyn Kv>).expect("open"); // in-memory next_global == BASE
         // A PRIOR leader durably allocated through BASE+4 (begin_global_durable committed next=BASE+5).
         kv.put(
-            crabka_pgkv::key::meta_next_global_xid_key(),
+            krabka_pgkv::key::meta_next_global_xid_key(),
             (GLOBAL_XID_BASE + 5).to_be_bytes().to_vec(),
         )
         .expect("put");

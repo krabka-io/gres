@@ -5,14 +5,14 @@ use super::*;
 pub(crate) fn writable_local_indexes(
     catalog_kv: &dyn Kv,
     table: &Table,
-) -> Result<Vec<crabka_pgcatalog::Index>, ExecError> {
-    let indexes = crabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)?;
+) -> Result<Vec<krabka_pgcatalog::Index>, ExecError> {
+    let indexes = krabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)?;
     if indexes.is_empty() {
         return Ok(Vec::new());
     }
     let mut local_indexes = Vec::new();
     for index in indexes {
-        if index.placement != crabka_pgcatalog::IndexPlacement::Local {
+        if index.placement != krabka_pgcatalog::IndexPlacement::Local {
             if index.unique {
                 return Err(ExecError::Unsupported(
                     "unique global indexes are not supported until global enforcement exists"
@@ -36,7 +36,7 @@ pub(crate) fn writable_local_indexes(
 /// conflicts serialize through per-key locks in the `RowLockManager` instead.
 pub(crate) enum UniqueLocalSerialization {
     None,
-    Shared(crabka_pgcatalog::TableId),
+    Shared(krabka_pgcatalog::TableId),
 }
 
 pub(crate) fn write_requires_unique_local_serialization(

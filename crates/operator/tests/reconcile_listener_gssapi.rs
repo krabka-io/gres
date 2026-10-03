@@ -33,7 +33,8 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use assert2::{assert, check};
 use base64::Engine as _;
-use crabka_operator::{
+use http::{Method, Response};
+use krabka_operator::{
     controller::{
         kafka::reconcile as reconcile_kafka, kafka_node_pool::reconcile as reconcile_pool,
     },
@@ -42,7 +43,6 @@ use crabka_operator::{
         Listener, ListenerAuthentication, ListenerAuthenticationGssapi, ListenerType, NodeRole,
     },
 };
-use http::{Method, Response};
 
 #[path = "shared/mod.rs"]
 mod shared;
@@ -374,7 +374,7 @@ fn pool_reconcile_rules(
 fn pool_ctx(
     namespace: &str,
     rules: Vec<MockRule>,
-) -> (Arc<crabka_operator::context::Context>, Arc<MockState>) {
+) -> (Arc<krabka_operator::context::Context>, Arc<MockState>) {
     let state = MockState::new(rules);
     let client = mock_client(&state, namespace);
     (Arc::new(fixture_ctx(client, namespace)), state)
@@ -638,7 +638,7 @@ async fn rendered_gssapi_toml_round_trips_through_broker_file_config() {
                 ],
                 realm: Some("EXAMPLE.COM".into()),
                 kdc: Some("tcp://kdc:88".into()),
-                max_time_skew: Some(crabka_units::secs(17)),
+                max_time_skew: Some(krabka_units::secs(17)),
             },
         )),
         configuration: None,
@@ -658,7 +658,7 @@ async fn rendered_gssapi_toml_round_trips_through_broker_file_config() {
     let toml = extract_broker0_toml(&observed, "c5");
 
     // Parse through the REAL broker parser, then apply to a live BrokerConfig.
-    let mut fc: crabka_broker::file_config::FileConfig =
+    let mut fc: krabka_broker::file_config::FileConfig =
         toml::from_str(&toml).expect("broker parses operator-rendered gssapi TOML");
     // The operator now emits a `controller_quorum_voters` set of per-pod
     // headless FQDNs. `apply_to` DNS-resolves each voter (bounded retry),
@@ -666,7 +666,7 @@ async fn rendered_gssapi_toml_round_trips_through_broker_file_config() {
     // only exercises the gssapi/inter-broker-credentials render path, not
     // quorum wiring. Drop the voters so the round-trip stays hermetic.
     fc.controller_quorum_voters.clear();
-    let mut bc = crabka_broker::config::BrokerConfig::default();
+    let mut bc = krabka_broker::config::BrokerConfig::default();
     fc.apply_to(&mut bc)
         .expect("apply rendered gssapi TOML to BrokerConfig");
 
@@ -679,7 +679,7 @@ async fn rendered_gssapi_toml_round_trips_through_broker_file_config() {
     );
     check!(g.realm == Some("EXAMPLE.COM".into()));
     check!(g.kdc == Some("tcp://kdc:88".into()));
-    check!(g.max_time_skew == crabka_units::secs(17));
+    check!(g.max_time_skew == krabka_units::secs(17));
     check!(g.keytab_path == std::path::PathBuf::from("/etc/crabka/gssapi-keytab/keytab"));
 
     // [inter_broker_credentials] survives as the Gssapi variant with the
@@ -689,7 +689,7 @@ async fn rendered_gssapi_toml_round_trips_through_broker_file_config() {
         .expect("bc.inter_broker_credentials must be Some after round trip");
     assert!(
         creds
-            == crabka_broker::config::InterBrokerCredentials::Gssapi {
+            == krabka_broker::config::InterBrokerCredentials::Gssapi {
                 keytab_path: std::path::PathBuf::from("/etc/crabka/gssapi-keytab/keytab"),
                 client_principal: "kafka@EXAMPLE.COM".into(),
                 service_name: "kafka".into(),

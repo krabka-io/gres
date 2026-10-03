@@ -24,7 +24,7 @@
 
 use std::net::{Ipv4Addr, SocketAddr};
 
-use crabka_units::prelude::*;
+use krabka_units::prelude::*;
 use rand::RngExt as _;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},

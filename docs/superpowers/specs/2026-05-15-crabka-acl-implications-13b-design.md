@@ -12,7 +12,7 @@ Two small polish items on top of slice 13:
    because of this gap. Add the implications and remove the
    workarounds.
 2. **Multi-super-user.** Replace `BrokerConfig::super_user_name:
-   Option<String>` with `super_users: HashSet<String>` so deployments
+Option<String>` with `super_users: HashSet<String>` so deployments
    can configure multiple privileged identities, matching real Kafka's
    `super.users=User:a;User:b` config.
 
@@ -48,22 +48,23 @@ implication update (touch every ACL call site once).
 ### Operation implications
 
 A small `implies(stored, requested) -> bool` helper lives in
-`crabka-broker::authorizer`. It returns `true` for the table:
+`krabka-broker::authorizer`. It returns `true` for the table:
 
 | Stored operation | Implies (matches when requested is...) |
-|---|---|
-| `Read` | `Describe` |
-| `Write` | `Describe` |
-| `Delete` | `Describe` |
-| `Alter` | `Describe` |
-| `AlterConfigs` | `DescribeConfigs` |
-| `All` | Everything (existing semantics, kept) |
+| ---------------- | -------------------------------------- |
+| `Read`           | `Describe`                             |
+| `Write`          | `Describe`                             |
+| `Delete`         | `Describe`                             |
+| `Alter`          | `Describe`                             |
+| `AlterConfigs`   | `DescribeConfigs`                      |
+| `All`            | Everything (existing semantics, kept)  |
 
 `matches_operation(entry, requested)` calls `implies` after the exact-
 match and `All` checks fail. The decision algorithm in `authorize`
 otherwise stays exactly the same.
 
 The implication table is one-way:
+
 - `Describe` does NOT imply `Read`.
 - `DescribeConfigs` does NOT imply `AlterConfigs`.
 
@@ -81,6 +82,7 @@ pub struct BrokerConfig {
 ```
 
 `HashSet<String>` over `Vec<String>`:
+
 - O(1) `.contains` on every `authorize` call.
 - Dedupes free.
 
@@ -139,7 +141,7 @@ operator missing config), not an implication.
 
 ## Components
 
-### `crabka-broker/src/config.rs`
+### `krabka-broker/src/config.rs`
 
 - Replace `pub super_user_name: Option<String>` with
   `pub super_users: std::collections::HashSet<String>`.
@@ -150,7 +152,7 @@ operator missing config), not an implication.
   (no parser exists yet — slice 13's `super_user_name` is set
   programmatically).
 
-### `crabka-broker/src/authorizer.rs`
+### `krabka-broker/src/authorizer.rs`
 
 - `super_user_name: Option<&str>` parameter → `super_users: &HashSet<String>`.
 - `if super_user_name == Some(&req.principal.name)` → `if super_users.contains(&req.principal.name)`.
@@ -167,6 +169,7 @@ Every call site that today passes
 site. Search: `rg "super_user_name" crates/broker/`.
 
 Files touched (slice-13's full handler-wiring matrix):
+
 - `produce.rs`, `fetch.rs`, `metadata.rs`
 - `create_topics.rs`, `delete_topics.rs`, `alter_configs.rs`,
   `incremental_alter_configs.rs`, `create_partitions.rs`,
@@ -175,7 +178,7 @@ Files touched (slice-13's full handler-wiring matrix):
   `join_group.rs`, `offset_commit.rs`, `offset_fetch.rs`
 - `describe_cluster.rs`, `alter_user_scram_credentials.rs`
 - `init_producer_id.rs`, `txn/handlers/{add_partitions_to_txn,
-  end_txn, txn_offset_commit}.rs`
+end_txn, txn_offset_commit}.rs`
 - `create_acls.rs`, `delete_acls.rs`, `describe_acls.rs`
 
 ### Test setup sites
@@ -207,7 +210,7 @@ Inside `#[cfg(test)]`; not part of the public API.
 ### Metadata for alice after `Allow Read Topic foo` grant
 
 1. Alice authenticates as `alice` via PLAIN. Image has one ACL: `Allow
-   Read Topic LITERAL "foo" User:alice host=*`.
+Read Topic LITERAL "foo" User:alice host=*`.
 2. JVM producer dials, sends Metadata for `foo` (or fetch-all).
    Handler calls `authorize` with `operation: Describe`.
 3. Compat shim: `super_users.is_empty()` may be true or false depending
@@ -306,7 +309,7 @@ If a test fails after dropping the Describe ACL:
 
 ## Testing
 
-### Unit tests — `crabka-broker::authorizer`
+### Unit tests — `krabka-broker::authorizer`
 
 New implication tests:
 
@@ -328,7 +331,7 @@ New super-user tests:
 - `empty_super_user_set_engages_compat_shim_when_no_acls`
 - `empty_super_user_set_denies_when_acls_present`
 
-### Unit tests — `crabka-broker::config`
+### Unit tests — `krabka-broker::config`
 
 - `super_users_default_is_empty`
 - `super_users_for_tests_is_empty`
@@ -342,7 +345,7 @@ New super-user tests:
   `error_code=0`.
 - `implication_metadata_describes_after_write_acl` — same with Write.
 - `multi_super_user_both_can_provision` — broker with `super_users =
-  {"admin", "ops-bot"}`; both authenticate (via PLAIN) and call
+{"admin", "ops-bot"}`; both authenticate (via PLAIN) and call
   `CreateAcls` successfully; alice (not in set) gets 31.
 
 ### Workaround removal (modify existing tests)

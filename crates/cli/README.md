@@ -1,7 +1,7 @@
-# crabka-cli
+# krabka-cli
 
-[![Crates.io](https://img.shields.io/crates/v/crabka-cli.svg)](https://crates.io/crates/crabka-cli)
-[![Docs.rs](https://docs.rs/crabka-cli/badge.svg)](https://docs.rs/crabka-cli)
+[![Crates.io](https://img.shields.io/crates/v/krabka-cli.svg)](https://crates.io/crates/krabka-cli)
+[![Docs.rs](https://docs.rs/krabka-cli/badge.svg)](https://docs.rs/krabka-cli)
 [![CI](https://github.com/robot-head/crabka/actions/workflows/ci.yml/badge.svg)](https://github.com/robot-head/crabka/actions/workflows/ci.yml)
 
 Operator CLI for Crabka (binary: `crabka`).
@@ -11,7 +11,7 @@ This crate is part of [Crabka](https://github.com/robot-head/crabka), a Rust imp
 ## Install
 
 ```sh
-cargo add crabka-cli
+cargo add krabka-cli
 ```
 
 For workspace development, use the path dependency from this repository instead.
@@ -60,7 +60,7 @@ the backend route of each suspended tenant.
 
 ## Documentation
 
-Read the API documentation on [docs.rs/crabka-cli](https://docs.rs/crabka-cli). The repository README contains the project-wide setup, development, and release notes.
+Read the API documentation on [docs.rs/krabka-cli](https://docs.rs/krabka-cli). The repository README contains the project-wide setup, development, and release notes.
 
 ## License
 

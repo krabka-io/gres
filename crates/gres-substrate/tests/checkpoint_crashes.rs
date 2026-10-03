@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use assert2::assert;
-use crabka_broker::{Broker, BrokerConfig};
-use crabka_client_admin::{AdminClient, DeleteRecordsOp};
-use crabka_client_producer::{Acks, Producer};
-use crabka_gres_ranges::{RangeId, TenantName};
-use crabka_gres_substrate::{
+use krabka_broker::{Broker, BrokerConfig};
+use krabka_client_admin::{AdminClient, DeleteRecordsOp};
+use krabka_client_producer::{Acks, Producer};
+use krabka_gres_ranges::{RangeId, TenantName};
+use krabka_gres_substrate::{
     CheckpointPart, CheckpointSnapshotSource, DEFAULT_PART_MAX_SIZE, GroupCommitRequest,
     InMemoryWalLog, Manifest, ProducerWalWriter, RecoveryFencer, SubstrateError,
     TransactionalWalWriter, WalFrame, WriterGeneration, apply_frame,
@@ -100,7 +100,7 @@ async fn live_fresh_generation_restores_old_checkpoint_and_fetches_offset_zero()
         let old = MemKv::default();
         old.put(b"old".to_vec(), b"checkpoint".to_vec())
             .expect("old state");
-        crabka_gres_substrate::checkpoint::write_checkpoint(
+        krabka_gres_substrate::checkpoint::write_checkpoint(
             objects.as_ref(),
             &format!("{tenant}/r0"),
             &old,
@@ -110,7 +110,7 @@ async fn live_fresh_generation_restores_old_checkpoint_and_fetches_offset_zero()
         .await
         .expect("old-generation checkpoint");
 
-        let fresh_config = crabka_gres_substrate::LiveRecoveryConfig::new(
+        let fresh_config = krabka_gres_substrate::LiveRecoveryConfig::new(
             bootstrap.clone(),
             tenant.clone(),
             range,
@@ -241,7 +241,7 @@ async fn live_broker_crash_case(
     );
 
     let restored = MemKv::default();
-    let recovery = crabka_gres_substrate::LiveRecoveryConfig::new(bootstrap, tenant, range, None)
+    let recovery = krabka_gres_substrate::LiveRecoveryConfig::new(bootstrap, tenant, range, None)
         .with_checkpoints(objects);
     let outcome = recover_live_for_range_with_restore(recovery, &restored).await?;
     assert!(outcome.next_journal_seq == 3);
@@ -265,8 +265,8 @@ fn live_service(
             namespace.into(),
             topic.into(),
             1,
-            crabka_units::bytes(0),
-            crabka_units::bytes(24),
+            krabka_units::bytes(0),
+            krabka_units::bytes(24),
             2,
             std::time::Duration::from_secs(1),
         )?,
@@ -337,7 +337,7 @@ impl CheckpointWalPruner for LiveAdminPruner {
             .admin
             .lock()
             .await
-            .delete_records(ops, crabka_units::secs(5))
+            .delete_records(ops, krabka_units::secs(5))
             .await
             .map_err(|error| SubstrateError::Checkpoint(error.to_string()))?;
         if let Some(failed) = outcomes.iter().find(|outcome| outcome.error_code != 0) {
@@ -403,8 +403,8 @@ async fn production_zombie_service_cannot_supersede_successor_manifest() {
                 "zombie-race".into(),
                 "wal.g0".into(),
                 1,
-                crabka_units::bytes(0),
-                crabka_units::bytes(24),
+                krabka_units::bytes(0),
+                krabka_units::bytes(24),
                 2,
                 std::time::Duration::from_secs(1),
             )
@@ -446,8 +446,8 @@ async fn production_zombie_service_cannot_supersede_successor_manifest() {
                 "zombie-race".into(),
                 "wal.g1".into(),
                 1,
-                crabka_units::bytes(0),
-                crabka_units::bytes(24),
+                krabka_units::bytes(0),
+                krabka_units::bytes(24),
                 2,
                 std::time::Duration::from_secs(1),
             )
@@ -492,7 +492,7 @@ async fn production_zombie_service_cannot_supersede_successor_manifest() {
         );
 
         let restored = MemKv::default();
-        let source = crabka_gres_substrate::checkpoint::restore_latest(
+        let source = krabka_gres_substrate::checkpoint::restore_latest(
             objects.as_ref(),
             "zombie-race",
             &restored,
@@ -578,8 +578,8 @@ impl ProductionCrashHarness {
             "tenant-production-crash".into(),
             "wal-production-crash".into(),
             1,
-            crabka_units::bytes(0),
-            crabka_units::bytes(24),
+            krabka_units::bytes(0),
+            krabka_units::bytes(24),
             1,
             std::time::Duration::from_secs(1),
         )?;
@@ -617,14 +617,14 @@ impl ProductionCrashHarness {
             .await?;
         let barrier_offset = barrier_ack.frames[0].offset;
         let kv = MemKv::default();
-        let plan = crabka_gres_substrate::checkpoint::restore_latest_and_replay_tail(
+        let plan = krabka_gres_substrate::checkpoint::restore_latest_and_replay_tail(
             self.objects.as_ref(),
             "tenant-production-crash",
             &kv,
-            crabka_gres_substrate::checkpoint::RestoreTail {
+            krabka_gres_substrate::checkpoint::RestoreTail {
                 current_generation: 0,
                 log_start: Some(self.log.earliest_retained_offset().await),
-                committed_frames: crabka_gres_substrate::CommittedWalReader::committed_from_start(
+                committed_frames: krabka_gres_substrate::CommittedWalReader::committed_from_start(
                     self.log.as_ref(),
                 )
                 .await?,
@@ -647,7 +647,7 @@ impl ProductionCrashHarness {
             .expect("delete newest manifest");
     }
 }
-use crabka_pgkv::{Kv, MemKv, SnapshotKv, WriteOp};
+use krabka_pgkv::{Kv, MemKv, SnapshotKv, WriteOp};
 use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -760,7 +760,7 @@ struct CrashHarness {
 }
 
 struct RestoredState {
-    source: Option<crabka_gres_substrate::checkpoint::RestoredFrom>,
+    source: Option<krabka_gres_substrate::checkpoint::RestoredFrom>,
     next_journal_seq: u64,
     kv: MemKv,
 }
@@ -804,11 +804,11 @@ impl CrashHarness {
 
     async fn recover(&self) -> Result<RestoredState, SubstrateError> {
         let kv = MemKv::default();
-        let plan = crabka_gres_substrate::checkpoint::restore_latest_and_replay_tail(
+        let plan = krabka_gres_substrate::checkpoint::restore_latest_and_replay_tail(
             self.objects.as_ref(),
             "tenant-a",
             &kv,
-            crabka_gres_substrate::checkpoint::RestoreTail {
+            krabka_gres_substrate::checkpoint::RestoreTail {
                 current_generation: 0,
                 log_start: Some(*self.log_start.lock().await),
                 committed_frames: tail_frames(),
@@ -835,7 +835,7 @@ impl CrashHarness {
         b_value: &[u8],
     ) -> Manifest {
         let kv = checkpoint_kv(b_value);
-        crabka_gres_substrate::checkpoint::write_checkpoint(
+        krabka_gres_substrate::checkpoint::write_checkpoint(
             self.objects.as_ref(),
             "tenant-a",
             &kv,
@@ -848,7 +848,7 @@ impl CrashHarness {
 
     async fn write_zombie_checkpoint_at(&self, covered_offset: i64) {
         let kv = checkpoint_kv(b"zombie-old");
-        crabka_gres_substrate::checkpoint::write_checkpoint(
+        krabka_gres_substrate::checkpoint::write_checkpoint(
             self.objects.as_ref(),
             "tenant-a",
             &kv,
@@ -916,7 +916,7 @@ fn barrier_frame() -> WalFrame {
     }
 }
 
-fn tail_frames() -> Vec<crabka_gres_substrate::ReplayItem> {
+fn tail_frames() -> Vec<krabka_gres_substrate::ReplayItem> {
     vec![
         item(0, 0, b"a", b"pre-checkpoint"),
         item(1, 1, b"b", b"previous-tail"),
@@ -945,8 +945,8 @@ fn item(
     journal_seq: u64,
     key: &[u8],
     value: &[u8],
-) -> crabka_gres_substrate::ReplayItem {
-    crabka_gres_substrate::ReplayItem {
+) -> krabka_gres_substrate::ReplayItem {
+    krabka_gres_substrate::ReplayItem {
         offset,
         bytes: WalFrame {
             journal_seq,
@@ -959,8 +959,8 @@ fn item(
     }
 }
 
-fn barrier(offset: i64) -> crabka_gres_substrate::ReplayItem {
-    crabka_gres_substrate::ReplayItem {
+fn barrier(offset: i64) -> krabka_gres_substrate::ReplayItem {
+    krabka_gres_substrate::ReplayItem {
         offset,
         bytes: WalFrame {
             journal_seq: u64::MAX,

@@ -2,7 +2,7 @@
 
 **Status:** Approved 2026-05-16.
 
-**Goal:** Replace slice 17's placeholder `Kafka` CRD with a real schema and turn the stub reconciler into one that actually materializes a single-broker KRaft mixed-mode Kafka cluster: a headless `Service`, a `ConfigMap`, a cluster-ID `Secret`, and a `StatefulSet` running the `crabka-broker` binary. Status conditions reflect `StatefulSet` rollout state. The kind-cluster e2e from slice 17 is extended to apply a `Kafka` CR, wait for `Ready=True`, and assert the broker pod responds on its Kafka listener.
+**Goal:** Replace slice 17's placeholder `Kafka` CRD with a real schema and turn the stub reconciler into one that actually materializes a single-broker KRaft mixed-mode Kafka cluster: a headless `Service`, a `ConfigMap`, a cluster-ID `Secret`, and a `StatefulSet` running the `krabka-broker` binary. Status conditions reflect `StatefulSet` rollout state. The kind-cluster e2e from slice 17 is extended to apply a `Kafka` CR, wait for `Ready=True`, and assert the broker pod responds on its Kafka listener.
 
 ---
 
@@ -12,7 +12,7 @@
 
 - Real `Kafka` CRD schema:
   - `spec.replicas: i32` (default `1`; this slice enforces `== 1` — multi-broker via `KafkaNodePool` arrives in slice 20).
-  - `spec.image: String` (default `ghcr.io/robot-head/crabka-broker:<chart-appVersion>`).
+  - `spec.image: String` (default `ghcr.io/robot-head/krabka-broker:<chart-appVersion>`).
   - `spec.kafkaVersion: String` retained as informational metadata (no schema enforcement; written into the broker pod's `app.kubernetes.io/version` label).
   - `spec.resources: ResourceRequirements` (CPU + memory requests/limits for the broker container; defaults match the operator pod's existing defaults).
   - `status.conditions: []Condition` (`Ready`, `Reconciling`); plus `status.readyReplicas` / `status.replicas` mirrors of `StatefulSet.status`.
@@ -20,31 +20,31 @@
   - One headless `Service` `<name>-broker-headless` (`clusterIP: None`, port 9092/TCP `kafka-internal`).
   - One `ConfigMap` `<name>-broker-config` containing a `broker.args` script consumed by the pod entrypoint.
   - One `Secret` `<name>-cluster-id` with a generated UUID under `clusterId`. Created on first reconcile, never overwritten.
-  - One `StatefulSet` `<name>-broker` with `serviceName=<name>-broker-headless`, the requested `replicas`, an init container that runs `crabka format`, a main container that runs `crabka-broker`, an `emptyDir` `data` volume mounted at `/var/lib/crabka/data`.
+  - One `StatefulSet` `<name>-broker` with `serviceName=<name>-broker-headless`, the requested `replicas`, an init container that runs `crabka format`, a main container that runs `krabka-broker`, an `emptyDir` `data` volume mounted at `/var/lib/crabka/data`.
 - All managed objects carry an `ownerReference` back to the `Kafka` CR with `controller: true` + `blockOwnerDeletion: true`.
-- `crabka-broker` CLI gains `--cluster-id <UUID>` (env `CRABKA_CLUSTER_ID`). `Controller::start` threads the value through to `CrabkaStateMachine::new` so cross-node images agree (and the operator-managed Secret is load-bearing on day one, not informational).
+- `krabka-broker` CLI gains `--cluster-id <UUID>` (env `KRABKA_CLUSTER_ID`). `Controller::start` threads the value through to `CrabkaStateMachine::new` so cross-node images agree (and the operator-managed Secret is load-bearing on day one, not informational).
 - `crabka format --cluster-id` is plumbed from the CLI (already present) into the init container args.
-- Packaging: `packaging/melange/crabka-broker.yaml` + `packaging/apko/crabka-broker.yaml` + `tools/build-image.sh` extended to build the broker image alongside the operator image.
+- Packaging: `packaging/melange/krabka-broker.yaml` + `packaging/apko/krabka-broker.yaml` + `tools/build-image.sh` extended to build the broker image alongside the operator image.
 - E2E (kind):
   - Apply `Kafka` `demo` with `replicas: 1`.
   - Wait for `status.conditions[?type=="Ready"].status == "True"`.
-  - `kubectl exec -n default demo-broker-0 -- /usr/bin/crabka-broker --version` returns 0 (smoke proof that the binary launched correctly).
-  - `kubectl logs -n default demo-broker-0` contains the substring `crabka-broker listening`.
+  - `kubectl exec -n default demo-broker-0 -- /usr/bin/krabka-broker --version` returns 0 (smoke proof that the binary launched correctly).
+  - `kubectl logs -n default demo-broker-0` contains the substring `krabka-broker listening`.
 
 ### Out (deferred)
 
-| Concern | Slice |
-|---|---|
-| Multi-broker clusters via `KafkaNodePool` | 20 |
-| Pod templates (affinity, tolerations, labels, annotations) | 20 |
-| Rolling restart on config drift | 21 |
-| `ControlledShutdown` for graceful drain | 22 (core) |
-| `NetworkPolicy` generation | 23 |
-| Persistent storage (PVCs, `storageClass`, retain-vs-delete) | 24 |
-| External listeners (NodePort / LB / Ingress / Route) | 25–27 |
-| Version upgrades / `inter.broker.protocol.version` | 28 |
-| Cluster CA + clients CA, TLS, SASL listener config | 30–31 |
-| `KafkaTopic` / `KafkaUser` CRDs | 35–36 |
+| Concern                                                     | Slice     |
+| ----------------------------------------------------------- | --------- |
+| Multi-broker clusters via `KafkaNodePool`                   | 20        |
+| Pod templates (affinity, tolerations, labels, annotations)  | 20        |
+| Rolling restart on config drift                             | 21        |
+| `ControlledShutdown` for graceful drain                     | 22 (core) |
+| `NetworkPolicy` generation                                  | 23        |
+| Persistent storage (PVCs, `storageClass`, retain-vs-delete) | 24        |
+| External listeners (NodePort / LB / Ingress / Route)        | 25–27     |
+| Version upgrades / `inter.broker.protocol.version`          | 28        |
+| Cluster CA + clients CA, TLS, SASL listener config          | 30–31     |
+| `KafkaTopic` / `KafkaUser` CRDs                             | 35–36     |
 
 ### Constraints inherited
 
@@ -104,7 +104,7 @@ pub struct KafkaStatus {
 
 `KafkaCondition` is unchanged from slice 17.
 
-CRD YAML is regenerated by `crabka-operator gen-crds` and committed to `deploy/crds/crabka.io_kafkas.yaml`. The codegen-drift check (`.github/workflows/codegen-check.yml`) already covers this path; no workflow change needed.
+CRD YAML is regenerated by `krabka-operator gen-crds` and committed to `deploy/crds/crabka.io_kafkas.yaml`. The codegen-drift check (`.github/workflows/codegen-check.yml`) already covers this path; no workflow change needed.
 
 ---
 
@@ -122,7 +122,7 @@ fn render_statefulset(owner: &Kafka, image: &str) -> StatefulSet;
 Each helper is a pure function of the owner spec + (for `Secret`) a `Uuid::new_v4()` call wrapped in an injectable trait so unit tests are deterministic. The reconcile fn:
 
 1. Validates `spec.replicas == 1`; if not, sets `Ready=False, reason=UnsupportedReplicaCount` and returns.
-2. Server-side applies `Service`, `ConfigMap`, `Secret` (with `if-not-exists` semantics for `Secret` to preserve the generated UUID), and `StatefulSet`. Field manager: `crabka-operator`.
+2. Server-side applies `Service`, `ConfigMap`, `Secret` (with `if-not-exists` semantics for `Secret` to preserve the generated UUID), and `StatefulSet`. Field manager: `krabka-operator`.
 3. Reads back the live `StatefulSet`, projects its `status.replicas` + `status.readyReplicas` into `KafkaStatus`, computes condition state:
    - `readyReplicas == spec.replicas` → `Ready=True, reason=Available`.
    - `readyReplicas == 0` → `Ready=False, reason=NoBrokersReady`.
@@ -141,7 +141,7 @@ The default broker image is computed in the reconcile fn:
 ```rust
 fn default_image(cfg: &OperatorConfig) -> String {
     cfg.default_broker_image.clone()
-        .unwrap_or_else(|| format!("ghcr.io/robot-head/crabka-broker:{}", env!("CARGO_PKG_VERSION")))
+        .unwrap_or_else(|| format!("ghcr.io/robot-head/krabka-broker:{}", env!("CARGO_PKG_VERSION")))
 }
 ```
 
@@ -163,7 +163,7 @@ metadata:
 spec:
   clusterIP: None
   selector:
-    app.kubernetes.io/name: crabka-broker
+    app.kubernetes.io/name: krabka-broker
     app.kubernetes.io/instance: demo
   ports:
     - name: kafka-internal
@@ -180,7 +180,7 @@ kind: ConfigMap
 metadata: { name: demo-broker-config, ... }
 data:
   broker.env: |
-    CRABKA_LISTEN_ADDR=0.0.0.0:9092
+    KRABKA_LISTEN_ADDR=0.0.0.0:9092
 ```
 
 The advertised listener is computed inline by the pod entrypoint from `POD_NAME` and the headless service FQDN; no ConfigMap variable for it. The ConfigMap is intentionally thin in slice 19 — slice 21 (rolling restart on config drift) will be the slice that justifies a richer one.
@@ -210,16 +210,22 @@ spec:
   podManagementPolicy: Parallel
   selector:
     matchLabels:
-      app.kubernetes.io/name: crabka-broker
+      app.kubernetes.io/name: krabka-broker
       app.kubernetes.io/instance: demo
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: crabka-broker
+        app.kubernetes.io/name: krabka-broker
         app.kubernetes.io/instance: demo
         app.kubernetes.io/version: <kafkaVersion>
     spec:
-      securityContext: { runAsNonRoot: true, runAsUser: 65532, fsGroup: 65532, seccompProfile: { type: RuntimeDefault } }
+      securityContext:
+        {
+          runAsNonRoot: true,
+          runAsUser: 65532,
+          fsGroup: 65532,
+          seccompProfile: { type: RuntimeDefault },
+        }
       initContainers:
         - name: format
           image: <broker image>
@@ -228,27 +234,49 @@ spec:
             - |
               set -eu
               if [ ! -f /var/lib/crabka/data/.formatted ]; then
-                /usr/bin/crabka format --log-dir /var/lib/crabka/data --cluster-id "$CRABKA_CLUSTER_ID"
+                /usr/bin/crabka format --log-dir /var/lib/crabka/data --cluster-id "$KRABKA_CLUSTER_ID"
                 touch /var/lib/crabka/data/.formatted
               fi
           env:
-            - { name: CRABKA_CLUSTER_ID, valueFrom: { secretKeyRef: { name: demo-cluster-id, key: clusterId } } }
+            - {
+                name: KRABKA_CLUSTER_ID,
+                valueFrom:
+                  { secretKeyRef: { name: demo-cluster-id, key: clusterId } },
+              }
           volumeMounts:
             - { name: data, mountPath: /var/lib/crabka/data }
-          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          securityContext:
+            {
+              allowPrivilegeEscalation: false,
+              readOnlyRootFilesystem: true,
+              capabilities: { drop: [ALL] },
+            }
       containers:
         - name: broker
           image: <broker image>
-          command: [/usr/bin/crabka-broker]
+          command: [/usr/bin/krabka-broker]
           args:
             - --listen-addr=0.0.0.0:9092
             - --log-dir=/var/lib/crabka/data
             - --broker-id=0
           env:
-            - { name: POD_NAME, valueFrom: { fieldRef: { fieldPath: metadata.name } } }
-            - { name: POD_NAMESPACE, valueFrom: { fieldRef: { fieldPath: metadata.namespace } } }
-            - { name: CRABKA_CLUSTER_ID, valueFrom: { secretKeyRef: { name: demo-cluster-id, key: clusterId } } }
-            - { name: CRABKA_ADVERTISED_LISTENER, value: "$(POD_NAME).demo-broker-headless.$(POD_NAMESPACE).svc.cluster.local:9092" }
+            - {
+                name: POD_NAME,
+                valueFrom: { fieldRef: { fieldPath: metadata.name } },
+              }
+            - {
+                name: POD_NAMESPACE,
+                valueFrom: { fieldRef: { fieldPath: metadata.namespace } },
+              }
+            - {
+                name: KRABKA_CLUSTER_ID,
+                valueFrom:
+                  { secretKeyRef: { name: demo-cluster-id, key: clusterId } },
+              }
+            - {
+                name: KRABKA_ADVERTISED_LISTENER,
+                value: "$(POD_NAME).demo-broker-headless.$(POD_NAMESPACE).svc.cluster.local:9092",
+              }
           ports:
             - { containerPort: 9092, name: kafka-internal, protocol: TCP }
           readinessProbe:
@@ -262,14 +290,19 @@ spec:
           resources: <from spec or defaults>
           volumeMounts:
             - { name: data, mountPath: /var/lib/crabka/data }
-          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          securityContext:
+            {
+              allowPrivilegeEscalation: false,
+              readOnlyRootFilesystem: true,
+              capabilities: { drop: [ALL] },
+            }
       volumes:
         - { name: data, emptyDir: {} }
 ```
 
-Note: `--advertised-listener` is not a CLI flag on the broker today (it derives from `--listen-addr`). The pod entrypoint script substitutes `CRABKA_ADVERTISED_LISTENER` into the args via shell expansion before exec. This slice keeps the broker CLI unchanged for the listener; threading an env-aware advertised listener is implicit through `--listen-addr` substitution (the broker binds `0.0.0.0:9092` and advertises the pod FQDN).
+Note: `--advertised-listener` is not a CLI flag on the broker today (it derives from `--listen-addr`). The pod entrypoint script substitutes `KRABKA_ADVERTISED_LISTENER` into the args via shell expansion before exec. This slice keeps the broker CLI unchanged for the listener; threading an env-aware advertised listener is implicit through `--listen-addr` substitution (the broker binds `0.0.0.0:9092` and advertises the pod FQDN).
 
-Actually we extend the broker binary to accept `--advertised-listener` from env `CRABKA_ADVERTISED_LISTENER` (clap `env = "..."` attribute). One-line CLI change. Same for `--cluster-id` (env `CRABKA_CLUSTER_ID`).
+Actually we extend the broker binary to accept `--advertised-listener` from env `KRABKA_ADVERTISED_LISTENER` (clap `env = "..."` attribute). One-line CLI change. Same for `--cluster-id` (env `KRABKA_CLUSTER_ID`).
 
 ---
 
@@ -277,8 +310,8 @@ Actually we extend the broker binary to accept `--advertised-listener` from env 
 
 `crates/broker/src/bin/broker.rs`:
 
-- Add `#[arg(long, env = "CRABKA_CLUSTER_ID")] cluster_id: Option<uuid::Uuid>`.
-- Add `#[arg(long, env = "CRABKA_ADVERTISED_LISTENER")] advertised_listener_env: Option<String>` (clap will use the env value if the CLI flag is absent). The existing `advertised_listener: Option<String>` field is renamed to keep one canonical name; both env and CLI flag map to it.
+- Add `#[arg(long, env = "KRABKA_CLUSTER_ID")] cluster_id: Option<uuid::Uuid>`.
+- Add `#[arg(long, env = "KRABKA_ADVERTISED_LISTENER")] advertised_listener_env: Option<String>` (clap will use the env value if the CLI flag is absent). The existing `advertised_listener: Option<String>` field is renamed to keep one canonical name; both env and CLI flag map to it.
 - Plumb `cluster_id` into `BrokerConfig` → `ControllerConfig` → `CrabkaStateMachine::new`. `BrokerConfig::cluster_id: Option<Uuid>` (None preserves current `Uuid::nil()` for backward-compat in unit tests).
 
 `crates/raft/src/controller.rs` line 377:
@@ -297,38 +330,38 @@ This is a small, mechanical wiring change. Existing tests pass `None` and keep `
 
 ## 6. Packaging
 
-Two new packaging files mirror `crabka-operator`:
+Two new packaging files mirror `krabka-operator`:
 
-`packaging/melange/crabka-broker.yaml`:
+`packaging/melange/krabka-broker.yaml`:
 
 ```yaml
 package:
-  name: crabka-broker
+  name: krabka-broker
   version: 0.1.1
   epoch: 0
   description: Single-node Kafka-compatible broker
   ...
 pipeline:
   - name: Install pinned Rust toolchain (same as operator)
-  - name: Build crabka-broker + crabka CLI
+  - name: Build krabka-broker + crabka CLI
     runs: |
-      cargo build --release --bin crabka-broker -p crabka-broker
-      cargo build --release --bin crabka -p crabka-cli
-      install -D -m 0755 target/release/crabka-broker "${{targets.contextdir}}/usr/bin/crabka-broker"
+      cargo build --release --bin krabka-broker -p krabka-broker
+      cargo build --release --bin crabka -p krabka-cli
+      install -D -m 0755 target/release/krabka-broker "${{targets.contextdir}}/usr/bin/krabka-broker"
       install -D -m 0755 target/release/crabka         "${{targets.contextdir}}/usr/bin/crabka"
 ```
 
-`packaging/apko/crabka-broker.yaml` composes the apk onto `wolfi-base` with the standard runtime contents.
+`packaging/apko/krabka-broker.yaml` composes the apk onto `wolfi-base` with the standard runtime contents.
 
-`tools/build-image.sh` is extended with a second `melange build` + `apko build` invocation for `crabka-broker`. The operator-e2e workflow gains a Build-broker-image step parallel to the existing operator one, plus a `kind load docker-image crabka-broker:e2e` step.
+`tools/build-image.sh` is extended with a second `melange build` + `apko build` invocation for `krabka-broker`. The operator-e2e workflow gains a Build-broker-image step parallel to the existing operator one, plus a `kind load docker-image krabka-broker:e2e` step.
 
 ---
 
 ## 7. Helm chart
 
-`charts/crabka-operator/`:
+`charts/krabka-operator/`:
 
-- `values.yaml` gains `brokerImage.repository` + `brokerImage.tag` + `brokerImage.pullPolicy`, defaulting to `ghcr.io/robot-head/crabka-broker:<chart.appVersion>` / `IfNotPresent`.
+- `values.yaml` gains `brokerImage.repository` + `brokerImage.tag` + `brokerImage.pullPolicy`, defaulting to `ghcr.io/robot-head/krabka-broker:<chart.appVersion>` / `IfNotPresent`.
 - `templates/deployment.yaml` adds `--default-broker-image={{ .Values.brokerImage.repository }}:{{ .Values.brokerImage.tag }}` to the operator's `args`.
 - `templates/clusterrole.yaml` is extended with verbs on `services`, `configmaps`, `secrets` (`get,list,watch,create,update,patch,delete`) in `""` apiGroup, and on `statefulsets` in `apps`. The existing Lease + events rules stay.
 
@@ -362,21 +395,21 @@ Mocked-client tests modeled after the slice 17 pattern:
 
 A tiny test exercises the new env-var plumbing without spinning a real broker:
 
-- `binary_accepts_cluster_id_env_var` — `crabka-broker --help` includes `--cluster-id`.
+- `binary_accepts_cluster_id_env_var` — `krabka-broker --help` includes `--cluster-id`.
 - `binary_advertised_listener_env_overrides_default` — clap-only parse-args path; no Tokio runtime.
 
-These run on every `cargo test -p crabka-broker --bin crabka-broker` invocation.
+These run on every `cargo test -p krabka-broker --bin krabka-broker` invocation.
 
 ### E2E (kind, `.github/workflows/operator-e2e.yml`)
 
 Replace the placeholder `demo` resource with a real broker:
 
-1. Build both `crabka-operator` and `crabka-broker` images via melange/apko, load both into kind.
+1. Build both `krabka-operator` and `krabka-broker` images via melange/apko, load both into kind.
 2. Install CRDs + chart (chart now references the broker image via `--default-broker-image`).
 3. Apply `Kafka` `demo` with `replicas: 1`.
 4. Wait for `status.conditions[?type=="Ready"].status == "True"` (up to 5 minutes — first-boot is slower than the slice 17 stub).
-5. Smoke: `kubectl exec demo-broker-0 -c broker -- /usr/bin/crabka-broker --version` → exit 0.
-6. Log probe: `kubectl logs demo-broker-0 -c broker` contains `crabka-broker listening`.
+5. Smoke: `kubectl exec demo-broker-0 -c broker -- /usr/bin/krabka-broker --version` → exit 0.
+6. Log probe: `kubectl logs demo-broker-0 -c broker` contains `krabka-broker listening`.
 7. Cleanup: `kubectl delete kafka demo`; assert StatefulSet, Service, ConfigMap, Secret are garbage-collected within 60 seconds.
 
 The existing diagnostics-on-failure block needs `kubectl get sts,svc,cm,secret -n default` rolled in.
@@ -406,14 +439,14 @@ crates/raft/src/
 ├── controller.rs               # MODIFIED — pass cluster_id to CrabkaStateMachine
 deploy/crds/
 ├── crabka.io_kafkas.yaml       # REGENERATED
-charts/crabka-operator/
+charts/krabka-operator/
 ├── values.yaml                 # MODIFIED — brokerImage block
 ├── templates/deployment.yaml   # MODIFIED — --default-broker-image arg
 ├── templates/clusterrole.yaml  # MODIFIED — services/cm/secret/sts verbs
 packaging/melange/
-├── crabka-broker.yaml          # NEW
+├── krabka-broker.yaml          # NEW
 packaging/apko/
-├── crabka-broker.yaml          # NEW
+├── krabka-broker.yaml          # NEW
 tools/
 ├── build-image.sh              # MODIFIED — build broker image too
 .github/workflows/
@@ -431,19 +464,19 @@ Implementation plan target: **~12 tasks across 4 batches**.
 
 ## 10. Open questions resolved
 
-- **Should the broker image be one container with both init + main, or two images?** One. The same image runs `crabka format` as init and `crabka-broker` as main. Cuts pull cost in half and matches Strimzi.
+- **Should the broker image be one container with both init + main, or two images?** One. The same image runs `crabka format` as init and `krabka-broker` as main. Cuts pull cost in half and matches Strimzi.
 - **Should the cluster-ID Secret be created via SSA or `if-not-exists`?** `if-not-exists` (server-side `create` then ignore `AlreadyExists`). SSA on a Secret with `data` would overwrite the generated UUID on every reconcile, which is wrong.
 - **Where does the broker get its `broker_id`?** Hardcoded `0` for slice 19 (replicas=1). Slice 20 (KafkaNodePool) introduces ordinal-derived ids.
-- **Why no `--advertised-listener` on the broker CLI today?** It exists as a CLI flag but not as an env var; slice 19 adds the env binding via clap's `env = "..."`. The operator passes it through `CRABKA_ADVERTISED_LISTENER`.
+- **Why no `--advertised-listener` on the broker CLI today?** It exists as a CLI flag but not as an env var; slice 19 adds the env binding via clap's `env = "..."`. The operator passes it through `KRABKA_ADVERTISED_LISTENER`.
 - **Why `podManagementPolicy: Parallel`?** With replicas=1 the policy is moot; setting it now means slice 20's multi-broker change doesn't touch the StatefulSet template.
 
 ---
 
 ## 11. Acceptance criteria
 
-1. `cargo test -p crabka-operator` and `cargo test -p crabka-broker --bin crabka-broker` pass.
+1. `cargo test -p krabka-operator` and `cargo test -p krabka-broker --bin krabka-broker` pass.
 2. `cargo clippy --workspace --all-targets -- -D warnings` clean.
-3. `helm lint charts/crabka-operator` and `helm template ... | kubectl --dry-run=client apply -f -` pass.
-4. `crabka-operator gen-crds` regenerates `deploy/crds/crabka.io_kafkas.yaml` with no drift (codegen-check CI green).
-5. operator-e2e workflow: apply `Kafka demo` with `replicas: 1`; pod `demo-broker-0` reaches Ready; `crabka-broker --version` exec returns 0; log line `crabka-broker listening` appears.
+3. `helm lint charts/krabka-operator` and `helm template ... | kubectl --dry-run=client apply -f -` pass.
+4. `krabka-operator gen-crds` regenerates `deploy/crds/crabka.io_kafkas.yaml` with no drift (codegen-check CI green).
+5. operator-e2e workflow: apply `Kafka demo` with `replicas: 1`; pod `demo-broker-0` reaches Ready; `krabka-broker --version` exec returns 0; log line `krabka-broker listening` appears.
 6. `kubectl delete kafka demo` garbage-collects `Service`, `ConfigMap`, `Secret`, `StatefulSet` within 60 s.

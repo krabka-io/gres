@@ -163,8 +163,8 @@ pub fn evaluate(
 
     // The broker aborts on a finalized metadata.version below its
     // supported floor (3.3-IV3). Refuse to inject one.
-    if let Some(mv) = crabka_metadata::metadata_version::from_version_string(&resolved.short()) {
-        if mv.feature_level() < crabka_metadata::metadata_version::METADATA_VERSION_MIN {
+    if let Some(mv) = krabka_metadata::metadata_version::from_version_string(&resolved.short()) {
+        if mv.feature_level() < krabka_metadata::metadata_version::METADATA_VERSION_MIN {
             return VersionOutcome::Invalid {
                 reason: VersionReason::MetadataVersionTooLow,
                 message: format!(
@@ -186,10 +186,10 @@ pub fn evaluate(
     let finalized =
         finalized_metadata_version.and_then(|version| KafkaVersion::parse(version).ok());
     if finalized.is_some_and(|finalized| resolved.metadata_key() < finalized.metadata_key())
-        && crabka_metadata::metadata_version::from_version_string(&resolved.short()).is_some_and(
+        && krabka_metadata::metadata_version::from_version_string(&resolved.short()).is_some_and(
             |target| {
                 target.feature_level()
-                    < crabka_metadata::metadata_version::ONLINE_DOWNGRADE_MIN_LEVEL
+                    < krabka_metadata::metadata_version::ONLINE_DOWNGRADE_MIN_LEVEL
             },
         )
     {

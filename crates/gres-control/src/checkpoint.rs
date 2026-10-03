@@ -2,7 +2,7 @@
 
 use std::str::FromStr;
 
-use crabka_units::{ByteSize, Time, convert::ByteSizeExt as _, mebibytes, secs};
+use krabka_units::{ByteSize, Time, convert::ByteSizeExt as _, mebibytes, secs};
 use refined_type::rule::{GreaterEqualUsize, GreaterUsize};
 
 /// Default checkpoint trigger threshold in committed WAL frames.
@@ -93,7 +93,7 @@ impl FromStr for PositiveUsize {
 #[cfg(test)]
 mod tests {
     use assert2::check;
-    use crabka_units::convert::TimeExt as _;
+    use krabka_units::convert::TimeExt as _;
 
     use super::*;
 
@@ -110,7 +110,7 @@ mod tests {
     fn checkpoint_part_size_carries_its_dimension() {
         let part = CheckpointPartBytes::new(4_096).expect("a 4 KiB part is valid");
 
-        check!(part.into_value() == crabka_units::kibibytes(4));
+        check!(part.into_value() == krabka_units::kibibytes(4));
         check!(CheckpointPartBytes::new(7).is_err());
     }
 }

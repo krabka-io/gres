@@ -3,7 +3,7 @@
 use super::*;
 
 /// The array element type beneath any domain wrappers.
-fn array_assignment_element(ty: ColumnType) -> Option<crabka_pgtypes::ElemType> {
+fn array_assignment_element(ty: ColumnType) -> Option<krabka_pgtypes::ElemType> {
     match ty {
         ColumnType::Domain(domain) => array_assignment_element(*domain.base),
         ty => ty.array_element(),
@@ -37,7 +37,7 @@ fn assign_point_subscript(
         0 => point.x = value,
         1 => point.y = value,
         _ => {
-            return Err(ExecError::Type(crabka_pgtypes::TypeError::array_subscript(
+            return Err(ExecError::Type(krabka_pgtypes::TypeError::array_subscript(
                 "array subscript out of range",
             )));
         }
@@ -61,7 +61,7 @@ pub(super) fn target_indirection_type(
                     ty.name()
                 )));
             };
-            let definition = crabka_pgtypes::usertype::lookup_oid(named.oid).ok_or_else(|| {
+            let definition = krabka_pgtypes::usertype::lookup_oid(named.oid).ok_or_else(|| {
                 ExecError::UndefinedObject(format!("type \"{}\" does not exist", named.name))
             })?;
             let fields = definition.fields().unwrap_or(&[]);
@@ -125,7 +125,7 @@ pub(super) fn assign_target_indirections(
                     ty.name()
                 )));
             };
-            let definition = crabka_pgtypes::usertype::lookup_oid(named.oid).ok_or_else(|| {
+            let definition = krabka_pgtypes::usertype::lookup_oid(named.oid).ok_or_else(|| {
                 ExecError::UndefinedObject(format!("type \"{}\" does not exist", named.name))
             })?;
             let fields = definition.fields().unwrap_or(&[]);
@@ -139,7 +139,7 @@ pub(super) fn assign_target_indirections(
                     ))
                 })?;
             let mut record = match base {
-                Datum::Null => crabka_pgtypes::RecordValue::named(
+                Datum::Null => krabka_pgtypes::RecordValue::named(
                     Some(named),
                     Arc::from(
                         fields
@@ -153,7 +153,7 @@ pub(super) fn assign_target_indirections(
                 // An ALTER TYPE ... ADD ATTRIBUTE leaves old stored values
                 // narrower than the current composite definition. Align those
                 // values by field name and supply NULL for the new attributes.
-                Datum::Record(record) => crabka_pgtypes::RecordValue::named(
+                Datum::Record(record) => krabka_pgtypes::RecordValue::named(
                     Some(named),
                     Arc::from(
                         fields

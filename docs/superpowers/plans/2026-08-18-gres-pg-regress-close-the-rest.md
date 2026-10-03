@@ -24,13 +24,13 @@ an EXPLAIN census, and an executor-architecture study). The ledgers live in
 
 Line kinds across the 110,197 (whole-block attribution, ±30%):
 
-| kind | lines |
-|---|---:|
+| kind                                                                                                                                                    |   lines |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------: |
 | cost-planner-only (node choice, join order/method, index/bitmap/tid access, Materialize/Memoize/Sort placement, parallel, partitionwise, row estimates) | ~23,000 |
-| deterministic plan shape / EXPLAIN renderer (needs a plan tree + typed deparse, no cost model) | ~6,600 |
-| cross-join row order fixable by PG's join-side rule (geometry 1,334) | ~1,340 |
-| sort tie order (pg_qsort + window ordering; window 1,196) | ~1,200 |
-| parser / executor / catalog / DDL / types / functions / absent subsystems | ~78,000 |
+| deterministic plan shape / EXPLAIN renderer (needs a plan tree + typed deparse, no cost model)                                                          |  ~6,600 |
+| cross-join row order fixable by PG's join-side rule (geometry 1,334)                                                                                    |  ~1,340 |
+| sort tie order (pg_qsort + window ordering; window 1,196)                                                                                               |  ~1,200 |
+| parser / executor / catalog / DDL / types / functions / absent subsystems                                                                               | ~78,000 |
 
 - The EXPLAIN census over the failing files: 2,106 EXPLAIN statements, 29,857 changed
   lines inside QUERY PLAN blocks, **only 1 block prints unmasked costs** (34 filtered,
@@ -42,7 +42,7 @@ Line kinds across the 110,197 (whole-block attribution, ±30%):
   58, Incremental Sort 52, Merge Append 52, Memoize 36, Merge Join 37, ProjectSet 37,
   Gather Merge 34, Tid Scan/Tid Range Scan 25, … 51 files toggle `enable_*` 569 times.
 - Gres today: no IR — the executor walks the AST (`exec.rs:19170
-  select_to_relation_with_ctes`); `EXPLAIN` is a second, independent syntactic walk
+select_to_relation_with_ctes`); `EXPLAIN` is a second, independent syntactic walk
   (`explain.rs:77`); secondary indexes are equality-only (`pgkv key.rs:248`, non-order-
   preserving row encoding); join order = FROM order; hash `JoinIndex` when an equality key
   exists but always printed `Nested Loop`; no pruning, no partitionwise, no parallel.
@@ -117,7 +117,7 @@ Line kinds across the 110,197 (whole-block attribution, ±30%):
 
 - Subagent-driven development in **parallel batches with disjoint file sets**. Every brief
   names the agent's file set AND every other live agent's file set (from `git status
-  --porcelain` at dispatch time, not from the plan), and says "stop and report rather than
+--porcelain` at dispatch time, not from the plan), and says "stop and report rather than
   edit" for foreign files. Every brief demands a section **"Where the brief was wrong"**.
 - Never `git checkout -- / restore / stash / clean` in the shared worktree; never
   `cargo +nightly fmt --all` in write mode there; format and gate in the agent's isolated
@@ -154,15 +154,15 @@ floor.
 
 ### Batch 0 — enablers (target ≈ −13,000 lines; two certifications)
 
-| id | workstream | size | lines | file set |
-|---|---|---|---:|---|
-| N00 | **exec.rs carve-out** (moves only: DDL families → `ddl_index.rs`, `ddl_partition.rs`, `ddl_inherit.rs`, `ddl_alter.rs`, `catalog_rows.rs`; read path stays until P0a). Certify alone. | M | 0 | `crates/pgexec/src/exec.rs`, `lib.rs` |
-| N01 | `SELECT … INTO` rejected in nested contexts (`INSERT INTO int4_tbl SELECT 1 INTO f` → `SELECT ... INTO is not allowed here` + caret; `views must not contain SELECT INTO`; `COPY (SELECT INTO)`). | S | ~450 | `crates/pgparser/src/parser.rs` (`opt_select_into` ~12427, `finish_query_statement`, `query_statement`) |
-| N02 | Blocking-query memory policy step (a): route the nine compile-time users of `scanner::BLOCKING_QUERY_MEMORY` (`exec.rs key_source_rows/ensure_blocking_rows_fit`, `agg.rs:2872`, `grouping.rs:496`, `cte.rs:492`, `setops.rs:353`, `srf.rs:2321`, `join.rs JoinPolicy::default`) through the flag; statement-level cap; `work_mem` GUC registered; per-conjunct WHERE→ON pushdown (`append_from_item` 13574) and a filter into `lateral_join` (13595). Certify alone (soak harness observes it). | M | ~2,000 | `scanner.rs`, `exec.rs` (named fns), `join.rs`, `agg.rs`, `grouping.rs`, `cte.rs`, `setops.rs`, `srf.rs` (constant only), `crates/gres/src/lib.rs:857`, `scripts/gres-pg-regress.sh:267` |
-| N03 | User SETOF functions in the select list (`routine.rs validate_plpgsql_scalar` 2112 / `inline_scalar_call` 2589-2612 → reuse `eval_plpgsql_table_function`); built-in SRF as a grouping key (`srf.rs classify/plan/rewrite_expr/reject_in_aggregate` → ProjectSet below Agg); ARE `\m \M \y \Y \A \Z` translation in `regexp_fn.rs compile_pattern` (472). Un-cascades ~2,900 EXPLAIN lines. | M | ~300 direct | `routine.rs`, `srf.rs`, `regexp_fn.rs` |
-| N04 | GUC surface: every planner GUC the schedule sets (`enable_*` ×20, `work_mem`, `hash_mem_multiplier`, `seq/random_page_cost`, `cpu_*_cost`, `parallel_*_cost`, `min_parallel_*_scan_size`, `max_parallel_workers[_per_gather]`, `debug_parallel_query` bool spellings, `jit*`, `track_io_timing`, `compute_query_id`, `plan_cache_mode`, `geqo*`, `join/from_collapse_limit`, `constraint_exclusion`, `enable_partition_pruning`, `enable_partitionwise_*`, `default_statistics_target`, `effective_cache_size`, `cursor_tuple_fraction`), `max_prepared_transactions=0` (→ `prepared_xacts` exact), `intervalstyle`/`password_encryption` HINT texts, role in SET clauses. | S-M | ~500 | `crates/pgexec/src/session.rs` GUC table (~976-1360) only |
-| N05 | Writable `pg_class` (superuser `UPDATE pg_class SET reltuples/relpages`) + durable `relpages`/`relallvisible` storage. Unblocks `join_hash` (744, then planner). | M | ~100 direct | `exec.rs` (`execute_write_body` Update arm 6453; `pg_class_rows`/`PgClassRow` ~20380/20826), `relstats.rs` |
-| N06 | Harness: connect as `regression` (`GRES_DB`) so printed database names match the oracle. | S | ~144 | `scripts/gres-pg-regress.sh` |
+| id  | workstream                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | size |       lines | file set                                                                                                                                                                                 |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | ----------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| N00 | **exec.rs carve-out** (moves only: DDL families → `ddl_index.rs`, `ddl_partition.rs`, `ddl_inherit.rs`, `ddl_alter.rs`, `catalog_rows.rs`; read path stays until P0a). Certify alone.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | M    |           0 | `crates/pgexec/src/exec.rs`, `lib.rs`                                                                                                                                                    |
+| N01 | `SELECT … INTO` rejected in nested contexts (`INSERT INTO int4_tbl SELECT 1 INTO f` → `SELECT ... INTO is not allowed here` + caret; `views must not contain SELECT INTO`; `COPY (SELECT INTO)`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | S    |        ~450 | `crates/pgparser/src/parser.rs` (`opt_select_into` ~12427, `finish_query_statement`, `query_statement`)                                                                                  |
+| N02 | Blocking-query memory policy step (a): route the nine compile-time users of `scanner::BLOCKING_QUERY_MEMORY` (`exec.rs key_source_rows/ensure_blocking_rows_fit`, `agg.rs:2872`, `grouping.rs:496`, `cte.rs:492`, `setops.rs:353`, `srf.rs:2321`, `join.rs JoinPolicy::default`) through the flag; statement-level cap; `work_mem` GUC registered; per-conjunct WHERE→ON pushdown (`append_from_item` 13574) and a filter into `lateral_join` (13595). Certify alone (soak harness observes it).                                                                                                                                                                           | M    |      ~2,000 | `scanner.rs`, `exec.rs` (named fns), `join.rs`, `agg.rs`, `grouping.rs`, `cte.rs`, `setops.rs`, `srf.rs` (constant only), `crates/gres/src/lib.rs:857`, `scripts/gres-pg-regress.sh:267` |
+| N03 | User SETOF functions in the select list (`routine.rs validate_plpgsql_scalar` 2112 / `inline_scalar_call` 2589-2612 → reuse `eval_plpgsql_table_function`); built-in SRF as a grouping key (`srf.rs classify/plan/rewrite_expr/reject_in_aggregate` → ProjectSet below Agg); ARE `\m \M \y \Y \A \Z` translation in `regexp_fn.rs compile_pattern` (472). Un-cascades ~2,900 EXPLAIN lines.                                                                                                                                                                                                                                                                                | M    | ~300 direct | `routine.rs`, `srf.rs`, `regexp_fn.rs`                                                                                                                                                   |
+| N04 | GUC surface: every planner GUC the schedule sets (`enable_*` ×20, `work_mem`, `hash_mem_multiplier`, `seq/random_page_cost`, `cpu_*_cost`, `parallel_*_cost`, `min_parallel_*_scan_size`, `max_parallel_workers[_per_gather]`, `debug_parallel_query` bool spellings, `jit*`, `track_io_timing`, `compute_query_id`, `plan_cache_mode`, `geqo*`, `join/from_collapse_limit`, `constraint_exclusion`, `enable_partition_pruning`, `enable_partitionwise_*`, `default_statistics_target`, `effective_cache_size`, `cursor_tuple_fraction`), `max_prepared_transactions=0` (→ `prepared_xacts` exact), `intervalstyle`/`password_encryption` HINT texts, role in SET clauses. | S-M  |        ~500 | `crates/pgexec/src/session.rs` GUC table (~976-1360) only                                                                                                                                |
+| N05 | Writable `pg_class` (superuser `UPDATE pg_class SET reltuples/relpages`) + durable `relpages`/`relallvisible` storage. Unblocks `join_hash` (744, then planner).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | M    | ~100 direct | `exec.rs` (`execute_write_body` Update arm 6453; `pg_class_rows`/`PgClassRow` ~20380/20826), `relstats.rs`                                                                               |
+| N06 | Harness: connect as `regression` (`GRES_DB`) so printed database names match the oracle.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | S    |        ~144 | `scripts/gres-pg-regress.sh`                                                                                                                                                             |
 
 Exit for batch 0: `int4_tbl` has 5 rows in `join.out`; every `explain_*` wrapper statement
 reaches EXPLAIN (zero "only supported in FROM position"); every planner GUC in the
@@ -257,9 +257,10 @@ Overlaps: `exec.rs` (P6 `partitioned_scan`/`inherited_scan` re-home | N28
 expansion | N34d ALTER TABLE region 28900-30300 | N37a grant arms | N39c
 `enforce_*`/`reject_temporal`/DROP COLUMN dependency); `session.rs` (N30b PREPARE on views
 | N37a SET ROLE | N28 dispatch); `parser.rs` (N28 RULE | N34d rest of `alter_table_action`
-+ alter_generic | N37a GRANT/ROLE | N39c EXCLUDE/REPLICA IDENTITY | N33b COMPRESSION);
-`fk.rs` (N39c temporal, after N31b); `viewdef.rs` (N30b owns; N28 adds `pg_get_ruledef`
-in `catalog_fn.rs`); `rls.rs` (N30b barrier ordering).
+
+- alter_generic | N37a GRANT/ROLE | N39c EXCLUDE/REPLICA IDENTITY | N33b COMPRESSION);
+  `fk.rs` (N39c temporal, after N31b); `viewdef.rs` (N30b owns; N28 adds `pg_get_ruledef`
+  in `catalog_fn.rs`); `rls.rs` (N30b barrier ordering).
 
 ### Batch 5 — Planner Phase 6 (parallel) + tail (≈ −4,000)
 
@@ -320,12 +321,12 @@ walk `build_from_schema_*`, `query.rs describe_query_expr*`), `explain.rs plan_*
   Tuplestore/Table Function scans; nested loops in FROM order for joins as today);
   per-node ntuples/nloops/rows_removed counters; InitPlan/SubPlan from subquery folding;
   describe walk deleted; old read path deleted at the end. Files: NEW `plan/{mod,query,
-  bind,rewrite(skeleton),createplan}.rs`, `plan/exec/*`, `exec.rs` read path only
+bind,rewrite(skeleton),createplan}.rs`, `plan/exec/*`, `exec.rs` read path only
   (`execute_read` 23750, `execute_read_locking` 23808), `query.rs`, `session.rs`
   `run_select_traced` (7902) + `explain` (5176). `join.rs`/`agg.rs`/`grouping.rs`/
   `window.rs`/`setops.rs`/`values.rs`/`srf.rs`/`cte.rs`/`subquery.rs` are CALLED as node
   bodies, not moved (so N16-N19 run in parallel). Exit: zero regressions on the exact
-  files; `cargo nextest -p crabka-pgexec` green with the read path served only by
+  files; `cargo nextest -p krabka-pgexec` green with the read path served only by
   `plan/exec`.
 - **P0b** EXPLAIN renderer + typed deparser + `ExplainOptions` (L, ~3,000 lines: VERBOSE
   `Output:` ~1,100 across join/subselect/with/returning/rangetypes/sqljson/tsrf/
@@ -384,8 +385,8 @@ walk `build_from_schema_*`, `query.rs describe_query_expr*`), `explain.rs plan_*
   join-side rule that reproduces `geometry`'s order, `planagg` MIN/MAX → InitPlan + Index
   Only Scan Backward, spilling Sort/Hash/Materialize under `work_mem` (decision 2b),
   `plan/dist.rs` for sharded relations. Files: `plan/{cost,paths,indexpath,joinpath,
-  pathkeys,equivclass}.rs`, `plan/exec/{hashjoin,mergejoin,nestloop,material,memoize,
-  indexscan,indexonlyscan,bitmap,tidscan,sort}.rs`, `join.rs` bodies, `scanner.rs`,
+pathkeys,equivclass}.rs`, `plan/exec/{hashjoin,mergejoin,nestloop,material,memoize,
+indexscan,indexonlyscan,bitmap,tidscan,sort}.rs`, `join.rs` bodies, `scanner.rs`,
   `exec.rs try_scan_with_local_index` removed. Exit: EXPLAIN (COSTS OFF) of every
   statement in join/subselect/equivclass/select/limit/tidscan/tidrangescan/aggregates
   (planagg)/create_index (btree) matches upstream node choice on the schedule's data
@@ -404,7 +405,7 @@ walk `build_from_schema_*`, `query.rs describe_query_expr*`), `explain.rs plan_*
 - **P6** partition-aware planning (XXL, ~8,200; needs N31a, N32, N33a, P4): Append/Merge
   Append over leaves in PartitionDesc order with `_n` aliases (surviving children only),
   `partprune.c` port (static + run-time + InitPlan params, `Subplans Removed`, `(never
-  executed)`), `constraint_exclusion` for inheritance CHECKs, partitionwise join/agg,
+executed)`), `constraint_exclusion` for inheritance CHECKs, partitionwise join/agg,
   EXPLAIN EXECUTE generic plans under `plan_cache_mode`, Update/Delete child lines,
   `inheritance.rs children_of` in OID order (today KV length-first order). Files:
   `plan/partition.rs`, `partition.rs` (479-551 bound order), `inheritance.rs`,
@@ -415,14 +416,14 @@ walk `build_from_schema_*`, `query.rs describe_query_expr*`), `explain.rs plan_*
   `max_parallel_workers_per_gather`, `parallel_workers` reloption stored via ALTER TABLE
   SET), Gather/Gather Merge/Parallel scans/Parallel Append/Parallel Hash/Partial+Finalize;
   real worker tasks over disjoint scan ranges with per-worker instrumentation (`Worker N:
-  Sort Method`, `Workers Launched`). Files: `plan/parallel.rs`, `plan/exec/gather.rs`,
+Sort Method`, `Workers Launched`). Files: `plan/parallel.rs`, `plan/exec/gather.rs`,
   `cost.rs`, `scanner.rs` range splitting. Exit: `select_parallel.out`,
   `write_parallel.out` exact; `join_hash` exact (needs `ExecChooseHashTableSize` batch
   counts from `work_mem`/`hash_mem_multiplier`, part of P4).
 - **P8** index access methods (XXL, optional last): GiST/SP-GiST/BRIN/hash/GIN-generic
   entries and scans with opclass support, KNN Order By, `brin_summarize_*`,
   `gin_clean_pending_list`/`gin_fuzzy_search_limit`. Files: NEW `index_am/{gist,spgist,
-  brin,gin}.rs`, `exec.rs index_entries`, `plan/indexpath.rs`, `geometry.rs`.
+brin,gin}.rs`, `exec.rs index_entries`, `plan/indexpath.rs`, `geometry.rs`.
 
 Parallel lanes inside the planner programme (no overlapping files): A = IR + bind +
 createplan + exec skeleton (only lane that edits `exec.rs`); B = stats + selfuncs + cost +
@@ -448,12 +449,12 @@ briefs must be written from those, not from this summary.
   near" wording (`lexer.rs:699 at_or_near`, `parser.rs:13684 syntax_error_at_token`
   adoption), string continuation, LINE/caret from offsets, DETAIL/HINT families,
   `column t1.x does not exist` + HINT, ambiguous table reference. Files: `pgparser
-  lexer.rs/error.rs/parser.rs`, `pgexec error.rs`, `session.rs` error emission, `scope.rs`.
+lexer.rs/error.rs/parser.rs`, `pgexec error.rs`, `session.rs` error emission, `scope.rs`.
 - **N10 result column naming** (S-M, ~1,100): FigureColname arms (scalar subquery →
   inner name, ARRAY → `array`, CASE → `case`, ROW → `row`), LATERAL alias pinned before
   substitution (830 of the lines), function-scan naming. Files: `exec.rs named_expr_inner`
   24919 / `BindPass::set_expr` ~14785 / `derived_name` 24850, `routine.rs
-  table_function_columns` 2951, `viewdef.rs` 661.
+table_function_columns` 2951, `viewdef.rs` 661.
 - **N11 LATERAL / correlated binder** (L, ~670) — absorbed by P0a `plan/bind.rs`; run
   standalone only if P0a slips.
 - **N12a arrays of any element type + domain over composite** (XL, ~1,850; certify
@@ -474,7 +475,7 @@ briefs must be written from those, not from this summary.
   select list, `RETURNS <rowtype>`, CREATE OR REPLACE checks + HINTs, CONTEXT/QUERY lines
   via pgwire `DiagnosticFields`, procedure CALL args, `pg_get_functiondef`. Files:
   `routine.rs` (1825/2211/2272/2347/2377/875/677/1535/468/2628/2841), `session.rs
-  drive_scalar_worker` (8027), `plpgsql.rs` seam, `pgwire error.rs`, `catalog_fn.rs`.
+drive_scalar_worker` (8027), `plpgsql.rs` seam, `pgwire error.rs`, `catalog_fn.rs`.
 - **N14 FunctionScan relation builder** (L, ~1,050): one builder for SQL + PL/pgSQL
   table functions in FROM (subquery/view/join/ROWS FROM/ORDINALITY/coldeflist, OUT-param
   setof record, RETURNS TABLE names, whole-row, scalar builtin in FROM as one-row scan).
@@ -501,7 +502,7 @@ briefs must be written from those, not from this summary.
   `useragg.rs`.
 - **N18 recursive CTE shape + SEARCH/CYCLE + DML-CTE order + CREATE RECURSIVE VIEW** (L,
   ~1,100; needs N12a): `cte.rs` 294-315/329-340/380/533-541/164-169, `exec.rs
-  execute_write_parts` (~4362) forward references, `parser.rs create_view` 9259 +
+execute_write_parts` (~4362) forward references, `parser.rs create_view` 9259 +
   `parse_with_clause`, `viewdef.rs` 194-230.
 - **N19 SRF ProjectSet semantics** (L, ~510): nested SRF args, SRF in GROUP BY/PARTITION
   BY, DISTINCT ON, error contexts, `split_pathtarget_at_srfs` placement. Files: `srf.rs`
@@ -553,7 +554,7 @@ briefs must be written from those, not from this summary.
   SERVER/USER MAPPING, IF NOT EXISTS, TYPE/VERSION, constraints/column OPTIONS/PARTITION
   OF/INHERITS, GRANT ON FOREIGN …, COMMENT ON FOREIGN …), catalog records with owner/
   handler/validator/type/version/acl/oid + per-column options (SCHEMA_VERSION),
-  `pg_foreign_*`, `pg_user_mapping[s]`, information_schema foreign_*/user_mapping*,
+  `pg_foreign_*`, `pg_user_mapping[s]`, information_schema foreign__/user_mapping_,
   `has_server_privilege`, `pg_options_to_table`, dependency tracking, PG messages. Files:
   `parser.rs` 3696-3789/13843-14073/4568/4615/8592, `ast.rs` 955-1032, `pgcatalog lib.rs`
   610-633/268 + `serde.rs` 1973/2313/2342, `catalog_rel.rs`, `catalog_fn.rs`, `exec.rs`
@@ -586,7 +587,7 @@ briefs must be written from those, not from this summary.
   where a real view can serve. After N30b.
 - **N30a `interpt_pp` regression C adapter** (S, 902): `routine.rs RegressionCAdapter`
   (1694-1746, 2041-2063) result-type parameter, `pgtypes geometry.rs
-  Lseg::intersection_point`. Un-cascades `select_views`.
+Lseg::intersection_point`. Un-cascades `select_views`.
 - **N30b view storage, deparse, updatable views** (XL, ~1,670): store the analysed query
   (bound view storage, not text) so `FROM schema.view` and rename survive; `pg_get_viewdef`
   layout fidelity (`viewdef.rs write_query` 141/270-292, `write_select` 430-445,
@@ -659,14 +660,14 @@ briefs must be written from those, not from this summary.
   the row format (SCHEMA_VERSION).
 - **N34a operators** (M-L, ~850): PG operator-token lexing rule (`lexer.rs` fixed
   punctuation table → generic operator characters: `~<~ ~<=~ ~>=~ ~>~ ^@ *= *< |@| <<< >>>
-  ===`), shell operators + commutator/negator links, ALTER OPERATOR / OPERATOR FAMILY /
+===`), shell operators + commutator/negator links, ALTER OPERATOR / OPERATOR FAMILY /
   OPERATOR CLASS options, user-operator resolution before builtin comparison
   (`eval.rs apply_binary`), `useroperator.rs` 373, `pgtypes ops.rs:1039` wording.
 - **N34b object addressing, dependency graph, role-owned objects, DROP notices** (L,
   ~1,450): `pg_get_object_address`/`pg_identify_object[_as_address]`/`pg_describe_object`
   (all object classes; `catalog_fn.rs CatalogFunc` 68/118, `srf.rs classify` 300 FROM
   forms), `pg_depend` for all object classes + `pg_shdepend` (`catalog_rel.rs
-  pg_depend_rows` 1017), DROP OWNED / REASSIGN OWNED / CREATE GROUP, drop-cascade
+pg_depend_rows` 1017), DROP OWNED / REASSIGN OWNED / CREATE GROUP, drop-cascade
   NOTICE/DETAIL family in OID order (all object kinds; `exec.rs` 9526-9600), DROP … IF
   EXISTS notices for every object kind, event trigger `ddl_command_end`/`sql_drop` rows,
   role-owned-object refusals (`DROP ROLE` should fail).
@@ -721,13 +722,13 @@ briefs must be written from those, not from this summary.
   privileges (schema/function/type/sequence/database/tablespace/parameter/language/FDW),
   role attributes lifecycle (`create_role`, `password_1`: REPLICATION DETAIL, VALID
   UNTIL, CONNECTION LIMIT, RENAME), view privileges, `zeropriv` ACLs, `SET ROLE` for a
-  SET-SESSION-AUTHORIZATION superuser (`crabka_pgcatalog::role_can_set` exempts only
+  SET-SESSION-AUTHORIZATION superuser (`krabka_pgcatalog::role_can_set` exempts only
   BOOTSTRAP_ROLE), predefined roles, `has_*_privilege` family. Files: `privilege.rs`
   (542/42/1127), `pgcatalog` roles/ACL, `parser.rs` GRANT/REVOKE/ALTER DEFAULT
   PRIVILEGES/CREATE ROLE options, `exec.rs` grant arms + role DDL, `catalog_fn.rs`,
   `catalog_rel.rs`, `session.rs SET ROLE`.
 - **N37b large objects** (L, ~880): NEW `largeobject.rs` (`lo_create/open/read/write/
-  lseek64/tell64/truncate/unlink/import/export/get/put/from_bytea`, `pg_largeobject` +
+lseek64/tell64/truncate/unlink/import/export/get/put/from_bytea`, `pg_largeobject` +
   `pg_largeobject_metadata` with owner/ACL, `lo_compat_privileges`); privileges section
   (427) depends on it. Matrix row 138.
 - **N37c misc admin functions, sysviews, routine namespaces** (M-L, ~600):
@@ -738,7 +739,7 @@ briefs must be written from those, not from this summary.
   public qualifiers) and `pg_temp` functions.
 - **N38 PL/pgSQL fidelity** (L, ~2,000): NEW/OLD field types kept (bpchar `!= ''`
   misfires; 570 lines cascade in `plpgsql`), expression SQL tail (`if count(*) = 0 from
-  …`), CONTEXT lines with statement line numbers (`pgparser plpgsql.rs` AST needs line
+…`), CONTEXT lines with statement line numbers (`pgparser plpgsql.rs` AST needs line
   numbers), `%ROWTYPE`, RETURN tail forms, composite field assignment on an unassigned
   record, RETURNS SETOF composite in FROM, RAISE diagnostics, CONTEXT for SQL functions
   called from PL/pgSQL. Files: `plpgsql.rs` 3045/288/385/425/1392/402-421/1756,
@@ -752,10 +753,10 @@ briefs must be written from those, not from this summary.
   MERGE RETURNING, partitioned targets), ON CONFLICT target grammar + arbiter inference
   (expression/collation/opclass indexes), INSERT target indirection + subscripts
   (`INSERT INTO arrtest (a[1:5], …)`), multi-column SET incl. row-subselect, MERGE grammar
-  + clause scope + USING joined source + correlated target + EXCLUDED typing, INSERT … AS
-  alias, correlated subqueries in DML. Files: `parser.rs` (insert target/alias/indirection,
-  `conflict_target`, `merge` 6863, RETURNING), `exec.rs execute_write` 3308-8300,
-  `viewwrite.rs`.
+  - clause scope + USING joined source + correlated target + EXCLUDED typing, INSERT … AS
+    alias, correlated subqueries in DML. Files: `parser.rs` (insert target/alias/indirection,
+    `conflict_target`, `merge` 6863, RETURNING), `exec.rs execute_write` 3308-8300,
+    `viewwrite.rs`.
 - **N39c constraint / trigger fidelity** (L, ~1,000): PERIOD temporal FKs
   (`reject_temporal_foreign_key` 26489; after N31b), `format_type` for ranges (136 lines
   in `without_overlaps`), full EXCLUDE (`parser.rs` 7825, `enforce_exclusion_constraint`
@@ -796,7 +797,7 @@ briefs must be written from those, not from this summary.
   unification), `proargtypes[0]::regtype` header naming, `regprocedure` quoting,
   `oidvector`, `amvalidate`, `pg_get_catalog_foreign_keys()` SRF (`oidjoins`).
 - **N42 psql describe support** (M-L, ~550): `pg_get_function_arguments/identity_arguments/
-  result` for builtins (188), sequence describe (with N35a), `\gdesc` describe of utility
+result` for builtins (188), sequence describe (with N35a), `\gdesc` describe of utility
   statements, bind-count FATAL, empty SELECT, `BEGIN ATOMIC` in `\df+`, builtin
   SQL-bodied functions, `tableoid`, AUTOCOMMIT-off `\;` batches (87 lines; needs a live
   repro — `relation "foo" already exists` on the first CREATE), `pg_prepared_statements`

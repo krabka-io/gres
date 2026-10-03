@@ -1,6 +1,6 @@
 //! The crabgresql AST for the SP2 slice.
 
-use crabka_pgtypes::{ColumnType, Datum};
+use krabka_pgtypes::{ColumnType, Datum};
 
 /// A relation name exactly as written: an optional schema qualifier and a name.
 ///
@@ -106,7 +106,7 @@ impl From<String> for RelationRef {
 /// It is not a name any statement can write: the lexer folds an unquoted
 /// spelling to lowercase and a quoted one keeps its quotes, so no user
 /// identifier collides with it.
-pub const SEQUENCE_RELATION: &str = "__crabka_sequence__";
+pub const SEQUENCE_RELATION: &str = "__krabka_sequence__";
 
 /// The point at which an ordinary trigger fires relative to its event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -925,7 +925,7 @@ pub enum Statement {
         ///
         /// The executor does not descend either way yet, so today the flag
         /// records what was written rather than changing what is deleted; the
-        /// scan it feeds is pinned in `crabka_pgexec`. It is carried here so
+        /// scan it feeds is pinned in `krabka_pgexec`. It is carried here so
         /// that the day DML recursion lands there is a flag to honour.
         only: bool,
         /// The statement's `WITH` list, which may contain data-modifying CTEs.

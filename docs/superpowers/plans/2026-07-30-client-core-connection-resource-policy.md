@@ -6,14 +6,14 @@
 
 **Architecture:** Add three small validated value types at their existing ownership boundaries, store connection-wide values in `ConnectionOptions`, and lower UOM values only at Tokio/Kafka protocol calls. Reuse the configured connection client id for SASL, and update existing `IsolatedFetch` constructors to select the typed one-byte default; deployment-specific propagation remains in separate plans after this generic phase is stable.
 
-**Tech Stack:** Rust, `refined_type`, `crabka-units`, Tokio, `tokio-util`, Bon builders, Cargo tests.
+**Tech Stack:** Rust, `refined_type`, `krabka-units`, Tokio, `tokio-util`, Bon builders, Cargo tests.
 
 ## Global Constraints
 
 - Preserve defaults exactly: dispatch queue `64`, accepted frame maximum `100MiB`, and isolated-fetch minimum `1B`.
 - Keep the accepted-frame security ceiling fixed at `100MiB`; reject larger requested values.
 - Use `refined_type` for positive newtype invariants.
-- Dimensioned inputs use `crabka_units::ByteSize`; reject non-finite and fractional-byte values.
+- Dimensioned inputs use `krabka_units::ByteSize`; reject non-finite and fractional-byte values.
 - `FetchMinBytes` must fit Kafka's positive signed `i32` `min_bytes` field.
 - SASL reuses `ConnectionOptions.client_id`; do not add a SASL-specific setting.
 - Libraries do not read environment variables.
@@ -38,10 +38,12 @@
 ### Task 1: Add Validated Connection Policy Types
 
 **Files:**
+
 - Modify: `crates/client-core/src/connection.rs`
 - Modify: `crates/client-core/src/lib.rs`
 
 **Interfaces:**
+
 - Produces: `ConnectionDispatchQueueCapacity::new(usize) -> Result<Self, String>`
 - Produces: `ConnectionDispatchQueueCapacity::get(self) -> usize`
 - Produces: `ClientFrameMax::try_from(ByteSize) -> Result<Self, String>`
@@ -85,7 +87,7 @@ Run:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core --lib connection::tests::connection_resource --locked
+  cargo test -p krabka-client-core --lib connection::tests::connection_resource --locked
 ```
 
 Expected: compilation fails because the new constants and types do not exist.
@@ -163,10 +165,12 @@ git commit -m "feat(client): validate connection resource policy"
 ### Task 2: Apply the Configured Frame Limit to Normal Transport
 
 **Files:**
+
 - Modify: `crates/client-core/src/transport.rs`
 - Modify: `crates/client-core/src/connection.rs`
 
 **Interfaces:**
+
 - Consumes: `ClientFrameMax`
 - Produces: `transport::codec_with_max(ClientFrameMax) -> LengthDelimitedCodec`
 - Preserves: `transport::codec()` as a default compatibility wrapper
@@ -200,7 +204,7 @@ fn configured_codec_accepts_the_exact_limit() {
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core --lib transport::tests::configured_codec --locked
+  cargo test -p krabka-client-core --lib transport::tests::configured_codec --locked
 ```
 
 Expected: compilation fails because `codec_with_max` does not exist.
@@ -238,9 +242,9 @@ Change `spawn_io_tasks` to accept `frame_max: ClientFrameMax`. Construct both
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core --lib transport --locked
+  cargo test -p krabka-client-core --lib transport --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core --lib connection --locked
+  cargo test -p krabka-client-core --lib connection --locked
 ```
 
 Expected: both commands pass.
@@ -257,11 +261,13 @@ git commit -m "feat(client): bound configured frames"
 ### Task 3: Store Connection Policy in Options and the Client Builder
 
 **Files:**
+
 - Modify: `crates/client-core/src/connection.rs`
 - Modify: `crates/client-core/src/client.rs`
 - Modify: all `ConnectionOptions` literals reported by `rg -n 'ConnectionOptions \\{' crates --glob '*.rs'`
 
 **Interfaces:**
+
 - Consumes: the two Task 1 policy types
 - Produces: `ConnectionOptions.dispatch_queue_capacity`
 - Produces: `ConnectionOptions.frame_max`
@@ -296,7 +302,7 @@ async fn invalid_connection_resource_policy_fails_before_resolution() {
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core --lib client::tests::invalid_connection_resource_policy_fails_before_resolution --locked
+  cargo test -p krabka-client-core --lib client::tests::invalid_connection_resource_policy_fails_before_resolution --locked
 ```
 
 Expected: compilation fails because the builder setters do not exist.
@@ -356,7 +362,7 @@ compatibility updates only.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core --all-targets --locked
+  cargo test -p krabka-client-core --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo check --workspace --all-targets --locked
 ```
@@ -375,10 +381,12 @@ git commit -m "feat(client): carry connection resource policy"
 ### Task 4: Reuse Client Policy During SASL
 
 **Files:**
+
 - Modify: `crates/client-core/src/sasl.rs`
 - Modify: `crates/client-core/src/connection.rs`
 
 **Interfaces:**
+
 - Consumes: `&ConnectionOptions.client_id`
 - Consumes: `ConnectionOptions.frame_max`
 - Produces: `outbound_sasl(stream, credentials, server_name, client_id, frame_max)`
@@ -425,7 +433,7 @@ same policy covers SASL writes, not only response allocation.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core --lib sasl::tests --locked
+  cargo test -p krabka-client-core --lib sasl::tests --locked
 ```
 
 Expected: configured-id assertions fail or the new signatures do not compile,
@@ -483,7 +491,7 @@ Run the command from Step 4, then:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core --lib connection --locked
+  cargo test -p krabka-client-core --lib connection --locked
 ```
 
 Expected: both pass.
@@ -500,6 +508,7 @@ git commit -m "fix(client): reuse policy in SASL"
 ### Task 5: Add the Typed Isolated-Fetch Minimum
 
 **Files:**
+
 - Modify: `crates/client-core/src/fetch.rs`
 - Modify: `crates/client-core/src/lib.rs`
 - Modify: `crates/client-streams/src/runtime/io_broker.rs`
@@ -510,6 +519,7 @@ git commit -m "fix(client): reuse policy in SASL"
 - Modify: existing tests that construct `IsolatedFetch`
 
 **Interfaces:**
+
 - Produces: `FetchMinBytes::try_from(ByteSize) -> Result<Self, String>`
 - Produces: `FetchMinBytes::bytes(self) -> i32`
 - Produces: `FetchMinBytes::size(self) -> ByteSize`
@@ -551,7 +561,7 @@ fn isolated_fetch_uses_configured_minimum() {
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core --lib fetch::tests --locked
+  cargo test -p krabka-client-core --lib fetch::tests --locked
 ```
 
 Expected: compilation fails because `FetchMinBytes` and `fetch_min` do not
@@ -594,8 +604,8 @@ Do not add CLI, environment, CRD, or higher-level policy fields in this phase.
 
 ```bash
 for package in \
-  crabka-client-core crabka-client-streams crabka-gres-control \
-  crabka-gres-fdw crabka-gres-substrate crabka-gres
+  krabka-client-core krabka-client-streams krabka-gres-control \
+  krabka-gres-fdw krabka-gres-substrate krabka-gres
 do
   TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
     cargo test -p \"$package\" --all-targets --locked || exit 1
@@ -616,9 +626,11 @@ git commit -m "feat(client): type isolated fetch minimum"
 ### Task 6: Verify and Record the Generic Phase
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
+
 - Consumes: all Task 1-5 behavior
 - Produces: an audit record distinguishing generic closure from deployment propagation
 
@@ -637,7 +649,7 @@ inputs only when the literal is the subject of the test.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core --all-targets --locked
+  cargo test -p krabka-client-core --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo check --workspace --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \

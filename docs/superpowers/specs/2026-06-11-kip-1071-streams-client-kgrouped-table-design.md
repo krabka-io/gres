@@ -6,7 +6,7 @@
 
 ## 1. Goal
 
-Add the **table re-grouping + aggregation** path to the `crabka-client-streams`
+Add the **table re-grouping + aggregation** path to the `krabka-client-streams`
 DSL: `KTable<K,V>.group_by(mapper) -> KGroupedTable<KR,VR>` with `count`,
 `reduce(adder, subtractor)`, and `aggregate(init, adder, subtractor)` producing a
 materialized `KTable<KR, T>`.
@@ -15,8 +15,8 @@ This is the last major missing aggregation surface. KStream grouping/aggregation
 (`KGroupedStream`: count/reduce/aggregate, windowed/session/sliding, cogroup) is
 fully built; the **table** equivalent is absent. Its defining semantic is the
 **subtractor**: because a `KTable` propagates a `Change<old,new>` change-stream,
-re-grouping must *remove* the old value's contribution from its (old) group and
-*add* the new value's contribution to its (new) group. A stream aggregation has
+re-grouping must _remove_ the old value's contribution from its (old) group and
+_add_ the new value's contribution to its (new) group. A stream aggregation has
 no subtractor, so it cannot model this — re-running an updated row would
 double-count.
 
@@ -40,7 +40,7 @@ Out of scope (YAGNI):
 - **Source-level null tombstones** — a DSL-wide limitation (`graph.pipe` /
   `Record.value` are non-`Option`, shared with the KV/versioned `KTableSource`).
   The source battery stays tombstone-free; the subtractor's delete path is
-  covered via a *downstream* tombstone instead (§7).
+  covered via a _downstream_ tombstone instead (§7).
 - **Caching / record-cache suppression** of intermediate aggregation results.
 
 ## 3. Why a subtractor (the core semantic)
@@ -58,8 +58,8 @@ forward(kr, Change { old: prior_agg, new: agg })
 ```
 
 **Subtract before add** — matches JVM `KTableAggregate`. When the grouping key is
-unchanged this nets the delta in one group; when the grouping key *changes*, the
-old and new contributions land in *different* groups (handled by the
+unchanged this nets the delta in one group; when the grouping key _changes_, the
+old and new contributions land in _different_ groups (handled by the
 repartition-map below).
 
 ## 4. Architecture — triplet + lowering
@@ -96,25 +96,25 @@ the stream path: `mint_store_name` → `format!("{store}{REPARTITION_SUFFIX}")`)
 ### 4.3 Wire visibility
 
 Per the cogroup precedent, the wire topology carries only **topic names, store
-names, copartition groups, and changelog config** — *not* processor-node names.
+names, copartition groups, and changelog config** — _not_ processor-node names.
 So the `KTABLE-SELECT-`/`KTABLE-AGGREGATE-` prefixes do not affect golden bytes
 when an explicit `Materialized` store name is used; they exist only to consume
-the JVM auto-name counter at the right positions (so a *second* aggregation's
+the JVM auto-name counter at the right positions (so a _second_ aggregation's
 store lands at the same index as the JVM fixture). The store changelog is a
 standard compacted KV changelog (`cleanup.policy=compact`), emitted iff
 `Materialized::with_logging(true)` (default).
 
 ## 5. Components
 
-| Unit | File | Responsibility |
-|---|---|---|
-| `KTable::group_by[_explicit]` | `dsl/ktable.rs` | Build `KGroupedTable`; capture mapper + serdes + lineage |
-| `KGroupedTable<KR,VR>` | `dsl/kgrouped_table.rs` (new) | `count/reduce/aggregate[_explicit]`; mint store name; lower SELECT → repartition → AGGREGATE |
-| `KTableRepartitionMapProcessor` | `dsl/processors/table_aggregate.rs` (new) | `Change<V>` → keyed `Change<VR>` with key-change split |
-| `KTableAggregateProcessor` | `dsl/processors/table_aggregate.rs` (new) | `Change<VR>` → `Change<T>`, subtract-then-add over the KV store |
-| `Changed` serde | `processor/serde/` (new module) | (de)serialize `Change<VR>` for the repartition topic — **byte format captured empirically** |
-| Node prefixes | `dsl/names.rs` | `KTABLE-SELECT-`, `KTABLE-AGGREGATE-` |
-| Export | `dsl/mod.rs` | Re-export `KGroupedTable` |
+| Unit                            | File                                      | Responsibility                                                                               |
+| ------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `KTable::group_by[_explicit]`   | `dsl/ktable.rs`                           | Build `KGroupedTable`; capture mapper + serdes + lineage                                     |
+| `KGroupedTable<KR,VR>`          | `dsl/kgrouped_table.rs` (new)             | `count/reduce/aggregate[_explicit]`; mint store name; lower SELECT → repartition → AGGREGATE |
+| `KTableRepartitionMapProcessor` | `dsl/processors/table_aggregate.rs` (new) | `Change<V>` → keyed `Change<VR>` with key-change split                                       |
+| `KTableAggregateProcessor`      | `dsl/processors/table_aggregate.rs` (new) | `Change<VR>` → `Change<T>`, subtract-then-add over the KV store                              |
+| `Changed` serde                 | `processor/serde/` (new module)           | (de)serialize `Change<VR>` for the repartition topic — **byte format captured empirically**  |
+| Node prefixes                   | `dsl/names.rs`                            | `KTABLE-SELECT-`, `KTABLE-AGGREGATE-`                                                        |
+| Export                          | `dsl/mod.rs`                              | Re-export `KGroupedTable`                                                                    |
 
 ### 5.1 `KTableRepartitionMapProcessor`
 
@@ -197,12 +197,12 @@ by `KGroupedStream`.)
    - a **grouping-key change** (old row's value subtracted from group A, new
      value added to group B) — the discriminating case;
    - a **downstream tombstone** subtract: an upstream `KTable.filter` that drops a
-     row emits a `Change { new: None }` *inside* the topology (no source null
+     row emits a `Change { new: None }` _inside_ the topology (no source null
      needed), exercising the subtract-only path;
    - `reduce` first-value-seeds.
-   Replay byte-for-byte via `TopologyTestDriver::process`.
+     Replay byte-for-byte via `TopologyTestDriver::process`.
 5. **CI gates.** `cargo fmt --check`, `cargo clippy --workspace --all-targets -D
-   warnings`, full `cargo test`. The client-streams-integration job uses a
+warnings`, full `cargo test`. The client-streams-integration job uses a
    catch-all `--tests` selector, so a new test binary is auto-covered.
 
 ## 8. Risks
@@ -221,6 +221,7 @@ by `KGroupedStream`.)
 ## 9. Files touched
 
 New:
+
 - `crates/client-streams/src/dsl/kgrouped_table.rs`
 - `crates/client-streams/src/dsl/processors/table_aggregate.rs`
 - `crates/client-streams/src/processor/serde/changed.rs` (or sibling of existing serdes)
@@ -229,6 +230,7 @@ New:
 - `crates/client-streams/tests/kgrouped_table_golden.rs`
 
 Modified:
+
 - `crates/client-streams/src/dsl/ktable.rs` (`group_by[_explicit]`)
 - `crates/client-streams/src/dsl/mod.rs` (export)
 - `crates/client-streams/src/dsl/names.rs` (`KTABLE-SELECT-`, `KTABLE-AGGREGATE-`)

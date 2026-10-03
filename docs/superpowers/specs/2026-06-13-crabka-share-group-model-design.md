@@ -4,6 +4,7 @@
 **Status:** Approved (design); plan + implementation to follow
 **Workstream:** A (stateright correctness models) — next slice after the merged raft consensus model
 **Predecessor specs:**
+
 - `2026-06-13-crabka-stateright-consensus-deflake-design.md` (raft model + shared infra; merged #511)
 - `2026-06-13-crabka-share-group-deflake-design.md` (share/group sleep-test de-flake; #513)
 
@@ -17,7 +18,7 @@ expire-locks), production, time advance, and leader-failover reload, and
 asserting the share-group delivery-safety invariants can never be violated.
 
 This is the **wrap-real** counterpart for share groups of what the merged raft
-model did for consensus: the model drives the *real production methods* — it
+model did for consensus: the model drives the _real production methods_ — it
 verifies the actual code, not a reimplementation.
 
 ## Background: what `AcquisitionState` is
@@ -31,24 +32,24 @@ delivery_count, acquired_by, lock_deadline)`. Delivery state is one of
 
 Production methods (these become the model's actions):
 
-| Method | Effect |
-| --- | --- |
-| `materialize(hwm, max_inflight)` | Extend the window with freshly produced records (appends one `Available` batch up to `min(hwm-1, end+max_inflight-1)`), advancing `end_offset`. Only fires when no `Available` records remain and `end < hwm`. |
+| Method                                                              | Effect                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `materialize(hwm, max_inflight)`                                    | Extend the window with freshly produced records (appends one `Available` batch up to `min(hwm-1, end+max_inflight-1)`), advancing `end_offset`. Only fires when no `Available` records remain and `end < hwm`.                                                     |
 | `acquire(member, max_records, _bytes, now, lock_dur, max_attempts)` | Hand out `Available` records to `member`: poison pills (`delivery_count >= max_attempts`) are `Archived` and SPSO advances past them; others go `Acquired` with `delivery_count += 1`, `acquired_by`/`lock_deadline` set; splits a run that exceeds `max_records`. |
-| `acknowledge(member, first, last, ack, _now)` | Range must be wholly `Acquired` by `member` (else `Err(INVALID_RECORD_STATE)`). `Accept → Acknowledged`, `Release → Available` (delivery_count retained for redelivery), `Reject`/`Gap → Archived`. Advances SPSO over any new terminal prefix. |
-| `renew(member, first, last, now, lock_dur)` | Range must be wholly `Acquired` by `member`. Resets each covered `lock_deadline` to `now + lock_dur`; state/owner/count preserved; SPSO **not** advanced. |
-| `expire_locks(now)` | Any `Acquired` batch with `now >= lock_deadline` reverts to `Available` (owner/lock cleared, delivery_count retained). |
-| `to_persist_batches()` / `load_from(...)` | Persistence projection / rehydrate. On reload, persisted `Acquired` maps to `Available` (locks do not survive a leader change), SPSO and `delivery_complete_count` are restored. |
+| `acknowledge(member, first, last, ack, _now)`                       | Range must be wholly `Acquired` by `member` (else `Err(INVALID_RECORD_STATE)`). `Accept → Acknowledged`, `Release → Available` (delivery_count retained for redelivery), `Reject`/`Gap → Archived`. Advances SPSO over any new terminal prefix.                    |
+| `renew(member, first, last, now, lock_dur)`                         | Range must be wholly `Acquired` by `member`. Resets each covered `lock_deadline` to `now + lock_dur`; state/owner/count preserved; SPSO **not** advanced.                                                                                                          |
+| `expire_locks(now)`                                                 | Any `Acquired` batch with `now >= lock_deadline` reverts to `Available` (owner/lock cleared, delivery_count retained).                                                                                                                                             |
+| `to_persist_batches()` / `load_from(...)`                           | Persistence projection / rehydrate. On reload, persisted `Acquired` maps to `Available` (locks do not survive a leader change), SPSO and `delivery_complete_count` are restored.                                                                                   |
 
 Internal invariants the machine maintains (and which the model verifies hold
-under *all* interleavings): the batch list stays sorted, contiguous, and
+under _all_ interleavings): the batch list stays sorted, contiguous, and
 gap-free over `[start_offset, end_offset)`; SPSO advances only over terminal
 prefixes; `coalesce` merges same-state neighbors.
 
 ## Why this is the right next slice
 
 - We just de-flaked the share/group integration tests (#513) — the share
-  subsystem is fresh, and a model complements those tests by proving the *core*
+  subsystem is fresh, and a model complements those tests by proving the _core_
   is correct independent of broker plumbing.
 - It advances Workstream A (correctness models) past raft into KIP-932.
 - `AcquisitionState` is pure, small, and deterministic — a clean wrap-real
@@ -61,7 +62,7 @@ prefixes; `coalesce` merges same-state neighbors.
   merged raft `linearizable` config. The relevant correctness here is the
   delivery-safety invariants below. The serial order of operations is provided
   for free by the single-owner `Mutex` on the live state — the model verifies
-  that *every* such serial execution respects the invariants.
+  that _every_ such serial execution respects the invariants.
 - **No broker / actor / network modeling.** The model is the single pure
   `AcquisitionState`; concurrency is the interleaving of atomic operations, not
   a distributed message system.
@@ -73,7 +74,7 @@ prefixes; `coalesce` merges same-state neighbors.
 ### 1. Time and `Instant`
 
 `acquire` / `renew` / `expire_locks` take `now: Instant` and store
-`lock_deadline: Instant`; lock expiry depends on the *ordering* of `now` vs
+`lock_deadline: Instant`; lock expiry depends on the _ordering_ of `now` vs
 `deadline`, so renew (extend lock) and expire (release lock) are only meaningful
 with a real clock. `std::time::Instant` is `Eq + Ord + Hash`, so it is safe to
 keep inside a hashed model state **provided the set of instants is finite**.
@@ -87,7 +88,7 @@ Approach (timeouts-as-actions extended to a tiny ordered clock):
 - Time-sensitive ops use `now = t0 + LOCK * clock`. Deadlines are therefore
   drawn from `{t0 + LOCK*(c+1)}` for `c in 0..=MAX_TICK` — a finite set, so the
   state space stays finite and hashing is deterministic within a run. (Across
-  runs `t0` differs but every state's *relative* structure — and thus the state
+  runs `t0` differs but every state's _relative_ structure — and thus the state
   count and all property results — is identical.)
 - A `Tick` action advances `clock` (bounded by `MAX_TICK`). A lock acquired at
   `clock = c` has deadline `t0 + LOCK*(c+1)`, so it expires once `clock >= c+1`;
@@ -106,17 +107,18 @@ module of `state`:
 mod state_model;
 ```
 
-Because `state::state_model` is a *descendant* of the module that declares
+Because `state::state_model` is a _descendant_ of the module that declares
 `AcquisitionState` and the private `InFlightBatch`, it reads `sm.batches`,
 `b.acquired_by`, `b.state`, `b.lock_deadline`, `delivery_complete_count`, etc.
 **directly via private access** — exactly how the existing `mod tests` at
 `state.rs:540` already does (`delivery_complete_count()`, `count_acquired_batches()`).
 
 Consequences:
+
 - **Zero new production observability surface** — no `BatchView` accessor, no
   `test-helpers` feature gating, no widening of `pub`.
 - Runs as a fast single `--lib` test binary
-  (`cargo test -p crabka-broker --lib state::state_model`).
+  (`cargo test -p krabka-broker --lib state::state_model`).
 - The model file (`state_model.rs`) is `#[cfg(test)]`, so it is excluded from
   normal/published builds.
 
@@ -133,14 +135,14 @@ in hand and can `assert!` (panic with a descriptive message) on violation.
 This deliberately keeps predecessor/history data **out of the hashed state**.
 Storing path-history (e.g. a per-offset "max delivery_count seen" map, or a
 `prev_spso` ghost) would make two structurally-identical machine states reached
-via different paths hash as *distinct* states, multiplying — potentially
+via different paths hash as _distinct_ states, multiplying — potentially
 exploding — the state count. That is the direct lesson from the Phase-1 raft
 OOM (`feedback_bound_model_checkers.md`): the model state must hold only the
 genuine machine state plus the small finite clock/hwm, nothing path-dependent.
 
 Tradeoff accepted: a transition-assert failure surfaces as a panic with the
 invariant name (not a minimal stateright counterexample trace). These
-invariants are *expected to hold*; the model's job is to gain confidence. If one
+invariants are _expected to hold_; the model's job is to gain confidence. If one
 ever fires, we add a bounded ghost locally to extract the trace.
 
 ## Model specification
@@ -188,7 +190,7 @@ enum ShareAction {
 
 `Produce` and `Materialize` are kept separate (rather than producing-then-
 materializing in one step) so the high-watermark can run ahead of the
-materialized window — only then does a single `materialize` pull a *multi-record*
+materialized window — only then does a single `materialize` pull a _multi-record_
 batch (up to `max_inflight`), which is what exercises the in-flight cap and
 multi-record acquire/split paths. Folding them would only ever materialize one
 record at a time.
@@ -202,7 +204,7 @@ record at a time.
 - `Acquire` — for each member, with `max_records in {1, i32::MAX}` (one record
   vs all available), when at least one `Available` batch exists.
 - `Acknowledge` / `Renew` — **data-dependent**, like raft's fetch actions:
-  enumerate the current `Acquired` runs *per owner*; for each maximal run offer
+  enumerate the current `Acquired` runs _per owner_; for each maximal run offer
   the full range and one split (first half). `ack in {Accept, Release, Reject}`.
   `Gap` is omitted — it shares the `Reject | Gap` match arm verbatim
   (`Archived`), so it is behaviorally identical and adds no coverage.
@@ -211,6 +213,7 @@ record at a time.
 - `Reload` — when `allow_reload` and the window is non-empty.
 
 `next_state(state, action)`:
+
 1. Clone `state`.
 2. Apply the corresponding **real** method to `new.sm` (or bump `clock`/`hwm`),
    using `now = t0 + LOCK * new.clock` where time is needed.
@@ -219,6 +222,7 @@ record at a time.
 4. Return `new`.
 
 `Reload` body:
+
 ```rust
 let (start, dcc, batches) = new.sm.to_persist_batches();
 let mut fresh = AcquisitionState::new(start);
@@ -235,13 +239,13 @@ new.sm = fresh; // Acquired -> Available, locks dropped
   last ends at `end_offset - 1` when non-empty (full, gap-free, non-overlapping
   cover of `[start_offset, end_offset)`); `start_offset <= end_offset`.
 - `mutual_exclusion` — no offset is `Acquired` by two members (structurally: no
-  two `Acquired` batches overlap, which holds by construction, *and* every
+  two `Acquired` batches overlap, which holds by construction, _and_ every
   `Acquired` batch has `Some(acquired_by)`).
 - `lock_consistency` — `Acquired` ⇒ `acquired_by.is_some() &&
-  lock_deadline.is_some()`; every non-`Acquired` batch ⇒ `acquired_by.is_none()
-  && lock_deadline.is_none()`.
+lock_deadline.is_some()`; every non-`Acquired` batch ⇒ `acquired_by.is_none()
+&& lock_deadline.is_none()`.
 - `delivery_count_bounded` — every batch `delivery_count <= max_attempts`
-  (poison pills are archived *at* the limit, never handed out beyond it).
+  (poison pills are archived _at_ the limit, never handed out beyond it).
 - `spso_in_range` — `0 <= start_offset <= end_offset <= max_offset`.
 
 **Transition-level — `assert!` in `next_state` (parent → child):**
@@ -259,7 +263,7 @@ new.sm = fresh; // Acquired -> Available, locks dropped
 
 **Non-vacuity — `Property::sometimes`** (proves the model is not vacuously
 stuck and every terminal / redelivery transition is reachable). All four are
-robustly observable from a *single* state (a non-prefix terminal batch survives
+robustly observable from a _single_ state (a non-prefix terminal batch survives
 in the window because an earlier non-terminal offset blocks `advance_spso`):
 
 - `can_advance_spso` — reach a state with `start_offset > 0`.
@@ -276,7 +280,7 @@ in the window because an earlier non-terminal offset blocks `advance_spso`):
 ### Bounds (`within_boundary`) — OOM safety
 
 `within_boundary` bounds only the dimensions that are **unbounded by design**
-(so the model is finite) — it must *not* prune the dimensions whose
+(so the model is finite) — it must _not_ prune the dimensions whose
 boundedness is a property we are trying to verify, or a real violation would be
 silently dropped before the property runs. So it rejects any state exceeding:
 
@@ -285,7 +289,7 @@ silently dropped before the property runs. So it rejects any state exceeding:
 - `end_offset <= max_offset`
 - batch count `<= 2 * max_offset` (loose structural cap)
 
-It does **not** bound `delivery_count` — that is bounded *by the code*
+It does **not** bound `delivery_count` — that is bounded _by the code_
 (`<= max_attempts`), which is exactly what the `delivery_count_bounded`
 `always` property verifies; bounding it here would mask the violation. A bug
 producing unbounded `delivery_count` is instead caught by that property, and its
@@ -330,9 +334,9 @@ No new `pub` items, no `test-helpers` surface, no logic changes.
 
 ## File structure
 
-| File | Responsibility |
-| --- | --- |
-| `crates/broker/src/share_partition/state.rs` | (modify) add the three derive additions; add `#[cfg(test)] #[path="state_model.rs"] mod state_model;` |
+| File                                               | Responsibility                                                                                                                                                                                                                                                     |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `crates/broker/src/share_partition/state.rs`       | (modify) add the three derive additions; add `#[cfg(test)] #[path="state_model.rs"] mod state_model;`                                                                                                                                                              |
 | `crates/broker/src/share_partition/state_model.rs` | (create) the entire model: `ShareState`, `ShareModel`, `ShareAction`, the `Model` impl (`init_states`/`actions`/`next_state`/`properties`/`within_boundary`), transition-assert helpers, and the `#[test]` config functions running each checker under the bounds. |
 
 If `state_model.rs` grows past a comfortable single-file size, split into
@@ -340,7 +344,7 @@ If `state_model.rs` grows past a comfortable single-file size, split into
 
 ## Testing strategy
 
-- The model *is* the test. Each config is a `#[test]` that builds the bounded
+- The model _is_ the test. Each config is a `#[test]` that builds the bounded
   `ShareModel`, spawns a BFS checker with `target_state_count` + `timeout`
   backstops, joins, and `assert_properties()`.
 - Each test additionally asserts the unique-state count is below the cap
@@ -356,6 +360,6 @@ If `state_model.rs` grows past a comfortable single-file size, split into
 
 - ISR / replication `ReplicaState` model.
 - Dynamic-voters (KIP-853) consensus-membership model.
-- Share-group *coordinator*-level concurrency (multiple partitions / group
+- Share-group _coordinator_-level concurrency (multiple partitions / group
   membership churn) — this slice is the single-partition acquisition core only.
 - De-flaking the remaining sleep-based tests in non-broker crates.

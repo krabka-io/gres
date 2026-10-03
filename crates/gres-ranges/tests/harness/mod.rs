@@ -12,18 +12,18 @@ use std::{
     sync::Arc,
 };
 
-use crabka_gres_control::{
+use krabka_gres_control::{
     RangeBoundary, RangeLayoutEntry, RangeLifecycle, SqlUser, TenantId, TenantRecord, TenantState,
 };
-use crabka_gres_ranges::{
+use krabka_gres_ranges::{
     BarrierError, FramedTcpClient, HostedRangeService, MemoryTsoHorizon, MultiRangeTenant,
     MultiRangeTenantConfig, Range0EndSampler, Range0Tail, RangeId, RangeRegistry, RangeService,
     RangeTlsClientConfig, RangeTlsServerConfig, ReadOnlyRange0Replica, TenantName,
     pgexec_timestamp_oracle_from_rpc, serve_tls, tso_rpc_from_horizon,
 };
-use crabka_pgexec::SqlEngine;
-use crabka_pgkv::{Kv, MemKv};
-use crabka_pgwire::engine::{Engine, QueryResult, Session};
+use krabka_pgexec::SqlEngine;
+use krabka_pgkv::{Kv, MemKv};
+use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
 pub mod process;
 
@@ -324,12 +324,12 @@ impl MtlsFixture {
             _dir: dir,
             server: RangeTlsServerConfig {
                 tenant: tenant.to_string(),
-                tls: crabka_security::TlsConfig {
+                tls: krabka_security::TlsConfig {
                     cert_chain_path: server_cert.clone(),
                     private_key_path: server_key,
                     trust_roots_path: Some(server_cert.clone()),
                     client_ca_path: Some(client_ca),
-                    client_auth: crabka_security::ClientAuthMode::Required,
+                    client_auth: krabka_security::ClientAuthMode::Required,
                 },
                 range_rpc_principals: BTreeSet::from([
                     "CN=test-client,OU=integration,O=crabka".to_string()
@@ -339,14 +339,14 @@ impl MtlsFixture {
                 ]),
             },
             client: RangeTlsClientConfig {
-                tls: crabka_security::TlsConfig {
+                tls: krabka_security::TlsConfig {
                     cert_chain_path: client_cert,
                     private_key_path: client_key,
                     trust_roots_path: Some(server_cert),
                     client_ca_path: None,
-                    client_auth: crabka_security::ClientAuthMode::Disabled,
+                    client_auth: krabka_security::ClientAuthMode::Disabled,
                 },
-                server_name: "crabka-dev".to_string(),
+                server_name: "krabka-dev".to_string(),
             },
         }
     }
@@ -413,7 +413,7 @@ fn two_compute_tenant_record(record_tenant: &str) -> TenantRecord {
     TenantRecord::new(
         1,
         TenantId::try_from(record_tenant).expect("tenant id"),
-        crabka_gres_control::TenantName::try_from(record_tenant).expect("record tenant"),
+        krabka_gres_control::TenantName::try_from(record_tenant).expect("record tenant"),
         TenantState::Active,
         SqlUser::try_from("alice").expect("user"),
         "SCRAM-SHA-256$4096:salt$stored:server".to_string(),
@@ -568,14 +568,14 @@ impl TwoComputeHarness {
 
     /// The gateway that hosts the range of `table_id`. That is the left gateway
     /// for r0 and r1, and the right gateway for r2.
-    fn session_for_table(&self, table_id: u64) -> crabka_gres_ranges::tenant::GatewaySession {
+    fn session_for_table(&self, table_id: u64) -> krabka_gres_ranges::tenant::GatewaySession {
         if table_id < 200 {
             return self.left_gateway.connect();
         }
         self.right_gateway.connect()
     }
 
-    fn peer_session_for_table(&self, table_id: u64) -> crabka_gres_ranges::tenant::GatewaySession {
+    fn peer_session_for_table(&self, table_id: u64) -> krabka_gres_ranges::tenant::GatewaySession {
         if table_id < 200 {
             return self.right_gateway.connect();
         }
@@ -584,16 +584,16 @@ impl TwoComputeHarness {
 }
 
 pub async fn run(
-    session: &mut crabka_gres_ranges::tenant::GatewaySession,
+    session: &mut krabka_gres_ranges::tenant::GatewaySession,
     sql: &str,
 ) -> Vec<QueryResult> {
     session.simple_query(sql).await.expect(sql)
 }
 
 pub async fn try_run(
-    session: &mut crabka_gres_ranges::tenant::GatewaySession,
+    session: &mut krabka_gres_ranges::tenant::GatewaySession,
     sql: &str,
-) -> Result<Vec<QueryResult>, crabka_pgwire::error::PgError> {
+) -> Result<Vec<QueryResult>, krabka_pgwire::error::PgError> {
     session.simple_query(sql).await
 }
 

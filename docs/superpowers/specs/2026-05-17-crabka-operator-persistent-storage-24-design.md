@@ -16,26 +16,26 @@
 - Renderer switches between `volumes: [{emptyDir}]` (current) and a `volumeClaimTemplates: [...]` entry on the StatefulSet. Pod-template `volumeMounts` reference the same `data` name in both cases — no change to mount points.
 - When `type == PersistentClaim`, the rendered StatefulSet sets `persistentVolumeClaimRetentionPolicy.{whenDeleted: <deleteClaim ? Delete : Retain>, whenScaled: Retain}`. The `whenScaled` value is always `Retain` in slice 24 (multi-replica scale-down is a slice-20a concern).
 - Static validation: `size` parses as a positive K8s `Quantity` (binary suffixes `Ki/Mi/Gi/Ti/Pi/Ei` and decimal `K/M/G/T/P/E`); a small in-tree parser lives in `controller/common.rs`.
-- Monotonic-resize validation (compares spec against the live StatefulSet's existing `volumeClaimTemplates`): rejects `Ephemeral ↔ PersistentClaim` switches, rejects `class` changes, rejects size *decreases*. Allows size *increases* (operator patches the StatefulSet template; K8s decides whether the storageClass actually supports expansion — failures surface as `Ready=False` via the bubbled-up API error).
+- Monotonic-resize validation (compares spec against the live StatefulSet's existing `volumeClaimTemplates`): rejects `Ephemeral ↔ PersistentClaim` switches, rejects `class` changes, rejects size _decreases_. Allows size _increases_ (operator patches the StatefulSet template; K8s decides whether the storageClass actually supports expansion — failures surface as `Ready=False` via the bubbled-up API error).
 - PVC labels inherit the pool's pod labels (including `app.kubernetes.io/instance=<kafka>`) so the existing slice-20 GC label selector still works on PVCs.
 - E2E (kind): `local-path-provisioner` (kind's default storageClass) is used implicitly via `class: None`. Smoke step asserts the PVC reaches `Bound`; GC step asserts PVCs are cleaned up when `deleteClaim: true` and the cluster is deleted.
 
 ### Out (deferred)
 
-| Concern | Slice |
-|---|---|
-| JBOD (multiple PVCs per pod, `KIP-113` log-dir reassignment) | 46 (operator surface) / 45 (broker side) |
-| `KafkaNodePool.status.storage` mirror (`pvc.status.{phase, capacity}`) | future |
-| Cluster-level `Kafka.spec.storage` default | future (operator slices haven't needed it yet) |
-| In-place size *decrease* / class change orchestration (data migration) | not on roadmap |
-| Volume snapshot / restore | not on roadmap |
-| `accessModes` beyond `ReadWriteOnce` | future |
-| Per-pod heterogeneous storage (e.g., log-dir on SSD, meta on HDD) | depends on slice 45 |
-| Status condition for "resize in progress" | future |
+| Concern                                                                | Slice                                          |
+| ---------------------------------------------------------------------- | ---------------------------------------------- |
+| JBOD (multiple PVCs per pod, `KIP-113` log-dir reassignment)           | 46 (operator surface) / 45 (broker side)       |
+| `KafkaNodePool.status.storage` mirror (`pvc.status.{phase, capacity}`) | future                                         |
+| Cluster-level `Kafka.spec.storage` default                             | future (operator slices haven't needed it yet) |
+| In-place size _decrease_ / class change orchestration (data migration) | not on roadmap                                 |
+| Volume snapshot / restore                                              | not on roadmap                                 |
+| `accessModes` beyond `ReadWriteOnce`                                   | future                                         |
+| Per-pod heterogeneous storage (e.g., log-dir on SSD, meta on HDD)      | depends on slice 45                            |
+| Status condition for "resize in progress"                              | future                                         |
 
 ### Constraints inherited from slice 20
 
-- `KafkaNodePool` is the only writer of broker `StatefulSet`s (SSA field manager `crabka-operator`).
+- `KafkaNodePool` is the only writer of broker `StatefulSet`s (SSA field manager `krabka-operator`).
 - Slice 20 invariants stay: replicas = 1, roles = {Controller, Broker}.
 - Slice 21's `crabka.io/config-hash` pod-template annotation still rolls pods on `spec.config` change; slice 24 changes are independent (volume swap rolls the pod via template diff naturally).
 
@@ -75,8 +75,8 @@ spec:
   storage:
     type: PersistentClaim
     size: 10Gi
-    class: fast-ssd          # optional
-    deleteClaim: false       # optional, default Retain
+    class: fast-ssd # optional
+    deleteClaim: false # optional, default Retain
 ```
 
 For `Ephemeral`:
@@ -118,9 +118,10 @@ A field-absent `spec.storage` is semantically identical to `spec.storage: {type:
        storageClassName: <pc.class or omit>
      ```
      The pod-template `volumeMounts` stay `[{name: data, mountPath: /var/lib/crabka/data}]`.
-   - PVC labels include `app.kubernetes.io/instance=<kafka>` (matches slice-20 GC selector) plus `app.kubernetes.io/name=crabka-broker` and `crabka.io/pool=<pool>`. K8s' StatefulSet controller already propagates labels from the `volumeClaimTemplates.metadata.labels` block onto the bound PVC.
+   - PVC labels include `app.kubernetes.io/instance=<kafka>` (matches slice-20 GC selector) plus `app.kubernetes.io/name=krabka-broker` and `crabka.io/pool=<pool>`. K8s' StatefulSet controller already propagates labels from the `volumeClaimTemplates.metadata.labels` block onto the bound PVC.
 
 2. **PVC retention policy.** Only emitted when `type == PersistentClaim`:
+
    ```yaml
    spec:
      persistentVolumeClaimRetentionPolicy:
@@ -140,14 +141,14 @@ The renderer remains pure: no I/O, no allocations beyond what `serde_json` emits
 
 Runs after the slice-20 validation (`roles`, `replicas`, `nodeIdStart`, `crabka.io/cluster` label). Variants added to `PoolValidationError`:
 
-| Variant | Trigger | Condition `reason` |
-|---|---|---|
-| `StorageSizeInvalid(String)` | `pc.size` doesn't parse as a `Quantity` | `StorageSizeInvalid` |
-| `StorageSizeNegativeOrZero(String)` | parses but ≤ 0 | `StorageSizeInvalid` |
+| Variant                             | Trigger                                 | Condition `reason`   |
+| ----------------------------------- | --------------------------------------- | -------------------- |
+| `StorageSizeInvalid(String)`        | `pc.size` doesn't parse as a `Quantity` | `StorageSizeInvalid` |
+| `StorageSizeNegativeOrZero(String)` | parses but ≤ 0                          | `StorageSizeInvalid` |
 
 ### Monotonic-storage validation (one StatefulSet GET)
 
-Compares desired `Storage` against the existing StatefulSet's `volumeClaimTemplates`. Runs *after* the slice-20 parent-Kafka lookup but *before* SSA-applying the StatefulSet. Helper:
+Compares desired `Storage` against the existing StatefulSet's `volumeClaimTemplates`. Runs _after_ the slice-20 parent-Kafka lookup but _before_ SSA-applying the StatefulSet. Helper:
 
 ```rust
 fn validate_storage_change(
@@ -157,22 +158,23 @@ fn validate_storage_change(
 ```
 
 The `observed` side is derived from the live StatefulSet:
+
 - If `volumeClaimTemplates` is empty → `observed = Some(Storage::Ephemeral)`.
 - If there's a `data` template → reconstruct `PersistentClaim` with `size = template.spec.resources.requests.storage`, `class = template.spec.storageClassName`, `delete_claim` derived from `persistentVolumeClaimRetentionPolicy.whenDeleted == Delete`.
 
 Rejection variants:
 
-| Variant | Trigger | Condition `reason` |
-|---|---|---|
-| `StorageTypeChanged { from, to }` | `Ephemeral ↔ PersistentClaim` switch | `StorageImmutable` |
-| `StorageClassChanged { from, to }` | `pc.class` value changed | `StorageImmutable` |
-| `StorageShrinkNotAllowed { current, desired }` | `pc.size` decreased | `StorageImmutable` |
+| Variant                                        | Trigger                              | Condition `reason` |
+| ---------------------------------------------- | ------------------------------------ | ------------------ |
+| `StorageTypeChanged { from, to }`              | `Ephemeral ↔ PersistentClaim` switch | `StorageImmutable` |
+| `StorageClassChanged { from, to }`             | `pc.class` value changed             | `StorageImmutable` |
+| `StorageShrinkNotAllowed { current, desired }` | `pc.size` decreased                  | `StorageImmutable` |
 
 When no live StatefulSet exists yet (first reconcile), monotonic validation is a no-op — any storage spec is accepted.
 
 When `pc.size` increased: pass-through. The operator patches the StatefulSet's `volumeClaimTemplates.spec.resources.requests.storage`. K8s decides whether the storageClass supports expansion; if it doesn't, the SSA patch returns an API error. The error bubbles through the normal `ReconcileError::Kube` path → `error_policy` re-queue + log. No special `PoolValidationError` variant — the SSA error message is descriptive enough on its own.
 
-`deleteClaim` mutations are *allowed* — they only affect the StatefulSet's retention-policy field, which K8s lets us patch freely. `validate_storage_change` rejects only the three immutable mutations (`type`, `class`, size-decrease); any other delta on `PersistentClaim` (i.e., `deleteClaim` flip or size increase) is acceptable and falls through to the SSA-apply path.
+`deleteClaim` mutations are _allowed_ — they only affect the StatefulSet's retention-policy field, which K8s lets us patch freely. `validate_storage_change` rejects only the three immutable mutations (`type`, `class`, size-decrease); any other delta on `PersistentClaim` (i.e., `deleteClaim` flip or size increase) is acceptable and falls through to the SSA-apply path.
 
 ### Validation ordering in `reconcile`
 
@@ -201,6 +203,7 @@ pub(crate) fn parse_quantity(s: &str) -> Result<i128, &'static str>;
 ```
 
 Accepts:
+
 - Binary suffixes `Ki`, `Mi`, `Gi`, `Ti`, `Pi`, `Ei` (1 Ki = 1024 bytes).
 - Decimal suffixes `K`, `M`, `G`, `T`, `P`, `E` (1 K = 1000 bytes).
 - Bare integers (no suffix → bytes).
@@ -218,17 +221,20 @@ Unit tests cover binary suffixes, decimal suffixes, parse rejections, zero / neg
 ### Unit tests
 
 **`crd::kafka_node_pool::tests`** (3 new):
+
 - `storage_ephemeral_round_trips_through_json`.
 - `storage_persistent_claim_round_trips_through_json` (full body with size, class, deleteClaim).
 - `spec_defaults_storage_to_none`.
 
 **`controller::common::tests`** (4 new):
+
 - `quantity_parse_binary_suffixes` (`"10Gi"`, `"512Mi"`, `"1Ki"`).
 - `quantity_parse_decimal_suffixes` (`"10G"`, `"500M"`).
 - `quantity_parse_rejects_garbage` (`"banana"`, `""`, `"1.5x"`).
 - `quantity_parse_zero_and_negative_are_errors` (`"0"`, `"-10Gi"`).
 
 **`controller::kafka_node_pool::tests`** (~8 new):
+
 - `render_statefulset_emptydir_when_storage_none`.
 - `render_statefulset_emptydir_when_storage_ephemeral`.
 - `render_statefulset_volume_claim_template_when_persistent`.
@@ -252,6 +258,7 @@ The existing 5 slice-20 pool tests stay green (default `storage = None` → empt
 Three changes:
 
 1. **Apply manifest** — replace the existing `KafkaNodePool brokers` spec body to include storage:
+
    ```yaml
    spec:
      roles: [Controller, Broker]
@@ -260,12 +267,13 @@ Three changes:
      storage:
        type: PersistentClaim
        size: 1Gi
-       deleteClaim: true        # so the GC step doesn't leave PVCs behind
+       deleteClaim: true # so the GC step doesn't leave PVCs behind
      template:
        # ...existing block unchanged...
    ```
 
 2. **New smoke step** (after `Smoke — broker binary launched in pod`, before `Smoke — config change rolls broker pod`):
+
    ```yaml
    - name: Smoke — broker bound a PersistentVolumeClaim
      run: |
@@ -280,6 +288,7 @@ Three changes:
    ```
 
 3. **Extend GC probe** — include PVCs in the labeled-resource count:
+
    ```bash
    pvcs=$(kubectl get pvc -n default -l app.kubernetes.io/instance=demo -o name 2>/dev/null | wc -l)
    # ...
@@ -319,9 +328,9 @@ Implementation plan target: **~6 tasks across 3 batches.**
 
 ## 8. Acceptance criteria
 
-1. `cargo test -p crabka-operator` green (existing 55 + ~17 new = ~72 tests).
+1. `cargo test -p krabka-operator` green (existing 55 + ~17 new = ~72 tests).
 2. `cargo clippy --workspace --all-targets -- -D warnings` clean.
-3. `helm lint charts/crabka-operator` passes (no chart changes expected).
+3. `helm lint charts/krabka-operator` passes (no chart changes expected).
 4. CRD regen stable for both `kafkas` and `kafkanodepools`.
 5. operator-e2e (kind):
    - `Kafka demo` + `KafkaNodePool brokers` with `storage.type=PersistentClaim, size=1Gi, deleteClaim=true` becomes `Ready=True`.

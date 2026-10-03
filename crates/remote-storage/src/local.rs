@@ -268,7 +268,7 @@ mod tests {
 
     use assert2::{assert, check};
     use bytes::Bytes;
-    use crabka_ids::LeaderEpoch;
+    use krabka_ids::LeaderEpoch;
     use uuid::Uuid;
 
     use super::*;

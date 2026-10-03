@@ -8,7 +8,7 @@ Scope is G-6 only. This evidence does not claim G-7 or later chapters.
 - Rust toolchain: `rustc 1.97.0 (2d8144b78 2026-07-07)`.
 - PostgreSQL compatibility oracle pinned by the conformance harness: PostgreSQL 18.
 - Kafka and Schema Registry for the FDW product proof are the workspace's real
-  in-process `crabka-broker` and `crabka-schema-registry`, not mocks or Docker
+  in-process `krabka-broker` and `krabka-schema-registry`, not mocks or Docker
   substitutes.
 
 ## Requirement audit
@@ -17,8 +17,8 @@ Scope is G-6 only. This evidence does not claim G-7 or later chapters.
 
 `FetchedRecord` exposes the protocol crate's owned `RecordHeader`, retaining
 wire order, duplicate keys, binary values, and null values. The real broker
-roundtrip produces headers through `crabka-client-producer`, fetches them
-through `crabka-client-core`, and projects this exact deterministic `_headers`
+roundtrip produces headers through `krabka-client-producer`, fetches them
+through `krabka-client-core`, and projects this exact deterministic `_headers`
 text:
 
 ```text
@@ -81,18 +81,18 @@ the F-0 structural validator and compatibility matrix anti-rot checks passed.
 Passed:
 
 ```text
-cargo nextest run -p crabka-client-core
+cargo nextest run -p krabka-client-core
   52 passed, 4 skipped
-cargo nextest run -p crabka-gres-fdw
+cargo nextest run -p krabka-gres-fdw
   54 passed
-cargo nextest run -p crabka-gres-fdw --features roundtrip --test roundtrip
+cargo nextest run -p krabka-gres-fdw --features roundtrip --test roundtrip
   1 passed (real broker + registry; repeated after explicit-override addition)
-cargo test -p crabka-gres --test runtime \
+cargo test -p krabka-gres --test runtime \
   live_multirange_substrate_default_fdw_server_reads_own_broker -- --exact
   1 passed (real multi-range substrate runtime + own broker)
-cargo clippy -p crabka-client-core -p crabka-pgexec -p crabka-gres-ranges \
-  -p crabka-gres-fdw -p crabka-gres --all-targets \
-  --features crabka-gres-fdw/roundtrip -- -D warnings
+cargo clippy -p krabka-client-core -p krabka-pgexec -p krabka-gres-ranges \
+  -p krabka-gres-fdw -p krabka-gres --all-targets \
+  --features krabka-gres-fdw/roundtrip -- -D warnings
 cargo check --workspace --all-targets
 cargo +nightly fmt --all -- --check
 python3 scripts/tests/gres_f0_runtime_gates.py
@@ -105,7 +105,7 @@ git diff --check
 
 The wider gates have two explicit non-G-6 contradictions:
 
-- `cargo nextest run -p crabka-gres`: 55/56 passed; the G-8 transfer test
+- `cargo nextest run -p krabka-gres`: 55/56 passed; the G-8 transfer test
   `live_multirange_transfer_stages_populated_successor_without_publishing_it`
   forces a checkpoint while its WAL writer is paused and fails with
   `WAL topic unavailable: WAL writer is paused`.

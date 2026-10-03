@@ -1,4 +1,4 @@
-//! `CodSpeed` microbenchmarks for `crabka-protocol::records`.
+//! `CodSpeed` microbenchmarks for `krabka-protocol::records`.
 //!
 //! Covers the v2 `RecordBatch` codec path end to end: encode, owned decode,
 //! borrowed zero-copy decode with iteration, and `encoded_len`. Each axis
@@ -6,15 +6,15 @@
 //! regression in any one shape shows up clearly.
 
 use bytes::{Bytes, BytesMut};
-use crabka_compression::CompressionType;
-use crabka_protocol::{
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use krabka_compression::CompressionType;
+use krabka_protocol::{
     DecodeBorrow,
     records::{
         Record, RecordBatch, RecordBatchBorrowed, RecordHeader, count_records_in_v2_batches,
         validate_one_v2_batch,
     },
 };
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 // ---------------------------------------------------------------------------
 // Fixture builders

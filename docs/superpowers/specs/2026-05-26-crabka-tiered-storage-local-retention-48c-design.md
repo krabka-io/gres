@@ -59,7 +59,7 @@ pub local_retention_bytes: Option<u64>,
 **Greenfield simplification:** Kafka distinguishes `local.retention.ms
 = -1` ("unlimited local") from `-2` ("inherit"). For tiered topics the
 practical difference is negligible (you'd never set local retention
-*longer* than total retention), so 48c collapses both to "inherit"
+_longer_ than total retention), so 48c collapses both to "inherit"
 (`None`). The wire-side validate accepts both for compatibility with
 `kafka-configs`, and the apply path maps both to `None`. Documented in
 the slice notes.
@@ -95,7 +95,7 @@ impl Log {
 
 `local_log_start_offset()` is the new accessor. For 48c it returns
 `log_start_offset()` — `local_log_start_override` is a separate field
-that tracks the local-only pointer, but the *current* invariant is
+that tracks the local-only pointer, but the _current_ invariant is
 that `local_log_start_offset() == log_start_offset()`. Both pointers
 co-evolve in 48c; they only diverge in 48e (remote-retention can
 advance `log_start_offset` past `local_log_start_offset` when the
@@ -163,7 +163,7 @@ Algorithm (per partition):
      `CopySegmentFinished` (matching by base offset is fine — slice
      48b's per-segment UUID guarantees no collision).
    - Compute `delete_by_time = effective_local_ms.is_some()
-     && now_ms - seg.max_timestamp > effective_local_ms`.
+&& now_ms - seg.max_timestamp > effective_local_ms`.
    - Compute `delete_by_size` greedily: maintain a running total of
      sealed+active bytes; mark oldest-first as deletable until total
      ≤ `effective_local_bytes`.
@@ -257,6 +257,6 @@ thin wrapper that gathers inputs and calls the helper.
 
 - `cargo fmt --all --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test -p crabka-log -p crabka-broker`
+- `cargo test -p krabka-log -p krabka-broker`
 - `cargo build --workspace`
 - No CRD drift (no CRDs touched).

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use bytes::{BufMut, BytesMut};
-use crabka_pgwire::{session::SessionConfig, stub::StubEngine};
+use krabka_pgwire::{session::SessionConfig, stub::StubEngine};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -47,7 +47,7 @@ fn client_tls() -> TlsConnector {
 async fn ssl_request_upgrades_to_tls_and_session_works() {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
-    tokio::spawn(crabka_pgwire::server::serve_tls(
+    tokio::spawn(krabka_pgwire::server::serve_tls(
         listener,
         Arc::new(StubEngine::new()),
         Arc::new(SessionConfig::trust()),
@@ -95,7 +95,7 @@ async fn ssl_request_upgrades_to_tls_and_session_works() {
 async fn ssl_request_without_tls_config_gets_n() {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
-    tokio::spawn(crabka_pgwire::server::serve_tls(
+    tokio::spawn(krabka_pgwire::server::serve_tls(
         listener,
         Arc::new(StubEngine::new()),
         Arc::new(SessionConfig::trust()),
@@ -118,7 +118,7 @@ async fn pipelined_bytes_after_ssl_request_are_rejected() {
     // NOT be processed as if it arrived over TLS.
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
-    tokio::spawn(crabka_pgwire::server::serve_tls(
+    tokio::spawn(krabka_pgwire::server::serve_tls(
         listener,
         Arc::new(StubEngine::new()),
         Arc::new(SessionConfig::trust()),

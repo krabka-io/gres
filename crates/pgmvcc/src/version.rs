@@ -1,11 +1,11 @@
 //! Xid-keyed tuple encoding for Crabka Gres MVCC.
 //!
-//! A rowid's versions live under `crabka_pgkv::key::row_key(table, rowid)` with
+//! A rowid's versions live under `krabka_pgkv::key::row_key(table, rowid)` with
 //! an ascending xid suffix, so versions sort chronologically. The value carries
 //! the xmin/xmax header and the row payload.
 
-use crabka_pgkv::KvError;
-use crabka_pgtypes::Datum;
+use krabka_pgkv::KvError;
+use krabka_pgtypes::Datum;
 use zerocopy::{
     FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned,
     byteorder::big_endian::{U32, U64},
@@ -16,10 +16,10 @@ use crate::xid::{FROZEN_XID, Xid};
 // ── SP5 xid-keyed tuple format ────────────────────────────────────────────────
 
 /// SP5 version key: the row key followed by the creating xid (big-endian,
-/// ascending). A rowid's versions all share `crabka_pgkv::key::row_key(table, rowid)`.
+/// ascending). A rowid's versions all share `krabka_pgkv::key::row_key(table, rowid)`.
 #[must_use]
 pub fn version_key_xid(table_id: u32, rowid: u64, xid: u64) -> Vec<u8> {
-    let mut k = crabka_pgkv::key::row_key(table_id, rowid);
+    let mut k = krabka_pgkv::key::row_key(table_id, rowid);
     k.extend_from_slice(U64::new(xid).as_bytes());
     k
 }
@@ -28,7 +28,7 @@ pub fn version_key_xid(table_id: u32, rowid: u64, xid: u64) -> Vec<u8> {
 /// `(table_id, bucket, rowid)` and bucket is the leading interval component.
 #[must_use]
 pub fn hash_version_key_xid(table_id: u32, bucket: u32, rowid: u64, xid: u64) -> Vec<u8> {
-    let mut k = crabka_pgkv::key::hash_row_key(table_id, bucket, rowid);
+    let mut k = krabka_pgkv::key::hash_row_key(table_id, bucket, rowid);
     k.extend_from_slice(U64::new(xid).as_bytes());
     k
 }
@@ -37,7 +37,7 @@ pub fn hash_version_key_xid(table_id: u32, bucket: u32, rowid: u64, xid: u64) ->
 /// transaction's `start_ts` (big-endian, ascending).
 #[must_use]
 pub fn version_key_ts(table_id: u32, rowid: u64, start_ts: u64) -> Vec<u8> {
-    let mut k = crabka_pgkv::key::row_key(table_id, rowid);
+    let mut k = krabka_pgkv::key::row_key(table_id, rowid);
     k.extend_from_slice(U64::new(start_ts).as_bytes());
     k
 }
@@ -45,7 +45,7 @@ pub fn version_key_ts(table_id: u32, rowid: u64, start_ts: u64) -> Vec<u8> {
 /// Timestamp-transaction version key for a hash-sharded row.
 #[must_use]
 pub fn hash_version_key_ts(table_id: u32, bucket: u32, rowid: u64, start_ts: u64) -> Vec<u8> {
-    let mut k = crabka_pgkv::key::hash_row_key(table_id, bucket, rowid);
+    let mut k = krabka_pgkv::key::hash_row_key(table_id, bucket, rowid);
     k.extend_from_slice(U64::new(start_ts).as_bytes());
     k
 }
@@ -179,7 +179,7 @@ pub fn encode_tuple(xmin: u64, xmax: u64, row: &[Datum]) -> Vec<u8> {
     };
     let mut out = Vec::with_capacity(17 + row.len() * 8);
     out.extend_from_slice(header.as_bytes());
-    out.extend_from_slice(&crabka_pgkv::rowenc::encode_row(row));
+    out.extend_from_slice(&krabka_pgkv::rowenc::encode_row(row));
     out
 }
 
@@ -201,7 +201,7 @@ pub fn encode_tuple_with_command_ids(
     };
     let mut out = Vec::with_capacity(25 + row.len() * 8);
     out.extend_from_slice(header.as_bytes());
-    out.extend_from_slice(&crabka_pgkv::rowenc::encode_row(row));
+    out.extend_from_slice(&krabka_pgkv::rowenc::encode_row(row));
     out
 }
 
@@ -225,7 +225,7 @@ pub fn encode_tuple_with_command_ids_and_update_target(
     };
     let mut out = Vec::with_capacity(33 + row.len() * 8);
     out.extend_from_slice(header.as_bytes());
-    out.extend_from_slice(&crabka_pgkv::rowenc::encode_row(row));
+    out.extend_from_slice(&krabka_pgkv::rowenc::encode_row(row));
     out
 }
 
@@ -246,7 +246,7 @@ pub fn encode_ts_tuple(start_ts: u64, state: TsVersionState, row: &[Datum]) -> V
     };
     let mut out = Vec::with_capacity(18 + row.len() * 8);
     out.extend_from_slice(header.as_bytes());
-    out.extend_from_slice(&crabka_pgkv::rowenc::encode_row(row));
+    out.extend_from_slice(&krabka_pgkv::rowenc::encode_row(row));
     out
 }
 
@@ -292,7 +292,7 @@ pub fn decode_tuple_with_command_ids_and_update_target(
                 header.xmax.get(),
                 0,
                 0,
-                crabka_pgkv::rowenc::decode_row(rest)?,
+                krabka_pgkv::rowenc::decode_row(rest)?,
                 None,
             ))
         }
@@ -304,7 +304,7 @@ pub fn decode_tuple_with_command_ids_and_update_target(
                 header.xmax.get(),
                 header.cmin.get(),
                 header.cmax.get(),
-                crabka_pgkv::rowenc::decode_row(rest)?,
+                krabka_pgkv::rowenc::decode_row(rest)?,
                 None,
             ))
         }
@@ -320,7 +320,7 @@ pub fn decode_tuple_with_command_ids_and_update_target(
                 header.xmax.get(),
                 header.cmin.get(),
                 header.cmax.get(),
-                crabka_pgkv::rowenc::decode_row(rest)?,
+                krabka_pgkv::rowenc::decode_row(rest)?,
                 Some(next_rowid),
             ))
         }
@@ -370,7 +370,7 @@ pub fn decode_ts_tuple(bytes: &[u8]) -> Result<TsTupleVersion, KvError> {
         }
         _ => return Err(KvError::CorruptRow("invalid timestamp tuple state".into())),
     };
-    let row = crabka_pgkv::rowenc::decode_row(rest)?;
+    let row = krabka_pgkv::rowenc::decode_row(rest)?;
     Ok(TsTupleVersion {
         start_ts: header.start_ts.get(),
         state,
@@ -425,7 +425,7 @@ pub fn clear_tuple_xmax(bytes: &[u8]) -> Result<Vec<u8>, KvError> {
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgtypes::Datum;
+    use krabka_pgtypes::Datum;
 
     use super::*;
 
@@ -461,7 +461,7 @@ mod tests {
     #[test]
     fn row_prefix_of_strips_xid_suffix() {
         let k = version_key_xid(7, 42, 5);
-        let expected = crabka_pgkv::key::row_key(7, 42);
+        let expected = krabka_pgkv::key::row_key(7, 42);
         assert_eq!(row_prefix_of(&k).expect("valid key"), expected.as_slice());
     }
 
@@ -479,7 +479,7 @@ mod tests {
 
     #[test]
     fn version_key_xid_is_rowid_prefix_plus_ascending_xid() {
-        let prefix = crabka_pgkv::key::row_key(7, 42);
+        let prefix = krabka_pgkv::key::row_key(7, 42);
         let k = version_key_xid(7, 42, 100);
         assert!(k.starts_with(&prefix));
         assert_eq!(xid_of_key(&k).expect("xid"), 100);

@@ -18,11 +18,11 @@
 
 use std::borrow::Cow;
 
-use crabka_pgparser::ast::{
+use krabka_pgparser::ast::{
     Expr, JsonBehavior, JsonTable, JsonTableColumn, JsonTableExistsColumn, JsonTableNestedColumns,
     JsonTableValueColumn, JsonWrapper,
 };
-use crabka_pgtypes::{ColumnType, Datum, JsonbValue};
+use krabka_pgtypes::{ColumnType, Datum, JsonbValue};
 
 use crate::{
     clock::EvalCtx,
@@ -500,7 +500,7 @@ impl Plan<'_> {
     ) -> Result<Datum, ExecError> {
         if let ColumnType::Array(elem) = ty {
             let JsonbValue::Array(items) = value else {
-                return Err(ExecError::Type(crabka_pgtypes::TypeError::Coded {
+                return Err(ExecError::Type(krabka_pgtypes::TypeError::Coded {
                     sqlstate: "22P02",
                     message: format!("expected JSON array, got \"{}\"", value.to_text()),
                 }));
@@ -509,7 +509,7 @@ impl Plan<'_> {
             for item in items {
                 elems.push(self.populate(item, elem.column_type(), false)?);
             }
-            return Ok(Datum::Array(crabka_pgtypes::ArrayValue::new(elem, elems)));
+            return Ok(Datum::Array(krabka_pgtypes::ArrayValue::new(elem, elems)));
         }
         let text = match (value, omit_quotes) {
             (JsonbValue::String(s), true) => s.clone(),
@@ -590,7 +590,7 @@ impl Plan<'_> {
         if value.is_null() {
             return Ok(Datum::Null);
         }
-        let cast = crabka_pgtypes::cast::cast_in(&value, ty, self.ctx.output_style())?;
+        let cast = krabka_pgtypes::cast::cast_in(&value, ty, self.ctx.output_style())?;
         crate::usertype::check_domain(ty, &cast, self.ctx)?;
         Ok(cast)
     }
@@ -709,7 +709,7 @@ fn not_single_scalar(column: &str) -> ExecError {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgwire::engine::{Engine, QueryResult, Session};
+    use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
     use crate::SqlEngine;
 
@@ -724,7 +724,7 @@ mod tests {
     async fn run(
         session: &mut crate::SqlSession,
         sql: &str,
-    ) -> Result<(Vec<String>, Vec<Vec<Option<String>>>), crabka_pgwire::error::PgError> {
+    ) -> Result<(Vec<String>, Vec<Vec<Option<String>>>), krabka_pgwire::error::PgError> {
         let result = session.simple_query(sql).await?.pop().expect("one result");
         match result {
             QueryResult::Rows { fields, rows, .. } => Ok((

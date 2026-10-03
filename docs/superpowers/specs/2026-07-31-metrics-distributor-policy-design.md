@@ -5,11 +5,11 @@
 Expose three existing distributor deployment policies through the standalone
 metrics service while preserving current effective behavior:
 
-| Policy | Existing effective default |
-|---|---:|
-| HA replica failover timeout | `30s` |
-| ingestion-rate tenant bucket cap | `100000` |
-| decompressed distributor request cap | `32MiB` |
+| Policy                               | Existing effective default |
+| ------------------------------------ | -------------------------: |
+| HA replica failover timeout          |                      `30s` |
+| ingestion-rate tenant bucket cap     |                   `100000` |
+| decompressed distributor request cap |                    `32MiB` |
 
 The metrics service is not owned by a CRD, so these policies belong to its
 CLI and environment surface. Library callers that construct
@@ -18,13 +18,13 @@ defaults.
 
 ## Configuration Surface
 
-The `crabka-metrics` binary adds:
+The `krabka-metrics` binary adds:
 
-| CLI | Environment | Default |
-|---|---|---:|
-| `--ha-failover-timeout` | `CRABKA_METRICS_HA_FAILOVER_TIMEOUT` | `30s` |
-| `--ingest-rate-bucket-cap` | `CRABKA_METRICS_INGEST_RATE_BUCKET_CAP` | `100000` |
-| `--distributor-max-decompressed` | `CRABKA_METRICS_DISTRIBUTOR_MAX_DECOMPRESSED` | `32MiB` |
+| CLI                              | Environment                                   |  Default |
+| -------------------------------- | --------------------------------------------- | -------: |
+| `--ha-failover-timeout`          | `KRABKA_METRICS_HA_FAILOVER_TIMEOUT`          |    `30s` |
+| `--ingest-rate-bucket-cap`       | `KRABKA_METRICS_INGEST_RATE_BUCKET_CAP`       | `100000` |
+| `--distributor-max-decompressed` | `KRABKA_METRICS_DISTRIBUTOR_MAX_DECOMPRESSED` |  `32MiB` |
 
 All three options are accepted for every target, matching the binary's
 existing flat CLI. Only the distributor consumes them.
@@ -50,7 +50,7 @@ boundary. Invalid values fail during CLI parsing.
 
 ```text
 CLI / environment
-  -> crabka-metrics distributor startup
+  -> krabka-metrics distributor startup
   -> DistributorState
        -> HaTracker election timeout
        -> IngestEnforcer tenant bucket cap

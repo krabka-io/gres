@@ -4,7 +4,7 @@
 
 **Goal:** Functional-correctness proofs (Creusot v0.12.0) for six pure kernels — consensus core, log data-path, throttle bucket — replayed as a required CI check, with a melange/apko toolchain image for Windows dev and CI.
 
-**Architecture:** New `crabka-verified` crate holds the kraft-core/log kernels as pure free functions over primitives; hosts call through (originals deleted). `crabka-throttle` is verified in place with its runtime shell behind `#[cfg(not(creusot))]`. A `crabka-creusot` Docker image (melange/apko, pinned tag v0.12.0) is the single toolchain artifact for local proving (Windows Docker) and the `creusot-verify` CI job, which replays checked-in why3find proof sessions.
+**Architecture:** New `krabka-verified` crate holds the kraft-core/log kernels as pure free functions over primitives; hosts call through (originals deleted). `krabka-throttle` is verified in place with its runtime shell behind `#[cfg(not(creusot))]`. A `krabka-creusot` Docker image (melange/apko, pinned tag v0.12.0) is the single toolchain artifact for local proving (Windows Docker) and the `creusot-verify` CI job, which replays checked-in why3find proof sessions.
 
 **Tech Stack:** Creusot v0.12.0 + `creusot-std` 0.12.0 (crates.io — the renamed successor of the deprecated `creusot-contracts`; the matched pair for the tool tag), Why3/why3find, melange/apko on Wolfi, GitHub Actions.
 
@@ -24,29 +24,29 @@
 
 ## File structure
 
-| File | Responsibility |
-|---|---|
-| `.creusot-version` | Single-source toolchain pin (`v0.12.0`) read by scripts, CI, docs |
-| `packaging/melange/creusot-toolchain.yaml` | Builds the Creusot toolchain APK from Wolfi |
-| `packaging/apko/creusot-toolchain.yaml` | Assembles the `crabka-creusot` image |
-| `tools/build-creusot-image.sh` | melange build → apko build (mirrors `tools/build-image.sh`) |
-| `tools/creusot.sh` | Wrapper: run any command inside the pinned image with the workspace mounted |
-| `crates/verified/Cargo.toml`, `build.rs`, `src/lib.rs` | New `crabka-verified` crate |
-| `crates/verified/src/consensus.rs` | `election_jitter_ms`, `log_is_up_to_date`, `recompute_high_watermark` + contracts |
-| `crates/verified/src/log_index.rs` | `offset_index_lookup` + contracts |
-| `crates/verified/src/compaction.rs` | `RecordMeta`/`BatchMeta`/`TxnDataState`/`RetainDecision`, `compute_horizon`, `retain_decision` + contracts |
-| `crates/throttle/src/lib.rs` | Pure `plan_consume` + contracts; module decls only |
-| `crates/throttle/src/runtime.rs` | `TokenBucket`/`ThrottleState` runtime shell, gated `#[cfg(not(creusot))]` |
-| `crates/throttle/build.rs` | check-cfg registration |
-| `crates/kraft-core/src/core.rs` | Call-throughs to `crabka_verified` (bodies deleted) |
-| `crates/log/src/index.rs`, `src/compact.rs` | Call-through + re-exports (bodies/types deleted) |
-| `.github/workflows/ci.yml` | `creusot` filter + `creusot-verify` job + gatekeeper entry |
-| `.github/workflows/publish-creusot-image.yml` | Builds/publishes `ghcr.io/robot-head/crabka-creusot:<pin>` |
-| `docs/verification.md` | How to prove, replay, debug, bump the pin |
+| File                                                   | Responsibility                                                                                             |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `.creusot-version`                                     | Single-source toolchain pin (`v0.12.0`) read by scripts, CI, docs                                          |
+| `packaging/melange/creusot-toolchain.yaml`             | Builds the Creusot toolchain APK from Wolfi                                                                |
+| `packaging/apko/creusot-toolchain.yaml`                | Assembles the `krabka-creusot` image                                                                       |
+| `tools/build-creusot-image.sh`                         | melange build → apko build (mirrors `tools/build-image.sh`)                                                |
+| `tools/creusot.sh`                                     | Wrapper: run any command inside the pinned image with the workspace mounted                                |
+| `crates/verified/Cargo.toml`, `build.rs`, `src/lib.rs` | New `krabka-verified` crate                                                                                |
+| `crates/verified/src/consensus.rs`                     | `election_jitter_ms`, `log_is_up_to_date`, `recompute_high_watermark` + contracts                          |
+| `crates/verified/src/log_index.rs`                     | `offset_index_lookup` + contracts                                                                          |
+| `crates/verified/src/compaction.rs`                    | `RecordMeta`/`BatchMeta`/`TxnDataState`/`RetainDecision`, `compute_horizon`, `retain_decision` + contracts |
+| `crates/throttle/src/lib.rs`                           | Pure `plan_consume` + contracts; module decls only                                                         |
+| `crates/throttle/src/runtime.rs`                       | `TokenBucket`/`ThrottleState` runtime shell, gated `#[cfg(not(creusot))]`                                  |
+| `crates/throttle/build.rs`                             | check-cfg registration                                                                                     |
+| `crates/kraft-core/src/core.rs`                        | Call-throughs to `krabka_verified` (bodies deleted)                                                        |
+| `crates/log/src/index.rs`, `src/compact.rs`            | Call-through + re-exports (bodies/types deleted)                                                           |
+| `.github/workflows/ci.yml`                             | `creusot` filter + `creusot-verify` job + gatekeeper entry                                                 |
+| `.github/workflows/publish-creusot-image.yml`          | Builds/publishes `ghcr.io/robot-head/krabka-creusot:<pin>`                                                 |
+| `docs/verification.md`                                 | How to prove, replay, debug, bump the pin                                                                  |
 
 ## Execution batching (per CLAUDE.md: parallel subagent batches)
 
-- **Batch 1** (parallel): Task 1 (toolchain image), Task 2 (throttle split), Task 3 (`crabka-verified` crate). Disjoint file sets. Task 1 is long-running (~30–60 min image build) — start it first.
+- **Batch 1** (parallel): Task 1 (toolchain image), Task 2 (throttle split), Task 3 (`krabka-verified` crate). Disjoint file sets. Task 1 is long-running (~30–60 min image build) — start it first.
 - **Batch 2** (parallel, after Batch 1): Task 4 (kraft-core call-through), Task 5 (log call-through), Task 6 (contracts + `creusot-std`). Disjoint: kraft-core / log / verified+throttle. (All touch `Cargo.lock`; it regenerates — commit it with whichever task lands last.)
 - **Batch 3**: Task 7 (author proofs in the image, check in sessions). Needs Tasks 1 and 6.
 - **Batch 4** (parallel): Task 8 (CI), Task 9 (docs + wrapper).
@@ -56,6 +56,7 @@
 ### Task 1: Creusot toolchain image (melange/apko)
 
 **Files:**
+
 - Create: `.creusot-version`
 - Create: `packaging/melange/creusot-toolchain.yaml`
 - Create: `packaging/apko/creusot-toolchain.yaml`
@@ -177,7 +178,7 @@ archs:
   - x86_64
 ```
 
-Note: if `cargo creusot` inside the image cannot find why3/why3find, the opam bin dir must be appended to `PATH`. Find it with `docker run --rm crabka-creusot:v0.12.0 "opam var bin"` and add that literal path to the apko `PATH` — then rebuild.
+Note: if `cargo creusot` inside the image cannot find why3/why3find, the opam bin dir must be appended to `PATH`. Find it with `docker run --rm krabka-creusot:v0.12.0 "opam var bin"` and add that literal path to the apko `PATH` — then rebuild.
 
 - [ ] **Step 4: Write the build script**
 
@@ -190,7 +191,7 @@ Note: if `cargo creusot` inside the image cannot find why3/why3find, the opam bi
 #   docker load < creusot-toolchain.tar
 set -euo pipefail
 PIN="$(cat "$(dirname "$0")/../.creusot-version")"
-TAG="${1:-crabka-creusot:${PIN}}"
+TAG="${1:-krabka-creusot:${PIN}}"
 RUNNER="${MELANGE_RUNNER:-docker}"
 WORK="$(pwd)"
 mkdir -p packages
@@ -221,7 +222,7 @@ echo "Built image archive: creusot-toolchain.tar (tag: $TAG)"
 On this machine melange/apko run as containers, from a robocopy staging copy that excludes `.claude` and `target` (see memory: bench image build). From a Git Bash shell:
 
 ```bash
-STAGE=/c/Users/MATTST~1/AppData/Local/Temp/crabka-creusot-stage
+STAGE=/c/Users/MATTST~1/AppData/Local/Temp/krabka-creusot-stage
 robocopy "C:\\Users\\Matt Stone\\git\\crabka\\.claude\\worktrees\\sad-cori-68d652" "$(cygpath -w "$STAGE")" //MIR //XD .claude target .git //NFL //NDL //NJH //NJS || true
 cd "$STAGE"
 docker run --rm --privileged -v "$PWD":/work -w /work cgr.dev/chainguard/melange keygen
@@ -229,22 +230,23 @@ docker run --rm --privileged -v "$PWD":/work -w /work cgr.dev/chainguard/melange
   packaging/melange/creusot-toolchain.yaml --source-dir /work \
   --signing-key melange.rsa --arch x86_64 --out-dir packages/
 docker run --rm -v "$PWD":/work -w /work cgr.dev/chainguard/apko build \
-  packaging/apko/creusot-toolchain.yaml crabka-creusot:v0.12.0 creusot-toolchain.tar \
+  packaging/apko/creusot-toolchain.yaml krabka-creusot:v0.12.0 creusot-toolchain.tar \
   --arch x86_64 --repository-append /work/packages --keyring-append /work/melange.rsa.pub
 docker load < creusot-toolchain.tar
 ```
 
-Expected: `docker load` prints `Loaded image: crabka-creusot:v0.12.0` (possibly arch-suffixed; if the tar contains an index, `docker load` output names the loadable tag — use that tag below and retag with `docker tag <loaded> crabka-creusot:v0.12.0`).
+Expected: `docker load` prints `Loaded image: krabka-creusot:v0.12.0` (possibly arch-suffixed; if the tar contains an index, `docker load` output names the loadable tag — use that tag below and retag with `docker tag <loaded> krabka-creusot:v0.12.0`).
 
 - [ ] **Step 6: Smoke-test — prove Creusot's own scaffold end-to-end**
 
 ```bash
-docker run --rm crabka-creusot:v0.12.0 "cargo creusot --help"
-docker run --rm crabka-creusot:v0.12.0 \
+docker run --rm krabka-creusot:v0.12.0 "cargo creusot --help"
+docker run --rm krabka-creusot:v0.12.0 \
   "cd /tmp && cargo creusot new demo && cd demo && cargo creusot"
 ```
 
 Expected: `--help` prints the cargo-creusot usage; the demo project builds to Coma and the provers discharge its obligations (output reports proved goals, exit 0). **While here, record two facts needed by Tasks 6–7** (paste them into the task notes/commit message):
+
 1. The exact `creusot-std` import line and Cargo.toml dependency entry that `cargo creusot new` generates (e.g. `use creusot_std::prelude::*;`).
 2. Where proof artifacts/sessions live in the scaffold (e.g. a `verif/` dir) and what command replays without re-searching (check `cargo creusot --help` for the prove/replay subcommands and flags).
 
@@ -259,11 +261,12 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 2: Split crabka-throttle into pure kernel + runtime module
+### Task 2: Split krabka-throttle into pure kernel + runtime module
 
 Pure refactor — zero behavior change, no Creusot anything yet (that's Task 6). The existing tests are the safety net.
 
 **Files:**
+
 - Modify: `crates/throttle/src/lib.rs`
 - Create: `crates/throttle/src/runtime.rs`
 
@@ -342,12 +345,12 @@ mod plan_fuzz {
 - [ ] **Step 3: Verify — tests, clippy, fmt**
 
 ```bash
-cargo test -p crabka-throttle
-cargo clippy -p crabka-throttle --all-targets -- -D warnings
-cargo +nightly fmt -p crabka-throttle
+cargo test -p krabka-throttle
+cargo clippy -p krabka-throttle --all-targets -- -D warnings
+cargo +nightly fmt -p krabka-throttle
 ```
 
-Expected: all existing tests pass (including `tests/bucket_model.rs`, which imports `crabka_throttle::plan_consume` — unchanged public API), clippy clean.
+Expected: all existing tests pass (including `tests/bucket_model.rs`, which imports `krabka_throttle::plan_consume` — unchanged public API), clippy clean.
 
 - [ ] **Step 4: Commit**
 
@@ -360,9 +363,10 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 3: Create the crabka-verified crate (kernels + oracle tests, no contracts yet)
+### Task 3: Create the krabka-verified crate (kernels + oracle tests, no contracts yet)
 
 **Files:**
+
 - Create: `crates/verified/Cargo.toml`
 - Create: `crates/verified/src/lib.rs`
 - Create: `crates/verified/src/consensus.rs`
@@ -375,16 +379,16 @@ TDD note: the oracle tests (Step 2) are written first and encode "behaves exactl
 
 ```toml
 [package]
-name = "crabka-verified"
+name = "krabka-verified"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "Formally verified pure kernels (Creusot) shared by Crabka's consensus and log crates"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-verified"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-verified"
 keywords = ["kafka", "verification", "creusot", "crabka"]
 categories = ["algorithms"]
 
@@ -526,7 +530,7 @@ mod tests {
 - [ ] **Step 3: Run to verify the tests fail**
 
 ```bash
-cargo test -p crabka-verified
+cargo test -p krabka-verified
 ```
 
 Expected: FAIL to compile — `recompute_high_watermark`, `election_jitter_ms`, `log_is_up_to_date`, `offset_index_lookup` not found. (You'll need minimal `src/lib.rs` module decls from Step 5 first for the crate to exist; that's fine — add them now.)
@@ -536,7 +540,7 @@ Expected: FAIL to compile — `recompute_high_watermark`, `election_jitter_ms`, 
 Top of `crates/verified/src/consensus.rs` (above the tests):
 
 ```rust
-//! KIP-595 consensus decision kernels, extracted from `crabka-kraft-core` so
+//! KIP-595 consensus decision kernels, extracted from `krabka-kraft-core` so
 //! Creusot can verify them (the host crate's `Instant`/async surface is
 //! untranslatable). Contracts are added in a follow-up task; the bodies here
 //! are already written in the loop style the proofs need (no std sort).
@@ -616,7 +620,7 @@ pub fn recompute_high_watermark(
 Top of `crates/verified/src/log_index.rs`:
 
 ```rust
-//! Offset-index lookup kernel, extracted from `crabka-log`'s `OffsetIndex` so
+//! Offset-index lookup kernel, extracted from `krabka-log`'s `OffsetIndex` so
 //! Creusot can verify it. Hand-rolled binary search (the canonical Creusot
 //! loop) instead of `binary_search_by_key`, so the proof doesn't depend on
 //! std's search being modeled.
@@ -644,9 +648,9 @@ pub fn offset_index_lookup(entries: &[(u32, u32)], target: u32) -> u32 {
 `crates/verified/src/compaction.rs` — the KIP-534 core moves from `crates/log/src/compact.rs` with visibility widened from `pub(crate)` to `pub` and doc comments carried over verbatim:
 
 ```rust
-//! KIP-534 log-compaction decision core, extracted from `crabka-log` so
+//! KIP-534 log-compaction decision core, extracted from `krabka-log` so
 //! Creusot can verify it. The host crate re-exports these; the stateright
-//! model in `crabka-log/src/compact_model.rs` drives these exact functions.
+//! model in `krabka-log/src/compact_model.rs` drives these exact functions.
 
 /// Per-record facts the retain decision needs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -739,7 +743,7 @@ pub fn retain_decision(
 }
 ```
 
-(No new unit tests for `retain_decision` here — its exhaustive `core_tests` and the stateright model stay in `crabka-log` and keep running against this exact function through the re-export, per Task 5.)
+(No new unit tests for `retain_decision` here — its exhaustive `core_tests` and the stateright model stay in `krabka-log` and keep running against this exact function through the re-export, per Task 5.)
 
 - [ ] **Step 5: Write `crates/verified/src/lib.rs`**
 
@@ -749,7 +753,7 @@ pub fn retain_decision(
 //! Every function here is a total, synchronous, allocation-light kernel whose
 //! functional contract is proven with Creusot (see `docs/verification.md`).
 //! Host crates call through — there are no duplicate bodies anywhere.
-#![doc(html_root_url = "https://docs.rs/crabka-verified/0.3.8")]
+#![doc(html_root_url = "https://docs.rs/krabka-verified/0.3.8")]
 
 pub mod compaction;
 pub mod consensus;
@@ -767,9 +771,9 @@ Check the exact `html_root_url` format against a sibling (e.g. `crates/kraft-cor
 - [ ] **Step 6: Run tests to verify they pass**
 
 ```bash
-cargo test -p crabka-verified
-cargo clippy -p crabka-verified --all-targets -- -D warnings
-cargo +nightly fmt -p crabka-verified
+cargo test -p krabka-verified
+cargo clippy -p krabka-verified --all-targets -- -D warnings
+cargo +nightly fmt -p krabka-verified
 ./tools/html-root-url.sh
 ```
 
@@ -779,7 +783,7 @@ Expected: all tests PASS (oracle proptests prove behavior-equivalence to the pro
 
 ```bash
 git add crates/verified Cargo.lock
-git commit -m "feat: crabka-verified crate with consensus, log-index, and compaction kernels
+git commit -m "feat: krabka-verified crate with consensus, log-index, and compaction kernels
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
@@ -789,15 +793,16 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 4: kraft-core call-through
 
 **Files:**
+
 - Modify: `crates/kraft-core/Cargo.toml`
 - Modify: `crates/kraft-core/src/core.rs` (lines 19–29, 90–94, 224–260)
 
 - [ ] **Step 1: Add the dependency**
 
-In `crates/kraft-core/Cargo.toml` `[dependencies]` (keep the block's comment about the crate being a sans-IO leaf — `crabka-verified` is pure and preserves that):
+In `crates/kraft-core/Cargo.toml` `[dependencies]` (keep the block's comment about the crate being a sans-IO leaf — `krabka-verified` is pure and preserves that):
 
 ```toml
-crabka-verified = { version = "0.3.8", path = "../verified" }
+krabka-verified = { version = "0.3.8", path = "../verified" }
 ```
 
 - [ ] **Step 2: Replace `election_jitter_ms` body (core.rs lines 19–29)**
@@ -807,11 +812,11 @@ Keep the existing doc comment (lines 12–18) exactly. Replace the function with
 ```rust
 #[must_use]
 pub fn election_jitter_ms(me: NodeId, epoch: LeaderEpoch, base_ms: u64) -> u64 {
-    crabka_verified::election_jitter_ms(me, epoch, base_ms)
+    krabka_verified::election_jitter_ms(me, epoch, base_ms)
 }
 ```
 
-(`NodeId = u64`, `LeaderEpoch = u32`, so this is a direct delegation. The `pub use core::{QuorumStateMachine, election_jitter_ms}` re-export in lib.rs:31 and the `crabka-raft` call sites are unchanged.)
+(`NodeId = u64`, `LeaderEpoch = u32`, so this is a direct delegation. The `pub use core::{QuorumStateMachine, election_jitter_ms}` re-export in lib.rs:31 and the `krabka-raft` call sites are unchanged.)
 
 - [ ] **Step 3: Replace `log_is_up_to_date` body (core.rs lines 88–94)**
 
@@ -819,7 +824,7 @@ Keep the doc comment. Replace with:
 
 ```rust
 fn log_is_up_to_date(log: &dyn LogView, cand: LogEnd) -> bool {
-    crabka_verified::log_is_up_to_date(
+    krabka_verified::log_is_up_to_date(
         log.last_epoch(),
         log.end_offset(),
         cand.last_epoch,
@@ -851,7 +856,7 @@ Keep the method doc comment (lines 214–223). Replace the body with:
             .values()
             .map(|progress| progress.fetch_offset.min(log_end))
             .collect();
-        let new_hwm = crabka_verified::recompute_high_watermark(
+        let new_hwm = krabka_verified::recompute_high_watermark(
             log_end,
             &follower_offsets,
             self.state.majority(),
@@ -869,21 +874,21 @@ Keep the method doc comment (lines 214–223). Replace the body with:
 - [ ] **Step 5: Verify — kraft-core, raft (stateright kraft_model), wasm leaf**
 
 ```bash
-cargo test -p crabka-kraft-core
-cargo test -p crabka-raft
-cargo clippy -p crabka-kraft-core -p crabka-raft --all-targets -- -D warnings
+cargo test -p krabka-kraft-core
+cargo test -p krabka-raft
+cargo clippy -p krabka-kraft-core -p krabka-raft --all-targets -- -D warnings
 rustup target add wasm32-unknown-unknown
-cargo check -p crabka-kraft-core --target wasm32-unknown-unknown
-cargo +nightly fmt -p crabka-kraft-core
+cargo check -p krabka-kraft-core --target wasm32-unknown-unknown
+cargo +nightly fmt -p krabka-kraft-core
 ```
 
-Expected: all PASS. `crabka-raft`'s `kraft_model.rs` stateright suite now drives the verified kernel through this call path — if any of its properties fail, the delegation changed behavior: stop and diff against the original bodies (the only intended delta is the clamps, which are identity under the model's invariants). The wasm check guards the "sans-IO leaf" promise in kraft-core's Cargo.toml.
+Expected: all PASS. `krabka-raft`'s `kraft_model.rs` stateright suite now drives the verified kernel through this call path — if any of its properties fail, the delegation changed behavior: stop and diff against the original bodies (the only intended delta is the clamps, which are identity under the model's invariants). The wasm check guards the "sans-IO leaf" promise in kraft-core's Cargo.toml.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add crates/kraft-core/Cargo.toml crates/kraft-core/src/core.rs Cargo.lock
-git commit -m "refactor(kraft-core): delegate consensus kernels to crabka-verified
+git commit -m "refactor(kraft-core): delegate consensus kernels to krabka-verified
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
@@ -893,6 +898,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 5: log call-through
 
 **Files:**
+
 - Modify: `crates/log/Cargo.toml`
 - Modify: `crates/log/src/index.rs` (lines 92–103)
 - Modify: `crates/log/src/compact.rs` (lines 39–77, 86–90, 123–163 deleted; re-export added)
@@ -902,7 +908,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 In `crates/log/Cargo.toml` `[dependencies]`:
 
 ```toml
-crabka-verified = { version = "0.3.8", path = "../verified" }
+krabka-verified = { version = "0.3.8", path = "../verified" }
 ```
 
 - [ ] **Step 2: Delegate `OffsetIndex::lookup` (index.rs lines 92–103)**
@@ -912,7 +918,7 @@ Keep the doc comment. Replace the method body with:
 ```rust
     #[must_use]
     pub fn lookup(&self, target: u32) -> u32 {
-        crabka_verified::offset_index_lookup(&self.entries, target)
+        krabka_verified::offset_index_lookup(&self.entries, target)
     }
 ```
 
@@ -926,12 +932,12 @@ Delete from `compact.rs`: the `RecordMeta`, `BatchMeta`, `TxnDataState`, `Retain
 // ---------------------------------------------------------------------------
 // KIP-534 pure decision cores
 //
-// The retain/horizon core now lives in `crabka-verified`, where its contract
+// The retain/horizon core now lives in `krabka-verified`, where its contract
 // is proven with Creusot. Re-exported `pub(crate)` so `compact_model.rs` and
 // `core_tests` keep driving the exact production functions.
 // ---------------------------------------------------------------------------
 
-pub(crate) use crabka_verified::{
+pub(crate) use krabka_verified::{
     BatchMeta, RecordMeta, RetainDecision, TxnDataState, compute_horizon, retain_decision,
 };
 ```
@@ -939,33 +945,34 @@ pub(crate) use crabka_verified::{
 - [ ] **Step 4: Verify — the moved code's tests still exercise the same functions**
 
 ```bash
-cargo test -p crabka-log
-cargo clippy -p crabka-log --all-targets -- -D warnings
-cargo +nightly fmt -p crabka-log
+cargo test -p krabka-log
+cargo clippy -p krabka-log --all-targets -- -D warnings
+cargo +nightly fmt -p krabka-log
 ```
 
-Expected: all PASS — in particular `compact.rs`'s `core_tests`, the `compact_model.rs` stateright suite, and the segment tests that hit `lookup` (index.rs tests at lines 166–218, segment.rs callers). These now drive the `crabka-verified` kernels through the re-exports/delegation, which is exactly the drift protection the spec requires.
+Expected: all PASS — in particular `compact.rs`'s `core_tests`, the `compact_model.rs` stateright suite, and the segment tests that hit `lookup` (index.rs tests at lines 166–218, segment.rs callers). These now drive the `krabka-verified` kernels through the re-exports/delegation, which is exactly the drift protection the spec requires.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add crates/log/Cargo.toml crates/log/src/index.rs crates/log/src/compact.rs Cargo.lock
-git commit -m "refactor(log): delegate offset-index lookup and KIP-534 core to crabka-verified
+git commit -m "refactor(log): delegate offset-index lookup and KIP-534 core to krabka-verified
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 6: Contracts (`creusot-std`) on crabka-verified and crabka-throttle
+### Task 6: Contracts (`creusot-std`) on krabka-verified and krabka-throttle
 
 **Files:**
+
 - Modify: `crates/verified/Cargo.toml`, `crates/verified/src/{lib,consensus,log_index,compaction}.rs`
 - Create: `crates/verified/build.rs`
 - Modify: `crates/throttle/Cargo.toml`, `crates/throttle/src/lib.rs`
 - Create: `crates/throttle/build.rs`
 
-Pearlite caveat (applies to every contract below): the clause *meanings* are fixed by the spec; the surface syntax (`@` model projection, `Seq` indexing, `#[logic]` visibility, prelude path) must match `creusot-std` 0.12 — validate against the `cargo creusot new` scaffold recorded in Task 1 Step 6 and the guide (https://guide.creusot.rs), and adjust syntax (never meaning) as needed. On stable rustc all these attributes erase; the acceptance gate for this task is stable builds staying green. Proving is Task 7.
+Pearlite caveat (applies to every contract below): the clause _meanings_ are fixed by the spec; the surface syntax (`@` model projection, `Seq` indexing, `#[logic]` visibility, prelude path) must match `creusot-std` 0.12 — validate against the `cargo creusot new` scaffold recorded in Task 1 Step 6 and the guide (https://guide.creusot.rs), and adjust syntax (never meaning) as needed. On stable rustc all these attributes erase; the acceptance gate for this task is stable builds staying green. Proving is Task 7.
 
 - [ ] **Step 1: Add `creusot-std` + check-cfg to both crates**
 
@@ -989,7 +996,7 @@ fn main() {
 - [ ] **Step 2: Confirm `creusot-std` erases on stable (spec risk 1)**
 
 ```bash
-cargo check -p crabka-verified -p crabka-throttle
+cargo check -p krabka-verified -p krabka-throttle
 ```
 
 Expected: clean build on stable 1.96. If `creusot-std` itself fails to compile on stable, apply the spec's fallback: make it `optional = true` behind a `creusot-proofs` feature, wrap every contract attribute in `#[cfg_attr(creusot, ...)]`, and have Task 7 pass `--features creusot-proofs` to `cargo creusot`. Do not proceed with a git dependency under any circumstances.
@@ -1140,10 +1147,10 @@ use creusot_std::prelude::*;
 - [ ] **Step 7: Verify stable builds are fully unaffected**
 
 ```bash
-cargo test -p crabka-verified -p crabka-throttle
+cargo test -p krabka-verified -p krabka-throttle
 cargo clippy --workspace --all-targets -- -D warnings
-cargo +nightly fmt -p crabka-verified
-cargo +nightly fmt -p crabka-throttle
+cargo +nightly fmt -p krabka-verified
+cargo +nightly fmt -p krabka-throttle
 ```
 
 Expected: all tests PASS, workspace clippy clean (workspace-wide per the shared-test-support gotcha, not `-p` only — this also proves no unexpected-cfg leakage into dependents).
@@ -1162,19 +1169,20 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 7: Prove both packages and check in proof sessions
 
 **Files:**
+
 - Modify: `crates/verified/src/*.rs` (loop invariants, `proof_assert!` lemmas — bodies/contracts unchanged)
 - Create: proof session artifacts under `crates/verified/` and `crates/throttle/` (exact layout per the Task 1 Step 6 recording — typically a `verif/` dir)
 
 - [ ] **Step 1: Run the verifier on both packages via the image**
 
 ```bash
-docker volume create crabka-creusot-target
+docker volume create krabka-creusot-target
 docker run --rm -v "$PWD:/work" -w /work \
-  -v crabka-creusot-target:/ctarget -e CARGO_TARGET_DIR=/ctarget \
-  crabka-creusot:v0.12.0 "cd crates/verified && cargo creusot"
+  -v krabka-creusot-target:/ctarget -e CARGO_TARGET_DIR=/ctarget \
+  krabka-creusot:v0.12.0 "cd crates/verified && cargo creusot"
 docker run --rm -v "$PWD:/work" -w /work \
-  -v crabka-creusot-target:/ctarget -e CARGO_TARGET_DIR=/ctarget \
-  crabka-creusot:v0.12.0 "cd crates/throttle && cargo creusot"
+  -v krabka-creusot-target:/ctarget -e CARGO_TARGET_DIR=/ctarget \
+  krabka-creusot:v0.12.0 "cd crates/throttle && cargo creusot"
 ```
 
 (The named target volume keeps verification builds out of the host's MSVC `target/` dir. Expect syntax errors on first run — fix pearlite surface syntax per the 0.12 guide, meanings fixed.)
@@ -1218,9 +1226,9 @@ inner counting loop — `count` tracks the logic count over the visited prefix:
 
 ```bash
 docker run --rm -v "$PWD:/work" -w /work \
-  -v crabka-creusot-target:/ctarget -e CARGO_TARGET_DIR=/ctarget \
-  crabka-creusot:v0.12.0 "cd crates/verified && cargo creusot && cd ../throttle && cargo creusot"
-cargo test -p crabka-verified -p crabka-throttle
+  -v krabka-creusot-target:/ctarget -e CARGO_TARGET_DIR=/ctarget \
+  krabka-creusot:v0.12.0 "cd crates/verified && cargo creusot && cd ../throttle && cargo creusot"
+cargo test -p krabka-verified -p krabka-throttle
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
@@ -1232,7 +1240,7 @@ Using the replay mechanism recorded in Task 1 Step 6 (why3find sessions; the pro
 
 ```bash
 git add crates/verified crates/throttle
-git commit -m "feat: check in Creusot proof sessions for crabka-verified and crabka-throttle
+git commit -m "feat: check in Creusot proof sessions for krabka-verified and krabka-throttle
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
@@ -1242,17 +1250,18 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 8: CI — creusot-verify required check + image publish workflow
 
 **Files:**
+
 - Modify: `.github/workflows/ci.yml`
 - Create: `.github/workflows/publish-creusot-image.yml`
 
 - [ ] **Step 1: Bootstrap-push the locally built image to ghcr**
 
-The CI job pulls `ghcr.io/robot-head/crabka-creusot:v0.12.0`; the publish workflow (Step 3) only runs on pushes to main, so seed the registry once from the Task 1 local build:
+The CI job pulls `ghcr.io/robot-head/krabka-creusot:v0.12.0`; the publish workflow (Step 3) only runs on pushes to main, so seed the registry once from the Task 1 local build:
 
 ```bash
-docker tag crabka-creusot:v0.12.0 ghcr.io/robot-head/crabka-creusot:v0.12.0
+docker tag krabka-creusot:v0.12.0 ghcr.io/robot-head/krabka-creusot:v0.12.0
 gh auth token | docker login ghcr.io -u robot-head --password-stdin
-docker push ghcr.io/robot-head/crabka-creusot:v0.12.0
+docker push ghcr.io/robot-head/krabka-creusot:v0.12.0
 ```
 
 Expected: push succeeds. (If the package is private by default, make it public in the ghcr package settings so the unauthenticated CI pull works, matching the other crabka images.)
@@ -1262,36 +1271,36 @@ Expected: push succeeds. (If the package is private by default, make it public i
 In the `changes` job: add `creusot: ${{ steps.filter.outputs.creusot }}` to `outputs`, and to the `filters:` block:
 
 ```yaml
-            creusot:
-              - 'crates/verified/**'
-              - 'crates/throttle/**'
-              - 'packaging/melange/creusot-toolchain.yaml'
-              - 'packaging/apko/creusot-toolchain.yaml'
-              - '.creusot-version'
-              - '.github/workflows/ci.yml'
+creusot:
+  - "crates/verified/**"
+  - "crates/throttle/**"
+  - "packaging/melange/creusot-toolchain.yaml"
+  - "packaging/apko/creusot-toolchain.yaml"
+  - ".creusot-version"
+  - ".github/workflows/ci.yml"
 ```
 
 Add the job (alongside the other integration jobs):
 
 ```yaml
-  # Replays the checked-in Creusot/why3find proof sessions for the two
-  # verified packages inside the pinned toolchain image. Red means a contract
-  # no longer proves — a functional regression in a verified kernel, or an
-  # edit that needs its proof session refreshed (see docs/verification.md).
-  creusot-verify:
-    needs: changes
-    if: ${{ needs.changes.outputs.creusot == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - name: Replay proof sessions
-        run: |
-          PIN="$(cat .creusot-version)"
-          docker run --rm -v "$PWD:/work" -w /work \
-            -e CARGO_TARGET_DIR=/tmp/creusot-target \
-            "ghcr.io/robot-head/crabka-creusot:${PIN}" \
-            "cd crates/verified && cargo creusot <REPLAY-ARGS> && cd ../throttle && cargo creusot <REPLAY-ARGS>"
+# Replays the checked-in Creusot/why3find proof sessions for the two
+# verified packages inside the pinned toolchain image. Red means a contract
+# no longer proves — a functional regression in a verified kernel, or an
+# edit that needs its proof session refreshed (see docs/verification.md).
+creusot-verify:
+  needs: changes
+  if: ${{ needs.changes.outputs.creusot == 'true' }}
+  runs-on: ubuntu-latest
+  timeout-minutes: 30
+  steps:
+    - uses: actions/checkout@v7
+    - name: Replay proof sessions
+      run: |
+        PIN="$(cat .creusot-version)"
+        docker run --rm -v "$PWD:/work" -w /work \
+          -e CARGO_TARGET_DIR=/tmp/creusot-target \
+          "ghcr.io/robot-head/krabka-creusot:${PIN}" \
+          "cd crates/verified && cargo creusot <REPLAY-ARGS> && cd ../throttle && cargo creusot <REPLAY-ARGS>"
 ```
 
 Replace `<REPLAY-ARGS>` with the exact replay invocation validated in Task 7 Step 4 — it must fail (nonzero exit) when a session no longer replays, and must not silently re-search. Verify the failure mode locally before committing: flip a contract bound (e.g. `result@ < base_ms@` → `<=`), run the replay command, confirm nonzero exit, revert.
@@ -1310,10 +1319,10 @@ on:
   push:
     branches: [main]
     paths:
-      - '.creusot-version'
-      - 'packaging/melange/creusot-toolchain.yaml'
-      - 'packaging/apko/creusot-toolchain.yaml'
-      - '.github/workflows/publish-creusot-image.yml'
+      - ".creusot-version"
+      - "packaging/melange/creusot-toolchain.yaml"
+      - "packaging/apko/creusot-toolchain.yaml"
+      - ".github/workflows/publish-creusot-image.yml"
   workflow_dispatch:
 
 permissions:
@@ -1357,7 +1366,7 @@ jobs:
         run: |
           PIN="$(cat .creusot-version)"
           apko publish packaging/apko/creusot-toolchain.yaml \
-            "ghcr.io/robot-head/crabka-creusot:${PIN}" \
+            "ghcr.io/robot-head/krabka-creusot:${PIN}" \
             --arch x86_64 \
             --repository-append "$PWD/packages" \
             --keyring-append "$PWD/melange.rsa.pub"
@@ -1387,6 +1396,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 9: Developer docs + wrapper script
 
 **Files:**
+
 - Create: `docs/verification.md`
 - Create: `tools/creusot.sh`
 - Modify: `packaging/README.md` (add a section pointing at the toolchain image)
@@ -1403,11 +1413,11 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 #   ./tools/creusot.sh "cd crates/verified && cargo creusot"
 set -euo pipefail
 PIN="$(cat "$(dirname "$0")/../.creusot-version")"
-docker volume create crabka-creusot-target >/dev/null
+docker volume create krabka-creusot-target >/dev/null
 exec docker run --rm -it \
   -v "$(pwd):/work" -w /work \
-  -v crabka-creusot-target:/ctarget -e CARGO_TARGET_DIR=/ctarget \
-  "ghcr.io/robot-head/crabka-creusot:${PIN}" "${*:-bash}"
+  -v krabka-creusot-target:/ctarget -e CARGO_TARGET_DIR=/ctarget \
+  "ghcr.io/robot-head/krabka-creusot:${PIN}" "${*:-bash}"
 ```
 
 - [ ] **Step 2: Write `docs/verification.md`**
@@ -1419,23 +1429,23 @@ Content requirements (state current facts only — no development journey, per t
 
 ## What is verified
 
-| Kernel | Crate | Contract (informal) |
-|---|---|---|
-| `plan_consume` | `crabka-throttle` | grant ≤ requested; grant+new = min(available⊕refill, burst); never exceeds burst; grant maximal |
-| `election_jitter_ms` | `crabka-verified` | result < base_ms (0 when base_ms = 0) |
-| `log_is_up_to_date` | `crabka-verified` | exactly the KIP-595 up-to-date rule |
-| `recompute_high_watermark` | `crabka-verified` | HWM monotonic, ≤ log end; any advance is past epoch_start with a ≥-majority replication witness |
-| `offset_index_lookup` | `crabka-verified` | position of the greatest entry ≤ target, else 0 |
-| `retain_decision` | `crabka-verified` | the full KIP-534 case space (control markers, dedup, tombstone horizons) |
+| Kernel                     | Crate             | Contract (informal)                                                                             |
+| -------------------------- | ----------------- | ----------------------------------------------------------------------------------------------- |
+| `plan_consume`             | `krabka-throttle` | grant ≤ requested; grant+new = min(available⊕refill, burst); never exceeds burst; grant maximal |
+| `election_jitter_ms`       | `krabka-verified` | result < base_ms (0 when base_ms = 0)                                                           |
+| `log_is_up_to_date`        | `krabka-verified` | exactly the KIP-595 up-to-date rule                                                             |
+| `recompute_high_watermark` | `krabka-verified` | HWM monotonic, ≤ log end; any advance is past epoch_start with a ≥-majority replication witness |
+| `offset_index_lookup`      | `krabka-verified` | position of the greatest entry ≤ target, else 0                                                 |
+| `retain_decision`          | `krabka-verified` | the full KIP-534 case space (control markers, dedup, tombstone horizons)                        |
 
 Host crates call these kernels directly (no duplicated bodies); the stateright
-models in `crabka-throttle`, `crabka-raft`, and `crabka-log` drive the same
+models in `krabka-throttle`, `krabka-raft`, and `krabka-log` drive the same
 functions, so model-checked and proven code are one artifact.
 
 ## Toolchain
 
 Creusot is pinned in `.creusot-version` and ships as a Docker image
-(`ghcr.io/robot-head/crabka-creusot:<pin>`) built by
+(`ghcr.io/robot-head/krabka-creusot:<pin>`) built by
 `packaging/melange/creusot-toolchain.yaml` + `packaging/apko/creusot-toolchain.yaml`
 (`tools/build-creusot-image.sh`, published by `publish-creusot-image.yml`).
 Contracts erase to no-ops under stable rustc — normal builds, clippy, and

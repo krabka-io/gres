@@ -34,15 +34,15 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use async_trait::async_trait;
 use base64::Engine as _;
-use crabka_client_admin::AdminError;
-use crabka_metadata::DelegationToken;
-use crabka_security::KafkaPrincipal;
-use crabka_units::{Time, convert::TimeExt as _, hours};
 use k8s_openapi::{
     ByteString,
     api::core::v1::Secret,
     apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference},
 };
+use krabka_client_admin::AdminError;
+use krabka_metadata::DelegationToken;
+use krabka_security::KafkaPrincipal;
+use krabka_units::{Time, convert::TimeExt as _, hours};
 use kube::{
     Resource,
     api::{Api, Patch, PatchParams},
@@ -112,7 +112,7 @@ pub(crate) fn decide(
 
 /// Admin-client surface that [`reconcile`] uses.
 ///
-/// The production implementation lives in `crabka-client-admin`, task O3.
+/// The production implementation lives in `krabka-client-admin`, task O3.
 /// It proxies onto the 4 delegation-token methods of `AdminClient`. Unit
 /// tests substitute an in-memory mock.
 #[async_trait]
@@ -473,10 +473,10 @@ pub(crate) fn build_secret(
 ) -> Result<Secret, ReconcileError> {
     let name = obj.metadata.name.clone().unwrap_or_default();
     let mut labels: BTreeMap<String, String> = BTreeMap::new();
-    labels.insert("app.kubernetes.io/name".into(), "crabka-broker".into());
+    labels.insert("app.kubernetes.io/name".into(), "krabka-broker".into());
     labels.insert(
         "app.kubernetes.io/managed-by".into(),
-        "crabka-operator".into(),
+        "krabka-operator".into(),
     );
     if let Some(cluster) = obj
         .metadata
@@ -970,8 +970,8 @@ mod tests {
 
     use assert2::{assert, check};
     use clap::Parser;
-    use crabka_units::minutes;
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+    use krabka_units::minutes;
 
     use super::*;
     use crate::{
@@ -1036,7 +1036,7 @@ mod tests {
         // renew_before = 5000 > (1000 - 0). Renew.
         assert!(
             decide(
-                &auth(vec![], Some(crabka_units::millis(5_000))),
+                &auth(vec![], Some(krabka_units::millis(5_000))),
                 Some(&t),
                 0
             ) == ReconcileDecision::Renew
@@ -1566,7 +1566,7 @@ mod tests {
         let auth_cfg = DelegationTokenAuth::default();
         let obj = user("alice", auth_cfg.clone());
         let mut config = config();
-        config.delegation_token_transient_backoff = crabka_units::millis(1_234);
+        config.delegation_token_transient_backoff = krabka_units::millis(1_234);
 
         let out = reconcile(&obj, &auth_cfg, &admin, &secrets, &users, 0, &config)
             .await
@@ -1646,7 +1646,7 @@ mod tests {
         let auth_cfg = DelegationTokenAuth::default();
         let obj = user("alice", auth_cfg.clone());
         let mut config = config();
-        config.delegation_token_invalid_requeue = crabka_units::millis(2_345);
+        config.delegation_token_invalid_requeue = krabka_units::millis(2_345);
 
         let out = reconcile(&obj, &auth_cfg, &admin, &secrets, &users, 0, &config)
             .await
@@ -1690,8 +1690,8 @@ mod tests {
         // Token expires "now" with renew_before unset — without a clamp
         // we'd compute a zero extent and hot-loop the reconciler.
         let t = token_with(0, vec![]);
-        let r = compute_requeue(&t, &auth(vec![], None), 0, crabka_units::secs(7), hours(24));
-        assert!(r == crabka_units::secs(7));
+        let r = compute_requeue(&t, &auth(vec![], None), 0, krabka_units::secs(7), hours(24));
+        assert!(r == krabka_units::secs(7));
     }
 
     #[test]
@@ -1716,7 +1716,7 @@ mod tests {
         let t = token_with(1500, vec![]);
         let conds = compute_conditions(
             &t,
-            &auth(vec![], Some(crabka_units::secs(1))),
+            &auth(vec![], Some(krabka_units::secs(1))),
             0,
             true,
             None,
@@ -1736,7 +1736,7 @@ mod tests {
         let t = token_with(5000, vec![]);
         let conds = compute_conditions(
             &t,
-            &auth(vec![], Some(crabka_units::secs(1))),
+            &auth(vec![], Some(krabka_units::secs(1))),
             0,
             true,
             None,

@@ -16,10 +16,10 @@ spec:
     - type: prometheus
       metadata:
         serverAddress: http://prometheus.monitoring.svc:9090
-        metricName: crabka_share_group_backlog
+        metricName: krabka_share_group_backlog
         # Keep the query defined while the coordinator is moving or before the
         # first labeled series exists. Crabka removes stale per-broker series.
-        query: sum(crabka_broker_share_group_backlog{group_id="order-workers"}) or on() vector(0)
+        query: sum(krabka_broker_share_group_backlog{group_id="order-workers"}) or on() vector(0)
         threshold: "100"
         # KEDA activates when the value is greater than this threshold, so 0
         # wakes the deployment as soon as one committed record is available.

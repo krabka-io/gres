@@ -2,19 +2,19 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-cargo build --locked -p crabka-cli -p crabka-gres
-cargo test --locked -p crabka-gres --test topology_process_nemesis --no-run
+cargo build --locked -p krabka-cli -p krabka-gres
+cargo test --locked -p krabka-gres --test topology_process_nemesis --no-run
 mkdir -p target/g8-topology-process-nemesis
 evidence_path="$PWD/target/g8-topology-process-nemesis/move-foundation.json"
-CRABKA_G8_PROCESS_NEMESIS=1 \
-CRABKA_G8_NEMESIS_EVIDENCE="$evidence_path" \
-timeout 180s cargo test --locked -p crabka-gres --test topology_process_nemesis \
+KRABKA_G8_PROCESS_NEMESIS=1 \
+KRABKA_G8_NEMESIS_EVIDENCE="$evidence_path" \
+timeout 180s cargo test --locked -p krabka-gres --test topology_process_nemesis \
   -- --exact real_process_move_cli_operator_and_wal_retirement --nocapture
 for kill_point in running checkpointed paused_before_stage paused_after_stage; do
-  CRABKA_G8_PROCESS_NEMESIS=1 \
-  CRABKA_G8_SOURCE_KILL_POINT="$kill_point" \
-  CRABKA_G8_KILL_EVIDENCE="$PWD/target/g8-topology-process-nemesis/move-${kill_point}-kill.json" \
-  timeout 180s cargo test --locked -p crabka-gres --test topology_process_nemesis \
+  KRABKA_G8_PROCESS_NEMESIS=1 \
+  KRABKA_G8_SOURCE_KILL_POINT="$kill_point" \
+  KRABKA_G8_KILL_EVIDENCE="$PWD/target/g8-topology-process-nemesis/move-${kill_point}-kill.json" \
+  timeout 180s cargo test --locked -p krabka-gres --test topology_process_nemesis \
     -- --exact real_process_move_source_phase_sigkill_with_exact_ack_ledger --nocapture
 done
 

@@ -2,7 +2,7 @@
 
 use std::{collections::BTreeMap, io};
 
-use crabka_units::{ByteSize, convert::ByteSizeExt as _, mebibytes};
+use krabka_units::{ByteSize, convert::ByteSizeExt as _, mebibytes};
 use serde::{
     Deserialize, Deserializer,
     de::{MapAccess, Visitor},

@@ -12,7 +12,7 @@ yanked = "deny"
 ignore = [
     # quick-xml DoS advisories (quadratic duplicate-attribute check and
     # unbounded namespace-declaration allocation). Patched in quick-xml
-    # >= 0.41, which is the version `crabka-pgtypes` pins for the `xml`
+    # >= 0.41, which is the version `krabka-pgtypes` pins for the `xml`
     # type — the one place attacker-controlled XML enters, since any client
     # that can run `SELECT '…'::xml` chooses the document. These ignores
     # cover only the transitive 0.39 copy under polars-io and the S3 XML
@@ -69,7 +69,7 @@ exceptions = [
     { allow = ["0BSD"], crate = "varint-rs" },
     # Creusot's specification attributes/proc macros are LGPL-2.1-or-later.
     # They enter the graph only through the newly added verified kernels
-    # (`crabka-verified`) and throttle arithmetic contracts; ordinary cargo
+    # (`krabka-verified`) and throttle arithmetic contracts; ordinary cargo
     # builds use Creusot's dummy macro implementation, so keep this allowance
     # crate-scoped rather than allowing LGPL globally.
     { allow = ["LGPL-2.1-or-later"], crate = "creusot-std" },
@@ -89,8 +89,9 @@ unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [
-    # Temporary compatibility pin until testcontainers-modules publishes a
-    # release that depends on testcontainers 0.28.
+    "https://github.com/krabka-io/connectrpc-axum",
+    "https://github.com/krabka-io/gres",
+    "https://github.com/robot-head/sspi-rs",
     "https://github.com/testcontainers/testcontainers-rs-modules-community",
 ]
 

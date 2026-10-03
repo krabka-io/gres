@@ -9,14 +9,14 @@
 use std::sync::Arc;
 
 use assert2::{assert, check};
-use crabka_operator::{
+use http::Method;
+use krabka_operator::{
     controller::kafka::reconcile,
     crd::{
         BootstrapConfig, BrokerOverride, Kafka, KafkaSpec, Listener, ListenerConfiguration,
         ListenerType,
     },
 };
-use http::Method;
 
 #[path = "shared/mod.rs"]
 mod shared;

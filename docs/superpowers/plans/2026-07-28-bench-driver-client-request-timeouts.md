@@ -35,7 +35,7 @@ builder boundaries. Reuse the existing shell `envsubst` deployment path.
 - Do not expose final-drain timing, retry attempts/backoff, polling/error
   backoff, sampling cadence, or Prometheus timing in this slice.
 - Add no CRD; the benchmark launcher and Job template own this binary.
-- `crabka-bench-driver` already directly depends on `refined_type`; do not
+- `krabka-bench-driver` already directly depends on `refined_type`; do not
   change dependencies or `Cargo.lock`.
 - Run every Cargo command with
   `CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0`; use `--locked` for
@@ -69,7 +69,7 @@ builder boundaries. Reuse the existing shell `envsubst` deployment path.
 - Produces:
   `pub const DEFAULT_PRODUCER_REQUEST_TIMEOUT_SECONDS: u64 = 2`
 - Produces:
-  `pub const DEFAULT_CRABKA_CONSUMER_REQUEST_TIMEOUT_SECONDS: u64 = 5`
+  `pub const DEFAULT_KRABKA_CONSUMER_REQUEST_TIMEOUT_SECONDS: u64 = 5`
 - Produces:
   `pub const DEFAULT_KAFKA_CONSUMER_REQUEST_TIMEOUT_SECONDS: u64 = 30`
 - Produces: `pub struct ClientRequestTimeoutSeconds(u64)`
@@ -83,12 +83,12 @@ builder boundaries. Reuse the existing shell `envsubst` deployment path.
   `default_consumer_request_timeout(Stack) -> ClientRequestTimeoutSeconds`
 - Produces:
   `DriverConfig::{producer_request_timeout_seconds,
-  consumer_request_timeout_seconds}`
+consumer_request_timeout_seconds}`
 - Consumes: `refined_type::rule::MinMaxU64<1, 2_147_483>`
 
 - [ ] **Step 1: Add failing validated-type and default tests**
 
-Replace the existing `request_timeout_policy_bounds_producers_and_only_crabka_consumers`
+Replace the existing `request_timeout_policy_bounds_producers_and_only_krabka_consumers`
 test in `crates/bench-driver/src/workload.rs` with focused tests:
 
 ```rust
@@ -146,7 +146,7 @@ Change the test helper in `crates/bench-driver/src/main.rs` to accept a stack:
 ```rust
 fn required_args(stack: &'static str) -> Vec<&'static str> {
     vec![
-        "crabka-bench-driver",
+        "krabka-bench-driver",
         "--scenario",
         "scenario.yaml",
         "--bootstrap",
@@ -210,7 +210,7 @@ values, supplies both CLI flags, and asserts the CLI values win:
 ```rust
 #[test]
 fn client_request_timeouts_read_environment_and_prefer_cli() {
-    const CHILD: &str = "CRABKA_BENCH_CLIENT_TIMEOUTS_CHILD";
+    const CHILD: &str = "KRABKA_BENCH_CLIENT_TIMEOUTS_CHILD";
 
     if std::env::var_os(CHILD).is_none() {
         let status = std::process::Command::new(
@@ -273,7 +273,7 @@ This also proves an explicit consumer value replaces the active-stack default.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-bench-driver client_request_timeout --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-bench-driver client_request_timeout --locked
 ```
 
 Expected: compilation fails because the validated type, default functions,
@@ -289,7 +289,7 @@ Replace the old duration-returning timeout helpers with:
 ```rust
 pub const MAX_CLIENT_REQUEST_TIMEOUT_SECONDS: u64 = 2_147_483;
 pub const DEFAULT_PRODUCER_REQUEST_TIMEOUT_SECONDS: u64 = 2;
-pub const DEFAULT_CRABKA_CONSUMER_REQUEST_TIMEOUT_SECONDS: u64 = 5;
+pub const DEFAULT_KRABKA_CONSUMER_REQUEST_TIMEOUT_SECONDS: u64 = 5;
 pub const DEFAULT_KAFKA_CONSUMER_REQUEST_TIMEOUT_SECONDS: u64 = 30;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -350,7 +350,7 @@ pub fn default_producer_request_timeout() -> ClientRequestTimeoutSeconds {
 #[must_use]
 pub fn default_consumer_request_timeout(stack: Stack) -> ClientRequestTimeoutSeconds {
     let seconds = match stack {
-        Stack::Crabka => DEFAULT_CRABKA_CONSUMER_REQUEST_TIMEOUT_SECONDS,
+        Stack::Crabka => DEFAULT_KRABKA_CONSUMER_REQUEST_TIMEOUT_SECONDS,
         Stack::Kafka => DEFAULT_KAFKA_CONSUMER_REQUEST_TIMEOUT_SECONDS,
     };
     ClientRequestTimeoutSeconds::new(seconds)
@@ -429,7 +429,7 @@ or any other builder option.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-bench-driver client_request_timeout --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-bench-driver client_request_timeout --locked
 ```
 
 Expected: all focused type, default, parser, and precedence tests pass.
@@ -458,11 +458,11 @@ both complete flows.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-bench-driver --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-bench-driver --all-targets --locked -- -D warnings
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo run -p crabka-bench-driver --bin crabka-bench-driver --locked -- --help
-test "$(target/debug/crabka-bench-driver --help | rg -c -- '--producer-request-timeout-seconds')" -eq 1
-test "$(target/debug/crabka-bench-driver --help | rg -c -- '--consumer-request-timeout-seconds')" -eq 1
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-bench-driver --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-bench-driver --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo run -p krabka-bench-driver --bin krabka-bench-driver --locked -- --help
+test "$(target/debug/krabka-bench-driver --help | rg -c -- '--producer-request-timeout-seconds')" -eq 1
+test "$(target/debug/krabka-bench-driver --help | rg -c -- '--consumer-request-timeout-seconds')" -eq 1
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 git diff --check
 git diff -- Cargo.lock
@@ -596,7 +596,7 @@ Run:
 ```bash
 tools/audit-runtime-values.sh
 tools/audit-runtime-values.sh | rg '^crates/bench-driver/'
-rg -n 'producer_request_timeout_seconds|consumer_request_timeout_seconds|ClientRequestTimeoutSeconds|DEFAULT_(PRODUCER|CRABKA_CONSUMER|KAFKA_CONSUMER)_REQUEST_TIMEOUT_SECONDS|producer-request-timeout-seconds|consumer-request-timeout-seconds|BENCH_(PRODUCER|CONSUMER)_REQUEST_TIMEOUT_SECONDS' \
+rg -n 'producer_request_timeout_seconds|consumer_request_timeout_seconds|ClientRequestTimeoutSeconds|DEFAULT_(PRODUCER|KRABKA_CONSUMER|KAFKA_CONSUMER)_REQUEST_TIMEOUT_SECONDS|producer-request-timeout-seconds|consumer-request-timeout-seconds|BENCH_(PRODUCER|CONSUMER)_REQUEST_TIMEOUT_SECONDS' \
   crates/bench-driver \
   bench \
   docs/configuration-audit.md
@@ -638,12 +638,12 @@ Append `## Bench Driver Client Request Timeouts` to
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-bench-driver --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-bench-driver --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-bench-driver --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-bench-driver --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 bash -n bench/scripts/run-scenario.sh
-test "$(target/debug/crabka-bench-driver --help | rg -c -- '--producer-request-timeout-seconds')" -eq 1
-test "$(target/debug/crabka-bench-driver --help | rg -c -- '--consumer-request-timeout-seconds')" -eq 1
+test "$(target/debug/krabka-bench-driver --help | rg -c -- '--producer-request-timeout-seconds')" -eq 1
+test "$(target/debug/krabka-bench-driver --help | rg -c -- '--consumer-request-timeout-seconds')" -eq 1
 BENCH_PRODUCER_REQUEST_TIMEOUT_SECONDS=7 \
 BENCH_CONSUMER_REQUEST_TIMEOUT_SECONDS=11 \
   envsubst '$BENCH_PRODUCER_REQUEST_TIMEOUT_SECONDS $BENCH_CONSUMER_REQUEST_TIMEOUT_SECONDS' \

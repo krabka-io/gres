@@ -1,5 +1,5 @@
-use crabka_units::ByteSize;
 use k8s_openapi::api::core::v1::ResourceRequirements;
+use krabka_units::ByteSize;
 use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -55,7 +55,7 @@ pub struct KafkaNodePoolSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_byte_size"
+        with = "krabka_units::serde_units::human::option_byte_size"
     )]
     #[schemars(with = "Option<String>")]
     pub client_frame_max: Option<ByteSize>,
@@ -75,19 +75,19 @@ impl KafkaNodePoolSpec {
         &self,
     ) -> Result<
         (
-            Option<crabka_client_core::ConnectionDispatchQueueCapacity>,
-            Option<crabka_client_core::ClientFrameMax>,
+            Option<krabka_client_core::ConnectionDispatchQueueCapacity>,
+            Option<krabka_client_core::ClientFrameMax>,
         ),
         String,
     > {
         let queue = self
             .client_dispatch_queue_capacity
-            .map(crabka_client_core::ConnectionDispatchQueueCapacity::new)
+            .map(krabka_client_core::ConnectionDispatchQueueCapacity::new)
             .transpose()
             .map_err(|error| format!("spec.clientDispatchQueueCapacity: {error}"))?;
         let frame = self
             .client_frame_max
-            .map(crabka_client_core::ClientFrameMax::try_from)
+            .map(krabka_client_core::ClientFrameMax::try_from)
             .transpose()
             .map_err(|error| format!("spec.clientFrameMax: {error}"))?;
         Ok((queue, frame))
@@ -195,7 +195,7 @@ pub struct PersistentClaimSpec {
 /// disk. It keeps the PVC name `data` and the mount
 /// `/var/lib/crabka/data`. Every other volume with `id = N` has the PVC
 /// `data-{N}` and the mount `/var/lib/crabka/data-{N}`, and the operator
-/// gives it to the broker in `CRABKA_EXTRA_LOG_DIRS`.
+/// gives it to the broker in `KRABKA_EXTRA_LOG_DIRS`.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct JbodSpec {
@@ -359,7 +359,7 @@ mod tests {
             .client_resource_policy()
             .expect("valid broker client policy");
         assert!(queue.expect("queue").get() == 7);
-        assert!(frame.expect("frame").size() == crabka_units::kibibytes(32));
+        assert!(frame.expect("frame").size() == krabka_units::kibibytes(32));
         assert!(
             serde_json::from_str::<KafkaNodePoolSpec>(&serde_json::to_string(&spec).unwrap())
                 .unwrap()

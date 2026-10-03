@@ -7,7 +7,7 @@
 //! enforces the alignment.
 
 use assert2::assert;
-use crabka_gres_control::{
+use krabka_gres_control::{
     ControlError, HashPlacement, RangeBoundary, RangeLayoutEntry, RangeLifecycle, SqlUser,
     TenantId, TenantName, TenantRecord, TenantState,
 };

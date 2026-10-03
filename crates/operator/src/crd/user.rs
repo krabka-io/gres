@@ -3,7 +3,7 @@
 //! The CRD is Strimzi-shaped. It supports SCRAM-SHA-512 and mTLS
 //! authentication, simple ACL authorization, and optional per-user quotas.
 
-use crabka_units::Time;
+use krabka_units::Time;
 use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -128,14 +128,14 @@ pub struct DelegationTokenAuth {
     /// `delegation_token_max_lifetime`, which defaults to 7d. The broker caps
     /// this value even when you set it explicitly.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub max_lifetime: Option<Time>,
 
     /// Renew when `expiry_timestamp_ms - now <= this`. Default 24h.
     /// Minimum 60s.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub renew_before_expiry: Option<Time>,
 }
@@ -174,7 +174,7 @@ macro_rules! scram_auth {
         pub struct $name {
             /// PBKDF2 iteration count. Defaults to 8192 on the controller
             /// side, which matches
-            /// `crabka_client_admin::DEFAULT_SCRAM_ITERATIONS`. The broker
+            /// `krabka_client_admin::DEFAULT_SCRAM_ITERATIONS`. The broker
             /// rejects values < 4096.
             #[serde(default, skip_serializing_if = "Option::is_none")]
             #[schemars(range(min = 4096, max = 1_000_000))]
@@ -832,8 +832,8 @@ spec:
         assert!(
             dt == DelegationTokenAuth {
                 renewers: vec!["User:bob".to_string(), "User:carol".to_string()],
-                max_lifetime: Some(crabka_units::days(1)),
-                renew_before_expiry: Some(crabka_units::hours(2)),
+                max_lifetime: Some(krabka_units::days(1)),
+                renew_before_expiry: Some(krabka_units::hours(2)),
             }
         );
     }

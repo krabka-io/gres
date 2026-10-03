@@ -2,14 +2,14 @@ use super::*;
 
 pub(super) fn resolve_relation_tablespace_oid(kv: &dyn Kv, name: &str) -> Result<u32, ExecError> {
     if name == "pg_global" {
-        return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+        return Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
             "0A000",
             "only shared relations can be placed in pg_global tablespace",
         )));
     }
-    crabka_pgcatalog::tablespace_oid(kv, name).map_err(|error| match error {
-        crabka_pgcatalog::CatalogError::UndefinedObject(_) => {
-            ExecError::Remote(crabka_pgwire::error::PgError::error(
+    krabka_pgcatalog::tablespace_oid(kv, name).map_err(|error| match error {
+        krabka_pgcatalog::CatalogError::UndefinedObject(_) => {
+            ExecError::Remote(krabka_pgwire::error::PgError::error(
                 "42704",
                 format!("tablespace \"{name}\" does not exist"),
             ))
@@ -19,18 +19,18 @@ pub(super) fn resolve_relation_tablespace_oid(kv: &dyn Kv, name: &str) -> Result
 }
 
 pub(super) fn constraint_deferral(
-    attributes: crabka_pgparser::ast::ConstraintAttributes,
-) -> crabka_pgcatalog::ConstraintDeferral {
-    crabka_pgcatalog::ConstraintDeferral::of(attributes.deferrable, attributes.initially_deferred)
+    attributes: krabka_pgparser::ast::ConstraintAttributes,
+) -> krabka_pgcatalog::ConstraintDeferral {
+    krabka_pgcatalog::ConstraintDeferral::of(attributes.deferrable, attributes.initially_deferred)
 }
 
 pub(super) fn create_table_constraint_index(
-    table_name: &crabka_pgcatalog::RelationName,
+    table_name: &krabka_pgcatalog::RelationName,
     columns: &[String],
     primary_key: bool,
     without_overlaps: bool,
-    deferral: crabka_pgcatalog::ConstraintDeferral,
-) -> crabka_pgcatalog::NewIndex {
+    deferral: krabka_pgcatalog::ConstraintDeferral,
+) -> krabka_pgcatalog::NewIndex {
     let suffix = if primary_key { "pkey" } else { "key" };
     let table = &table_name.name;
     let name = if primary_key {
@@ -38,24 +38,24 @@ pub(super) fn create_table_constraint_index(
     } else {
         format!("{table}_{}_{suffix}", columns.join("_"))
     };
-    crabka_pgcatalog::NewIndex {
+    krabka_pgcatalog::NewIndex {
         name,
         columns: columns.to_vec(),
-        key_options: crabka_pgcatalog::default_index_key_options(columns.len()),
+        key_options: krabka_pgcatalog::default_index_key_options(columns.len()),
         include: Vec::new(),
         predicate: None,
         nulls_not_distinct: false,
         unique: true,
-        placement: crabka_pgcatalog::IndexPlacement::Local,
+        placement: krabka_pgcatalog::IndexPlacement::Local,
         method: if without_overlaps {
-            crabka_pgcatalog::IndexMethod::Gist
+            krabka_pgcatalog::IndexMethod::Gist
         } else {
-            crabka_pgcatalog::IndexMethod::Btree
+            krabka_pgcatalog::IndexMethod::Btree
         },
         constraint: Some(if primary_key {
-            crabka_pgcatalog::IndexConstraint::PrimaryKey
+            krabka_pgcatalog::IndexConstraint::PrimaryKey
         } else {
-            crabka_pgcatalog::IndexConstraint::Unique
+            krabka_pgcatalog::IndexConstraint::Unique
         }),
         without_overlaps,
         deferral,
@@ -78,7 +78,7 @@ pub(super) fn validate_without_overlaps_key(
         .ok_or_else(|| ExecError::UndefinedIndexColumn(temporal.clone()))?;
     if !matches!(
         column.ty.storage_type(),
-        crabka_pgtypes::ColumnType::Range(_) | crabka_pgtypes::ColumnType::Multirange(_)
+        krabka_pgtypes::ColumnType::Range(_) | krabka_pgtypes::ColumnType::Multirange(_)
     ) {
         return Err(ExecError::WithoutOverlapsNotRange(temporal.clone()));
     }
@@ -86,22 +86,22 @@ pub(super) fn validate_without_overlaps_key(
 }
 
 pub(super) fn create_table_primary_key_columns<'a>(
-    columns: &'a [crabka_pgparser::ast::ColumnDef],
-    constraints: &'a [crabka_pgparser::ast::TableConstraint],
+    columns: &'a [krabka_pgparser::ast::ColumnDef],
+    constraints: &'a [krabka_pgparser::ast::TableConstraint],
 ) -> HashSet<&'a str> {
     let mut primary_key_columns = HashSet::new();
     for column in columns {
         if column.constraints.iter().any(|constraint| {
             matches!(
                 constraint.kind,
-                crabka_pgparser::ast::ColumnConstraintKind::PrimaryKey
+                krabka_pgparser::ast::ColumnConstraintKind::PrimaryKey
             )
         }) {
             primary_key_columns.insert(column.name.as_str());
         }
     }
     for constraint in constraints {
-        if let crabka_pgparser::ast::TableConstraintKind::PrimaryKey { columns, .. } =
+        if let krabka_pgparser::ast::TableConstraintKind::PrimaryKey { columns, .. } =
             &constraint.kind
         {
             primary_key_columns.extend(columns.iter().map(String::as_str));

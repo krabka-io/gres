@@ -12,7 +12,7 @@ client connection timeout, or client request deadline.
 
 ## Validated Policy
 
-`crabka-rebalancer` owns a `ReassignmentRequestTimeout` newtype. It accepts a
+`krabka-rebalancer` owns a `ReassignmentRequestTimeout` newtype. It accepts a
 UOM `Time` and stores the validated whole-millisecond value required by the
 Kafka protocol. Construction rejects non-finite, zero, negative, fractional
 millisecond, and values greater than `i32::MAX` milliseconds. Validation uses
@@ -36,7 +36,7 @@ The standalone binary exposes:
 
 ```text
 --reassignment-request-timeout
-CRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT
+KRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT
 ```
 
 The value uses human UOM syntax such as `60s` and is parsed as positive

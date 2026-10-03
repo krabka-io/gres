@@ -233,7 +233,7 @@ mod tests {
         // Reuse a deterministic dev cert; for the unit test we just need
         // valid PEM. We embed pre-generated PEMs as constants.
         // (Generated with: openssl req -x509 -newkey ed25519 -nodes -days 36500 \
-        //   -subj "//CN=crabka-dev" -keyout key.pem -out cert.pem)
+        //   -subj "//CN=krabka-dev" -keyout key.pem -out cert.pem)
         let cert_pem = include_str!("../tests/fixtures/dev_cert.pem");
         let key_pem = include_str!("../tests/fixtures/dev_key.pem");
         let cert_path = dir.join("cert.pem");
@@ -253,7 +253,7 @@ mod tests {
         // Self-signed dev client CA. Generated with:
         //   openssl ecparam -name prime256v1 -genkey -noout -out ca.key
         //   openssl req -x509 -new -key ca.key -days 36500 \
-        //     -subj "/CN=crabka-dev-client-ca" -out ca.pem
+        //     -subj "/CN=krabka-dev-client-ca" -out ca.pem
         let pem = include_str!("../tests/fixtures/dev_client_ca.pem");
         let p = dir.join("client_ca.pem");
         File::create(&p).unwrap().write_all(pem.as_bytes()).unwrap();

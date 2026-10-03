@@ -29,12 +29,12 @@ use std::{
 };
 
 use assert2::{assert, check};
-use crabka_gres_ranges::{
+use krabka_gres_ranges::{
     BarrierError, BatchedTsoClient, GrantLease, Range0Barrier, Range0EndSampler, Range0Frame,
     Range0Tail, TsoError, TsoTimestamp,
 };
-use crabka_pgkv::MemKv;
-use crabka_units::millis;
+use krabka_pgkv::MemKv;
+use krabka_units::millis;
 use opentelemetry::{
     Value,
     trace::{SpanKind, Status, TracerProvider as _},
@@ -57,7 +57,7 @@ impl Traces {
             .build();
         let layer = tracing_opentelemetry::layer()
             .with_tracer(provider.tracer("blocking-wait-tracing"))
-            .with_filter(EnvFilter::new("crabka_gres_ranges::route=trace"));
+            .with_filter(EnvFilter::new("krabka_gres_ranges::route=trace"));
         tracing::subscriber::set_global_default(tracing_subscriber::registry().with(layer))
             .expect("install global subscriber; run these tests under cargo nextest");
         Self { provider, exporter }
@@ -94,7 +94,7 @@ struct SequentialOracle {
 }
 
 #[async_trait::async_trait]
-impl crabka_gres_ranges::TsoRpc for SequentialOracle {
+impl krabka_gres_ranges::TsoRpc for SequentialOracle {
     async fn grant(&self, count: NonZeroU64) -> Result<GrantLease, TsoError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         let first = self.next_ts.fetch_add(count.get(), Ordering::SeqCst);
@@ -109,7 +109,7 @@ impl crabka_gres_ranges::TsoRpc for SequentialOracle {
 struct BrokenOracle;
 
 #[async_trait::async_trait]
-impl crabka_gres_ranges::TsoRpc for BrokenOracle {
+impl krabka_gres_ranges::TsoRpc for BrokenOracle {
     async fn grant(&self, _count: NonZeroU64) -> Result<GrantLease, TsoError> {
         Err(TsoError::FencedEpoch { epoch: 7 })
     }
@@ -278,7 +278,7 @@ async fn the_read_gate_barrier_reports_its_own_mode() {
     let tail = tail_applied_through(4);
     let barrier = Range0Barrier::with_timeout(tail, as_sampler(&sampler), millis(5_000));
 
-    crabka_pgexec::Linearizer::ensure_readable(&barrier)
+    krabka_pgexec::Linearizer::ensure_readable(&barrier)
         .await
         .expect("the tail already covers the sampled end");
 

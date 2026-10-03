@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use assert2::assert;
-use crabka_gres_conformance::{
+use krabka_gres_conformance::{
     ExtendedCase, ExtendedParam, ExtendedParamType, ExtendedParamValue, run_extended_one, run_one,
     tls,
 };
@@ -10,7 +10,7 @@ use tokio_postgres::{Client, error::SqlState};
 static NEXT_TABLE: AtomicU64 = AtomicU64::new(0);
 
 fn live_url() -> Option<String> {
-    std::env::var("CRABKA_GRES_PGDOG_TEST_URL").ok()
+    std::env::var("KRABKA_GRES_PGDOG_TEST_URL").ok()
 }
 
 fn unique_table(prefix: &str) -> String {

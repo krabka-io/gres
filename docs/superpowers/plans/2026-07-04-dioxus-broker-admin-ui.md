@@ -4,9 +4,9 @@
 
 **Goal:** Build a standalone Dioxus fullstack browser UI for administering one configured Crabka cluster with broker-backed SCRAM-SHA-512 login.
 
-**Architecture:** Add a new `crabka-admin-ui` workspace crate under `crates/admin-ui`. The binary hosts a Dioxus fullstack app, stores authenticated sessions server-side, calls `crabka-client-admin` through a thin adapter, derives UI capabilities from broker ACLs, and renders an operations-sidebar admin console. Spec: [docs/superpowers/specs/2026-07-04-dioxus-broker-admin-ui-design.md](../specs/2026-07-04-dioxus-broker-admin-ui-design.md).
+**Architecture:** Add a new `krabka-admin-ui` workspace crate under `crates/admin-ui`. The binary hosts a Dioxus fullstack app, stores authenticated sessions server-side, calls `krabka-client-admin` through a thin adapter, derives UI capabilities from broker ACLs, and renders an operations-sidebar admin console. Spec: [docs/superpowers/specs/2026-07-04-dioxus-broker-admin-ui-design.md](../specs/2026-07-04-dioxus-broker-admin-ui-design.md).
 
-**Tech Stack:** Rust 2024, Dioxus `0.7.9` fullstack/server/router, axum `0.8`, Tokio, `crabka-client-admin`, `crabka-client-core`, `crabka-security`, `serde`, `thiserror`, `uuid`, `playwright-rs` for browser E2E.
+**Tech Stack:** Rust 2024, Dioxus `0.7.9` fullstack/server/router, axum `0.8`, Tokio, `krabka-client-admin`, `krabka-client-core`, `krabka-security`, `serde`, `thiserror`, `uuid`, `playwright-rs` for browser E2E.
 
 ---
 
@@ -17,9 +17,9 @@ This plan was written from the isolated worktree `C:\Users\Matt Stone\git\crabka
 Baseline checks before implementation:
 
 - `cargo build`: PASS.
-- `cargo test`: FAIL before admin-ui changes. Failures include Rust compiler/internal resolution errors in existing `crabka-broker` tests and dependency rlib format errors for crates such as `picky`, `potential_utf`, `ecdsa`, `icu_properties`, and `crypto_primes`.
+- `cargo test`: FAIL before admin-ui changes. Failures include Rust compiler/internal resolution errors in existing `krabka-broker` tests and dependency rlib format errors for crates such as `picky`, `potential_utf`, `ecdsa`, `icu_properties`, and `crypto_primes`.
 
-Do not use workspace-wide `cargo test` as the first signal for admin-ui regressions until the baseline issue is fixed. Use targeted `cargo test -p crabka-admin-ui` and targeted integration/E2E commands in this plan.
+Do not use workspace-wide `cargo test` as the first signal for admin-ui regressions until the baseline issue is fixed. Use targeted `cargo test -p krabka-admin-ui` and targeted integration/E2E commands in this plan.
 
 ---
 
@@ -35,7 +35,7 @@ Do not use workspace-wide `cargo test` as the first signal for admin-ui regressi
 - Broker ACL authorization remains authoritative. Permission derivation only hides/disables UI affordances.
 - Behavior tests must exercise code behavior, not source text.
 - Use conventional commits for implementation commits: `feat:` for new user-visible admin UI slices, `test:` for tests-only follow-ups, `fix:` for bug fixes.
-- Prefer targeted verification: `cargo test -p crabka-admin-ui`, `cargo build -p crabka-admin-ui`, and crate-local clippy. Workspace-wide tests are blocked by the baseline note above.
+- Prefer targeted verification: `cargo test -p krabka-admin-ui`, `cargo build -p krabka-admin-ui`, and crate-local clippy. Workspace-wide tests are blocked by the baseline note above.
 
 ---
 
@@ -52,7 +52,7 @@ Create the new crate with these files:
 - `crates/admin-ui/src/error.rs`: UI-facing error types and conversions from admin/client errors.
 - `crates/admin-ui/src/dto.rs`: serializable DTOs used by server functions and views.
 - `crates/admin-ui/src/permissions.rs`: capability derivation from ACL entries.
-- `crates/admin-ui/src/admin.rs`: thin adapter over `crabka-client-admin`; no Dioxus code here.
+- `crates/admin-ui/src/admin.rs`: thin adapter over `krabka-client-admin`; no Dioxus code here.
 - `crates/admin-ui/src/server.rs`: axum/Dioxus server construction and health route.
 - `crates/admin-ui/src/server_fns.rs`: Dioxus server functions for auth/read/mutation flows.
 - `crates/admin-ui/src/views/mod.rs`: view module declarations.
@@ -79,12 +79,12 @@ Do not split further unless a file grows past focused responsibility during impl
 
 ## Batch Plan
 
-| Batch | Tasks | Parallel? | Rationale |
-|---|---|---|---|
-| A - Crate Foundation | 1, then 2/3 | Partial | Task 1 creates crate; config/session and DTO/errors are independent after that. |
-| B - Auth/Admin Core | 4 and 5 | Yes | SCRAM login/security and permission derivation/admin mapping touch disjoint files. |
-| C - Server Functions + UI Shell | 6, then 7/8 | Partial | Server state/functions precede views; layout and first read views can then proceed together. |
-| D - Mutations + E2E | 9 and 10, then 11 | Partial | Mutation views and server tests can proceed together; Playwright depends on runnable UI. |
+| Batch                           | Tasks             | Parallel? | Rationale                                                                                    |
+| ------------------------------- | ----------------- | --------- | -------------------------------------------------------------------------------------------- |
+| A - Crate Foundation            | 1, then 2/3       | Partial   | Task 1 creates crate; config/session and DTO/errors are independent after that.              |
+| B - Auth/Admin Core             | 4 and 5           | Yes       | SCRAM login/security and permission derivation/admin mapping touch disjoint files.           |
+| C - Server Functions + UI Shell | 6, then 7/8       | Partial   | Server state/functions precede views; layout and first read views can then proceed together. |
+| D - Mutations + E2E             | 9 and 10, then 11 | Partial   | Mutation views and server tests can proceed together; Playwright depends on runnable UI.     |
 
 Dispatch every parallel group in one message with separate subagents. Review after each batch before moving on.
 
@@ -92,9 +92,10 @@ Dispatch every parallel group in one message with separate subagents. Review aft
 
 ## Batch A - Crate Foundation
 
-### Task 1: Create `crabka-admin-ui` crate skeleton
+### Task 1: Create `krabka-admin-ui` crate skeleton
 
 **Files:**
+
 - Create: `crates/admin-ui/Cargo.toml`
 - Create: `crates/admin-ui/src/lib.rs`
 - Create: `crates/admin-ui/src/main.rs`
@@ -102,8 +103,9 @@ Dispatch every parallel group in one message with separate subagents. Review aft
 - Test: `crates/admin-ui/tests/smoke.rs`
 
 **Interfaces:**
-- Produces `crabka_admin_ui::app() -> dioxus::prelude::Element`.
-- Produces `crabka_admin_ui::server::health_router() -> axum::Router`.
+
+- Produces `krabka_admin_ui::app() -> dioxus::prelude::Element`.
+- Produces `krabka_admin_ui::server::health_router() -> axum::Router`.
 
 - [ ] **Step 1: Write the failing smoke test**
 
@@ -116,7 +118,7 @@ use tower::ServiceExt as _;
 
 #[tokio::test]
 async fn healthz_returns_ok() {
-    let app = crabka_admin_ui::server::health_router();
+    let app = krabka_admin_ui::server::health_router();
 
     let response = app
         .oneshot(
@@ -134,9 +136,9 @@ async fn healthz_returns_ok() {
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `cargo test -p crabka-admin-ui --test smoke`
+Run: `cargo test -p krabka-admin-ui --test smoke`
 
-Expected: FAIL because package `crabka-admin-ui` does not exist.
+Expected: FAIL because package `krabka-admin-ui` does not exist.
 
 - [ ] **Step 3: Add the crate manifest**
 
@@ -144,7 +146,7 @@ Create `crates/admin-ui/Cargo.toml`:
 
 ```toml
 [package]
-name = "crabka-admin-ui"
+name = "krabka-admin-ui"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -152,9 +154,9 @@ license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "Standalone Dioxus broker administration UI for Crabka"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-admin-ui"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-admin-ui"
 keywords = ["kafka", "admin", "ui", "dioxus", "crabka"]
 categories = ["web-programming::http-server"]
 
@@ -162,16 +164,16 @@ categories = ["web-programming::http-server"]
 workspace = true
 
 [[bin]]
-name = "crabka-admin-ui"
+name = "krabka-admin-ui"
 path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
 axum = { workspace = true, features = ["json", "query"] }
 clap = { workspace = true, features = ["derive", "env"] }
-crabka-client-admin = { version = "0.3.8", path = "../client-admin" }
-crabka-client-core = { version = "0.3.8", path = "../client-core" }
-crabka-security = { version = "0.3.8", path = "../security" }
+krabka-client-admin = { version = "0.3.8", path = "../client-admin" }
+krabka-client-core = { version = "0.3.8", path = "../client-core" }
+krabka-security = { version = "0.3.8", path = "../security" }
 dioxus = { version = "0.7.9", default-features = false, features = ["fullstack", "router", "server"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
@@ -241,10 +243,10 @@ use anyhow::Context;
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
-    let addr: SocketAddr = std::env::var("CRABKA_ADMIN_UI_LISTEN_ADDR")
+    let addr: SocketAddr = std::env::var("KRABKA_ADMIN_UI_LISTEN_ADDR")
         .unwrap_or_else(|_| "127.0.0.1:8088".to_string())
         .parse()
-        .context("parse CRABKA_ADMIN_UI_LISTEN_ADDR")?;
+        .context("parse KRABKA_ADMIN_UI_LISTEN_ADDR")?;
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
@@ -252,7 +254,7 @@ async fn main() -> anyhow::Result<()> {
     let bound = listener.local_addr().context("read admin UI listener addr")?;
     tracing::info!(%bound, "crabka admin UI listening");
 
-    axum::serve(listener, crabka_admin_ui::server::health_router())
+    axum::serve(listener, krabka_admin_ui::server::health_router())
         .await
         .context("serve admin UI")
 }
@@ -260,18 +262,18 @@ async fn main() -> anyhow::Result<()> {
 
 - [ ] **Step 5: Run the test to verify it passes**
 
-Run: `cargo test -p crabka-admin-ui --test smoke`
+Run: `cargo test -p krabka-admin-ui --test smoke`
 
 Expected: PASS.
 
-Run: `cargo build -p crabka-admin-ui`
+Run: `cargo build -p krabka-admin-ui`
 
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo +nightly fmt -p crabka-admin-ui
+cargo +nightly fmt -p krabka-admin-ui
 git add crates/admin-ui
 git commit -m "feat: add admin UI crate skeleton"
 ```
@@ -281,12 +283,14 @@ git commit -m "feat: add admin UI crate skeleton"
 ### Task 2: Add validated single-cluster config
 
 **Files:**
+
 - Create: `crates/admin-ui/src/config.rs`
 - Modify: `crates/admin-ui/src/lib.rs`
 - Modify: `crates/admin-ui/src/main.rs`
 - Test: `crates/admin-ui/tests/config.rs`
 
 **Interfaces:**
+
 - Produces `AdminUiConfig::from_env() -> Result<AdminUiConfig, ConfigError>`.
 - Produces `AdminUiConfig::validate(self) -> Result<Self, ConfigError>`.
 - Produces `BrokerSecurityConfig` limited to `SaslPlaintext` and `SaslSsl` with SCRAM-SHA-512 at login time.
@@ -298,7 +302,7 @@ Create `crates/admin-ui/tests/config.rs`:
 ```rust
 use std::net::SocketAddr;
 
-use crabka_admin_ui::config::{AdminUiConfig, BrokerSecurityConfig, ConfigError};
+use krabka_admin_ui::config::{AdminUiConfig, BrokerSecurityConfig, ConfigError};
 
 #[test]
 fn default_config_targets_local_server_and_requires_bootstrap() {
@@ -329,7 +333,7 @@ fn validates_single_cluster_sasl_plaintext_config() {
 
 - [ ] **Step 2: Run tests to verify failure**
 
-Run: `cargo test -p crabka-admin-ui --test config`
+Run: `cargo test -p krabka-admin-ui --test config`
 
 Expected: FAIL because `config` module does not exist.
 
@@ -343,8 +347,8 @@ Create `crates/admin-ui/src/config.rs`:
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
-use crabka_client_core::security::TlsConnectorConfig;
-use crabka_security::ListenerProtocol;
+use krabka_client_core::security::TlsConnectorConfig;
+use krabka_security::ListenerProtocol;
 use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -368,13 +372,13 @@ pub struct AdminUiConfig {
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ConfigError {
-    #[error("at least one CRABKA_ADMIN_UI_BOOTSTRAP address is required")]
+    #[error("at least one KRABKA_ADMIN_UI_BOOTSTRAP address is required")]
     MissingBootstrap,
-    #[error("CRABKA_ADMIN_UI_LISTEN_ADDR is invalid: {0}")]
+    #[error("KRABKA_ADMIN_UI_LISTEN_ADDR is invalid: {0}")]
     InvalidListenAddr(String),
-    #[error("CRABKA_ADMIN_UI_SECURITY_PROTOCOL must be SASL_PLAINTEXT or SASL_SSL")]
+    #[error("KRABKA_ADMIN_UI_SECURITY_PROTOCOL must be SASL_PLAINTEXT or SASL_SSL")]
     InvalidSecurityProtocol,
-    #[error("CRABKA_ADMIN_UI_TLS_SERVER_NAME is required for SASL_SSL")]
+    #[error("KRABKA_ADMIN_UI_TLS_SERVER_NAME is required for SASL_SSL")]
     MissingTlsServerName,
 }
 
@@ -393,15 +397,15 @@ impl Default for AdminUiConfig {
 impl AdminUiConfig {
     pub fn from_env() -> Result<Self, ConfigError> {
         let mut cfg = Self::default();
-        if let Ok(raw) = std::env::var("CRABKA_ADMIN_UI_LISTEN_ADDR") {
+        if let Ok(raw) = std::env::var("KRABKA_ADMIN_UI_LISTEN_ADDR") {
             cfg.listen_addr = raw
                 .parse()
                 .map_err(|_| ConfigError::InvalidListenAddr(raw.clone()))?;
         }
-        if let Ok(name) = std::env::var("CRABKA_ADMIN_UI_CLUSTER_NAME") {
+        if let Ok(name) = std::env::var("KRABKA_ADMIN_UI_CLUSTER_NAME") {
             cfg.cluster_name = name;
         }
-        if let Ok(addrs) = std::env::var("CRABKA_ADMIN_UI_BOOTSTRAP") {
+        if let Ok(addrs) = std::env::var("KRABKA_ADMIN_UI_BOOTSTRAP") {
             cfg.bootstrap_addrs = addrs
                 .split(',')
                 .map(str::trim)
@@ -409,17 +413,17 @@ impl AdminUiConfig {
                 .map(ToOwned::to_owned)
                 .collect();
         }
-        if let Ok(protocol) = std::env::var("CRABKA_ADMIN_UI_SECURITY_PROTOCOL") {
+        if let Ok(protocol) = std::env::var("KRABKA_ADMIN_UI_SECURITY_PROTOCOL") {
             cfg.security = match protocol.as_str() {
                 "SASL_PLAINTEXT" => BrokerSecurityConfig::SaslPlaintext,
                 "SASL_SSL" => BrokerSecurityConfig::SaslSsl {
-                    trust_roots_pem: std::env::var_os("CRABKA_ADMIN_UI_TLS_TRUST_ROOTS_PEM")
+                    trust_roots_pem: std::env::var_os("KRABKA_ADMIN_UI_TLS_TRUST_ROOTS_PEM")
                         .map(PathBuf::from),
-                    server_name: std::env::var("CRABKA_ADMIN_UI_TLS_SERVER_NAME")
+                    server_name: std::env::var("KRABKA_ADMIN_UI_TLS_SERVER_NAME")
                         .map_err(|_| ConfigError::MissingTlsServerName)?,
                     client_identity: match (
-                        std::env::var_os("CRABKA_ADMIN_UI_TLS_CLIENT_CERT_PEM"),
-                        std::env::var_os("CRABKA_ADMIN_UI_TLS_CLIENT_KEY_PEM"),
+                        std::env::var_os("KRABKA_ADMIN_UI_TLS_CLIENT_CERT_PEM"),
+                        std::env::var_os("KRABKA_ADMIN_UI_TLS_CLIENT_KEY_PEM"),
                     ) {
                         (Some(cert), Some(key)) => Some((PathBuf::from(cert), PathBuf::from(key))),
                         _ => None,
@@ -500,7 +504,7 @@ use anyhow::Context;
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
-    let cfg = crabka_admin_ui::config::AdminUiConfig::from_env()
+    let cfg = krabka_admin_ui::config::AdminUiConfig::from_env()
         .context("load admin UI config")?;
 
     let listener = tokio::net::TcpListener::bind(cfg.listen_addr)
@@ -509,7 +513,7 @@ async fn main() -> anyhow::Result<()> {
     let bound = listener.local_addr().context("read admin UI listener addr")?;
     tracing::info!(%bound, cluster = %cfg.cluster_name, "crabka admin UI listening");
 
-    axum::serve(listener, crabka_admin_ui::server::health_router())
+    axum::serve(listener, krabka_admin_ui::server::health_router())
         .await
         .context("serve admin UI")
 }
@@ -517,14 +521,14 @@ async fn main() -> anyhow::Result<()> {
 
 - [ ] **Step 4: Run config tests**
 
-Run: `cargo test -p crabka-admin-ui --test config`
+Run: `cargo test -p krabka-admin-ui --test config`
 
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo +nightly fmt -p crabka-admin-ui
+cargo +nightly fmt -p krabka-admin-ui
 git add crates/admin-ui/src/config.rs crates/admin-ui/src/lib.rs crates/admin-ui/src/main.rs crates/admin-ui/tests/config.rs
 git commit -m "feat: add admin UI runtime config"
 ```
@@ -534,6 +538,7 @@ git commit -m "feat: add admin UI runtime config"
 ### Task 3: Add session store and UI DTO/error foundation
 
 **Files:**
+
 - Create: `crates/admin-ui/src/session.rs`
 - Create: `crates/admin-ui/src/dto.rs`
 - Create: `crates/admin-ui/src/error.rs`
@@ -542,6 +547,7 @@ git commit -m "feat: add admin UI runtime config"
 - Test: `crates/admin-ui/tests/admin_mapping.rs`
 
 **Interfaces:**
+
 - Produces `SessionStore`, `SessionId`, `SessionRecord`.
 - Produces `UiError`, `KafkaErrorDto`, `ResourceOutcome`.
 - Produces DTOs reused by admin adapter and views.
@@ -553,7 +559,7 @@ Create `crates/admin-ui/tests/session.rs`:
 ```rust
 use std::time::Duration;
 
-use crabka_admin_ui::session::{SessionStore, SessionUser};
+use krabka_admin_ui::session::{SessionStore, SessionUser};
 
 #[test]
 fn session_store_creates_and_retrieves_user() {
@@ -586,7 +592,7 @@ fn logout_removes_session() {
 Create `crates/admin-ui/tests/admin_mapping.rs`:
 
 ```rust
-use crabka_admin_ui::dto::{KafkaErrorDto, ResourceOutcome};
+use krabka_admin_ui::dto::{KafkaErrorDto, ResourceOutcome};
 
 #[test]
 fn resource_outcome_reports_error_state() {
@@ -607,7 +613,7 @@ fn resource_outcome_reports_error_state() {
 
 - [ ] **Step 3: Run tests to verify failure**
 
-Run: `cargo test -p crabka-admin-ui --test session --test admin_mapping`
+Run: `cargo test -p krabka-admin-ui --test session --test admin_mapping`
 
 Expected: FAIL because modules/types do not exist.
 
@@ -791,7 +797,7 @@ Create `crates/admin-ui/src/error.rs`:
 ```rust
 //! UI-facing errors surfaced by server functions.
 
-use crabka_client_admin::{AdminError, KafkaError};
+use krabka_client_admin::{AdminError, KafkaError};
 use thiserror::Error;
 
 use crate::dto::KafkaErrorDto;
@@ -850,14 +856,14 @@ pub mod session;
 
 - [ ] **Step 5: Run tests**
 
-Run: `cargo test -p crabka-admin-ui --test session --test admin_mapping`
+Run: `cargo test -p krabka-admin-ui --test session --test admin_mapping`
 
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo +nightly fmt -p crabka-admin-ui
+cargo +nightly fmt -p krabka-admin-ui
 git add crates/admin-ui/Cargo.toml crates/admin-ui/src/lib.rs crates/admin-ui/src/session.rs crates/admin-ui/src/dto.rs crates/admin-ui/src/error.rs crates/admin-ui/tests/session.rs crates/admin-ui/tests/admin_mapping.rs
 git commit -m "feat: add admin UI session and DTO foundation"
 ```
@@ -869,11 +875,13 @@ git commit -m "feat: add admin UI session and DTO foundation"
 ### Task 4: Implement SCRAM-SHA-512 broker-backed login service
 
 **Files:**
+
 - Create: `crates/admin-ui/src/auth.rs`
 - Modify: `crates/admin-ui/src/lib.rs`
 - Test: `crates/admin-ui/tests/auth.rs`
 
 **Interfaces:**
+
 - Produces `LoginRequest`, `LoginSuccess`, `AuthService`.
 - Produces `build_scram_sha512_security(&AdminUiConfig, &str, &str) -> ClientSecurity`.
 - Uses `AdminClient::connect_secured` with `SaslCredentials::Scram { mechanism: SaslMechanism::ScramSha512, ... }`.
@@ -883,10 +891,10 @@ git commit -m "feat: add admin UI session and DTO foundation"
 Create `crates/admin-ui/tests/auth.rs`:
 
 ```rust
-use crabka_admin_ui::auth::build_scram_sha512_security;
-use crabka_admin_ui::config::{AdminUiConfig, BrokerSecurityConfig};
-use crabka_client_core::security::SaslCredentials;
-use crabka_security::{ListenerProtocol, SaslMechanism};
+use krabka_admin_ui::auth::build_scram_sha512_security;
+use krabka_admin_ui::config::{AdminUiConfig, BrokerSecurityConfig};
+use krabka_client_core::security::SaslCredentials;
+use krabka_security::{ListenerProtocol, SaslMechanism};
 
 #[test]
 fn build_security_uses_scram_sha512_only() {
@@ -913,7 +921,7 @@ fn build_security_uses_scram_sha512_only() {
 
 - [ ] **Step 2: Run test to verify failure**
 
-Run: `cargo test -p crabka-admin-ui --test auth`
+Run: `cargo test -p krabka-admin-ui --test auth`
 
 Expected: FAIL because `auth` module does not exist.
 
@@ -924,9 +932,9 @@ Create `crates/admin-ui/src/auth.rs`:
 ```rust
 //! Broker-backed login for the admin UI.
 
-use crabka_client_admin::AdminClient;
-use crabka_client_core::security::{ClientSecurity, SaslCredentials};
-use crabka_security::SaslMechanism;
+use krabka_client_admin::AdminClient;
+use krabka_client_core::security::{ClientSecurity, SaslCredentials};
+use krabka_security::SaslMechanism;
 use serde::{Deserialize, Serialize};
 
 use crate::config::AdminUiConfig;
@@ -1008,14 +1016,14 @@ pub mod session;
 
 - [ ] **Step 4: Run auth tests**
 
-Run: `cargo test -p crabka-admin-ui --test auth`
+Run: `cargo test -p krabka-admin-ui --test auth`
 
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo +nightly fmt -p crabka-admin-ui
+cargo +nightly fmt -p krabka-admin-ui
 git add crates/admin-ui/src/auth.rs crates/admin-ui/src/lib.rs crates/admin-ui/tests/auth.rs
 git commit -m "feat: add SCRAM broker login service"
 ```
@@ -1025,6 +1033,7 @@ git commit -m "feat: add SCRAM broker login service"
 ### Task 5: Implement permission derivation and admin adapter mappings
 
 **Files:**
+
 - Create: `crates/admin-ui/src/permissions.rs`
 - Create: `crates/admin-ui/src/admin.rs`
 - Modify: `crates/admin-ui/src/dto.rs`
@@ -1033,8 +1042,9 @@ git commit -m "feat: add SCRAM broker login service"
 - Test: `crates/admin-ui/tests/admin_mapping.rs`
 
 **Interfaces:**
+
 - Produces `Capabilities` with booleans used by UI route guards and action buttons.
-- Produces `AdminFacade` wrapping `crabka-client-admin::AdminClient`.
+- Produces `AdminFacade` wrapping `krabka-client-admin::AdminClient`.
 - Produces pure mapping helpers for topic rows, group rows, log-dir rows, and outcomes.
 
 - [ ] **Step 1: Write failing permission tests**
@@ -1042,8 +1052,8 @@ git commit -m "feat: add SCRAM broker login service"
 Create `crates/admin-ui/tests/permissions.rs`:
 
 ```rust
-use crabka_admin_ui::permissions::{Capabilities, derive_capabilities};
-use crabka_client_admin::{AclEntry, AclOperation, PatternType, PermissionType, ResourceType};
+use krabka_admin_ui::permissions::{Capabilities, derive_capabilities};
+use krabka_client_admin::{AclEntry, AclOperation, PatternType, PermissionType, ResourceType};
 
 fn allow(resource_type: ResourceType, operation: AclOperation) -> AclEntry {
     AclEntry {
@@ -1087,8 +1097,8 @@ fn unrelated_principal_gets_no_capabilities() {
 Append to `crates/admin-ui/tests/admin_mapping.rs`:
 
 ```rust
-use crabka_admin_ui::admin::topic_rows;
-use crabka_client_admin::{KafkaError, TopicMetadata, TopicMetadataEntry};
+use krabka_admin_ui::admin::topic_rows;
+use krabka_client_admin::{KafkaError, TopicMetadata, TopicMetadataEntry};
 
 #[test]
 fn maps_topic_metadata_to_rows_with_errors() {
@@ -1116,7 +1126,7 @@ fn maps_topic_metadata_to_rows_with_errors() {
 
 - [ ] **Step 3: Run tests to verify failure**
 
-Run: `cargo test -p crabka-admin-ui --test permissions --test admin_mapping`
+Run: `cargo test -p krabka-admin-ui --test permissions --test admin_mapping`
 
 Expected: FAIL because `permissions` and `admin` modules do not exist.
 
@@ -1127,7 +1137,7 @@ Create `crates/admin-ui/src/permissions.rs`:
 ```rust
 //! Derive UI affordances from broker ACL entries.
 
-use crabka_client_admin::{AclEntry, AclOperation, PermissionType, ResourceType};
+use krabka_client_admin::{AclEntry, AclOperation, PermissionType, ResourceType};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1187,7 +1197,7 @@ Create `crates/admin-ui/src/admin.rs`:
 ```rust
 //! Thin admin-client adapter for UI-facing operations.
 
-use crabka_client_admin::{AdminClient, AdminError, LogDirInfo, TopicMetadata};
+use krabka_client_admin::{AdminClient, AdminError, LogDirInfo, TopicMetadata};
 
 use crate::dto::{KafkaErrorDto, LogDirRow, TopicRow};
 
@@ -1259,14 +1269,14 @@ pub mod permissions;
 
 - [ ] **Step 6: Run tests**
 
-Run: `cargo test -p crabka-admin-ui --test permissions --test admin_mapping`
+Run: `cargo test -p krabka-admin-ui --test permissions --test admin_mapping`
 
 Expected: PASS.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-cargo +nightly fmt -p crabka-admin-ui
+cargo +nightly fmt -p krabka-admin-ui
 git add crates/admin-ui/src/admin.rs crates/admin-ui/src/permissions.rs crates/admin-ui/src/dto.rs crates/admin-ui/src/lib.rs crates/admin-ui/tests/permissions.rs crates/admin-ui/tests/admin_mapping.rs
 git commit -m "feat: derive admin UI capabilities"
 ```
@@ -1278,12 +1288,14 @@ git commit -m "feat: derive admin UI capabilities"
 ### Task 6: Add app state and server-function seam
 
 **Files:**
+
 - Modify: `crates/admin-ui/src/server.rs`
 - Create: `crates/admin-ui/src/server_fns.rs`
 - Modify: `crates/admin-ui/src/lib.rs`
 - Test: `crates/admin-ui/tests/server_fns.rs`
 
 **Interfaces:**
+
 - Produces `AppState { cfg: Arc<AdminUiConfig>, sessions: Arc<SessionStore> }`.
 - Produces server-function seam functions for login/logout/current session/topics/groups/acls/users/quotas/log dirs.
 - Keeps raw passwords only in `LoginRequest` handling and never serializes them back.
@@ -1296,9 +1308,9 @@ Create `crates/admin-ui/tests/server_fns.rs`:
 use std::sync::Arc;
 use std::time::Duration;
 
-use crabka_admin_ui::config::{AdminUiConfig, BrokerSecurityConfig};
-use crabka_admin_ui::server::AppState;
-use crabka_admin_ui::session::SessionStore;
+use krabka_admin_ui::config::{AdminUiConfig, BrokerSecurityConfig};
+use krabka_admin_ui::server::AppState;
+use krabka_admin_ui::session::SessionStore;
 
 #[test]
 fn app_state_carries_config_and_sessions() {
@@ -1319,7 +1331,7 @@ fn app_state_carries_config_and_sessions() {
 
 - [ ] **Step 2: Run test to verify failure**
 
-Run: `cargo test -p crabka-admin-ui --test server_fns`
+Run: `cargo test -p krabka-admin-ui --test server_fns`
 
 Expected: FAIL because `AppState` does not exist.
 
@@ -1407,14 +1419,14 @@ pub mod server_fns;
 
 - [ ] **Step 4: Run tests**
 
-Run: `cargo test -p crabka-admin-ui --test server_fns`
+Run: `cargo test -p krabka-admin-ui --test server_fns`
 
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo +nightly fmt -p crabka-admin-ui
+cargo +nightly fmt -p krabka-admin-ui
 git add crates/admin-ui/src/server.rs crates/admin-ui/src/server_fns.rs crates/admin-ui/src/lib.rs crates/admin-ui/tests/server_fns.rs
 git commit -m "feat: add admin UI server state"
 ```
@@ -1424,6 +1436,7 @@ git commit -m "feat: add admin UI server state"
 ### Task 7: Add operations-sidebar layout and route guard
 
 **Files:**
+
 - Create: `crates/admin-ui/src/views/mod.rs`
 - Create: `crates/admin-ui/src/views/layout.rs`
 - Create: `crates/admin-ui/src/views/login.rs`
@@ -1431,6 +1444,7 @@ git commit -m "feat: add admin UI server state"
 - Modify: `crates/admin-ui/src/lib.rs`
 
 **Interfaces:**
+
 - Produces `Route` enum.
 - Produces operations-sidebar links for Overview, Topics, Groups, ACLs, Users, Quotas, Log Dirs.
 
@@ -1566,14 +1580,14 @@ pub fn app() -> Element {
 
 - [ ] **Step 3: Build targeted crate**
 
-Run: `cargo build -p crabka-admin-ui`
+Run: `cargo build -p krabka-admin-ui`
 
 Expected: PASS.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-cargo +nightly fmt -p crabka-admin-ui
+cargo +nightly fmt -p krabka-admin-ui
 git add crates/admin-ui/src/lib.rs crates/admin-ui/src/views
 git commit -m "feat: add admin UI operations shell"
 ```
@@ -1583,6 +1597,7 @@ git commit -m "feat: add admin UI operations shell"
 ### Task 8: Add first read-only admin views
 
 **Files:**
+
 - Create: `crates/admin-ui/src/views/topics.rs`
 - Create: `crates/admin-ui/src/views/groups.rs`
 - Create: `crates/admin-ui/src/views/acls.rs`
@@ -1593,6 +1608,7 @@ git commit -m "feat: add admin UI operations shell"
 - Modify: `crates/admin-ui/src/lib.rs`
 
 **Interfaces:**
+
 - Produces read-oriented Dioxus components for all first-slice sections.
 - Produces read-oriented Dioxus components for all first-slice sections with explicit empty states that render before live broker data is loaded.
 
@@ -1691,14 +1707,14 @@ pub mod users;
 
 - [ ] **Step 3: Build targeted crate**
 
-Run: `cargo build -p crabka-admin-ui`
+Run: `cargo build -p krabka-admin-ui`
 
 Expected: PASS.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-cargo +nightly fmt -p crabka-admin-ui
+cargo +nightly fmt -p krabka-admin-ui
 git add crates/admin-ui/src/views
 git commit -m "feat: add admin UI section views"
 ```
@@ -1710,11 +1726,13 @@ git commit -m "feat: add admin UI section views"
 ### Task 9: Add admin mutation DTOs and server-function shells
 
 **Files:**
+
 - Modify: `crates/admin-ui/src/dto.rs`
 - Modify: `crates/admin-ui/src/server_fns.rs`
 - Test: `crates/admin-ui/tests/admin_mapping.rs`
 
 **Interfaces:**
+
 - Produces request DTOs for create/delete topics, partitions, configs, ACLs, SCRAM users, quotas, and log-dir moves.
 - Server functions return `Vec<ResourceOutcome>` for batch-like Kafka operations.
 
@@ -1723,7 +1741,7 @@ git commit -m "feat: add admin UI section views"
 Append to `crates/admin-ui/tests/admin_mapping.rs`:
 
 ```rust
-use crabka_admin_ui::dto::{CreateTopicRequestDto, ScramUserUpsertDto};
+use krabka_admin_ui::dto::{CreateTopicRequestDto, ScramUserUpsertDto};
 
 #[test]
 fn create_topic_request_validates_positive_counts() {
@@ -1752,7 +1770,7 @@ fn scram_upsert_rejects_empty_password() {
 
 - [ ] **Step 2: Run tests to verify failure**
 
-Run: `cargo test -p crabka-admin-ui --test admin_mapping`
+Run: `cargo test -p krabka-admin-ui --test admin_mapping`
 
 Expected: FAIL because DTOs do not exist.
 
@@ -1837,14 +1855,14 @@ pub async fn upsert_scram_sha512_user(
 
 - [ ] **Step 5: Run tests**
 
-Run: `cargo test -p crabka-admin-ui --test admin_mapping`
+Run: `cargo test -p krabka-admin-ui --test admin_mapping`
 
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo +nightly fmt -p crabka-admin-ui
+cargo +nightly fmt -p krabka-admin-ui
 git add crates/admin-ui/src/dto.rs crates/admin-ui/src/server_fns.rs crates/admin-ui/tests/admin_mapping.rs
 git commit -m "feat: add admin UI mutation DTOs"
 ```
@@ -1854,12 +1872,14 @@ git commit -m "feat: add admin UI mutation DTOs"
 ### Task 10: Add high-value Playwright E2E scaffold
 
 **Files:**
+
 - Test: `crates/admin-ui/tests/e2e.rs`
 - Modify: `crates/admin-ui/Cargo.toml`
 
 **Interfaces:**
-- Produces ignored E2E tests that run against `CRABKA_ADMIN_UI_E2E_URL`.
-- Does not require launching browsers during normal `cargo test -p crabka-admin-ui`.
+
+- Produces ignored E2E tests that run against `KRABKA_ADMIN_UI_E2E_URL`.
+- Does not require launching browsers during normal `cargo test -p krabka-admin-ui`.
 
 - [ ] **Step 1: Add ignored Playwright test**
 
@@ -1867,9 +1887,9 @@ Create `crates/admin-ui/tests/e2e.rs`:
 
 ```rust
 #[tokio::test]
-#[ignore = "requires CRABKA_ADMIN_UI_E2E_URL and installed Playwright browsers"]
+#[ignore = "requires KRABKA_ADMIN_UI_E2E_URL and installed Playwright browsers"]
 async fn login_page_renders() -> Result<(), Box<dyn std::error::Error>> {
-    let base_url = std::env::var("CRABKA_ADMIN_UI_E2E_URL")?;
+    let base_url = std::env::var("KRABKA_ADMIN_UI_E2E_URL")?;
 
     let playwright = playwright_rs::Playwright::initialize().await?;
     playwright.prepare()?;
@@ -1889,18 +1909,18 @@ async fn login_page_renders() -> Result<(), Box<dyn std::error::Error>> {
 
 - [ ] **Step 2: Verify ignored test compiles but does not run by default**
 
-Run: `cargo test -p crabka-admin-ui --test e2e`
+Run: `cargo test -p krabka-admin-ui --test e2e`
 
 Expected: PASS with one ignored test.
 
-Run: `cargo test -p crabka-admin-ui --test e2e -- --ignored`
+Run: `cargo test -p krabka-admin-ui --test e2e -- --ignored`
 
-Expected without `CRABKA_ADMIN_UI_E2E_URL`: FAIL with missing environment variable. This confirms the ignored E2E path is gated.
+Expected without `KRABKA_ADMIN_UI_E2E_URL`: FAIL with missing environment variable. This confirms the ignored E2E path is gated.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-cargo +nightly fmt -p crabka-admin-ui
+cargo +nightly fmt -p krabka-admin-ui
 git add crates/admin-ui/Cargo.toml crates/admin-ui/tests/e2e.rs
 git commit -m "test: add admin UI playwright scaffold"
 ```
@@ -1910,13 +1930,15 @@ git commit -m "test: add admin UI playwright scaffold"
 ### Task 11: Wire runnable Dioxus server and final targeted verification
 
 **Files:**
+
 - Modify: `crates/admin-ui/src/server.rs`
 - Modify: `crates/admin-ui/src/main.rs`
 - Modify: `crates/admin-ui/src/lib.rs`
 - Test: `crates/admin-ui/tests/smoke.rs`
 
 **Interfaces:**
-- Produces a runnable `crabka-admin-ui` binary serving `/healthz` and the Dioxus app.
+
+- Produces a runnable `krabka-admin-ui` binary serving `/healthz` and the Dioxus app.
 - Keeps admin server independent from broker and gateway HTTP servers.
 
 - [ ] **Step 1: Extend smoke test to verify app route returns HTML**
@@ -1926,11 +1948,11 @@ Append to `crates/admin-ui/tests/smoke.rs`:
 ```rust
 #[tokio::test]
 async fn root_returns_html() {
-    let cfg = crabka_admin_ui::config::AdminUiConfig {
+    let cfg = krabka_admin_ui::config::AdminUiConfig {
         bootstrap_addrs: vec!["127.0.0.1:9092".to_string()],
-        ..crabka_admin_ui::config::AdminUiConfig::default()
+        ..krabka_admin_ui::config::AdminUiConfig::default()
     };
-    let app = crabka_admin_ui::server::router(crabka_admin_ui::server::AppState::new(cfg));
+    let app = krabka_admin_ui::server::router(krabka_admin_ui::server::AppState::new(cfg));
 
     let response = app
         .oneshot(
@@ -1948,7 +1970,7 @@ async fn root_returns_html() {
 
 - [ ] **Step 2: Run smoke test to verify failure**
 
-Run: `cargo test -p crabka-admin-ui --test smoke`
+Run: `cargo test -p krabka-admin-ui --test smoke`
 
 Expected: FAIL because `server::router` does not exist.
 
@@ -1965,7 +1987,7 @@ pub fn router(state: AppState) -> Router {
 }
 ```
 
-This HTML route is the first runnable server checkpoint for `/healthz` plus browser navigation. The same task keeps the Dioxus component tree compile-checked through `crabka_admin_ui::app()`; subsequent implementation work should replace the HTML response with Dioxus fullstack rendering before treating the UI as complete.
+This HTML route is the first runnable server checkpoint for `/healthz` plus browser navigation. The same task keeps the Dioxus component tree compile-checked through `krabka_admin_ui::app()`; subsequent implementation work should replace the HTML response with Dioxus fullstack rendering before treating the UI as complete.
 
 Modify `crates/admin-ui/src/main.rs` to serve `server::router`:
 
@@ -1976,9 +1998,9 @@ use anyhow::Context;
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
-    let cfg = crabka_admin_ui::config::AdminUiConfig::from_env()
+    let cfg = krabka_admin_ui::config::AdminUiConfig::from_env()
         .context("load admin UI config")?;
-    let state = crabka_admin_ui::server::AppState::new(cfg.clone());
+    let state = krabka_admin_ui::server::AppState::new(cfg.clone());
 
     let listener = tokio::net::TcpListener::bind(cfg.listen_addr)
         .await
@@ -1986,7 +2008,7 @@ async fn main() -> anyhow::Result<()> {
     let bound = listener.local_addr().context("read admin UI listener addr")?;
     tracing::info!(%bound, cluster = %cfg.cluster_name, "crabka admin UI listening");
 
-    axum::serve(listener, crabka_admin_ui::server::router(state))
+    axum::serve(listener, krabka_admin_ui::server::router(state))
         .await
         .context("serve admin UI")
 }
@@ -1994,19 +2016,19 @@ async fn main() -> anyhow::Result<()> {
 
 - [ ] **Step 4: Run targeted verification**
 
-Run: `cargo test -p crabka-admin-ui`
+Run: `cargo test -p krabka-admin-ui`
 
 Expected: PASS, with `e2e.rs` ignored by default.
 
-Run: `cargo build -p crabka-admin-ui`
+Run: `cargo build -p krabka-admin-ui`
 
 Expected: PASS.
 
-Run: `cargo clippy -p crabka-admin-ui --all-targets -- -D warnings`
+Run: `cargo clippy -p krabka-admin-ui --all-targets -- -D warnings`
 
 Expected: PASS.
 
-Run: `cargo +nightly fmt -p crabka-admin-ui --check`
+Run: `cargo +nightly fmt -p krabka-admin-ui --check`
 
 Expected: PASS.
 
@@ -2024,10 +2046,10 @@ git commit -m "feat: serve standalone admin UI"
 Run these at the end of the plan:
 
 ```bash
-cargo test -p crabka-admin-ui
-cargo build -p crabka-admin-ui
-cargo clippy -p crabka-admin-ui --all-targets -- -D warnings
-cargo +nightly fmt -p crabka-admin-ui --check
+cargo test -p krabka-admin-ui
+cargo build -p krabka-admin-ui
+cargo clippy -p krabka-admin-ui --all-targets -- -D warnings
+cargo +nightly fmt -p krabka-admin-ui --check
 ```
 
 Expected: all pass, with Playwright E2E ignored by default.

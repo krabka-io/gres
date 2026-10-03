@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use crabka_schema_registry::{compat, format::SchemaType, store::StoreState};
+use krabka_schema_registry::{compat, format::SchemaType, store::StoreState};
 
 #[derive(serde::Deserialize)]
 struct Case {

@@ -14,12 +14,12 @@ use std::sync::Arc;
 
 use axum::Extension;
 use connectrpc_axum::message::{ConnectError, ConnectRequest, ConnectResponse, error::Code};
-use crabka_units::{
+use krabka_units::{
     ByteRate, Time,
     convert::{ByteRateExt as _, StdDurationExt as _, TimeExt as _},
 };
 #[cfg(test)]
-use crabka_units::{millis, secs};
+use krabka_units::{millis, secs};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
@@ -531,7 +531,7 @@ mod tests {
 
     use assert2::check;
     use async_trait::async_trait;
-    use crabka_units::{bytes_per_sec, percent};
+    use krabka_units::{bytes_per_sec, percent};
 
     use super::*;
     use crate::{
@@ -584,7 +584,7 @@ mod tests {
 
     fn build_app_state(dir: &std::path::Path) -> Arc<AppState> {
         let store = Arc::new(ProposalStore::new(20));
-        let mut registry = prometheus_client::registry::Registry::with_prefix("crabka_rebalancer");
+        let mut registry = prometheus_client::registry::Registry::with_prefix("krabka_rebalancer");
         let metrics = RebalancerMetrics::register(&mut registry);
         let executor = ExecutorState {
             store: store.clone(),

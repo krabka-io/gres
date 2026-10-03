@@ -2,7 +2,7 @@
 
 **Status:** Implemented (all 8 slices) — see §14 for as-built notes
 **Date:** 2026-06-18
-**Scope of this spec:** the **traces** signal — a *full* Grafana-Tempo-equivalent
+**Scope of this spec:** the **traces** signal — a _full_ Grafana-Tempo-equivalent
 distributed-tracing backend (not an MVP). Covers OTLP/Jaeger/Zipkin ingest, the
 Kafka-native ingest-storage pipeline (distributor → WAL → block-builder +
 live-store + metrics-generator), span blocks on object storage, the complete
@@ -12,7 +12,7 @@ remote_write), the full Tempo HTTP API that Grafana's built-in Tempo datasource
 speaks, and multi-tenancy.
 
 This is the third signal in the LGTM+P replacement. It reuses the shared
-substrate designed for logs (`crabka-blockstore`) and the role-selectable service
+substrate designed for logs (`krabka-blockstore`) and the role-selectable service
 skeleton, and follows the same "emulate the wire/HTTP contract, don't fork the
 product" pattern. See the sibling specs:
 [2026-06-18-crabka-observability-logs-design.md](2026-06-18-crabka-observability-logs-design.md)
@@ -22,24 +22,24 @@ and
 ## 1. Goal & thesis
 
 Replace Grafana Tempo and serve as Grafana's traces datasource, by emulating
-Tempo's *external* surfaces (the Tempo HTTP API, OTLP/Jaeger/Zipkin push) on
-Crabka's substrate — the Kafka log as the durable ingest WAL, `crabka-blockstore`
+Tempo's _external_ surfaces (the Tempo HTTP API, OTLP/Jaeger/Zipkin push) on
+Crabka's substrate — the Kafka log as the durable ingest WAL, `krabka-blockstore`
 for columnar Parquet span blocks on object storage, and DataFusion for query. We
-reproduce Tempo's *contracts* (TraceQL semantics, API shapes, metric names), not
+reproduce Tempo's _contracts_ (TraceQL semantics, API shapes, metric names), not
 its block byte-format or internal components.
 
-**The load-bearing realization.** Tempo 3.0's GA architecture is *already
-Kafka-native* — its "ingest storage" mode is the default. The **distributor**
+**The load-bearing realization.** Tempo 3.0's GA architecture is _already
+Kafka-native_ — its "ingest storage" mode is the default. The **distributor**
 shards spans by `trace_id` into Kafka partitions; the **block-builder**,
 **live-store**, and **metrics-generator** are three independent Kafka consumer
 groups (each owns its own offsets), each running at replication-factor 1 because
-Kafka itself provides durability. The standalone *ingester* component is gone.
-Crabka provides the *exact* substrate Tempo 3.0 assumes — the WAL topic *is*
-Tempo's Kafka ingest topic, partitioning by `trace_id` *is* Tempo's partitioning,
+Kafka itself provides durability. The standalone _ingester_ component is gone.
+Crabka provides the _exact_ substrate Tempo 3.0 assumes — the WAL topic _is_
+Tempo's Kafka ingest topic, partitioning by `trace_id` _is_ Tempo's partitioning,
 and RF1 is safe because the Crabka broker replicates the partition. This is a
 near-1:1 mapping — **the best fit of the four signals.**
 
-**The invariant to preserve.** `hash(trace_id) → partition` routes *all* spans of
+**The invariant to preserve.** `hash(trace_id) → partition` routes _all_ spans of
 a trace to one partition. That is what lets the three consumer groups run at RF1
 with no cross-consumer deduplication: each group sees every span of a trace
 exactly once, in one partition, with independent offsets. Preserving this hashing
@@ -48,33 +48,33 @@ on.
 
 ## 2. Decisions (locked)
 
-| # | Decision | Choice |
-|---|---|---|
-| 1 | Ambition | **Full** Tempo replacement (not an MVP) |
-| 2 | TraceQL engine | **Our own** parser + planner. No published Rust TraceQL parser exists on crates.io; adapt `icegatetech/icegate`'s ANTLR `TraceQLLexer.g4`/`TraceQLParser.g4` (Apache-2.0) as the grammar *reference*. Lower onto DataFusion (shared substrate) |
-| 3 | Storage | `crabka-blockstore` (shared with logs/metrics), **generalized** behind a `BlockIndex` trait (Decision A). Logs/metrics keep their `SeriesIndex`; traces add a `TraceIndex`; blockstore stops assuming mandatory `series_fingerprint`+`timestamp` columns — each signal declares its own schema + index |
-| 4 | Span block format | **Crabka choice: a flattened span-per-row Parquet** (denormalized trace+resource columns), sorted/grouped by `trace_id`. *Not* vParquet byte-format compatible — greenfield. We need TraceQL-semantic/API compat, not block-format compat. Real Tempo vParquet4 is one-row-per-trace nested; we flatten |
-| 5 | Structural operators | The **nested-set model** (`nested_set_left`/`right`/`parent_id`, Int32, DFS-preorder, computed at block-build), lowered to a **partitioned self-join** keyed by `trace_id` with nested-set range/equality predicates — *not* a per-trace tree-walk operator. Joins are siblings-aware: a span is never its own sibling, so the **sibling** lowering carries a distinct-span predicate (`B.span_id != A.span_id`) on top of equal `parent_id`, matching Tempo's "different span sharing the same parent." This is the centerpiece |
-| 6 | Dedicated attribute columns | Copy vParquet5's **fully-dynamic attribute promotion** (configured resource/span attrs hoisted into their own dict-encoded columns at block-build = the pushdown fast path). Drop vParquet4's hardcoded HTTP columns |
-| 7 | metrics-generator | **In scope** (Decision A). span-metrics (RED) + service-graphs, emitted via the **remote_write client reused from the metrics signal** into Crabka's metrics backend |
-| 8 | Grafana integration | **Tempo HTTP API emulation** → Grafana's built-in Tempo datasource, unmodified. Service Graph is *not* a Tempo endpoint — it is `traces_service_graph_*` series in the metrics backend, queried by Grafana directly |
-| 9 | Process model | Role-selectable service (`distributor`/`block-builder`/`live-store`/`querier`/`query-frontend`/`compactor`/`metrics-generator`); uses the Crabka broker as its ingest WAL |
+| #   | Decision                    | Choice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Ambition                    | **Full** Tempo replacement (not an MVP)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 2   | TraceQL engine              | **Our own** parser + planner. No published Rust TraceQL parser exists on crates.io; adapt `icegatetech/icegate`'s ANTLR `TraceQLLexer.g4`/`TraceQLParser.g4` (Apache-2.0) as the grammar _reference_. Lower onto DataFusion (shared substrate)                                                                                                                                                                                                                                                                                   |
+| 3   | Storage                     | `krabka-blockstore` (shared with logs/metrics), **generalized** behind a `BlockIndex` trait (Decision A). Logs/metrics keep their `SeriesIndex`; traces add a `TraceIndex`; blockstore stops assuming mandatory `series_fingerprint`+`timestamp` columns — each signal declares its own schema + index                                                                                                                                                                                                                           |
+| 4   | Span block format           | **Crabka choice: a flattened span-per-row Parquet** (denormalized trace+resource columns), sorted/grouped by `trace_id`. _Not_ vParquet byte-format compatible — greenfield. We need TraceQL-semantic/API compat, not block-format compat. Real Tempo vParquet4 is one-row-per-trace nested; we flatten                                                                                                                                                                                                                          |
+| 5   | Structural operators        | The **nested-set model** (`nested_set_left`/`right`/`parent_id`, Int32, DFS-preorder, computed at block-build), lowered to a **partitioned self-join** keyed by `trace_id` with nested-set range/equality predicates — _not_ a per-trace tree-walk operator. Joins are siblings-aware: a span is never its own sibling, so the **sibling** lowering carries a distinct-span predicate (`B.span_id != A.span_id`) on top of equal `parent_id`, matching Tempo's "different span sharing the same parent." This is the centerpiece |
+| 6   | Dedicated attribute columns | Copy vParquet5's **fully-dynamic attribute promotion** (configured resource/span attrs hoisted into their own dict-encoded columns at block-build = the pushdown fast path). Drop vParquet4's hardcoded HTTP columns                                                                                                                                                                                                                                                                                                             |
+| 7   | metrics-generator           | **In scope** (Decision A). span-metrics (RED) + service-graphs, emitted via the **remote_write client reused from the metrics signal** into Crabka's metrics backend                                                                                                                                                                                                                                                                                                                                                             |
+| 8   | Grafana integration         | **Tempo HTTP API emulation** → Grafana's built-in Tempo datasource, unmodified. Service Graph is _not_ a Tempo endpoint — it is `traces_service_graph_*` series in the metrics backend, queried by Grafana directly                                                                                                                                                                                                                                                                                                              |
+| 9   | Process model               | Role-selectable service (`distributor`/`block-builder`/`live-store`/`querier`/`query-frontend`/`compactor`/`metrics-generator`); uses the Crabka broker as its ingest WAL                                                                                                                                                                                                                                                                                                                                                        |
 
 ## 3. Architecture
 
 ### 3.1 Tempo 3.0 component → Crabka realization
 
-| Tempo component | Crabka realization |
-|---|---|
-| **Distributor** (OTLP/Jaeger/Zipkin ingest, hash `trace_id` → partition) | `distributor` role — terminates the push protocols, hashes `trace_id` → WAL partition, ACKs after the Kafka write |
-| **Kafka ingest topic** | **The Crabka broker** — the WAL topic *is* Tempo's ingest topic; partition replication *is* Tempo's RF; partitioning by `trace_id` preserves the dedup-avoidance invariant |
-| **Block-builder** (consumer group → Parquet → object store → commit) | `block-builder` role — consumes the WAL, groups spans by `trace_id` over a window, writes span Parquet blocks + `TraceIndex`, commits offsets (write-then-commit, idempotent keys) |
-| **Live-store** (consumer group serving recent traces) | `live-store` role — the **hot tier**, an in-memory recent-traces store (assembled by `trace_id`, ~30–60 min), exposed as a DataFusion `MemTable`; rebuildable purely from offsets |
-| **Querier** | `querier` role — DataFusion over `crabka-blockstore` (cold) **UNION** live-store (hot) |
-| **Query-frontend** | `query-frontend` role — shard/queue search across time + block + row-group jobs |
-| **Compactor** | `compactor` role — merges/recompacts span blocks (and the late-span merge) |
-| **Metrics-generator** (span-metrics + service-graphs → remote_write) | `metrics-generator` role — third consumer group; emits RED + service-graph series via the metrics signal's remote_write client into Crabka's metrics backend |
-| **Overrides / limits** | per-tenant config on Crabka's quota/ACL machinery |
+| Tempo component                                                          | Crabka realization                                                                                                                                                                 |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Distributor** (OTLP/Jaeger/Zipkin ingest, hash `trace_id` → partition) | `distributor` role — terminates the push protocols, hashes `trace_id` → WAL partition, ACKs after the Kafka write                                                                  |
+| **Kafka ingest topic**                                                   | **The Crabka broker** — the WAL topic _is_ Tempo's ingest topic; partition replication _is_ Tempo's RF; partitioning by `trace_id` preserves the dedup-avoidance invariant         |
+| **Block-builder** (consumer group → Parquet → object store → commit)     | `block-builder` role — consumes the WAL, groups spans by `trace_id` over a window, writes span Parquet blocks + `TraceIndex`, commits offsets (write-then-commit, idempotent keys) |
+| **Live-store** (consumer group serving recent traces)                    | `live-store` role — the **hot tier**, an in-memory recent-traces store (assembled by `trace_id`, ~30–60 min), exposed as a DataFusion `MemTable`; rebuildable purely from offsets  |
+| **Querier**                                                              | `querier` role — DataFusion over `krabka-blockstore` (cold) **UNION** live-store (hot)                                                                                             |
+| **Query-frontend**                                                       | `query-frontend` role — shard/queue search across time + block + row-group jobs                                                                                                    |
+| **Compactor**                                                            | `compactor` role — merges/recompacts span blocks (and the late-span merge)                                                                                                         |
+| **Metrics-generator** (span-metrics + service-graphs → remote_write)     | `metrics-generator` role — third consumer group; emits RED + service-graph series via the metrics signal's remote_write client into Crabka's metrics backend                       |
+| **Overrides / limits**                                                   | per-tenant config on Crabka's quota/ACL machinery                                                                                                                                  |
 
 ### 3.2 The Kafka-native pipeline
 
@@ -109,18 +109,18 @@ no group needs cross-partition dedup.
 
 ### 3.3 Crate layout
 
-- `crabka-blockstore` *(shared with logs/metrics; generalized in slice 1)* — the
+- `krabka-blockstore` _(shared with logs/metrics; generalized in slice 1)_ — the
   concrete index is extracted behind a **`BlockIndex` trait**. Logs/metrics keep a
   `SeriesIndex` (impl `BlockIndex`); traces add a `TraceIndex` (impl `BlockIndex`).
   `BlockStore` is parameterized/dyn over `BlockIndex`. The mandatory
   `series_fingerprint`+`timestamp` columns become signal-declared; existing
   `BlockStore`/`BlockWriter`/`BlockMeta`/`scan_context` and `Labels`/`LabelMatcher`/
   `MatchOp` stay available.
-- `crabka-traceql` *(slices 2–3)* — the TraceQL engine: our own parser (grammar
+- `krabka-traceql` _(slices 2–3)_ — the TraceQL engine: our own parser (grammar
   referenced from icegate's `.g4`), the planner, the **nested-set structural
   self-join** lowering (`SpanStructuralJoin`), the pipeline-aggregation lowering,
   and TraceQL metrics → time-bucketed Prometheus-shaped series.
-- `crabka-traces` *(slices 4–8)* — the role-selectable service binary wiring
+- `krabka-traces` _(slices 4–8)_ — the role-selectable service binary wiring
   blockstore + traceql + a Kafka client, plus the wire surfaces (OTLP/Jaeger/Zipkin
   ingest, the Tempo HTTP API, metrics-generator → remote_write).
 
@@ -146,8 +146,8 @@ service-graphs processors.
 
 Span blocks are **tenant-scoped + time-bounded** Parquet on object storage,
 **one row per span**, sorted/grouped by `trace_id` so each trace's spans are
-contiguous. This is a *deliberate flattening* of Tempo's vParquet4 (which is one
-*row per trace*, nested `Trace → ResourceSpans → ScopeSpans → Spans`): we
+contiguous. This is a _deliberate flattening_ of Tempo's vParquet4 (which is one
+_row per trace_, nested `Trace → ResourceSpans → ScopeSpans → Spans`): we
 denormalize trace- and resource-level fields onto every span row. We are
 compatible with TraceQL semantics and the Tempo API, **not** with the vParquet
 byte format (greenfield — no block-format interop is required).
@@ -155,10 +155,12 @@ byte format (greenfield — no block-format interop is required).
 ### 4.1 Span block columns
 
 **Identity (raw bytes):**
+
 - `trace_id: FixedSizeBinary[16]`, `span_id: FixedSizeBinary[8]`,
-  `parent_span_id: FixedSizeBinary[8]` (the raw *semantic* parent reference).
+  `parent_span_id: FixedSizeBinary[8]` (the raw _semantic_ parent reference).
 
 **Structural / nested-set (the load-bearing columns):**
+
 - `nested_set_left: Int32`, `nested_set_right: Int32`, `parent_id: Int32`.
   Computed at block-build via a **DFS pre-order over each trace's span tree**
   (modified pre-order traversal): an ancestor's `[left, right]` interval strictly
@@ -168,29 +170,34 @@ byte format (greenfield — no block-format interop is required).
   `Parent` intrinsics.
 
 **Trace-denormalized (one value per trace, copied to every span row):**
+
 - `root_service_name: Utf8`, `root_span_name: Utf8`,
   `trace_start_unix_nano: Int64`, `trace_duration_nanos: Int64`.
 
 **Span intrinsics:**
+
 - `name: Utf8`, `kind: Int` (enum `unspecified|internal|server|client|producer|
-  consumer`), `start_unix_nano: Int64`, `duration_nanos: Int64`,
+consumer`), `start_unix_nano: Int64`, `duration_nanos: Int64`,
   `status_code: Int` (enum `unset|ok|error`), `status_message: Utf8`.
 
 **Dedicated attribute columns (the pushdown fast path):**
+
 - A configurable set of resource/span attributes hoisted at block-build into their
-  own **dict-encoded columns**. We copy vParquet5's *fully-dynamic* promotion model
+  own **dict-encoded columns**. We copy vParquet5's _fully-dynamic_ promotion model
   (configured attrs → physical column at write time, queries transparent), **not**
   vParquet4's hardcoded `HttpMethod`/`HttpUrl`/`HttpStatusCode` columns. Promotion
   is configuration, not code.
 
 **Generic attributes (typed LIST columns, array-aware):**
+
 - Each attribute is `Attribute { Key, IsArray: Bool, Value: List<Utf8>,
-  ValueInt: List<Int64>, ValueDouble: List<Float64>, ValueBool: List<Bool> }`
+ValueInt: List<Int64>, ValueDouble: List<Float64>, ValueBool: List<Bool> }`
   (per Tempo's wire model). A **scalar value is a single-element list.** This makes
   array attributes first-class; TraceQL array semantics (§6) match `=`/`=~` if
-  *any* element matches and `!=`/`!~` if *no* element matches.
+  _any_ element matches and `!=`/`!~` if _no_ element matches.
 
 **Events & links (nested):**
+
 - `events: List<Struct<...>>` and `links: List<Struct<...>>` — first-class and
   queryable. Events carry `Event.time_since_start_nano` (relative to span start);
   links carry the linked `traceID`/`spanID`. TraceQL reaches them via the `event:`/
@@ -202,7 +209,7 @@ byte format (greenfield — no block-format interop is required).
 Instead each block carries:
 
 - **(a) Sharded `trace_id` bloom filters** for **index-less by-id retrieval.**
-  Shard = `FNV-1 32-bit hash(trace_id) mod shard_count` (hash, *not* raw bytes;
+  Shard = `FNV-1 32-bit hash(trace_id) mod shard_count` (hash, _not_ raw bytes;
   matches Tempo's sharding). Default bloom FP rate `0.01`, shard size `100 KiB`.
   By-id lookup = time/block prefilter → per-block bloom test → Parquet row-group
   min/max binary search over the `trace_id` column page statistics (first 16 bytes
@@ -244,7 +251,7 @@ trivially.)
 `SpanRecord` = tenant + one OTLP-derived span (`trace_id[16]`, `span_id[8]`,
 `parent_span_id[8]`, `name`, `kind`, `start_ns`, `duration_ns`, `status`, resource
 attrs, span attrs, events, links). Encoded via serde + `serde-wincode` (workspace
-convention). The WAL topic is `__crabka_traces_wal` (or per-tenant); **partition
+convention). The WAL topic is `__krabka_traces_wal` (or per-tenant); **partition
 key = `hash(trace_id)`**, sending all spans of a trace to one partition — the RF1
 dedup-avoidance invariant. The distributor ACKs the push **after** the Kafka write
 is acknowledged.
@@ -254,8 +261,8 @@ is acknowledged.
 Consumes the WAL, groups spans by `trace_id` over a **flush window**, and writes
 span Parquet blocks (via blockstore `BlockWriter`) + `TraceIndex` updates → object
 storage → commits offsets. A trace is flushed when its window closes — "complete
-enough," *not* true completeness. **Late spans** (arriving after a trace's window
-closed) land in a *later* block; the read path and compactor merge a trace's spans
+enough," _not_ true completeness. **Late spans** (arriving after a trace's window
+closed) land in a _later_ block; the read path and compactor merge a trace's spans
 across blocks. The nested-set columns are computed here, via the DFS pre-order over
 each flushed trace's span tree. Write-then-commit + deterministic idempotent block
 keys make a mid-flush crash re-do work, never lose or double-count it.
@@ -269,9 +276,9 @@ It is pure read-path state: **rebuildable from offsets** on restart, holding no
 durability of its own. (This is Tempo's live-store, which replaced the old
 ingester's query role.)
 
-## 6. TraceQL engine (`crabka-traceql`)
+## 6. TraceQL engine (`krabka-traceql`)
 
-We build our own parser and planner. The grammar is *referenced* from
+We build our own parser and planner. The grammar is _referenced_ from
 `icegatetech/icegate`'s ANTLR `TraceQLLexer.g4`/`TraceQLParser.g4` (Apache-2.0);
 icegate also has a DataFusion planner that returns `NotImplemented` for structural
 ops — useful as a starting skeleton, but the structural engine is ours. There is
@@ -310,18 +317,18 @@ spans:**
 - negated `!>>`, `!<<`, `!>`, `!<`;
 - union (both sides returned) `&>>`, `&<<`, `&>`, `&<`, `&~`.
 
-These are realized via the **nested-set model**, *not* a per-trace tree-walk:
+These are realized via the **nested-set model**, _not_ a per-trace tree-walk:
 
 - **descendant** `B >> A` ⟹ `B.nested_set_left > A.nested_set_left &&
-  B.nested_set_right < A.nested_set_right`
+B.nested_set_right < A.nested_set_right`
 - **child / parent** `B > A` ⟹ `B.parent_id == A.nested_set_left`
 - **sibling** `B ~ A` ⟹ `B.parent_id == A.parent_id && B.span_id != A.span_id` —
-  a sibling is a *different* span sharing the same parent. The distinct-span
+  a sibling is a _different_ span sharing the same parent. The distinct-span
   predicate is mandatory: a naive equi-join on `parent_id` alone matches a span
-  against *itself* (so a span would be reported as its own sibling) and wrongly
+  against _itself_ (so a span would be reported as its own sibling) and wrongly
   matches a span that satisfies both `{condA}` and `{condB}`. This mirrors Tempo,
   whose sibling operator returns spans matching `{condB}` that have at least one
-  *other* span matching `{condA}` under the same parent. Here `parent_id` is the
+  _other_ span matching `{condA}` under the same parent. Here `parent_id` is the
   nested-set parent column (`== parent.nested_set_left`), not the raw
   `parent_span_id` bytes; two roots share `parent_id = 0` (the sentinel) and are
   therefore treated as siblings of each other — consistent with Tempo. The
@@ -375,7 +382,7 @@ experimental where Tempo flags it: `rate`/`count_over_time` are older;
 
 ### 6.8 The `SpanStore` boundary
 
-`crabka-traceql` is storage-agnostic via an injected `SpanStore`. The querier
+`krabka-traceql` is storage-agnostic via an injected `SpanStore`. The querier
 (slice 5) implements it as the hot/cold UNION. Pinned public contract:
 
 ```rust
@@ -455,14 +462,14 @@ Emit `traces_service_graph_request_total`, `_request_failed_total`,
 unset / `virtual_node` / `messaging_system` / `database`).
 
 **Service Graph is rendered by Grafana** from a linked Prometheus datasource over
-these `traces_service_graph_*` series — it is *not* a Tempo HTTP endpoint. This is
+these `traces_service_graph_*` series — it is _not_ a Tempo HTTP endpoint. This is
 the loop-closing point: traces feed series back into the metrics signal, where
 Grafana reads them.
 
 ## 8. Tempo HTTP API surface
 
 Served to Grafana's **built-in Tempo datasource** (which speaks the native Tempo
-API *only* — never Jaeger/Zipkin *query*). Tenant via `X-Scope-OrgID`. Response
+API _only_ — never Jaeger/Zipkin _query_). Tenant via `X-Scope-OrgID`. Response
 shapes must match Tempo exactly — the byte-equality analog for this layer.
 
 - **`GET /api/echo`** → `200 "echo"` — the datasource health/test probe.
@@ -501,7 +508,7 @@ shapes must match Tempo exactly — the byte-equality analog for this layer.
 The minimum surface Grafana's Tempo datasource exercises is `/api/echo`,
 `/api/v2/traces/{id}`, `/api/search` (q + tags), `/api/v2/search/tags` +
 `tag/{tag}/values`, and `/api/metrics/query_range`. All of it is a projection of
-the `crabka-traceql` result types (§6.8).
+the `krabka-traceql` result types (§6.8).
 
 ## 9. Error handling, limits, multi-tenancy
 
@@ -511,7 +518,7 @@ the `crabka-traceql` result types (§6.8).
 - **Per-tenant limits** on Crabka token-bucket quotas: max traces per search, max
   spans per trace, ingest rate, max attribute size → Tempo-shaped `4xx`/`429`.
 - **Crash-safety:** block-builder consumer-group offsets + **write-then-commit**
-  with deterministic idempotent block keys (write block + `TraceIndex`, *then*
+  with deterministic idempotent block keys (write block + `TraceIndex`, _then_
   commit offsets) — a crash between only re-does work. The **live-store** and
   **metrics-generator** hold no durable state: both are fully rebuildable from
   WAL offsets.
@@ -523,7 +530,7 @@ the `crabka-traceql` result types (§6.8).
 
 Mirrors Crabka's differential-testing ethos.
 
-- **Differential vs. real Tempo** *(headline)* — ingest identical OTLP traces into
+- **Differential vs. real Tempo** _(headline)_ — ingest identical OTLP traces into
   Tempo and Crabka (testcontainers), run a TraceQL query corpus against both,
   assert equal results (by-id, search, structural ops, pipelines, TraceQL metrics).
   The byte-equality analog that proves "drop-in."
@@ -563,7 +570,7 @@ subagent batches.
    `series_fingerprint`+`timestamp`. Define the flattened span block (incl. the
    **nested-set columns + the DFS pre-order** at block-build) and the `TraceIndex`
    (FNV-sharded `trace_id` bloom for index-less by-id + per-block tag sets/blooms).
-2. **`crabka-traceql` core** — our parser (grammar referenced from icegate's
+2. **`krabka-traceql` core** — our parser (grammar referenced from icegate's
    `.g4`), the planner, selectors (scopes/intrinsics/array semantics, the
    single-span rule), non-structural pushdown + the `AND` fast path, and the
    **`SpanStructuralJoin`** lowering for the **core** structural operators
@@ -592,13 +599,13 @@ subagent batches.
 
 ## 12. Relation to the four-signal vision
 
-Traces is the **third tenant** of `crabka-blockstore`, and the one that *forces*
+Traces is the **third tenant** of `krabka-blockstore`, and the one that _forces_
 the generalization the logs spec promised: by needing a fundamentally different
-index (`TraceIndex` = `trace_id` bloom + tag sets, *not* a series fingerprint
+index (`TraceIndex` = `trace_id` bloom + tag sets, _not_ a series fingerprint
 index) and a non-mandatory schema (span columns, no `series_fingerprint`+
 `timestamp`), it justifies extracting the **`BlockIndex` trait** — the same
 pluggable seam that **profiles / Pyroscope** will reuse for its profile-type +
-symbol index. `crabka-traceql` sits beside `crabka-logql` and `crabka-promql` on
+symbol index. `krabka-traceql` sits beside `krabka-logql` and `krabka-promql` on
 the same DataFusion substrate and the same role-selectable service skeleton.
 
 And it **closes the loop**: the metrics-generator feeds `traces_spanmetrics_*` and
@@ -608,17 +615,17 @@ exemplar-source for, the metrics signal. `trace_id` (hex) is the universal join
 key: metrics→traces via latency exemplars, traces→logs/metrics/profiles via Grafana
 datasource correlation (no Tempo endpoint), all keyed by `trace_id`.
 
-| Signal | Front-end crate | API emulated | Block payload | Index impl |
-|---|---|---|---|---|
-| **Logs** | `crabka-logql` | Loki HTTP | `line`, metadata | `SeriesIndex` |
-| **Metrics** | `crabka-promql` | Prometheus HTTP | float / native-hist / exemplar | `SeriesIndex` |
-| **Traces** | `crabka-traceql` | Tempo HTTP | flattened span + nested-set | **`TraceIndex`** |
-| **Profiles** | `crabka-pprof` | Pyroscope HTTP | sample/stack | (profile-type + symbol, *reuses `BlockIndex`*) |
+| Signal       | Front-end crate  | API emulated    | Block payload                  | Index impl                                     |
+| ------------ | ---------------- | --------------- | ------------------------------ | ---------------------------------------------- |
+| **Logs**     | `krabka-logql`   | Loki HTTP       | `line`, metadata               | `SeriesIndex`                                  |
+| **Metrics**  | `krabka-promql`  | Prometheus HTTP | float / native-hist / exemplar | `SeriesIndex`                                  |
+| **Traces**   | `krabka-traceql` | Tempo HTTP      | flattened span + nested-set    | **`TraceIndex`**                               |
+| **Profiles** | `krabka-pprof`   | Pyroscope HTTP  | sample/stack                   | (profile-type + symbol, _reuses `BlockIndex`_) |
 
 ## 13. Open questions for planning
 
 - **`SpanStructuralJoin` physical operator** — does the per-trace partitioned
-  self-join need a *custom* DataFusion physical operator, or can it be expressed as
+  self-join need a _custom_ DataFusion physical operator, or can it be expressed as
   a standard partitioned hash/range join with a `trace_id` partition key plus
   nested-set predicates? Slice 2 should prototype both and pick the simpler one that
   hits the columnar fast path.
@@ -646,7 +653,7 @@ datasource correlation (no Tempo endpoint), all keyed by `trace_id`.
 The traces signal is implemented across `crates/blockstore`, `crates/traceql`, and
 `crates/traces` and is green (build + unit/integration tests; the
 differential-vs-Tempo and Grafana legs are `#[ignore]`, Docker-gated). The
-implementation honors the spec's *contracts* (TraceQL semantics, Tempo API shapes,
+implementation honors the spec's _contracts_ (TraceQL semantics, Tempo API shapes,
 the nested-set structural model, the `trace_id`-partitioned WAL dedup-avoidance
 invariant). The following deliberate deviations from the original design/plans
 stand as-built:
@@ -673,7 +680,7 @@ stand as-built:
   row-group), fans jobs out with bounded concurrency, and merges over **typed serde
   wire structs** (not raw `serde_json::Value`), enforcing `limit` (newest-first) and
   `spss` and accumulating the `metrics{}` job-accounting block. The merge currency is
-  the typed Tempo-JSON wire model rather than the richer `crabka-traceql` result
+  the typed Tempo-JSON wire model rather than the richer `krabka-traceql` result
   types, because the querier's search JSON is the thin Tempo shape (lossless to union
   at the wire level). **Trace-by-id is frontend-side typed assembly**: it fans one
   job per querier (the querier reassembles a trace across blocks and exposes no
@@ -682,7 +689,7 @@ stand as-built:
   COMPLETE/PARTIAL. Shard failures propagate for the data-partitioning queries
   (search/tags/metrics); by-id tolerates per-querier failure and fails only if every
   querier does.
-- **SQL-string planner.** `crabka-traceql` lowers to DataFusion by emitting SQL
+- **SQL-string planner.** `krabka-traceql` lowers to DataFusion by emitting SQL
   (incl. the nested-set structural self-join predicate algebra) rather than building
   `LogicalPlan`s programmatically; the structural predicates match the spec exactly.
 - **Tempo HTTP API in one module.** The querier serves the full Tempo surface from a

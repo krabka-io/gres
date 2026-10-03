@@ -3,7 +3,7 @@
 //! re-encode v1 round-trips for the fields v1 understands." This harness
 //! seeds that contract with an assertion that v1 ↔ v1 round-trips.
 
-use crabka_metadata::{
+use krabka_metadata::{
     BrokerRegistrationRecord, DeleteTopicRecord, LeaderEpoch, MetadataRecord, NodeId,
     PartitionRecord, TopicRecord,
 };

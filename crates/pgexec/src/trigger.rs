@@ -1,6 +1,6 @@
 //! Trigger catalog DDL and PostgreSQL parse-analysis rules.
 
-use crabka_pgcatalog::{
+use krabka_pgcatalog::{
     RelationName, Table,
     routine::{Routine, RoutineResult, routines_named},
     trigger::{
@@ -9,9 +9,9 @@ use crabka_pgcatalog::{
         get_event_trigger, get_trigger, put_event_trigger_ops, put_trigger_ops,
     },
 };
-use crabka_pgkv::{Kv, WriteOp};
-use crabka_pgparser::ast as parsed;
-use crabka_pgwire::engine::QueryResult;
+use krabka_pgkv::{Kv, WriteOp};
+use krabka_pgparser::ast as parsed;
+use krabka_pgwire::engine::QueryResult;
 
 use crate::error::ExecError;
 
@@ -28,10 +28,10 @@ pub(crate) struct TriggerInvocation {
     pub table_name: String,
     pub arguments: Vec<String>,
     pub column_names: Vec<String>,
-    pub column_types: Vec<crabka_pgtypes::ColumnType>,
-    pub transitions: Vec<(String, Vec<Vec<crabka_pgtypes::Datum>>)>,
-    pub old: crabka_pgtypes::Datum,
-    pub new: crabka_pgtypes::Datum,
+    pub column_types: Vec<krabka_pgtypes::ColumnType>,
+    pub transitions: Vec<(String, Vec<Vec<krabka_pgtypes::Datum>>)>,
+    pub old: krabka_pgtypes::Datum,
+    pub new: krabka_pgtypes::Datum,
 }
 
 thread_local! {
@@ -46,8 +46,8 @@ thread_local! {
 struct TransitionChange {
     table_id: u32,
     operation: String,
-    old: Option<Vec<crabka_pgtypes::Datum>>,
-    new: Option<Vec<crabka_pgtypes::Datum>>,
+    old: Option<Vec<krabka_pgtypes::Datum>>,
+    new: Option<Vec<krabka_pgtypes::Datum>>,
 }
 
 #[derive(Debug, Clone)]
@@ -123,7 +123,7 @@ pub(crate) fn with_after_trigger_queue<T>(f: impl FnOnce() -> T) -> (T, Vec<Pend
 pub(crate) fn invoke(
     routine: Routine,
     invocation: TriggerInvocation,
-) -> Result<crabka_pgtypes::Datum, ExecError> {
+) -> Result<krabka_pgtypes::Datum, ExecError> {
     let runtime = crate::routine::scalar_runtime_request_sender().ok_or_else(|| {
         ExecError::Unsupported("trigger function requires a session executor".into())
     })?;
@@ -174,19 +174,19 @@ fn trigger_error_detail(
     detail: impl Into<String>,
 ) -> ExecError {
     ExecError::Remote(
-        crabka_pgwire::error::PgError::error(sqlstate, message.into()).with_detail(detail.into()),
+        krabka_pgwire::error::PgError::error(sqlstate, message.into()).with_detail(detail.into()),
     )
 }
 
 fn trigger_relation_kind_error(relation: &RelationName, kind: &str, detail: &str) -> ExecError {
     ExecError::Remote(
-        crabka_pgwire::error::PgError::error("42809", format!("\"{}\" is a {kind}", relation.name))
+        krabka_pgwire::error::PgError::error("42809", format!("\"{}\" is a {kind}", relation.name))
             .with_detail(detail),
     )
 }
 
 fn relation_target(kv: &dyn Kv, name: &RelationName) -> Result<(u32, Option<Table>), ExecError> {
-    if let Ok(table) = crabka_pgcatalog::get_table(kv, name) {
+    if let Ok(table) = krabka_pgcatalog::get_table(kv, name) {
         return Ok((table.id, Some(table)));
     }
     let view_oids = crate::catalog_rel::view_oids(kv)?;
@@ -194,22 +194,22 @@ fn relation_target(kv: &dyn Kv, name: &RelationName) -> Result<(u32, Option<Tabl
         return Ok((u32::try_from(*oid).unwrap_or(0), None));
     }
     Err(ExecError::Catalog(
-        crabka_pgcatalog::CatalogError::UndefinedTable(name.to_string()),
+        krabka_pgcatalog::CatalogError::UndefinedTable(name.to_string()),
     ))
 }
 
 pub(crate) fn relation_trigger_table(kv: &dyn Kv, name: &RelationName) -> Result<Table, ExecError> {
-    if let Ok(table) = crabka_pgcatalog::get_table(kv, name) {
+    if let Ok(table) = krabka_pgcatalog::get_table(kv, name) {
         return Ok(table);
     }
-    let view = crabka_pgcatalog::get_view(kv, name)?;
+    let view = krabka_pgcatalog::get_view(kv, name)?;
     let id = crate::catalog_rel::view_oids(kv)?
         .get(name)
         .copied()
         .and_then(|oid| u32::try_from(oid).ok())
         .unwrap_or(0);
     Ok(Table {
-        owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+        owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
         id,
         name: view.name,
         columns: view.columns,
@@ -537,7 +537,7 @@ pub(crate) fn create(
     } else {
         Vec::new()
     };
-    let mut next_oid = crabka_pgcatalog::trigger::next_trigger_oid(kv)?;
+    let mut next_oid = krabka_pgcatalog::trigger::next_trigger_oid(kv)?;
     let mut allocated = false;
     if trigger.oid == 0 {
         trigger.oid = next_oid;
@@ -546,7 +546,7 @@ pub(crate) fn create(
     }
     let mut ops = put_trigger_ops(kv, &trigger)?;
     for descendant in descendants {
-        let child = crabka_pgcatalog::get_table(kv, &descendant)?;
+        let child = krabka_pgcatalog::get_table(kv, &descendant)?;
         let child_existing = get_trigger(kv, child.id, &trigger.name)?;
         if child_existing
             .as_ref()
@@ -576,7 +576,7 @@ pub(crate) fn create(
     if allocated {
         ops.insert(
             0,
-            crabka_pgcatalog::trigger::set_next_trigger_oid_op(next_oid),
+            krabka_pgcatalog::trigger::set_next_trigger_oid_op(next_oid),
         );
     }
     Ok(command("CREATE TRIGGER", ops))
@@ -743,7 +743,7 @@ fn trigger_descendants(
     roots: &std::collections::HashSet<u32>,
 ) -> Result<Vec<Trigger>, ExecError> {
     let mut parent_oids = roots.clone();
-    let mut remaining = crabka_pgcatalog::trigger::list_triggers(kv)?;
+    let mut remaining = krabka_pgcatalog::trigger::list_triggers(kv)?;
     let mut descendants = Vec::new();
     loop {
         let mut found = false;
@@ -781,8 +781,8 @@ fn map_event(value: parsed::EventTriggerEvent) -> EventTriggerEvent {
 /// because `create_event` is handed the role name rather than the context that
 /// method hangs off.
 fn acting_role(role: &str) -> &str {
-    if role == crabka_pgcatalog::PUBLIC_ROLE {
-        crabka_pgcatalog::BOOTSTRAP_ROLE
+    if role == krabka_pgcatalog::PUBLIC_ROLE {
+        krabka_pgcatalog::BOOTSTRAP_ROLE
     } else {
         role
     }
@@ -1031,12 +1031,12 @@ pub(crate) fn event_command_tag(stmt: &parsed::Statement) -> &'static str {
         Statement::DropTable { names, .. }
             if names
                 .first()
-                .is_some_and(|name| name.name.starts_with("__crabka_sequence__:")) =>
+                .is_some_and(|name| name.name.starts_with("__krabka_sequence__:")) =>
         {
             "DROP SEQUENCE"
         }
         Statement::DropTable { .. } => "DROP TABLE",
-        Statement::CreateIndex { table, .. } if table.name == "__crabka_sequence__" => {
+        Statement::CreateIndex { table, .. } if table.name == "__krabka_sequence__" => {
             "CREATE SEQUENCE"
         }
         Statement::CreateIndex { .. } => "CREATE INDEX",
@@ -1200,7 +1200,7 @@ pub(crate) fn event_trigger_context(
     };
     let mut objects = Vec::new();
     for (reference, object_type) in references {
-        let sequence = reference.name.strip_prefix("__crabka_sequence__:");
+        let sequence = reference.name.strip_prefix("__krabka_sequence__:");
         let lookup = sequence.map(|name| parsed::RelationRef {
             schema: reference.schema.clone(),
             name: name.to_string(),
@@ -1224,7 +1224,7 @@ pub(crate) fn event_trigger_context(
                 .copied()
                 .unwrap_or_default()
         } else {
-            let Ok(table) = crabka_pgcatalog::get_table(kv, &name) else {
+            let Ok(table) = krabka_pgcatalog::get_table(kv, &name) else {
                 continue;
             };
             crate::catalog_rel::table_relation_oid(table.id).unwrap_or_default()
@@ -1239,16 +1239,16 @@ pub(crate) fn event_trigger_context(
             object_id,
             object_sub_id: 0,
             object_type: object_type.to_string(),
-            schema_name: Some(crabka_pgcatalog::displayed_schema(&name.schema).to_string()),
+            schema_name: Some(krabka_pgcatalog::displayed_schema(&name.schema).to_string()),
             object_name: Some(object_name.to_string()),
             identity: format!(
                 "{}.{}",
-                crate::catalog_fn::quote_identifier(crabka_pgcatalog::displayed_schema(
+                crate::catalog_fn::quote_identifier(krabka_pgcatalog::displayed_schema(
                     &name.schema
                 )),
                 crate::catalog_fn::quote_identifier(object_name)
             ),
-            is_temporary: crabka_pgcatalog::is_temp_schema(&name.schema),
+            is_temporary: krabka_pgcatalog::is_temp_schema(&name.schema),
         });
     }
     if let parsed::Statement::DropTable { names, cascade, .. } = stmt {
@@ -1261,12 +1261,12 @@ pub(crate) fn event_trigger_context(
             ) else {
                 continue;
             };
-            let Ok(table) = crabka_pgcatalog::get_table(kv, &name) else {
+            let Ok(table) = krabka_pgcatalog::get_table(kv, &name) else {
                 continue;
             };
             append_table_drop_objects(kv, &table, &mut objects)?;
             for descendant in crate::partition::descendants(kv, &name)? {
-                if let Ok(table) = crabka_pgcatalog::get_table(kv, &descendant) {
+                if let Ok(table) = krabka_pgcatalog::get_table(kv, &descendant) {
                     append_relation_object(&table.name, table.id, "table", &mut objects);
                     append_table_drop_objects(kv, &table, &mut objects)?;
                 }
@@ -1283,7 +1283,7 @@ pub(crate) fn event_trigger_context(
                         append_trigger_objects(kv, u32::try_from(oid).unwrap_or(0), &mut objects)?;
                     }
                 }
-                for foreign_key in crabka_pgcatalog::list_referencing_foreign_keys(kv, table.id)? {
+                for foreign_key in krabka_pgcatalog::list_referencing_foreign_keys(kv, table.id)? {
                     append_foreign_key_object(&foreign_key, &mut objects)?;
                 }
             }
@@ -1321,14 +1321,14 @@ fn append_relation_object(
         object_id: i32::try_from(oid).unwrap_or(0),
         object_sub_id: 0,
         object_type: object_type.into(),
-        schema_name: Some(crabka_pgcatalog::displayed_schema(&name.schema).to_string()),
+        schema_name: Some(krabka_pgcatalog::displayed_schema(&name.schema).to_string()),
         object_name: Some(name.name.clone()),
         identity: format!(
             "{}.{}",
-            crate::catalog_fn::quote_identifier(crabka_pgcatalog::displayed_schema(&name.schema)),
+            crate::catalog_fn::quote_identifier(krabka_pgcatalog::displayed_schema(&name.schema)),
             crate::catalog_fn::quote_identifier(&name.name)
         ),
-        is_temporary: crabka_pgcatalog::is_temp_schema(&name.schema),
+        is_temporary: krabka_pgcatalog::is_temp_schema(&name.schema),
     });
 }
 
@@ -1337,32 +1337,32 @@ fn append_trigger_objects(
     table_id: u32,
     objects: &mut Vec<crate::clock::EventTriggerObject>,
 ) -> Result<(), ExecError> {
-    for trigger in crabka_pgcatalog::trigger::triggers_for_table(kv, table_id)? {
+    for trigger in krabka_pgcatalog::trigger::triggers_for_table(kv, table_id)? {
         objects.push(crate::clock::EventTriggerObject {
             class_id: crate::catalog_fn::PG_TRIGGER_OID,
             object_id: i32::try_from(trigger.oid).unwrap_or(0),
             object_sub_id: 0,
             object_type: "trigger".into(),
             schema_name: Some(
-                crabka_pgcatalog::displayed_schema(&trigger.table.schema).to_string(),
+                krabka_pgcatalog::displayed_schema(&trigger.table.schema).to_string(),
             ),
             object_name: Some(trigger.name.clone()),
             identity: format!(
                 "{} on {}.{}",
                 crate::catalog_fn::quote_identifier(&trigger.name),
-                crate::catalog_fn::quote_identifier(crabka_pgcatalog::displayed_schema(
+                crate::catalog_fn::quote_identifier(krabka_pgcatalog::displayed_schema(
                     &trigger.table.schema
                 )),
                 crate::catalog_fn::quote_identifier(&trigger.table.name)
             ),
-            is_temporary: crabka_pgcatalog::is_temp_schema(&trigger.table.schema),
+            is_temporary: krabka_pgcatalog::is_temp_schema(&trigger.table.schema),
         });
     }
     Ok(())
 }
 
 fn append_foreign_key_object(
-    foreign_key: &crabka_pgcatalog::ForeignKey,
+    foreign_key: &krabka_pgcatalog::ForeignKey,
     objects: &mut Vec<crate::clock::EventTriggerObject>,
 ) -> Result<(), ExecError> {
     objects.push(crate::clock::EventTriggerObject {
@@ -1371,18 +1371,18 @@ fn append_foreign_key_object(
         object_sub_id: 0,
         object_type: "table constraint".into(),
         schema_name: Some(
-            crabka_pgcatalog::displayed_schema(&foreign_key.table.schema).to_string(),
+            krabka_pgcatalog::displayed_schema(&foreign_key.table.schema).to_string(),
         ),
         object_name: Some(foreign_key.name.clone()),
         identity: format!(
             "{} on {}.{}",
             crate::catalog_fn::quote_identifier(&foreign_key.name),
-            crate::catalog_fn::quote_identifier(crabka_pgcatalog::displayed_schema(
+            crate::catalog_fn::quote_identifier(krabka_pgcatalog::displayed_schema(
                 &foreign_key.table.schema
             )),
             crate::catalog_fn::quote_identifier(&foreign_key.table.name)
         ),
-        is_temporary: crabka_pgcatalog::is_temp_schema(&foreign_key.table.schema),
+        is_temporary: krabka_pgcatalog::is_temp_schema(&foreign_key.table.schema),
     });
     Ok(())
 }
@@ -1393,7 +1393,7 @@ fn append_table_drop_objects(
     objects: &mut Vec<crate::clock::EventTriggerObject>,
 ) -> Result<(), ExecError> {
     append_trigger_objects(kv, table.id, objects)?;
-    for foreign_key in crabka_pgcatalog::list_table_foreign_keys(kv, table.id)? {
+    for foreign_key in krabka_pgcatalog::list_table_foreign_keys(kv, table.id)? {
         append_foreign_key_object(&foreign_key, objects)?;
     }
     Ok(())
@@ -1405,7 +1405,7 @@ pub(crate) fn matching_event_triggers(
     tag: &str,
     replication_role: &str,
 ) -> Result<Vec<EventTrigger>, ExecError> {
-    let mut triggers = crabka_pgcatalog::trigger::list_event_triggers(kv)?;
+    let mut triggers = krabka_pgcatalog::trigger::list_event_triggers(kv)?;
     triggers.retain(|trigger| {
         if trigger.event != event {
             return false;
@@ -1453,8 +1453,8 @@ pub(crate) fn event_invocation(trigger: &EventTrigger, tag: &str) -> TriggerInvo
         column_names: Vec::new(),
         column_types: Vec::new(),
         transitions: Vec::new(),
-        old: crabka_pgtypes::Datum::Null,
-        new: crabka_pgtypes::Datum::Null,
+        old: krabka_pgtypes::Datum::Null,
+        new: krabka_pgtypes::Datum::Null,
     }
 }
 
@@ -1495,7 +1495,7 @@ fn generated_column_depends_on(table: &Table, column: &str, updated: &[String]) 
         .iter()
         .find(|candidate| candidate.name == column)
         .and_then(|column| column.generated.as_ref())
-        .and_then(|generated| crabka_pgparser::parser::parse_expression(&generated.expr).ok())
+        .and_then(|generated| krabka_pgparser::parser::parse_expression(&generated.expr).ok())
     else {
         return false;
     };
@@ -1518,7 +1518,7 @@ pub(crate) fn has_instead_row_trigger(
     updated: &[String],
 ) -> Result<bool, ExecError> {
     Ok(
-        crabka_pgcatalog::trigger::triggers_for_table(kv, relation_id)?
+        krabka_pgcatalog::trigger::triggers_for_table(kv, relation_id)?
             .into_iter()
             .any(|trigger| {
                 trigger.timing == TriggerTiming::InsteadOf
@@ -1542,11 +1542,11 @@ fn trigger_is_enabled(trigger: &Trigger) -> bool {
     }
 }
 
-fn record(table: &Table, row: Option<&[crabka_pgtypes::Datum]>) -> crabka_pgtypes::Datum {
+fn record(table: &Table, row: Option<&[krabka_pgtypes::Datum]>) -> krabka_pgtypes::Datum {
     let Some(row) = row else {
-        return crabka_pgtypes::Datum::Null;
+        return krabka_pgtypes::Datum::Null;
     };
-    crabka_pgtypes::Datum::Record(crabka_pgtypes::RecordValue::named(
+    krabka_pgtypes::Datum::Record(krabka_pgtypes::RecordValue::named(
         None,
         std::sync::Arc::from(
             table
@@ -1562,28 +1562,28 @@ fn record(table: &Table, row: Option<&[crabka_pgtypes::Datum]>) -> crabka_pgtype
 fn when_matches(
     trigger: &Trigger,
     table: &Table,
-    old: Option<&[crabka_pgtypes::Datum]>,
-    new: Option<&[crabka_pgtypes::Datum]>,
+    old: Option<&[krabka_pgtypes::Datum]>,
+    new: Option<&[krabka_pgtypes::Datum]>,
     ctx: &crate::clock::EvalCtx,
 ) -> Result<bool, ExecError> {
     let Some(source) = &trigger.when else {
         return Ok(true);
     };
-    let expr = crabka_pgparser::parser::parse_expression(source)?;
+    let expr = krabka_pgparser::parser::parse_expression(source)?;
     let mut scope = crate::scope::Scope::single(table, "old");
     scope.push_tableoid("old");
     let mut new_scope = crate::scope::Scope::single(table, "new");
     new_scope.push_tableoid("new");
     scope.columns.extend(new_scope.columns);
-    let tableoid = crabka_pgtypes::Datum::Int4(crate::catalog_rel::table_relation_oid(table.id)?);
-    let nulls = vec![crabka_pgtypes::Datum::Null; table.columns.len()];
+    let tableoid = krabka_pgtypes::Datum::Int4(crate::catalog_rel::table_relation_oid(table.id)?);
+    let nulls = vec![krabka_pgtypes::Datum::Null; table.columns.len()];
     let mut values = old.unwrap_or(&nulls).to_vec();
     values.push(tableoid.clone());
     values.extend_from_slice(new.unwrap_or(&nulls));
     values.push(tableoid);
     Ok(matches!(
         crate::eval::eval(&expr, &scope, &values, ctx)?,
-        crabka_pgtypes::Datum::Bool(true)
+        krabka_pgtypes::Datum::Bool(true)
     ))
 }
 
@@ -1601,16 +1601,16 @@ fn invoke_catalog_trigger(
     trigger: &Trigger,
     table: &Table,
     event: DmlEvent,
-    old: Option<&[crabka_pgtypes::Datum]>,
-    new: Option<&[crabka_pgtypes::Datum]>,
-) -> Result<crabka_pgtypes::Datum, ExecError> {
+    old: Option<&[krabka_pgtypes::Datum]>,
+    new: Option<&[krabka_pgtypes::Datum]>,
+) -> Result<krabka_pgtypes::Datum, ExecError> {
     note_fired();
     if trigger
         .function
         .ends_with("suppress_redundant_updates_trigger")
     {
         return Ok(if old == new {
-            crabka_pgtypes::Datum::Null
+            krabka_pgtypes::Datum::Null
         } else {
             record(table, new)
         });
@@ -1678,9 +1678,9 @@ fn invoke_tsvector_update_trigger(
     trigger: &Trigger,
     table: &Table,
     event: DmlEvent,
-    new: Option<&[crabka_pgtypes::Datum]>,
-) -> Result<crabka_pgtypes::Datum, ExecError> {
-    use crabka_pgtypes::Datum;
+    new: Option<&[krabka_pgtypes::Datum]>,
+) -> Result<krabka_pgtypes::Datum, ExecError> {
+    use krabka_pgtypes::Datum;
 
     if trigger.timing != TriggerTiming::Before
         || trigger.level != TriggerLevel::Row
@@ -1708,7 +1708,7 @@ fn invoke_tsvector_update_trigger(
             .ok_or_else(|| trigger_error("42703", format!("column \"{name}\" does not exist")))
     };
     let target = column_index(&trigger.arguments[0])?;
-    if table.columns[target].ty != crabka_pgtypes::ColumnType::TsVector {
+    if table.columns[target].ty != krabka_pgtypes::ColumnType::TsVector {
         return Err(trigger_error(
             "42804",
             format!(
@@ -1769,8 +1769,8 @@ fn queue_catalog_trigger(
     trigger: &Trigger,
     table: &Table,
     event: DmlEvent,
-    old: Option<&[crabka_pgtypes::Datum]>,
-    new: Option<&[crabka_pgtypes::Datum]>,
+    old: Option<&[krabka_pgtypes::Datum]>,
+    new: Option<&[krabka_pgtypes::Datum]>,
 ) -> Result<(), ExecError> {
     note_fired();
     let invocation = TriggerInvocation {
@@ -1863,7 +1863,7 @@ pub(crate) struct WriteTarget<'a> {
 /// here rather than relying on the write path never to have computed the value
 /// makes the rule hold for a statement that DOES name the column in its own
 /// `WHERE`, which materializes it into the very row `OLD` is taken from.
-fn blank_virtual_generated(table: &Table, image: &mut [crabka_pgtypes::Datum]) {
+fn blank_virtual_generated(table: &Table, image: &mut [krabka_pgtypes::Datum]) {
     for (index, _) in table
         .columns
         .iter()
@@ -1871,7 +1871,7 @@ fn blank_virtual_generated(table: &Table, image: &mut [crabka_pgtypes::Datum]) {
         .filter(|(_, column)| column.is_virtual_generated())
     {
         if let Some(slot) = image.get_mut(index) {
-            *slot = crabka_pgtypes::Datum::Null;
+            *slot = krabka_pgtypes::Datum::Null;
         }
     }
 }
@@ -1889,7 +1889,7 @@ fn blank_virtual_generated(table: &Table, image: &mut [crabka_pgtypes::Datum]) {
 /// survives to the next trigger — `PostgreSQL` prints it — and is discarded by
 /// the settle rather than between triggers. A `VIRTUAL` column is the one
 /// upstream re-blanks after every trigger; see [`blank_virtual_generated`].
-fn blank_generated(table: &Table, image: &mut [crabka_pgtypes::Datum]) {
+fn blank_generated(table: &Table, image: &mut [krabka_pgtypes::Datum]) {
     for (index, _) in table
         .columns
         .iter()
@@ -1897,7 +1897,7 @@ fn blank_generated(table: &Table, image: &mut [crabka_pgtypes::Datum]) {
         .filter(|(_, column)| column.generated.is_some())
     {
         if let Some(slot) = image.get_mut(index) {
-            *slot = crabka_pgtypes::Datum::Null;
+            *slot = krabka_pgtypes::Datum::Null;
         }
     }
 }
@@ -1906,8 +1906,8 @@ fn blank_generated(table: &Table, image: &mut [crabka_pgtypes::Datum]) {
 /// the relation has a virtual generated column to blank.
 fn trigger_image<'a>(
     table: &Table,
-    image: Option<&'a [crabka_pgtypes::Datum]>,
-) -> Option<std::borrow::Cow<'a, [crabka_pgtypes::Datum]>> {
+    image: Option<&'a [krabka_pgtypes::Datum]>,
+) -> Option<std::borrow::Cow<'a, [krabka_pgtypes::Datum]>> {
     let image = image?;
     if !crate::exec::has_virtual_generated(table) {
         return Some(std::borrow::Cow::Borrowed(image));
@@ -1947,17 +1947,17 @@ pub(crate) fn fire_before_row(
     target: WriteTarget<'_>,
     event: DmlEvent,
     updated: &[String],
-    old: Option<&[crabka_pgtypes::Datum]>,
-    mut new: Option<Vec<crabka_pgtypes::Datum>>,
+    old: Option<&[krabka_pgtypes::Datum]>,
+    mut new: Option<Vec<krabka_pgtypes::Datum>>,
     ctx: &crate::clock::EvalCtx,
-) -> Result<Option<Vec<crabka_pgtypes::Datum>>, ExecError> {
+) -> Result<Option<Vec<krabka_pgtypes::Datum>>, ExecError> {
     let WriteTarget { table, check } = target;
     let old_image = trigger_image(table, old);
     let old = old_image.as_deref();
     if let Some(image) = new.as_mut() {
         blank_generated(table, image);
     }
-    for trigger in crabka_pgcatalog::trigger::triggers_for_table(kv, table.id)? {
+    for trigger in krabka_pgcatalog::trigger::triggers_for_table(kv, table.id)? {
         if trigger.timing != TriggerTiming::Before
             || trigger.level != TriggerLevel::Row
             || !trigger_matches_event(&trigger, Some(table), event, updated)
@@ -1968,8 +1968,8 @@ pub(crate) fn fire_before_row(
         }
         let result = invoke_catalog_trigger(kv, &trigger, table, event, old, new.as_deref())?;
         match result {
-            crabka_pgtypes::Datum::Null => return Ok(None),
-            crabka_pgtypes::Datum::Record(record) => {
+            krabka_pgtypes::Datum::Null => return Ok(None),
+            krabka_pgtypes::Datum::Record(record) => {
                 if record.values.len() != table.columns.len() {
                     return Err(trigger_error(
                         "42804",
@@ -2016,10 +2016,10 @@ pub(crate) fn fire_instead_row(
     view: &Table,
     event: DmlEvent,
     updated: &[String],
-    old: Option<&[crabka_pgtypes::Datum]>,
-    new: Option<Vec<crabka_pgtypes::Datum>>,
+    old: Option<&[krabka_pgtypes::Datum]>,
+    new: Option<Vec<krabka_pgtypes::Datum>>,
     _ctx: &crate::clock::EvalCtx,
-) -> Result<Option<Vec<crabka_pgtypes::Datum>>, ExecError> {
+) -> Result<Option<Vec<krabka_pgtypes::Datum>>, ExecError> {
     if !has_instead_row_trigger(kv, view.id, event, updated)? {
         return Err(ExecError::ObjectNotInPrerequisiteState(format!(
             "cannot {} view \"{}\" because it has no INSTEAD OF trigger",
@@ -2032,7 +2032,7 @@ pub(crate) fn fire_instead_row(
     } else {
         new
     };
-    for trigger in crabka_pgcatalog::trigger::triggers_for_table(kv, view.id)? {
+    for trigger in krabka_pgcatalog::trigger::triggers_for_table(kv, view.id)? {
         if trigger.timing == TriggerTiming::InsteadOf
             && trigger.level == TriggerLevel::Row
             && trigger_matches_event(&trigger, None, event, updated)
@@ -2043,8 +2043,8 @@ pub(crate) fn fire_instead_row(
                 .flatten();
             let datum = invoke_catalog_trigger(kv, &trigger, view, event, old, invocation_new)?;
             result = match datum {
-                crabka_pgtypes::Datum::Null => None,
-                crabka_pgtypes::Datum::Record(record)
+                krabka_pgtypes::Datum::Null => None,
+                krabka_pgtypes::Datum::Record(record)
                     if record.values.len() == view.columns.len() =>
                 {
                     Some(record.values)
@@ -2069,8 +2069,8 @@ pub(crate) fn fire_after_row(
     table: &Table,
     event: DmlEvent,
     updated: &[String],
-    old: Option<&[crabka_pgtypes::Datum]>,
-    new: Option<&[crabka_pgtypes::Datum]>,
+    old: Option<&[krabka_pgtypes::Datum]>,
+    new: Option<&[krabka_pgtypes::Datum]>,
     ctx: &crate::clock::EvalCtx,
 ) -> Result<(), ExecError> {
     let old_image = trigger_image(table, old);
@@ -2088,8 +2088,8 @@ pub(crate) fn fire_after_row(
     let mut seen = std::collections::HashSet::new();
     let mut pending = vec![(
         table.clone(),
-        old.map(<[crabka_pgtypes::Datum]>::to_vec),
-        new.map(<[crabka_pgtypes::Datum]>::to_vec),
+        old.map(<[krabka_pgtypes::Datum]>::to_vec),
+        new.map(<[krabka_pgtypes::Datum]>::to_vec),
     )];
     while let Some((relation, transition_old, transition_new)) = pending.pop() {
         if !seen.insert(relation.id) {
@@ -2107,18 +2107,18 @@ pub(crate) fn fire_after_row(
         }
         ancestors.extend(crate::inheritance::parents_of(kv, &relation.name)?);
         for parent_name in ancestors {
-            let parent = crabka_pgcatalog::get_table(kv, &parent_name)?;
+            let parent = krabka_pgcatalog::get_table(kv, &parent_name)?;
             // The ancestor's columns, read out of this relation's row by name:
             // a child may store them in a different order and may add its own,
             // and the ancestor's transition table shows neither.
             let ordinals = crate::exec::column_mapping(&parent, &relation)?;
-            let reshape = |row: &Vec<crabka_pgtypes::Datum>| {
+            let reshape = |row: &Vec<krabka_pgtypes::Datum>| {
                 ordinals
                     .iter()
                     .map(|ordinal| {
                         row.get(*ordinal)
                             .cloned()
-                            .unwrap_or(crabka_pgtypes::Datum::Null)
+                            .unwrap_or(krabka_pgtypes::Datum::Null)
                     })
                     .collect()
             };
@@ -2134,7 +2134,7 @@ pub(crate) fn fire_after_row(
             changes.extend(recorded);
         }
     });
-    for trigger in crabka_pgcatalog::trigger::triggers_for_table(kv, table.id)? {
+    for trigger in krabka_pgcatalog::trigger::triggers_for_table(kv, table.id)? {
         if trigger.timing == TriggerTiming::After
             && trigger.level == TriggerLevel::Row
             && trigger_matches_event(&trigger, Some(table), event, updated)
@@ -2161,7 +2161,7 @@ pub(crate) fn fire_statement(
     // per call would outnumber the statements it describes.
     let mut span = tracing::Span::none();
     let mut fired = 0usize;
-    for trigger in crabka_pgcatalog::trigger::triggers_for_table(kv, table.id)? {
+    for trigger in krabka_pgcatalog::trigger::triggers_for_table(kv, table.id)? {
         if trigger.timing == timing
             && trigger.level == TriggerLevel::Statement
             && trigger_matches_event(&trigger, Some(table), event, updated)
@@ -2215,7 +2215,7 @@ pub(crate) fn clone_partition_triggers(
     parent: &Table,
     child: &RelationName,
 ) -> Result<Vec<WriteOp>, ExecError> {
-    let sources = crabka_pgcatalog::trigger::triggers_for_table(kv, parent.id)?;
+    let sources = krabka_pgcatalog::trigger::triggers_for_table(kv, parent.id)?;
     let sources = sources
         .into_iter()
         .filter(|trigger| trigger.level == TriggerLevel::Row)
@@ -2225,10 +2225,10 @@ pub(crate) fn clone_partition_triggers(
     }
     let mut relations = vec![child.clone()];
     relations.extend(crate::partition::descendants(kv, child)?);
-    let mut next_oid = crabka_pgcatalog::trigger::next_trigger_oid(kv)?;
+    let mut next_oid = krabka_pgcatalog::trigger::next_trigger_oid(kv)?;
     let mut ops = Vec::new();
     for relation in relations {
-        let table = crabka_pgcatalog::get_table(kv, &relation)?;
+        let table = krabka_pgcatalog::get_table(kv, &relation)?;
         for source in &sources {
             if let Some(existing) = get_trigger(kv, table.id, &source.name)? {
                 if existing.parent_oid != source.oid {
@@ -2251,7 +2251,7 @@ pub(crate) fn clone_partition_triggers(
     if !ops.is_empty() {
         ops.insert(
             0,
-            crabka_pgcatalog::trigger::set_next_trigger_oid_op(next_oid),
+            krabka_pgcatalog::trigger::set_next_trigger_oid_op(next_oid),
         );
     }
     Ok(ops)
@@ -2262,8 +2262,8 @@ pub(crate) fn clone_new_partition_triggers(
     parent: &Table,
     child: &Table,
 ) -> Result<Vec<WriteOp>, ExecError> {
-    let sources = crabka_pgcatalog::trigger::triggers_for_table(kv, parent.id)?;
-    let mut next_oid = crabka_pgcatalog::trigger::next_trigger_oid(kv)?;
+    let sources = krabka_pgcatalog::trigger::triggers_for_table(kv, parent.id)?;
+    let mut next_oid = krabka_pgcatalog::trigger::next_trigger_oid(kv)?;
     let mut ops = Vec::new();
     for source in sources
         .into_iter()
@@ -2280,7 +2280,7 @@ pub(crate) fn clone_new_partition_triggers(
     if !ops.is_empty() {
         ops.insert(
             0,
-            crabka_pgcatalog::trigger::set_next_trigger_oid_op(next_oid),
+            krabka_pgcatalog::trigger::set_next_trigger_oid_op(next_oid),
         );
     }
     Ok(ops)
@@ -2292,7 +2292,7 @@ pub(crate) fn drop_partition_trigger_clones(
     child: &RelationName,
 ) -> Result<Vec<WriteOp>, ExecError> {
     let parent_oids: std::collections::HashSet<u32> =
-        crabka_pgcatalog::trigger::triggers_for_table(kv, parent.id)?
+        krabka_pgcatalog::trigger::triggers_for_table(kv, parent.id)?
             .into_iter()
             .map(|trigger| trigger.oid)
             .collect();
@@ -2300,8 +2300,8 @@ pub(crate) fn drop_partition_trigger_clones(
     relations.extend(crate::partition::descendants(kv, child)?);
     let mut ops = Vec::new();
     for relation in relations {
-        let table = crabka_pgcatalog::get_table(kv, &relation)?;
-        for trigger in crabka_pgcatalog::trigger::triggers_for_table(kv, table.id)? {
+        let table = krabka_pgcatalog::get_table(kv, &relation)?;
+        for trigger in krabka_pgcatalog::trigger::triggers_for_table(kv, table.id)? {
             if parent_oids.contains(&trigger.parent_oid) {
                 ops.extend(drop_trigger_ops(table.id, &trigger.name));
             }
@@ -2318,14 +2318,14 @@ pub(crate) fn set_table_trigger_mode(
 ) -> Result<Vec<WriteOp>, ExecError> {
     if matches!(selector, parsed::TriggerSelector::All)
         && mode == parsed::TriggerEnableMode::Disabled
-        && (!crabka_pgcatalog::list_table_foreign_keys(kv, table.id)?.is_empty()
-            || !crabka_pgcatalog::list_referencing_foreign_keys(kv, table.id)?.is_empty())
+        && (!krabka_pgcatalog::list_table_foreign_keys(kv, table.id)?.is_empty()
+            || !krabka_pgcatalog::list_referencing_foreign_keys(kv, table.id)?.is_empty())
     {
         return Err(ExecError::Unsupported(
             "DISABLE TRIGGER ALL is not supported on tables with foreign keys".into(),
         ));
     }
-    let mut triggers = crabka_pgcatalog::trigger::triggers_for_table(kv, table.id)?;
+    let mut triggers = krabka_pgcatalog::trigger::triggers_for_table(kv, table.id)?;
     let matched = triggers.iter().any(|trigger| match selector {
         parsed::TriggerSelector::Named(name) => trigger.name == *name,
         parsed::TriggerSelector::All => true,

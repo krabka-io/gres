@@ -2,26 +2,26 @@
 
 use std::{collections::BTreeSet, sync::Arc};
 
-use crabka_client_admin::AdminClient;
-use crabka_client_core::{
+use krabka_client_admin::AdminClient;
+use krabka_client_core::{
     ClientDnsTimeout, ClientFrameMax, Connection, ConnectionDispatchQueueCapacity,
     ConnectionOptions, FetchMinBytes, IsolatedFetch, fetch_partition_with_isolation_progress,
     security::ClientSecurity,
 };
-use crabka_client_producer::{
+use krabka_client_producer::{
     Acks, Producer, ProducerFlushTimeout, ProducerRetryPolicy, ProducerThroughputPolicy,
 };
-use crabka_gres_ranges::{RangeId, TenantName};
-use crabka_pgkv::{Kv, RestoreKv};
-use crabka_protocol::{
+use krabka_gres_ranges::{RangeId, TenantName};
+use krabka_pgkv::{Kv, RestoreKv};
+use krabka_protocol::{
     owned::{
         fetch_request::{FetchPartition, FetchRequest, FetchTopic},
         fetch_response::FetchResponse,
     },
     primitives::uuid::Uuid as WireUuid,
 };
-use crabka_trace_context::TraceCarrier;
-use crabka_units::{
+use krabka_trace_context::TraceCarrier;
+use krabka_units::{
     ByteSize, Time,
     convert::{ByteSizeExt as _, TimeExt as _},
     fmt::Human as _,
@@ -56,7 +56,7 @@ pub const DEFAULT_WAL_RECOVERY_FETCH_MAX_WAIT: Time = millis(100);
 pub const DEFAULT_WAL_RECOVERY_FETCH_PARTITION_MAX: ByteSize = mebibytes(1);
 /// Default whole-response byte limit for committed-WAL recovery fetches.
 ///
-/// Mirrors [`crabka_client_core::DEFAULT_FETCH_RESPONSE_MAX`], which is the
+/// Mirrors [`krabka_client_core::DEFAULT_FETCH_RESPONSE_MAX`], which is the
 /// raw `int32` that the client crate sends on the wire.
 /// `recovery_read_policy_mirrors_the_client_response_limit` keeps the two equal.
 pub const DEFAULT_WAL_RECOVERY_FETCH_RESPONSE_MAX: ByteSize = mebibytes(50);
@@ -496,7 +496,7 @@ impl LiveRecoveryConfig {
     }
 
     fn client_id(&self) -> String {
-        format!("crabka-gres-{}-r{}", self.tenant, self.range)
+        format!("krabka-gres-{}-r{}", self.tenant, self.range)
     }
 }
 
@@ -624,7 +624,7 @@ impl CommittedEndDialer for LiveEndDialer {
         let connection = open_wal_connection(
             &bootstrap_addrs,
             self.config.security.clone(),
-            "crabka-gres-substrate-end-sample",
+            "krabka-gres-substrate-end-sample",
             self.config.read_policy,
             self.config.dispatch_queue_capacity,
             self.config.frame_max,
@@ -738,7 +738,7 @@ pub async fn live_wal_trimmed_past_applied(
 /// covers the retained WAL, or when the rebuild does not advance the tail.
 pub async fn rebuild_live_range0_tail_from_checkpoint(
     config: &LiveRecoveryConfig,
-    tail: &crabka_gres_ranges::Range0Tail,
+    tail: &krabka_gres_ranges::Range0Tail,
     fresh_store: Arc<dyn RestoreKv>,
     checkpoints: Option<&dyn CheckpointStore>,
 ) -> Result<i64, SubstrateError> {
@@ -934,7 +934,7 @@ fn parse_bootstrap_addrs(bootstrap: &str) -> Result<Vec<String>, SubstrateError>
 
 fn wal_admin_connection_options(config: &LiveRecoveryConfig) -> ConnectionOptions {
     ConnectionOptions {
-        dns_timeout: crabka_client_core::ClientDnsTimeout::default(),
+        dns_timeout: krabka_client_core::ClientDnsTimeout::default(),
         client_id: config.client_id(),
         connect_timeout: config.wal_admin_policy.connect_timeout(),
         request_timeout: config.wal_admin_policy.request_timeout(),
@@ -1032,7 +1032,7 @@ impl KafkaCommittedWalReader {
         open_wal_connection(
             &self.bootstrap_addrs,
             self.security.clone(),
-            "crabka-gres-substrate-replay",
+            "krabka-gres-substrate-replay",
             self.read_policy,
             self.dispatch_queue_capacity,
             self.frame_max,
@@ -1049,7 +1049,7 @@ fn wal_connection_options(
     frame_max: ClientFrameMax,
 ) -> ConnectionOptions {
     ConnectionOptions {
-        dns_timeout: crabka_client_core::ClientDnsTimeout::default(),
+        dns_timeout: krabka_client_core::ClientDnsTimeout::default(),
         client_id: client_id.to_string(),
         connect_timeout: read_policy.connect_timeout(),
         request_timeout: read_policy.request_timeout(),
@@ -1406,7 +1406,7 @@ fn decode_fetch_response(
 }
 
 fn decode_replay_items(
-    partition: &crabka_protocol::owned::fetch_response::PartitionData,
+    partition: &krabka_protocol::owned::fetch_response::PartitionData,
 ) -> (Vec<ReplayItem>, i64) {
     let Some(payload) = &partition.records else {
         return (Vec::new(), partition.log_start_offset.max(0));
@@ -1866,7 +1866,7 @@ impl CommittedWalReader for InMemoryWalLog {
 impl CheckpointWalPruner for InMemoryWalLog {
     async fn delete_records(
         &self,
-        ops: &[crabka_client_admin::DeleteRecordsOp],
+        ops: &[krabka_client_admin::DeleteRecordsOp],
     ) -> Result<(), SubstrateError> {
         let mut state = self.state.lock().await;
         for op in ops {
@@ -1916,10 +1916,10 @@ mod tests {
     };
 
     use assert2::assert;
-    use crabka_gres_ranges::{RangeId, TenantName};
-    use crabka_pgkv::{Kv, KvError, MemKv, WriteOp, key};
-    use crabka_pgmvcc::clog;
-    use crabka_protocol::owned::fetch_response::{FetchableTopicResponse, PartitionData};
+    use krabka_gres_ranges::{RangeId, TenantName};
+    use krabka_pgkv::{Kv, KvError, MemKv, WriteOp, key};
+    use krabka_pgmvcc::clog;
+    use krabka_protocol::owned::fetch_response::{FetchableTopicResponse, PartitionData};
 
     use super::*;
     use crate::checkpoint::{
@@ -1981,7 +1981,7 @@ mod tests {
     fn recovery_read_policy_mirrors_the_client_response_limit() {
         assert!(
             DEFAULT_WAL_RECOVERY_FETCH_RESPONSE_MAX
-                == crabka_client_core::DEFAULT_FETCH_RESPONSE_MAX
+                == krabka_client_core::DEFAULT_FETCH_RESPONSE_MAX
         );
     }
 
@@ -1995,8 +1995,8 @@ mod tests {
 
         let policy = RecoveryReadPolicy::new(
             millis(11),
-            crabka_units::bytes(22),
-            crabka_units::bytes(33),
+            krabka_units::bytes(22),
+            krabka_units::bytes(33),
             44,
         )
         .expect("valid policy")
@@ -2014,26 +2014,26 @@ mod tests {
     #[test]
     fn recovery_read_policy_rejects_zero_values() {
         assert!(
-            RecoveryReadPolicy::new(millis(0), crabka_units::bytes(2), crabka_units::bytes(3), 4,)
+            RecoveryReadPolicy::new(millis(0), krabka_units::bytes(2), krabka_units::bytes(3), 4,)
                 .is_err()
         );
         assert!(
-            RecoveryReadPolicy::new(millis(1), crabka_units::bytes(0), crabka_units::bytes(3), 4,)
+            RecoveryReadPolicy::new(millis(1), krabka_units::bytes(0), krabka_units::bytes(3), 4,)
                 .is_err()
         );
         assert!(
-            RecoveryReadPolicy::new(millis(1), crabka_units::bytes(2), crabka_units::bytes(0), 4,)
+            RecoveryReadPolicy::new(millis(1), krabka_units::bytes(2), krabka_units::bytes(0), 4,)
                 .is_err()
         );
         assert!(
-            RecoveryReadPolicy::new(millis(1), crabka_units::bytes(2), crabka_units::bytes(3), 0,)
+            RecoveryReadPolicy::new(millis(1), krabka_units::bytes(2), krabka_units::bytes(3), 0,)
                 .is_err()
         );
         assert!(
             RecoveryReadPolicy::new(
                 Time::from_micros(500),
-                crabka_units::bytes(2),
-                crabka_units::bytes(3),
+                krabka_units::bytes(2),
+                krabka_units::bytes(3),
                 4,
             )
             .is_err()
@@ -2042,7 +2042,7 @@ mod tests {
             RecoveryReadPolicy::new(
                 millis(1),
                 ByteSize::from_bytes(i32::MAX as u64 + 1),
-                crabka_units::bytes(3),
+                krabka_units::bytes(3),
                 4,
             )
             .is_err()
@@ -2053,15 +2053,15 @@ mod tests {
     fn recovery_read_policy_preserves_valid_values() {
         let policy = RecoveryReadPolicy::new(
             millis(11),
-            crabka_units::bytes(22),
-            crabka_units::bytes(33),
+            krabka_units::bytes(22),
+            krabka_units::bytes(33),
             44,
         )
         .expect("valid policy");
 
         assert!(policy.fetch_max_wait() == millis(11));
-        assert!(policy.fetch_partition_max() == crabka_units::bytes(22));
-        assert!(policy.fetch_response_max() == crabka_units::bytes(33));
+        assert!(policy.fetch_partition_max() == krabka_units::bytes(22));
+        assert!(policy.fetch_response_max() == krabka_units::bytes(33));
         assert!(policy.empty_fetch_retries() == 44);
     }
 
@@ -2077,8 +2077,8 @@ mod tests {
     fn recovery_read_policy_replaces_timeouts_without_changing_fetch_limits() {
         let policy = RecoveryReadPolicy::new(
             millis(11),
-            crabka_units::bytes(22),
-            crabka_units::bytes(33),
+            krabka_units::bytes(22),
+            krabka_units::bytes(33),
             44,
         )
         .expect("valid policy")
@@ -2086,8 +2086,8 @@ mod tests {
         .expect("valid timeouts");
 
         assert!(policy.fetch_max_wait() == millis(11));
-        assert!(policy.fetch_partition_max() == crabka_units::bytes(22));
-        assert!(policy.fetch_response_max() == crabka_units::bytes(33));
+        assert!(policy.fetch_partition_max() == krabka_units::bytes(22));
+        assert!(policy.fetch_response_max() == krabka_units::bytes(33));
         assert!(policy.empty_fetch_retries() == 44);
         assert!(policy.connect_timeout() == millis(55));
         assert!(policy.request_timeout() == millis(66));
@@ -2155,7 +2155,7 @@ mod tests {
     #[test]
     fn recovery_read_policy_builds_exact_wal_connection_options() {
         let security = ClientSecurity {
-            protocol: crabka_security::ListenerProtocol::Plaintext,
+            protocol: krabka_security::ListenerProtocol::Plaintext,
             tls: None,
             sasl: None,
             sasl_host: Some("broker.internal".into()),
@@ -2164,7 +2164,7 @@ mod tests {
             .with_timeouts(millis(77), millis(88))
             .expect("valid timeouts");
         let dispatch = ConnectionDispatchQueueCapacity::new(7).unwrap();
-        let frame_max = ClientFrameMax::try_from(crabka_units::kibibytes(32)).unwrap();
+        let frame_max = ClientFrameMax::try_from(krabka_units::kibibytes(32)).unwrap();
         let options =
             wal_connection_options("replay-client", Some(security), policy, dispatch, frame_max);
 
@@ -2174,7 +2174,7 @@ mod tests {
         assert!(options.dispatch_queue_capacity == dispatch);
         assert!(options.frame_max == frame_max);
         let security = options.security.expect("security");
-        assert!(security.protocol == crabka_security::ListenerProtocol::Plaintext);
+        assert!(security.protocol == krabka_security::ListenerProtocol::Plaintext);
         assert!(security.sasl_host.as_deref() == Some("broker.internal"));
     }
 
@@ -2186,8 +2186,8 @@ mod tests {
 
         let replacement = RecoveryReadPolicy::new(
             millis(11),
-            crabka_units::bytes(22),
-            crabka_units::bytes(33),
+            krabka_units::bytes(22),
+            krabka_units::bytes(33),
             44,
         )
         .expect("valid policy");
@@ -2198,8 +2198,8 @@ mod tests {
     fn client_resource_policy_defaults_and_replaces_in_live_config() {
         let tenant = TenantName::parse("tenant-a").expect("tenant");
         let dispatch = ConnectionDispatchQueueCapacity::new(7).unwrap();
-        let frame_max = ClientFrameMax::try_from(crabka_units::kibibytes(32)).unwrap();
-        let fetch_min = FetchMinBytes::try_from(crabka_units::bytes(9)).unwrap();
+        let frame_max = ClientFrameMax::try_from(krabka_units::kibibytes(32)).unwrap();
+        let fetch_min = FetchMinBytes::try_from(krabka_units::bytes(9)).unwrap();
         let config = LiveRecoveryConfig::new("localhost:9092", tenant, RangeId::COORDINATOR, None)
             .with_client_resource_policy(dispatch, frame_max, fetch_min);
 
@@ -2229,10 +2229,10 @@ mod tests {
             LiveRecoveryConfig::new("localhost:9092", tenant.clone(), RangeId::new(7), None);
         assert_eq!(
             config.producer_retry_policy(),
-            crabka_client_producer::ProducerRetryPolicy::default()
+            krabka_client_producer::ProducerRetryPolicy::default()
         );
 
-        let replacement = crabka_client_producer::ProducerRetryPolicy::new(
+        let replacement = krabka_client_producer::ProducerRetryPolicy::new(
             Duration::from_millis(31),
             32,
             Duration::from_millis(33),
@@ -2256,11 +2256,11 @@ mod tests {
         let config = LiveRecoveryConfig::new("localhost:9092", tenant, RangeId::new(7), None);
         assert_eq!(
             config.producer_dns_timeout(),
-            crabka_client_core::ClientDnsTimeout::default()
+            krabka_client_core::ClientDnsTimeout::default()
         );
 
         let replacement =
-            crabka_client_core::ClientDnsTimeout::new(millis(37)).expect("valid DNS timeout");
+            krabka_client_core::ClientDnsTimeout::new(millis(37)).expect("valid DNS timeout");
         assert_eq!(
             config
                 .with_producer_dns_timeout(replacement)
@@ -2276,16 +2276,16 @@ mod tests {
             LiveRecoveryConfig::new("localhost:9092", tenant.clone(), RangeId::new(7), None);
         assert_eq!(
             config.producer_flush_timeout(),
-            crabka_client_producer::ProducerFlushTimeout::default()
+            krabka_client_producer::ProducerFlushTimeout::default()
         );
         assert_eq!(
             config.producer_flush_timeout().duration(),
-            crabka_client_producer::DEFAULT_PRODUCER_FLUSH_TIMEOUT
+            krabka_client_producer::DEFAULT_PRODUCER_FLUSH_TIMEOUT
         );
         assert_eq!(config.producer_flush_timeout().milliseconds(), 50_000);
 
         let replacement =
-            crabka_client_producer::ProducerFlushTimeout::new(Duration::from_millis(31))
+            krabka_client_producer::ProducerFlushTimeout::new(Duration::from_millis(31))
                 .expect("valid timeout");
         assert_eq!(
             LiveRecoveryConfig::new("localhost:9092", tenant, RangeId::new(7), None)
@@ -2312,14 +2312,14 @@ mod tests {
             LiveRecoveryConfig::new("localhost:9092", tenant.clone(), RangeId::new(7), None);
         assert_eq!(
             config.producer_throughput_policy(),
-            crabka_client_producer::ProducerThroughputPolicy::default()
+            krabka_client_producer::ProducerThroughputPolicy::default()
         );
 
-        let replacement = crabka_client_producer::ProducerThroughputPolicy::new(
-            crabka_client_producer::Compression::Zstd,
+        let replacement = krabka_client_producer::ProducerThroughputPolicy::new(
+            krabka_client_producer::Compression::Zstd,
             Duration::from_millis(38),
             39,
-            crabka_client_producer::DEFAULT_PRODUCER_MAX_IN_FLIGHT,
+            krabka_client_producer::DEFAULT_PRODUCER_MAX_IN_FLIGHT,
         )
         .expect("valid policy");
         assert_eq!(
@@ -2352,7 +2352,7 @@ mod tests {
     #[test]
     fn wal_admin_policy_builds_exact_connection_options() {
         let security = ClientSecurity {
-            protocol: crabka_security::ListenerProtocol::Plaintext,
+            protocol: krabka_security::ListenerProtocol::Plaintext,
             tls: None,
             sasl: None,
             sasl_host: Some("broker.internal".into()),
@@ -2366,7 +2366,7 @@ mod tests {
 
         let options = wal_admin_connection_options(&config);
 
-        assert!(options.client_id == "crabka-gres-tenant-a-r7");
+        assert!(options.client_id == "krabka-gres-tenant-a-r7");
         assert!(options.connect_timeout == millis(33));
         assert!(options.request_timeout == millis(44));
         assert!(
@@ -2378,8 +2378,8 @@ mod tests {
     fn recovery_read_policy_wires_normal_fetch_settings() {
         let policy = RecoveryReadPolicy::new(
             millis(11),
-            crabka_units::bytes(22),
-            crabka_units::bytes(33),
+            krabka_units::bytes(22),
+            krabka_units::bytes(33),
             44,
         )
         .expect("valid policy");
@@ -2392,16 +2392,16 @@ mod tests {
         );
 
         assert!(fetch.max_wait == millis(11));
-        assert!(fetch.partition_max == crabka_units::bytes(22));
-        assert!(fetch.max == crabka_units::bytes(33));
+        assert!(fetch.partition_max == krabka_units::bytes(22));
+        assert!(fetch.max == krabka_units::bytes(33));
     }
 
     #[test]
     fn recovery_read_policy_keeps_end_sample_zero_wait() {
         let policy = RecoveryReadPolicy::new(
             millis(11),
-            crabka_units::bytes(22),
-            crabka_units::bytes(33),
+            krabka_units::bytes(22),
+            krabka_units::bytes(33),
             44,
         )
         .expect("valid policy");
@@ -2483,7 +2483,7 @@ mod tests {
     fn fetch_request_carries_the_requested_wait_and_committed_isolation() {
         let topic_id = WireUuid([7_u8; 16]);
         let policy = RecoveryReadPolicy::default();
-        let fetch_min = FetchMinBytes::try_from(crabka_units::bytes(9)).unwrap();
+        let fetch_min = FetchMinBytes::try_from(krabka_units::bytes(9)).unwrap();
         let request = build_fetch_request("__gres_wal.t.r0", topic_id, 42, 250, policy, fetch_min);
 
         assert!(request.max_wait_ms == 250);

@@ -1,14 +1,14 @@
-# crabka-metrics Slice 4 — Ingest service (remote_write v1/v2 + OTLP + distributor + WAL + compactor)
+# krabka-metrics Slice 4 — Ingest service (remote_write v1/v2 + OTLP + distributor + WAL + compactor)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the three ingest doors of the metrics backend — remote_write v1/v2 + OTLP metrics — landing in a Kafka WAL topic via the **distributor** role (validate → HA-dedup → produce), and the **compactor** role that consumes the WAL topic, groups by `(tenant, fingerprint)`, builds Arrow blocks via Slice-1 codecs, and writes them to `crabka-blockstore`. Ship a role-selectable `crabka-metrics --target distributor|compactor` binary.
+**Goal:** Build the three ingest doors of the metrics backend — remote_write v1/v2 + OTLP metrics — landing in a Kafka WAL topic via the **distributor** role (validate → HA-dedup → produce), and the **compactor** role that consumes the WAL topic, groups by `(tenant, fingerprint)`, builds Arrow blocks via Slice-1 codecs, and writes them to `krabka-blockstore`. Ship a role-selectable `krabka-metrics --target distributor|compactor` binary.
 
-**Architecture:** This slice adds the `wire`, `otlp`, `wal`, `distributor`, and `compactor` modules to the `crabka-metrics` crate built in Slice 1. The `wire` module owns the remote_write v1/v2 protobuf types (prost-generated from vendored `.proto`) + content negotiation + the wire-`Histogram` → `NativeHistogram` decode (integer-histogram **delta-decode to absolute**; this is the only place deltas exist). The `otlp` module extends the broker's `client_metrics/otlp.rs` decode pattern to the full type mapping, the new piece being `ExponentialHistogram` → `NativeHistogram` (scale↔schema clamp + boundary off-by-one fix). The `wal` module defines `WalRecord` — the metrics WAL topic record (serde + `serde-wincode`, the codebase convention) that **Slices 5/6/7 consume**. The `distributor` is an axum 0.8 server; the `compactor` is a Kafka consumer-group loop. A real Crabka broker is only needed for the produce/consume round-trip tests, which are `#[ignore]`-gated.
+**Architecture:** This slice adds the `wire`, `otlp`, `wal`, `distributor`, and `compactor` modules to the `krabka-metrics` crate built in Slice 1. The `wire` module owns the remote_write v1/v2 protobuf types (prost-generated from vendored `.proto`) + content negotiation + the wire-`Histogram` → `NativeHistogram` decode (integer-histogram **delta-decode to absolute**; this is the only place deltas exist). The `otlp` module extends the broker's `client_metrics/otlp.rs` decode pattern to the full type mapping, the new piece being `ExponentialHistogram` → `NativeHistogram` (scale↔schema clamp + boundary off-by-one fix). The `wal` module defines `WalRecord` — the metrics WAL topic record (serde + `serde-wincode`, the codebase convention) that **Slices 5/6/7 consume**. The `distributor` is an axum 0.8 server; the `compactor` is a Kafka consumer-group loop. A real Crabka broker is only needed for the produce/consume round-trip tests, which are `#[ignore]`-gated.
 
 ```
 remote_write v1/v2  ─┐
-                     ├─→ distributor (axum) ─→ validate ─→ HA-dedup ─→ produce WalRecord ─→ __crabka_metrics_wal
+                     ├─→ distributor (axum) ─→ validate ─→ HA-dedup ─→ produce WalRecord ─→ __krabka_metrics_wal
 OTLP /otlp/v1/metrics┘                                        (HA-tracker topic)              │
                                                                                               ▼
                                                                             compactor (consumer-group)
@@ -19,61 +19,64 @@ OTLP /otlp/v1/metrics┘                                        (HA-tracker topi
                                                                             ─→ commit offsets  (block+index FIRST)
 ```
 
-**Tech Stack:** Rust 2024 · `prost` 0.14 (workspace) · `opentelemetry-proto` 0.32 (`gen-tonic-messages`,`metrics`) · `axum` 0.8 (`http1`,`tokio`) · `snap` 1 (raw block, **not** Xerial) · `bytes` 1 · `arrow` 59 · `crabka-blockstore` · `crabka-metrics` (Slice 1) · `crabka-client-producer` · `crabka-client-consumer` · `crabka-client-admin` · `serde` + `serde-wincode` (`wincode::Serialize`) · `clap` 4 · `tokio` · `thiserror` · `tracing`. Build: `prost-build` (new build-dep) for the vendored remote_write protos. Tests: `assert2`, `proptest`, `tempfile`; broker round-trip tests use `crates/broker/tests/support` (in-process) — Docker only for differential-vs-Mimir (deferred to Slice 8).
+**Tech Stack:** Rust 2024 · `prost` 0.14 (workspace) · `opentelemetry-proto` 0.32 (`gen-tonic-messages`,`metrics`) · `axum` 0.8 (`http1`,`tokio`) · `snap` 1 (raw block, **not** Xerial) · `bytes` 1 · `arrow` 59 · `krabka-blockstore` · `krabka-metrics` (Slice 1) · `krabka-client-producer` · `krabka-client-consumer` · `krabka-client-admin` · `serde` + `serde-wincode` (`wincode::Serialize`) · `clap` 4 · `tokio` · `thiserror` · `tracing`. Build: `prost-build` (new build-dep) for the vendored remote_write protos. Tests: `assert2`, `proptest`, `tempfile`; broker round-trip tests use `crates/broker/tests/support` (in-process) — Docker only for differential-vs-Mimir (deferred to Slice 8).
 
 ## Global Constraints
 
 - **No backwards compatibility.** Greenfield/undeployed. Change `WalRecord`/enums/wire-internal types freely; no shims, no migration code, no `#[serde(default)]`. (Only Kafka **client** wire compat matters — and the remote_write/OTLP byte-exactness on the HTTP edge.)
 - **`unsafe_code = "forbid"`** workspace-wide. No `unsafe`.
-- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p crabka-metrics --all-targets` before each commit.
-- **Formatting:** `cargo fmt -p crabka-metrics` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
+- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p krabka-metrics --all-targets` before each commit.
+- **Formatting:** `cargo fmt -p krabka-metrics` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
 - **Assertions:** `assert2::assert!` in tests; `prop_assert*` inside `proptest!`.
-- **Arrow version identity:** use `arrow` 59 directly. `crabka-metrics` Slice-1 codecs produce batches `crabka-blockstore::BlockWriter::write_block` consumes without conversion.
+- **Arrow version identity:** use `arrow` 59 directly. `krabka-metrics` Slice-1 codecs produce batches `krabka-blockstore::BlockWriter::write_block` consumes without conversion.
 - **prost generated types are the source of truth.** The remote_write `.proto` field names/types this plan quotes (e.g. `Histogram.count` as a `oneof`) are pinned by behavior tests; if a generated field name differs, **align to the generated `OUT_DIR` type**, never fabricate. DataFusion is **not** a dependency of this slice.
-- **Kafka wire-protocol exactness** is preserved automatically by producing/consuming through the existing `crabka-client-producer`/`crabka-client-consumer` clients — do not hand-roll protocol frames.
+- **Kafka wire-protocol exactness** is preserved automatically by producing/consuming through the existing `krabka-client-producer`/`krabka-client-consumer` clients — do not hand-roll protocol frames.
 
 ---
 
 ## Dependency & slice roadmap
 
 **Depends on (consume exactly — do not re-implement):**
-- **`crabka-metrics` Slice 1** — `NativeHistogram { schema:i8, is_float:bool, reset_hint:ResetHint, zero_threshold:f64, zero_count:f64, count:f64, sum:f64, positive_spans:Vec<BucketSpan>, positive_counts:Vec<f64> (absolute), negative_spans, negative_counts, custom_values:Option<Vec<f64>>, start_timestamp_ms:Option<i64> }`, `BucketSpan { offset:i32, length:u32 }`, `ResetHint { Unknown, Yes, No, Gauge }` (`as_i8`/`from_i8`), `SymbolTable` (`from_symbols`/`resolve_label_refs`/`new`/`intern`/`resolve`/`symbols`), `encode_native_histograms`/`decode_native_histograms`, `encode_float_samples`/`decode_float_samples`, schema builders.
-- **`crabka-blockstore`** — `BlockStore`, `BlockWriter::write_block(tenant:&str, object_key:&str, schema:SchemaRef, batches:&[RecordBatch]) -> Result<BlockMeta>`, `Index::{add_series, add_block, save}`, `BlockMeta`, `Labels` (`new`/`insert`/`fingerprint`/`iter`), `SeriesFingerprint` (= `u64`).
-- **`crabka-client-producer`** — `Producer::builder().bootstrap(..).build().await? -> Result<Producer, ProducerError>`; `Producer::send(ProducerRecord) -> oneshot::Receiver<Result<RecordMetadata, ProducerError>>` (`.await.await??` for ack); `ProducerRecord { topic:String, partition:Option<i32>, key:Option<Bytes>, value:Option<Bytes>, headers:Vec<Header>, timestamp_ms:Option<i64> }`; `Producer::flush()`. **The producer hashes `key` with MurmurHash2 to choose a partition** — so set `key` = our partition key and leave `partition: None`. (Verify signatures against `crates/client-producer/src/{builder,record,producer}.rs`.)
-- **`crabka-client-consumer`** — `Consumer::builder().bootstrap(..).group_id(..).subscribe([..]).auto_offset_reset(AutoOffsetReset::Earliest).build().await?`; `Consumer::poll(Duration) -> Result<Vec<ConsumerRecord>, ConsumerError>`; `Consumer::commit_sync() -> Result<(), ConsumerError>`; `ConsumerRecord { topic, partition:i32, offset:i64, key:Option<Bytes>, value:Option<Bytes>, .. }`. (Verify against `crates/client-consumer/src/{consumer,poll,commit}.rs`.)
-- **`crabka-client-admin`** — `create_topics(&[CreateTopicSpec { name, partitions, replicas, configs }], timeout_ms) -> Result<Vec<CreateTopicOutcome>, AdminError>` (for tests + bootstrapping the WAL/HA topics).
 
-**THIS slice defines (Slices 5/6/7 consume):** `WalRecord` (Task 5) — the WAL topic record. `WAL_TOPIC = "__crabka_metrics_wal"`. Partition key = `(tenant, series_fingerprint)`.
+- **`krabka-metrics` Slice 1** — `NativeHistogram { schema:i8, is_float:bool, reset_hint:ResetHint, zero_threshold:f64, zero_count:f64, count:f64, sum:f64, positive_spans:Vec<BucketSpan>, positive_counts:Vec<f64> (absolute), negative_spans, negative_counts, custom_values:Option<Vec<f64>>, start_timestamp_ms:Option<i64> }`, `BucketSpan { offset:i32, length:u32 }`, `ResetHint { Unknown, Yes, No, Gauge }` (`as_i8`/`from_i8`), `SymbolTable` (`from_symbols`/`resolve_label_refs`/`new`/`intern`/`resolve`/`symbols`), `encode_native_histograms`/`decode_native_histograms`, `encode_float_samples`/`decode_float_samples`, schema builders.
+- **`krabka-blockstore`** — `BlockStore`, `BlockWriter::write_block(tenant:&str, object_key:&str, schema:SchemaRef, batches:&[RecordBatch]) -> Result<BlockMeta>`, `Index::{add_series, add_block, save}`, `BlockMeta`, `Labels` (`new`/`insert`/`fingerprint`/`iter`), `SeriesFingerprint` (= `u64`).
+- **`krabka-client-producer`** — `Producer::builder().bootstrap(..).build().await? -> Result<Producer, ProducerError>`; `Producer::send(ProducerRecord) -> oneshot::Receiver<Result<RecordMetadata, ProducerError>>` (`.await.await??` for ack); `ProducerRecord { topic:String, partition:Option<i32>, key:Option<Bytes>, value:Option<Bytes>, headers:Vec<Header>, timestamp_ms:Option<i64> }`; `Producer::flush()`. **The producer hashes `key` with MurmurHash2 to choose a partition** — so set `key` = our partition key and leave `partition: None`. (Verify signatures against `crates/client-producer/src/{builder,record,producer}.rs`.)
+- **`krabka-client-consumer`** — `Consumer::builder().bootstrap(..).group_id(..).subscribe([..]).auto_offset_reset(AutoOffsetReset::Earliest).build().await?`; `Consumer::poll(Duration) -> Result<Vec<ConsumerRecord>, ConsumerError>`; `Consumer::commit_sync() -> Result<(), ConsumerError>`; `ConsumerRecord { topic, partition:i32, offset:i64, key:Option<Bytes>, value:Option<Bytes>, .. }`. (Verify against `crates/client-consumer/src/{consumer,poll,commit}.rs`.)
+- **`krabka-client-admin`** — `create_topics(&[CreateTopicSpec { name, partitions, replicas, configs }], timeout_ms) -> Result<Vec<CreateTopicOutcome>, AdminError>` (for tests + bootstrapping the WAL/HA topics).
+
+**THIS slice defines (Slices 5/6/7 consume):** `WalRecord` (Task 5) — the WAL topic record. `WAL_TOPIC = "__krabka_metrics_wal"`. Partition key = `(tenant, series_fingerprint)`.
 
 **The 8 metrics slices** (this plan = Slice 4):
-1. Data layer (DONE). 2. `crabka-promql` core. 3. Query completeness. **4. Ingest service *(this plan)*.** 5. Querier + Prometheus HTTP API. 6. Query-frontend. 7. Ruler. 8. Hardening.
+
+1. Data layer (DONE). 2. `krabka-promql` core. 3. Query completeness. **4. Ingest service _(this plan)_.** 5. Querier + Prometheus HTTP API. 6. Query-frontend. 7. Ruler. 8. Hardening.
 
 ---
 
 ## File structure (`crates/metrics/`)
 
-| File | Responsibility |
-|---|---|
-| `Cargo.toml` | add ingest deps + `prost`/`opentelemetry-proto` + `[build-dependencies] prost-build` |
-| `build.rs` | prost-codegen the vendored remote_write v1/v2 protos → `OUT_DIR` |
-| `proto/prometheus/remote.proto` | vendored remote_write **v1** (`prometheus.WriteRequest`) |
-| `proto/io/prometheus/write/v2/types.proto` | vendored remote_write **v2** (`io.prometheus.write.v2.Request`) |
-| `src/wire/mod.rs` | `pb` (generated include), content negotiation, snappy block decode, status codes |
-| `src/wire/v1.rs` | v1 `WriteRequest` → `Vec<DecodedSeries>` (labels + float samples + wire histograms) |
-| `src/wire/v2.rs` | v2 `Request` → `Vec<DecodedSeries>` via `SymbolTable`; written-counts response struct |
-| `src/wire/histogram.rs` | wire `Histogram` (int delta-decode / float absolute / NHCB) → `NativeHistogram` |
-| `src/otlp.rs` | OTLP `MetricsData` → `Vec<DecodedSeries>`; `ExponentialHistogram` → `NativeHistogram`; `TranslationStrategy` |
-| `src/wal.rs` | `WalRecord`, `SamplePayload`, `WalExemplar` + `encode`/`decode` + partition key |
-| `src/distributor/mod.rs` | axum router (`/api/v1/push`, `/otlp/v1/metrics`), serve, limits |
-| `src/distributor/ha.rs` | `HaTracker` — elected `__replica__` per `(tenant, cluster)`; dedup decision |
-| `src/compactor.rs` | consumer-group loop → group/sort → blocks → index → commit |
-| `src/bin/crabka-metrics.rs` | `clap` role-selectable entrypoint (`--target`) |
+| File                                       | Responsibility                                                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `Cargo.toml`                               | add ingest deps + `prost`/`opentelemetry-proto` + `[build-dependencies] prost-build`                         |
+| `build.rs`                                 | prost-codegen the vendored remote_write v1/v2 protos → `OUT_DIR`                                             |
+| `proto/prometheus/remote.proto`            | vendored remote_write **v1** (`prometheus.WriteRequest`)                                                     |
+| `proto/io/prometheus/write/v2/types.proto` | vendored remote_write **v2** (`io.prometheus.write.v2.Request`)                                              |
+| `src/wire/mod.rs`                          | `pb` (generated include), content negotiation, snappy block decode, status codes                             |
+| `src/wire/v1.rs`                           | v1 `WriteRequest` → `Vec<DecodedSeries>` (labels + float samples + wire histograms)                          |
+| `src/wire/v2.rs`                           | v2 `Request` → `Vec<DecodedSeries>` via `SymbolTable`; written-counts response struct                        |
+| `src/wire/histogram.rs`                    | wire `Histogram` (int delta-decode / float absolute / NHCB) → `NativeHistogram`                              |
+| `src/otlp.rs`                              | OTLP `MetricsData` → `Vec<DecodedSeries>`; `ExponentialHistogram` → `NativeHistogram`; `TranslationStrategy` |
+| `src/wal.rs`                               | `WalRecord`, `SamplePayload`, `WalExemplar` + `encode`/`decode` + partition key                              |
+| `src/distributor/mod.rs`                   | axum router (`/api/v1/push`, `/otlp/v1/metrics`), serve, limits                                              |
+| `src/distributor/ha.rs`                    | `HaTracker` — elected `__replica__` per `(tenant, cluster)`; dedup decision                                  |
+| `src/compactor.rs`                         | consumer-group loop → group/sort → blocks → index → commit                                                   |
+| `src/bin/krabka-metrics.rs`                | `clap` role-selectable entrypoint (`--target`)                                                               |
 
 ---
 
 ### Task 1: Ingest-deps wiring + vendored protos + prost build
 
 **Files:**
+
 - Modify: `crates/metrics/Cargo.toml`
 - Create: `crates/metrics/build.rs`
 - Create: `crates/metrics/proto/prometheus/remote.proto`
@@ -83,6 +86,7 @@ OTLP /otlp/v1/metrics┘                                        (HA-tracker topi
 - Modify: root `Cargo.toml` (add `prost-build` to `[workspace.dependencies]`)
 
 **Interfaces:**
+
 - Produces: generated prost types reachable as `crate::wire::pb::v1::WriteRequest`, `crate::wire::pb::v1::{TimeSeries,Label,Sample,Histogram,...}`, `crate::wire::pb::v2::Request`, `crate::wire::pb::v2::{TimeSeries,Sample,Histogram,Exemplar,Metadata,...}`.
 
 - [ ] **Step 1: Add `prost-build` to the workspace deps**
@@ -111,10 +115,10 @@ serde-wincode = { workspace = true }
 wincode = { workspace = true }
 clap = { workspace = true }
 tracing = { workspace = true }
-crabka-blockstore = { path = "../blockstore" }
-crabka-client-producer = { path = "../client-producer" }
-crabka-client-consumer = { path = "../client-consumer" }
-crabka-client-admin = { path = "../client-admin" }
+krabka-blockstore = { path = "../blockstore" }
+krabka-client-producer = { path = "../client-producer" }
+krabka-client-consumer = { path = "../client-consumer" }
+krabka-client-admin = { path = "../client-admin" }
 url = { workspace = true }
 object_store = { workspace = true }
 twox-hash = { workspace = true }
@@ -333,7 +337,7 @@ mod tests {
 }
 ```
 
-> **The two `include!` module names (`/prometheus.rs`, `/io.prometheus.write.v2.rs`) are prost's filename convention (package name).** If `cargo build` reports a missing file, list `OUT_DIR` (`cargo build -p crabka-metrics -v` prints it) and use the actual generated filenames. This is the source of truth; do not guess further.
+> **The two `include!` module names (`/prometheus.rs`, `/io.prometheus.write.v2.rs`) are prost's filename convention (package name).** If `cargo build` reports a missing file, list `OUT_DIR` (`cargo build -p krabka-metrics -v` prints it) and use the actual generated filenames. This is the source of truth; do not guess further.
 
 Add `assert2` to `[dev-dependencies]` if not already present (Slice 1 added it).
 
@@ -341,14 +345,14 @@ Add `assert2` to `[dev-dependencies]` if not already present (Slice 1 added it).
 
 In `lib.rs` add `pub mod wire;`.
 
-Run: `cargo test -p crabka-metrics --lib wire::tests`
+Run: `cargo test -p krabka-metrics --lib wire::tests`
 Expected: compiles (first build invokes `protoc`); both prost round-trip tests PASS.
 
 - [ ] **Step 8: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add Cargo.toml Cargo.lock crates/metrics/
 git commit -m "feat(metrics): vendor remote_write v1/v2 protos + prost codegen"
 ```
@@ -358,12 +362,14 @@ git commit -m "feat(metrics): vendor remote_write v1/v2 protos + prost codegen"
 ### Task 2: `DecodedSeries` + snappy block decode + content negotiation
 
 **Files:**
+
 - Create: `crates/metrics/src/wire/decoded.rs` (the shared decode target)
 - Modify: `crates/metrics/src/wire/mod.rs` (snappy + content-type dispatch + status helpers)
 
 **Interfaces:**
+
 - Produces:
-  - `struct DecodedSeries { pub labels: crabka_blockstore::Labels, pub samples: Vec<(i64, f64)>, pub histograms: Vec<(i64, crabka_metrics::NativeHistogram)>, pub exemplars: Vec<DecodedExemplar> }` (`Debug`, `PartialEq`)
+  - `struct DecodedSeries { pub labels: krabka_blockstore::Labels, pub samples: Vec<(i64, f64)>, pub histograms: Vec<(i64, krabka_metrics::NativeHistogram)>, pub exemplars: Vec<DecodedExemplar> }` (`Debug`, `PartialEq`)
   - `struct DecodedExemplar { pub labels: Vec<(String, String)>, pub value: f64, pub timestamp_ms: i64 }`
   - `enum WireFormat { RemoteWriteV1, RemoteWriteV2, Otlp }`
   - `fn negotiate(content_type: Option<&str>) -> Result<WireFormat, WireError>` — dispatch on the `proto=` param.
@@ -433,7 +439,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib wire::decoded`
+Run: `cargo test -p krabka-metrics --lib wire::decoded`
 Expected: FAIL — `cannot find function negotiate`.
 
 - [ ] **Step 3: Implement `decoded.rs`**
@@ -444,8 +450,8 @@ Prepend above the `tests` module:
 //! The decode target every wire format lowers into, plus content negotiation,
 //! plain snappy-block decode, and the ingest status-code mapping.
 
-use crabka_blockstore::Labels;
-use crabka_metrics::NativeHistogram;
+use krabka_blockstore::Labels;
+use krabka_metrics::NativeHistogram;
 
 /// One series' decoded payload, format-agnostic.
 #[derive(Debug, PartialEq)]
@@ -522,7 +528,7 @@ pub fn negotiate(content_type: Option<&str>) -> Result<WireFormat, WireError> {
 
 /// Decode a **plain** snappy block (remote_write requires snappy-block, framed
 /// MUST NOT be used). This is *not* the Kafka Xerial-framed variant used by
-/// `crabka-compression::snappy` — that one prepends a magic header and chunks.
+/// `krabka-compression::snappy` — that one prepends a magic header and chunks.
 /// remote_write uses a single raw block, so we use `snap::raw` directly.
 pub fn snappy_block_decode(body: &[u8], max_output: usize) -> Result<Vec<u8>, WireError> {
     let want = snap::raw::decompress_len(body)
@@ -536,7 +542,7 @@ pub fn snappy_block_decode(body: &[u8], max_output: usize) -> Result<Vec<u8>, Wi
 }
 ```
 
-> **Snappy distinction is load-bearing:** the codebase's `crabka-compression::snappy::decompress` expects a 16-byte Xerial magic header and length-prefixed chunks (Kafka producer framing). remote_write sends a single plain `snap::raw` block. Using the wrong decoder corrupts every request. Keep this `snap::raw::Decoder` path; do **not** route remote_write bodies through `crabka-compression`.
+> **Snappy distinction is load-bearing:** the codebase's `krabka-compression::snappy::decompress` expects a 16-byte Xerial magic header and length-prefixed chunks (Kafka producer framing). remote_write sends a single plain `snap::raw` block. Using the wrong decoder corrupts every request. Keep this `snap::raw::Decoder` path; do **not** route remote_write bodies through `krabka-compression`.
 
 - [ ] **Step 4: Re-export from `wire/mod.rs`**
 
@@ -544,14 +550,14 @@ Add to `wire/mod.rs`: `mod decoded; pub use decoded::{DecodedExemplar, DecodedSe
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib wire::decoded`
+Run: `cargo test -p krabka-metrics --lib wire::decoded`
 Expected: PASS (6 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): DecodedSeries + content negotiation + snappy block decode"
 ```
@@ -561,10 +567,12 @@ git commit -m "feat(metrics): DecodedSeries + content negotiation + snappy block
 ### Task 3: wire `Histogram` → `NativeHistogram` (delta-decode)
 
 **Files:**
+
 - Create: `crates/metrics/src/wire/histogram.rs`
 - Modify: `crates/metrics/src/wire/mod.rs`
 
 **Interfaces:**
+
 - Consumes: `pb::v1::Histogram`, `pb::v2::Histogram`, Slice-1 `NativeHistogram`/`BucketSpan`/`ResetHint`.
 - Produces:
   - `fn v1_histogram_to_native(h: &pb::v1::Histogram) -> Result<NativeHistogram, WireError>`
@@ -607,7 +615,7 @@ mod tests {
         assert!(!h.is_float);
         assert!(h.count == 10.0);
         assert!(h.positive_counts == vec![4.0, 3.0]); // delta [4,-1] => [4,3]
-        assert!(h.reset_hint == crabka_metrics::ResetHint::No);
+        assert!(h.reset_hint == krabka_metrics::ResetHint::No);
         assert!(h.zero_count == 3.0);
     }
 
@@ -654,7 +662,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib wire::histogram`
+Run: `cargo test -p krabka-metrics --lib wire::histogram`
 Expected: FAIL — `cannot find function v1_histogram_to_native`.
 
 - [ ] **Step 3: Implement `histogram.rs`**
@@ -664,7 +672,7 @@ Expected: FAIL — `cannot find function v1_histogram_to_native`.
 //! Integer histograms carry delta-encoded counts (first element absolute);
 //! float histograms carry absolute counts. We always store absolute.
 
-use crabka_metrics::{BucketSpan, NativeHistogram, ResetHint};
+use krabka_metrics::{BucketSpan, NativeHistogram, ResetHint};
 
 use super::decoded::WireError;
 use super::pb;
@@ -836,14 +844,14 @@ pub fn v2_histogram_to_native(h: &pb::v2::Histogram) -> Result<NativeHistogram, 
 
 `wire/mod.rs`: `mod histogram; pub use histogram::{v1_histogram_to_native, v2_histogram_to_native};`
 
-Run: `cargo test -p crabka-metrics --lib wire::histogram`
+Run: `cargo test -p krabka-metrics --lib wire::histogram`
 Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): wire Histogram to NativeHistogram (integer delta-decode + NHCB)"
 ```
@@ -853,11 +861,13 @@ git commit -m "feat(metrics): wire Histogram to NativeHistogram (integer delta-d
 ### Task 4: v1 + v2 request decoders → `Vec<DecodedSeries>`
 
 **Files:**
+
 - Create: `crates/metrics/src/wire/v1.rs`
 - Create: `crates/metrics/src/wire/v2.rs`
 - Modify: `crates/metrics/src/wire/mod.rs`
 
 **Interfaces:**
+
 - Produces:
   - `fn decode_v1(body: &[u8], max_decompressed: usize) -> Result<Vec<DecodedSeries>, WireError>` — snappy-decompress → prost-decode `WriteRequest` → per-`TimeSeries` `DecodedSeries`.
   - `fn decode_v2(body: &[u8], max_decompressed: usize) -> Result<(Vec<DecodedSeries>, WrittenCounts), WireError>` — uses `SymbolTable::from_symbols` + `resolve_label_refs`; counts samples/histograms/exemplars for the v2 response headers.
@@ -950,7 +960,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify they fail**
 
-Run: `cargo test -p crabka-metrics --lib wire::v1 wire::v2`
+Run: `cargo test -p krabka-metrics --lib wire::v1 wire::v2`
 Expected: FAIL — `cannot find function decode_v1`.
 
 - [ ] **Step 3: Implement `v1.rs`**
@@ -958,7 +968,7 @@ Expected: FAIL — `cannot find function decode_v1`.
 ```rust
 //! remote_write v1 (`prometheus.WriteRequest`) → `Vec<DecodedSeries>`.
 
-use crabka_blockstore::Labels;
+use krabka_blockstore::Labels;
 use prost::Message;
 
 use super::decoded::{DecodedExemplar, DecodedSeries, WireError};
@@ -1003,8 +1013,8 @@ pub fn decode_v1(body: &[u8], max_decompressed: usize) -> Result<Vec<DecodedSeri
 //! remote_write v2 (`io.prometheus.write.v2.Request`) → `Vec<DecodedSeries>`,
 //! resolving the symbol table, plus the written-counts for the response headers.
 
-use crabka_blockstore::Labels;
-use crabka_metrics::SymbolTable;
+use krabka_blockstore::Labels;
+use krabka_metrics::SymbolTable;
 use prost::Message;
 
 use super::decoded::{DecodedExemplar, DecodedSeries, WireError};
@@ -1076,14 +1086,14 @@ pub fn decode_v2(
 
 `wire/mod.rs`: `mod v1; mod v2; pub use v1::decode_v1; pub use v2::{decode_v2, WrittenCounts};`
 
-Run: `cargo test -p crabka-metrics --lib wire`
+Run: `cargo test -p krabka-metrics --lib wire`
 Expected: PASS (all wire tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): remote_write v1/v2 request decoders to DecodedSeries"
 ```
@@ -1093,12 +1103,14 @@ git commit -m "feat(metrics): remote_write v1/v2 request decoders to DecodedSeri
 ### Task 5: `WalRecord` — the WAL topic record (Slices 5/6/7 consume this)
 
 **Files:**
+
 - Create: `crates/metrics/src/wal.rs`
 - Modify: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
+
 - Produces (the SHARED CONTRACT this slice owns):
-  - `const WAL_TOPIC: &str = "__crabka_metrics_wal"`
+  - `const WAL_TOPIC: &str = "__krabka_metrics_wal"`
   - `struct WalRecord { pub tenant: String, pub labels: Vec<(String, String)>, pub payload: SamplePayload, pub exemplars: Vec<WalExemplar> }` (`serde`, `Clone`, `Debug`, `PartialEq`)
   - `enum SamplePayload { Float { timestamp_ms: i64, value: f64 }, Hist { timestamp_ms: i64, hist: NativeHistogram } }`
   - `struct WalExemplar { pub labels: Vec<(String, String)>, pub value: f64, pub timestamp_ms: i64 }`
@@ -1106,7 +1118,7 @@ git commit -m "feat(metrics): remote_write v1/v2 request decoders to DecodedSeri
   - `WalRecord::series_fingerprint(&self) -> u64` (via blockstore `Labels::fingerprint`).
   - `fn partition_key(tenant: &str, fp: u64) -> Bytes` — the produce key; hash of `(tenant, fp)`.
 
-> `NativeHistogram` (Slice 1) must `derive(Serialize, Deserialize)` for `WalRecord` to encode. **If Slice 1's `NativeHistogram`/`BucketSpan`/`ResetHint` do not already derive serde, add the derives in Slice 1's `histogram.rs` as part of this task** (greenfield — just change it; it does not affect the Arrow codec). Add `serde = { workspace = true }` to `crabka-metrics` deps (Task 1 added it).
+> `NativeHistogram` (Slice 1) must `derive(Serialize, Deserialize)` for `WalRecord` to encode. **If Slice 1's `NativeHistogram`/`BucketSpan`/`ResetHint` do not already derive serde, add the derives in Slice 1's `histogram.rs` as part of this task** (greenfield — just change it; it does not affect the Arrow codec). Add `serde = { workspace = true }` to `krabka-metrics` deps (Task 1 added it).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1116,7 +1128,7 @@ Create `crates/metrics/src/wal.rs`:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crabka_metrics::{BucketSpan, NativeHistogram, ResetHint};
+    use krabka_metrics::{BucketSpan, NativeHistogram, ResetHint};
     use assert2::assert;
 
     fn hist() -> NativeHistogram {
@@ -1193,7 +1205,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib wal`
+Run: `cargo test -p krabka-metrics --lib wal`
 Expected: FAIL — `cannot find type WalRecord`.
 
 - [ ] **Step 3: Implement `wal.rs`**
@@ -1204,12 +1216,12 @@ Expected: FAIL — `cannot find type WalRecord`.
 //! `serde-wincode` (the codebase convention; see `crates/broker/src/bootstrap.rs`).
 
 use bytes::Bytes;
-use crabka_blockstore::Labels;
-use crabka_metrics::NativeHistogram;
+use krabka_blockstore::Labels;
+use krabka_metrics::NativeHistogram;
 use serde::{Deserialize, Serialize};
 
 /// The metrics WAL topic name.
-pub const WAL_TOPIC: &str = "__crabka_metrics_wal";
+pub const WAL_TOPIC: &str = "__krabka_metrics_wal";
 
 /// WAL codec errors.
 #[derive(Debug, thiserror::Error)]
@@ -1300,14 +1312,14 @@ If `cargo test` fails with "`NativeHistogram` does not implement `Serialize`", a
 
 `lib.rs`: `mod wal; pub use wal::{partition_key, SamplePayload, WalError, WalExemplar, WalRecord, WAL_TOPIC};`
 
-Run: `cargo test -p crabka-metrics --lib wal`
+Run: `cargo test -p krabka-metrics --lib wal`
 Expected: PASS (4 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): WalRecord WAL topic record + serde-wincode codec (slice-4 contract)"
 ```
@@ -1317,10 +1329,12 @@ git commit -m "feat(metrics): WalRecord WAL topic record + serde-wincode codec (
 ### Task 6: OTLP decode extension — full type mapping + ExponentialHistogram
 
 **Files:**
+
 - Create: `crates/metrics/src/otlp.rs`
 - Modify: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `opentelemetry_proto::tonic::metrics::v1::{MetricsData, metric::Data, ExponentialHistogramDataPoint, exponential_histogram_data_point::Buckets, NumberDataPoint, ...}`, Slice-1 `NativeHistogram`.
 - Produces:
   - `enum TranslationStrategy { UnderscoreEscapingWithSuffixes, NoTranslation }` (`Default` = `UnderscoreEscapingWithSuffixes`)
@@ -1328,7 +1342,7 @@ git commit -m "feat(metrics): WalRecord WAL topic record + serde-wincode codec (
   - `fn exponential_histogram_to_native(dp: &ExponentialHistogramDataPoint) -> Result<NativeHistogram, OtlpError>` — the scale↔schema clamp + boundary off-by-one fix.
   - `fn normalize_name(name: &str, strategy: TranslationStrategy) -> String`
 
-> **Scope guard:** delta→cumulative accumulation and `target_info` need cross-datapoint state. Implement the **pure** per-datapoint mappings (Gauge, monotonic/non-monotonic Sum, Histogram→classic float series, ExponentialHistogram→native, name/label normalization) fully and tested. Delta accumulation + `target_info` resource-attr promotion are stubbed behind explicit `// TODO(slice4-otlp-state)` markers with a focused test asserting the *cumulative* path works; wire the delta accumulator as the final step of this task (Step 7). Do not silently drop delta points — return `OtlpError::DeltaUnsupported` until Step 7 lands the accumulator, then make the test pass.
+> **Scope guard:** delta→cumulative accumulation and `target_info` need cross-datapoint state. Implement the **pure** per-datapoint mappings (Gauge, monotonic/non-monotonic Sum, Histogram→classic float series, ExponentialHistogram→native, name/label normalization) fully and tested. Delta accumulation + `target_info` resource-attr promotion are stubbed behind explicit `// TODO(slice4-otlp-state)` markers with a focused test asserting the _cumulative_ path works; wire the delta accumulator as the final step of this task (Step 7). Do not silently drop delta points — return `OtlpError::DeltaUnsupported` until Step 7 lands the accumulator, then make the test pass.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1431,7 +1445,7 @@ mod tests {
         let h = exponential_histogram_to_native(&dp).unwrap();
         assert!(h.schema == 8);
         // indices = [(i>>2)+1 for i in 0..4] = [1,1,1,1] => one merged bucket.
-        assert!(h.positive_spans == vec![crabka_metrics::BucketSpan { offset: 1, length: 1 }]);
+        assert!(h.positive_spans == vec![krabka_metrics::BucketSpan { offset: 1, length: 1 }]);
         assert!(h.positive_counts == vec![4.0]);
     }
 
@@ -1452,7 +1466,7 @@ mod tests {
         let h = exponential_histogram_to_native(&dp).unwrap();
         assert!(h.schema == 8);
         // Contiguous indices 1,2,3 => a single span at offset 1, length 3.
-        assert!(h.positive_spans == vec![crabka_metrics::BucketSpan { offset: 1, length: 3 }]);
+        assert!(h.positive_spans == vec![krabka_metrics::BucketSpan { offset: 1, length: 3 }]);
         assert!(h.positive_counts == vec![1.0, 5.0, 4.0]);
     }
 
@@ -1466,7 +1480,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib otlp`
+Run: `cargo test -p krabka-metrics --lib otlp`
 Expected: FAIL — `cannot find function decode_otlp`.
 
 - [ ] **Step 3: Implement `otlp.rs`** (per-datapoint mappings + the exponential-histogram clamp)
@@ -1477,8 +1491,8 @@ Expected: FAIL — `cannot find function decode_otlp`.
 //! `ExponentialHistogram` → `NativeHistogram` (scale↔schema clamp + the
 //! lower-vs-upper boundary off-by-one offset fix).
 
-use crabka_blockstore::Labels;
-use crabka_metrics::{BucketSpan, NativeHistogram, ResetHint};
+use krabka_blockstore::Labels;
+use krabka_metrics::{BucketSpan, NativeHistogram, ResetHint};
 use opentelemetry_proto::tonic::common::v1::any_value::Value as AnyValue;
 use opentelemetry_proto::tonic::metrics::v1::{
     ExponentialHistogramDataPoint, MetricsData, NumberDataPoint, metric::Data,
@@ -1736,27 +1750,27 @@ fn number_series(name: &str, dp: &NumberDataPoint, strategy: TranslationStrategy
 }
 ```
 
-> **Verify against the broker's `otlp.rs` + the generated `opentelemetry-proto` types** (`crates/broker/src/client_metrics/otlp.rs` shows `MetricsData::decode`; the exact field names — `bucket_counts`, `offset`, `scale`, `zero_threshold`, `start_time_unix_nano` — are confirmed in `opentelemetry.proto.metrics.v1.rs`). `Buckets::default()` exists (prost derives `Default`). The index-merge downscale + boundary fix are the correctness traps; the three exponential-histogram tests pin them (including the odd-offset case that distinguishes the real Prometheus INDEX-merge from a naive array-pair-merge). The merge MUST follow `prometheusremotewrite/histograms.go::convertBucketsLayout` (shift each source bucket's index by `scale_down`, coalesce equal shifted indices) — do not merge by array position. If the boundary `+1` convention proves wrong against a real Prometheus/Mimir comparison (Slice 8 differential), adjust *with a failing test first*.
+> **Verify against the broker's `otlp.rs` + the generated `opentelemetry-proto` types** (`crates/broker/src/client_metrics/otlp.rs` shows `MetricsData::decode`; the exact field names — `bucket_counts`, `offset`, `scale`, `zero_threshold`, `start_time_unix_nano` — are confirmed in `opentelemetry.proto.metrics.v1.rs`). `Buckets::default()` exists (prost derives `Default`). The index-merge downscale + boundary fix are the correctness traps; the three exponential-histogram tests pin them (including the odd-offset case that distinguishes the real Prometheus INDEX-merge from a naive array-pair-merge). The merge MUST follow `prometheusremotewrite/histograms.go::convertBucketsLayout` (shift each source bucket's index by `scale_down`, coalesce equal shifted indices) — do not merge by array position. If the boundary `+1` convention proves wrong against a real Prometheus/Mimir comparison (Slice 8 differential), adjust _with a failing test first_.
 
 - [ ] **Step 4: Declare + run the pure tests**
 
 `lib.rs`: `mod otlp; pub use otlp::{decode_otlp, exponential_histogram_to_native, normalize_name, OtlpError, TranslationStrategy};`
 
-Run: `cargo test -p crabka-metrics --lib otlp`
+Run: `cargo test -p krabka-metrics --lib otlp`
 Expected: PASS (all 7 tests; delta path correctly errors until Step 7 — there is no delta test yet, so all green).
 
 - [ ] **Step 5: Commit the cumulative path**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): OTLP decode — Sum/Gauge/ExponentialHistogram with scale clamp"
 ```
 
 - [ ] **Step 6: Write the failing delta-accumulation test**
 
-Append to the `tests` module a test that feeds two consecutive **delta** `Sum` datapoints for the same series and asserts the emitted samples are *cumulative* (running total), keyed by a `DeltaAccumulator` state struct:
+Append to the `tests` module a test that feeds two consecutive **delta** `Sum` datapoints for the same series and asserts the emitted samples are _cumulative_ (running total), keyed by a `DeltaAccumulator` state struct:
 
 ```rust
     #[test]
@@ -1786,14 +1800,14 @@ Append to the `tests` module a test that feeds two consecutive **delta** `Sum` d
 
 Add a `#[derive(Default)] struct DeltaAccumulator { running: HashMap<u64, f64> }` keyed by series fingerprint, and `decode_otlp_stateful(md, strategy, &mut DeltaAccumulator)` that mirrors `decode_otlp` but, for delta-temporality monotonic sums, looks up the fingerprint, adds the delta to the running total, and emits the cumulative value. Keep `decode_otlp` as the stateless convenience wrapper that constructs a throwaway accumulator (cumulative-only inputs leave it unused). Re-export `DeltaAccumulator`/`decode_otlp_stateful`.
 
-Run: `cargo test -p crabka-metrics --lib otlp`
+Run: `cargo test -p krabka-metrics --lib otlp`
 Expected: PASS (delta test included).
 
 - [ ] **Step 8: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): OTLP delta-to-cumulative accumulator"
 ```
@@ -1803,14 +1817,16 @@ git commit -m "feat(metrics): OTLP delta-to-cumulative accumulator"
 ### Task 7: HA tracker — elected `__replica__` per `(tenant, cluster)`
 
 **Files:**
+
 - Create: `crates/metrics/src/distributor/ha.rs`
 - Create: `crates/metrics/src/distributor/mod.rs` (module shell; router lands in Task 8)
 - Modify: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `struct HaTracker { elected: Mutex<HashMap<(String, String), String>> }` (in-memory view of the compacted HA-tracker topic; interior `Mutex` so first-seen election is atomic behind `&self`)
-  - `const HA_TRACKER_TOPIC: &str = "__crabka_metrics_ha"`
+  - `const HA_TRACKER_TOPIC: &str = "__krabka_metrics_ha"`
   - `HaTracker::elected_replica(&self, tenant: &str, cluster: &str) -> Option<String>`
   - `HaTracker::set_elected(&self, tenant, cluster, replica)`
   - `HaTracker::elect_or_get(&self, tenant: &str, cluster: &str, replica: &str) -> String` — atomically elect an unseen pair's first replica, else return the already-elected one.
@@ -1818,7 +1834,7 @@ git commit -m "feat(metrics): OTLP delta-to-cumulative accumulator"
   - `fn ha_decision(tracker: &HaTracker, tenant: &str, series: &[DecodedSeries]) -> HaDecision` — inspect the **first** series' `cluster` + `__replica__` labels; if there is no `__replica__` label, `Accept` (HA disabled for this stream); else `elect_or_get` the `(tenant, cluster)` pair and `Accept` iff this replica is the elected one (first-seen wins; others Drop — no fail-open double-write).
   - `fn strip_replica_label(series: &mut [DecodedSeries])` — remove `__replica__` from every series before WAL write.
 
-> HA-tracker leader election (lease acquisition / failover via the compacted topic) is a write-coordination concern. This task models the **read path** (consult elected replica) + the in-memory tracker fed from the compacted topic, AND a minimal **in-process first-seen election** (`elect_or_get`) so an unseen `(tenant, cluster)` does not fail open — the first replica we see is elected atomically and all others Drop, exactly the Mimir dedup behavior. **Persisting/replaying** that election to the compacted HA topic (so it survives restart and spans distributor replicas) is the focused follow-on noted with `// TODO(slice4-ha-election)`. The dedup *decision* + label stripping — the spec's HTTP-202 behavior — is fully implemented and tested here, with no double-write for unseen clusters.
+> HA-tracker leader election (lease acquisition / failover via the compacted topic) is a write-coordination concern. This task models the **read path** (consult elected replica) + the in-memory tracker fed from the compacted topic, AND a minimal **in-process first-seen election** (`elect_or_get`) so an unseen `(tenant, cluster)` does not fail open — the first replica we see is elected atomically and all others Drop, exactly the Mimir dedup behavior. **Persisting/replaying** that election to the compacted HA topic (so it survives restart and spans distributor replicas) is the focused follow-on noted with `// TODO(slice4-ha-election)`. The dedup _decision_ + label stripping — the spec's HTTP-202 behavior — is fully implemented and tested here, with no double-write for unseen clusters.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1829,7 +1845,7 @@ Create `crates/metrics/src/distributor/ha.rs`:
 mod tests {
     use super::*;
     use crate::wire::{DecodedSeries};
-    use crabka_blockstore::Labels;
+    use krabka_blockstore::Labels;
     use assert2::assert;
 
     fn series_with(cluster: &str, replica: &str) -> DecodedSeries {
@@ -1889,7 +1905,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib distributor::ha`
+Run: `cargo test -p krabka-metrics --lib distributor::ha`
 Expected: FAIL — `cannot find type HaTracker`.
 
 - [ ] **Step 3: Implement `ha.rs`**
@@ -1906,7 +1922,7 @@ use std::sync::Mutex;
 use crate::wire::DecodedSeries;
 
 /// The compacted HA-tracker topic: `(tenant, cluster) -> elected __replica__`.
-pub const HA_TRACKER_TOPIC: &str = "__crabka_metrics_ha";
+pub const HA_TRACKER_TOPIC: &str = "__krabka_metrics_ha";
 
 /// In-memory view of the elected replica per `(tenant, cluster)`, rebuilt by
 /// replaying the compacted HA-tracker topic and extended in-process by
@@ -1991,7 +2007,7 @@ pub fn ha_decision(tracker: &HaTracker, tenant: &str, series: &[DecodedSeries]) 
 /// an HA-coordination label, not part of series identity downstream).
 pub fn strip_replica_label(series: &mut [DecodedSeries]) {
     for s in series {
-        let mut rebuilt = crabka_blockstore::Labels::new();
+        let mut rebuilt = krabka_blockstore::Labels::new();
         for (name, value) in s.labels.iter() {
             if name != "__replica__" {
                 rebuilt.insert(name.clone(), value.clone());
@@ -2008,14 +2024,14 @@ pub fn strip_replica_label(series: &mut [DecodedSeries]) {
 
 `lib.rs`: `pub mod distributor;`. In `distributor/mod.rs`: `pub mod ha; pub use ha::{ha_decision, strip_replica_label, HaDecision, HaTracker, HA_TRACKER_TOPIC};`
 
-Run: `cargo test -p crabka-metrics --lib distributor::ha`
+Run: `cargo test -p krabka-metrics --lib distributor::ha`
 Expected: PASS (5 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): HA dedup decision + replica-label strip"
 ```
@@ -2025,9 +2041,11 @@ git commit -m "feat(metrics): HA dedup decision + replica-label strip"
 ### Task 8: Distributor axum server — routes, limits, produce
 
 **Files:**
+
 - Modify: `crates/metrics/src/distributor/mod.rs` (router + handlers + serve)
 
 **Interfaces:**
+
 - Produces:
   - `struct TenantLimits { pub max_label_value_len: usize, pub max_series_per_request: usize }` (`Default`)
   - `struct DistributorState { producer, tracker, limits, max_decompressed }` (the axum `State`)
@@ -2131,33 +2149,34 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib distributor::tests`
+Run: `cargo test -p krabka-metrics --lib distributor::tests`
 Expected: FAIL — `cannot find function router`.
 
 - [ ] **Step 3: Implement `distributor/mod.rs`**
 
 Implement:
-- `WalSink` trait (`async fn append(&self, WalRecord) -> Result<(), ProduceError>`), a `KafkaSink` wrapping `crabka_client_producer::Producer` (in `produce_series`, build a `ProducerRecord { topic: WAL_TOPIC.into(), key: Some(partition_key(tenant, fp)), value: Some(Bytes::from(rec.encode()?)), partition: None, .. }` and `producer.send(record).await.await??`), and `DistributorState { sink: Arc<dyn WalSink>, tracker: HaTracker, limits: TenantLimits, max_decompressed: usize }`.
+
+- `WalSink` trait (`async fn append(&self, WalRecord) -> Result<(), ProduceError>`), a `KafkaSink` wrapping `krabka_client_producer::Producer` (in `produce_series`, build a `ProducerRecord { topic: WAL_TOPIC.into(), key: Some(partition_key(tenant, fp)), value: Some(Bytes::from(rec.encode()?)), partition: None, .. }` and `producer.send(record).await.await??`), and `DistributorState { sink: Arc<dyn WalSink>, tracker: HaTracker, limits: TenantLimits, max_decompressed: usize }`.
 - `router()`: `Router::new().route("/api/v1/push", post(push)).route("/otlp/v1/metrics", post(otlp_push)).with_state(state)`.
 - `push` handler: read `X-Scope-OrgID` (400 if missing under multi-tenant), `Content-Type` → `negotiate()`; on `RemoteWriteV1` call `decode_v1`, on `RemoteWriteV2` call `decode_v2`; `validate(&series, &limits)`; `ha_decision` → `Drop` returns `202 Accepted`; else `strip_replica_label`, append each as a `WalRecord` (one record per (series, sample) — fan float samples and histograms into separate `SamplePayload`s), return `204` (v2: with the three `X-Prometheus-Remote-Write-*-Written` headers from `WrittenCounts`). Map `WireError::status_code()` to the response.
 - `otlp_push` handler: `decode_otlp` (or stateful) → same validate/HA/append path → `200 OK` (OTLP HTTP success is 200, body empty `ExportMetricsServiceResponse`).
 - `validate`: enforce `max_series_per_request` and `max_label_value_len`; over-limit → `WireError::Invalid` (→ 400) or a dedicated 429 for rate (rate-limiting integration with Crabka quotas is `// TODO(slice4-quota)`; the structural cap is enforced now).
 - `serve()`: mirror `crates/broker/src/metrics_server.rs::run` — bind `TcpListener`, `axum::serve(listener, router(state)).with_graceful_shutdown(...)`, return the bound `SocketAddr`. (TLS is the `grpc-gateway/serve.rs` pattern; defer TLS to hardening — plaintext serve here, note `// TODO(slice4-tls)`.)
 
-Body extraction: axum `body::Bytes` extractor gives the raw bytes (`Content-Encoding: snappy` is decoded by *us* via `snappy_block_decode`, not axum — do not enable any axum decompression layer).
+Body extraction: axum `body::Bytes` extractor gives the raw bytes (`Content-Encoding: snappy` is decoded by _us_ via `snappy_block_decode`, not axum — do not enable any axum decompression layer).
 
 > **Verify the producer `.send` ack pattern** (`producer.send(rec).await.await??` — outer await resolves partition, inner await the oneshot for broker ack) against `crates/client-producer/src/lib.rs`. For throughput, the distributor may `send` without awaiting each inner oneshot and `flush()` at end-of-request; for correctness of the test, await acks. Keep it simple: await per record in this slice.
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib distributor`
+Run: `cargo test -p krabka-metrics --lib distributor`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): distributor axum server — push/otlp routes, limits, HA, WAL produce"
 ```
@@ -2167,10 +2186,12 @@ git commit -m "feat(metrics): distributor axum server — push/otlp routes, limi
 ### Task 9: Compactor — WAL consumer-group → blocks → index
 
 **Files:**
+
 - Create: `crates/metrics/src/compactor.rs`
 - Modify: `crates/metrics/src/lib.rs`
 
 **Interfaces:**
+
 - Produces:
   - `fn object_key(tenant: &str, partition: i32, min_offset: i64, max_offset: i64, min_ts: i64, max_ts: i64) -> String` — deterministic idempotent key.
   - `fn group_and_sort(records: &[WalRecord]) -> BTreeMap<(String, u64), Vec<&WalRecord>>` — group by `(tenant, fingerprint)`, each group sorted by timestamp.
@@ -2229,7 +2250,7 @@ mod tests {
 
         let store: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
         let base = url::Url::parse("memory:///").unwrap();
-        let mut bs = crabka_blockstore::BlockStore::new(store.clone(), base);
+        let mut bs = krabka_blockstore::BlockStore::new(store.clone(), base);
 
         let recs = vec![
             float_rec("t", "up", 100, 1.0),
@@ -2245,12 +2266,13 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib compactor`
+Run: `cargo test -p krabka-metrics --lib compactor`
 Expected: FAIL — `cannot find function object_key`.
 
 - [ ] **Step 3: Implement `compactor.rs`**
 
 Implement:
+
 - `object_key`: `format!("blocks/{tenant}/{partition:05}/{min_offset:020}-{max_offset:020}-{min_ts}-{max_ts}.parquet")` (deterministic from inputs; same WAL offset range + window ⇒ same key ⇒ idempotent overwrite via blockstore's `write_block`).
 - `group_and_sort`: `BTreeMap<(String, u64), Vec<&WalRecord>>`, push by `(tenant, fingerprint())`, then `sort_by_key(|r| r.payload.timestamp_ms())` each group.
 - `build_batches`: separate float groups from histogram groups; collect `(fp, ts, value)` rows → `encode_float_samples`; `(fp, ts, NativeHistogram)` rows → `encode_native_histograms`. Returns the float batch (schema `float_sample_schema()`) and native batch (`native_histogram_schema()`) separately, since they go to different blocks/schemas. (Exemplar sidecar block is `// TODO(slice4-exemplar-block)` — the exemplar wire-decode already lands in `WalRecord`; writing the sidecar block mirrors the float path against `exemplar_schema()` and is a focused follow-on.)
@@ -2269,14 +2291,14 @@ Implement:
 
 `lib.rs`: `mod compactor; pub use compactor::{compact_batch, group_and_sort, object_key, run, CompactError};`
 
-Run: `cargo test -p crabka-metrics --lib compactor`
+Run: `cargo test -p krabka-metrics --lib compactor`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): compactor — WAL group/sort to blockstore blocks + index snapshot"
 ```
@@ -2286,10 +2308,12 @@ git commit -m "feat(metrics): compactor — WAL group/sort to blockstore blocks 
 ### Task 10: Role-selectable binary
 
 **Files:**
-- Create: `crates/metrics/src/bin/crabka-metrics.rs`
+
+- Create: `crates/metrics/src/bin/krabka-metrics.rs`
 - Modify: `crates/metrics/Cargo.toml` (`[[bin]]` if needed; clap already a dep)
 
 **Interfaces:**
+
 - Produces: a binary with `--target distributor|compactor` (other targets stubbed with a "not yet implemented in this slice" message). Distributor wires a real `Producer` + `serve`; compactor wires a `Consumer` + `BlockStore` + `run`.
 
 - [ ] **Step 1: Write the failing test (arg parsing)**
@@ -2305,43 +2329,44 @@ mod tests {
 
     #[test]
     fn parses_distributor_target() {
-        let cli = Cli::try_parse_from(["crabka-metrics", "--target", "distributor"]).unwrap();
+        let cli = Cli::try_parse_from(["krabka-metrics", "--target", "distributor"]).unwrap();
         assert!(matches!(cli.target, Target::Distributor));
     }
 
     #[test]
     fn rejects_unknown_target() {
-        assert!(Cli::try_parse_from(["crabka-metrics", "--target", "bogus"]).is_err());
+        assert!(Cli::try_parse_from(["krabka-metrics", "--target", "bogus"]).is_err());
     }
 }
 ```
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --bin crabka-metrics`
+Run: `cargo test -p krabka-metrics --bin krabka-metrics`
 Expected: FAIL — `cannot find type Cli`.
 
 - [ ] **Step 3: Implement the binary**
 
 `main`: parse `Cli`; `tracing_subscriber` init; build a `CancellationToken` wired to `tokio::signal::ctrl_c`; match `target`:
+
 - `Distributor` → `Producer::builder().bootstrap(&cli.bootstrap).build().await?`, wrap in `KafkaSink`, build `DistributorState`, `distributor::serve(cli.listen.parse()?, state, shutdown).await?`.
-- `Compactor` → `Consumer::builder().bootstrap(&cli.bootstrap).group_id("crabka-metrics-compactor").subscribe([WAL_TOPIC.to_string()]).auto_offset_reset(AutoOffsetReset::Earliest).build().await?`, build a `BlockStore` over the configured object store (memory for now; real object store config is `// TODO(slice4-objstore-config)`), `compactor::run(consumer, blockstore, "index/metrics.json", shutdown).await?`.
+- `Compactor` → `Consumer::builder().bootstrap(&cli.bootstrap).group_id("krabka-metrics-compactor").subscribe([WAL_TOPIC.to_string()]).auto_offset_reset(AutoOffsetReset::Earliest).build().await?`, build a `BlockStore` over the configured object store (memory for now; real object store config is `// TODO(slice4-objstore-config)`), `compactor::run(consumer, blockstore, "index/metrics.json", shutdown).await?`.
 - `Querier | QueryFrontend | Ruler` → `eprintln!` + `std::process::exit(2)` with "target not implemented until slice {N}".
 
 > Keep `main` thin; the testable logic lives in the modules. The binary just wires + serves.
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --bin crabka-metrics`
-Expected: PASS (2 tests). Then `cargo build -p crabka-metrics --bin crabka-metrics` compiles.
+Run: `cargo test -p krabka-metrics --bin krabka-metrics`
+Expected: PASS (2 tests). Then `cargo build -p krabka-metrics --bin krabka-metrics` compiles.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
-git commit -m "feat(metrics): role-selectable crabka-metrics binary (distributor|compactor)"
+git commit -m "feat(metrics): role-selectable krabka-metrics binary (distributor|compactor)"
 ```
 
 ---
@@ -2349,20 +2374,23 @@ git commit -m "feat(metrics): role-selectable crabka-metrics binary (distributor
 ### Task 11: End-to-end broker round-trip (Docker/in-process gated)
 
 **Files:**
+
 - Create: `crates/metrics/tests/ingest_roundtrip.rs`
 
 **Interfaces:**
+
 - Consumes the public API: `distributor::router`/`serve`, `Producer`, `Consumer`, `compactor::run`, `WalRecord`, `WAL_TOPIC`, blockstore.
 
 This is the one test that needs a real broker. Use the in-process broker test-support (`crates/broker/tests/support`) — it starts a broker without Docker (`support::start()`), so it can run in CI. Mark Docker-only paths `#[ignore]`.
 
 - [ ] **Step 1: Decide the harness**
 
-The in-process `support::start()` (from `crates/broker/tests/support/mod.rs`) returns a broker + client + tempdir without Docker. **However** `tests/support/mod.rs` is path-included by the broker crate's own tests; `crabka-metrics` cannot `use` it directly. Two options — pick the cheaper:
-- **(A)** Add a small `dev-dependency` path include: copy the minimal `start()` helper into `crates/metrics/tests/support/mod.rs` (the memory note "broker test-support is path-included" — replicate the few lines: `BrokerConfig::for_tests(tempdir)`, `Broker::start(config).await`, `broker.listen_addr()`), with `crabka-broker` as a `dev-dependency`.
+The in-process `support::start()` (from `crates/broker/tests/support/mod.rs`) returns a broker + client + tempdir without Docker. **However** `tests/support/mod.rs` is path-included by the broker crate's own tests; `krabka-metrics` cannot `use` it directly. Two options — pick the cheaper:
+
+- **(A)** Add a small `dev-dependency` path include: copy the minimal `start()` helper into `crates/metrics/tests/support/mod.rs` (the memory note "broker test-support is path-included" — replicate the few lines: `BrokerConfig::for_tests(tempdir)`, `Broker::start(config).await`, `broker.listen_addr()`), with `krabka-broker` as a `dev-dependency`.
 - **(B)** Mark the whole round-trip `#[ignore = "requires Docker"]` and use `testcontainers` cp-kafka like `crates/client-core/tests/integration.rs`.
 
-Prefer **(A)** for CI coverage; fall back to **(B)** if `crabka-broker`'s test config isn't reachable as a dev-dep. **Verify** which is feasible by checking whether `BrokerConfig::for_tests` + `Broker::start` are `pub` in `crabka-broker`'s public API (not just test-support). If they're test-only, use **(B)**.
+Prefer **(A)** for CI coverage; fall back to **(B)** if `krabka-broker`'s test config isn't reachable as a dev-dep. **Verify** which is feasible by checking whether `BrokerConfig::for_tests` + `Broker::start` are `pub` in `krabka-broker`'s public API (not just test-support). If they're test-only, use **(B)**.
 
 - [ ] **Step 2: Write the round-trip test**
 
@@ -2389,13 +2417,13 @@ Fill in the body using the verified producer/consumer/admin APIs (Task 1 deps). 
 
 - [ ] **Step 3: Run**
 
-Run (in-process harness A): `cargo test -p crabka-metrics --test ingest_roundtrip`
-Run (Docker harness B): `cargo test -p crabka-metrics --test ingest_roundtrip -- --ignored`
+Run (in-process harness A): `cargo test -p krabka-metrics --test ingest_roundtrip`
+Run (Docker harness B): `cargo test -p krabka-metrics --test ingest_roundtrip -- --ignored`
 Expected: PASS (the WAL record round-trips and a block is written).
 
 - [ ] **Step 4: Whole-crate gate**
 
-Run: `cargo test -p crabka-metrics && cargo clippy -p crabka-metrics --all-targets && cargo fmt -p crabka-metrics --check`
+Run: `cargo test -p krabka-metrics && cargo clippy -p krabka-metrics --all-targets && cargo fmt -p krabka-metrics --check`
 Expected: all PASS (ignored Docker tests skipped), no warnings, formatting clean.
 
 - [ ] **Step 5: Commit**
@@ -2410,6 +2438,7 @@ git commit -m "test(metrics): end-to-end remote_write -> WAL -> compactor -> blo
 ## Self-review
 
 **Spec coverage (against §5 ingest + §3 architecture + §11 Slice 4):**
+
 - remote_write v1 + v2 decode, snappy-block, content negotiation, status codes → Tasks 2, 4, 8.
 - v2 symbol table (`symbols[0]==""`, even-length refs) → Task 4 (reuses Slice-1 `SymbolTable`).
 - v2 `X-Prometheus-Remote-Write-*-Written` headers on 204 → Tasks 4 (`WrittenCounts`), 8 (header emission).
@@ -2422,8 +2451,9 @@ git commit -m "test(metrics): end-to-end remote_write -> WAL -> compactor -> blo
 - broker round-trip test → Task 11.
 
 **Deviations flagged (deferred with explicit TODO markers, not silently dropped):**
-- HA *election persistence* (producing election records to `HA_TRACKER_TOPIC` so the in-process election survives restart / spans replicas) — Task 7 `// TODO(slice4-ha-election)`; the dedup decision (first-seen in-process election, no fail-open) + 202 + strip are fully implemented/tested.
-- Exemplar *sidecar block* write — Task 9 `// TODO(slice4-exemplar-block)`; exemplar wire-decode already lands in `WalRecord` (Tasks 4/5).
+
+- HA _election persistence_ (producing election records to `HA_TRACKER_TOPIC` so the in-process election survives restart / spans replicas) — Task 7 `// TODO(slice4-ha-election)`; the dedup decision (first-seen in-process election, no fail-open) + 202 + strip are fully implemented/tested.
+- Exemplar _sidecar block_ write — Task 9 `// TODO(slice4-exemplar-block)`; exemplar wire-decode already lands in `WalRecord` (Tasks 4/5).
 - Classic OTLP `Histogram`/`Summary` → float series — Task 6 `// TODO(slice4-otlp-classic)`; the harder `ExponentialHistogram` path is done+tested.
 - TLS on the distributor + per-tenant rate-limit (429 via Crabka quotas) — `// TODO(slice4-tls)`/`// TODO(slice4-quota)`; structural caps (415/400) are enforced.
 - `target_info` resource-attr gauge — `// TODO`; resource-attr → label is straightforward and follows the cumulative path.
@@ -2433,6 +2463,7 @@ git commit -m "test(metrics): end-to-end remote_write -> WAL -> compactor -> blo
 **Type consistency:** `DecodedSeries`/`DecodedExemplar` (Task 2) consumed unchanged by v1/v2/OTLP decoders (Tasks 4, 6) and the distributor (Tasks 7, 8). `WalRecord`/`SamplePayload`/`partition_key` (Task 5) consumed by the distributor produce path (Task 8) and the compactor (Task 9). `WireError::status_code()` is the single ingest status mapping (Task 2), used by the distributor (Task 8). `NativeHistogram` field set matches Slice 1 across Tasks 3/5/6/9. The blockstore API (`BlockStore::new`/`writer`/`index_mut`/`write_block`/`add_series`/`add_block`/`save`) matches the blockstore plan exactly (Task 9).
 
 **Known risks (flagged, not hidden):**
+
 - **prost codegen + protoc in CI** — Task 1 build.rs needs `protoc`; mirror `grpc-gateway/build.rs`'s fallback if CI lacks it. Pinned by the two prost round-trip tests so a codegen break is a compile error, not silent.
 - **remote_write v2 is `2.0-rc.4`/experimental** — the vendored proto is pinned with a tag comment; expect churn. Contained to `proto/` + `wire/v2.rs`.
 - **The exponential-histogram boundary `+1`** is the single subtlest correctness claim; it is asserted by a focused test now and will be cross-checked against real Prometheus/Mimir in Slice 8's differential harness — adjust there with a failing test if it diverges.

@@ -13,10 +13,10 @@ use assert2::check;
 use async_trait::async_trait;
 use axum::Extension;
 use connectrpc_axum::message::{ConnectError, ConnectRequest, ConnectResponse, error::Code};
-use crabka_broker::{Broker, BrokerConfig, BrokerHandle};
-use crabka_client_core::Client;
-use crabka_protocol::owned::create_topics_request::{CreatableTopic, CreateTopicsRequest};
-use crabka_rebalancer::{
+use krabka_broker::{Broker, BrokerConfig, BrokerHandle};
+use krabka_client_core::Client;
+use krabka_protocol::owned::create_topics_request::{CreatableTopic, CreateTopicsRequest};
+use krabka_rebalancer::{
     api::{
         GoalRegistry,
         handlers::{self, AppState},
@@ -37,7 +37,7 @@ use crabka_rebalancer::{
     scraper::UsageStore,
     state_topic::StateBackend as _,
 };
-use crabka_units::{
+use krabka_units::{
     ByteRate, Time, bytes_per_sec,
     convert::{ByteRateExt as _, TimeExt as _},
     millis, minutes, percent, secs,
@@ -142,7 +142,7 @@ fn build_state(snapshot: SharedSnapshot) -> (Arc<AppState>, Registry) {
     let executor = ExecutorState {
         store: store.clone(),
         config: ExecutorConfig {
-            data_dir: std::path::PathBuf::from("/tmp/crabka-rebalancer-test"),
+            data_dir: std::path::PathBuf::from("/tmp/krabka-rebalancer-test"),
             default_throttle: DEFAULT_THROTTLE,
             poll_interval: millis(50),
             execute_deadline: secs(30),
@@ -150,7 +150,7 @@ fn build_state(snapshot: SharedSnapshot) -> (Arc<AppState>, Registry) {
         },
         metrics: metrics.clone(),
         in_flight: Arc::new(tokio::sync::Mutex::new(None)),
-        state_topic: Arc::new(crabka_rebalancer::state_topic::fake::InMemoryBackend::new_loaded()),
+        state_topic: Arc::new(krabka_rebalancer::state_topic::fake::InMemoryBackend::new_loaded()),
     };
     let state = Arc::new(AppState {
         snapshot,
@@ -166,8 +166,8 @@ fn build_state(snapshot: SharedSnapshot) -> (Arc<AppState>, Registry) {
         metrics,
         executor,
         client_facade,
-        anomaly_store: Arc::new(crabka_rebalancer::detector::AnomalyStore::new(200)),
-        state_topic: Arc::new(crabka_rebalancer::state_topic::fake::InMemoryBackend::new_loaded()),
+        anomaly_store: Arc::new(krabka_rebalancer::detector::AnomalyStore::new(200)),
+        state_topic: Arc::new(krabka_rebalancer::state_topic::fake::InMemoryBackend::new_loaded()),
         cancel_drain_timeout: RebalancerRuntimePolicy::default().cancel_drain_timeout,
         cancel_drain_poll_interval: RebalancerRuntimePolicy::default().cancel_drain_poll_interval,
     });
@@ -383,16 +383,16 @@ async fn create_proposal_on_balanced_cluster_returns_empty_movements() {
     assert2::assert!(exec.code() == Code::FailedPrecondition);
 
     // OpenMetrics: the registry that `/metrics` would scrape contains
-    // all three spec-promised metrics with the `crabka_rebalancer_`
+    // all three spec-promised metrics with the `krabka_rebalancer_`
     // prefix, and the OpenMetrics terminator. Snapshot-side metrics
     // were bumped above; `proposals_created_total` is bumped by the
     // `create_proposal` handler we just exercised.
     let mut buf = String::new();
     prometheus_client::encoding::text::encode(&mut buf, &registry).unwrap();
     for needle in [
-        "crabka_rebalancer_snapshot_at_ms",
-        "crabka_rebalancer_snapshots_total",
-        "crabka_rebalancer_proposals_created_total",
+        "krabka_rebalancer_snapshot_at_ms",
+        "krabka_rebalancer_snapshots_total",
+        "krabka_rebalancer_proposals_created_total",
     ] {
         assert2::assert!(buf.contains(needle));
     }
@@ -475,7 +475,7 @@ async fn get_state_returns_unavailable_before_first_snapshot() {
 async fn execute_proposal_settles_against_real_broker() {
     use std::time::Instant;
 
-    use crabka_rebalancer::{
+    use krabka_rebalancer::{
         executor::{Execution, client_impl::LiveClient},
         model::proposal::{Proposal, ProposalStatus, ProposalSummary},
     };
@@ -485,7 +485,7 @@ async fn execute_proposal_settles_against_real_broker() {
 
     let client = Client::builder()
         .bootstrap(bootstrap.as_str())
-        .client_id("crabka-rebalancer-test")
+        .client_id("krabka-rebalancer-test")
         .build()
         .await
         .expect("admin client");
@@ -514,9 +514,9 @@ async fn execute_proposal_settles_against_real_broker() {
     };
     store.insert(proposal.clone());
 
-    let mut registry = prometheus_client::registry::Registry::with_prefix("crabka_rebalancer");
+    let mut registry = prometheus_client::registry::Registry::with_prefix("krabka_rebalancer");
     let metrics = RebalancerMetrics::register(&mut registry);
-    let backend = Arc::new(crabka_rebalancer::state_topic::fake::InMemoryBackend::new_loaded());
+    let backend = Arc::new(krabka_rebalancer::state_topic::fake::InMemoryBackend::new_loaded());
     let executor_state = ExecutorState {
         store: store.clone(),
         config: ExecutorConfig {
@@ -571,7 +571,7 @@ async fn execute_proposal_settles_against_real_broker() {
 /// token fires.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn cancel_clears_throttle_and_reverts() {
-    use crabka_rebalancer::{
+    use krabka_rebalancer::{
         executor::{Execution, client_impl::LiveClient},
         model::proposal::{Proposal, ProposalStatus, ProposalSummary},
     };
@@ -581,7 +581,7 @@ async fn cancel_clears_throttle_and_reverts() {
 
     let client = Client::builder()
         .bootstrap(bootstrap.as_str())
-        .client_id("crabka-rebalancer-test")
+        .client_id("krabka-rebalancer-test")
         .build()
         .await
         .expect("admin client");
@@ -609,9 +609,9 @@ async fn cancel_clears_throttle_and_reverts() {
     };
     store.insert(proposal.clone());
 
-    let mut registry = prometheus_client::registry::Registry::with_prefix("crabka_rebalancer");
+    let mut registry = prometheus_client::registry::Registry::with_prefix("krabka_rebalancer");
     let metrics = RebalancerMetrics::register(&mut registry);
-    let backend = Arc::new(crabka_rebalancer::state_topic::fake::InMemoryBackend::new_loaded());
+    let backend = Arc::new(krabka_rebalancer::state_topic::fake::InMemoryBackend::new_loaded());
     let executor_state = ExecutorState {
         store: store.clone(),
         config: ExecutorConfig {
@@ -679,7 +679,7 @@ async fn cancel_clears_throttle_and_reverts() {
 /// the state machine to terminal, and tombstones the backend entry.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn restart_resumes_in_flight_plan() {
-    use crabka_rebalancer::{
+    use krabka_rebalancer::{
         executor::{
             Execution,
             client_impl::LiveClient,
@@ -693,7 +693,7 @@ async fn restart_resumes_in_flight_plan() {
 
     let client = Client::builder()
         .bootstrap(bootstrap.as_str())
-        .client_id("crabka-rebalancer-test")
+        .client_id("krabka-rebalancer-test")
         .build()
         .await
         .expect("admin client");
@@ -723,10 +723,10 @@ async fn restart_resumes_in_flight_plan() {
 
     // Seed the backend as if a previous run persisted Submit phase.
     let in_flight = InFlightFile::new(proposal.id.clone(), Phase::Submit, 1, DEFAULT_THROTTLE);
-    let backend = Arc::new(crabka_rebalancer::state_topic::fake::InMemoryBackend::new_loaded());
+    let backend = Arc::new(krabka_rebalancer::state_topic::fake::InMemoryBackend::new_loaded());
     *backend.state.lock().unwrap() = Some(in_flight.clone());
 
-    let mut registry = prometheus_client::registry::Registry::with_prefix("crabka_rebalancer");
+    let mut registry = prometheus_client::registry::Registry::with_prefix("krabka_rebalancer");
     let metrics = RebalancerMetrics::register(&mut registry);
     let executor_state = ExecutorState {
         store: store.clone(),
@@ -765,7 +765,7 @@ async fn restart_resumes_in_flight_plan() {
 /// directly and needs no real broker, because it only covers goal interaction.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rack_aware_eliminates_same_rack_collisions() {
-    use crabka_rebalancer::{
+    use krabka_rebalancer::{
         goals::{Goal, GoalContext, rack_aware::RackAware},
         model::{BrokerView, ClusterState, Movement, PartitionView},
     };
@@ -833,7 +833,7 @@ async fn rack_aware_eliminates_same_rack_collisions() {
 async fn replica_capacity_evicts_over_capacity_broker() {
     use std::{collections::HashMap, sync::Arc};
 
-    use crabka_rebalancer::{
+    use krabka_rebalancer::{
         capacity::{BrokerCapacities, BrokerCapacity},
         goals::{Goal, GoalContext, replica_capacity::ReplicaCapacity},
         model::{BrokerView, ClusterState, Movement, PartitionView},
@@ -936,7 +936,7 @@ async fn replica_capacity_evicts_over_capacity_broker() {
 async fn disk_usage_evicts_hot_broker() {
     use std::sync::Arc;
 
-    use crabka_rebalancer::{
+    use krabka_rebalancer::{
         goals::{Goal, GoalContext, disk_usage::DiskUsage},
         model::{BrokerView, ClusterState, Movement, PartitionView},
         scraper::{MetricKind, UsageStore, WindowConfig, parse::ParsedSample},
@@ -981,7 +981,7 @@ async fn disk_usage_evicts_hot_broker() {
 
     let store = UsageStore::new(WindowConfig {
         scrape_interval: secs(30),
-        retention: crabka_units::hours(1),
+        retention: krabka_units::hours(1),
     });
     // Insert at wall-clock "now" so DiskUsage's now_ms()-anchored
     // stale-data guard sees the samples as fresh.
@@ -1022,7 +1022,7 @@ async fn disk_usage_evicts_hot_broker() {
         imbalance_threshold: percent(10),
         max_movements_per_proposal: 256,
         min_topic_leaders_per_broker: 0,
-        broker_capacities: Arc::new(crabka_rebalancer::capacity::BrokerCapacities::default()),
+        broker_capacities: Arc::new(krabka_rebalancer::capacity::BrokerCapacities::default()),
         broker_usages: Arc::new(store),
     };
 
@@ -1067,7 +1067,7 @@ async fn get_anomalies_returns_empty_when_detector_quiet() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn anomaly_store_persists_and_get_anomalies_returns_it() {
-    use crabka_rebalancer::detector::{AnomalyKey, AnomalyKind, AnomalySeverity};
+    use krabka_rebalancer::detector::{AnomalyKey, AnomalyKind, AnomalySeverity};
 
     let shared = new_shared_snapshot();
     let (state, _registry) = build_state(shared);
@@ -1103,7 +1103,7 @@ async fn anomaly_store_persists_and_get_anomalies_returns_it() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn auto_trigger_skipped_when_executor_in_flight() {
-    use crabka_rebalancer::{
+    use krabka_rebalancer::{
         detector::{
             Anomaly, AnomalyKey, AnomalyKind, AnomalySeverity, DetectorConfig, DetectorMetrics,
             auto_trigger,
@@ -1164,7 +1164,7 @@ async fn auto_trigger_skipped_when_executor_in_flight() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn disk_pressure_anomaly_auto_triggers_proposal() {
-    use crabka_rebalancer::{
+    use krabka_rebalancer::{
         detector::{
             AnomalyKey, AnomalyKind, AnomalySeverity, DetectorConfig, DetectorMetrics, auto_trigger,
         },

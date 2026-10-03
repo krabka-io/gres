@@ -68,7 +68,7 @@ pub(crate) fn eval_row_count(
             value.column_type().map_or("unknown", ColumnType::name)
         )));
     }
-    let Datum::Int8(count) = crabka_pgtypes::cast::cast(&value, ColumnType::Int8, &ctx.time_zone)?
+    let Datum::Int8(count) = krabka_pgtypes::cast::cast(&value, ColumnType::Int8, &ctx.time_zone)?
     else {
         return Err(ExecError::TypeMismatch(format!(
             "argument of {} must be type bigint",
@@ -114,7 +114,7 @@ pub(crate) struct RowWindow {
 /// subquery inside the counts first so it reads under the same snapshot.
 pub(crate) fn query_row_window(
     read_ctx: &crate::subquery::SubCtx<'_>,
-    q: &crabka_pgparser::ast::QueryExpr,
+    q: &krabka_pgparser::ast::QueryExpr,
 ) -> Result<RowWindow, ExecError> {
     let ctx = read_ctx.eval_ctx;
     let (limit, offset) = crate::subquery::resolve_row_counts(read_ctx, q)?;
@@ -134,7 +134,7 @@ pub(crate) fn query_row_window(
 pub(crate) fn apply_row_window<T>(
     mut keyed: Vec<(Vec<Datum>, T)>,
     window: RowWindow,
-    order_by: &[crabka_pgparser::ast::OrderItem],
+    order_by: &[krabka_pgparser::ast::OrderItem],
 ) -> Vec<T> {
     apply_offset_limit(&mut keyed, window.offset, None);
     if let Some(limit) = window.limit {

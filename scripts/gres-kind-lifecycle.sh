@@ -4,11 +4,11 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-readonly CLUSTER="${CRABKA_GRES_KIND_CLUSTER:-crabka-gres-g5}"
-readonly ARTIFACT_DIR="${CRABKA_GRES_KIND_ARTIFACT_DIR:-target/gres-kind-lifecycle-artifacts}"
-readonly ITERATIONS="${CRABKA_GRES_COLDSTART_ITERATIONS:-10}"
-readonly P95_CEILING_MS="${CRABKA_GRES_COLDSTART_P95_CEILING_MS:-30000}"
-readonly PGPASSWORD_VALUE="${CRABKA_GRES_KIND_PASSWORD:-g5-secret-password}"
+readonly CLUSTER="${KRABKA_GRES_KIND_CLUSTER:-krabka-gres-g5}"
+readonly ARTIFACT_DIR="${KRABKA_GRES_KIND_ARTIFACT_DIR:-target/gres-kind-lifecycle-artifacts}"
+readonly ITERATIONS="${KRABKA_GRES_COLDSTART_ITERATIONS:-10}"
+readonly P95_CEILING_MS="${KRABKA_GRES_COLDSTART_P95_CEILING_MS:-30000}"
+readonly PGPASSWORD_VALUE="${KRABKA_GRES_KIND_PASSWORD:-g5-secret-password}"
 readonly PGDOG_IMAGE="ghcr.io/pgdogdev/pgdog:0.1.47"
 readonly IMAGE_TAG="g5-e2e"
 # Safety margin between a wake no-roll observation and the operator-stamped
@@ -31,31 +31,31 @@ cleanup() {
     if [ -n "$COMPUTE_FORWARD_PID" ]; then kill "$COMPUTE_FORWARD_PID" 2>/dev/null || true; fi
     if [ -n "$BROKER_FORWARD_PID" ]; then kill "$BROKER_FORWARD_PID" 2>/dev/null || true; fi
     kubectl get events -A --sort-by=.lastTimestamp >"$ARTIFACT_DIR/events.txt" 2>&1 || true
-    kubectl logs -n crabka-operator deploy/crabka-gres-operator --timestamps \
+    kubectl logs -n krabka-operator deploy/krabka-gres-operator --timestamps \
         >"$ARTIFACT_DIR/operator.log" 2>&1 || true
     # A label selector caps `kubectl logs` at ten lines per container unless
     # `--tail=-1` asks for the whole log.
-    kubectl logs -l 'app.kubernetes.io/name=crabka-gres,app.kubernetes.io/instance=tenant-a' \
+    kubectl logs -l 'app.kubernetes.io/name=krabka-gres,app.kubernetes.io/instance=tenant-a' \
         --all-containers=true --prefix --tail=-1 --ignore-errors=true \
         >"$ARTIFACT_DIR/compute.log" 2>&1 || true
-    kubectl logs -l 'app.kubernetes.io/name=crabka-gres,app.kubernetes.io/instance=tenant-a' \
+    kubectl logs -l 'app.kubernetes.io/name=krabka-gres,app.kubernetes.io/instance=tenant-a' \
         --all-containers=true --prefix --tail=-1 --previous --ignore-errors=true \
         >"$ARTIFACT_DIR/compute-previous.log" 2>&1 || true
     # Pooler-side evidence: a first-statement failure through PgDog needs the
     # PgDog pool log and the activator log next to the operator log.
-    kubectl logs -l 'app.kubernetes.io/name=crabka-pgdog,app.kubernetes.io/instance=fleet' \
+    kubectl logs -l 'app.kubernetes.io/name=krabka-pgdog,app.kubernetes.io/instance=fleet' \
         --all-containers=true --prefix --tail=-1 --timestamps --ignore-errors=true \
         >"$ARTIFACT_DIR/pgdog.log" 2>&1 || true
-    kubectl logs -l 'app.kubernetes.io/name=crabka-pgdog,app.kubernetes.io/instance=fleet' \
+    kubectl logs -l 'app.kubernetes.io/name=krabka-pgdog,app.kubernetes.io/instance=fleet' \
         --all-containers=true --prefix --tail=-1 --timestamps --previous --ignore-errors=true \
         >"$ARTIFACT_DIR/pgdog-previous.log" 2>&1 || true
-    kubectl logs -l 'app.kubernetes.io/name=crabka-gres-activator,app.kubernetes.io/instance=fleet' \
+    kubectl logs -l 'app.kubernetes.io/name=krabka-gres-activator,app.kubernetes.io/instance=fleet' \
         --all-containers=true --prefix --tail=-1 --timestamps --ignore-errors=true \
         >"$ARTIFACT_DIR/activator.log" 2>&1 || true
     kubectl logs demo-brokers-0 -c broker --timestamps >"$ARTIFACT_DIR/broker.log" 2>&1 || true
     kubectl get gres,grestenant,deploy,pod,svc -A -o yaml \
         >"$ARTIFACT_DIR/final-objects.yaml" 2>&1 || true
-    if [ "$status" -ne 0 ] || [ "${CRABKA_GRES_KIND_KEEP_CLUSTER:-0}" = 1 ]; then
+    if [ "$status" -ne 0 ] || [ "${KRABKA_GRES_KIND_KEEP_CLUSTER:-0}" = 1 ]; then
         echo "artifacts retained at $ARTIFACT_DIR" >&2
     else
         timeout 60s kind delete cluster --name "$CLUSTER" >/dev/null 2>&1 || true
@@ -78,7 +78,7 @@ start_pgdog_port_forward() {
     wait "$PORT_FORWARD_PID" 2>/dev/null || true
     PORT_FORWARD_PID=""
     pod=$(kubectl get pods \
-        -l 'app.kubernetes.io/name=crabka-pgdog,app.kubernetes.io/instance=fleet' \
+        -l 'app.kubernetes.io/name=krabka-pgdog,app.kubernetes.io/instance=fleet' \
         --field-selector=status.phase=Running \
         --sort-by=.metadata.creationTimestamp -o name | tail -n 1)
     [ -n "$pod" ] || fail "no running PgDog pod after rollout"
@@ -173,11 +173,11 @@ timeout 90s kind delete cluster --name "$CLUSTER" >/dev/null 2>&1 || true
 timeout 180s kind create cluster --name "$CLUSTER" --wait 120s
 
 timeout 1800s cargo build --locked --release \
-    -p crabka-cli -p crabka-operator -p crabka-broker -p crabka-gres -p crabka-gres-activator
-build_image crabka-operator "crabka-operator:$IMAGE_TAG"
-build_image crabka-broker "crabka-broker:$IMAGE_TAG"
-build_image crabka-gres "crabka-gres:$IMAGE_TAG"
-build_image crabka-gres-activator "crabka-gres-activator:$IMAGE_TAG"
+    -p krabka-cli -p krabka-operator -p krabka-broker -p krabka-gres -p krabka-gres-activator
+build_image krabka-operator "krabka-operator:$IMAGE_TAG"
+build_image krabka-broker "krabka-broker:$IMAGE_TAG"
+build_image krabka-gres "krabka-gres:$IMAGE_TAG"
+build_image krabka-gres-activator "krabka-gres-activator:$IMAGE_TAG"
 timeout 180s docker pull "$PGDOG_IMAGE"
 # PgDog publishes a multi-platform OCI index that `kind load docker-image`
 # cannot reliably flatten. Let containerd pull the exact pinned digest/tag.
@@ -213,30 +213,30 @@ spec: {selector: {app: minio}, ports: [{port: 9000, targetPort: 9000}]}
 YAML
 timeout 180s kubectl rollout status deploy/minio --timeout=170s
 
-kubectl create namespace crabka-operator
-kubectl create serviceaccount crabka-gres-operator -n crabka-operator
-kubectl create clusterrolebinding crabka-gres-operator-admin \
-    --clusterrole=cluster-admin --serviceaccount=crabka-operator:crabka-gres-operator
+kubectl create namespace krabka-operator
+kubectl create serviceaccount krabka-gres-operator -n krabka-operator
+kubectl create clusterrolebinding krabka-gres-operator-admin \
+    --clusterrole=cluster-admin --serviceaccount=krabka-operator:krabka-gres-operator
 kubectl apply -f - <<YAML
 apiVersion: apps/v1
 kind: Deployment
-metadata: {name: crabka-gres-operator, namespace: crabka-operator}
+metadata: {name: krabka-gres-operator, namespace: krabka-operator}
 spec:
   replicas: 1
-  selector: {matchLabels: {app: crabka-gres-operator}}
+  selector: {matchLabels: {app: krabka-gres-operator}}
   template:
-    metadata: {labels: {app: crabka-gres-operator}}
+    metadata: {labels: {app: krabka-gres-operator}}
     spec:
-      serviceAccountName: crabka-gres-operator
+      serviceAccountName: krabka-gres-operator
       containers:
         - name: operator
-          image: crabka-operator:$IMAGE_TAG
+          image: krabka-operator:$IMAGE_TAG
           imagePullPolicy: Never
           args:
             - run
-            - --default-broker-image=crabka-broker:$IMAGE_TAG
-            - --default-gres-image=crabka-gres:$IMAGE_TAG
-            - --default-gres-activator-image=crabka-gres-activator:$IMAGE_TAG
+            - --default-broker-image=krabka-broker:$IMAGE_TAG
+            - --default-gres-image=krabka-gres:$IMAGE_TAG
+            - --default-gres-activator-image=krabka-gres-activator:$IMAGE_TAG
             - --default-pgdog-image=$PGDOG_IMAGE
             - --gres-checkpoint-store=s3
             - --gres-checkpoint-bucket=gres-checkpoints
@@ -246,10 +246,10 @@ spec:
             - --gres-checkpoint-access-key-id=minio
             - --gres-checkpoint-secret-access-key=minio-secret
           env:
-            - {name: OPERATOR_NAMESPACE, value: crabka-operator}
+            - {name: OPERATOR_NAMESPACE, value: krabka-operator}
             - {name: POD_NAME, valueFrom: {fieldRef: {fieldPath: metadata.name}}}
 YAML
-timeout 180s kubectl rollout status -n crabka-operator deploy/crabka-gres-operator --timeout=170s
+timeout 180s kubectl rollout status -n krabka-operator deploy/krabka-gres-operator --timeout=170s
 
 kubectl apply -f - <<'YAML'
 apiVersion: crabka.io/v1alpha1
@@ -502,7 +502,7 @@ for iteration in $(seq 1 "$ITERATIONS"); do
         fail "post-grace direct PgDog route accepted the wrong tenant credential"
     fi
     post_grace_pgdog_log="$ARTIFACT_DIR/post-grace-pgdog-${iteration}.log"
-    kubectl logs -l app.kubernetes.io/name=crabka-pgdog,app.kubernetes.io/instance=fleet \
+    kubectl logs -l app.kubernetes.io/name=krabka-pgdog,app.kubernetes.io/instance=fleet \
         --all-containers=true --prefix --ignore-errors=true --since=2m \
         >"$post_grace_pgdog_log" 2>&1
     grep -Fq 'auth: passthrough' "$post_grace_pgdog_log" || \
@@ -534,7 +534,7 @@ printf '%s\t%s\n' "$lifecycle_start_ns" "$lifecycle_end_ns" >"$ARTIFACT_DIR/life
 # publish Suspended, delete the exact newest manifest, then restore the
 # operator. The suspended compute must stay quiesced while parking fails closed
 # without deleting the generation-qualified WAL.
-kubectl scale deploy/crabka-gres-operator -n crabka-operator --replicas=0
+kubectl scale deploy/krabka-gres-operator -n krabka-operator --replicas=0
 kubectl port-forward svc/demo-broker-headless 19092:9092 >"$ARTIFACT_DIR/broker-port-forward.log" 2>&1 &
 BROKER_FORWARD_PID=$!
 deadline_wait 30 "broker port-forward" "timeout 1 bash -c '</dev/tcp/127.0.0.1/19092' 2>/dev/null"
@@ -549,16 +549,16 @@ kubectl run minio-delete-manifest --restart=Never \
 deadline_wait 60 "newest manifest deletion" \
     '[ "$(kubectl get pod minio-delete-manifest -o jsonpath='"'"'{.status.phase}'"'"')" = Succeeded ]'
 kubectl logs minio-delete-manifest >"$ARTIFACT_DIR/deleted-manifest.txt"
-kubectl scale deploy/crabka-gres-operator -n crabka-operator --replicas=1
-timeout 120s kubectl rollout status deploy/crabka-gres-operator -n crabka-operator --timeout=110s
+kubectl scale deploy/krabka-gres-operator -n krabka-operator --replicas=1
+timeout 120s kubectl rollout status deploy/krabka-gres-operator -n krabka-operator --timeout=110s
 deadline_wait 90 "missing-final-manifest refusal" \
-    "kubectl logs -n crabka-operator deploy/crabka-gres-operator --since=2m | grep -Eqi 'manifest.*(missing|not found)|missing.*manifest'"
+    "kubectl logs -n krabka-operator deploy/krabka-gres-operator --since=2m | grep -Eqi 'manifest.*(missing|not found)|missing.*manifest'"
 [ "$(kubectl get deploy tenant-a-gres -o jsonpath='{.spec.replicas}')" = 0 ] || \
     fail "operator restarted suspended compute despite missing final manifest"
 kubectl exec demo-brokers-0 -- sh -c \
     'test -n "$(find /var/lib/crabka/data -maxdepth 1 -type d -name "__gres_wal.tenant-a.r0.g*-0" -print -quit)"' || \
     fail "operator deleted WAL despite missing final manifest"
-kubectl logs -n crabka-operator deploy/crabka-gres-operator --since=2m \
+kubectl logs -n krabka-operator deploy/krabka-gres-operator --since=2m \
     >"$ARTIFACT_DIR/missing-manifest-refusal.log"
 kill "$BROKER_FORWARD_PID" 2>/dev/null || true
 wait "$BROKER_FORWARD_PID" 2>/dev/null || true
@@ -590,7 +590,7 @@ result = {
   "kubectl_version": subprocess.check_output(["kubectl", "version", "--client"], text=True).splitlines()[0],
   "host": platform.platform(), "latencies_ms": values,
   "wal_generations": generations,
-  "crabka_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+  "krabka_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
   "pgdog_resolved_image": subprocess.check_output(
       ["docker", "image", "inspect", pgdog, "--format", "{{index .RepoDigests 0}}"], text=True
   ).strip(),
@@ -603,7 +603,7 @@ PY
 # Retain exact controller/watch/requeue and lifecycle records. ResumeRequested
 # is broker-backed and coalesced by the registry; wal_generation advancement is
 # evidenced by the controller logs plus the generation proof captured above.
-kubectl logs -n crabka-operator deploy/crabka-gres-operator --timestamps >"$ARTIFACT_DIR/operator.log"
+kubectl logs -n krabka-operator deploy/krabka-gres-operator --timestamps >"$ARTIFACT_DIR/operator.log"
 grep -E 'ResumeRequested|resume_requested|parking|wal_generation|Suspended|suspended' \
     "$ARTIFACT_DIR/operator.log" >"$ARTIFACT_DIR/lifecycle-events.log" || true
 echo "PASS: operator-backed Kind lifecycle and N=$ITERATIONS verified-TLS cold starts"

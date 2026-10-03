@@ -11,20 +11,20 @@ use std::{
 };
 
 use arc_swap::ArcSwap;
-use crabka_pgcatalog::ShardingStrategy;
-use crabka_pgexec::{
+use futures::future::join_all;
+use krabka_pgcatalog::ShardingStrategy;
+use krabka_pgexec::{
     ExecError, PredicateOp, PredicatePushdown, SqlEngine, foreign::ForeignScanner,
 };
-use crabka_pgtypes::Datum;
-use crabka_pgwire::{
+use krabka_pgtypes::Datum;
+use krabka_pgwire::{
     engine::{
         BoundParam, CloseTarget, Engine, ExecuteOutcome, Notification, PortalDescription,
         PreparedDescription, QueryResult, Session, TxStatus,
     },
     error::{PgError, sqlstate},
 };
-use crabka_units::convert::TimeExt as _;
-use futures::future::join_all;
+use krabka_units::convert::TimeExt as _;
 use tokio::sync::{Mutex, RwLock};
 use tracing::Instrument as _;
 
@@ -92,7 +92,7 @@ pub struct MultiRangeTenantConfig {
     ///
     /// This is a fault-injection control for load and chaos tests, not a
     /// production setting. When [`TimestampSourceMode::Hlc`] is installed, the
-    /// tenant wraps the system clock in a [`crabka_pgexec::SkewedWallClock`].
+    /// tenant wraps the system clock in a [`krabka_pgexec::SkewedWallClock`].
     /// A positive offset makes this node mint stamps as if its wall clock ran
     /// ahead of its peers. A negative offset makes it mint stamps as if the
     /// clock ran behind them. The offset is node-local by design and, unlike
@@ -362,7 +362,7 @@ pub enum TenantError {
 /// Read-only range-0 state injected into an rN-only compute.
 #[derive(Clone)]
 pub struct ReadOnlyRange0Replica {
-    catalog_kv: Arc<dyn crabka_pgkv::Kv>,
+    catalog_kv: Arc<dyn krabka_pgkv::Kv>,
     barrier: Arc<Range0Barrier>,
     tail: crate::Range0Tail,
     refresh_poke: Option<Arc<tokio::sync::Notify>>,
@@ -467,12 +467,12 @@ impl ReadOnlyRange0Replica {
 /// this hook is the only place they are visible. It runs inline on the apply
 /// path: it does exactly one non-blocking best-effort fan-out and returns.
 struct NotifyTailObserver {
-    bus: Arc<crabka_pgexec::notify::NotifyBus>,
+    bus: Arc<krabka_pgexec::notify::NotifyBus>,
     origin: String,
 }
 
 impl crate::range0_tail::Range0FrameObserver for NotifyTailObserver {
-    fn observe(&self, ops: &[crabka_pgkv::WriteOp]) {
+    fn observe(&self, ops: &[krabka_pgkv::WriteOp]) {
         let notifications = remote_notifications(ops, &self.origin);
         if notifications.is_empty() {
             return;
@@ -488,18 +488,18 @@ impl crate::range0_tail::Range0FrameObserver for NotifyTailObserver {
 /// that fails to decode. These bytes came off a log another node wrote, so a
 /// corrupt or future-versioned record must cost one warning, not the catalog
 /// apply path it runs on.
-fn remote_notifications(ops: &[crabka_pgkv::WriteOp], origin: &str) -> Vec<Notification> {
+fn remote_notifications(ops: &[krabka_pgkv::WriteOp], origin: &str) -> Vec<Notification> {
     let mut notifications = Vec::new();
     for op in ops {
-        if !crabka_pgkv::is_notify_op(op) {
+        if !krabka_pgkv::is_notify_op(op) {
             continue;
         }
-        let (crabka_pgkv::WriteOp::Put { value, .. }
-        | crabka_pgkv::WriteOp::ConditionalPut { value, .. }) = op
+        let (krabka_pgkv::WriteOp::Put { value, .. }
+        | krabka_pgkv::WriteOp::ConditionalPut { value, .. }) = op
         else {
             continue;
         };
-        match crabka_pgkv::NotifyRecord::decode(value) {
+        match krabka_pgkv::NotifyRecord::decode(value) {
             // A node that observes its own record has already delivered it
             // locally; the leader applies its own frames without this tail, so
             // this is a safety net rather than the load-bearing check.
@@ -549,9 +549,9 @@ pub enum LocalSqlSplitError {
     #[error("successor r{range_id} engine: {error:?}")]
     SuccessorEngine { range_id: RangeId, error: ExecError },
     #[error(transparent)]
-    Catalog(#[from] crabka_pgcatalog::CatalogError),
+    Catalog(#[from] krabka_pgcatalog::CatalogError),
     #[error(transparent)]
-    Storage(#[from] crabka_pgkv::KvError),
+    Storage(#[from] krabka_pgkv::KvError),
     #[error(transparent)]
     Transfer(#[from] RangeTransferError),
     #[error(
@@ -659,7 +659,7 @@ pub fn in_doubt_markers_for_engine(
     interval_start: RangeKey,
     interval_end: Option<RangeKey>,
 ) -> Result<Vec<crate::InDoubtMarker>, SplitError> {
-    let routing_by_physical = crabka_pgcatalog::list_tables(engine.catalog_kv())
+    let routing_by_physical = krabka_pgcatalog::list_tables(engine.catalog_kv())
         .map_err(|error| SplitError::Hook(format!("list marker tables: {error}")))?
         .into_iter()
         .map(|table| (table.id, routing_table_id(&table.name)))
@@ -669,7 +669,7 @@ pub fn in_doubt_markers_for_engine(
         .timestamp_transaction_descriptors()
         .map_err(|error| SplitError::Hook(format!("read timestamp descriptors: {error:?}")))?
     {
-        if descriptor.decision != crabka_pgexec::PrimaryTxnDecision::Pending {
+        if descriptor.decision != krabka_pgexec::PrimaryTxnDecision::Pending {
             continue;
         }
         for operation in descriptor.operations {
@@ -709,9 +709,9 @@ impl MultiRangeTenant {
         };
         for global_xid in coordinator.prepared_globals()? {
             let status = coordinator
-                .commit_global_decision(global_xid, crabka_pgmvcc::clog::XidStatus::Aborted)
+                .commit_global_decision(global_xid, krabka_pgmvcc::clog::XidStatus::Aborted)
                 .await?;
-            let commit = status == crabka_pgmvcc::clog::XidStatus::Committed;
+            let commit = status == krabka_pgmvcc::clog::XidStatus::Committed;
             for range_id in serving
                 .range_map
                 .ranges()
@@ -760,7 +760,7 @@ impl MultiRangeTenant {
     pub fn start_with_engine_factory_and_timestamp_oracle(
         mut config: MultiRangeTenantConfig,
         mut open_engine: impl FnMut(Option<&PathBuf>, RangeId) -> Result<SqlEngine, ExecError>,
-        timestamp_oracle: Option<Arc<dyn crabka_pgexec::TimestampSource>>,
+        timestamp_oracle: Option<Arc<dyn krabka_pgexec::TimestampSource>>,
     ) -> Result<(Self, MultiRangeTenantHandles), TenantError> {
         let hosts_range0 = Self::validate_range0_assembly(&mut config)?;
         let mut engines = BTreeMap::new();
@@ -820,7 +820,7 @@ impl MultiRangeTenant {
                     (config.range_registry.clone(), config.range_client.clone())
                 {
                     let rpc = Arc::new(RegistryTsoRpc::new(registry, client));
-                    let timestamp_oracle: Arc<dyn crabka_pgexec::TimestampSource> =
+                    let timestamp_oracle: Arc<dyn krabka_pgexec::TimestampSource> =
                         Arc::new(PgexecTsoOracle {
                             client: BatchedTsoClient::new(rpc),
                             observed_floor: std::sync::atomic::AtomicU64::new(0),
@@ -846,7 +846,7 @@ impl MultiRangeTenant {
             .iter()
             .map(|(range_id, engine)| (*range_id, engine.clone_handle()))
             .collect();
-        let range_scanner: Arc<dyn crabka_pgexec::RangeScanner> =
+        let range_scanner: Arc<dyn krabka_pgexec::RangeScanner> =
             match config.range_registry.clone() {
                 Some(registry) => Arc::new(RegistryRangeScanner::new_with_policy(
                     registry,
@@ -1213,7 +1213,7 @@ impl MultiRangeTenant {
                 }
             }
         }
-        let scanner: Arc<dyn crabka_pgexec::RangeScanner> = Arc::new(InProcessRangeScanner {
+        let scanner: Arc<dyn krabka_pgexec::RangeScanner> = Arc::new(InProcessRangeScanner {
             engines: engines
                 .iter()
                 .map(|(range_id, engine)| (*range_id, engine.clone_handle()))
@@ -1395,14 +1395,14 @@ impl MultiRangeTenant {
             .engines
             .get(&RangeId::COORDINATOR)
             .ok_or(LocalSqlSplitError::RemoteRange)?;
-        let table = crabka_pgcatalog::list_tables(coordinator.catalog_kv())?
+        let table = krabka_pgcatalog::list_tables(coordinator.catalog_kv())?
             .into_iter()
             .find(|table| routing_table_id(&table.name) == table_id)
             .ok_or(LocalSqlSplitError::MissingTable(table_id))?;
         if table.foreign.is_some() {
             return Err(LocalSqlSplitError::UnsupportedTableKind(table_id));
         }
-        if !crabka_pgcatalog::list_table_indexes(coordinator.catalog_kv(), &table.name)?.is_empty()
+        if !krabka_pgcatalog::list_table_indexes(coordinator.catalog_kv(), &table.name)?.is_empty()
         {
             return Err(LocalSqlSplitError::IndexedTable(table_id));
         }
@@ -1427,7 +1427,7 @@ impl MultiRangeTenant {
         let mapping = crate::transfer::predecessor_table_mapping(
             &serving.range_map,
             state.predecessor,
-            crabka_pgcatalog::list_tables(coordinator.catalog_kv())?
+            krabka_pgcatalog::list_tables(coordinator.catalog_kv())?
                 .into_iter()
                 .map(|table| {
                     (
@@ -1437,12 +1437,12 @@ impl MultiRangeTenant {
                 }),
         )?;
         for (bytes, _) in source.kv_handle().scan_range(&[], &[u8::MAX])? {
-            let physical = match crabka_pgkv::key::classify_key(&bytes) {
-                crabka_pgkv::key::KeyClass::PrimaryRow { table_id, .. }
-                | crabka_pgkv::key::KeyClass::PrimaryVersion { table_id, .. }
-                | crabka_pgkv::key::KeyClass::HashPrimaryRow { table_id, .. }
-                | crabka_pgkv::key::KeyClass::HashPrimaryVersion { table_id, .. }
-                | crabka_pgkv::key::KeyClass::Sequence { table_id } => {
+            let physical = match krabka_pgkv::key::classify_key(&bytes) {
+                krabka_pgkv::key::KeyClass::PrimaryRow { table_id, .. }
+                | krabka_pgkv::key::KeyClass::PrimaryVersion { table_id, .. }
+                | krabka_pgkv::key::KeyClass::HashPrimaryRow { table_id, .. }
+                | krabka_pgkv::key::KeyClass::HashPrimaryVersion { table_id, .. }
+                | krabka_pgkv::key::KeyClass::Sequence { table_id } => {
                     Some(TableId::new(u64::from(table_id)))
                 }
                 _ => None,
@@ -1468,7 +1468,7 @@ impl MultiRangeTenant {
             .engines
             .get(&RangeId::COORDINATOR)
             .ok_or(LocalSqlSplitError::RemoteRange)?;
-        for table in crabka_pgcatalog::list_tables(coordinator.catalog_kv())? {
+        for table in krabka_pgcatalog::list_tables(coordinator.catalog_kv())? {
             let catalog_table_id = routing_table_id(&table.name);
             if state
                 .target_map
@@ -1517,27 +1517,27 @@ impl MultiRangeTenant {
         let Some(coordinator) = serving.engines.get(&RangeId::COORDINATOR) else {
             return Err(LocalSqlSplitError::RemoteRange);
         };
-        let table = crabka_pgcatalog::list_tables(coordinator.catalog_kv())?
+        let table = krabka_pgcatalog::list_tables(coordinator.catalog_kv())?
             .into_iter()
             .find(|table| routing_table_id(&table.name) == table_id)
             .ok_or(LocalSqlSplitError::MissingTable(table_id))?;
         if table.foreign.is_some() {
             return Err(LocalSqlSplitError::UnsupportedTableKind(table_id));
         }
-        if !crabka_pgcatalog::list_table_indexes(coordinator.catalog_kv(), &table.name)?.is_empty()
+        if !krabka_pgcatalog::list_table_indexes(coordinator.catalog_kv(), &table.name)?.is_empty()
         {
             return Err(LocalSqlSplitError::IndexedTable(table_id));
         }
         if !predecessor_engine
             .kv_handle()
-            .scan_prefix(&crabka_pgkv::key::table_prefix(table.id))?
+            .scan_prefix(&krabka_pgkv::key::table_prefix(table.id))?
             .is_empty()
         {
             return Err(LocalSqlSplitError::NonEmptyTable(table_id));
         }
         let sequence = predecessor_engine
             .kv_handle()
-            .get(&crabka_pgkv::key::seq_key(table.id))?
+            .get(&krabka_pgkv::key::seq_key(table.id))?
             .ok_or(LocalSqlSplitError::AllocatedRowIds(table_id))?;
         if sequence != 1_u64.to_be_bytes() {
             return Err(LocalSqlSplitError::AllocatedRowIds(table_id));
@@ -1552,22 +1552,22 @@ impl MultiRangeTenant {
 /// lock. It replays a durable commit physically with the operations stored in that
 /// descriptor.
 fn hosted_participant_requires_recovery(
-    descriptor: &crabka_pgexec::TimestampTxnDescriptor,
-    identity: crabka_pgexec::TimestampTxnIdentity,
+    descriptor: &krabka_pgexec::TimestampTxnDescriptor,
+    identity: krabka_pgexec::TimestampTxnIdentity,
     participant: RangeId,
-    outstanding: &BTreeSet<crabka_pgexec::DurableTimestampIntentIdentity>,
+    outstanding: &BTreeSet<krabka_pgexec::DurableTimestampIntentIdentity>,
 ) -> bool {
-    descriptor.decision == crabka_pgexec::PrimaryTxnDecision::Pending
-        || outstanding.contains(&crabka_pgexec::DurableTimestampIntentIdentity {
+    descriptor.decision == krabka_pgexec::PrimaryTxnDecision::Pending
+        || outstanding.contains(&krabka_pgexec::DurableTimestampIntentIdentity {
             identity,
             participant_range: participant.as_u32(),
         })
 }
 
 fn route_timestamp_descriptor_to_active_map(
-    mut descriptor: crabka_pgexec::TimestampTxnDescriptor,
+    mut descriptor: krabka_pgexec::TimestampTxnDescriptor,
     range_map: &RangeMap,
-) -> Result<crabka_pgexec::TimestampTxnDescriptor, crate::MapValidationError> {
+) -> Result<krabka_pgexec::TimestampTxnDescriptor, crate::MapValidationError> {
     let active_ranges = range_map
         .ranges()
         .iter()
@@ -1648,7 +1648,7 @@ fn recover_durable_timestamp_transactions(
                     .map_err(|error| TenantError::TimestampRecovery(error.to_string()))?
                     .block_on(async {
                         for (primary_range, descriptor) in descriptors {
-                            let identity = crabka_pgexec::TimestampTxnIdentity {
+                            let identity = krabka_pgexec::TimestampTxnIdentity {
                                 start_ts: descriptor.start_ts,
                                 global_xid: descriptor.global_xid,
                                 primary_range: primary_range.as_u32(),
@@ -1727,7 +1727,7 @@ fn recover_durable_timestamp_transactions(
                                 let resolve_result = if let Some(participant) =
                                     engines.get(&range_id)
                                 {
-                                    if decision == crabka_pgexec::PrimaryTxnDecision::Aborted {
+                                    if decision == krabka_pgexec::PrimaryTxnDecision::Aborted {
                                         participant
                                             .abort_timestamp_transaction_intents(
                                                 descriptor.start_ts,
@@ -1780,9 +1780,9 @@ async fn recover_orphan_timestamp_participants(
     remote: Option<(&RangeRegistry, &FramedTcpClient)>,
 ) -> Result<(), TenantError> {
     let recovery_error =
-        |error: crabka_pgexec::ExecError| TenantError::TimestampRecovery(format!("{error:?}"));
+        |error: krabka_pgexec::ExecError| TenantError::TimestampRecovery(format!("{error:?}"));
     let mut orphan_participants =
-        BTreeMap::<crabka_pgexec::TimestampTxnIdentity, Vec<RangeId>>::new();
+        BTreeMap::<krabka_pgexec::TimestampTxnIdentity, Vec<RangeId>>::new();
     for engine in engines.values() {
         for durable in engine
             .durable_timestamp_intent_identities()
@@ -1810,7 +1810,7 @@ async fn recover_orphan_timestamp_participants(
                 .map_err(recovery_error)?;
             (None, remote_primary_decision)
         };
-        if primary_decision != crabka_pgexec::PrimaryTxnDecision::Pending {
+        if primary_decision != krabka_pgexec::PrimaryTxnDecision::Pending {
             if primary.is_none() {
                 for range_id in participants {
                     let participant = engines.get(&range_id).ok_or_else(|| {
@@ -1818,7 +1818,7 @@ async fn recover_orphan_timestamp_participants(
                             "terminal participant r{range_id} is not hosted"
                         ))
                     })?;
-                    if primary_decision == crabka_pgexec::PrimaryTxnDecision::Aborted {
+                    if primary_decision == krabka_pgexec::PrimaryTxnDecision::Aborted {
                         participant
                             .abort_timestamp_transaction_intents(identity.start_ts)
                             .await
@@ -1846,7 +1846,7 @@ async fn recover_orphan_timestamp_participants(
                         "terminal participant r{range_id} is not hosted"
                     ))
                 })?;
-                if primary_decision == crabka_pgexec::PrimaryTxnDecision::Aborted {
+                if primary_decision == krabka_pgexec::PrimaryTxnDecision::Aborted {
                     participant
                         .abort_timestamp_transaction_intents(identity.start_ts)
                         .await
@@ -1872,7 +1872,7 @@ async fn recover_orphan_timestamp_participants(
             continue;
         }
         let primary = primary.expect("pending decision requires hosted primary");
-        let descriptor = crabka_pgexec::TimestampTxnDescriptor::begun(
+        let descriptor = krabka_pgexec::TimestampTxnDescriptor::begun(
             identity.start_ts,
             identity.global_xid,
             participants.iter().map(|range| range.as_u32()).collect(),
@@ -1884,7 +1884,7 @@ async fn recover_orphan_timestamp_participants(
         primary
             .decide_timestamp_transaction(
                 identity.start_ts,
-                crabka_pgexec::PrimaryTxnDecision::Aborted,
+                krabka_pgexec::PrimaryTxnDecision::Aborted,
             )
             .await
             .map_err(recovery_error)?;
@@ -1906,8 +1906,8 @@ async fn recover_orphan_timestamp_participants(
 
 async fn recover_remote_timestamp_primary(
     remote: Option<(&RangeRegistry, &FramedTcpClient)>,
-    identity: crabka_pgexec::TimestampTxnIdentity,
-) -> Result<crabka_pgexec::PrimaryTxnDecision, ExecError> {
+    identity: krabka_pgexec::TimestampTxnIdentity,
+) -> Result<krabka_pgexec::PrimaryTxnDecision, ExecError> {
     let (registry, client) = remote.ok_or_else(|| {
         ExecError::Unsupported(format!(
             "timestamp primary r{} is unreachable",
@@ -1937,11 +1937,11 @@ async fn recover_remote_timestamp_primary(
         crate::transport::RangeResponse::TimestampPrimaryDecision { decision, .. } => {
             match decision {
                 crate::transport::WireTimestampDecision::Aborted => {
-                    Ok(crabka_pgexec::PrimaryTxnDecision::Aborted)
+                    Ok(krabka_pgexec::PrimaryTxnDecision::Aborted)
                 }
                 crate::transport::WireTimestampDecision::Committed { commit_ts } => {
-                    Ok(crabka_pgexec::PrimaryTxnDecision::Committed(
-                        crabka_pgexec::CommitTimestamp::new(commit_ts)
+                    Ok(krabka_pgexec::PrimaryTxnDecision::Committed(
+                        krabka_pgexec::CommitTimestamp::new(commit_ts)
                             .map_err(|error| ExecError::Unsupported(error.to_string()))?,
                     ))
                 }
@@ -1960,9 +1960,9 @@ async fn recover_remote_timestamp_primary(
 async fn recover_remote_timestamp_participant(
     remote: Option<(&RangeRegistry, &FramedTcpClient)>,
     range_id: RangeId,
-    identity: crabka_pgexec::TimestampTxnIdentity,
-    decision: crabka_pgexec::PrimaryTxnDecision,
-    operations: &[crabka_pgexec::TimestampTxnOperation],
+    identity: krabka_pgexec::TimestampTxnIdentity,
+    decision: krabka_pgexec::PrimaryTxnDecision,
+    operations: &[krabka_pgexec::TimestampTxnOperation],
 ) -> Result<(), ExecError> {
     let (registry, client) = remote.ok_or_else(|| {
         ExecError::Unsupported(format!(
@@ -1975,15 +1975,15 @@ async fn recover_remote_timestamp_participant(
         .await
         .map_err(|error| ExecError::Unsupported(error.to_string()))?;
     let decision = match decision {
-        crabka_pgexec::PrimaryTxnDecision::Aborted => {
+        krabka_pgexec::PrimaryTxnDecision::Aborted => {
             crate::transport::WireTimestampDecision::Aborted
         }
-        crabka_pgexec::PrimaryTxnDecision::Committed(ts) => {
+        krabka_pgexec::PrimaryTxnDecision::Committed(ts) => {
             crate::transport::WireTimestampDecision::Committed {
                 commit_ts: ts.get(),
             }
         }
-        crabka_pgexec::PrimaryTxnDecision::Pending => {
+        krabka_pgexec::PrimaryTxnDecision::Pending => {
             return Err(ExecError::Unsupported(
                 "timestamp recovery primary remained pending".into(),
             ));
@@ -2061,54 +2061,54 @@ impl TsoRpc for SharedTsoRpc {
 }
 
 #[async_trait::async_trait]
-impl<R> crabka_pgexec::TimestampSource for PgexecTsoOracle<R>
+impl<R> krabka_pgexec::TimestampSource for PgexecTsoOracle<R>
 where
     R: TsoRpc,
 {
     async fn allocate_read_timestamp(
         &self,
-    ) -> Result<crabka_pgexec::timestamp_txn::ReadTimestamp, crabka_pgexec::TimestampSourceError>
+    ) -> Result<krabka_pgexec::timestamp_txn::ReadTimestamp, krabka_pgexec::TimestampSourceError>
     {
         let timestamp = self.grant_one().await?;
-        crabka_pgexec::timestamp_txn::ReadTimestamp::new(timestamp).map_err(Into::into)
+        krabka_pgexec::timestamp_txn::ReadTimestamp::new(timestamp).map_err(Into::into)
     }
 
     async fn allocate_transaction_id(
         &self,
-    ) -> Result<crabka_pgexec::TimestampTransactionId, crabka_pgexec::TimestampSourceError> {
+    ) -> Result<krabka_pgexec::TimestampTransactionId, krabka_pgexec::TimestampSourceError> {
         let timestamp = self.grant_one().await?;
-        crabka_pgexec::TimestampTransactionId::new(timestamp).map_err(Into::into)
+        krabka_pgexec::TimestampTransactionId::new(timestamp).map_err(Into::into)
     }
 
     async fn allocate_write_lease(
         &self,
         hidden_rowid_count: usize,
     ) -> Result<
-        crabka_pgexec::timestamp_txn::TimestampWriteLease,
-        crabka_pgexec::TimestampSourceError,
+        krabka_pgexec::timestamp_txn::TimestampWriteLease,
+        krabka_pgexec::TimestampSourceError,
     > {
         let count = u64::try_from(hidden_rowid_count)
             .ok()
             .and_then(|count| count.checked_add(1))
             .ok_or_else(|| {
-                crabka_pgexec::TimestampSourceError::Unavailable(
+                krabka_pgexec::TimestampSourceError::Unavailable(
                     "timestamp write lease is too large".into(),
                 )
             })?;
         let first = self.grant_above_floor(count).await?;
-        let start_ts = crabka_pgexec::TimestampTransactionId::new(first)?;
+        let start_ts = krabka_pgexec::TimestampTransactionId::new(first)?;
         let hidden_rowids = (1..=hidden_rowid_count)
             .map(|offset| {
                 first
                     .checked_add(u64::try_from(offset).expect("offset fits u64"))
                     .ok_or_else(|| {
-                        crabka_pgexec::TimestampSourceError::Unavailable(
+                        krabka_pgexec::TimestampSourceError::Unavailable(
                             "timestamp write lease overflow".into(),
                         )
                     })
             })
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(crabka_pgexec::timestamp_txn::TimestampWriteLease {
+        Ok(krabka_pgexec::timestamp_txn::TimestampWriteLease {
             start_ts,
             hidden_rowids,
         })
@@ -2116,10 +2116,10 @@ where
 
     async fn allocate_commit_after(
         &self,
-        start_ts: crabka_pgexec::TimestampTransactionId,
-    ) -> Result<crabka_pgexec::CommitTimestamp, crabka_pgexec::TimestampSourceError> {
+        start_ts: krabka_pgexec::TimestampTransactionId,
+    ) -> Result<krabka_pgexec::CommitTimestamp, krabka_pgexec::TimestampSourceError> {
         let timestamp = self.grant_one().await?;
-        crabka_pgexec::CommitTimestamp::after_start(start_ts, timestamp).map_err(Into::into)
+        krabka_pgexec::CommitTimestamp::after_start(start_ts, timestamp).map_err(Into::into)
     }
 
     fn observe(&self, observed_ts: u64) {
@@ -2132,7 +2132,7 @@ impl<R> PgexecTsoOracle<R>
 where
     R: TsoRpc,
 {
-    async fn grant_one(&self) -> Result<u64, crabka_pgexec::TimestampSourceError> {
+    async fn grant_one(&self) -> Result<u64, krabka_pgexec::TimestampSourceError> {
         self.grant_above_floor(1).await
     }
 
@@ -2152,14 +2152,14 @@ where
     async fn grant_above_floor(
         &self,
         count: u64,
-    ) -> Result<u64, crabka_pgexec::TimestampSourceError> {
+    ) -> Result<u64, krabka_pgexec::TimestampSourceError> {
         let mut request = count;
         loop {
             let requested = NonZeroU64::new(request).ok_or_else(|| {
-                crabka_pgexec::TimestampSourceError::Unavailable("timestamp grant is empty".into())
+                krabka_pgexec::TimestampSourceError::Unavailable("timestamp grant is empty".into())
             })?;
             let lease = self.client.grant(requested).await.map_err(|error| {
-                crabka_pgexec::TimestampSourceError::Unavailable(error.to_string())
+                krabka_pgexec::TimestampSourceError::Unavailable(error.to_string())
             })?;
             let floor = self
                 .observed_floor
@@ -2170,7 +2170,7 @@ where
                 .get()
                 .checked_add(request - count)
                 .ok_or_else(|| {
-                    crabka_pgexec::TimestampSourceError::Unavailable(
+                    krabka_pgexec::TimestampSourceError::Unavailable(
                         "timestamp grant overflow".into(),
                     )
                 })?;
@@ -2179,7 +2179,7 @@ where
             }
             let deficit = floor - first + 1;
             request = count.checked_add(deficit).ok_or_else(|| {
-                crabka_pgexec::TimestampSourceError::Unavailable(
+                krabka_pgexec::TimestampSourceError::Unavailable(
                     "timestamp floor exhausts the grant domain".into(),
                 )
             })?;
@@ -2232,14 +2232,14 @@ fn install_node_notify_bus(
     engines: &BTreeMap<RangeId, SqlEngine>,
     replica: Option<&ReadOnlyRange0Replica>,
     identity: Option<String>,
-) -> Arc<crabka_pgexec::notify::NotifyBus> {
+) -> Arc<krabka_pgexec::notify::NotifyBus> {
     if let Some(coordinator) = engines.get(&RangeId::COORDINATOR) {
         if let Some(identity) = identity {
             coordinator.set_notify_origin(identity);
         }
         return Arc::clone(coordinator.notify_bus());
     }
-    let bus = Arc::new(crabka_pgexec::notify::NotifyBus::new());
+    let bus = Arc::new(krabka_pgexec::notify::NotifyBus::new());
     if let (Some(replica), Some(identity)) = (replica, identity) {
         replica
             .tail()
@@ -2263,7 +2263,7 @@ pub fn pgexec_timestamp_oracle_from_horizon<C, H>(
     heartbeat: H,
     epoch: i16,
     persisted_max_ts: u64,
-) -> Result<Arc<dyn crabka_pgexec::TimestampSource>, TsoError>
+) -> Result<Arc<dyn krabka_pgexec::TimestampSource>, TsoError>
 where
     C: TsoHorizonCommitter + 'static,
     H: EpochHeartbeat + 'static,
@@ -2286,7 +2286,7 @@ pub fn pgexec_timestamp_oracle_from_horizon_with_policy<C, H>(
     epoch: i16,
     persisted_max_ts: u64,
     policy: &crate::RangeRuntimePolicy,
-) -> Result<Arc<dyn crabka_pgexec::TimestampSource>, TsoError>
+) -> Result<Arc<dyn krabka_pgexec::TimestampSource>, TsoError>
 where
     C: TsoHorizonCommitter + 'static,
     H: EpochHeartbeat + 'static,
@@ -2310,7 +2310,7 @@ where
 #[must_use]
 pub fn pgexec_timestamp_oracle_from_rpc(
     rpc: Arc<dyn TsoRpc>,
-) -> Arc<dyn crabka_pgexec::TimestampSource> {
+) -> Arc<dyn krabka_pgexec::TimestampSource> {
     Arc::new(PgexecTsoOracle {
         client: BatchedTsoClient::new(Arc::new(SharedTsoRpc(rpc))),
         observed_floor: std::sync::atomic::AtomicU64::new(0),
@@ -2393,7 +2393,7 @@ pub fn hlc_tso_rpc_from_horizon<C, H>(
     heartbeat: H,
     epoch: i16,
     persisted_max_ts: u64,
-    wall: Arc<dyn crabka_pgexec::WallClock>,
+    wall: Arc<dyn krabka_pgexec::WallClock>,
 ) -> Result<Arc<dyn TsoRpc>, TsoError>
 where
     C: TsoHorizonCommitter + 'static,
@@ -2417,7 +2417,7 @@ pub fn hlc_tso_rpc_from_horizon_with_policy<C, H>(
     heartbeat: H,
     epoch: i16,
     persisted_max_ts: u64,
-    wall: Arc<dyn crabka_pgexec::WallClock>,
+    wall: Arc<dyn krabka_pgexec::WallClock>,
     policy: &crate::RangeRuntimePolicy,
 ) -> Result<Arc<dyn TsoRpc>, TsoError>
 where
@@ -2426,7 +2426,7 @@ where
 {
     let headroom_ms =
         u64::try_from(policy.hlc_horizon_headroom.millis_i64_trunc()).unwrap_or(u64::MAX);
-    let stride = NonZeroU64::new(crabka_pgexec::hlc::pack(headroom_ms, 0))
+    let stride = NonZeroU64::new(krabka_pgexec::hlc::pack(headroom_ms, 0))
         .ok_or(TsoError::TimestampOverflow)?;
     let oracle = Arc::new(TsoOracle::recover_hlc_with_policy(
         committer,
@@ -2445,15 +2445,15 @@ where
 /// The wall clock an HLC component on this node should read.
 ///
 /// A zero `wall_offset_ms` gives the plain system clock. A nonzero offset wraps
-/// the system clock in the fault-injection [`crabka_pgexec::SkewedWallClock`]
+/// the system clock in the fault-injection [`krabka_pgexec::SkewedWallClock`]
 /// that load and chaos tests use to emulate cross-node wall-clock skew.
 #[must_use]
-pub fn hlc_wall_clock(wall_offset_ms: i64) -> Arc<dyn crabka_pgexec::WallClock> {
+pub fn hlc_wall_clock(wall_offset_ms: i64) -> Arc<dyn krabka_pgexec::WallClock> {
     if wall_offset_ms == 0 {
-        Arc::new(crabka_pgexec::SystemWallClock)
+        Arc::new(krabka_pgexec::SystemWallClock)
     } else {
-        Arc::new(crabka_pgexec::SkewedWallClock::new(
-            Arc::new(crabka_pgexec::SystemWallClock),
+        Arc::new(krabka_pgexec::SkewedWallClock::new(
+            Arc::new(krabka_pgexec::SystemWallClock),
             wall_offset_ms,
         ))
     }
@@ -2487,7 +2487,7 @@ fn install_memory_timestamp_oracle(
 /// uncertainty-window read-restart are the documented follow-up work.
 ///
 /// A nonzero `wall_offset_ms` wraps the system clock in a fault-injection
-/// [`crabka_pgexec::SkewedWallClock`], for load and chaos tests that emulate
+/// [`krabka_pgexec::SkewedWallClock`], for load and chaos tests that emulate
 /// cross-node wall-clock skew.
 fn install_hlc_timestamp_source(
     engines: &mut BTreeMap<RangeId, SqlEngine>,
@@ -2504,8 +2504,8 @@ fn install_hlc_timestamp_source(
         .load_max_ts()
         .map_err(TenantError::TimestampSource)?;
     let wall = hlc_wall_clock(wall_offset_ms);
-    let timestamp_source: Arc<dyn crabka_pgexec::TimestampSource> =
-        Arc::new(crabka_pgexec::HlcTimestampSource::seeded_from_horizon(
+    let timestamp_source: Arc<dyn krabka_pgexec::TimestampSource> =
+        Arc::new(krabka_pgexec::HlcTimestampSource::seeded_from_horizon(
             persisted_max_ts,
             wall,
             max_offset_ms,
@@ -2516,7 +2516,7 @@ fn install_hlc_timestamp_source(
 
 fn install_timestamp_oracle(
     engines: &mut BTreeMap<RangeId, SqlEngine>,
-    timestamp_oracle: &Arc<dyn crabka_pgexec::TimestampSource>,
+    timestamp_oracle: &Arc<dyn krabka_pgexec::TimestampSource>,
 ) {
     for engine in engines.values_mut() {
         engine.set_timestamp_oracle(Arc::clone(timestamp_oracle));
@@ -2526,36 +2526,36 @@ fn install_timestamp_oracle(
 struct UnavailableRange0TimestampSource;
 
 #[async_trait::async_trait]
-impl crabka_pgexec::TimestampSource for UnavailableRange0TimestampSource {
+impl krabka_pgexec::TimestampSource for UnavailableRange0TimestampSource {
     async fn allocate_read_timestamp(
         &self,
-    ) -> Result<crabka_pgexec::timestamp_txn::ReadTimestamp, crabka_pgexec::TimestampSourceError>
+    ) -> Result<krabka_pgexec::timestamp_txn::ReadTimestamp, krabka_pgexec::TimestampSourceError>
     {
         Err(timestamp_oracle_unavailable())
     }
 
     async fn allocate_transaction_id(
         &self,
-    ) -> Result<crabka_pgexec::TimestampTransactionId, crabka_pgexec::TimestampSourceError> {
+    ) -> Result<krabka_pgexec::TimestampTransactionId, krabka_pgexec::TimestampSourceError> {
         Err(timestamp_oracle_unavailable())
     }
 
     async fn allocate_commit_after(
         &self,
-        _start_ts: crabka_pgexec::TimestampTransactionId,
-    ) -> Result<crabka_pgexec::CommitTimestamp, crabka_pgexec::TimestampSourceError> {
+        _start_ts: krabka_pgexec::TimestampTransactionId,
+    ) -> Result<krabka_pgexec::CommitTimestamp, krabka_pgexec::TimestampSourceError> {
         Err(timestamp_oracle_unavailable())
     }
 }
 
-fn timestamp_oracle_unavailable() -> crabka_pgexec::TimestampSourceError {
-    crabka_pgexec::TimestampSourceError::Unavailable(
+fn timestamp_oracle_unavailable() -> krabka_pgexec::TimestampSourceError {
+    krabka_pgexec::TimestampSourceError::Unavailable(
         "range-0 timestamp oracle is unavailable on an rN-only compute".into(),
     )
 }
 
 fn install_unavailable_timestamp_oracle(engines: &mut BTreeMap<RangeId, SqlEngine>) {
-    let timestamp_oracle: Arc<dyn crabka_pgexec::TimestampSource> =
+    let timestamp_oracle: Arc<dyn krabka_pgexec::TimestampSource> =
         Arc::new(UnavailableRange0TimestampSource);
     install_timestamp_oracle(engines, &timestamp_oracle);
 }
@@ -2565,13 +2565,13 @@ struct InProcessRangeScanner {
     range_map: RangeMap,
 }
 
-impl crabka_pgexec::RangeScanner for InProcessRangeScanner {
+impl krabka_pgexec::RangeScanner for InProcessRangeScanner {
     fn scan(
         &self,
-        request: crabka_pgexec::ScanRequest<'_>,
-    ) -> Result<Vec<crabka_pgexec::ScannedRow>, ExecError> {
+        request: krabka_pgexec::ScanRequest<'_>,
+    ) -> Result<Vec<krabka_pgexec::ScannedRow>, ExecError> {
         if !request.table.sharded {
-            return crabka_pgexec::RangeScanner::scan(&crabka_pgexec::LocalRangeScanner, request);
+            return krabka_pgexec::RangeScanner::scan(&krabka_pgexec::LocalRangeScanner, request);
         }
         if request.read_ts.is_none() {
             return Err(ExecError::Unsupported(
@@ -2602,13 +2602,13 @@ impl crabka_pgexec::RangeScanner for InProcessRangeScanner {
                 request.global_snapshot,
                 request.snapshot,
                 request.own_xid,
-                crabka_pgexec::TimestampScanOwner {
+                krabka_pgexec::TimestampScanOwner {
                     read_ts: request.read_ts,
                     own_start_ts: request.own_start_ts,
                 },
                 local_scan_interval(request.interval, segment.interval),
             )?;
-            rows.extend(crabka_pgexec::scanner::apply_executable_scan_pushdown(
+            rows.extend(krabka_pgexec::scanner::apply_executable_scan_pushdown(
                 local_rows,
                 &request.predicate,
                 &request.projection,
@@ -2617,9 +2617,9 @@ impl crabka_pgexec::RangeScanner for InProcessRangeScanner {
             )?);
         }
         if let Some(spec) = request.partial_aggregate.as_ref() {
-            rows = crabka_pgexec::scanner::merge_partial_aggregate_rows(rows, spec)?;
+            rows = krabka_pgexec::scanner::merge_partial_aggregate_rows(rows, spec)?;
         } else if let Some(spec) = request.top_k.as_ref() {
-            crabka_pgexec::scanner::apply_top_k_pushdown(&mut rows, spec)?;
+            krabka_pgexec::scanner::apply_top_k_pushdown(&mut rows, spec)?;
         } else {
             rows.sort_by_key(|row| (row.rowid, row.xmin));
         }
@@ -2629,8 +2629,8 @@ impl crabka_pgexec::RangeScanner for InProcessRangeScanner {
 
 fn hash_scan_segments(
     range_map: &RangeMap,
-    table: &crabka_pgcatalog::Table,
-    request: &crabka_pgexec::ScanRequest<'_>,
+    table: &krabka_pgcatalog::Table,
+    request: &krabka_pgexec::ScanRequest<'_>,
 ) -> Result<Option<Vec<RangeScanSegment>>, ExecError> {
     let Some(ShardingStrategy::Hash(hash)) = table.sharding.as_ref() else {
         return Ok(None);
@@ -2682,8 +2682,8 @@ fn hash_scan_segments(
 }
 
 fn hash_equality_value(
-    table: &crabka_pgcatalog::Table,
-    hash: &crabka_pgcatalog::HashSharding,
+    table: &krabka_pgcatalog::Table,
+    hash: &krabka_pgcatalog::HashSharding,
     predicate: &PredicatePushdown,
 ) -> Option<Vec<u8>> {
     let PredicatePushdown::Conjunctive(predicates) = predicate else {
@@ -2702,26 +2702,26 @@ fn hash_equality_value(
     Some(bytes)
 }
 
-fn map_interval_from_exec(interval: crabka_pgexec::RowInterval) -> MapRowInterval {
+fn map_interval_from_exec(interval: krabka_pgexec::RowInterval) -> MapRowInterval {
     MapRowInterval {
         start: interval.start,
         end: interval.end,
     }
 }
 
-fn exec_interval_from_map(interval: MapRowInterval) -> crabka_pgexec::RowInterval {
-    crabka_pgexec::RowInterval {
+fn exec_interval_from_map(interval: MapRowInterval) -> krabka_pgexec::RowInterval {
+    krabka_pgexec::RowInterval {
         start: interval.start,
         end: interval.end,
     }
 }
 
 fn local_scan_interval(
-    requested: crabka_pgexec::RowInterval,
+    requested: krabka_pgexec::RowInterval,
     segment: MapRowInterval,
-) -> crabka_pgexec::RowInterval {
-    if requested == crabka_pgexec::RowInterval::ALL {
-        return crabka_pgexec::RowInterval::ALL;
+) -> krabka_pgexec::RowInterval {
+    if requested == krabka_pgexec::RowInterval::ALL {
+        return krabka_pgexec::RowInterval::ALL;
     }
     exec_interval_from_map(segment)
 }
@@ -2760,7 +2760,7 @@ impl MultiRangeTenant {
     /// range-0 tail where it is not. The gateway keeps the receiver: the wire
     /// loop takes it through [`Session::take_notifications`] and pushes
     /// `NotificationResponse` from there. The gateway hands the registration
-    /// handle to one hosted range's [`crabka_pgexec::SqlSession`], the seat this
+    /// handle to one hosted range's [`krabka_pgexec::SqlSession`], the seat this
     /// connection's `LISTEN` and `UNLISTEN` run on.
     ///
     /// A session can fail to register for two reasons: it has no backend pid, or
@@ -2769,7 +2769,7 @@ impl MultiRangeTenant {
     /// does not accept them into a queue that nothing on this connection drains.
     fn open_session(&self, notify_pid: Option<i32>) -> GatewaySession {
         let serving = self.inner.serving.load_full();
-        let mut sessions: BTreeMap<RangeId, crabka_pgexec::SqlSession> = serving
+        let mut sessions: BTreeMap<RangeId, krabka_pgexec::SqlSession> = serving
             .engines
             .iter()
             .map(|(range_id, engine)| (*range_id, engine.connect()))
@@ -2779,7 +2779,7 @@ impl MultiRangeTenant {
             (Some(_), None) => (GatewayNotify::NoLocalSeat, None),
             (Some(pid), Some(seat)) => {
                 let (handle, receiver) =
-                    crabka_pgexec::notify::NotifyBus::register(&self.inner.notify_bus, pid);
+                    krabka_pgexec::notify::NotifyBus::register(&self.inner.notify_bus, pid);
                 // Replaces (and unregisters) the registration the seat engine
                 // made for its own session, so this connection has exactly one
                 // seat on the bus and the gateway holds its queue.
@@ -2816,7 +2816,7 @@ impl MultiRangeTenant {
 /// because `LISTEN` and `UNLISTEN` only ever touch the registration handle the
 /// seat holds, never the seat's own data. A node that hosts nothing has no seat
 /// and no statement at all, because its router has no catalog engine either.
-fn notify_seat(sessions: &BTreeMap<RangeId, crabka_pgexec::SqlSession>) -> Option<RangeId> {
+fn notify_seat(sessions: &BTreeMap<RangeId, krabka_pgexec::SqlSession>) -> Option<RangeId> {
     sessions
         .contains_key(&RangeId::COORDINATOR)
         .then_some(RangeId::COORDINATOR)
@@ -2883,7 +2883,7 @@ struct TenantInner {
     /// The one notification bus of this node. It is shared with the coordinator
     /// engine where range 0 is hosted, and fed by the range-0 tail where it is
     /// not.
-    notify_bus: Arc<crabka_pgexec::notify::NotifyBus>,
+    notify_bus: Arc<krabka_pgexec::notify::NotifyBus>,
     /// This node's identity on the notification log, or `None` when its
     /// notifications stay in-process.
     notify_origin: Option<String>,
@@ -3162,7 +3162,7 @@ impl SplitHooks for LocalSqlSplitBridge<'_> {
             configure_successor_engine(coordinator, &mut successor);
             engines.insert(descriptor.range_id, successor);
         }
-        let scanner: Arc<dyn crabka_pgexec::RangeScanner> = Arc::new(InProcessRangeScanner {
+        let scanner: Arc<dyn krabka_pgexec::RangeScanner> = Arc::new(InProcessRangeScanner {
             engines: engines
                 .iter()
                 .map(|(range_id, engine)| (*range_id, engine.clone_handle()))
@@ -3258,7 +3258,7 @@ impl StatementKind {
 
 pub struct GatewaySession {
     inner: Arc<TenantInner>,
-    sessions: BTreeMap<RangeId, crabka_pgexec::SqlSession>,
+    sessions: BTreeMap<RangeId, krabka_pgexec::SqlSession>,
     remote_sessions: BTreeMap<RangeId, RemoteRangeSession>,
     timestamp_topology_guard: Option<tokio::sync::OwnedRwLockReadGuard<()>>,
     serving_epoch: MapEpoch,
@@ -3328,8 +3328,8 @@ enum GatewayTransaction {
         escalated: bool,
     },
     Timestamp {
-        identity: crabka_pgexec::TimestampTxnIdentity,
-        participants: BTreeMap<RangeId, Vec<crabka_pgexec::TimestampWrite>>,
+        identity: krabka_pgexec::TimestampTxnIdentity,
+        participants: BTreeMap<RangeId, Vec<krabka_pgexec::TimestampWrite>>,
     },
     Failed {
         touched: Vec<RangeId>,
@@ -3359,7 +3359,7 @@ struct PreparedParticipantRelease {
     reason = "boxing would allocate on every participant prepare and release"
 )]
 enum ParticipantSession {
-    Local(crabka_pgexec::SqlSession),
+    Local(krabka_pgexec::SqlSession),
     Remote(RemoteRangeSession),
 }
 
@@ -3411,7 +3411,7 @@ impl ParticipantSession {
 
 /// Restores detached participant sessions even when their async work is canceled.
 struct ParticipantSessions<'a> {
-    sessions: &'a mut BTreeMap<RangeId, crabka_pgexec::SqlSession>,
+    sessions: &'a mut BTreeMap<RangeId, krabka_pgexec::SqlSession>,
     remote_sessions: &'a mut BTreeMap<RangeId, RemoteRangeSession>,
     participants: Vec<(RangeId, ParticipantSession)>,
 }
@@ -3486,7 +3486,7 @@ impl Session for GatewaySession {
         Ok(all_results)
     }
 
-    async fn simple_query_into<S: crabka_pgwire::engine::ResultSink>(
+    async fn simple_query_into<S: krabka_pgwire::engine::ResultSink>(
         &mut self,
         sql: &str,
         page_rows: usize,
@@ -3500,7 +3500,7 @@ impl Session for GatewaySession {
         let statements = split_statements(sql).collect::<Vec<_>>();
         if statements.is_empty() {
             return sink
-                .send(crabka_pgwire::engine::ResultPage::Empty { result_index: 0 })
+                .send(krabka_pgwire::engine::ResultPage::Empty { result_index: 0 })
                 .await;
         }
         let mut result_index = 0usize;
@@ -3605,7 +3605,7 @@ impl Session for GatewaySession {
             // handshake, but the gateway has no portal-scoped copy completion
             // path yet — fail clearly instead of half-entering copy mode.
             Ok(ExecuteOutcome::CopyIn { .. }) => Err(PgError::error(
-                crabka_pgwire::error::sqlstate::FEATURE_NOT_SUPPORTED,
+                krabka_pgwire::error::sqlstate::FEATURE_NOT_SUPPORTED,
                 "COPY FROM STDIN is not supported through the multi-range gateway",
             )),
             other => other,
@@ -3661,23 +3661,23 @@ struct OffsetResultSink<'a, S> {
 }
 
 #[async_trait::async_trait]
-impl<S: crabka_pgwire::engine::ResultSink> crabka_pgwire::engine::ResultSink
+impl<S: krabka_pgwire::engine::ResultSink> krabka_pgwire::engine::ResultSink
     for OffsetResultSink<'_, S>
 {
-    async fn send(&mut self, mut page: crabka_pgwire::engine::ResultPage) -> Result<(), PgError> {
+    async fn send(&mut self, mut page: krabka_pgwire::engine::ResultPage) -> Result<(), PgError> {
         self.pages = self.pages.saturating_add(1);
-        if let crabka_pgwire::engine::ResultPage::Rows { rows, .. } = &page {
+        if let krabka_pgwire::engine::ResultPage::Rows { rows, .. } = &page {
             self.rows = self.rows.saturating_add(rows.len());
         }
         let (index, terminal) = match &mut page {
-            crabka_pgwire::engine::ResultPage::Rows {
+            krabka_pgwire::engine::ResultPage::Rows {
                 result_index, tag, ..
             } => (result_index, tag.is_some()),
-            crabka_pgwire::engine::ResultPage::Command { result_index, .. }
-            | crabka_pgwire::engine::ResultPage::Empty { result_index }
+            krabka_pgwire::engine::ResultPage::Command { result_index, .. }
+            | krabka_pgwire::engine::ResultPage::Empty { result_index }
             // A copy-out block is one whole result, so it is terminal like a
             // command tag; only its index needs the offset.
-            | crabka_pgwire::engine::ResultPage::CopyOut { result_index, .. } => {
+            | krabka_pgwire::engine::ResultPage::CopyOut { result_index, .. } => {
                 (result_index, true)
             }
         };
@@ -3692,12 +3692,12 @@ impl<S: crabka_pgwire::engine::ResultSink> crabka_pgwire::engine::ResultSink
 }
 
 /// The `pg.decision` attribute for a resolve round.
-const fn timestamp_decision_label(decision: crabka_pgexec::TimestampTxnDecision) -> &'static str {
+const fn timestamp_decision_label(decision: krabka_pgexec::TimestampTxnDecision) -> &'static str {
     match decision {
-        crabka_pgexec::TimestampTxnDecision::Pending => "pending",
-        crabka_pgexec::TimestampTxnDecision::Aborted => "aborted",
-        crabka_pgexec::TimestampTxnDecision::Committed(_) => "committed",
-        crabka_pgexec::TimestampTxnDecision::Deleted(_) => "deleted",
+        krabka_pgexec::TimestampTxnDecision::Pending => "pending",
+        krabka_pgexec::TimestampTxnDecision::Aborted => "aborted",
+        krabka_pgexec::TimestampTxnDecision::Committed(_) => "committed",
+        krabka_pgexec::TimestampTxnDecision::Deleted(_) => "deleted",
     }
 }
 
@@ -3746,13 +3746,13 @@ fn rows_affected(results: &[QueryResult]) -> Option<u64> {
     total
 }
 
-async fn send_gateway_result<S: crabka_pgwire::engine::ResultSink>(
+async fn send_gateway_result<S: krabka_pgwire::engine::ResultSink>(
     sink: &mut S,
     result_index: usize,
     page_rows: usize,
     result: QueryResult,
 ) -> Result<(), PgError> {
-    use crabka_pgwire::engine::ResultPage;
+    use krabka_pgwire::engine::ResultPage;
     match result {
         QueryResult::Rows { fields, rows, tag } => {
             if rows.is_empty() {
@@ -4125,7 +4125,7 @@ impl GatewaySession {
         let owner_statement = if deferred {
             let id = self.next_internal_statement;
             self.next_internal_statement = self.next_internal_statement.wrapping_add(1);
-            format!("__crabka_gateway_{id}")
+            format!("__krabka_gateway_{id}")
         } else {
             statement.to_owned()
         };
@@ -4953,8 +4953,8 @@ impl GatewaySession {
     async fn record_range0_global_status(
         &mut self,
         global_xid: u64,
-        status: crabka_pgmvcc::clog::XidStatus,
-    ) -> Result<crabka_pgmvcc::clog::XidStatus, PgError> {
+        status: krabka_pgmvcc::clog::XidStatus,
+    ) -> Result<krabka_pgmvcc::clog::XidStatus, PgError> {
         let serving = self.current_serving()?;
         if let Some(coordinator) = serving.engine(RangeId::COORDINATOR) {
             coordinator
@@ -5304,7 +5304,7 @@ impl GatewaySession {
                 "multi-range timestamp scatter does not support global-index maintenance",
             ));
         }
-        let mut writes_by_range = BTreeMap::<RangeId, Vec<crabka_pgexec::TimestampWrite>>::new();
+        let mut writes_by_range = BTreeMap::<RangeId, Vec<krabka_pgexec::TimestampWrite>>::new();
         let table = self
             .table_for_timestamp_writes(&plan.writes)
             .map_err(ExecError::into_pg)?;
@@ -5378,7 +5378,7 @@ impl GatewaySession {
                 timestamp_primary_range(&writes_by_range).expect("one primary range");
             telemetry::record_primary_range(&span, primary_range);
             let start_ts = write_lease.start_ts;
-            let identity = crabka_pgexec::TimestampTxnIdentity {
+            let identity = krabka_pgexec::TimestampTxnIdentity {
                 start_ts,
                 global_xid: start_ts.get(),
                 primary_range: primary_range.as_u32(),
@@ -5420,7 +5420,7 @@ impl GatewaySession {
             self.timestamp_resolve(
                 primary_range,
                 identity,
-                crabka_pgexec::TimestampTxnDecision::Committed(commit_ts),
+                krabka_pgexec::TimestampTxnDecision::Committed(commit_ts),
                 writes_by_range.get(&primary_range).expect("primary writes"),
             )
             .await?;
@@ -5444,7 +5444,7 @@ impl GatewaySession {
                     self.timestamp_resolve(
                         *range_id,
                         identity,
-                        crabka_pgexec::TimestampTxnDecision::Committed(commit_ts),
+                        krabka_pgexec::TimestampTxnDecision::Committed(commit_ts),
                         writes,
                     )
                     .await?;
@@ -5466,7 +5466,7 @@ impl GatewaySession {
             self.acquire_timestamp_topology_guard().await;
             self.current_serving()?;
             let primary_range = timestamp_primary_range(&writes_by_range).expect("primary range");
-            let identity = crabka_pgexec::TimestampTxnIdentity {
+            let identity = krabka_pgexec::TimestampTxnIdentity {
                 start_ts: write_lease.start_ts,
                 global_xid: write_lease.start_ts.get(),
                 primary_range: primary_range.as_u32(),
@@ -5547,8 +5547,8 @@ impl GatewaySession {
 
     fn timestamp_participants_with(
         &self,
-        current: &[(RangeId, Vec<crabka_pgexec::TimestampWrite>)],
-    ) -> Vec<(RangeId, Vec<crabka_pgexec::TimestampWrite>)> {
+        current: &[(RangeId, Vec<krabka_pgexec::TimestampWrite>)],
+    ) -> Vec<(RangeId, Vec<krabka_pgexec::TimestampWrite>)> {
         let mut all = match &self.transaction {
             GatewayTransaction::Timestamp { participants, .. } => participants.clone(),
             _ => BTreeMap::new(),
@@ -5590,7 +5590,7 @@ impl GatewaySession {
         self.timestamp_resolve(
             primary_range,
             identity,
-            crabka_pgexec::TimestampTxnDecision::Committed(commit_ts),
+            krabka_pgexec::TimestampTxnDecision::Committed(commit_ts),
             primary_writes,
         )
         .await?;
@@ -5607,7 +5607,7 @@ impl GatewaySession {
             self.timestamp_resolve(
                 *range_id,
                 identity,
-                crabka_pgexec::TimestampTxnDecision::Committed(commit_ts),
+                krabka_pgexec::TimestampTxnDecision::Committed(commit_ts),
                 writes,
             )
             .await?;
@@ -5621,7 +5621,7 @@ impl GatewaySession {
     fn timestamp_participant(
         &self,
         range_id: RangeId,
-    ) -> Result<crabka_pgexec::TimestampTxnParticipant, PgError> {
+    ) -> Result<krabka_pgexec::TimestampTxnParticipant, PgError> {
         self.current_serving()?
             .engine(range_id)
             .map(|engine| engine.timestamp_txn_participant(range_id.as_u32()))
@@ -5639,9 +5639,9 @@ impl GatewaySession {
     async fn timestamp_prewrite_as_primary(
         &self,
         range_id: RangeId,
-        identity: crabka_pgexec::TimestampTxnIdentity,
+        identity: krabka_pgexec::TimestampTxnIdentity,
         participants: &[RangeId],
-        writes: &[crabka_pgexec::TimestampWrite],
+        writes: &[krabka_pgexec::TimestampWrite],
     ) -> Result<(), PgError> {
         let span = self.prewrite_span(range_id, telemetry::ROLE_PRIMARY, identity, writes.len());
         let participants = participants
@@ -5672,8 +5672,8 @@ impl GatewaySession {
     async fn timestamp_prewrite_as_secondary(
         &self,
         range_id: RangeId,
-        identity: crabka_pgexec::TimestampTxnIdentity,
-        writes: &[crabka_pgexec::TimestampWrite],
+        identity: krabka_pgexec::TimestampTxnIdentity,
+        writes: &[krabka_pgexec::TimestampWrite],
     ) -> Result<(), PgError> {
         let span = self.prewrite_span(range_id, telemetry::ROLE_SECONDARY, identity, writes.len());
         let result = async {
@@ -5700,8 +5700,8 @@ impl GatewaySession {
     async fn timestamp_prewrite_on_primary(
         &self,
         range_id: RangeId,
-        identity: crabka_pgexec::TimestampTxnIdentity,
-        writes: &[crabka_pgexec::TimestampWrite],
+        identity: krabka_pgexec::TimestampTxnIdentity,
+        writes: &[krabka_pgexec::TimestampWrite],
     ) -> Result<(), PgError> {
         let span = self.prewrite_span(range_id, telemetry::ROLE_PRIMARY, identity, writes.len());
         let result = async {
@@ -5733,7 +5733,7 @@ impl GatewaySession {
         &self,
         range_id: RangeId,
         role: &'static str,
-        identity: crabka_pgexec::TimestampTxnIdentity,
+        identity: krabka_pgexec::TimestampTxnIdentity,
         writes: usize,
     ) -> tracing::Span {
         let span = telemetry::prewrite_span(
@@ -5752,7 +5752,7 @@ impl GatewaySession {
     async fn add_primary_participant(
         &self,
         primary_range: RangeId,
-        identity: crabka_pgexec::TimestampTxnIdentity,
+        identity: krabka_pgexec::TimestampTxnIdentity,
         participant_range: RangeId,
     ) -> Result<(), PgError> {
         let serving = self.current_serving()?;
@@ -5779,13 +5779,13 @@ impl GatewaySession {
     async fn acknowledge_primary_operations(
         &self,
         primary_range: RangeId,
-        identity: crabka_pgexec::TimestampTxnIdentity,
+        identity: krabka_pgexec::TimestampTxnIdentity,
         participant_range: RangeId,
-        writes: &[crabka_pgexec::TimestampWrite],
+        writes: &[krabka_pgexec::TimestampWrite],
     ) -> Result<(), PgError> {
         let operations = writes
             .iter()
-            .map(|write| crabka_pgexec::TimestampTxnOperation {
+            .map(|write| krabka_pgexec::TimestampTxnOperation {
                 range_id: participant_range.as_u32(),
                 table_id: write.table_id,
                 bucket: write.bucket,
@@ -5818,9 +5818,9 @@ impl GatewaySession {
     async fn timestamp_resolve(
         &self,
         range_id: RangeId,
-        identity: crabka_pgexec::TimestampTxnIdentity,
-        decision: crabka_pgexec::TimestampTxnDecision,
-        writes: &[crabka_pgexec::TimestampWrite],
+        identity: krabka_pgexec::TimestampTxnIdentity,
+        decision: krabka_pgexec::TimestampTxnDecision,
+        writes: &[krabka_pgexec::TimestampWrite],
     ) -> Result<(), PgError> {
         let role = if identity.primary_range == range_id.as_u32() {
             telemetry::ROLE_PRIMARY
@@ -5849,9 +5849,9 @@ impl GatewaySession {
     async fn timestamp_resolve_inner(
         &self,
         range_id: RangeId,
-        identity: crabka_pgexec::TimestampTxnIdentity,
-        decision: crabka_pgexec::TimestampTxnDecision,
-        writes: &[crabka_pgexec::TimestampWrite],
+        identity: krabka_pgexec::TimestampTxnIdentity,
+        decision: krabka_pgexec::TimestampTxnDecision,
+        writes: &[krabka_pgexec::TimestampWrite],
     ) -> Result<(), PgError> {
         if let Ok(participant) = self.timestamp_participant(range_id) {
             return if identity.primary_range == range_id.as_u32() {
@@ -5877,14 +5877,14 @@ impl GatewaySession {
                         .await?
                 };
                 let asserted_decision = match decision {
-                    crabka_pgexec::TimestampTxnDecision::Aborted => {
-                        crabka_pgexec::PrimaryTxnDecision::Aborted
+                    krabka_pgexec::TimestampTxnDecision::Aborted => {
+                        krabka_pgexec::PrimaryTxnDecision::Aborted
                     }
-                    crabka_pgexec::TimestampTxnDecision::Committed(commit_ts)
-                    | crabka_pgexec::TimestampTxnDecision::Deleted(commit_ts) => {
-                        crabka_pgexec::PrimaryTxnDecision::Committed(commit_ts)
+                    krabka_pgexec::TimestampTxnDecision::Committed(commit_ts)
+                    | krabka_pgexec::TimestampTxnDecision::Deleted(commit_ts) => {
+                        krabka_pgexec::PrimaryTxnDecision::Committed(commit_ts)
                     }
-                    crabka_pgexec::TimestampTxnDecision::Pending => {
+                    krabka_pgexec::TimestampTxnDecision::Pending => {
                         return Err(PgError::error(
                             "40001",
                             "timestamp primary has no terminal decision",
@@ -5893,7 +5893,7 @@ impl GatewaySession {
                 };
                 let asserted_operations = writes
                     .iter()
-                    .map(|write| crabka_pgexec::TimestampTxnOperation {
+                    .map(|write| krabka_pgexec::TimestampTxnOperation {
                         range_id: range_id.as_u32(),
                         table_id: write.table_id,
                         bucket: write.bucket,
@@ -5907,7 +5907,7 @@ impl GatewaySession {
                     .filter(|operation| operation.range_id == range_id.as_u32())
                     .collect::<Vec<_>>();
                 let actual_operations = canonicalize_timestamp_operations(actual_operations)?;
-                if actual_decision == crabka_pgexec::PrimaryTxnDecision::Pending
+                if actual_decision == krabka_pgexec::PrimaryTxnDecision::Pending
                     || actual_decision != asserted_decision
                     || actual_operations != asserted_operations
                 {
@@ -5940,8 +5940,8 @@ impl GatewaySession {
     /// with `pg.outcome = "indeterminate"`.
     async fn abort_timestamp_scatter(
         &self,
-        identity: crabka_pgexec::TimestampTxnIdentity,
-        participants: &[(RangeId, Vec<crabka_pgexec::TimestampWrite>)],
+        identity: krabka_pgexec::TimestampTxnIdentity,
+        participants: &[(RangeId, Vec<krabka_pgexec::TimestampWrite>)],
     ) -> Result<(), ExecError> {
         let span = telemetry::abort_scatter_span(
             RangeId::new(identity.primary_range),
@@ -5982,8 +5982,8 @@ impl GatewaySession {
 
     async fn abort_timestamp_scatter_inner(
         &self,
-        identity: crabka_pgexec::TimestampTxnIdentity,
-        participants: &[(RangeId, Vec<crabka_pgexec::TimestampWrite>)],
+        identity: krabka_pgexec::TimestampTxnIdentity,
+        participants: &[(RangeId, Vec<krabka_pgexec::TimestampWrite>)],
     ) -> Result<(), ExecError> {
         let primary_range = RangeId::new(identity.primary_range);
         let primary_writes = participants
@@ -5996,7 +5996,7 @@ impl GatewaySession {
         self.timestamp_resolve(
             primary_range,
             identity,
-            crabka_pgexec::TimestampTxnDecision::Aborted,
+            krabka_pgexec::TimestampTxnDecision::Aborted,
             primary_writes,
         )
         .await
@@ -6008,7 +6008,7 @@ impl GatewaySession {
             self.timestamp_resolve(
                 *range_id,
                 identity,
-                crabka_pgexec::TimestampTxnDecision::Aborted,
+                krabka_pgexec::TimestampTxnDecision::Aborted,
                 writes,
             )
             .await
@@ -6019,8 +6019,8 @@ impl GatewaySession {
 
     fn table_for_timestamp_writes(
         &self,
-        writes: &[crabka_pgexec::TimestampWrite],
-    ) -> Result<crabka_pgcatalog::Table, ExecError> {
+        writes: &[krabka_pgexec::TimestampWrite],
+    ) -> Result<krabka_pgcatalog::Table, ExecError> {
         let Some(first) = writes.first() else {
             return Err(ExecError::Unsupported(
                 "timestamp scatter has no writes".into(),
@@ -6034,7 +6034,7 @@ impl GatewaySession {
         let catalog = serving.planner_engine().ok_or_else(|| {
             ExecError::Unsupported("tenant has no hosted engine with a range-0 catalog view".into())
         })?;
-        crabka_pgcatalog::list_tables(catalog.catalog_kv())?
+        krabka_pgcatalog::list_tables(catalog.catalog_kv())?
             .into_iter()
             .find(|table| table.id == first.table_id)
             .ok_or_else(|| ExecError::Unsupported("timestamp scatter table is missing".into()))
@@ -6118,7 +6118,7 @@ impl GatewaySession {
     fn session_for(
         &mut self,
         range_id: RangeId,
-    ) -> Result<&mut crabka_pgexec::SqlSession, PgError> {
+    ) -> Result<&mut krabka_pgexec::SqlSession, PgError> {
         self.current_serving()?;
         self.sessions.get_mut(&range_id).ok_or_else(|| {
             PgError::error(
@@ -6185,7 +6185,7 @@ impl GatewaySession {
     /// That is the only state in which a wait can be an edge of a cross-engine
     /// deadlock cycle. Single-range forwarding and autocommit forwarding keep
     /// `None`, which preserves exact engine-local blocking on the remote host.
-    fn cross_range_statement_cap(&self) -> Option<crabka_units::Time> {
+    fn cross_range_statement_cap(&self) -> Option<krabka_units::Time> {
         matches!(
             self.transaction,
             GatewayTransaction::Open {
@@ -6241,8 +6241,8 @@ impl Drop for GatewaySession {
 fn dispatch_dropped_timestamp_cleanup(
     serving: Arc<ServingSnapshot>,
     remote_sessions: BTreeMap<RangeId, RemoteRangeSession>,
-    identity: crabka_pgexec::TimestampTxnIdentity,
-    participants: BTreeMap<RangeId, Vec<crabka_pgexec::TimestampWrite>>,
+    identity: krabka_pgexec::TimestampTxnIdentity,
+    participants: BTreeMap<RangeId, Vec<krabka_pgexec::TimestampWrite>>,
     topology_guard: Option<tokio::sync::OwnedRwLockReadGuard<()>>,
 ) {
     if let Ok(handle) = tokio::runtime::Handle::try_current() {
@@ -6262,7 +6262,7 @@ fn dispatch_dropped_timestamp_cleanup(
         return;
     }
     let spawn = std::thread::Builder::new()
-        .name("crabka-timestamp-drop-cleanup".into())
+        .name("krabka-timestamp-drop-cleanup".into())
         .spawn(move || {
             let _topology_guard = topology_guard;
             let runtime = tokio::runtime::Builder::new_current_thread()
@@ -6300,8 +6300,8 @@ fn dispatch_dropped_timestamp_cleanup(
 async fn cleanup_dropped_timestamp_session(
     serving: Arc<ServingSnapshot>,
     remote_sessions: BTreeMap<RangeId, RemoteRangeSession>,
-    identity: crabka_pgexec::TimestampTxnIdentity,
-    participants: BTreeMap<RangeId, Vec<crabka_pgexec::TimestampWrite>>,
+    identity: krabka_pgexec::TimestampTxnIdentity,
+    participants: BTreeMap<RangeId, Vec<krabka_pgexec::TimestampWrite>>,
 ) -> Result<(), PgError> {
     let primary_range = RangeId::new(identity.primary_range);
     let primary_decision = if let Some(engine) = serving.engine(primary_range) {
@@ -6316,7 +6316,7 @@ async fn cleanup_dropped_timestamp_session(
             .await?
     };
     let decision = match primary_decision {
-        crabka_pgexec::PrimaryTxnDecision::Pending => {
+        krabka_pgexec::PrimaryTxnDecision::Pending => {
             let primary_writes = participants.get(&primary_range).ok_or_else(|| {
                 PgError::error("XX000", "timestamp primary participant is missing")
             })?;
@@ -6325,7 +6325,7 @@ async fn cleanup_dropped_timestamp_session(
                     .timestamp_txn_participant(primary_range.as_u32())
                     .resolve_as_primary(
                         identity,
-                        crabka_pgexec::TimestampTxnDecision::Aborted,
+                        krabka_pgexec::TimestampTxnDecision::Aborted,
                         primary_writes,
                     )
                     .await
@@ -6338,16 +6338,16 @@ async fn cleanup_dropped_timestamp_session(
                     })?
                     .timestamp_resolve(
                         identity,
-                        crabka_pgexec::TimestampTxnDecision::Aborted,
+                        krabka_pgexec::TimestampTxnDecision::Aborted,
                         primary_writes,
                     )
                     .await?;
             }
-            crabka_pgexec::TimestampTxnDecision::Aborted
+            krabka_pgexec::TimestampTxnDecision::Aborted
         }
-        crabka_pgexec::PrimaryTxnDecision::Aborted => crabka_pgexec::TimestampTxnDecision::Aborted,
-        crabka_pgexec::PrimaryTxnDecision::Committed(commit_ts) => {
-            crabka_pgexec::TimestampTxnDecision::Committed(commit_ts)
+        krabka_pgexec::PrimaryTxnDecision::Aborted => krabka_pgexec::TimestampTxnDecision::Aborted,
+        krabka_pgexec::PrimaryTxnDecision::Committed(commit_ts) => {
+            krabka_pgexec::TimestampTxnDecision::Committed(commit_ts)
         }
     };
     for (range_id, writes) in participants {
@@ -6377,9 +6377,9 @@ async fn cleanup_dropped_timestamp_session(
 /// use their leased hidden IDs.
 fn timestamp_insert_write_routes(
     range_map: &RangeMap,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     statement: &str,
-    writes: &[crabka_pgexec::TimestampWrite],
+    writes: &[krabka_pgexec::TimestampWrite],
 ) -> Result<Vec<RangeId>, PgError> {
     let lower = statement.trim_start().to_ascii_lowercase();
     let table_id = routing_table_id(&table.name);
@@ -6421,7 +6421,7 @@ fn timestamp_insert_write_routes(
 }
 
 fn ensure_timestamp_scatter_is_supported(statement: &str) -> Result<(), PgError> {
-    let statements = crabka_pgparser::parse(statement).map_err(|error| {
+    let statements = krabka_pgparser::parse(statement).map_err(|error| {
         PgError::error(
             sqlstate::FEATURE_NOT_SUPPORTED,
             format!("cannot parse timestamp scatter statement: {error}"),
@@ -6433,7 +6433,7 @@ fn ensure_timestamp_scatter_is_supported(statement: &str) -> Result<(), PgError>
     // upsert from reaching the scatter protocol as if it were a plain insert.
     if matches!(
         statements.as_slice(),
-        [crabka_pgparser::ast::Statement::Insert {
+        [krabka_pgparser::ast::Statement::Insert {
             on_conflict: None,
             ..
         }]
@@ -6544,21 +6544,21 @@ fn rollback_command_response() -> Vec<QueryResult> {
 
 fn status_for_transaction_decision(
     decision: TransactionDecision,
-) -> crabka_pgmvcc::clog::XidStatus {
+) -> krabka_pgmvcc::clog::XidStatus {
     match decision {
-        TransactionDecision::Commit => crabka_pgmvcc::clog::XidStatus::Committed,
-        TransactionDecision::Abort => crabka_pgmvcc::clog::XidStatus::Aborted,
+        TransactionDecision::Commit => krabka_pgmvcc::clog::XidStatus::Committed,
+        TransactionDecision::Abort => krabka_pgmvcc::clog::XidStatus::Aborted,
     }
 }
 
 fn transaction_decision_from_status(
-    status: crabka_pgmvcc::clog::XidStatus,
+    status: krabka_pgmvcc::clog::XidStatus,
 ) -> Result<TransactionDecision, PgError> {
     match status {
-        crabka_pgmvcc::clog::XidStatus::Committed => Ok(TransactionDecision::Commit),
-        crabka_pgmvcc::clog::XidStatus::Aborted => Ok(TransactionDecision::Abort),
-        crabka_pgmvcc::clog::XidStatus::InProgress
-        | crabka_pgmvcc::clog::XidStatus::Prepared(_) => Err(PgError::error(
+        krabka_pgmvcc::clog::XidStatus::Committed => Ok(TransactionDecision::Commit),
+        krabka_pgmvcc::clog::XidStatus::Aborted => Ok(TransactionDecision::Abort),
+        krabka_pgmvcc::clog::XidStatus::InProgress
+        | krabka_pgmvcc::clog::XidStatus::Prepared(_) => Err(PgError::error(
             "XX000",
             "global transaction decision did not become terminal",
         )),
@@ -6741,7 +6741,7 @@ fn split_statements(sql: &str) -> impl Iterator<Item = &str> {
 
 fn route_statement(
     range_map: &RangeMap,
-    catalog: &crabka_pgexec::SqlEngine,
+    catalog: &krabka_pgexec::SqlEngine,
     sql: &str,
 ) -> Result<StatementRoute, PgError> {
     let normalized = sql.trim_start().to_ascii_lowercase();
@@ -6854,7 +6854,7 @@ struct RouteTarget {
 }
 
 fn timestamp_primary_range(
-    writes_by_range: &BTreeMap<RangeId, Vec<crabka_pgexec::TimestampWrite>>,
+    writes_by_range: &BTreeMap<RangeId, Vec<krabka_pgexec::TimestampWrite>>,
 ) -> Option<RangeId> {
     writes_by_range.keys().next().copied()
 }
@@ -6884,7 +6884,7 @@ impl RouteTarget {
 
 fn route_sql_statement(
     range_map: &RangeMap,
-    catalog: &crabka_pgexec::SqlEngine,
+    catalog: &krabka_pgexec::SqlEngine,
     sql: &str,
     kind: StatementKind,
     table_ref: Option<&TableRef>,
@@ -6949,7 +6949,7 @@ fn route_sql_statement(
 
 fn route_hash_sharded_statement(
     range_map: &RangeMap,
-    catalog: &crabka_pgexec::SqlEngine,
+    catalog: &krabka_pgexec::SqlEngine,
     sql: &str,
     kind: StatementKind,
     table_ref: &TableRef,
@@ -7001,22 +7001,22 @@ fn route_table(range_map: &RangeMap, table_id: TableId) -> Result<RangeId, PgErr
 }
 
 fn catalog_table_is_sharded(
-    catalog: &crabka_pgexec::SqlEngine,
+    catalog: &krabka_pgexec::SqlEngine,
     table_name: &str,
 ) -> Result<bool, PgError> {
-    let table_name = crabka_pgcatalog::RelationName::public(table_name);
+    let table_name = krabka_pgcatalog::RelationName::public(table_name);
     match catalog.table_uses_global_visibility(&table_name) {
         Ok(uses_global_visibility) => Ok(uses_global_visibility),
-        Err(ExecError::Catalog(crabka_pgcatalog::CatalogError::UndefinedTable(_))) => Ok(false),
+        Err(ExecError::Catalog(krabka_pgcatalog::CatalogError::UndefinedTable(_))) => Ok(false),
         Err(error) => Err(error.into_pg()),
     }
 }
 
 fn catalog_table(
-    catalog: &crabka_pgexec::SqlEngine,
+    catalog: &krabka_pgexec::SqlEngine,
     table_name: &str,
-) -> Result<crabka_pgcatalog::Table, PgError> {
-    let table_name = crabka_pgcatalog::RelationName::public(table_name);
+) -> Result<krabka_pgcatalog::Table, PgError> {
+    let table_name = krabka_pgcatalog::RelationName::public(table_name);
     catalog
         .catalog_table(&table_name)
         .map_err(ExecError::into_pg)
@@ -7030,7 +7030,7 @@ struct TableRef {
 
 fn reject_unsupported_cross_range_statement(
     range_map: &RangeMap,
-    catalog: &crabka_pgexec::SqlEngine,
+    catalog: &krabka_pgexec::SqlEngine,
     table_refs: &[TableRef],
 ) -> Result<(), PgError> {
     if table_refs.len() <= 1 {
@@ -7051,10 +7051,10 @@ fn reject_unsupported_cross_range_statement(
         return Ok(());
     }
     let all_global_visibility = table_refs.iter().try_fold(true, |all_global, table_ref| {
-        let table_name = crabka_pgcatalog::RelationName::public(&table_ref.name);
+        let table_name = krabka_pgcatalog::RelationName::public(&table_ref.name);
         let uses_global = match catalog.table_uses_global_visibility(&table_name) {
             Ok(uses_global) => uses_global,
-            Err(ExecError::Catalog(crabka_pgcatalog::CatalogError::UndefinedTable(_))) => false,
+            Err(ExecError::Catalog(krabka_pgcatalog::CatalogError::UndefinedTable(_))) => false,
             Err(error) => return Err(error.into_pg()),
         };
         Ok(all_global && uses_global)
@@ -7130,8 +7130,8 @@ fn statement_rowid_keys(sql: &str, kind: StatementKind) -> Result<Vec<u64>, PgEr
 fn sql_hash_values(
     sql: &str,
     kind: StatementKind,
-    table: &crabka_pgcatalog::Table,
-    hash: &crabka_pgcatalog::HashSharding,
+    table: &krabka_pgcatalog::Table,
+    hash: &krabka_pgcatalog::HashSharding,
 ) -> Result<Vec<Vec<u8>>, PgError> {
     if kind == StatementKind::Dml && sql.starts_with("insert") {
         return inserted_hash_values(sql, table, hash);
@@ -7150,8 +7150,8 @@ fn sql_hash_values(
 
 fn sql_hash_equality_value(
     sql: &str,
-    table: &crabka_pgcatalog::Table,
-    hash: &crabka_pgcatalog::HashSharding,
+    table: &krabka_pgcatalog::Table,
+    hash: &krabka_pgcatalog::HashSharding,
 ) -> Option<Vec<u8>> {
     let mut bytes = Vec::new();
     for column in &hash.columns {
@@ -7165,8 +7165,8 @@ fn sql_hash_equality_value(
 
 fn inserted_hash_values(
     sql: &str,
-    table: &crabka_pgcatalog::Table,
-    hash: &crabka_pgcatalog::HashSharding,
+    table: &krabka_pgcatalog::Table,
+    hash: &krabka_pgcatalog::HashSharding,
 ) -> Result<Vec<Vec<u8>>, PgError> {
     let Some(values_index) = sql.find("values") else {
         return Err(unknown_shard_key_error());
@@ -7217,7 +7217,7 @@ fn inserted_hash_values(
 fn sql_hash_column_value(
     sql: &str,
     column: &str,
-    column_type: crabka_pgtypes::ColumnType,
+    column_type: krabka_pgtypes::ColumnType,
     default_column_index: usize,
 ) -> Option<Vec<u8>> {
     if let Some(value) = inserted_hash_column_value(sql, column, column_type, default_column_index)
@@ -7225,13 +7225,13 @@ fn sql_hash_column_value(
         return Some(value);
     }
     match column_type {
-        crabka_pgtypes::ColumnType::Int4 => identifier_equals_integer(sql, column)
+        krabka_pgtypes::ColumnType::Int4 => identifier_equals_integer(sql, column)
             .and_then(|value| i32::try_from(value).ok())
             .map(|value| value.to_be_bytes().to_vec()),
-        crabka_pgtypes::ColumnType::Int8 => identifier_equals_integer(sql, column)
+        krabka_pgtypes::ColumnType::Int8 => identifier_equals_integer(sql, column)
             .and_then(|value| i64::try_from(value).ok())
             .map(|value| value.to_be_bytes().to_vec()),
-        crabka_pgtypes::ColumnType::Text => {
+        krabka_pgtypes::ColumnType::Text => {
             identifier_equals_quoted_text(sql, column).map(String::into_bytes)
         }
         _ => None,
@@ -7241,7 +7241,7 @@ fn sql_hash_column_value(
 fn inserted_hash_column_value(
     sql: &str,
     column: &str,
-    column_type: crabka_pgtypes::ColumnType,
+    column_type: krabka_pgtypes::ColumnType,
     default_column_index: usize,
 ) -> Option<Vec<u8>> {
     let values_index = sql.find("values")?;
@@ -7256,15 +7256,15 @@ fn inserted_hash_column_value(
     literal_hash_bytes(field, column_type)
 }
 
-fn literal_hash_bytes(value: &str, column_type: crabka_pgtypes::ColumnType) -> Option<Vec<u8>> {
+fn literal_hash_bytes(value: &str, column_type: krabka_pgtypes::ColumnType) -> Option<Vec<u8>> {
     match column_type {
-        crabka_pgtypes::ColumnType::Int4 => parse_integer_literal(value)
+        krabka_pgtypes::ColumnType::Int4 => parse_integer_literal(value)
             .and_then(|value| i32::try_from(value).ok())
             .map(|value| value.to_be_bytes().to_vec()),
-        crabka_pgtypes::ColumnType::Int8 => parse_integer_literal(value)
+        krabka_pgtypes::ColumnType::Int8 => parse_integer_literal(value)
             .and_then(|value| i64::try_from(value).ok())
             .map(|value| value.to_be_bytes().to_vec()),
-        crabka_pgtypes::ColumnType::Text => parse_quoted_text(value).map(String::into_bytes),
+        krabka_pgtypes::ColumnType::Text => parse_quoted_text(value).map(String::into_bytes),
         _ => None,
     }
 }
@@ -7776,8 +7776,8 @@ fn configure_successor_engine(coordinator: &SqlEngine, successor: &mut SqlEngine
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgexec::{TimestampSource, WallClock as _};
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgexec::{TimestampSource, WallClock as _};
+    use krabka_pgkv::{Kv, MemKv};
 
     use super::*;
 
@@ -7827,7 +7827,7 @@ mod tests {
     async fn abort_recovery_keeps_only_failed_parallel_releases() {
         let policy = crate::RangeRuntimePolicy {
             decision_release_lag_retries: crate::PositiveU32::new(1).expect("one retry"),
-            decision_release_retry_backoff: crabka_units::millis(1),
+            decision_release_retry_backoff: krabka_units::millis(1),
             ..crate::RangeRuntimePolicy::default()
         };
         let config = MultiRangeTenantConfig::from_boundaries(
@@ -7917,25 +7917,25 @@ mod tests {
             ],
         )
         .expect("post-split map");
-        let start_ts = crabka_pgexec::TimestampTransactionId::new(10).expect("start timestamp");
-        let mut descriptor = crabka_pgexec::TimestampTxnDescriptor::begun(start_ts, 7, vec![0, 1]);
+        let start_ts = krabka_pgexec::TimestampTransactionId::new(10).expect("start timestamp");
+        let mut descriptor = krabka_pgexec::TimestampTxnDescriptor::begun(start_ts, 7, vec![0, 1]);
         descriptor.prepared = vec![0, 1];
         descriptor.operations = vec![
-            crabka_pgexec::TimestampTxnOperation {
+            krabka_pgexec::TimestampTxnOperation {
                 range_id: 0,
                 table_id: 52,
                 bucket: Some(1),
                 rowid: 1,
                 delete: false,
             },
-            crabka_pgexec::TimestampTxnOperation {
+            krabka_pgexec::TimestampTxnOperation {
                 range_id: 1,
                 table_id: 52,
                 bucket: Some(2),
                 rowid: 2,
                 delete: false,
             },
-            crabka_pgexec::TimestampTxnOperation {
+            krabka_pgexec::TimestampTxnOperation {
                 range_id: 1,
                 table_id: 52,
                 bucket: Some(8),
@@ -7964,10 +7964,10 @@ mod tests {
         let range_map = MultiRangeTenantConfig::from_boundaries(tenant(), "0:0,0:50")
             .expect("active map")
             .range_map;
-        let start_ts = crabka_pgexec::TimestampTransactionId::new(10).expect("start timestamp");
-        let mut descriptor = crabka_pgexec::TimestampTxnDescriptor::begun(start_ts, 7, vec![0]);
+        let start_ts = krabka_pgexec::TimestampTransactionId::new(10).expect("start timestamp");
+        let mut descriptor = krabka_pgexec::TimestampTxnDescriptor::begun(start_ts, 7, vec![0]);
         descriptor.prepared = vec![0];
-        descriptor.operations = vec![crabka_pgexec::TimestampTxnOperation {
+        descriptor.operations = vec![krabka_pgexec::TimestampTxnOperation {
             range_id: 0,
             table_id: 1,
             bucket: None,
@@ -7985,19 +7985,19 @@ mod tests {
 
     #[test]
     fn settled_terminal_descriptor_is_not_replayed_on_a_hosted_participant() {
-        let start_ts = crabka_pgexec::TimestampTransactionId::new(10).expect("start timestamp");
+        let start_ts = krabka_pgexec::TimestampTransactionId::new(10).expect("start timestamp");
         let commit_ts =
-            crabka_pgexec::CommitTimestamp::after_start(start_ts, 20).expect("commit timestamp");
-        let mut descriptor = crabka_pgexec::TimestampTxnDescriptor::begun(start_ts, 7, vec![1]);
+            krabka_pgexec::CommitTimestamp::after_start(start_ts, 20).expect("commit timestamp");
+        let mut descriptor = krabka_pgexec::TimestampTxnDescriptor::begun(start_ts, 7, vec![1]);
         descriptor
-            .decide(crabka_pgexec::PrimaryTxnDecision::Committed(commit_ts))
+            .decide(krabka_pgexec::PrimaryTxnDecision::Committed(commit_ts))
             .expect("terminal descriptor");
-        let identity = crabka_pgexec::TimestampTxnIdentity {
+        let identity = krabka_pgexec::TimestampTxnIdentity {
             start_ts,
             global_xid: 7,
             primary_range: 0,
         };
-        let outstanding = BTreeSet::from([crabka_pgexec::DurableTimestampIntentIdentity {
+        let outstanding = BTreeSet::from([krabka_pgexec::DurableTimestampIntentIdentity {
             identity,
             participant_range: 1,
         }]);
@@ -8015,7 +8015,7 @@ mod tests {
             &outstanding,
         ));
 
-        let pending = crabka_pgexec::TimestampTxnDescriptor::begun(start_ts, 7, vec![1]);
+        let pending = krabka_pgexec::TimestampTxnDescriptor::begun(start_ts, 7, vec![1]);
         assert!(hosted_participant_requires_recovery(
             &pending,
             identity,
@@ -8029,7 +8029,7 @@ mod tests {
         let writes = BTreeMap::from([
             (
                 RangeId::new(3),
-                vec![crabka_pgexec::TimestampWrite {
+                vec![krabka_pgexec::TimestampWrite {
                     table_id: 50,
                     bucket: None,
                     rowid: 1,
@@ -8040,7 +8040,7 @@ mod tests {
             ),
             (
                 RangeId::new(4),
-                vec![crabka_pgexec::TimestampWrite {
+                vec![krabka_pgexec::TimestampWrite {
                     table_id: 50,
                     bucket: None,
                     rowid: 2,
@@ -8173,8 +8173,8 @@ mod tests {
     async fn timestamp_commit_releases_topology_publication_fence() {
         let (mut session, publication) = timestamp_session_with_blocked_publication().await;
         session.transaction = GatewayTransaction::Timestamp {
-            identity: crabka_pgexec::TimestampTxnIdentity {
-                start_ts: crabka_pgexec::TimestampTransactionId::new(10).expect("timestamp"),
+            identity: krabka_pgexec::TimestampTxnIdentity {
+                start_ts: krabka_pgexec::TimestampTransactionId::new(10).expect("timestamp"),
                 global_xid: 10,
                 primary_range: RangeId::COORDINATOR.as_u32(),
             },
@@ -8194,8 +8194,8 @@ mod tests {
     async fn timestamp_abort_releases_topology_publication_fence() {
         let (mut session, publication) = timestamp_session_with_blocked_publication().await;
         session.transaction = GatewayTransaction::Timestamp {
-            identity: crabka_pgexec::TimestampTxnIdentity {
-                start_ts: crabka_pgexec::TimestampTransactionId::new(11).expect("timestamp"),
+            identity: krabka_pgexec::TimestampTxnIdentity {
+                start_ts: krabka_pgexec::TimestampTransactionId::new(11).expect("timestamp"),
                 global_xid: 11,
                 primary_range: RangeId::COORDINATOR.as_u32(),
             },
@@ -8259,8 +8259,8 @@ mod tests {
         // (nothing durable exists yet), so the unabortable fixture must carry
         // a participant while the primary is absent.
         session.transaction = GatewayTransaction::Timestamp {
-            identity: crabka_pgexec::TimestampTxnIdentity {
-                start_ts: crabka_pgexec::TimestampTransactionId::new(12).expect("timestamp"),
+            identity: krabka_pgexec::TimestampTxnIdentity {
+                start_ts: krabka_pgexec::TimestampTransactionId::new(12).expect("timestamp"),
                 global_xid: 12,
                 primary_range: RangeId::COORDINATOR.as_u32(),
             },
@@ -8327,8 +8327,8 @@ mod tests {
         let mut session = gateway.connect();
         session.acquire_timestamp_topology_guard().await;
         session.transaction = GatewayTransaction::Timestamp {
-            identity: crabka_pgexec::TimestampTxnIdentity {
-                start_ts: crabka_pgexec::TimestampTransactionId::new(10).expect("timestamp"),
+            identity: krabka_pgexec::TimestampTxnIdentity {
+                start_ts: krabka_pgexec::TimestampTransactionId::new(10).expect("timestamp"),
                 global_xid: 10,
                 primary_range: RangeId::COORDINATOR.as_u32(),
             },
@@ -8360,10 +8360,10 @@ mod tests {
             .await
             .expect("marker table");
         let table = r1
-            .catalog_table(&crabka_pgcatalog::RelationName::public("marker52"))
+            .catalog_table(&krabka_pgcatalog::RelationName::public("marker52"))
             .expect("marker catalog");
-        let start_ts = crabka_pgexec::TimestampTransactionId::new(700).expect("timestamp");
-        let identity = crabka_pgexec::TimestampTxnIdentity {
+        let start_ts = krabka_pgexec::TimestampTransactionId::new(700).expect("timestamp");
+        let identity = krabka_pgexec::TimestampTxnIdentity {
             start_ts,
             global_xid: 701,
             primary_range: 1,
@@ -8372,7 +8372,7 @@ mod tests {
             .prewrite_as_primary(
                 identity,
                 &[1],
-                &[crabka_pgexec::TimestampWrite {
+                &[krabka_pgexec::TimestampWrite {
                     table_id: table.id,
                     bucket: None,
                     rowid: 1,
@@ -8407,7 +8407,7 @@ mod tests {
 
         // Selecting Hlc installs a real, working single-source clock: its
         // uncertainty window is the configured offset in the packed domain.
-        assert!(source.uncertainty_window() == crabka_pgexec::hlc::pack(250, 0));
+        assert!(source.uncertainty_window() == krabka_pgexec::hlc::pack(250, 0));
         assert!(source.uncertainty_window() > 0);
 
         // Every stamp minted through the normal allocation path is monotone.
@@ -8444,18 +8444,18 @@ mod tests {
                 .expect("config")
                 .with_timestamp_source_mode(TimestampSourceMode::Hlc { max_offset_ms: 250 })
                 .with_hlc_wall_offset_ms(skew_ms);
-            let before_ms = crabka_pgexec::SystemWallClock.now_ms();
+            let before_ms = krabka_pgexec::SystemWallClock.now_ms();
             let (gateway, _handles) = MultiRangeTenant::start(config).expect("tenant");
             let engines = gateway.hosted_range_engines();
             let source = engines[&RangeId::COORDINATOR].timestamp_oracle_handle();
 
             let minted = source.allocate_read_timestamp().await.expect("read").get();
-            let after_ms = crabka_pgexec::SystemWallClock.now_ms();
+            let after_ms = krabka_pgexec::SystemWallClock.now_ms();
 
             // The fresh clock mints straight off the (skewed) wall reading, so
             // the physical component sits exactly in the skewed wall interval
             // spanning the allocation.
-            let physical_ms = crabka_pgexec::hlc::unpack(minted).physical_ms;
+            let physical_ms = krabka_pgexec::hlc::unpack(minted).physical_ms;
             assert!(
                 physical_ms >= before_ms.saturating_add_signed(skew_ms),
                 "skew {skew_ms}"
@@ -8586,12 +8586,12 @@ mod tests {
         let range1 = &handles.inner.serving.load().engines[&RangeId::new(1)];
         assert!(
             range1
-                .catalog_table(&crabka_pgcatalog::RelationName::public("follower_table"))
+                .catalog_table(&krabka_pgcatalog::RelationName::public("follower_table"))
                 .is_ok()
         );
         assert!(
             range1
-                .catalog_table(&crabka_pgcatalog::RelationName::public("unrelated_table"))
+                .catalog_table(&krabka_pgcatalog::RelationName::public("unrelated_table"))
                 .is_err()
         );
 
@@ -8623,10 +8623,10 @@ mod tests {
     /// delegate counts write leases and commit grants, which proves when the
     /// code bypasses the global oracle.
     ///
-    /// [`LocalTimestampSource`]: crabka_pgexec::timestamp_txn::LocalTimestampSource
+    /// [`LocalTimestampSource`]: krabka_pgexec::timestamp_txn::LocalTimestampSource
     #[derive(Default)]
     struct CountingTimestampSource {
-        inner: crabka_pgexec::timestamp_txn::LocalTimestampSource,
+        inner: krabka_pgexec::timestamp_txn::LocalTimestampSource,
         write_leases: AtomicUsize,
         commit_grants: AtomicUsize,
     }
@@ -8635,14 +8635,14 @@ mod tests {
     impl TimestampSource for CountingTimestampSource {
         async fn allocate_read_timestamp(
             &self,
-        ) -> Result<crabka_pgexec::timestamp_txn::ReadTimestamp, crabka_pgexec::TimestampSourceError>
+        ) -> Result<krabka_pgexec::timestamp_txn::ReadTimestamp, krabka_pgexec::TimestampSourceError>
         {
             self.inner.allocate_read_timestamp().await
         }
 
         async fn allocate_transaction_id(
             &self,
-        ) -> Result<crabka_pgexec::TimestampTransactionId, crabka_pgexec::TimestampSourceError>
+        ) -> Result<krabka_pgexec::TimestampTransactionId, krabka_pgexec::TimestampSourceError>
         {
             self.write_leases.fetch_add(1, Ordering::SeqCst);
             self.inner.allocate_transaction_id().await
@@ -8652,8 +8652,8 @@ mod tests {
             &self,
             hidden_rowid_count: usize,
         ) -> Result<
-            crabka_pgexec::timestamp_txn::TimestampWriteLease,
-            crabka_pgexec::TimestampSourceError,
+            krabka_pgexec::timestamp_txn::TimestampWriteLease,
+            krabka_pgexec::TimestampSourceError,
         > {
             self.write_leases.fetch_add(1, Ordering::SeqCst);
             self.inner.allocate_write_lease(hidden_rowid_count).await
@@ -8661,8 +8661,8 @@ mod tests {
 
         async fn allocate_commit_after(
             &self,
-            start_ts: crabka_pgexec::TimestampTransactionId,
-        ) -> Result<crabka_pgexec::CommitTimestamp, crabka_pgexec::TimestampSourceError> {
+            start_ts: krabka_pgexec::TimestampTransactionId,
+        ) -> Result<krabka_pgexec::CommitTimestamp, krabka_pgexec::TimestampSourceError> {
             self.commit_grants.fetch_add(1, Ordering::SeqCst);
             self.inner.allocate_commit_after(start_ts).await
         }
@@ -8670,7 +8670,7 @@ mod tests {
         async fn allocate_read_timestamp_after(
             &self,
             durable_horizon: u64,
-        ) -> Result<crabka_pgexec::timestamp_txn::ReadTimestamp, crabka_pgexec::TimestampSourceError>
+        ) -> Result<krabka_pgexec::timestamp_txn::ReadTimestamp, krabka_pgexec::TimestampSourceError>
         {
             self.inner
                 .allocate_read_timestamp_after(durable_horizon)
@@ -8680,7 +8680,7 @@ mod tests {
         async fn allocate_transaction_id_after(
             &self,
             durable_horizon: u64,
-        ) -> Result<crabka_pgexec::TimestampTransactionId, crabka_pgexec::TimestampSourceError>
+        ) -> Result<krabka_pgexec::TimestampTransactionId, krabka_pgexec::TimestampSourceError>
         {
             self.write_leases.fetch_add(1, Ordering::SeqCst);
             self.inner
@@ -8690,9 +8690,9 @@ mod tests {
 
         async fn allocate_commit_after_durable(
             &self,
-            start_ts: crabka_pgexec::TimestampTransactionId,
+            start_ts: krabka_pgexec::TimestampTransactionId,
             durable_horizon: u64,
-        ) -> Result<crabka_pgexec::CommitTimestamp, crabka_pgexec::TimestampSourceError> {
+        ) -> Result<krabka_pgexec::CommitTimestamp, krabka_pgexec::TimestampSourceError> {
             self.commit_grants.fetch_add(1, Ordering::SeqCst);
             self.inner
                 .allocate_commit_after_durable(start_ts, durable_horizon)
@@ -9063,12 +9063,12 @@ mod tests {
 
     async fn pending_engine_for_startup_test(
         start_ts: u64,
-    ) -> (SqlEngine, SqlEngine, crabka_pgexec::TimestampTransactionId) {
+    ) -> (SqlEngine, SqlEngine, krabka_pgexec::TimestampTransactionId) {
         let engine = SqlEngine::new();
         let observer = engine.clone_handle();
-        let start_ts = crabka_pgexec::TimestampTransactionId::new(start_ts).expect("timestamp");
+        let start_ts = krabka_pgexec::TimestampTransactionId::new(start_ts).expect("timestamp");
         engine
-            .begin_timestamp_transaction(&crabka_pgexec::TimestampTxnDescriptor::begun(
+            .begin_timestamp_transaction(&krabka_pgexec::TimestampTxnDescriptor::begun(
                 start_ts,
                 start_ts.get() + 1,
                 vec![RangeId::COORDINATOR.as_u32()],
@@ -9090,7 +9090,7 @@ mod tests {
             observer
                 .primary_timestamp_decision(start_ts)
                 .expect("ordinary startup decision"),
-            crabka_pgexec::PrimaryTxnDecision::Aborted
+            krabka_pgexec::PrimaryTxnDecision::Aborted
         );
     }
 
@@ -9108,31 +9108,31 @@ mod tests {
             observer
                 .primary_timestamp_decision(start_ts)
                 .expect("deferred startup decision"),
-            crabka_pgexec::PrimaryTxnDecision::Pending
+            krabka_pgexec::PrimaryTxnDecision::Pending
         );
     }
 
     #[test]
     fn durable_timestamp_recovery_aborts_intents_and_removes_all_sidecars_idempotently() {
-        let coordinator_kv: Arc<dyn Kv> = Arc::new(crabka_pgkv::MemKv::new());
-        let participant_kv: Arc<dyn Kv> = Arc::new(crabka_pgkv::MemKv::new());
+        let coordinator_kv: Arc<dyn Kv> = Arc::new(krabka_pgkv::MemKv::new());
+        let participant_kv: Arc<dyn Kv> = Arc::new(krabka_pgkv::MemKv::new());
         let coordinator = SqlEngine::with_kv(Arc::clone(&coordinator_kv)).expect("coordinator");
         let mut participant = SqlEngine::with_kv(Arc::clone(&participant_kv)).expect("participant");
         participant.set_catalog_kv(Arc::clone(&coordinator_kv));
 
-        let start_ts = crabka_pgexec::TimestampTransactionId::new(10).expect("start timestamp");
-        let identity = crabka_pgexec::TimestampTxnIdentity {
+        let start_ts = krabka_pgexec::TimestampTransactionId::new(10).expect("start timestamp");
+        let identity = krabka_pgexec::TimestampTxnIdentity {
             start_ts,
             global_xid: 9,
             primary_range: RangeId::COORDINATOR.as_u32(),
         };
-        let write = crabka_pgexec::TimestampWrite {
+        let write = krabka_pgexec::TimestampWrite {
             table_id: 10,
             bucket: None,
             rowid: 11,
             row: vec![Datum::Int4(12)],
             delete: false,
-            global_index_intents: vec![crabka_pgexec::timestamp_txn::GlobalIndexIntent {
+            global_index_intents: vec![krabka_pgexec::timestamp_txn::GlobalIndexIntent {
                 index_id: 1,
                 indexed_values: vec![Datum::Int4(12)],
                 base_table_id: 10,
@@ -9148,7 +9148,7 @@ mod tests {
             .expect("runtime");
         runtime.block_on(async {
             coordinator
-                .begin_timestamp_transaction(&crabka_pgexec::TimestampTxnDescriptor::begun(
+                .begin_timestamp_transaction(&krabka_pgexec::TimestampTxnDescriptor::begun(
                     start_ts,
                     identity.global_xid,
                     vec![1],
@@ -9188,13 +9188,13 @@ mod tests {
             .expect("repeat recovery");
 
         let tuple_key =
-            crabka_pgmvcc::version::version_key_ts(write.table_id, write.rowid, start_ts.get());
+            krabka_pgmvcc::version::version_key_ts(write.table_id, write.rowid, start_ts.get());
         let tuple = participant_kv
             .get(&tuple_key)
             .expect("read settled tuple")
             .expect("settled tuple");
-        let tuple = crabka_pgmvcc::version::decode_ts_tuple(&tuple).expect("decode tuple");
-        assert!(tuple.state == crabka_pgmvcc::version::TsVersionState::Aborted);
+        let tuple = krabka_pgmvcc::version::decode_ts_tuple(&tuple).expect("decode tuple");
+        assert!(tuple.state == krabka_pgmvcc::version::TsVersionState::Aborted);
         assert!(
             participant_kv
                 .scan_prefix(b"\0\0\0\0meta/ts_prewrite/")
@@ -9217,17 +9217,17 @@ mod tests {
 
     #[test]
     fn recovery_aborts_secondary_prewritten_before_primary_participant_ack() {
-        let primary_kv: Arc<dyn Kv> = Arc::new(crabka_pgkv::MemKv::new());
-        let secondary_kv: Arc<dyn Kv> = Arc::new(crabka_pgkv::MemKv::new());
+        let primary_kv: Arc<dyn Kv> = Arc::new(krabka_pgkv::MemKv::new());
+        let secondary_kv: Arc<dyn Kv> = Arc::new(krabka_pgkv::MemKv::new());
         let primary = SqlEngine::with_kv(Arc::clone(&primary_kv)).expect("primary");
         let secondary = SqlEngine::with_kv(Arc::clone(&secondary_kv)).expect("secondary");
-        let start_ts = crabka_pgexec::TimestampTransactionId::new(20).expect("start timestamp");
-        let identity = crabka_pgexec::TimestampTxnIdentity {
+        let start_ts = krabka_pgexec::TimestampTransactionId::new(20).expect("start timestamp");
+        let identity = krabka_pgexec::TimestampTxnIdentity {
             start_ts,
             global_xid: 21,
             primary_range: 1,
         };
-        let primary_write = crabka_pgexec::TimestampWrite {
+        let primary_write = krabka_pgexec::TimestampWrite {
             table_id: 10,
             bucket: None,
             rowid: 11,
@@ -9235,7 +9235,7 @@ mod tests {
             delete: false,
             global_index_intents: Vec::new(),
         };
-        let secondary_write = crabka_pgexec::TimestampWrite {
+        let secondary_write = krabka_pgexec::TimestampWrite {
             table_id: 10,
             bucket: None,
             rowid: 12,
@@ -9270,7 +9270,7 @@ mod tests {
         recover_durable_timestamp_transactions(&engines, &recovery_map, None)
             .expect("recovery aborts prewrite-before-ack orphan");
 
-        let tuple_key = crabka_pgmvcc::version::version_key_ts(
+        let tuple_key = krabka_pgmvcc::version::version_key_ts(
             secondary_write.table_id,
             secondary_write.rowid,
             start_ts.get(),
@@ -9279,8 +9279,8 @@ mod tests {
             .get(&tuple_key)
             .expect("read secondary tuple")
             .expect("secondary tuple retained as aborted version");
-        let tuple = crabka_pgmvcc::version::decode_ts_tuple(&tuple).expect("decode tuple");
-        assert_eq!(tuple.state, crabka_pgmvcc::version::TsVersionState::Aborted);
+        let tuple = krabka_pgmvcc::version::decode_ts_tuple(&tuple).expect("decode tuple");
+        assert_eq!(tuple.state, krabka_pgmvcc::version::TsVersionState::Aborted);
         assert!(
             secondary_kv
                 .scan_prefix(b"\0\0\0\0meta/ts_prewrite/")
@@ -9298,15 +9298,15 @@ mod tests {
     #[test]
     fn rn_only_recovery_settles_orphan_through_remote_primary() {
         let primary = SqlEngine::new();
-        let secondary_kv: Arc<dyn Kv> = Arc::new(crabka_pgkv::MemKv::new());
+        let secondary_kv: Arc<dyn Kv> = Arc::new(krabka_pgkv::MemKv::new());
         let secondary = SqlEngine::with_kv(Arc::clone(&secondary_kv)).expect("secondary");
-        let start_ts = crabka_pgexec::TimestampTransactionId::new(30).expect("start timestamp");
-        let identity = crabka_pgexec::TimestampTxnIdentity {
+        let start_ts = krabka_pgexec::TimestampTransactionId::new(30).expect("start timestamp");
+        let identity = krabka_pgexec::TimestampTxnIdentity {
             start_ts,
             global_xid: 31,
             primary_range: 1,
         };
-        let primary_write = crabka_pgexec::TimestampWrite {
+        let primary_write = krabka_pgexec::TimestampWrite {
             table_id: 10,
             bucket: None,
             rowid: 1,
@@ -9314,7 +9314,7 @@ mod tests {
             delete: false,
             global_index_intents: Vec::new(),
         };
-        let secondary_write = crabka_pgexec::TimestampWrite {
+        let secondary_write = krabka_pgexec::TimestampWrite {
             table_id: 10,
             bucket: None,
             rowid: 2,
@@ -9360,22 +9360,22 @@ mod tests {
             });
         });
         let address = address_rx.recv().expect("primary address");
-        let record = crabka_gres_control::TenantRecord::new(
+        let record = krabka_gres_control::TenantRecord::new(
             1,
-            crabka_gres_control::TenantId::try_from("tenant-rn-recovery").expect("tenant id"),
-            crabka_gres_control::TenantName::try_from("tenant-rn-recovery").expect("tenant name"),
-            crabka_gres_control::TenantState::Active,
-            crabka_gres_control::SqlUser::try_from("alice").expect("user"),
+            krabka_gres_control::TenantId::try_from("tenant-rn-recovery").expect("tenant id"),
+            krabka_gres_control::TenantName::try_from("tenant-rn-recovery").expect("tenant name"),
+            krabka_gres_control::TenantState::Active,
+            krabka_gres_control::SqlUser::try_from("alice").expect("user"),
             "SCRAM-SHA-256$4096:salt$stored:server".into(),
             1,
         )
         .expect("record")
-        .with_range_layout(vec![crabka_gres_control::RangeLayoutEntry {
+        .with_range_layout(vec![krabka_gres_control::RangeLayoutEntry {
             range_id: 1,
             end_key: None,
             endpoint: address.to_string(),
             wal_generation: 1,
-            lifecycle: crabka_gres_control::RangeLifecycle::default(),
+            lifecycle: krabka_gres_control::RangeLifecycle::default(),
             retirement: None,
         }])
         .expect("layout");
@@ -9414,29 +9414,29 @@ mod tests {
 
     fn ddl_layout_entry(
         range_id: u32,
-        end_key: Option<crabka_gres_control::RangeBoundary>,
+        end_key: Option<krabka_gres_control::RangeBoundary>,
         endpoint: String,
-    ) -> crabka_gres_control::RangeLayoutEntry {
-        crabka_gres_control::RangeLayoutEntry {
+    ) -> krabka_gres_control::RangeLayoutEntry {
+        krabka_gres_control::RangeLayoutEntry {
             range_id,
             end_key,
             endpoint,
             wal_generation: 1,
-            lifecycle: crabka_gres_control::RangeLifecycle::default(),
+            lifecycle: krabka_gres_control::RangeLifecycle::default(),
             retirement: None,
         }
     }
 
     fn ddl_registry(
         record_tenant: &str,
-        layout: Vec<crabka_gres_control::RangeLayoutEntry>,
+        layout: Vec<krabka_gres_control::RangeLayoutEntry>,
     ) -> RangeRegistry {
-        let record = crabka_gres_control::TenantRecord::new(
+        let record = krabka_gres_control::TenantRecord::new(
             1,
-            crabka_gres_control::TenantId::try_from(record_tenant).expect("tenant id"),
-            crabka_gres_control::TenantName::try_from(record_tenant).expect("record tenant"),
-            crabka_gres_control::TenantState::Active,
-            crabka_gres_control::SqlUser::try_from("alice").expect("user"),
+            krabka_gres_control::TenantId::try_from(record_tenant).expect("tenant id"),
+            krabka_gres_control::TenantName::try_from(record_tenant).expect("record tenant"),
+            krabka_gres_control::TenantState::Active,
+            krabka_gres_control::SqlUser::try_from("alice").expect("user"),
             "SCRAM-SHA-256$4096:salt$stored:server".to_string(),
             1,
         )
@@ -9459,7 +9459,7 @@ mod tests {
             vec![
                 ddl_layout_entry(
                     0,
-                    Some(crabka_gres_control::RangeBoundary::table_start(60)),
+                    Some(krabka_gres_control::RangeBoundary::table_start(60)),
                     "127.0.0.1:1".to_string(),
                 ),
                 ddl_layout_entry(1, None, follower_endpoint.to_string()),
@@ -9506,7 +9506,7 @@ mod tests {
             vec![
                 ddl_layout_entry(
                     0,
-                    Some(crabka_gres_control::RangeBoundary::table_start(60)),
+                    Some(krabka_gres_control::RangeBoundary::table_start(60)),
                     address.to_string(),
                 ),
                 ddl_layout_entry(1, None, address.to_string()),
@@ -9579,7 +9579,7 @@ mod tests {
             vec![
                 ddl_layout_entry(
                     0,
-                    Some(crabka_gres_control::RangeBoundary::table_start(60)),
+                    Some(krabka_gres_control::RangeBoundary::table_start(60)),
                     address.to_string(),
                 ),
                 ddl_layout_entry(1, None, address.to_string()),
@@ -9759,7 +9759,7 @@ mod tests {
             vec![
                 ddl_layout_entry(
                     0,
-                    Some(crabka_gres_control::RangeBoundary::table_start(60)),
+                    Some(krabka_gres_control::RangeBoundary::table_start(60)),
                     address.to_string(),
                 ),
                 ddl_layout_entry(1, None, address.to_string()),
@@ -9838,7 +9838,7 @@ mod tests {
             .engines
             .get(&RangeId::COORDINATOR)
             .expect("range 0")
-            .catalog_table(&crabka_pgcatalog::RelationName::public("t"))
+            .catalog_table(&krabka_pgcatalog::RelationName::public("t"))
             .expect("table");
         let range0_versions = committed_timestamp_versions(
             serving.engines.get(&RangeId::COORDINATOR).expect("range 0"),
@@ -9951,13 +9951,13 @@ mod tests {
         let engines = gateway.hosted_range_engines();
         let primary = &engines[&RangeId::COORDINATOR];
         let secondary = &engines[&RangeId::new(1)];
-        let start_ts = crabka_pgexec::TimestampTransactionId::new(500).expect("start timestamp");
-        let identity = crabka_pgexec::TimestampTxnIdentity {
+        let start_ts = krabka_pgexec::TimestampTransactionId::new(500).expect("start timestamp");
+        let identity = krabka_pgexec::TimestampTxnIdentity {
             start_ts,
             global_xid: 501,
             primary_range: 0,
         };
-        let write = crabka_pgexec::TimestampWrite {
+        let write = krabka_pgexec::TimestampWrite {
             table_id: 10,
             bucket: None,
             rowid: 60,
@@ -9966,7 +9966,7 @@ mod tests {
             global_index_intents: Vec::new(),
         };
         primary
-            .begin_timestamp_transaction(&crabka_pgexec::TimestampTxnDescriptor::begun(
+            .begin_timestamp_transaction(&krabka_pgexec::TimestampTxnDescriptor::begun(
                 start_ts,
                 identity.global_xid,
                 vec![1],
@@ -9979,18 +9979,18 @@ mod tests {
             .await
             .expect("prewrite");
         primary
-            .decide_timestamp_transaction(start_ts, crabka_pgexec::PrimaryTxnDecision::Aborted)
+            .decide_timestamp_transaction(start_ts, krabka_pgexec::PrimaryTxnDecision::Aborted)
             .await
             .expect("abort primary");
         let session = gateway.connect();
         let commit_ts =
-            crabka_pgexec::CommitTimestamp::after_start(start_ts, 502).expect("commit timestamp");
+            krabka_pgexec::CommitTimestamp::after_start(start_ts, 502).expect("commit timestamp");
         assert!(
             session
                 .timestamp_resolve(
                     RangeId::new(1),
                     identity,
-                    crabka_pgexec::TimestampTxnDecision::Committed(commit_ts),
+                    krabka_pgexec::TimestampTxnDecision::Committed(commit_ts),
                     std::slice::from_ref(&write),
                 )
                 .await
@@ -9998,7 +9998,7 @@ mod tests {
         );
         assert_eq!(
             local_timestamp_tuple_state(secondary, &write, start_ts),
-            crabka_pgmvcc::version::TsVersionState::Intent
+            krabka_pgmvcc::version::TsVersionState::Intent
         );
     }
 
@@ -10009,13 +10009,13 @@ mod tests {
         let engines = gateway.hosted_range_engines();
         let primary = &engines[&RangeId::COORDINATOR];
         let secondary = &engines[&RangeId::new(1)];
-        let start_ts = crabka_pgexec::TimestampTransactionId::new(510).expect("start timestamp");
-        let identity = crabka_pgexec::TimestampTxnIdentity {
+        let start_ts = krabka_pgexec::TimestampTransactionId::new(510).expect("start timestamp");
+        let identity = krabka_pgexec::TimestampTxnIdentity {
             start_ts,
             global_xid: 511,
             primary_range: 0,
         };
-        let write = crabka_pgexec::TimestampWrite {
+        let write = krabka_pgexec::TimestampWrite {
             table_id: 10,
             bucket: None,
             rowid: 61,
@@ -10024,7 +10024,7 @@ mod tests {
             global_index_intents: Vec::new(),
         };
         primary
-            .begin_timestamp_transaction(&crabka_pgexec::TimestampTxnDescriptor::begun(
+            .begin_timestamp_transaction(&krabka_pgexec::TimestampTxnDescriptor::begun(
                 start_ts,
                 identity.global_xid,
                 vec![1],
@@ -10042,7 +10042,7 @@ mod tests {
                 .timestamp_resolve(
                     RangeId::new(1),
                     identity,
-                    crabka_pgexec::TimestampTxnDecision::Aborted,
+                    krabka_pgexec::TimestampTxnDecision::Aborted,
                     std::slice::from_ref(&write),
                 )
                 .await
@@ -10052,11 +10052,11 @@ mod tests {
             primary
                 .primary_timestamp_decision(start_ts)
                 .expect("decision"),
-            crabka_pgexec::PrimaryTxnDecision::Pending
+            krabka_pgexec::PrimaryTxnDecision::Pending
         );
         assert_eq!(
             local_timestamp_tuple_state(secondary, &write, start_ts),
-            crabka_pgmvcc::version::TsVersionState::Intent
+            krabka_pgmvcc::version::TsVersionState::Intent
         );
     }
 
@@ -10067,13 +10067,13 @@ mod tests {
         let engines = gateway.hosted_range_engines();
         let primary = &engines[&RangeId::COORDINATOR];
         let secondary = &engines[&RangeId::new(1)];
-        let start_ts = crabka_pgexec::TimestampTransactionId::new(610).expect("start timestamp");
-        let identity = crabka_pgexec::TimestampTxnIdentity {
+        let start_ts = krabka_pgexec::TimestampTransactionId::new(610).expect("start timestamp");
+        let identity = krabka_pgexec::TimestampTxnIdentity {
             start_ts,
             global_xid: 611,
             primary_range: 0,
         };
-        let low = crabka_pgexec::TimestampWrite {
+        let low = krabka_pgexec::TimestampWrite {
             table_id: 10,
             bucket: None,
             rowid: 60,
@@ -10081,14 +10081,14 @@ mod tests {
             delete: false,
             global_index_intents: Vec::new(),
         };
-        let high = crabka_pgexec::TimestampWrite {
+        let high = krabka_pgexec::TimestampWrite {
             rowid: 61,
             row: vec![Datum::Int4(2)],
             ..low.clone()
         };
         let operations = [&low, &high]
             .into_iter()
-            .map(|write| crabka_pgexec::TimestampTxnOperation {
+            .map(|write| krabka_pgexec::TimestampTxnOperation {
                 range_id: 1,
                 table_id: write.table_id,
                 bucket: write.bucket,
@@ -10097,7 +10097,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
         primary
-            .begin_timestamp_transaction(&crabka_pgexec::TimestampTxnDescriptor::begun(
+            .begin_timestamp_transaction(&krabka_pgexec::TimestampTxnDescriptor::begun(
                 start_ts,
                 identity.global_xid,
                 vec![1],
@@ -10114,11 +10114,11 @@ mod tests {
             .await
             .expect("ack operations");
         let commit_ts =
-            crabka_pgexec::CommitTimestamp::after_start(start_ts, 612).expect("commit timestamp");
+            krabka_pgexec::CommitTimestamp::after_start(start_ts, 612).expect("commit timestamp");
         primary
             .decide_timestamp_transaction(
                 start_ts,
-                crabka_pgexec::PrimaryTxnDecision::Committed(commit_ts),
+                krabka_pgexec::PrimaryTxnDecision::Committed(commit_ts),
             )
             .await
             .expect("commit primary");
@@ -10127,43 +10127,43 @@ mod tests {
             .timestamp_resolve(
                 RangeId::new(1),
                 identity,
-                crabka_pgexec::TimestampTxnDecision::Committed(commit_ts),
+                krabka_pgexec::TimestampTxnDecision::Committed(commit_ts),
                 &[high.clone(), low.clone()],
             )
             .await
             .expect("descending operations are canonicalized");
         assert!(matches!(
             local_timestamp_tuple_state(secondary, &low, start_ts),
-            crabka_pgmvcc::version::TsVersionState::Committed { .. }
+            krabka_pgmvcc::version::TsVersionState::Committed { .. }
         ));
         assert!(matches!(
             local_timestamp_tuple_state(secondary, &high, start_ts),
-            crabka_pgmvcc::version::TsVersionState::Committed { .. }
+            krabka_pgmvcc::version::TsVersionState::Committed { .. }
         ));
     }
 
     fn local_timestamp_tuple_state(
         engine: &SqlEngine,
-        write: &crabka_pgexec::TimestampWrite,
-        start_ts: crabka_pgexec::TimestampTransactionId,
-    ) -> crabka_pgmvcc::version::TsVersionState {
+        write: &krabka_pgexec::TimestampWrite,
+        start_ts: krabka_pgexec::TimestampTransactionId,
+    ) -> krabka_pgmvcc::version::TsVersionState {
         let key =
-            crabka_pgmvcc::version::version_key_ts(write.table_id, write.rowid, start_ts.get());
+            krabka_pgmvcc::version::version_key_ts(write.table_id, write.rowid, start_ts.get());
         let bytes = engine
             .kv_handle()
             .get(&key)
             .expect("read tuple")
             .expect("tuple");
-        crabka_pgmvcc::version::decode_ts_tuple(&bytes)
+        krabka_pgmvcc::version::decode_ts_tuple(&bytes)
             .expect("decode tuple")
             .state
     }
 
     #[tokio::test]
     async fn tso_oracle_allocations_skip_above_observed_local_stamps() {
-        use crabka_pgexec::TimestampSource as _;
+        use krabka_pgexec::TimestampSource as _;
 
-        let kv = Arc::new(crabka_pgkv::MemKv::new());
+        let kv = Arc::new(krabka_pgkv::MemKv::new());
         let horizon = MemoryTsoHorizon::new(kv, 1);
         let oracle = Arc::new(
             TsoOracle::recover(
@@ -10207,7 +10207,7 @@ mod tests {
 
     #[tokio::test]
     async fn fenced_range_zero_timestamp_oracle_fails_clear() {
-        let kv = Arc::new(crabka_pgkv::MemKv::new());
+        let kv = Arc::new(krabka_pgkv::MemKv::new());
         let horizon = MemoryTsoHorizon::new(kv, 1);
         let oracle = Arc::new(
             TsoOracle::recover(
@@ -10226,7 +10226,7 @@ mod tests {
             observed_floor: std::sync::atomic::AtomicU64::new(0),
         };
 
-        let error = crabka_pgexec::TimestampSource::allocate_transaction_id(&timestamp_oracle)
+        let error = krabka_pgexec::TimestampSource::allocate_transaction_id(&timestamp_oracle)
             .await
             .expect_err("fenced oracle rejects grants");
 
@@ -10235,20 +10235,20 @@ mod tests {
 
     #[tokio::test]
     async fn hlc_grant_rpc_is_wall_anchored_and_restart_seeds_from_the_horizon() {
-        use crabka_pgexec::hlc::unpack;
+        use krabka_pgexec::hlc::unpack;
 
         let count = NonZeroU64::new(4).expect("count");
-        let kv = Arc::new(crabka_pgkv::MemKv::new());
+        let kv = Arc::new(krabka_pgkv::MemKv::new());
         let horizon = MemoryTsoHorizon::new(kv, 1);
         // Live-shaped assembly: the same builder the live boot path uses, with
         // a pinned wall clock so anchoring is deterministic.
-        let predecessor_wall = Arc::new(crabka_pgexec::ManualWallClock::new(5_000));
+        let predecessor_wall = Arc::new(krabka_pgexec::ManualWallClock::new(5_000));
         let rpc = hlc_tso_rpc_from_horizon(
             horizon.clone(),
             horizon.clone(),
             1,
             horizon.load_max_ts().expect("fresh horizon"),
-            predecessor_wall as Arc<dyn crabka_pgexec::WallClock>,
+            predecessor_wall as Arc<dyn krabka_pgexec::WallClock>,
         )
         .expect("hlc tso rpc");
         let before_restart = rpc.grant(count).await.expect("grant");
@@ -10259,13 +10259,13 @@ mod tests {
         // wall luck — provides monotonicity across the restart.
         drop(rpc);
         let persisted = horizon.load_max_ts().expect("persisted horizon");
-        let successor_wall = Arc::new(crabka_pgexec::ManualWallClock::new(3));
+        let successor_wall = Arc::new(krabka_pgexec::ManualWallClock::new(3));
         let restarted = hlc_tso_rpc_from_horizon(
             horizon.clone(),
             horizon.clone(),
             1,
             persisted,
-            successor_wall as Arc<dyn crabka_pgexec::WallClock>,
+            successor_wall as Arc<dyn krabka_pgexec::WallClock>,
         )
         .expect("restarted hlc tso rpc");
         let after_restart = restarted
@@ -10498,11 +10498,11 @@ mod tests {
             .iter()
             .enumerate()
             .map(
-                |(index, (origin, process_id, channel, payload))| crabka_pgkv::WriteOp::Put {
-                    key: crabka_pgkv::key::notify_key(
+                |(index, (origin, process_id, channel, payload))| krabka_pgkv::WriteOp::Put {
+                    key: krabka_pgkv::key::notify_key(
                         u64::try_from(index).expect("index fits u64"),
                     ),
-                    value: crabka_pgkv::NotifyRecord {
+                    value: krabka_pgkv::NotifyRecord {
                         origin: (*origin).to_owned(),
                         process_id: *process_id,
                         channel: (*channel).to_owned(),
@@ -10606,13 +10606,13 @@ mod tests {
         tail.apply_committed(&crate::Range0Frame::new(
             1,
             vec![
-                crabka_pgkv::WriteOp::Put {
-                    key: crabka_pgkv::key::notify_key(9),
+                krabka_pgkv::WriteOp::Put {
+                    key: krabka_pgkv::key::notify_key(9),
                     value: vec![0xff, 0x00, 0x01],
                 },
-                crabka_pgkv::WriteOp::Put {
-                    key: crabka_pgkv::key::notify_key(10),
-                    value: crabka_pgkv::NotifyRecord {
+                krabka_pgkv::WriteOp::Put {
+                    key: krabka_pgkv::key::notify_key(10),
+                    value: krabka_pgkv::NotifyRecord {
                         origin: "other-node".to_owned(),
                         process_id: 99,
                         channel: "remote_chan".to_owned(),
@@ -10702,12 +10702,12 @@ mod tests {
     fn committed_timestamp_versions(engine: &SqlEngine, table_id: u32) -> Vec<TimestampVersion> {
         engine
             .kv_handle()
-            .scan_prefix(&crabka_pgkv::key::table_prefix(table_id))
+            .scan_prefix(&krabka_pgkv::key::table_prefix(table_id))
             .expect("scan table")
             .into_iter()
             .filter_map(|(_key, value)| {
-                let version = crabka_pgmvcc::version::decode_ts_tuple(&value).ok()?;
-                let crabka_pgmvcc::version::TsVersionState::Committed { commit_ts } = version.state
+                let version = krabka_pgmvcc::version::decode_ts_tuple(&value).ok()?;
+                let krabka_pgmvcc::version::TsVersionState::Committed { commit_ts } = version.state
                 else {
                     return None;
                 };

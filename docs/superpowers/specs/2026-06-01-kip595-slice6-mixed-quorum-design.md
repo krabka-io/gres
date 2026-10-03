@@ -34,6 +34,7 @@ KIP-853 dynamic reconfiguration.
 ## The three enumerated fixes (from the spike findings)
 
 ### Fix 1 — ApiVersions on the controller listener (promote the spike tweak)
+
 The JVM dials peers with `ApiVersions v4` (flexible); Crabka was returning an
 empty v0 body → JVM declared `UNSUPPORTED_VERSION: does not support VOTE`. The
 spike landed a hand-rolled version-aware body in `crates/raft/src/server.rs`
@@ -47,22 +48,25 @@ client). Add a unit test asserting the v0-vs-v3+ body shapes + the advertised
 set. Keep the existing Crabka↔Crabka behavior byte-identical on the v≤2 path.
 
 ### Fix 2 — Fetch metadata-topic identity by topic_id (the replication blocker)
+
 KRaft `Fetch v17` identifies `__cluster_metadata` by **`topicId`** (the fixed
 `00000000-0000-0000-0000-000000000001`), not by name. Crabka's
 `crates/raft/src/kraft/transport.rs` `wire` keys it by name with a nil topic_id,
 so the Crabka leader's Fetch **response** never matches the JVM follower's
 requested partition → no records → HWM stuck. Fix in `wire`:
+
 - Define `const METADATA_TOPIC_ID` = `00000000-0000-0000-0000-000000000001`.
 - `PeerResponse::Fetch` encode: set `FetchableTopicResponse.topic_id =
-  METADATA_TOPIC_ID` (the JVM follower matches the response by id).
+METADATA_TOPIC_ID` (the JVM follower matches the response by id).
 - `PeerRequest::Fetch` encode: set `FetchTopic.topic_id = METADATA_TOPIC_ID`
-  (v13+ drops the topic *name* in favor of id; so a Crabka follower fetching a
+  (v13+ drops the topic _name_ in favor of id; so a Crabka follower fetching a
   JVM leader matches too).
 - Keep decode positional (`topics.first()`) — unaffected.
 - **Regression:** Crabka↔Crabka Fetch must stay green (both sides now use the
   real topic_id; decode is positional).
 
 ### Fix 3 — cluster_id echo (cheap correctness)
+
 Crabka sends `cluster_id: None` in Vote/Fetch; the JVM tolerated it for
 election. Thread the engine's `cluster_id` (a `uuid::Uuid` → Kafka
 base64url-no-pad string) into the `wire` encoders and set it on outbound
@@ -74,6 +78,7 @@ deferred and noted.
 
 The spike could not test past Fix 2; these are the next candidates, each handled
 empirically when the test runs:
+
 - **Bootstrap offset-0 reconciliation.** Crabka and the JVM each independently
   bootstrap offset 0 (different bytes, epoch 0). When a Crabka node leads at
   epoch ≥ 1, the JVM follower must detect divergence and truncate its epoch-0
@@ -96,7 +101,7 @@ empirically when the test runs:
   quorum and asserts election + leader→follower replication (the done bar).
   Docker-gated (`#[ignore]` like the other JVM tests, run explicitly /
   in the JVM CI lane), not in the default `cargo test` lane.
-- **Regression:** full `crabka-raft` + the broker controller-path suites
+- **Regression:** full `krabka-raft` + the broker controller-path suites
   (quorum / leader_election / controlled_shutdown / role_separation_observer)
   stay green — the ApiVersions + Fetch-topic_id changes are on the shared
   controller wire, so Crabka↔Crabka must be byte-compatible. The 3d-2 JVM

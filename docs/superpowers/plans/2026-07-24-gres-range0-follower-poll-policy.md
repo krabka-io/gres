@@ -9,7 +9,7 @@
 
 **Goal:** Replace Gres's fixed 100 ms range-0 follower polling cadence with one validated CLI/environment setting and a typed fleet CRD field.
 
-**Architecture:** `crabka-gres-control` owns the single compiled default. Gres resolves an optional `PositiveMillis` parser value into `SubstrateRuntimeConfig`, and the existing follower loop consumes that duration. The operator validates the same value in `GresComputeSpec` and emits it only with the existing multi-range arguments.
+**Architecture:** `krabka-gres-control` owns the single compiled default. Gres resolves an optional `PositiveMillis` parser value into `SubstrateRuntimeConfig`, and the existing follower loop consumes that duration. The operator validates the same value in `GresComputeSpec` and emits it only with the existing multi-range arguments.
 
 **Tech Stack:** Rust 2024, Clap, `refined_type` through `PositiveMillis`, Tokio, kube/schemars, serde, generated Kubernetes CRDs.
 
@@ -17,7 +17,7 @@
 
 - Run every Cargo command with `CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0`.
 - Reuse `PositiveMillis`; add no dependency, newtype, or one-field policy struct.
-- Use exactly `--range0-follower-poll-interval-ms` and `CRABKA_GRES_RANGE0_FOLLOWER_POLL_INTERVAL_MS`.
+- Use exactly `--range0-follower-poll-interval-ms` and `KRABKA_GRES_RANGE0_FOLLOWER_POLL_INTERVAL_MS`.
 - Keep the parser field optional; the one shared effective default is 100 ms.
 - Reject zero and explicit standalone use without `--ranges`.
 - Render the operator argument only in the existing range-control branch that renders `--ranges`.
@@ -37,7 +37,7 @@
 
 **Interfaces:**
 
-- Produces: `crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL_MS: u64`
+- Produces: `krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL_MS: u64`
 - Produces: `ServeArgs::range0_follower_poll_interval_ms: Option<PositiveMillis>`
 - Produces: `SubstrateRuntimeConfig::range0_follower_poll_interval: Duration`
 - Produces: `async fn wait_for_range0_follower_refresh(&Notify, Duration)`
@@ -51,10 +51,10 @@ environment branch, and prove CLI precedence:
 ```rust
 #[test]
 fn range0_follower_poll_interval_uses_default_environment_and_cli_precedence() {
-    const CHILD: &str = "CRABKA_TEST_GRES_RANGE0_FOLLOWER_POLL_CHILD";
-    const ENV: &str = "CRABKA_GRES_RANGE0_FOLLOWER_POLL_INTERVAL_MS";
+    const CHILD: &str = "KRABKA_TEST_GRES_RANGE0_FOLLOWER_POLL_CHILD";
+    const ENV: &str = "KRABKA_GRES_RANGE0_FOLLOWER_POLL_INTERVAL_MS";
     let base = [
-        "crabka-gres",
+        "krabka-gres",
         "--substrate-bootstrap=memory://",
         "--tenant=tenant-a",
         "--ranges=0,10",
@@ -119,7 +119,7 @@ Add boundary/mode assertions:
 fn range0_follower_poll_interval_rejects_zero_and_non_multirange_use() {
     assert!(
         Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--ranges=0,10",
@@ -129,7 +129,7 @@ fn range0_follower_poll_interval_rejects_zero_and_non_multirange_use() {
     );
     assert!(
         Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--range0-follower-poll-interval-ms=1",
@@ -137,7 +137,7 @@ fn range0_follower_poll_interval_rejects_zero_and_non_multirange_use() {
         .is_err()
     );
 
-    let mut programmatic = Cli::try_parse_from(["crabka-gres"])
+    let mut programmatic = Cli::try_parse_from(["krabka-gres"])
         .expect("defaults")
         .serve;
     programmatic.range0_follower_poll_interval_ms =
@@ -193,9 +193,9 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres range0_follower_poll_interval --lib
+  cargo test -p krabka-gres range0_follower_poll_interval --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres configured_range0_follower_poll_and_poke --lib
+  cargo test -p krabka-gres configured_range0_follower_poll_and_poke --lib
 ```
 
 Expected: compilation fails because the shared default, parser/config fields,
@@ -216,7 +216,7 @@ Import it in Gres and add this field to `ServeArgs`:
 /// Periodic range-0 follower refresh cadence in multi-range substrate mode.
 #[arg(
     long = "range0-follower-poll-interval-ms",
-    env = "CRABKA_GRES_RANGE0_FOLLOWER_POLL_INTERVAL_MS",
+    env = "KRABKA_GRES_RANGE0_FOLLOWER_POLL_INTERVAL_MS",
     requires = "ranges"
 )]
 pub range0_follower_poll_interval_ms: Option<PositiveMillis>,
@@ -286,16 +286,16 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres range0_follower_poll_interval --lib
+  cargo test -p krabka-gres range0_follower_poll_interval --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres configured_range0_follower_poll_and_poke --lib
+  cargo test -p krabka-gres configured_range0_follower_poll_and_poke --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres --no-fail-fast
+  cargo test -p krabka-gres --no-fail-fast
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-gres-control -p crabka-gres \
+  cargo clippy -p krabka-gres-control -p krabka-gres \
     --all-targets --all-features -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-gres -- --help |
+  cargo run -q -p krabka-gres -- --help |
   rg -- '--range0-follower-poll-interval-ms'
 cargo fmt --all -- --check
 git diff --check
@@ -411,10 +411,10 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator \
+  cargo test -p krabka-operator \
     compute_checkpoint_lifecycle_policy --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator compute_workload --lib
+  cargo test -p krabka-operator compute_workload --lib
 ```
 
 Expected: compilation fails because the CRD and effective-policy fields do not
@@ -469,7 +469,7 @@ First generate to a temporary directory:
 ```bash
 crd_dir=$(mktemp -d)
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-operator -- gen-crds "$crd_dir"
+  cargo run -q -p krabka-operator -- gen-crds "$crd_dir"
 diff -ru deploy/crds "$crd_dir"
 ```
 
@@ -481,7 +481,7 @@ Then regenerate the checked-in CRDs:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-operator -- gen-crds deploy/crds
+  cargo run -q -p krabka-operator -- gen-crds deploy/crds
 ```
 
 - [x] **Step 7: Run focused and full Task 2 verification**
@@ -490,20 +490,20 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator \
+  cargo test -p krabka-operator \
     compute_checkpoint_lifecycle_policy --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator compute_workload --lib
+  cargo test -p krabka-operator compute_workload --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator --no-fail-fast
+  cargo test -p krabka-operator --no-fail-fast
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-operator --all-targets --all-features -- -D warnings
+  cargo clippy -p krabka-operator --all-targets --all-features -- -D warnings
 cargo fmt --all -- --check
 git diff --check
 
 crd_verify_dir=$(mktemp -d)
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-operator -- gen-crds "$crd_verify_dir"
+  cargo run -q -p krabka-operator -- gen-crds "$crd_verify_dir"
 diff -ru deploy/crds "$crd_verify_dir"
 ```
 
@@ -536,11 +536,11 @@ git commit -m "feat(operator): expose range0 follower polling"
 - [x] **Step 1: Run the repository and focused scans**
 
 ```bash
-tools/audit-runtime-values.sh > /tmp/crabka-gres-range0-follower-values.txt
+tools/audit-runtime-values.sh > /tmp/krabka-gres-range0-follower-values.txt
 rg -n \
   'range0.follower|range-0 follower|RANGE0_FOLLOWER|from_millis\\(100\\)' \
   crates/gres-control crates/gres crates/operator deploy/crds \
-  > /tmp/crabka-gres-range0-follower-focused.txt
+  > /tmp/krabka-gres-range0-follower-focused.txt
 ```
 
 Classify every focused production numeric value as the shared default, live
@@ -569,20 +569,20 @@ single-range Deployment arguments.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-control --no-fail-fast
+  cargo test -p krabka-gres-control --no-fail-fast
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres --no-fail-fast
+  cargo test -p krabka-gres --no-fail-fast
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator --no-fail-fast
+  cargo test -p krabka-operator --no-fail-fast
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-gres-control -p crabka-gres -p crabka-operator \
+  cargo clippy -p krabka-gres-control -p krabka-gres -p krabka-operator \
     --all-targets --all-features -- -D warnings
 cargo fmt --all -- --check
 git diff --check
 
 crd_audit_dir=$(mktemp -d)
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-operator -- gen-crds "$crd_audit_dir"
+  cargo run -q -p krabka-operator -- gen-crds "$crd_audit_dir"
 diff -ru deploy/crds "$crd_audit_dir"
 ```
 

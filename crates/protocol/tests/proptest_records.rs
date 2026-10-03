@@ -1,6 +1,6 @@
 use bytes::{Bytes, BytesMut};
-use crabka_compression::CompressionType;
-use crabka_protocol::records::{Record, RecordBatch, RecordHeader};
+use krabka_compression::CompressionType;
+use krabka_protocol::records::{Record, RecordBatch, RecordHeader};
 use proptest::prelude::*;
 
 fn arb_bytes(max: usize) -> impl Strategy<Value = Bytes> {

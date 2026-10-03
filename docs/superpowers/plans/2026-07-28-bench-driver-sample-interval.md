@@ -47,7 +47,7 @@ and rejection of `"0"`, `"not-a-number"`, `"-1"`, and
 `"18446744073709551616"`.
 
 - [ ] Add failing CLI tests for the default, invalid inputs, and a hermetic
-  child-process precedence check:
+      child-process precedence check:
 
 ```text
 BENCH_SAMPLE_INTERVAL_MS=11
@@ -58,7 +58,7 @@ BENCH_SAMPLE_INTERVAL_MS=11
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-bench-driver sample_interval --locked
+  cargo test -p krabka-bench-driver sample_interval --locked
 ```
 
 - [ ] Replace `SAMPLE_INTERVAL_MS` with:
@@ -85,7 +85,7 @@ sample_interval_ms: SampleIntervalMs,
 ```
 
 - [ ] Add `sample_interval: SampleIntervalMs` to `DriverConfig`, initialize it
-  from the CLI and workload test config, and replace:
+      from the CLI and workload test config, and replace:
 
 ```rust
 let interval_ms = SAMPLE_INTERVAL_MS;
@@ -101,7 +101,7 @@ let interval_ms = cfg.sample_interval.milliseconds();
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-bench-driver sample_interval --locked
+  cargo test -p krabka-bench-driver sample_interval --locked
 test "$(rg -o 'cfg\\.sample_interval\\.milliseconds\\(\\)' \
   crates/bench-driver/src/workload.rs | wc -l)" -eq 1
 if rg -n '^const SAMPLE_INTERVAL_MS' crates/bench-driver/src/workload.rs; then
@@ -113,12 +113,12 @@ fi
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-bench-driver --all-targets --locked
+  cargo test -p krabka-bench-driver --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-bench-driver --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-bench-driver --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -p crabka-bench-driver --bin crabka-bench-driver --locked -- --help
-test "$(target/debug/crabka-bench-driver --help | rg -c -- '--sample-interval-ms')" -eq 1
+  cargo run -p krabka-bench-driver --bin krabka-bench-driver --locked -- --help
+test "$(target/debug/krabka-bench-driver --help | rg -c -- '--sample-interval-ms')" -eq 1
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 git diff --check
 git diff -- Cargo.lock
@@ -187,12 +187,12 @@ protocol/format/state/mathematical/query invariants rather than unresolved
 operational owners.
 
 - [ ] Append `## Bench Driver Sample Interval` to
-  `docs/configuration-audit.md`, recording the default, validation, precedence,
-  runtime/deployment flow, preserved grid behavior, exact counts, gates, and
-  bench-driver closure.
+      `docs/configuration-audit.md`, recording the default, validation, precedence,
+      runtime/deployment flow, preserved grid behavior, exact counts, gates, and
+      bench-driver closure.
 
 - [ ] Re-run all package, Clippy, nightly format, help, shell/render, diff,
-  lockfile, and scanner gates.
+      lockfile, and scanner gates.
 
 - [ ] Commit only the audit:
 
@@ -205,8 +205,8 @@ git commit -m "docs(audit): record bench sample interval"
 
 - [ ] Inspect the complete scanner output outside `crates/bench-driver`.
 - [ ] Exclude tests, fixtures, protocol/format/state invariants, dependency
-  mechanics, and already-configured defaults.
+      mechanics, and already-configured defaults.
 - [ ] Name the next coherent unresolved operational owner and enter the design
-  approval workflow before implementation.
+      approval workflow before implementation.
 
 Keep the unrelated producer final-drain plan untracked.

@@ -5,21 +5,21 @@
 
 ## Goal
 
-Add security to the standalone `crabka-schema-registry` REST service in one slice: **authentication** (HTTP Basic + Bearer/OAuth + mTLS), **authorization** (per-subject Kafka Topic ACLs), **server-side TLS** (HTTPS), and **SR↔broker client security** (SASL/TLS). Reuse Crabka's existing security crates wholesale, mirroring the grpc-gateway's P5 pattern — only HTTP Basic is new code.
+Add security to the standalone `krabka-schema-registry` REST service in one slice: **authentication** (HTTP Basic + Bearer/OAuth + mTLS), **authorization** (per-subject Kafka Topic ACLs), **server-side TLS** (HTTPS), and **SR↔broker client security** (SASL/TLS). Reuse Crabka's existing security crates wholesale, mirroring the grpc-gateway's P5 pattern — only HTTP Basic is new code.
 
 ## Non-negotiables
 
-- **Reuse, don't reinvent.** The grpc-gateway (P5, `crates/grpc-gateway/src/authz/`, `serve.rs`) is the reference. Reused: `crabka-authz` (authorizer + ACL cache), `crabka-security` (`Principal`, `OAuthBearerValidator`, `TlsConfig`, `extract_principal_from_cert`), `crabka-metadata` (`ResourceType`/`AclOperation`), `client-core` (`ClientSecurity`/`SaslCredentials`).
+- **Reuse, don't reinvent.** The grpc-gateway (P5, `crates/grpc-gateway/src/authz/`, `serve.rs`) is the reference. Reused: `krabka-authz` (authorizer + ACL cache), `krabka-security` (`Principal`, `OAuthBearerValidator`, `TlsConfig`, `extract_principal_from_cert`), `krabka-metadata` (`ResourceType`/`AclOperation`), `client-core` (`ClientSecurity`/`SaslCredentials`).
 - **cp-fidelity** is limited to **HTTP Basic** behavior (OSS cp-schema-registry security = HTTPS + `BASIC` + Kafka-client security; fine-grained authz is Confluent-commercial, no OSS oracle). Per-subject authz is Crabka-specific, validated by our own broker-backed tests.
 - **Greenfield / Kafka-byte-exactness** per CLAUDE.md. No back-compat shims.
 - **Backwards-compatible default:** with no security configured, the service behaves exactly as today (open, anonymous, HTTP) — security is opt-in via config.
 
 ## Reused APIs (grounded)
 
-- `crabka_authz::{Authorizer, SimpleAclAuthorizer, AclSource, AuthorizationRequest<'a>, AuthorizationResult}`; `crabka_authz::cache::AclCache` (snapshot from broker `DescribeAcls`, implements `AclSource`).
-- `crabka_security::{Principal, AuthMethod, TlsConfig, ClientAuthMode, extract_principal_from_cert, OAuthBearerValidator (Unsecured|Signed|Introspection), AuthOutcome}`.
-- `crabka_metadata::{ResourceType (Topic|Group|Cluster|TransactionalId), AclOperation (Read|Write|Create|Delete|Alter|Describe|…), PatternType, PermissionType}`.
-- `crabka_client_core::{ClientSecurity, SaslCredentials, TlsConnectorConfig}`; `crabka_security::ListenerProtocol`.
+- `krabka_authz::{Authorizer, SimpleAclAuthorizer, AclSource, AuthorizationRequest<'a>, AuthorizationResult}`; `krabka_authz::cache::AclCache` (snapshot from broker `DescribeAcls`, implements `AclSource`).
+- `krabka_security::{Principal, AuthMethod, TlsConfig, ClientAuthMode, extract_principal_from_cert, OAuthBearerValidator (Unsecured|Signed|Introspection), AuthOutcome}`.
+- `krabka_metadata::{ResourceType (Topic|Group|Cluster|TransactionalId), AclOperation (Read|Write|Create|Delete|Alter|Describe|…), PatternType, PermissionType}`.
+- `krabka_client_core::{ClientSecurity, SaslCredentials, TlsConnectorConfig}`; `krabka_security::ListenerProtocol`.
 - Gateway templates: `crates/grpc-gateway/src/authz/auth_layer.rs` (Bearer middleware → `Principal` in extensions), `serve.rs` (TLS accept loop + mTLS principal), `authz/mod.rs` (AclCache refresh task + `authorize` gating).
 
 ## Architecture — middleware stack
@@ -36,7 +36,7 @@ request → [auth_layer]  resolve Principal (mTLS|Bearer|Basic|Anonymous) → ex
 
 ### Unit 1 — Authentication (`src/auth/`, new module)
 
-`auth_layer` (axum `from_fn_with_state`) resolves a `crabka_security::Principal` and inserts it into request extensions, in precedence order:
+`auth_layer` (axum `from_fn_with_state`) resolves a `krabka_security::Principal` and inserts it into request extensions, in precedence order:
 
 1. **mTLS** — if the TLS accept loop (Unit 3) already inserted an mTLS `Principal` into extensions (from the verified peer cert), use it as the highest-precedence source.
 2. **Bearer** — `Authorization: Bearer <jwt>` → reused `OAuthBearerValidator::validate` → `Principal` (auth_method `SaslOAuthBearer`). Invalid token → `401`.
@@ -51,35 +51,35 @@ request → [auth_layer]  resolve Principal (mTLS|Bearer|Basic|Anonymous) → ex
 
 `SchemaRegistryAuthz { authorizer: Arc<dyn Authorizer>, acls: watch::Receiver<Arc<AclCache>>, super_users: HashSet<String>, enabled: bool }`.
 
-- A background task (gateway pattern) periodically `DescribeAcls` via `crabka-client-admin` and publishes a fresh `AclCache` over a `watch` channel.
+- A background task (gateway pattern) periodically `DescribeAcls` via `krabka-client-admin` and publishes a fresh `AclCache` over a `watch` channel.
 - `authz_layer` maps the request to a permission and calls `authorizer.authorize(&*acls, &AuthorizationRequest { principal, host, resource_type, resource_name, operation })`; `Deny` → `403`. Super-users and `enabled = false` short-circuit to allow.
 - **Forward-trust:** if the request carries `forward::FORWARD_HEADER` (a write already authorized at its ingress node), `authz_layer` **skips** authorization — the primary trusts inter-node forwards (documented trust boundary; secure the inter-node link in deployment).
 
 **(method, path) → (ResourceType, name, AclOperation) map** (the pure core, unit-tested):
 
-| Route | Resource | Op |
-|---|---|---|
-| `GET /` | — (health, unauthenticated) | — |
-| `GET /schemas/types` | Cluster `kafka-cluster` | Describe |
-| `GET /schemas`, `/schemas/ids/{id}`, `/schemas/ids/{id}/versions` | Cluster `kafka-cluster` | Read |
-| `GET /subjects` | Cluster `kafka-cluster` | Describe |
-| `POST /subjects/{s}` (lookup) | Topic `{s}` | Read |
-| `DELETE /subjects/{s}` | Topic `{s}` | Delete |
-| `GET /subjects/{s}/versions` | Topic `{s}` | Read |
-| `POST /subjects/{s}/versions` (register) | Topic `{s}` | Write |
-| `GET /subjects/{s}/versions/{v}` (+ `/schema`, `/referencedby`) | Topic `{s}` | Read |
-| `DELETE /subjects/{s}/versions/{v}` | Topic `{s}` | Delete |
-| `GET /config`, `/mode` | Cluster `kafka-cluster` | Describe |
-| `PUT /config`, `/mode` | Cluster `kafka-cluster` | Alter |
-| `GET /config/{s}`, `/mode/{s}` | Topic `{s}` | Describe |
-| `PUT /config/{s}`, `/mode/{s}`, `DELETE /mode/{s}` | Topic `{s}` | Alter |
-| `POST /compatibility/subjects/{s}/versions/{v}` | Topic `{s}` | Read |
+| Route                                                             | Resource                    | Op       |
+| ----------------------------------------------------------------- | --------------------------- | -------- |
+| `GET /`                                                           | — (health, unauthenticated) | —        |
+| `GET /schemas/types`                                              | Cluster `kafka-cluster`     | Describe |
+| `GET /schemas`, `/schemas/ids/{id}`, `/schemas/ids/{id}/versions` | Cluster `kafka-cluster`     | Read     |
+| `GET /subjects`                                                   | Cluster `kafka-cluster`     | Describe |
+| `POST /subjects/{s}` (lookup)                                     | Topic `{s}`                 | Read     |
+| `DELETE /subjects/{s}`                                            | Topic `{s}`                 | Delete   |
+| `GET /subjects/{s}/versions`                                      | Topic `{s}`                 | Read     |
+| `POST /subjects/{s}/versions` (register)                          | Topic `{s}`                 | Write    |
+| `GET /subjects/{s}/versions/{v}` (+ `/schema`, `/referencedby`)   | Topic `{s}`                 | Read     |
+| `DELETE /subjects/{s}/versions/{v}`                               | Topic `{s}`                 | Delete   |
+| `GET /config`, `/mode`                                            | Cluster `kafka-cluster`     | Describe |
+| `PUT /config`, `/mode`                                            | Cluster `kafka-cluster`     | Alter    |
+| `GET /config/{s}`, `/mode/{s}`                                    | Topic `{s}`                 | Describe |
+| `PUT /config/{s}`, `/mode/{s}`, `DELETE /mode/{s}`                | Topic `{s}`                 | Alter    |
+| `POST /compatibility/subjects/{s}/versions/{v}`                   | Topic `{s}`                 | Read     |
 
 `AclOperation` implication (Read→Describe etc.) is handled inside `SimpleAclAuthorizer` — we request the most specific op. Subject parsing reuses axum's matched-path/`Path` extraction inside the middleware (a pure `fn authz_target(method, path) -> Option<(ResourceType, String, AclOperation)>` so it is unit-tested independent of axum).
 
 ### Unit 3 — Server TLS (`bin/schema-registry.rs` + `rest/serve.rs`, new)
 
-When `tls` config is present, serve HTTPS: build `Arc<rustls::ServerConfig>` via `crabka_security::TlsConfig::build_server_config()`, accept with `tokio-rustls` (gateway `serve.rs` accept-loop pattern). On `ClientAuthMode::Optional|Required`, run `extract_principal_from_cert` on the verified peer cert and insert the resulting `Principal { auth_method: MTls }` into request extensions (gateway `serve.rs` `peer_principal` pattern); Unit 1 consumes it as its highest-precedence source. Without `tls`, serve plain HTTP as today.
+When `tls` config is present, serve HTTPS: build `Arc<rustls::ServerConfig>` via `krabka_security::TlsConfig::build_server_config()`, accept with `tokio-rustls` (gateway `serve.rs` accept-loop pattern). On `ClientAuthMode::Optional|Required`, run `extract_principal_from_cert` on the verified peer cert and insert the resulting `Principal { auth_method: MTls }` into request extensions (gateway `serve.rs` `peer_principal` pattern); Unit 1 consumes it as its highest-precedence source. Without `tls`, serve plain HTTP as today.
 
 ### Unit 4 — Client→broker security (`config.rs` + `kafkastore`)
 
@@ -95,9 +95,9 @@ SecurityConfig {
   realm: String,                           // WWW-Authenticate realm
   basic: Option<BasicAuthConfig>,          // file path or inline user→hash map
   bearer: Option<BearerAuthConfig>,        // reuse broker OAuth config (issuer/JWKS/principal-claim/…)
-  tls: Option<crabka_security::TlsConfig>, // server cert/key/CA + client_auth
+  tls: Option<krabka_security::TlsConfig>, // server cert/key/CA + client_auth
   authz: Option<AuthzConfig>,              // enable + super_users + acl_refresh_interval
-  client: crabka_client_core::ClientSecurity, // SR↔broker SASL/TLS (default PLAINTEXT)
+  client: krabka_client_core::ClientSecurity, // SR↔broker SASL/TLS (default PLAINTEXT)
 }
 ```
 
@@ -125,17 +125,17 @@ OSS `cp-schema-registry` security = HTTPS + `BASIC` auth + Kafka-client security
 
 ## Out of scope / deferred
 
-- Confluent-commercial RBAC (role bindings, MDS), SR ACL management *via the REST API* (`/acls`), and resource patterns beyond Literal/Prefixed.
+- Confluent-commercial RBAC (role bindings, MDS), SR ACL management _via the REST API_ (`/acls`), and resource patterns beyond Literal/Prefixed.
 - A dedicated `ResourceType::Subject` (we reuse `Topic` per the approved decision).
 - Forwarding the original client identity to the primary for re-authorization (we authorize at ingress + trust the inter-node link).
 - Audit logging of authz decisions (the gateway has it; defer unless trivial to reuse).
-- OAuth token *acquisition* by the SR client to the broker (SASL OAUTHBEARER outbound) — the client supports PLAIN/SCRAM/GSSAPI now; OAUTHBEARER-outbound is deferred.
+- OAuth token _acquisition_ by the SR client to the broker (SASL OAUTHBEARER outbound) — the client supports PLAIN/SCRAM/GSSAPI now; OAUTHBEARER-outbound is deferred.
 
 ## File structure
 
 ```
 crates/schema-registry/
-  Cargo.toml                 # + crabka-authz, crabka-security, crabka-metadata, crabka-client-admin, base64, (bcrypt?)
+  Cargo.toml                 # + krabka-authz, krabka-security, krabka-metadata, krabka-client-admin, base64, (bcrypt?)
   src/
     config.rs                # + SecurityConfig and sub-structs
     auth/mod.rs              # auth_layer + AuthState; Principal resolution + 401 logic

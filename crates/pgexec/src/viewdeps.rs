@@ -23,7 +23,7 @@
 //! itself, and both are visible to the query they precede. A schema-qualified
 //! name is never shadowed, because a CTE has no schema.
 
-use crabka_pgparser::ast::{
+use krabka_pgparser::ast::{
     CteBody, Expr, FuncArgs, QueryBody, QueryExpr, RelationRef, SelectItem, SelectStmt, SetExpr,
     TableExpr, WindowRef, WindowSpec,
 };
@@ -195,8 +195,8 @@ fn walk_window_spec<'a>(
     }
 }
 
-fn frame_offset(bound: &crabka_pgparser::ast::FrameBound) -> Option<&Expr> {
-    use crabka_pgparser::ast::FrameBound;
+fn frame_offset(bound: &krabka_pgparser::ast::FrameBound) -> Option<&Expr> {
+    use krabka_pgparser::ast::FrameBound;
     match bound {
         FrameBound::Preceding(offset) | FrameBound::Following(offset) => Some(offset),
         FrameBound::UnboundedPreceding
@@ -244,7 +244,7 @@ fn walk_table_expr<'a>(
         } => {
             walk_table_expr(left, scope, visit);
             walk_table_expr(right, scope, visit);
-            if let crabka_pgparser::ast::JoinConstraint::On(predicate) = constraint {
+            if let krabka_pgparser::ast::JoinConstraint::On(predicate) = constraint {
                 walk_expr(predicate, scope, visit);
             }
         }
@@ -284,14 +284,14 @@ fn walk_expr<'a>(expr: &'a Expr, scope: &mut Vec<&'a str>, visit: &mut impl FnMu
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgparser::ast::Statement;
+    use krabka_pgparser::ast::Statement;
 
     use super::{Node, query_sources, walk_query};
 
     /// Every relation the body of `definition` reads, as `schema.name` where a
     /// qualifier was written and the bare name otherwise.
     fn sources(definition: &str) -> Vec<String> {
-        let statements = crabka_pgparser::parse(definition).expect("parse");
+        let statements = krabka_pgparser::parse(definition).expect("parse");
         let [Statement::Query(query)] = statements.as_slice() else {
             panic!("expected one query");
         };
@@ -305,7 +305,7 @@ mod tests {
     }
 
     fn nodes(definition: &str) -> (usize, usize) {
-        let statements = crabka_pgparser::parse(definition).expect("parse");
+        let statements = krabka_pgparser::parse(definition).expect("parse");
         let [Statement::Query(query)] = statements.as_slice() else {
             panic!("expected one query");
         };
@@ -461,13 +461,13 @@ mod tests {
             "SELECT * FROM generate_series(1, $1) g",
         ];
         for definition in cases {
-            let statements = crabka_pgparser::parse(definition).expect("parse");
+            let statements = krabka_pgparser::parse(definition).expect("parse");
             let [Statement::Query(query)] = statements.as_slice() else {
                 panic!("expected one query");
             };
             let mut found = false;
             walk_query(query, &mut |node| {
-                if let Node::Expr(crabka_pgparser::ast::Expr::Param(_)) = node {
+                if let Node::Expr(krabka_pgparser::ast::Expr::Param(_)) = node {
                     found = true;
                 }
             });

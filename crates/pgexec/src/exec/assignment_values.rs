@@ -17,7 +17,7 @@ pub(crate) fn jsonpath_assignment_base(target: ColumnType) -> Option<ColumnType>
     let base = target.storage_type();
     matches!(
         base,
-        ColumnType::JsonPath | ColumnType::Array(crabka_pgtypes::ElemType::JsonPath)
+        ColumnType::JsonPath | ColumnType::Array(krabka_pgtypes::ElemType::JsonPath)
     )
     .then_some(base)
 }
@@ -109,7 +109,7 @@ pub(crate) fn default_from_expr(
     }
 
     let source = crate::eval::infer_type(expr, &Scope::empty())?;
-    if !crabka_pgtypes::cast::assignment_cast_allowed(source, target) {
+    if !krabka_pgtypes::cast::assignment_cast_allowed(source, target) {
         return Err(ExecError::TypeMismatch(format!(
             "column is of type {} but expression is of type {}",
             target.name(),
@@ -134,11 +134,11 @@ pub(crate) fn coerce_default(
 /// Coerce an evaluated value into a target column type (assignment context). `ctx`
 /// supplies the session zone for any temporal numeric conversion.
 pub(crate) fn coerce(
-    value: crabka_pgtypes::Datum,
-    target: crabka_pgtypes::ColumnType,
+    value: krabka_pgtypes::Datum,
+    target: krabka_pgtypes::ColumnType,
     ctx: &crate::clock::EvalCtx,
-) -> Result<crabka_pgtypes::Datum, ExecError> {
-    use crabka_pgtypes::{ColumnType, Datum, TypeError, string::Coercion};
+) -> Result<krabka_pgtypes::Datum, ExecError> {
+    use krabka_pgtypes::{ColumnType, Datum, TypeError, string::Coercion};
     // Assignment to a domain column coerces to the domain's base type and then
     // has to satisfy the domain's own constraints — PostgreSQL applies them at
     // every assignment, not only at an explicit cast.
@@ -158,7 +158,7 @@ pub(crate) fn coerce(
     // a `record` built by a bare `ROW(…)` is coerced field by field into the
     // target's attribute types.
     if let (Datum::Record(_), ColumnType::Record(Some(_))) = (&value, target) {
-        return Ok(crabka_pgtypes::cast::cast_in(
+        return Ok(krabka_pgtypes::cast::cast_in(
             &value,
             target,
             ctx.output_style(),
@@ -191,10 +191,10 @@ pub(crate) fn coerce(
             ))),
         };
     }
-    if target == ColumnType::Array(crabka_pgtypes::ElemType::JsonPath) {
+    if target == ColumnType::Array(krabka_pgtypes::ElemType::JsonPath) {
         return match value {
             Datum::Null => Ok(Datum::Null),
-            Datum::Array(array) if array.elem == crabka_pgtypes::ElemType::JsonPath => {
+            Datum::Array(array) if array.elem == krabka_pgtypes::ElemType::JsonPath => {
                 Ok(Datum::Array(array))
             }
             other => Err(ExecError::TypeMismatch(format!(
@@ -213,7 +213,7 @@ pub(crate) fn coerce(
             Datum::Int4(_) | Datum::Int8(_) | Datum::Float8(_) | Datum::Numeric(_)
         )
     {
-        return Ok(crabka_pgtypes::cast::cast_in(
+        return Ok(krabka_pgtypes::cast::cast_in(
             &value,
             target,
             ctx.output_style(),
@@ -231,19 +231,19 @@ pub(crate) fn coerce(
         (Datum::Text(s), ColumnType::Text) => Datum::Text(s),
         (Datum::Text(s), ColumnType::Aclitem | ColumnType::Refcursor) => Datum::Text(s),
         (value @ Datum::Text(_), ColumnType::Name) => {
-            crabka_pgtypes::cast::cast_assign_in(&value, ColumnType::Name, ctx.output_style())?
+            krabka_pgtypes::cast::cast_assign_in(&value, ColumnType::Name, ctx.output_style())?
         }
         (Datum::Text(s), ColumnType::Varchar(limit)) => Datum::Text(
-            crabka_pgtypes::string::apply_varchar_typmod(&s, limit, Coercion::Assignment)?,
+            krabka_pgtypes::string::apply_varchar_typmod(&s, limit, Coercion::Assignment)?,
         ),
         (Datum::Text(s), ColumnType::Char(limit)) => Datum::Text(
-            crabka_pgtypes::string::apply_char_typmod(&s, limit, Coercion::Assignment)?,
+            krabka_pgtypes::string::apply_char_typmod(&s, limit, Coercion::Assignment)?,
         ),
         (value, target @ (ColumnType::Varchar(_) | ColumnType::Char(_))) => {
-            crabka_pgtypes::cast::cast_assign_in(&value, target, ctx.output_style())?
+            krabka_pgtypes::cast::cast_assign_in(&value, target, ctx.output_style())?
         }
         (Datum::Text(s), ColumnType::Uuid) => {
-            Datum::Text(crabka_pgtypes::uuid::UuidBytes::parse(&s)?.to_canonical_text())
+            Datum::Text(krabka_pgtypes::uuid::UuidBytes::parse(&s)?.to_canonical_text())
         }
         (Datum::Bytea(bytes), ColumnType::Bytea) => Datum::Bytea(bytes),
         (Datum::Text(s), ColumnType::Bytea) => Datum::Bytea(crate::session::decode_bytea_text(&s)?),
@@ -274,13 +274,13 @@ pub(crate) fn coerce(
         // rounds half-away-from-zero with a range check (22003); numeric→float8 may
         // become ±Infinity for an out-of-range magnitude.
         (Datum::Numeric(d), ColumnType::Float8) => {
-            Datum::Float8(crabka_pgtypes::numeric::to_f64(&d))
+            Datum::Float8(krabka_pgtypes::numeric::to_f64(&d))
         }
         (Datum::Numeric(d), ColumnType::Int4) => {
-            crabka_pgtypes::numeric::to_i32(&d).map(Datum::Int4)?
+            krabka_pgtypes::numeric::to_i32(&d).map(Datum::Int4)?
         }
         (Datum::Numeric(d), ColumnType::Int8) => {
-            crabka_pgtypes::numeric::to_i64(&d).map(Datum::Int8)?
+            krabka_pgtypes::numeric::to_i64(&d).map(Datum::Int8)?
         }
         // SP37: date/time assignment — same-type pass-through (no implicit
         // cross-type coercion between temporal types; mismatches hit the catch-all).
@@ -298,7 +298,7 @@ pub(crate) fn coerce(
         // an over-long value, where the explicit cast the catch-all would use
         // pads or truncates silently.
         (value @ Datum::BitString(_), ty @ (ColumnType::Bit(_) | ColumnType::VarBit(_))) => {
-            crabka_pgtypes::cast::cast_assign_in(&value, ty, ctx.output_style())?
+            krabka_pgtypes::cast::cast_assign_in(&value, ty, ctx.output_style())?
         }
         // `json → jsonb` and `jsonb → json` are assignment-level casts in
         // `pg_cast`, so storing one in a column of the other is allowed and runs
@@ -310,15 +310,15 @@ pub(crate) fn coerce(
         | (value @ (Datum::Text(_) | Datum::Array(_)), ty @ ColumnType::Array(_)) => {
             // `cast_assign_in`, because this is a store: an over-long element
             // of a `varchar(n)[]` column is 22001, not a silent truncation.
-            crabka_pgtypes::cast::cast_assign_in(&value, ty, ctx.output_style())?
+            krabka_pgtypes::cast::cast_assign_in(&value, ty, ctx.output_style())?
         }
         (v, target) => {
             // Assignment-context implicit casts — PostgreSQL's pg_cast
             // castcontext 'i'/'a' pairs and I/O conversions into string types.
             if let Some(from) = v.column_type()
-                && crabka_pgtypes::cast::assignment_cast_allowed(from, target)
+                && krabka_pgtypes::cast::assignment_cast_allowed(from, target)
             {
-                return Ok(crabka_pgtypes::cast::cast_in(
+                return Ok(krabka_pgtypes::cast::cast_in(
                     &v,
                     target,
                     ctx.output_style(),

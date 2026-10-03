@@ -2,11 +2,11 @@
 
 **Date:** 2026-06-15
 **Status:** Approved (design)
-**Crate(s):** `crabka-client-streams`, `crabka-docgen`; website `guide/`; CI.
+**Crate(s):** `krabka-client-streams`, `krabka-docgen`; website `guide/`; CI.
 
 ## Problem
 
-`crabka-client-streams` supports a broad set of data formats — primitive serdes,
+`krabka-client-streams` supports a broad set of data formats — primitive serdes,
 registry-backed schema serdes (JSON Schema / Protobuf / Avro), and columnar
 serdes/codecs (Polars, Arrow, `columnar`) — but the documentation does not
 explain them, there is no getting-started guide for the streams stack, and there
@@ -17,7 +17,7 @@ hand-maintained with zero verification).
 
 ## Goals
 
-1. A getting-started + data-formats guide for `crabka-client-streams`.
+1. A getting-started + data-formats guide for `krabka-client-streams`.
 2. A single worked pipeline that moves order data through every format tier:
    **JSON → Protobuf → Arrow → columnar Polars → summary Protobuf.**
 3. An automated harness that builds and runs every documented example, asserts it
@@ -32,41 +32,41 @@ hand-maintained with zero verification).
 
 ## Current state (verified)
 
-Serdes/codecs available in `crabka-client-streams`:
+Serdes/codecs available in `krabka-client-streams`:
 
-| Serde / codec | Handles | Crate | Feature gate | Source |
-|---|---|---|---|---|
-| `StringSerde`, `I64Serde`, `BytesSerde` | `String` / `i64` / `Bytes` | client-streams | none | `src/processor/serde.rs` |
-| `SchemaSerde<T, JsonSerde<T>>` | JSON-Schema typed | schema-serde | none (default on) | `src/format/json.rs` |
-| `SchemaSerde<T, ProtobufSerde<T>>` | prost `Message` (dynamic via `prost-reflect`) | schema-serde | none (default on) | `src/format/protobuf.rs` |
-| `SchemaSerde<T, AvroSerde<T>>` | `apache_avro::AvroSchema` | schema-serde | none (default on) | `src/format/avro.rs` |
-| `PolarsIpcSerde` | `polars::DataFrame` (Arrow IPC) | client-streams | `polars` | `src/columnar/serde/polars.rs` |
-| `ArrowIpcSerde` | `arrow::RecordBatch` (Arrow IPC) | client-streams | `arrow` | `src/columnar/serde/arrow.rs` |
-| `ColumnarSerde<T>` | `columnar::Columnar` | client-streams | `columnar` | `src/columnar/serde/columnar.rs` |
-| `BlobCodec`, `RowCodec` | Kafka records ↔ `DataFrame` | client-streams | `polars` | `src/columnar/topology/codec.rs` |
+| Serde / codec                           | Handles                                       | Crate          | Feature gate      | Source                           |
+| --------------------------------------- | --------------------------------------------- | -------------- | ----------------- | -------------------------------- |
+| `StringSerde`, `I64Serde`, `BytesSerde` | `String` / `i64` / `Bytes`                    | client-streams | none              | `src/processor/serde.rs`         |
+| `SchemaSerde<T, JsonSerde<T>>`          | JSON-Schema typed                             | schema-serde   | none (default on) | `src/format/json.rs`             |
+| `SchemaSerde<T, ProtobufSerde<T>>`      | prost `Message` (dynamic via `prost-reflect`) | schema-serde   | none (default on) | `src/format/protobuf.rs`         |
+| `SchemaSerde<T, AvroSerde<T>>`          | `apache_avro::AvroSchema`                     | schema-serde   | none (default on) | `src/format/avro.rs`             |
+| `PolarsIpcSerde`                        | `polars::DataFrame` (Arrow IPC)               | client-streams | `polars`          | `src/columnar/serde/polars.rs`   |
+| `ArrowIpcSerde`                         | `arrow::RecordBatch` (Arrow IPC)              | client-streams | `arrow`           | `src/columnar/serde/arrow.rs`    |
+| `ColumnarSerde<T>`                      | `columnar::Columnar`                          | client-streams | `columnar`        | `src/columnar/serde/columnar.rs` |
+| `BlobCodec`, `RowCodec`                 | Kafka records ↔ `DataFrame`                   | client-streams | `polars`          | `src/columnar/topology/codec.rs` |
 
 Key facts the design relies on:
 
 - Protobuf is fully dynamic (no `.proto` at runtime). The existing
   `examples/protobuf_pipeline.rs` mirrors codegen via committed
   `examples/proto/order.proto` + `examples/gen/{order.rs, file_descriptor_set.bin}`
-  + `examples/gen/regenerate.sh` (no `build.rs`).
+  - `examples/gen/regenerate.sh` (no `build.rs`).
 - High-level DSL exists: `StreamsApp::builder().bootstrap(..).application_id(..)
-  .schema_registry(..).build()`, then `app.streams_builder()` →
+.schema_registry(..).build()`, then `app.streams_builder()` →
   `.stream::<K,V>([..]).map_values(..).to(..)` → `app.run(topology).await`.
 - In-process broker test pattern: `Broker::start(BrokerConfig::for_tests(dir))`
   then `broker.listen_addr()`. Enabled for non-broker crates via the
-  `crabka-broker/test-helpers` dev-dependency facade.
+  `krabka-broker/test-helpers` dev-dependency facade.
 - In-process Schema Registry over a real HTTP port:
   `KafkaStore::start(&RegistryConfig{ bootstrap, schemas_topic, schemas_topic_rf,
-  client_id, advertised_url, group_id, leader_eligibility, security }, cancel)`
+client_id, advertised_url, group_id, leader_eligibility, security }, cancel)`
   → `rest::router(AppState { store })` → `serve::serve_http(TcpListener::bind(
-  "127.0.0.1:0"), app, cancel)`; point `RegistryClient::new("http://<addr>")` at it.
+"127.0.0.1:0"), app, cancel)`; point `RegistryClient::new("http://<addr>")` at it.
 - Cargo examples have access to `[dev-dependencies]`, so a self-contained example
   can boot its own broker + registry.
 - `crates/docgen` already generates markdown reference pages and is run by
-  `.github/workflows/docs.yml` (`cargo run -p crabka-docgen -- all --out
-  website/content/reference`) before the Zola site build. CI has an existing
+  `.github/workflows/docs.yml` (`cargo run -p krabka-docgen -- all --out
+website/content/reference`) before the Zola site build. CI has an existing
   `drift` job pattern for generated-artifact checks.
 
 ## Design
@@ -106,7 +106,7 @@ Stages:
   `ArrowBlobCodec: BatchCodec` that decodes the `ArrowIpcSerde` record values to
   a Polars `DataFrame` via `polars-arrow`. Apply
   `BuiltinOp::GroupByAgg { keys: [col("user")], aggs: [col("amount_cents").sum()
-  .alias("total_cents"), col("amount_cents").count().alias("order_count")] }`.
+.alias("total_cents"), col("amount_cents").count().alias("order_count")] }`.
 - **D · polars→summary proto** — convert each aggregated row to `OrderSummary`,
   produce to `orders.summary` via `ProtobufSerde<OrderSummary>`.
 
@@ -124,9 +124,9 @@ and Polars-IPC byte formats are interchangeable.
   fixed set of `OrderEvent`s.
 - Runs Stages A–D, reads `orders.summary`, and `assert!`s the per-user
   `total_cents` / `order_count` against the known input. Prints `format_pipeline:
-  OK` on success; panics (non-zero exit) on failure. **Running it is the test.**
+OK` on success; panics (non-zero exit) on failure. **Running it is the test.**
 - Every teachable region wrapped in `// docs:begin <anchor>` / `// docs:end
-  <anchor>` markers (anchors: `setup`, `stage-a-json-proto`, `stage-b-proto-arrow`,
+<anchor>` markers (anchors: `setup`, `stage-a-json-proto`, `stage-b-proto-arrow`,
   `stage-c-arrow-polars`, `stage-d-polars-proto`, `assert`).
 
 Proto codegen mirrors the existing example: `examples/proto/orders.proto`,
@@ -174,11 +174,11 @@ Snippet mechanism — extend `crates/docgen`:
 
 `tools/test-doc-examples.sh` (bash, `set -euo pipefail`):
 
-1. `cargo build -p crabka-client-streams --examples --features polars,arrow`
+1. `cargo build -p krabka-client-streams --examples --features polars,arrow`
 2. Run each self-asserting example:
-   `cargo run -p crabka-client-streams --example format_pipeline --features polars,arrow`
+   `cargo run -p krabka-client-streams --example format_pipeline --features polars,arrow`
    (plus the per-format examples with their required features).
-3. Drift guard: `cargo run -p crabka-docgen -- snippets` then
+3. Drift guard: `cargo run -p krabka-docgen -- snippets` then
    `git diff --exit-code -- website/content` (fails if docs are stale).
 
 New CI job `doc-examples` in `.github/workflows/ci.yml`:
@@ -201,6 +201,7 @@ New CI job `doc-examples` in `.github/workflows/ci.yml`:
 ## Files touched
 
 New:
+
 - `crates/client-streams/examples/format_pipeline.rs`
 - `crates/client-streams/examples/format_json.rs`
 - `crates/client-streams/examples/format_protobuf.rs`
@@ -212,6 +213,7 @@ New:
 - (CI) new `doc-examples` job in `.github/workflows/ci.yml`
 
 Modified:
+
 - `crates/client-streams/Cargo.toml` — `[[example]]` entries (+ required-features);
   dev-deps for in-process broker + schema registry + producer/consumer if missing.
 - `crates/docgen/src/**` + its bin — add the `snippets` operation; fold into `all`.

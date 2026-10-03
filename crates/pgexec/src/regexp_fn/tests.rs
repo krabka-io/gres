@@ -1,6 +1,6 @@
 use assert2::assert;
-use crabka_pgparser::parser::parse_expr_for_test as pexpr;
-use crabka_pgtypes::{ColumnType, Datum, ElemType};
+use krabka_pgparser::parser::parse_expr_for_test as pexpr;
+use krabka_pgtypes::{ColumnType, Datum, ElemType};
 
 use crate::{clock::EvalCtx, regexp_fn::compile_pattern, scope::Scope};
 

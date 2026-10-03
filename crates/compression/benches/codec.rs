@@ -1,4 +1,4 @@
-//! `CodSpeed` microbenchmarks for `crabka-compression`.
+//! `CodSpeed` microbenchmarks for `krabka-compression`.
 //!
 //! For each supported codec, we measure compress and decompress over three
 //! payload sizes and three payload shapes. The sizes are 1 KiB, 64 KiB, and
@@ -13,8 +13,8 @@
 //! codspeed thus tracks net work that is directly comparable across codecs.
 
 use bytes::Bytes;
-use crabka_compression::{CompressionType, compress, decompress};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use krabka_compression::{CompressionType, compress, decompress};
 
 // ---------------------------------------------------------------------------
 // Payload generators — deterministic so codspeed sees the same bytes every run.
@@ -77,7 +77,7 @@ fn bench_one_shape(
                 decompress(
                     ct,
                     black_box(&compressed),
-                    crabka_units::convert::ByteSizeExt::from_bytes(u64::MAX),
+                    krabka_units::convert::ByteSizeExt::from_bytes(u64::MAX),
                 )
                 .unwrap()
             });
@@ -88,7 +88,7 @@ fn bench_one_shape(
                 let d = decompress(
                     ct,
                     &c,
-                    crabka_units::convert::ByteSizeExt::from_bytes(u64::MAX),
+                    krabka_units::convert::ByteSizeExt::from_bytes(u64::MAX),
                 )
                 .unwrap();
                 black_box(d)
@@ -130,7 +130,7 @@ fn bench_none(c: &mut Criterion) {
                 decompress(
                     CompressionType::None,
                     black_box(&data),
-                    crabka_units::convert::ByteSizeExt::from_bytes(u64::MAX),
+                    krabka_units::convert::ByteSizeExt::from_bytes(u64::MAX),
                 )
                 .unwrap()
             });

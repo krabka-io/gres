@@ -42,23 +42,23 @@ introspection mode.
 
 ## Non-deliverables (deferred)
 
-| Item | Status |
-|------|--------|
-| Per-listener introspection config (different IdPs per listener) | Still rejected by the cross-listener canonical guard; future 49h |
-| Operator-managed Keycloak client-credentials provisioning | Operator does NOT create the IdP's `kafka-broker` client; ops bootstrap that out-of-band |
-| Operator-managed Secret rename (`{kafka}-oauth-jwks-trust` and `/etc/crabka/oauth-jwks-trust/`) | Internal naming stays — already broadened to "IdP trust" semantically in slice 49d |
-| Source-Secret reflector for instant client-secret rotation pickup | Pod-restart-driven rotation only; reflector deferred |
-| Cross-namespace Secret refs | Same-namespace only |
-| Token caching at the operator level | Not applicable — broker decided no-cache in 49d |
-| `client_secret_post` / `private_key_jwt` auth methods | Basic Auth only |
-| Outbound mTLS from broker to IdP | Not in any roadmap slice |
+| Item                                                                                            | Status                                                                                   |
+| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Per-listener introspection config (different IdPs per listener)                                 | Still rejected by the cross-listener canonical guard; future 49h                         |
+| Operator-managed Keycloak client-credentials provisioning                                       | Operator does NOT create the IdP's `kafka-broker` client; ops bootstrap that out-of-band |
+| Operator-managed Secret rename (`{kafka}-oauth-jwks-trust` and `/etc/crabka/oauth-jwks-trust/`) | Internal naming stays — already broadened to "IdP trust" semantically in slice 49d       |
+| Source-Secret reflector for instant client-secret rotation pickup                               | Pod-restart-driven rotation only; reflector deferred                                     |
+| Cross-namespace Secret refs                                                                     | Same-namespace only                                                                      |
+| Token caching at the operator level                                                             | Not applicable — broker decided no-cache in 49d                                          |
+| `client_secret_post` / `private_key_jwt` auth methods                                           | Basic Auth only                                                                          |
+| Outbound mTLS from broker to IdP                                                                | Not in any roadmap slice                                                                 |
 
 ## Cross-mode validation (the explicit `accessTokenIsJwt` semantic)
 
-| `accessTokenIsJwt` | Required fields | Forbidden fields |
-|---|---|---|
-| `true` (default) | `jwksEndpointUri` | `introspectionEndpointUri`, `userInfoEndpointUri`, `clientId`, `clientSecret`, `introspectionHttpTimeoutSeconds` |
-| `false` | `introspectionEndpointUri`, `clientId`, `clientSecret` | `jwksEndpointUri`. `userInfoEndpointUri` + `introspectionHttpTimeoutSeconds` are permitted-but-optional. |
+| `accessTokenIsJwt` | Required fields                                        | Forbidden fields                                                                                                 |
+| ------------------ | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `true` (default)   | `jwksEndpointUri`                                      | `introspectionEndpointUri`, `userInfoEndpointUri`, `clientId`, `clientSecret`, `introspectionHttpTimeoutSeconds` |
+| `false`            | `introspectionEndpointUri`, `clientId`, `clientSecret` | `jwksEndpointUri`. `userInfoEndpointUri` + `introspectionHttpTimeoutSeconds` are permitted-but-optional.         |
 
 Validation fails fast with `Ready=False reason=…` (one of the four new reasons). Reconciler does NOT continue past this point if invalid.
 
@@ -75,7 +75,7 @@ Validation fails fast with `Ready=False reason=…` (one of the four new reasons
 # Kafka.spec.listeners[].authentication
 # JWT mode (existing — 49b/50/50b — unchanged):
 type: oauth
-accessTokenIsJwt: true              # default; can omit
+accessTokenIsJwt: true # default; can omit
 validIssuerUri: https://idp.example/realms/kafka
 jwksEndpointUri: https://idp.example/realms/kafka/protocol/openid-connect/certs
 validAudience: kafka-broker
@@ -88,17 +88,17 @@ tlsTrustedCertificates:
 # Introspection mode (new — 50c):
 type: oauth
 accessTokenIsJwt: false
-validIssuerUri: https://idp.example/realms/kafka     # same
+validIssuerUri: https://idp.example/realms/kafka # same
 introspectionEndpointUri: https://idp.example/realms/kafka/protocol/openid-connect/token/introspect
-userInfoEndpointUri: https://idp.example/realms/kafka/protocol/openid-connect/userinfo  # optional
+userInfoEndpointUri: https://idp.example/realms/kafka/protocol/openid-connect/userinfo # optional
 validAudience: kafka-broker
 userNameClaim: preferred_username
 customClaimCheck: { scope: kafka.write }
-clientId: kafka-broker                # Basic-Auth client_id
-clientSecret:                         # Strimzi-shape Secret ref
+clientId: kafka-broker # Basic-Auth client_id
+clientSecret: # Strimzi-shape Secret ref
   secretName: keycloak-introspection-secret
   key: secret
-introspectionHttpTimeoutSeconds: 10   # optional
+introspectionHttpTimeoutSeconds: 10 # optional
 tlsTrustedCertificates:
   - secretName: keycloak-ca
     certificate: tls.crt
@@ -239,6 +239,7 @@ In `controller/kafka_node_pool.rs`:
 
 - `render_storage(..., oauth_introspection_mount: Option<&OauthIntrospectionMount>)` — new parameter (positioned after the existing `oauth_jwks_trust_secret` arg).
 - When `Some(mount)`, appends to volumes:
+
   ```json
   {
     "name": "oauth-introspection-secret",
@@ -252,9 +253,11 @@ In `controller/kafka_node_pool.rs`:
 
 - `render_broker_container(..., oauth_introspection_mount: Option<&str>)` — new parameter (the mount path). When `Some("/etc/crabka/oauth-introspection")`, appends to volumeMounts:
   ```json
-  { "name": "oauth-introspection-secret",
+  {
+    "name": "oauth-introspection-secret",
     "mountPath": "/etc/crabka/oauth-introspection",
-    "readOnly": true }
+    "readOnly": true
+  }
   ```
 
 The projected `items` mapping is the key piece: the user's source Secret can have any key name, but inside the pod the file is always `/etc/crabka/oauth-introspection/client-secret`. The broker reads from that fixed path regardless of the user's source-key naming.
@@ -266,6 +269,7 @@ In `controller/listeners.rs::render_broker_toml`, the existing
 
 - When canonical OAuth config has `access_token_is_jwt: true` (existing behavior): emit `jwks_endpoint_uri = …` as today (slice 49b).
 - When `access_token_is_jwt: false`: do NOT emit `jwks_endpoint_uri`. Instead emit (in this exact order, matching 49d's `FileOAuthBearerConfig` field order):
+
   ```toml
   introspection_endpoint_uri = "<introspectionEndpointUri>"
   userinfo_endpoint_uri = "<userInfoEndpointUri>"               # only if Some
@@ -278,19 +282,19 @@ In `controller/listeners.rs::render_broker_toml`, the existing
 
 ## File-level change map
 
-| File | Change |
-|------|--------|
-| `crates/operator/src/crd/listener.rs` | Make `jwks_endpoint_uri` `Option<String>`; 6 new fields on `ListenerAuthenticationOAuth`; new `OauthClientSecretRef` struct; extend hand-rolled schema; ~6 new round-trip tests + extend schema-regression test |
-| `crates/operator/src/controller/listeners.rs` | Per-listener cross-mode validation (4 new failure-mode reasons); TOML render fork by `access_token_is_jwt`; per-canonical-field divergence walk extended with 4 new perturbations |
-| `crates/operator/src/controller/kafka.rs` | New `reconcile_oauth_introspection_secret` async helper (validation-only, no managed Secret upsert); new `OauthIntrospectionMount` pub(crate) struct; new `oauth_introspection_secret_mount` pub(crate) helper for the pool reconciler; call-site insertion in `reconcile_kafka` |
-| `crates/operator/src/controller/kafka_node_pool.rs` | `Option<&OauthIntrospectionMount>` param on `render_storage`; `Option<&str>` mount-path param on `render_broker_container`; pool reconciler derives the mount via the new helper |
-| `crates/operator/src/controller/common.rs` | 4 new `ReconcileError` variants for the failure modes |
-| `crates/operator/sample/oauth-listener.yaml` | Add a second oauth listener block (introspection mode) so users can copy from either example |
-| `deploy/crds/crabka.io_kafkas.yaml` | Regenerated |
-| `crates/operator/tests/reconcile_listener_oauth.rs` | Extend canonical-divergence walk + add the "two listeners with divergent access_token_is_jwt rejected" test |
-| `crates/operator/tests/reconcile_oauth_introspection.rs` (new) | Reconcile-level integration: Secret-validation paths + pod-mount assertions (9 tests) |
-| `.github/workflows/operator-e2e.yml` | New `kind-oauth-introspection` job, label-gated `e2e-oauth-introspection` + `push: main`. Realm bootstrap captures the `kafka-broker` confidential-client secret into `keycloak-introspection-secret` (default ns). Kafka CR uses introspection mode |
-| `STATUS.md` | New `## Slice 50c` entry |
+| File                                                           | Change                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/operator/src/crd/listener.rs`                          | Make `jwks_endpoint_uri` `Option<String>`; 6 new fields on `ListenerAuthenticationOAuth`; new `OauthClientSecretRef` struct; extend hand-rolled schema; ~6 new round-trip tests + extend schema-regression test                                                                  |
+| `crates/operator/src/controller/listeners.rs`                  | Per-listener cross-mode validation (4 new failure-mode reasons); TOML render fork by `access_token_is_jwt`; per-canonical-field divergence walk extended with 4 new perturbations                                                                                                |
+| `crates/operator/src/controller/kafka.rs`                      | New `reconcile_oauth_introspection_secret` async helper (validation-only, no managed Secret upsert); new `OauthIntrospectionMount` pub(crate) struct; new `oauth_introspection_secret_mount` pub(crate) helper for the pool reconciler; call-site insertion in `reconcile_kafka` |
+| `crates/operator/src/controller/kafka_node_pool.rs`            | `Option<&OauthIntrospectionMount>` param on `render_storage`; `Option<&str>` mount-path param on `render_broker_container`; pool reconciler derives the mount via the new helper                                                                                                 |
+| `crates/operator/src/controller/common.rs`                     | 4 new `ReconcileError` variants for the failure modes                                                                                                                                                                                                                            |
+| `crates/operator/sample/oauth-listener.yaml`                   | Add a second oauth listener block (introspection mode) so users can copy from either example                                                                                                                                                                                     |
+| `deploy/crds/crabka.io_kafkas.yaml`                            | Regenerated                                                                                                                                                                                                                                                                      |
+| `crates/operator/tests/reconcile_listener_oauth.rs`            | Extend canonical-divergence walk + add the "two listeners with divergent access_token_is_jwt rejected" test                                                                                                                                                                      |
+| `crates/operator/tests/reconcile_oauth_introspection.rs` (new) | Reconcile-level integration: Secret-validation paths + pod-mount assertions (9 tests)                                                                                                                                                                                            |
+| `.github/workflows/operator-e2e.yml`                           | New `kind-oauth-introspection` job, label-gated `e2e-oauth-introspection` + `push: main`. Realm bootstrap captures the `kafka-broker` confidential-client secret into `keycloak-introspection-secret` (default ns). Kafka CR uses introspection mode                             |
+| `STATUS.md`                                                    | New `## Slice 50c` entry                                                                                                                                                                                                                                                         |
 
 ## Test plan
 
@@ -349,6 +353,7 @@ Clones the existing `kind-oauth` job (slice 50b's Keycloak HTTPS setup). Changes
    - Create a kube Secret `keycloak-introspection-secret` in `default` ns with the value under key `secret`.
 
 2. **Kafka CR YAML**:
+
    ```yaml
    authentication:
      type: oauth
@@ -376,7 +381,7 @@ Clones the existing `kind-oauth` job (slice 50b's Keycloak HTTPS setup). Changes
 
 ## Acceptance criteria
 
-1. `cargo build -p crabka-operator` clean.
+1. `cargo build -p krabka-operator` clean.
 2. `cargo test --workspace` passes (new + existing tests).
 3. `cargo fmt --check` + `cargo clippy --workspace --all-targets -- -D warnings` clean.
 4. CRD-drift gate clean.

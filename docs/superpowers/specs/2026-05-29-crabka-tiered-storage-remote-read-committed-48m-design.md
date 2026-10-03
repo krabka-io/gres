@@ -161,6 +161,6 @@ files).
 
 - `cargo fmt --all --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test -p crabka-broker`
+- `cargo test -p krabka-broker`
 - `cargo test --workspace` (no regressions)
 - KIP-98/KIP-405 read-committed semantics preserved; no CRD drift.

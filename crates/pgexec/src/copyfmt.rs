@@ -22,8 +22,8 @@
 
 use std::borrow::Cow;
 
-use crabka_pgparser::ast::{CopyColumns, CopyFormat, CopyHeader, CopyOptions};
-use crabka_pgwire::error::PgError;
+use krabka_pgparser::ast::{CopyColumns, CopyFormat, CopyHeader, CopyOptions};
+use krabka_pgwire::error::PgError;
 
 use crate::{charset::Charset, error::ExecError};
 
@@ -182,7 +182,7 @@ fn refuse_unhandled_copy_from_options(options: &CopyOptions) -> Result<(), ExecE
             "ON_ERROR",
             options
                 .on_error
-                .is_some_and(|on_error| on_error != crabka_pgparser::ast::CopyOnError::Stop),
+                .is_some_and(|on_error| on_error != krabka_pgparser::ast::CopyOnError::Stop),
         ),
         ("REJECT_LIMIT", options.reject_limit.is_some()),
     ];
@@ -1120,7 +1120,7 @@ fn decode_copy_text_field(field: &str) -> Result<String, ExecError> {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgparser::ast::{CopyColumns, CopyFormat, CopyHeader, CopyOptions};
+    use krabka_pgparser::ast::{CopyColumns, CopyFormat, CopyHeader, CopyOptions};
 
     use super::{Charset, CopyForceFlags, CopyInFormat, CopyOutFormat, decode_copy_rows};
     use crate::error::ExecError;
@@ -1739,7 +1739,7 @@ mod tests {
             },
             Case {
                 options: options(|o| {
-                    o.on_error = Some(crabka_pgparser::ast::CopyOnError::Ignore);
+                    o.on_error = Some(krabka_pgparser::ast::CopyOnError::Ignore);
                 }),
                 message: "COPY ON_ERROR is not supported",
             },
@@ -1765,9 +1765,9 @@ mod tests {
     fn copy_from_accepts_the_options_that_change_no_row() {
         for build in [
             (|o: &mut CopyOptions| o.freeze = true) as fn(&mut CopyOptions),
-            |o: &mut CopyOptions| o.on_error = Some(crabka_pgparser::ast::CopyOnError::Stop),
+            |o: &mut CopyOptions| o.on_error = Some(krabka_pgparser::ast::CopyOnError::Stop),
             |o: &mut CopyOptions| {
-                o.log_verbosity = Some(crabka_pgparser::ast::CopyLogVerbosity::Verbose);
+                o.log_verbosity = Some(krabka_pgparser::ast::CopyLogVerbosity::Verbose);
             },
         ] {
             assert!(CopyInFormat::resolve(&options(build), Charset::default()).is_ok());

@@ -1,20 +1,20 @@
 //! Gres tracing + OTLP distributed-tracing pipeline.
 //!
-//! `crabka-gres` always installs a structured-JSON `tracing_subscriber` `fmt`
+//! `krabka-gres` always installs a structured-JSON `tracing_subscriber` `fmt`
 //! layer on stdout, gated by the usual `RUST_LOG` `EnvFilter`, so container log
 //! collectors ingest fields rather than ANSI text. When the environment
 //! configures OTLP export, gres attaches a second `tracing-opentelemetry`
 //! layer. That layer converts `tracing` spans into OpenTelemetry spans and
 //! batch-exports them over OTLP to a collector, either gRPC `:4317` or
-//! HTTP/protobuf `:4318`. The pipeline itself is [`crabka_telemetry`]. This
+//! HTTP/protobuf `:4318`. The pipeline itself is [`krabka_telemetry`]. This
 //! module only supplies the gres-specific filters and documents the knobs.
 //!
 //! # Enabling
 //!
 //! OTLP is **off by default**. A gres with no OTLP environment does stdout
 //! logging only. It turns on when any endpoint is set, that is
-//! `CRABKA_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, or
-//! `OTEL_EXPORTER_OTLP_ENDPOINT`, or when `CRABKA_OTLP_ENABLED=true`.
+//! `KRABKA_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, or
+//! `OTEL_EXPORTER_OTLP_ENDPOINT`, or when `KRABKA_OTLP_ENABLED=true`.
 //! `OTEL_SDK_DISABLED=true` force-disables it.
 //!
 //! # Span targets
@@ -24,11 +24,11 @@
 //!
 //! | Target | Level | Spans |
 //! |---|---|---|
-//! | `crabka_pgwire::session` | `DEBUG` | `gres.session`, `gres.statement`, `gres.parse`/`bind`/`describe`/`execute` |
-//! | `crabka_pgexec::statement` | `DEBUG` | `pg.parse.sql`, `db.statement`, `pg.select`, `pg.write`, `pg.ddl` |
-//! | `crabka_pgexec::exec` | `DEBUG`/`TRACE` | `gres.exec_read`, `pg.execute_write`, `pg.commit` at `DEBUG`; `pg.scan`, `pg.read_context`, `pg.lock.row` at `TRACE` |
-//! | `crabka_gres_ranges::route` | `DEBUG`/`TRACE` | `pg.timestamp_scatter`, `pg.prewrite`, `pg.resolve`, `gres.range_rpc`, `gres.range_serve`, `tso.grant`, `range.barrier` at `DEBUG`; `pg.route` at `TRACE` |
-//! | `crabka_gres_substrate::wal` | `DEBUG`/`TRACE` | `pg.commit`, `gres.wal_append`, `gres.wal_apply` at `DEBUG`; `wal.chunk` at `TRACE` |
+//! | `krabka_pgwire::session` | `DEBUG` | `gres.session`, `gres.statement`, `gres.parse`/`bind`/`describe`/`execute` |
+//! | `krabka_pgexec::statement` | `DEBUG` | `pg.parse.sql`, `db.statement`, `pg.select`, `pg.write`, `pg.ddl` |
+//! | `krabka_pgexec::exec` | `DEBUG`/`TRACE` | `gres.exec_read`, `pg.execute_write`, `pg.commit` at `DEBUG`; `pg.scan`, `pg.read_context`, `pg.lock.row` at `TRACE` |
+//! | `krabka_gres_ranges::route` | `DEBUG`/`TRACE` | `pg.timestamp_scatter`, `pg.prewrite`, `pg.resolve`, `gres.range_rpc`, `gres.range_serve`, `tso.grant`, `range.barrier` at `DEBUG`; `pg.route` at `TRACE` |
+//! | `krabka_gres_substrate::wal` | `DEBUG`/`TRACE` | `pg.commit`, `gres.wal_append`, `gres.wal_apply` at `DEBUG`; `wal.chunk` at `TRACE` |
 //!
 //! Only the OTLP layer enables those targets, through [`OTEL_DEFAULT_FILTER`].
 //! The stdout `fmt` layer's default, [`FMT_DEFAULT_FILTER`], deliberately names
@@ -37,7 +37,7 @@
 //!
 //! # Operator filter recipes
 //!
-//! Set `CRABKA_OTLP_FILTER` to override [`OTEL_DEFAULT_FILTER`] wholesale. The
+//! Set `KRABKA_OTLP_FILTER` to override [`OTEL_DEFAULT_FILTER`] wholesale. The
 //! pipeline reads it when it builds the OTLP layer.
 //!
 //! - **Statement level only** — one span per session and per statement, and
@@ -45,25 +45,25 @@
 //!   always-on production tracing:
 //!
 //!   ```text
-//!   CRABKA_OTLP_FILTER=info,crabka_pgwire::session=debug,crabka_pgexec::statement=debug
+//!   KRABKA_OTLP_FILTER=info,krabka_pgwire::session=debug,krabka_pgexec::statement=debug
 //!   ```
 //!
 //! - **Default** — the statement tier plus routing, cross-node RPC hops, the 2PC
 //!   rounds and the WAL append. This is the waterfall an operator needs to tell
 //!   *which step* was slow. It is [`OTEL_DEFAULT_FILTER`]. Unset
-//!   `CRABKA_OTLP_FILTER` to get it.
+//!   `KRABKA_OTLP_FILTER` to get it.
 //!
 //! - **Full internal detail** — adds the per-scan, per-read-context and
 //!   contended-row-lock spans. A single large scan emits many spans, so use this
 //!   setting for a targeted investigation, not for steady state:
 //!
 //!   ```text
-//!   CRABKA_OTLP_FILTER=info,crabka_pgwire::session=debug,crabka_pgexec::statement=debug,crabka_pgexec::exec=trace,crabka_gres_ranges::route=trace,crabka_gres_substrate::wal=trace
+//!   KRABKA_OTLP_FILTER=info,krabka_pgwire::session=debug,krabka_pgexec::statement=debug,krabka_pgexec::exec=trace,krabka_gres_ranges::route=trace,krabka_gres_substrate::wal=trace
 //!   ```
 //!
 //! # SQL text on spans
 //!
-//! `CRABKA_OTLP_SQL_TEXT=true` attaches the **verbatim** SQL of each statement as
+//! `KRABKA_OTLP_SQL_TEXT=true` attaches the **verbatim** SQL of each statement as
 //! the `db.query.text` span attribute. It is **off by default**, and it is the
 //! only setting here that can export secrets or personal data. The query text
 //! is the statement as the client sent it, literals included, for example
@@ -76,14 +76,14 @@
 //! `db.namespace` and `pg.table_id`. That is enough to group and attribute
 //! latency without any literal.
 //!
-//! The flag is read where the attribute is recorded. `crabka-pgexec` and
-//! `crabka-gres-ranges` each hold a `LazyLock<bool>`, which keeps those crates
-//! free of a `crabka-telemetry` dependency. The value is therefore sampled once
+//! The flag is read where the attribute is recorded. `krabka-pgexec` and
+//! `krabka-gres-ranges` each hold a `LazyLock<bool>`, which keeps those crates
+//! free of a `krabka-telemetry` dependency. The value is therefore sampled once
 //! per process at first use, and a later change to the environment has no
 //! effect. This module is the single place that documents the flag.
 
-// Re-export the generic OTLP pipeline from crabka-telemetry.
-pub use crabka_telemetry::{OtlpConfig, OtlpProtocol, TelemetryError, TelemetryGuard, init};
+// Re-export the generic OTLP pipeline from krabka-telemetry.
+pub use krabka_telemetry::{OtlpConfig, OtlpProtocol, TelemetryError, TelemetryGuard, init};
 
 /// Default filter for the stdout JSON `fmt` layer, used when `RUST_LOG` is
 /// unset.
@@ -91,35 +91,35 @@ pub use crabka_telemetry::{OtlpConfig, OtlpProtocol, TelemetryError, TelemetryGu
 /// This names none of the five span targets on purpose. They sit at `DEBUG`,
 /// so a name here would print a span line per statement, or per scan, to
 /// stdout on every gres, exporting or not.
-pub const FMT_DEFAULT_FILTER: &str = "crabka_gres=info,info";
+pub const FMT_DEFAULT_FILTER: &str = "krabka_gres=info,info";
 
-/// Default filter for the OTLP layer, used when `CRABKA_OTLP_FILTER` is unset.
+/// Default filter for the OTLP layer, used when `KRABKA_OTLP_FILTER` is unset.
 ///
 /// This enables the query-path targets at `DEBUG`: session, statement,
 /// executor, routing and WAL. The `TRACE`-level spans inside those targets stay
 /// off. Those are the per-scan, per-read-context, contended row lock and WAL
 /// chunk spans. Widen a single target to `=trace` to get them.
-pub const OTEL_DEFAULT_FILTER: &str = "info,crabka_pgwire::session=debug,crabka_pgexec::statement=debug,crabka_pgexec::exec=debug,crabka_gres_ranges::route=debug,crabka_gres_substrate::wal=debug";
+pub const OTEL_DEFAULT_FILTER: &str = "info,krabka_pgwire::session=debug,krabka_pgexec::statement=debug,krabka_pgexec::exec=debug,krabka_gres_ranges::route=debug,krabka_gres_substrate::wal=debug";
 
 /// Environment variable that gates verbatim SQL, `db.query.text`, on statement
 /// spans. It is off unless set to a truthy value. The module docs explain why
 /// it is off by default.
-pub const SQL_TEXT_ENV: &str = "CRABKA_OTLP_SQL_TEXT";
+pub const SQL_TEXT_ENV: &str = "KRABKA_OTLP_SQL_TEXT";
 
 /// `tracing` target for the pgwire session and statement spans.
-pub const PGWIRE_SESSION_TARGET: &str = "crabka_pgwire::session";
+pub const PGWIRE_SESSION_TARGET: &str = "krabka_pgwire::session";
 
 /// `tracing` target for the pgexec statement tier.
-pub const PGEXEC_STATEMENT_TARGET: &str = "crabka_pgexec::statement";
+pub const PGEXEC_STATEMENT_TARGET: &str = "krabka_pgexec::statement";
 
 /// `tracing` target for the pgexec executor internals.
-pub const PGEXEC_EXEC_TARGET: &str = "crabka_pgexec::exec";
+pub const PGEXEC_EXEC_TARGET: &str = "krabka_pgexec::exec";
 
 /// `tracing` target for range routing, cross-node RPC and the 2PC rounds.
-pub const RANGES_ROUTE_TARGET: &str = "crabka_gres_ranges::route";
+pub const RANGES_ROUTE_TARGET: &str = "krabka_gres_ranges::route";
 
 /// `tracing` target for the substrate WAL append and apply paths.
-pub const SUBSTRATE_WAL_TARGET: &str = "crabka_gres_substrate::wal";
+pub const SUBSTRATE_WAL_TARGET: &str = "krabka_gres_substrate::wal";
 
 /// Resolve `service.instance.id`, the resource attribute that separates one
 /// gres process's spans from another's in the trace backend. `get` is the
@@ -191,7 +191,7 @@ mod tests {
     /// Serve arguments as the binary would parse them, so the tests exercise the
     /// same defaults `main` runs with.
     fn serve_args(arguments: &[&str]) -> crate::ServeArgs {
-        let mut argv = vec!["crabka-gres"];
+        let mut argv = vec!["krabka-gres"];
         argv.extend_from_slice(arguments);
         crate::Cli::try_parse_from(argv)
             .expect("serve arguments")
@@ -260,7 +260,7 @@ mod tests {
     /// layer alone.
     #[test]
     fn otlp_disabled_without_environment() {
-        let cfg = OtlpConfig::from_env(|_| None, "gres-1", "0.0.0", "crabka-gres")
+        let cfg = OtlpConfig::from_env(|_| None, "gres-1", "0.0.0", "krabka-gres")
             .expect("valid OTLP configuration");
         assert!(cfg.is_none());
     }
@@ -327,15 +327,15 @@ mod tests {
     #[test]
     fn otlp_enabled_by_endpoint() {
         let cfg = OtlpConfig::from_env(
-            |key| (key == "CRABKA_OTLP_ENDPOINT").then(|| "http://collector:4317".to_owned()),
+            |key| (key == "KRABKA_OTLP_ENDPOINT").then(|| "http://collector:4317".to_owned()),
             "gres-1",
             "0.0.0",
-            "crabka-gres",
+            "krabka-gres",
         )
         .expect("valid OTLP configuration")
         .expect("OTLP enabled by endpoint");
         check!(cfg.endpoint == "http://collector:4317");
-        check!(cfg.service_name == "crabka-gres");
+        check!(cfg.service_name == "krabka-gres");
         check!(cfg.service_instance_id == "gres-1");
     }
 }

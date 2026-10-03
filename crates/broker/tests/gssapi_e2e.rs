@@ -30,7 +30,7 @@
 //! # wait for KDC_READY in the logs
 //! KRB5_CONFIG=crates/security/tests/fixtures/kdc/krb5.conf \
 //!   SSPI_KDC_URL=tcp://localhost:88 \
-//!   cargo test -p crabka-broker --test gssapi_e2e -- --ignored
+//!   cargo test -p krabka-broker --test gssapi_e2e -- --ignored
 //! ```
 
 use std::{
@@ -40,8 +40,8 @@ use std::{
 };
 
 use assert2::assert;
-use crabka_broker::{Broker, BrokerConfig, BrokerHandle, config::ListenerSpec};
-use crabka_security::{
+use krabka_broker::{Broker, BrokerConfig, BrokerHandle, config::ListenerSpec};
+use krabka_security::{
     ListenerProtocol, SaslMechanism,
     gssapi::{GssapiConfig, name::Rule},
 };
@@ -74,7 +74,7 @@ async fn start_host_gssapi_broker() -> (BrokerHandle, tempfile::TempDir) {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("crabka_broker=debug,info")),
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("krabka_broker=debug,info")),
         )
         .with_test_writer()
         .try_init();
@@ -106,7 +106,7 @@ async fn start_host_gssapi_broker() -> (BrokerHandle, tempfile::TempDir) {
         principal_to_local_rules: vec![Rule::Default],
         realm: Some("CRABKA.TEST".to_string()),
         kdc: Some(kdc_url),
-        max_time_skew: crabka_security::gssapi::DEFAULT_GSSAPI_MAX_TIME_SKEW,
+        max_time_skew: krabka_security::gssapi::DEFAULT_GSSAPI_MAX_TIME_SKEW,
     });
 
     let handle = Broker::start(cfg).await.expect("start gssapi broker");
@@ -174,7 +174,7 @@ fn run_gssapi_tool(tool_args: &[&str]) -> std::process::Output {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "requires Docker + the KDC fixture (docker compose up) + KRB5_CONFIG/SSPI_KDC_URL"]
 async fn cp_kafka_gssapi_client_round_trip() {
-    const TOPIC: &str = "crabka-gssapi-itest";
+    const TOPIC: &str = "krabka-gssapi-itest";
 
     let (broker, _dir) = start_host_gssapi_broker().await;
 

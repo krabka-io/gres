@@ -8,1773 +8,1773 @@ spec:
     kind: Kafka
     plural: kafkas
     shortNames:
-    - kk
+      - kk
     singular: kafka
   scope: Namespaced
   versions:
-  - name: v1alpha1
-    schema:
-      openAPIV3Schema:
-        description: Auto-generated derived type for KafkaSpec via `CustomResource`
-        properties:
-          spec:
-            description: |-
-              Crabka cluster spec. The spec carries only the version label. Sibling
-              `KafkaNodePool`s labeled `crabka.io/cluster=<this name>` describe the
-              broker pods.
-            properties:
-              authorization:
-                description: |-
-                  Cluster-level authorizer selection. When `None`, the broker uses the
-                  default `AllowAll` authorizer and makes no ACL checks. When `Some`, the
-                  operator renders the `[authorization]` TOML section, so the broker
-                  builds the matching `Arc<dyn Authorizer>`. That is
-                  `SimpleAclAuthorizer` for `type: simple`, and `OpaAuthorizer` for
-                  `type: opa`. With `simple` or `opa` selected, the operator's
-                  inter-broker principal MUST appear in `super_users`. There is no
-                  implicit `ANONYMOUS` allow, and operators must opt in explicitly.
-                nullable: true
-                properties:
-                  allowOnError:
-                    type: boolean
-                  expireAfterMs:
-                    minimum: 1000.0
-                    type: integer
-                  initialCacheCapacity:
-                    minimum: 0.0
-                    type: integer
-                  maximumCacheSize:
-                    minimum: 1.0
-                    type: integer
-                  superUsers:
-                    items:
-                      type: string
-                    type: array
-                  type:
-                    enum:
-                    - simple
-                    - opa
-                    type: string
-                  url:
-                    type: string
-                required:
-                - type
-                type: object
-              brokerTuning:
-                description: Validated broker operational policy rendered into `[runtime]`.
-                nullable: true
-                properties:
-                  aclMaxPrincipal:
-                    nullable: true
-                    type: string
-                  aclMaxResourceName:
-                    nullable: true
-                    type: string
-                  auditEventQueueCapacity:
-                    format: uint
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  auditPartitionWaitTimeout:
-                    nullable: true
-                    type: string
-                  auditSpoolReplayInterval:
-                    nullable: true
-                    type: string
-                  auditStatsPollInterval:
-                    nullable: true
-                    type: string
-                  auditTailReadMax:
-                    nullable: true
-                    type: string
-                  auditTailWindowOffsets:
-                    format: int64
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  autoJoinRetryBackoff:
-                    nullable: true
-                    type: string
-                  autoJoinVoterRequestTimeout:
-                    nullable: true
-                    type: string
-                  classicGroupInitialRebalanceDelay:
-                    nullable: true
-                    type: string
-                  cleanerInterval:
-                    nullable: true
-                    type: string
-                  clientMetricsDefaultInterval:
-                    nullable: true
-                    type: string
-                  clientMetricsEvictionTick:
-                    nullable: true
-                    type: string
-                  clientMetricsOtlpQueueCapacity:
-                    format: uint
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  clientMetricsPromSnapshotTtl:
-                    nullable: true
-                    type: string
-                  clientMetricsStaleFloor:
-                    nullable: true
-                    type: string
-                  clientMetricsStalePushIntervals:
-                    format: uint32
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  clientMetricsTelemetryMax:
-                    nullable: true
-                    type: string
-                  connectionCreationThrottleMax:
-                    nullable: true
-                    type: string
-                  consumerGroupHeartbeatInterval:
-                    nullable: true
-                    type: string
-                  consumerGroupMaxHeartbeatInterval:
-                    nullable: true
-                    type: string
-                  consumerGroupMaxSessionTimeout:
-                    nullable: true
-                    type: string
-                  consumerGroupMaxSize:
-                    format: uint
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  consumerGroupMinHeartbeatInterval:
-                    nullable: true
-                    type: string
-                  consumerGroupMinSessionTimeout:
-                    nullable: true
-                    type: string
-                  consumerGroupSessionTimeout:
-                    nullable: true
-                    type: string
-                  controlledShutdownDrainTimeout:
-                    nullable: true
-                    type: string
-                  controllerElectionTimeout:
-                    nullable: true
-                    type: string
-                  controllerFetchMissLimit:
-                    format: uint32
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  controllerHeartbeatInterval:
-                    nullable: true
-                    type: string
-                  coordinatorActorMailboxCapacity:
-                    format: uint
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  coordinatorSessionExpiryTick:
-                    nullable: true
-                    type: string
-                  coordinatorShutdownAckTimeout:
-                    nullable: true
-                    type: string
-                  defaultMinInsyncReplicas:
-                    format: int32
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  delegationTokenDefaultRenewPeriod:
-                    nullable: true
-                    type: string
-                  delegationTokenExpiryCheckInterval:
-                    nullable: true
-                    type: string
-                  delegationTokenMaxLifetime:
-                    nullable: true
-                    type: string
-                  disklessWalFlushInterval:
-                    nullable: true
-                    type: string
-                  disklessWalFlushMaxSize:
-                    nullable: true
-                    type: string
-                  disklessWalIndexProjectionTimeout:
-                    nullable: true
-                    type: string
-                  disklessWalLocalReplicaCount:
-                    format: uint
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  disklessWalTrimSafetyLag:
-                    format: int64
-                    minimum: 0.0
-                    nullable: true
-                    type: integer
-                  futureLogMoveReadChunk:
-                    nullable: true
-                    type: string
-                  futureLogMoveRetryBackoff:
-                    nullable: true
-                    type: string
-                  gaugePollInterval:
-                    nullable: true
-                    type: string
-                  heartbeatInterval:
-                    nullable: true
-                    type: string
-                  heartbeatTimeout:
-                    nullable: true
-                    type: string
-                  interBrokerServerName:
-                    minLength: 1
-                    nullable: true
-                    type: string
-                  isrScanInterval:
-                    nullable: true
-                    type: string
-                  leaderImbalanceCheckInterval:
-                    nullable: true
-                    type: string
-                  leaderImbalancePerBroker:
-                    nullable: true
-                    type: string
-                  livenessTickInterval:
-                    nullable: true
-                    type: string
-                  logReadBufferCap:
-                    nullable: true
-                    type: string
-                  logTimestampScanWindow:
-                    nullable: true
-                    type: string
-                  maxConnections:
-                    format: uint
-                    minimum: 0.0
-                    nullable: true
-                    type: integer
-                  maxConnectionsPerIp:
-                    format: uint
-                    minimum: 0.0
-                    nullable: true
-                    type: integer
-                  maxIncrementalFetchSessionCacheSlots:
-                    format: uint
-                    minimum: 0.0
-                    nullable: true
-                    type: integer
-                  maxProduceGroup:
-                    format: uint
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  metadataMaxBetweenSnapshots:
-                    nullable: true
-                    type: string
-                  metadataMaxSnapshotInterval:
-                    nullable: true
-                    type: string
-                  metadataRaftCommandQueueCapacity:
-                    format: uint
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  metadataRaftFetchMax:
-                    nullable: true
-                    type: string
-                  metadataSnapshotFetchMax:
-                    nullable: true
-                    type: string
-                  metadataSnapshotIntervalRecords:
-                    format: uint64
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  oauthJwksHttpTimeout:
-                    nullable: true
-                    type: string
-                  observerFetchMax:
-                    nullable: true
-                    type: string
-                  observerLagBound:
-                    format: uint64
-                    minimum: 0.0
-                    nullable: true
-                    type: integer
-                  observerPollInterval:
-                    nullable: true
-                    type: string
-                  offsetsTopicMetadataWaitTimeout:
-                    nullable: true
-                    type: string
-                  opaHttpTimeout:
-                    nullable: true
-                    type: string
-                  operatorRecoveryDeadline:
-                    nullable: true
-                    type: string
-                  partitionDiskScanInterval:
-                    nullable: true
-                    type: string
-                  partitionWriterQueueDepth:
-                    format: uint
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  producerIdExpiration:
-                    nullable: true
-                    type: string
-                  producerIdExpirationScanInterval:
-                    nullable: true
-                    type: string
-                  quotaThrottleMax:
-                    nullable: true
-                    type: string
-                  recordDecompressionMaxRatio:
-                    nullable: true
-                    type: string
-                  recordDecompressionOutputCeiling:
-                    nullable: true
-                    type: string
-                  recordDecompressionOutputFloor:
-                    nullable: true
-                    type: string
-                  remoteLogManagerInterval:
-                    nullable: true
-                    type: string
-                  replicaLagTimeMax:
-                    nullable: true
-                    type: string
-                  replicationEpochFenceBackoff:
-                    nullable: true
-                    type: string
-                  replicationFetchMax:
-                    nullable: true
-                    type: string
-                  replicationFetchMaxWait:
-                    nullable: true
-                    type: string
-                  replicationFetchMin:
-                    nullable: true
-                    type: string
-                  replicationReconnectDelayCap:
-                    nullable: true
-                    type: string
-                  replicationReconnectInitialDelay:
-                    nullable: true
-                    type: string
-                  replicationSendErrorBackoff:
-                    nullable: true
-                    type: string
-                  replicationThrottleExhaustedBackoff:
-                    nullable: true
-                    type: string
-                  replicationUnexpectedErrorBackoff:
-                    nullable: true
-                    type: string
-                  replicationUnknownTopicRetryDelay:
-                    nullable: true
-                    type: string
-                  rlmmBootstrapBackoffInitial:
-                    nullable: true
-                    type: string
-                  rlmmBootstrapBackoffMax:
-                    nullable: true
-                    type: string
-                  rlmmReconcileTick:
-                    nullable: true
-                    type: string
-                  selfRegistrationBackoffMax:
-                    nullable: true
-                    type: string
-                  selfRegistrationBackoffMin:
-                    nullable: true
-                    type: string
-                  selfRegistrationMaxAttempts:
-                    format: uint32
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  sendfileMin:
-                    nullable: true
-                    type: string
-                  shareGroupEnable:
-                    nullable: true
-                    type: boolean
-                  shareGroupHeartbeatInterval:
-                    nullable: true
-                    type: string
-                  shareGroupIsolationLevel:
-                    nullable: true
-                    type: string
-                  shareGroupMaxDeliveryAttempts:
-                    format: int16
-                    maximum: 32767.0
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  shareGroupMaxInflightRecords:
-                    format: int32
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  shareGroupMaxSize:
-                    format: uint
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  shareGroupRecordLockDuration:
-                    nullable: true
-                    type: string
-                  shareGroupSessionTimeout:
-                    nullable: true
-                    type: string
-                  shareRecoveryReadMax:
-                    nullable: true
-                    type: string
-                  shareSessionCacheMaxWhenUnlimited:
-                    format: uint
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  shareStateNumPartitions:
-                    format: int32
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  shareStateReplicationFactor:
-                    format: int16
-                    maximum: 32767.0
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  socketReceiveBuffer:
-                    nullable: true
-                    type: string
-                  socketRequestMax:
-                    nullable: true
-                    type: string
-                  socketSendBuffer:
-                    nullable: true
-                    type: string
-                  startupLeaderWaitTimeout:
-                    nullable: true
-                    type: string
-                  streamsGroupAcceptableRecoveryLag:
-                    format: int64
-                    minimum: 0.0
-                    nullable: true
-                    type: integer
-                  streamsGroupAssignor:
-                    nullable: true
-                    type: string
-                  streamsGroupEnable:
-                    nullable: true
-                    type: boolean
-                  streamsGroupHeartbeatInterval:
-                    nullable: true
-                    type: string
-                  streamsGroupMaxSize:
-                    format: uint
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  streamsGroupNumStandbyReplicas:
-                    format: int32
-                    minimum: 0.0
-                    nullable: true
-                    type: integer
-                  streamsGroupNumWarmupReplicas:
-                    format: int32
-                    minimum: 0.0
-                    nullable: true
-                    type: integer
-                  streamsGroupSessionTimeout:
-                    nullable: true
-                    type: string
-                  streamsGroupTaskOffsetInterval:
-                    nullable: true
-                    type: string
-                  streamsInternalTopicReplicationFactor:
-                    format: int16
-                    maximum: 32767.0
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  syncGroupFollowerWait:
-                    nullable: true
-                    type: string
-                  telemetryDecompressedOutputCeiling:
-                    nullable: true
-                    type: string
-                  telemetryDecompressedOutputFloor:
-                    nullable: true
-                    type: string
-                  telemetryMaxDecompressionRatio:
-                    nullable: true
-                    type: string
-                  tlsReloadInterval:
-                    nullable: true
-                    type: string
-                  transactionMaxTimeout:
-                    nullable: true
-                    type: string
-                  transactionMinTimeout:
-                    nullable: true
-                    type: string
-                  transactionRecoveryReadMax:
-                    nullable: true
-                    type: string
-                  transactionStateNumPartitions:
-                    format: int32
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  transactionStateReplicationFactor:
-                    format: int16
-                    maximum: 32767.0
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  txnAbortCleanupInterval:
-                    nullable: true
-                    type: string
-                  uncleanRecoveryAggressiveDeadline:
-                    nullable: true
-                    type: string
-                  uncleanRecoveryBalancedDeadline:
-                    nullable: true
-                    type: string
-                  uncleanRecoveryQueueCapacity:
-                    format: uint
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                type: object
-              clientsCa:
-                description: |-
-                  Per-cluster CA that signs `KafkaUser` TLS certs. When absent, the
-                  operator uses a fully-defaulted `CertificateAuthority`.
-                nullable: true
-                properties:
-                  generateCertificateAuthority:
-                    default: true
-                    description: |-
-                      When `true`, which is the default, the operator generates and
-                      renews this CA. When `false`, the cluster admin must create the CA
-                      `Secret` pair first, and the operator refuses to overwrite them.
-                      The admin renews a BYO CA. The `CronJob` skips a BYO CA and emits
-                      an Event when the CA comes near its expiry.
-                    type: boolean
-                  renewalDays:
-                    default: 30
-                    description: |-
-                      Window in days before `notAfter` in which the renewal `CronJob`
-                      reissues the leaf certs. Default 30.
-                    format: uint32
-                    minimum: 0.0
-                    type: integer
-                  validityDays:
-                    default: 365
-                    description: Cert validity in days. Default 365.
-                    format: uint32
-                    minimum: 0.0
-                    type: integer
-                type: object
-              clusterCa:
-                description: |-
-                  Per-cluster CA for inter-broker mTLS and broker certs. When absent,
-                  the operator uses a fully-defaulted `CertificateAuthority`, which it
-                  generates itself with 365/30 days.
-                nullable: true
-                properties:
-                  generateCertificateAuthority:
-                    default: true
-                    description: |-
-                      When `true`, which is the default, the operator generates and
-                      renews this CA. When `false`, the cluster admin must create the CA
-                      `Secret` pair first, and the operator refuses to overwrite them.
-                      The admin renews a BYO CA. The `CronJob` skips a BYO CA and emits
-                      an Event when the CA comes near its expiry.
-                    type: boolean
-                  renewalDays:
-                    default: 30
-                    description: |-
-                      Window in days before `notAfter` in which the renewal `CronJob`
-                      reissues the leaf certs. Default 30.
-                    format: uint32
-                    minimum: 0.0
-                    type: integer
-                  validityDays:
-                    default: 365
-                    description: Cert validity in days. Default 365.
-                    format: uint32
-                    minimum: 0.0
-                    type: integer
-                type: object
-              config:
-                additionalProperties:
-                  type: string
-                description: |-
-                  Opaque broker properties, in `server.properties`-style key and value
-                  pairs. The operator passes them through to the broker's
-                  `[server_properties]` TOML table, and the broker treats them as inert
-                  today. Changes propagate through the config hash.
-                nullable: true
-                type: object
-              delegationToken:
-                description: |-
-                  Delegation-token master HMAC key source. When `None`, the broker
-                  rejects all KIP-48 delegation-token RPCs with err 61
-                  `DELEGATION_TOKEN_AUTH_DISABLED`. When `Some`, the operator injects
-                  `CRABKA_DELEGATION_TOKEN_SECRET_KEY` into each broker pod through a
-                  `valueFrom.secretKeyRef`. The key is then part of the rendered
-                  `StatefulSet`, so the SSA reconcile does not race with out-of-band
-                  `kubectl set env` patches.
-                nullable: true
-                properties:
-                  secretKeyRef:
-                    description: |-
-                      Reference to a Kubernetes `Secret` in the same namespace as the
-                      `Kafka` CR. Its `data.<key>` value is the broker's master HMAC key for
-                      KIP-48 delegation tokens.
-                    properties:
-                      key:
-                        description: Key within the Secret's `data`. Defaults to `secret-key`.
-                        nullable: true
-                        type: string
-                      name:
-                        description: Secret name in the same namespace as the `Kafka` CR.
-                        type: string
-                    required:
-                    - name
-                    type: object
-                required:
-                - secretKeyRef
-                type: object
-              gresRegistry:
-                description: Shared creation and reader policy for the Gres tenant registry topic.
-                nullable: true
-                properties:
-                  fetchMaxWait:
-                    description: Maximum time a registry fetch waits for data.
-                    nullable: true
-                    type: string
-                  fetchPartitionMax:
-                    description: Maximum bytes fetched from the registry partition.
-                    nullable: true
-                    type: string
-                  producerDnsTimeout:
-                    description: DNS lookup deadline for the registry producer.
-                    nullable: true
-                    type: string
-                  readerAdminDnsTimeout:
-                    description: DNS lookup deadline for registry reader and admin paths.
-                    nullable: true
-                    type: string
-                  readerFetchMin:
-                    description: Minimum response size for registry reader fetches.
-                    nullable: true
-                    type: string
-                  readerRetryBackoff:
-                    description: Registry reader retry delay.
-                    nullable: true
-                    type: string
-                  replicationFactor:
-                    description: Registry topic replication factor.
-                    format: int32
-                    maximum: 32767.0
-                    minimum: 1.0
-                    nullable: true
-                    type: integer
-                  topicCreateTimeout:
-                    description: Kafka topic creation timeout.
-                    nullable: true
-                    type: string
-                type: object
-              interBrokerKerberos:
-                description: |-
-                  Inter-broker Kerberos initiate config. It is required when
-                  `interBrokerListenerName` resolves to a `type: gssapi` listener. It
-                  supplies the shared client principal and the KDC. The keytab comes from
-                  that listener's `keytabSecretRef`.
-                nullable: true
-                properties:
-                  clientPrincipal:
-                    description: |-
-                      Principal that every broker authenticates as when it dials peers, for
-                      example `kafka@EXAMPLE.COM`. It must exist in the shared keytab.
-                    type: string
-                  kdcUrl:
-                    description: KDC endpoint, for example `tcp://kdc:88`.
-                    type: string
-                  serviceName:
-                    description: Target SPN primary. Defaults to `kafka`.
-                    nullable: true
-                    type: string
-                required:
-                - clientPrincipal
-                - kdcUrl
-                type: object
-              interBrokerListenerName:
-                description: |-
-                  Name of the listener for inter-broker traffic. When `None`, the
-                  operator picks the first `internal` listener. When `listeners` is
-                  empty, the operator picks the synthesized default `"PLAIN"`.
-                nullable: true
-                type: string
-              kafkaVersion:
-                description: |-
-                  Crabka version label. The operator propagates it to all pool pods
-                  through the `app.kubernetes.io/version` label.
-                type: string
-              krb5ConfSecretRef:
-                description: |-
-                  Optional process-wide `krb5.conf`. The operator mounts it into the
-                  broker pods and points `KRB5_CONFIG` at it. It serves both the accept
-                  path and the initiate path.
-                nullable: true
-                properties:
-                  key:
-                    description: Key within the Secret whose value is the krb5.conf contents.
-                    type: string
-                  secretName:
-                    description: Name of the Secret holding the krb5.conf.
-                    type: string
-                required:
-                - key
-                - secretName
-                type: object
-              listeners:
-                description: |-
-                  Named listeners. An empty or absent list synthesizes one internal
-                  `PLAIN` listener on port 9092.
-                items:
+    - name: v1alpha1
+      schema:
+        openAPIV3Schema:
+          description: Auto-generated derived type for KafkaSpec via `CustomResource`
+          properties:
+            spec:
+              description: |-
+                Crabka cluster spec. The spec carries only the version label. Sibling
+                `KafkaNodePool`s labeled `crabka.io/cluster=<this name>` describe the
+                broker pods.
+              properties:
+                authorization:
+                  description: |-
+                    Cluster-level authorizer selection. When `None`, the broker uses the
+                    default `AllowAll` authorizer and makes no ACL checks. When `Some`, the
+                    operator renders the `[authorization]` TOML section, so the broker
+                    builds the matching `Arc<dyn Authorizer>`. That is
+                    `SimpleAclAuthorizer` for `type: simple`, and `OpaAuthorizer` for
+                    `type: opa`. With `simple` or `opa` selected, the operator's
+                    inter-broker principal MUST appear in `super_users`. There is no
+                    implicit `ANONYMOUS` allow, and operators must opt in explicitly.
+                  nullable: true
                   properties:
-                    authentication:
-                      description: |-
-                        Per-listener authentication mechanism. Absent means anonymous, and no
-                        client identity is required. When the field is `type: tls`, the
-                        listener must also have `tls: true`. The reconcile enforces this
-                        rule.
+                    allowOnError:
+                      type: boolean
+                    expireAfterMs:
+                      minimum: 1000.0
+                      type: integer
+                    initialCacheCapacity:
+                      minimum: 0.0
+                      type: integer
+                    maximumCacheSize:
+                      minimum: 1.0
+                      type: integer
+                    superUsers:
+                      items:
+                        type: string
+                      type: array
+                    type:
+                      enum:
+                        - simple
+                        - opa
+                      type: string
+                    url:
+                      type: string
+                  required:
+                    - type
+                  type: object
+                brokerTuning:
+                  description: Validated broker operational policy rendered into `[runtime]`.
+                  nullable: true
+                  properties:
+                    aclMaxPrincipal:
                       nullable: true
+                      type: string
+                    aclMaxResourceName:
+                      nullable: true
+                      type: string
+                    auditEventQueueCapacity:
+                      format: uint
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    auditPartitionWaitTimeout:
+                      nullable: true
+                      type: string
+                    auditSpoolReplayInterval:
+                      nullable: true
+                      type: string
+                    auditStatsPollInterval:
+                      nullable: true
+                      type: string
+                    auditTailReadMax:
+                      nullable: true
+                      type: string
+                    auditTailWindowOffsets:
+                      format: int64
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    autoJoinRetryBackoff:
+                      nullable: true
+                      type: string
+                    autoJoinVoterRequestTimeout:
+                      nullable: true
+                      type: string
+                    classicGroupInitialRebalanceDelay:
+                      nullable: true
+                      type: string
+                    cleanerInterval:
+                      nullable: true
+                      type: string
+                    clientMetricsDefaultInterval:
+                      nullable: true
+                      type: string
+                    clientMetricsEvictionTick:
+                      nullable: true
+                      type: string
+                    clientMetricsOtlpQueueCapacity:
+                      format: uint
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    clientMetricsPromSnapshotTtl:
+                      nullable: true
+                      type: string
+                    clientMetricsStaleFloor:
+                      nullable: true
+                      type: string
+                    clientMetricsStalePushIntervals:
+                      format: uint32
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    clientMetricsTelemetryMax:
+                      nullable: true
+                      type: string
+                    connectionCreationThrottleMax:
+                      nullable: true
+                      type: string
+                    consumerGroupHeartbeatInterval:
+                      nullable: true
+                      type: string
+                    consumerGroupMaxHeartbeatInterval:
+                      nullable: true
+                      type: string
+                    consumerGroupMaxSessionTimeout:
+                      nullable: true
+                      type: string
+                    consumerGroupMaxSize:
+                      format: uint
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    consumerGroupMinHeartbeatInterval:
+                      nullable: true
+                      type: string
+                    consumerGroupMinSessionTimeout:
+                      nullable: true
+                      type: string
+                    consumerGroupSessionTimeout:
+                      nullable: true
+                      type: string
+                    controlledShutdownDrainTimeout:
+                      nullable: true
+                      type: string
+                    controllerElectionTimeout:
+                      nullable: true
+                      type: string
+                    controllerFetchMissLimit:
+                      format: uint32
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    controllerHeartbeatInterval:
+                      nullable: true
+                      type: string
+                    coordinatorActorMailboxCapacity:
+                      format: uint
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    coordinatorSessionExpiryTick:
+                      nullable: true
+                      type: string
+                    coordinatorShutdownAckTimeout:
+                      nullable: true
+                      type: string
+                    defaultMinInsyncReplicas:
+                      format: int32
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    delegationTokenDefaultRenewPeriod:
+                      nullable: true
+                      type: string
+                    delegationTokenExpiryCheckInterval:
+                      nullable: true
+                      type: string
+                    delegationTokenMaxLifetime:
+                      nullable: true
+                      type: string
+                    disklessWalFlushInterval:
+                      nullable: true
+                      type: string
+                    disklessWalFlushMaxSize:
+                      nullable: true
+                      type: string
+                    disklessWalIndexProjectionTimeout:
+                      nullable: true
+                      type: string
+                    disklessWalLocalReplicaCount:
+                      format: uint
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    disklessWalTrimSafetyLag:
+                      format: int64
+                      minimum: 0.0
+                      nullable: true
+                      type: integer
+                    futureLogMoveReadChunk:
+                      nullable: true
+                      type: string
+                    futureLogMoveRetryBackoff:
+                      nullable: true
+                      type: string
+                    gaugePollInterval:
+                      nullable: true
+                      type: string
+                    heartbeatInterval:
+                      nullable: true
+                      type: string
+                    heartbeatTimeout:
+                      nullable: true
+                      type: string
+                    interBrokerServerName:
+                      minLength: 1
+                      nullable: true
+                      type: string
+                    isrScanInterval:
+                      nullable: true
+                      type: string
+                    leaderImbalanceCheckInterval:
+                      nullable: true
+                      type: string
+                    leaderImbalancePerBroker:
+                      nullable: true
+                      type: string
+                    livenessTickInterval:
+                      nullable: true
+                      type: string
+                    logReadBufferCap:
+                      nullable: true
+                      type: string
+                    logTimestampScanWindow:
+                      nullable: true
+                      type: string
+                    maxConnections:
+                      format: uint
+                      minimum: 0.0
+                      nullable: true
+                      type: integer
+                    maxConnectionsPerIp:
+                      format: uint
+                      minimum: 0.0
+                      nullable: true
+                      type: integer
+                    maxIncrementalFetchSessionCacheSlots:
+                      format: uint
+                      minimum: 0.0
+                      nullable: true
+                      type: integer
+                    maxProduceGroup:
+                      format: uint
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    metadataMaxBetweenSnapshots:
+                      nullable: true
+                      type: string
+                    metadataMaxSnapshotInterval:
+                      nullable: true
+                      type: string
+                    metadataRaftCommandQueueCapacity:
+                      format: uint
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    metadataRaftFetchMax:
+                      nullable: true
+                      type: string
+                    metadataSnapshotFetchMax:
+                      nullable: true
+                      type: string
+                    metadataSnapshotIntervalRecords:
+                      format: uint64
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    oauthJwksHttpTimeout:
+                      nullable: true
+                      type: string
+                    observerFetchMax:
+                      nullable: true
+                      type: string
+                    observerLagBound:
+                      format: uint64
+                      minimum: 0.0
+                      nullable: true
+                      type: integer
+                    observerPollInterval:
+                      nullable: true
+                      type: string
+                    offsetsTopicMetadataWaitTimeout:
+                      nullable: true
+                      type: string
+                    opaHttpTimeout:
+                      nullable: true
+                      type: string
+                    operatorRecoveryDeadline:
+                      nullable: true
+                      type: string
+                    partitionDiskScanInterval:
+                      nullable: true
+                      type: string
+                    partitionWriterQueueDepth:
+                      format: uint
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    producerIdExpiration:
+                      nullable: true
+                      type: string
+                    producerIdExpirationScanInterval:
+                      nullable: true
+                      type: string
+                    quotaThrottleMax:
+                      nullable: true
+                      type: string
+                    recordDecompressionMaxRatio:
+                      nullable: true
+                      type: string
+                    recordDecompressionOutputCeiling:
+                      nullable: true
+                      type: string
+                    recordDecompressionOutputFloor:
+                      nullable: true
+                      type: string
+                    remoteLogManagerInterval:
+                      nullable: true
+                      type: string
+                    replicaLagTimeMax:
+                      nullable: true
+                      type: string
+                    replicationEpochFenceBackoff:
+                      nullable: true
+                      type: string
+                    replicationFetchMax:
+                      nullable: true
+                      type: string
+                    replicationFetchMaxWait:
+                      nullable: true
+                      type: string
+                    replicationFetchMin:
+                      nullable: true
+                      type: string
+                    replicationReconnectDelayCap:
+                      nullable: true
+                      type: string
+                    replicationReconnectInitialDelay:
+                      nullable: true
+                      type: string
+                    replicationSendErrorBackoff:
+                      nullable: true
+                      type: string
+                    replicationThrottleExhaustedBackoff:
+                      nullable: true
+                      type: string
+                    replicationUnexpectedErrorBackoff:
+                      nullable: true
+                      type: string
+                    replicationUnknownTopicRetryDelay:
+                      nullable: true
+                      type: string
+                    rlmmBootstrapBackoffInitial:
+                      nullable: true
+                      type: string
+                    rlmmBootstrapBackoffMax:
+                      nullable: true
+                      type: string
+                    rlmmReconcileTick:
+                      nullable: true
+                      type: string
+                    selfRegistrationBackoffMax:
+                      nullable: true
+                      type: string
+                    selfRegistrationBackoffMin:
+                      nullable: true
+                      type: string
+                    selfRegistrationMaxAttempts:
+                      format: uint32
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    sendfileMin:
+                      nullable: true
+                      type: string
+                    shareGroupEnable:
+                      nullable: true
+                      type: boolean
+                    shareGroupHeartbeatInterval:
+                      nullable: true
+                      type: string
+                    shareGroupIsolationLevel:
+                      nullable: true
+                      type: string
+                    shareGroupMaxDeliveryAttempts:
+                      format: int16
+                      maximum: 32767.0
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    shareGroupMaxInflightRecords:
+                      format: int32
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    shareGroupMaxSize:
+                      format: uint
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    shareGroupRecordLockDuration:
+                      nullable: true
+                      type: string
+                    shareGroupSessionTimeout:
+                      nullable: true
+                      type: string
+                    shareRecoveryReadMax:
+                      nullable: true
+                      type: string
+                    shareSessionCacheMaxWhenUnlimited:
+                      format: uint
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    shareStateNumPartitions:
+                      format: int32
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    shareStateReplicationFactor:
+                      format: int16
+                      maximum: 32767.0
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    socketReceiveBuffer:
+                      nullable: true
+                      type: string
+                    socketRequestMax:
+                      nullable: true
+                      type: string
+                    socketSendBuffer:
+                      nullable: true
+                      type: string
+                    startupLeaderWaitTimeout:
+                      nullable: true
+                      type: string
+                    streamsGroupAcceptableRecoveryLag:
+                      format: int64
+                      minimum: 0.0
+                      nullable: true
+                      type: integer
+                    streamsGroupAssignor:
+                      nullable: true
+                      type: string
+                    streamsGroupEnable:
+                      nullable: true
+                      type: boolean
+                    streamsGroupHeartbeatInterval:
+                      nullable: true
+                      type: string
+                    streamsGroupMaxSize:
+                      format: uint
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    streamsGroupNumStandbyReplicas:
+                      format: int32
+                      minimum: 0.0
+                      nullable: true
+                      type: integer
+                    streamsGroupNumWarmupReplicas:
+                      format: int32
+                      minimum: 0.0
+                      nullable: true
+                      type: integer
+                    streamsGroupSessionTimeout:
+                      nullable: true
+                      type: string
+                    streamsGroupTaskOffsetInterval:
+                      nullable: true
+                      type: string
+                    streamsInternalTopicReplicationFactor:
+                      format: int16
+                      maximum: 32767.0
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    syncGroupFollowerWait:
+                      nullable: true
+                      type: string
+                    telemetryDecompressedOutputCeiling:
+                      nullable: true
+                      type: string
+                    telemetryDecompressedOutputFloor:
+                      nullable: true
+                      type: string
+                    telemetryMaxDecompressionRatio:
+                      nullable: true
+                      type: string
+                    tlsReloadInterval:
+                      nullable: true
+                      type: string
+                    transactionMaxTimeout:
+                      nullable: true
+                      type: string
+                    transactionMinTimeout:
+                      nullable: true
+                      type: string
+                    transactionRecoveryReadMax:
+                      nullable: true
+                      type: string
+                    transactionStateNumPartitions:
+                      format: int32
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    transactionStateReplicationFactor:
+                      format: int16
+                      maximum: 32767.0
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    txnAbortCleanupInterval:
+                      nullable: true
+                      type: string
+                    uncleanRecoveryAggressiveDeadline:
+                      nullable: true
+                      type: string
+                    uncleanRecoveryBalancedDeadline:
+                      nullable: true
+                      type: string
+                    uncleanRecoveryQueueCapacity:
+                      format: uint
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                  type: object
+                clientsCa:
+                  description: |-
+                    Per-cluster CA that signs `KafkaUser` TLS certs. When absent, the
+                    operator uses a fully-defaulted `CertificateAuthority`.
+                  nullable: true
+                  properties:
+                    generateCertificateAuthority:
+                      default: true
+                      description: |-
+                        When `true`, which is the default, the operator generates and
+                        renews this CA. When `false`, the cluster admin must create the CA
+                        `Secret` pair first, and the operator refuses to overwrite them.
+                        The admin renews a BYO CA. The `CronJob` skips a BYO CA and emits
+                        an Event when the CA comes near its expiry.
+                      type: boolean
+                    renewalDays:
+                      default: 30
+                      description: |-
+                        Window in days before `notAfter` in which the renewal `CronJob`
+                        reissues the leaf certs. Default 30.
+                      format: uint32
+                      minimum: 0.0
+                      type: integer
+                    validityDays:
+                      default: 365
+                      description: Cert validity in days. Default 365.
+                      format: uint32
+                      minimum: 0.0
+                      type: integer
+                  type: object
+                clusterCa:
+                  description: |-
+                    Per-cluster CA for inter-broker mTLS and broker certs. When absent,
+                    the operator uses a fully-defaulted `CertificateAuthority`, which it
+                    generates itself with 365/30 days.
+                  nullable: true
+                  properties:
+                    generateCertificateAuthority:
+                      default: true
+                      description: |-
+                        When `true`, which is the default, the operator generates and
+                        renews this CA. When `false`, the cluster admin must create the CA
+                        `Secret` pair first, and the operator refuses to overwrite them.
+                        The admin renews a BYO CA. The `CronJob` skips a BYO CA and emits
+                        an Event when the CA comes near its expiry.
+                      type: boolean
+                    renewalDays:
+                      default: 30
+                      description: |-
+                        Window in days before `notAfter` in which the renewal `CronJob`
+                        reissues the leaf certs. Default 30.
+                      format: uint32
+                      minimum: 0.0
+                      type: integer
+                    validityDays:
+                      default: 365
+                      description: Cert validity in days. Default 365.
+                      format: uint32
+                      minimum: 0.0
+                      type: integer
+                  type: object
+                config:
+                  additionalProperties:
+                    type: string
+                  description: |-
+                    Opaque broker properties, in `server.properties`-style key and value
+                    pairs. The operator passes them through to the broker's
+                    `[server_properties]` TOML table, and the broker treats them as inert
+                    today. Changes propagate through the config hash.
+                  nullable: true
+                  type: object
+                delegationToken:
+                  description: |-
+                    Delegation-token master HMAC key source. When `None`, the broker
+                    rejects all KIP-48 delegation-token RPCs with err 61
+                    `DELEGATION_TOKEN_AUTH_DISABLED`. When `Some`, the operator injects
+                    `KRABKA_DELEGATION_TOKEN_SECRET_KEY` into each broker pod through a
+                    `valueFrom.secretKeyRef`. The key is then part of the rendered
+                    `StatefulSet`, so the SSA reconcile does not race with out-of-band
+                    `kubectl set env` patches.
+                  nullable: true
+                  properties:
+                    secretKeyRef:
+                      description: |-
+                        Reference to a Kubernetes `Secret` in the same namespace as the
+                        `Kafka` CR. Its `data.<key>` value is the broker's master HMAC key for
+                        KIP-48 delegation tokens.
                       properties:
-                        accessTokenIsJwt:
-                          type: boolean
-                        clientId:
-                          minLength: 1
+                        key:
+                          description: Key within the Secret's `data`. Defaults to `secret-key`.
+                          nullable: true
                           type: string
-                        clientSecret:
-                          properties:
-                            key:
-                              minLength: 1
-                              type: string
-                            secretName:
-                              minLength: 1
-                              type: string
-                          required:
-                          - key
-                          - secretName
-                          type: object
-                        customClaimCheck:
-                          minLength: 1
+                        name:
+                          description: Secret name in the same namespace as the `Kafka` CR.
                           type: string
-                        enableOauthBearer:
-                          type: boolean
-                        fallbackUserNameClaim:
-                          minLength: 1
-                          type: string
-                        fallbackUserNamePrefix:
-                          minLength: 1
-                          type: string
-                        groupsClaim:
-                          minLength: 1
-                          type: string
-                        groupsClaimDelimiter:
-                          minLength: 1
-                          type: string
-                        introspectionEndpointUri:
-                          minLength: 1
-                          type: string
-                        introspectionHttpTimeoutSeconds:
-                          minimum: 1.0
-                          type: integer
-                        jwksEndpointUri:
-                          minLength: 1
-                          type: string
-                        jwksExpirySeconds:
-                          format: int32
-                          minimum: 1.0
-                          type: integer
-                        jwksIgnoreKeyUse:
-                          type: boolean
-                        jwksMinRefreshPauseSeconds:
-                          format: int32
-                          minimum: 0.0
-                          type: integer
-                        jwksRefreshSeconds:
-                          minimum: 0.0
-                          type: integer
-                        kdc:
-                          minLength: 1
-                          type: string
-                        keytabSecretRef:
-                          properties:
-                            key:
-                              minLength: 1
-                              type: string
-                            secretName:
-                              minLength: 1
-                              type: string
-                          required:
-                          - key
-                          - secretName
-                          type: object
-                        maxClockSkewSeconds:
-                          minimum: 0.0
-                          type: integer
-                        maxSecondsWithoutReauthentication:
-                          format: int32
-                          minimum: 1.0
-                          type: integer
-                        maxTimeSkew:
-                          minLength: 1
-                          type: string
-                        principalToLocalRules:
-                          items:
+                      required:
+                        - name
+                      type: object
+                  required:
+                    - secretKeyRef
+                  type: object
+                gresRegistry:
+                  description: Shared creation and reader policy for the Gres tenant registry topic.
+                  nullable: true
+                  properties:
+                    fetchMaxWait:
+                      description: Maximum time a registry fetch waits for data.
+                      nullable: true
+                      type: string
+                    fetchPartitionMax:
+                      description: Maximum bytes fetched from the registry partition.
+                      nullable: true
+                      type: string
+                    producerDnsTimeout:
+                      description: DNS lookup deadline for the registry producer.
+                      nullable: true
+                      type: string
+                    readerAdminDnsTimeout:
+                      description: DNS lookup deadline for registry reader and admin paths.
+                      nullable: true
+                      type: string
+                    readerFetchMin:
+                      description: Minimum response size for registry reader fetches.
+                      nullable: true
+                      type: string
+                    readerRetryBackoff:
+                      description: Registry reader retry delay.
+                      nullable: true
+                      type: string
+                    replicationFactor:
+                      description: Registry topic replication factor.
+                      format: int32
+                      maximum: 32767.0
+                      minimum: 1.0
+                      nullable: true
+                      type: integer
+                    topicCreateTimeout:
+                      description: Kafka topic creation timeout.
+                      nullable: true
+                      type: string
+                  type: object
+                interBrokerKerberos:
+                  description: |-
+                    Inter-broker Kerberos initiate config. It is required when
+                    `interBrokerListenerName` resolves to a `type: gssapi` listener. It
+                    supplies the shared client principal and the KDC. The keytab comes from
+                    that listener's `keytabSecretRef`.
+                  nullable: true
+                  properties:
+                    clientPrincipal:
+                      description: |-
+                        Principal that every broker authenticates as when it dials peers, for
+                        example `kafka@EXAMPLE.COM`. It must exist in the shared keytab.
+                      type: string
+                    kdcUrl:
+                      description: KDC endpoint, for example `tcp://kdc:88`.
+                      type: string
+                    serviceName:
+                      description: Target SPN primary. Defaults to `kafka`.
+                      nullable: true
+                      type: string
+                  required:
+                    - clientPrincipal
+                    - kdcUrl
+                  type: object
+                interBrokerListenerName:
+                  description: |-
+                    Name of the listener for inter-broker traffic. When `None`, the
+                    operator picks the first `internal` listener. When `listeners` is
+                    empty, the operator picks the synthesized default `"PLAIN"`.
+                  nullable: true
+                  type: string
+                kafkaVersion:
+                  description: |-
+                    Crabka version label. The operator propagates it to all pool pods
+                    through the `app.kubernetes.io/version` label.
+                  type: string
+                krb5ConfSecretRef:
+                  description: |-
+                    Optional process-wide `krb5.conf`. The operator mounts it into the
+                    broker pods and points `KRB5_CONFIG` at it. It serves both the accept
+                    path and the initiate path.
+                  nullable: true
+                  properties:
+                    key:
+                      description: Key within the Secret whose value is the krb5.conf contents.
+                      type: string
+                    secretName:
+                      description: Name of the Secret holding the krb5.conf.
+                      type: string
+                  required:
+                    - key
+                    - secretName
+                  type: object
+                listeners:
+                  description: |-
+                    Named listeners. An empty or absent list synthesizes one internal
+                    `PLAIN` listener on port 9092.
+                  items:
+                    properties:
+                      authentication:
+                        description: |-
+                          Per-listener authentication mechanism. Absent means anonymous, and no
+                          client identity is required. When the field is `type: tls`, the
+                          listener must also have `tls: true`. The reconcile enforces this
+                          rule.
+                        nullable: true
+                        properties:
+                          accessTokenIsJwt:
+                            type: boolean
+                          clientId:
                             minLength: 1
                             type: string
-                          type: array
-                        realm:
-                          minLength: 1
-                          type: string
-                        serviceName:
-                          minLength: 1
-                          type: string
-                        tlsTrustedCertificates:
-                          items:
+                          clientSecret:
                             properties:
-                              certificate:
+                              key:
                                 minLength: 1
                                 type: string
                               secretName:
                                 minLength: 1
                                 type: string
                             required:
-                            - certificate
-                            - secretName
+                              - key
+                              - secretName
                             type: object
-                          type: array
-                        type:
-                          enum:
-                          - tls
-                          - scram-sha-512
-                          - scram-sha-256
-                          - oauth
-                          - gssapi
-                          type: string
-                        userInfoEndpointUri:
-                          minLength: 1
-                          type: string
-                        userNameClaim:
-                          type: string
-                        validAudience:
-                          type: string
-                        validIssuerUri:
-                          minLength: 1
-                          type: string
-                        validTokenType:
-                          minLength: 1
-                          type: string
-                      required:
-                      - type
-                      type: object
-                    configuration:
-                      description: Optional listener-type-specific configuration.
-                      nullable: true
-                      properties:
-                        bootstrap:
-                          nullable: true
-                          properties:
-                            annotations:
-                              additionalProperties:
-                                type: string
-                              description: Annotations to add to the bootstrap Service.
-                              type: object
-                            host:
-                              description: '`ingress` / `route` only: bootstrap hostname.'
-                              nullable: true
-                              type: string
-                            labels:
-                              additionalProperties:
-                                type: string
-                              description: Labels to add to the bootstrap Service.
-                              type: object
-                            loadBalancerIP:
-                              description: '`loadbalancer` only: pin the bootstrap LB IP.'
-                              nullable: true
-                              type: string
-                            nodePort:
-                              description: '`nodeport` only: pin the bootstrap `NodePort`.'
-                              format: int32
-                              nullable: true
-                              type: integer
-                          type: object
-                        brokers:
-                          items:
-                            properties:
-                              advertisedHost:
-                                description: Override the computed advertised host.
-                                nullable: true
-                                type: string
-                              advertisedPort:
-                                description: Override the computed advertised port.
-                                format: int32
-                                nullable: true
-                                type: integer
-                              broker:
-                                description: Broker id this override applies to (matches the node id).
-                                format: int32
-                                type: integer
-                              host:
-                                description: '`ingress` / `route` only: per-broker hostname.'
-                                nullable: true
-                                type: string
-                              loadBalancerIP:
-                                description: '`loadbalancer` only: pin this broker''s `Service.spec.loadBalancerIP`.'
-                                nullable: true
-                                type: string
-                              nodePort:
-                                description: '`nodeport` only: pin this broker''s `Service.spec.ports[0].nodePort`.'
-                                format: int32
-                                nullable: true
-                                type: integer
-                            required:
-                            - broker
-                            type: object
-                          type: array
-                        class:
-                          description: |-
-                            `ingress` only: the `spec.ingressClassName` that the operator sets on
-                            every generated `Ingress`. This is the Strimzi-shaped
-                            `configuration.class`. It is inert for other listener types.
-                          nullable: true
-                          type: string
-                      type: object
-                    name:
-                      description: |-
-                        Unique within the cluster. Alphanumeric characters and `-`, ≤25
-                        chars. It is the Kafka listener name, and it appears in
-                        `bootstrap.servers`-style URLs.
-                      type: string
-                    networkPolicyPeers:
-                      description: |-
-                        Per-listener peer allow-list. It is tri-state:
-                        - `None` gives no per-listener restriction, that is, allow-all on this
-                          port.
-                        - `Some(vec![])` gives deny-all on this listener port. The operator
-                          emits no per-listener rule, and the default-deny applies.
-                        - `Some(non_empty)` lets only the listed peers reach this port.
-
-                        The operator reads this field only when `Kafka.spec.networkPolicy` is
-                        set. In any other case the field is inert. The operator auto-allow rule
-                        still fires on this port for deny-all listeners, so that the operator
-                        can manage the cluster.
-                      items:
-                        description: |-
-                          Subset of `networking.k8s.io/v1.NetworkPolicyPeer`.
-
-                          This struct omits `ipBlock` on purpose. Someone can add it later if
-                          external CIDR allow-lists become a real need.
-                        properties:
-                          namespaceSelector:
-                            description: A label selector is a label query over a set of resources. The result of matchLabels and matchExpressions are ANDed. An empty label selector matches all objects. A null label selector matches no objects.
-                            nullable: true
-                            properties:
-                              matchExpressions:
-                                description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
-                                items:
-                                  description: A label selector requirement is a selector that contains values, a key, and an operator that relates the key and values.
-                                  properties:
-                                    key:
-                                      description: key is the label key that the selector applies to.
-                                      type: string
-                                    operator:
-                                      description: operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist.
-                                      type: string
-                                    values:
-                                      description: values is an array of string values. If the operator is In or NotIn, the values array must be non-empty. If the operator is Exists or DoesNotExist, the values array must be empty. This array is replaced during a strategic merge patch.
-                                      items:
-                                        type: string
-                                      type: array
-                                  required:
-                                  - key
-                                  - operator
-                                  type: object
-                                type: array
-                              matchLabels:
-                                additionalProperties:
-                                  type: string
-                                description: matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels map is equivalent to an element of matchExpressions, whose key field is "key", the operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                type: object
-                            type: object
-                          podSelector:
-                            description: A label selector is a label query over a set of resources. The result of matchLabels and matchExpressions are ANDed. An empty label selector matches all objects. A null label selector matches no objects.
-                            nullable: true
-                            properties:
-                              matchExpressions:
-                                description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
-                                items:
-                                  description: A label selector requirement is a selector that contains values, a key, and an operator that relates the key and values.
-                                  properties:
-                                    key:
-                                      description: key is the label key that the selector applies to.
-                                      type: string
-                                    operator:
-                                      description: operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist.
-                                      type: string
-                                    values:
-                                      description: values is an array of string values. If the operator is In or NotIn, the values array must be non-empty. If the operator is Exists or DoesNotExist, the values array must be empty. This array is replaced during a strategic merge patch.
-                                      items:
-                                        type: string
-                                      type: array
-                                  required:
-                                  - key
-                                  - operator
-                                  type: object
-                                type: array
-                              matchLabels:
-                                additionalProperties:
-                                  type: string
-                                description: matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels map is equivalent to an element of matchExpressions, whose key field is "key", the operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                type: object
-                            type: object
-                        type: object
-                      nullable: true
-                      type: array
-                    port:
-                      description: Container port the broker binds. Unique within the cluster.
-                      format: int32
-                      type: integer
-                    tls:
-                      default: false
-                      description: |-
-                        Transport-level TLS. When `true`, the listener uses the per-broker
-                        keystore that the cluster CA signed, and clients must use TLS to
-                        connect. This field is independent of `authentication`. A `tls: true`
-                        listener with no `authentication` is anonymous over TLS.
-                      type: boolean
-                    type:
-                      description: |-
-                        Listener type. `internal` is in-cluster. `nodeport` and
-                        `loadbalancer` create external Services. The schema accepts `ingress`
-                        and `route`, but the reconcile rejects them.
-                      enum:
-                      - internal
-                      - nodeport
-                      - loadbalancer
-                      - ingress
-                      - route
-                      type: string
-                  required:
-                  - name
-                  - port
-                  - type
-                  type: object
-                type: array
-              logging:
-                description: |-
-                  Broker log configuration. When `None`, the brokers use their built-in
-                  default `RUST_LOG` filter. When `Some`, the operator composes an inline
-                  `tracing` env-filter string, or reads an external one. The operator
-                  then renders it into the broker `ConfigMap` under the `rust.log` key,
-                  wires it into the `RUST_LOG` env of each broker pod, and rolls the
-                  cluster on a change through the config hash.
-                nullable: true
-                properties:
-                  loggers:
-                    additionalProperties:
-                      type: string
-                    description: |-
-                      Inline loggers, from tracing target to level. The key `root` is
-                      case-insensitive and sets the global default level as a bare
-                      env-filter directive. Any other key is a tracing target, that is, a
-                      Rust module path such as `crabka_broker`. The levels are
-                      `trace|debug|info|warn|error|off`, and they are case-insensitive.
-                      `fatal` is accepted as an alias for `error`.
-                    type: object
-                  type:
-                    default: inline
-                    enum:
-                    - inline
-                    - external
-                    type: string
-                  valueFrom:
-                    description: |-
-                      External logging source. This field is required when
-                      `type: external`. The operator uses the value of the referenced
-                      `ConfigMap` key verbatim as the broker's `RUST_LOG` filter.
-                    nullable: true
-                    properties:
-                      configMapKeyRef:
-                        properties:
-                          key:
+                          customClaimCheck:
+                            minLength: 1
                             type: string
-                          name:
+                          enableOauthBearer:
+                            type: boolean
+                          fallbackUserNameClaim:
+                            minLength: 1
                             type: string
-                        required:
-                        - key
-                        - name
-                        type: object
-                    required:
-                    - configMapKeyRef
-                    type: object
-                type: object
-              metadataVersion:
-                description: |-
-                  `KRaft` metadata version, the runtime analog of
-                  `inter.broker.protocol.version`. When unset, it tracks the
-                  `major.minor` of `kafkaVersion`. When set, it pins the metadata version
-                  for a two-step upgrade or an online downgrade. The operator validates
-                  it against `kafkaVersion`; changes on an existing cluster are finalized
-                  through `UpdateFeatures`, with safe-downgrade semantics for a lower
-                  target. Rejections surface `KafkaVersionValid=False` and leave
-                  `status.metadataVersion` unchanged.
-                nullable: true
-                type: string
-              metricsConfig:
-                description: |-
-                  Prometheus scrape configuration. When `None`, the brokers do not bind
-                  `/metrics`, and the operator renders no `PodMonitor` and no
-                  `ServiceMonitor`. When `Some`, the broker `StatefulSet` gains a
-                  `metrics` container port on TCP 9404, and the operator SSA-applies the
-                  resources that `pod_monitor` and `service_monitor` request.
-                nullable: true
-                properties:
-                  podMonitor:
-                    nullable: true
-                    properties:
-                      interval:
-                        nullable: true
-                        type: string
-                      labels:
-                        additionalProperties:
-                          type: string
-                        type: object
-                      scrapeTimeout:
-                        nullable: true
-                        type: string
-                    type: object
-                  serviceMonitor:
-                    nullable: true
-                    properties:
-                      interval:
-                        nullable: true
-                        type: string
-                      labels:
-                        additionalProperties:
-                          type: string
-                        type: object
-                      scrapeTimeout:
-                        nullable: true
-                        type: string
-                    type: object
-                  type:
-                    default: prometheus
-                    enum:
-                    - prometheus
-                    type: string
-                type: object
-              networkPolicy:
-                description: |-
-                  Opt-in `NetworkPolicy` generation. When `None`, the operator generates
-                  no `NetworkPolicy`. When `Some`, even `{}`, the operator renders a
-                  cluster-level `NetworkPolicy` that gates ingress to the broker and
-                  controller pods.
-                nullable: true
-                type: object
-              tieredStorage:
-                description: |-
-                  KIP-405: cluster-wide tiered storage. When `Some`, every broker pod
-                  boots with the local-tier RSM enabled, with an `emptyDir` mounted at
-                  `/var/lib/crabka/remote`, which is the broker's
-                  `remote_log_storage_dir`, and with `[remote_storage]` rendered in the
-                  broker TOML. The per-topic enablement does not change. It stays
-                  `KafkaTopic.spec.config["remote.storage.enable"] = "true"`.
-
-                  With the `emptyDir` default and `InmemoryRemoteLogMetadataManager` as
-                  the only RLMM, tier data does not survive pod restarts. PVC support
-                  pairs with the production RLMM.
-                nullable: true
-                properties:
-                  gcs:
-                    description: |-
-                      GCS-backend tuning. It is required when `kind == Gcs`, and it must be
-                      absent in any other case. The struct has the same shape as
-                      `crabka_remote_storage::GcsConfig`. The operator renders the
-                      non-credential fields verbatim into the broker TOML's
-                      `[remote_storage.gcs]` block. S3 uses env-var credentials, but GCS does
-                      not. The operator mounts an explicit service-account JSON key as a FILE
-                      on the broker pod and gives it to the broker as `service_account_path`
-                      in the TOML. Unset credentials select keyless Workload Identity or
-                      ADC.
-                    nullable: true
-                    properties:
-                      allowHttp:
-                        description: |-
-                          Allow plaintext HTTP. It is off by default. Turn it on for GCS
-                          emulators that run without TLS. Real GCS never needs it.
-                        type: boolean
-                      bucket:
-                        description: GCS bucket name. Required.
-                        type: string
-                      credentials:
-                        description: |-
-                          Optional explicit service-account credentials. When None, the broker
-                          uses Workload Identity or ADC, which is the keyless GKE path.
-                        nullable: true
-                        properties:
-                          serviceAccountKey:
-                            description: Reference to the Secret holding the service-account JSON key.
+                          fallbackUserNamePrefix:
+                            minLength: 1
+                            type: string
+                          groupsClaim:
+                            minLength: 1
+                            type: string
+                          groupsClaimDelimiter:
+                            minLength: 1
+                            type: string
+                          introspectionEndpointUri:
+                            minLength: 1
+                            type: string
+                          introspectionHttpTimeoutSeconds:
+                            minimum: 1.0
+                            type: integer
+                          jwksEndpointUri:
+                            minLength: 1
+                            type: string
+                          jwksExpirySeconds:
+                            format: int32
+                            minimum: 1.0
+                            type: integer
+                          jwksIgnoreKeyUse:
+                            type: boolean
+                          jwksMinRefreshPauseSeconds:
+                            format: int32
+                            minimum: 0.0
+                            type: integer
+                          jwksRefreshSeconds:
+                            minimum: 0.0
+                            type: integer
+                          kdc:
+                            minLength: 1
+                            type: string
+                          keytabSecretRef:
                             properties:
                               key:
-                                description: Key within the Secret's `data`. Defaults to `secret-key`.
-                                nullable: true
+                                minLength: 1
                                 type: string
-                              name:
-                                description: Secret name in the same namespace as the `Kafka` CR.
+                              secretName:
+                                minLength: 1
                                 type: string
                             required:
-                            - name
+                              - key
+                              - secretName
                             type: object
+                          maxClockSkewSeconds:
+                            minimum: 0.0
+                            type: integer
+                          maxSecondsWithoutReauthentication:
+                            format: int32
+                            minimum: 1.0
+                            type: integer
+                          maxTimeSkew:
+                            minLength: 1
+                            type: string
+                          principalToLocalRules:
+                            items:
+                              minLength: 1
+                              type: string
+                            type: array
+                          realm:
+                            minLength: 1
+                            type: string
+                          serviceName:
+                            minLength: 1
+                            type: string
+                          tlsTrustedCertificates:
+                            items:
+                              properties:
+                                certificate:
+                                  minLength: 1
+                                  type: string
+                                secretName:
+                                  minLength: 1
+                                  type: string
+                              required:
+                                - certificate
+                                - secretName
+                              type: object
+                            type: array
+                          type:
+                            enum:
+                              - tls
+                              - scram-sha-512
+                              - scram-sha-256
+                              - oauth
+                              - gssapi
+                            type: string
+                          userInfoEndpointUri:
+                            minLength: 1
+                            type: string
+                          userNameClaim:
+                            type: string
+                          validAudience:
+                            type: string
+                          validIssuerUri:
+                            minLength: 1
+                            type: string
+                          validTokenType:
+                            minLength: 1
+                            type: string
                         required:
-                        - serviceAccountKey
+                          - type
                         type: object
-                      endpoint:
-                        description: |-
-                          Optional custom GCS API base URL, for example for emulators and
-                          fakes. When `None`, the broker uses the standard Google Cloud Storage
-                          endpoint.
-                        nullable: true
-                        type: string
-                      multipartChunkSize:
-                        description: |-
-                          Override the per-part size for multipart uploads in bytes. When unset,
-                          the broker uses
-                          `crabka_remote_storage::DEFAULT_MULTIPART_CHUNK_SIZE`, which is
-                          16 MiB.
-                        format: uint64
-                        minimum: 0.0
-                        nullable: true
-                        type: integer
-                      multipartThreshold:
-                        description: |-
-                          Override the single-PUT and multipart cutoff in bytes. When unset, the
-                          broker uses `crabka_remote_storage::DEFAULT_MULTIPART_THRESHOLD`, which
-                          is 100 MiB. Lower it in tests to exercise the multipart path on small
-                          fixtures.
-                        format: uint64
-                        minimum: 0.0
-                        nullable: true
-                        type: integer
-                      prefix:
-                        description: |-
-                          Optional key prefix inside the bucket. It lets more than one Crabka
-                          cluster share a bucket without a collision.
-                        nullable: true
-                        type: string
-                    required:
-                    - bucket
-                    type: object
-                  metadataManager:
-                    description: |-
-                      KIP-405: pick the `RemoteLogMetadataManager` that the broker pods run.
-                      When the field is absent, or when it is `type: Topic`, the broker
-                      activates the durable
-                      `crabka_remote_storage_topic::TopicBasedRemoteLogMetadataManager`
-                      against the internal `__remote_log_metadata` topic. Tier-segment
-                      metadata then survives pod restarts and is consistent across the
-                      brokers in the cluster. Only an explicit `type: InMemory` selects the
-                      in-memory fixture, which is for test and dev only.
-                    nullable: true
-                    properties:
-                      topic:
-                        description: |-
-                          Topic-backed tuning. It is optional when `kind == Topic`, and the
-                          broker fills the defaults for the bootstrap and topic parameters. It
-                          must be absent in any other case.
+                      configuration:
+                        description: Optional listener-type-specific configuration.
                         nullable: true
                         properties:
                           bootstrap:
+                            nullable: true
+                            properties:
+                              annotations:
+                                additionalProperties:
+                                  type: string
+                                description: Annotations to add to the bootstrap Service.
+                                type: object
+                              host:
+                                description: "`ingress` / `route` only: bootstrap hostname."
+                                nullable: true
+                                type: string
+                              labels:
+                                additionalProperties:
+                                  type: string
+                                description: Labels to add to the bootstrap Service.
+                                type: object
+                              loadBalancerIP:
+                                description: "`loadbalancer` only: pin the bootstrap LB IP."
+                                nullable: true
+                                type: string
+                              nodePort:
+                                description: "`nodeport` only: pin the bootstrap `NodePort`."
+                                format: int32
+                                nullable: true
+                                type: integer
+                            type: object
+                          brokers:
+                            items:
+                              properties:
+                                advertisedHost:
+                                  description: Override the computed advertised host.
+                                  nullable: true
+                                  type: string
+                                advertisedPort:
+                                  description: Override the computed advertised port.
+                                  format: int32
+                                  nullable: true
+                                  type: integer
+                                broker:
+                                  description: Broker id this override applies to (matches the node id).
+                                  format: int32
+                                  type: integer
+                                host:
+                                  description: "`ingress` / `route` only: per-broker hostname."
+                                  nullable: true
+                                  type: string
+                                loadBalancerIP:
+                                  description: "`loadbalancer` only: pin this broker's `Service.spec.loadBalancerIP`."
+                                  nullable: true
+                                  type: string
+                                nodePort:
+                                  description: "`nodeport` only: pin this broker's `Service.spec.ports[0].nodePort`."
+                                  format: int32
+                                  nullable: true
+                                  type: integer
+                              required:
+                                - broker
+                              type: object
+                            type: array
+                          class:
                             description: |-
-                              `host:port` that the broker pod dials to reach its own listener, so
-                              that it can publish and consume `__remote_log_metadata`. This is
-                              usually the pod's loopback inter-broker listener, for example
-                              `127.0.0.1:9094`.
-                            type: string
-                          eventQueueCapacity:
-                            description: Capacity of the shared metadata-event delivery queue.
-                            format: uint
-                            minimum: 1.0
-                            nullable: true
-                            type: integer
-                          fetchMaxBytes:
-                            description: Maximum bytes returned by each per-partition metadata fetch.
+                              `ingress` only: the `spec.ingressClassName` that the operator sets on
+                              every generated `Ingress`. This is the Strimzi-shaped
+                              `configuration.class`. It is inert for other listener types.
                             nullable: true
                             type: string
-                          fetchMaxWait:
-                            description: Maximum wait for each per-partition metadata fetch.
-                            nullable: true
-                            type: string
-                          fetchRetryBackoff:
-                            description: Backoff after a failed metadata fetch.
-                            nullable: true
-                            type: string
-                          numPartitions:
-                            description: |-
-                              Partition count for `__remote_log_metadata` on the first creation.
-                              Defaults to 50, which is the Kafka
-                              `remote.log.metadata.topic.num.partitions`.
-                            format: int32
-                            nullable: true
-                            type: integer
-                          replication:
-                            description: |-
-                              Replication factor for `__remote_log_metadata` on the first creation.
-                              Defaults to 3, which is the Kafka
-                              `remote.log.metadata.topic.replication.factor`.
-                            format: int32
-                            nullable: true
-                            type: integer
-                          snapshotInterval:
-                            description: RLMM cache snapshot cadence.
-                            nullable: true
-                            type: string
-                          topicCreateTimeout:
-                            description: Timeout for provisioning each internal metadata topic.
-                            nullable: true
-                            type: string
-                        required:
-                        - bootstrap
                         type: object
-                      type:
-                        description: Implementation selector.
-                        enum:
-                        - InMemory
-                        - Topic
+                      name:
+                        description: |-
+                          Unique within the cluster. Alphanumeric characters and `-`, ≤25
+                          chars. It is the Kafka listener name, and it appears in
+                          `bootstrap.servers`-style URLs.
                         type: string
-                    required:
-                    - type
-                    type: object
-                  persistence:
-                    description: |-
-                      KIP-405: durable storage for the local-tier directory. It is valid
-                      only with `type=Local`. When it is absent, which is the default, the
-                      operator renders an `emptyDir` for `tier-storage`. When `Some`, the
-                      operator renders a `volumeClaimTemplate` of the configured size and
-                      class, so tier data survives pod restarts. Together with the
-                      topic-backed RLMM, this closes the "tier data is lost on pod restart"
-                      caveat.
-                    nullable: true
-                    properties:
-                      class:
-                        description: Storage class name. `None` means the cluster default.
+                      networkPolicyPeers:
+                        description: |-
+                          Per-listener peer allow-list. It is tri-state:
+                          - `None` gives no per-listener restriction, that is, allow-all on this
+                            port.
+                          - `Some(vec![])` gives deny-all on this listener port. The operator
+                            emits no per-listener rule, and the default-deny applies.
+                          - `Some(non_empty)` lets only the listed peers reach this port.
+
+                          The operator reads this field only when `Kafka.spec.networkPolicy` is
+                          set. In any other case the field is inert. The operator auto-allow rule
+                          still fires on this port for deny-all listeners, so that the operator
+                          can manage the cluster.
+                        items:
+                          description: |-
+                            Subset of `networking.k8s.io/v1.NetworkPolicyPeer`.
+
+                            This struct omits `ipBlock` on purpose. Someone can add it later if
+                            external CIDR allow-lists become a real need.
+                          properties:
+                            namespaceSelector:
+                              description: A label selector is a label query over a set of resources. The result of matchLabels and matchExpressions are ANDed. An empty label selector matches all objects. A null label selector matches no objects.
+                              nullable: true
+                              properties:
+                                matchExpressions:
+                                  description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
+                                  items:
+                                    description: A label selector requirement is a selector that contains values, a key, and an operator that relates the key and values.
+                                    properties:
+                                      key:
+                                        description: key is the label key that the selector applies to.
+                                        type: string
+                                      operator:
+                                        description: operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist.
+                                        type: string
+                                      values:
+                                        description: values is an array of string values. If the operator is In or NotIn, the values array must be non-empty. If the operator is Exists or DoesNotExist, the values array must be empty. This array is replaced during a strategic merge patch.
+                                        items:
+                                          type: string
+                                        type: array
+                                    required:
+                                      - key
+                                      - operator
+                                    type: object
+                                  type: array
+                                matchLabels:
+                                  additionalProperties:
+                                    type: string
+                                  description: matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels map is equivalent to an element of matchExpressions, whose key field is "key", the operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                  type: object
+                              type: object
+                            podSelector:
+                              description: A label selector is a label query over a set of resources. The result of matchLabels and matchExpressions are ANDed. An empty label selector matches all objects. A null label selector matches no objects.
+                              nullable: true
+                              properties:
+                                matchExpressions:
+                                  description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
+                                  items:
+                                    description: A label selector requirement is a selector that contains values, a key, and an operator that relates the key and values.
+                                    properties:
+                                      key:
+                                        description: key is the label key that the selector applies to.
+                                        type: string
+                                      operator:
+                                        description: operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist.
+                                        type: string
+                                      values:
+                                        description: values is an array of string values. If the operator is In or NotIn, the values array must be non-empty. If the operator is Exists or DoesNotExist, the values array must be empty. This array is replaced during a strategic merge patch.
+                                        items:
+                                          type: string
+                                        type: array
+                                    required:
+                                      - key
+                                      - operator
+                                    type: object
+                                  type: array
+                                matchLabels:
+                                  additionalProperties:
+                                    type: string
+                                  description: matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels map is equivalent to an element of matchExpressions, whose key field is "key", the operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                  type: object
+                              type: object
+                          type: object
                         nullable: true
-                        type: string
-                      deleteClaim:
+                        type: array
+                      port:
+                        description: Container port the broker binds. Unique within the cluster.
+                        format: int32
+                        type: integer
+                      tls:
                         default: false
                         description: |-
-                          `true` gives
-                          `persistentVolumeClaimRetentionPolicy.whenDeleted: Delete`. It must
-                          match the parent `KafkaNodePool.spec.storage.deleteClaim` when both
-                          PVCs are present, because K8s `StatefulSets` have one set-wide
-                          retention policy and no per-template override. The operator validates
-                          this at reconcile time, and a mismatch surfaces as
-                          `TieredStorageInvalid`.
+                          Transport-level TLS. When `true`, the listener uses the per-broker
+                          keystore that the cluster CA signed, and clients must use TLS to
+                          connect. This field is independent of `authentication`. A `tls: true`
+                          listener with no `authentication` is anonymous over TLS.
                         type: boolean
-                      size:
+                      type:
                         description: |-
-                          K8s `Quantity`, for example `"50Gi"` or `"500Mi"`. It must be
-                          non-empty. The Kubernetes API server validates the resource-quantity
-                          form at SSA time.
-                        type: string
-                    required:
-                    - size
-                    type: object
-                  s3:
-                    description: |-
-                      S3-backend tuning. It is required when `kind == S3`, and it must be
-                      absent in any other case. The struct has the same shape as
-                      `crabka_remote_storage::S3Config`. The operator renders the
-                      non-credential fields verbatim into the broker TOML's
-                      `[remote_storage.s3]` block. The credentials come from Kubernetes
-                      Secrets, and the operator injects them as the broker-pod env vars
-                      `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
-                    nullable: true
-                    properties:
-                      allowHttp:
-                        description: |-
-                          Allow plaintext HTTP. It is off by default. Turn it on for a `MinIO`
-                          that runs without TLS. AWS S3 never needs it.
-                        type: boolean
-                      bucket:
-                        description: S3 bucket name. Required.
-                        type: string
-                      credentials:
-                        description: |-
-                          Optional explicit credentials. When `None`, the broker falls back to
-                          the AWS credential chain, such as IRSA on EKS or an instance profile on
-                          EC2.
-                        nullable: true
-                        properties:
-                          accessKeyId:
-                            description: Reference to the Secret holding the `AWS_ACCESS_KEY_ID` value.
-                            properties:
-                              key:
-                                description: Key within the Secret's `data`. Defaults to `secret-key`.
-                                nullable: true
-                                type: string
-                              name:
-                                description: Secret name in the same namespace as the `Kafka` CR.
-                                type: string
-                            required:
-                            - name
-                            type: object
-                          secretAccessKey:
-                            description: Reference to the Secret holding the `AWS_SECRET_ACCESS_KEY` value.
-                            properties:
-                              key:
-                                description: Key within the Secret's `data`. Defaults to `secret-key`.
-                                nullable: true
-                                type: string
-                              name:
-                                description: Secret name in the same namespace as the `Kafka` CR.
-                                type: string
-                            required:
-                            - name
-                            type: object
-                        required:
-                        - accessKeyId
-                        - secretAccessKey
-                        type: object
-                      endpoint:
-                        description: |-
-                          Optional custom endpoint URL, for example `http://minio:9000` for
-                          `MinIO`, or `https://<account>.r2.cloudflarestorage.com` for Cloudflare
-                          R2. When `None`, the broker uses the AWS S3 endpoint for the configured
-                          region.
-                        nullable: true
-                        type: string
-                      multipartChunkSize:
-                        description: |-
-                          Override the per-part size for multipart uploads in bytes. When unset,
-                          the broker uses
-                          `crabka_remote_storage::DEFAULT_MULTIPART_CHUNK_SIZE`, which is
-                          16 MiB.
-                        format: uint64
-                        minimum: 0.0
-                        nullable: true
-                        type: integer
-                      multipartThreshold:
-                        description: |-
-                          Override the single-PUT and multipart cutoff in bytes. When unset, the
-                          broker uses `crabka_remote_storage::DEFAULT_MULTIPART_THRESHOLD`, which
-                          is 100 MiB. Lower it in tests to exercise the multipart path on small
-                          fixtures.
-                        format: uint64
-                        minimum: 0.0
-                        nullable: true
-                        type: integer
-                      prefix:
-                        description: |-
-                          Optional key prefix inside the bucket. It lets more than one Crabka
-                          cluster share a bucket without a collision.
-                        nullable: true
-                        type: string
-                      region:
-                        description: |-
-                          AWS region. It is required even for the non-AWS endpoints `MinIO` and
-                          R2, because the `AmazonS3Builder` of `object_store` rejects an empty
-                          region.
-                        type: string
-                    required:
-                    - bucket
-                    - region
-                    type: object
-                  type:
-                    description: Backend kind selector.
-                    enum:
-                    - Local
-                    - S3
-                    - Gcs
-                    type: string
-                required:
-                - type
-                type: object
-              tracing:
-                description: |-
-                  Distributed-tracing wiring for the broker pods. When `Some`, the
-                  operator renders the matching `CRABKA_OTLP_*` env vars onto every
-                  broker pod. The broker's telemetry pipeline reads them with
-                  `TelemetryConfig::from_env` and installs the OTLP tracer at startup.
-                  When `None`, the operator emits no OTLP env vars, and the broker leaves
-                  tracing off. That is the default.
-                nullable: true
-                properties:
-                  otlp:
-                    description: OTLP-backend tuning. Required when `kind == Otlp`.
-                    nullable: true
-                    properties:
-                      endpoint:
-                        description: |-
-                          Required. OTLP collector endpoint in the form `scheme://host:port`.
-                          The operator renders it as `CRABKA_OTLP_ENDPOINT`. A set field also
-                          sets `CRABKA_OTLP_ENABLED=true`.
-                        type: string
-                      protocol:
-                        description: |-
-                          OTLP wire protocol selector. It has the same shape as the broker's
-                          internal `OtlpProtocol` enum and the `OTEL_EXPORTER_OTLP_PROTOCOL` spec
-                          values.
+                          Listener type. `internal` is in-cluster. `nodeport` and
+                          `loadbalancer` create external Services. The schema accepts `ingress`
+                          and `route`, but the reconcile rejects them.
                         enum:
-                        - grpc
-                        - http_protobuf
-                        nullable: true
-                        type: string
-                      sampleRatio:
-                        description: |-
-                          Optional sampling ratio in `[0.0, 1.0]`. The operator renders it as
-                          `CRABKA_OTLP_SAMPLE_RATIO`. An unset field leaves the binary's own
-                          default of `1.0`, which samples every trace.
-                        format: double
-                        nullable: true
-                        type: number
-                      serviceName:
-                        description: |-
-                          Optional `service.name` resource attribute. The operator renders it as
-                          `OTEL_SERVICE_NAME`. An unset field leaves the binary's own name, which
-                          is `"crabka-broker"` for `Kafka` and `"crabka-gres"` for `Gres`.
-                        nullable: true
-                        type: string
-                      timeout:
-                        description: |-
-                          Optional export timeout. The operator renders it as
-                          `CRABKA_OTLP_TIMEOUT`. An unset field leaves the binary's own default
-                          of `10s`.
-                        nullable: true
+                          - internal
+                          - nodeport
+                          - loadbalancer
+                          - ingress
+                          - route
                         type: string
                     required:
-                    - endpoint
+                      - name
+                      - port
+                      - type
                     type: object
-                  type:
-                    description: Tracing backend selector.
-                    enum:
-                    - Otlp
-                    type: string
-                required:
-                - type
-                type: object
-            required:
-            - kafkaVersion
-            type: object
-          status:
-            nullable: true
-            properties:
-              clientsCa:
-                description: |-
-                  Status surface for one CA.
-
-                  The reconciler fills it in from the parsed CA cert and the CRD spec.
-                nullable: true
-                properties:
-                  certGeneration:
-                    default: 0
-                    description: |-
-                      Monotonic generation of the active signing cert. It increments on
-                      a same-key renewal and on a key promotion.
-                    format: uint64
-                    minimum: 0.0
-                    type: integer
-                  generated:
-                    description: |-
-                      `true` when the operator generated this CA, that is, when
-                      `generateCertificateAuthority == true`. `false` for a BYO CA.
-                    type: boolean
-                  keyGeneration:
-                    default: 0
-                    description: |-
-                      Monotonic generation of the active signing key. It increments only
-                      on a key replacement.
-                    format: uint64
-                    minimum: 0.0
-                    type: integer
-                  notAfter:
-                    description: |-
-                      RFC3339 `notAfter` of the current CA cert, which is the signing
-                      cert.
-                    type: string
-                  rotationPhase:
-                    description: |-
-                      Staged key-replacement phase. One of `idle`, `key-replace-trust`,
-                      and `key-replace-promote`.
-                    nullable: true
-                    type: string
-                  trustAnchors:
-                    description: Number of CA certs in the trust bundle now.
-                    format: uint
-                    minimum: 0.0
-                    nullable: true
-                    type: integer
-                required:
-                - generated
-                - notAfter
-                type: object
-              clusterCa:
-                description: |-
-                  Status surface for one CA.
-
-                  The reconciler fills it in from the parsed CA cert and the CRD spec.
-                nullable: true
-                properties:
-                  certGeneration:
-                    default: 0
-                    description: |-
-                      Monotonic generation of the active signing cert. It increments on
-                      a same-key renewal and on a key promotion.
-                    format: uint64
-                    minimum: 0.0
-                    type: integer
-                  generated:
-                    description: |-
-                      `true` when the operator generated this CA, that is, when
-                      `generateCertificateAuthority == true`. `false` for a BYO CA.
-                    type: boolean
-                  keyGeneration:
-                    default: 0
-                    description: |-
-                      Monotonic generation of the active signing key. It increments only
-                      on a key replacement.
-                    format: uint64
-                    minimum: 0.0
-                    type: integer
-                  notAfter:
-                    description: |-
-                      RFC3339 `notAfter` of the current CA cert, which is the signing
-                      cert.
-                    type: string
-                  rotationPhase:
-                    description: |-
-                      Staged key-replacement phase. One of `idle`, `key-replace-trust`,
-                      and `key-replace-promote`.
-                    nullable: true
-                    type: string
-                  trustAnchors:
-                    description: Number of CA certs in the trust bundle now.
-                    format: uint
-                    minimum: 0.0
-                    nullable: true
-                    type: integer
-                required:
-                - generated
-                - notAfter
-                type: object
-              conditions:
-                default: []
-                description: |-
-                  Standard Kubernetes-style condition list. It shows `Ready`,
-                  `ListenersValid`, and `ListenersReady`.
-                items:
+                  type: array
+                logging:
+                  description: |-
+                    Broker log configuration. When `None`, the brokers use their built-in
+                    default `RUST_LOG` filter. When `Some`, the operator composes an inline
+                    `tracing` env-filter string, or reads an external one. The operator
+                    then renders it into the broker `ConfigMap` under the `rust.log` key,
+                    wires it into the `RUST_LOG` env of each broker pod, and rolls the
+                    cluster on a change through the config hash.
+                  nullable: true
                   properties:
-                    lastTransitionTime:
-                      description: RFC3339 timestamp.
-                      type: string
-                    message:
-                      description: Human-readable message.
-                      type: string
-                    reason:
-                      description: CamelCase machine reason.
-                      type: string
-                    status:
-                      description: '`True`, `False`, or `Unknown`.'
-                      type: string
+                    loggers:
+                      additionalProperties:
+                        type: string
+                      description: |-
+                        Inline loggers, from tracing target to level. The key `root` is
+                        case-insensitive and sets the global default level as a bare
+                        env-filter directive. Any other key is a tracing target, that is, a
+                        Rust module path such as `krabka_broker`. The levels are
+                        `trace|debug|info|warn|error|off`, and they are case-insensitive.
+                        `fatal` is accepted as an alias for `error`.
+                      type: object
                     type:
-                      description: For example, `Ready`.
-                      type: string
-                  required:
-                  - lastTransitionTime
-                  - message
-                  - reason
-                  - status
-                  - type
-                  type: object
-                type: array
-              kafkaVersion:
-                description: Echo of `spec.kafkaVersion`, for observability.
-                nullable: true
-                type: string
-              listeners:
-                description: |-
-                  Per-listener resolved addresses. The operator fills them in once
-                  `ListenersReady=True`.
-                items:
-                  properties:
-                    addresses:
-                      default: []
-                      items:
-                        properties:
-                          host:
-                            type: string
-                          port:
-                            format: int32
-                            type: integer
-                        required:
-                        - host
-                        - port
-                        type: object
-                      type: array
-                    bootstrapServers:
-                      description: '`host:port` that clients put in `bootstrap.servers`.'
-                      type: string
-                    name:
-                      type: string
-                    type:
+                      default: inline
                       enum:
-                      - internal
-                      - nodeport
-                      - loadbalancer
-                      - ingress
-                      - route
+                        - inline
+                        - external
+                      type: string
+                    valueFrom:
+                      description: |-
+                        External logging source. This field is required when
+                        `type: external`. The operator uses the value of the referenced
+                        `ConfigMap` key verbatim as the broker's `RUST_LOG` filter.
+                      nullable: true
+                      properties:
+                        configMapKeyRef:
+                          properties:
+                            key:
+                              type: string
+                            name:
+                              type: string
+                          required:
+                            - key
+                            - name
+                          type: object
+                      required:
+                        - configMapKeyRef
+                      type: object
+                  type: object
+                metadataVersion:
+                  description: |-
+                    `KRaft` metadata version, the runtime analog of
+                    `inter.broker.protocol.version`. When unset, it tracks the
+                    `major.minor` of `kafkaVersion`. When set, it pins the metadata version
+                    for a two-step upgrade or an online downgrade. The operator validates
+                    it against `kafkaVersion`; changes on an existing cluster are finalized
+                    through `UpdateFeatures`, with safe-downgrade semantics for a lower
+                    target. Rejections surface `KafkaVersionValid=False` and leave
+                    `status.metadataVersion` unchanged.
+                  nullable: true
+                  type: string
+                metricsConfig:
+                  description: |-
+                    Prometheus scrape configuration. When `None`, the brokers do not bind
+                    `/metrics`, and the operator renders no `PodMonitor` and no
+                    `ServiceMonitor`. When `Some`, the broker `StatefulSet` gains a
+                    `metrics` container port on TCP 9404, and the operator SSA-applies the
+                    resources that `pod_monitor` and `service_monitor` request.
+                  nullable: true
+                  properties:
+                    podMonitor:
+                      nullable: true
+                      properties:
+                        interval:
+                          nullable: true
+                          type: string
+                        labels:
+                          additionalProperties:
+                            type: string
+                          type: object
+                        scrapeTimeout:
+                          nullable: true
+                          type: string
+                      type: object
+                    serviceMonitor:
+                      nullable: true
+                      properties:
+                        interval:
+                          nullable: true
+                          type: string
+                        labels:
+                          additionalProperties:
+                            type: string
+                          type: object
+                        scrapeTimeout:
+                          nullable: true
+                          type: string
+                      type: object
+                    type:
+                      default: prometheus
+                      enum:
+                        - prometheus
+                      type: string
+                  type: object
+                networkPolicy:
+                  description: |-
+                    Opt-in `NetworkPolicy` generation. When `None`, the operator generates
+                    no `NetworkPolicy`. When `Some`, even `{}`, the operator renders a
+                    cluster-level `NetworkPolicy` that gates ingress to the broker and
+                    controller pods.
+                  nullable: true
+                  type: object
+                tieredStorage:
+                  description: |-
+                    KIP-405: cluster-wide tiered storage. When `Some`, every broker pod
+                    boots with the local-tier RSM enabled, with an `emptyDir` mounted at
+                    `/var/lib/crabka/remote`, which is the broker's
+                    `remote_log_storage_dir`, and with `[remote_storage]` rendered in the
+                    broker TOML. The per-topic enablement does not change. It stays
+                    `KafkaTopic.spec.config["remote.storage.enable"] = "true"`.
+
+                    With the `emptyDir` default and `InmemoryRemoteLogMetadataManager` as
+                    the only RLMM, tier data does not survive pod restarts. PVC support
+                    pairs with the production RLMM.
+                  nullable: true
+                  properties:
+                    gcs:
+                      description: |-
+                        GCS-backend tuning. It is required when `kind == Gcs`, and it must be
+                        absent in any other case. The struct has the same shape as
+                        `krabka_remote_storage::GcsConfig`. The operator renders the
+                        non-credential fields verbatim into the broker TOML's
+                        `[remote_storage.gcs]` block. S3 uses env-var credentials, but GCS does
+                        not. The operator mounts an explicit service-account JSON key as a FILE
+                        on the broker pod and gives it to the broker as `service_account_path`
+                        in the TOML. Unset credentials select keyless Workload Identity or
+                        ADC.
+                      nullable: true
+                      properties:
+                        allowHttp:
+                          description: |-
+                            Allow plaintext HTTP. It is off by default. Turn it on for GCS
+                            emulators that run without TLS. Real GCS never needs it.
+                          type: boolean
+                        bucket:
+                          description: GCS bucket name. Required.
+                          type: string
+                        credentials:
+                          description: |-
+                            Optional explicit service-account credentials. When None, the broker
+                            uses Workload Identity or ADC, which is the keyless GKE path.
+                          nullable: true
+                          properties:
+                            serviceAccountKey:
+                              description: Reference to the Secret holding the service-account JSON key.
+                              properties:
+                                key:
+                                  description: Key within the Secret's `data`. Defaults to `secret-key`.
+                                  nullable: true
+                                  type: string
+                                name:
+                                  description: Secret name in the same namespace as the `Kafka` CR.
+                                  type: string
+                              required:
+                                - name
+                              type: object
+                          required:
+                            - serviceAccountKey
+                          type: object
+                        endpoint:
+                          description: |-
+                            Optional custom GCS API base URL, for example for emulators and
+                            fakes. When `None`, the broker uses the standard Google Cloud Storage
+                            endpoint.
+                          nullable: true
+                          type: string
+                        multipartChunkSize:
+                          description: |-
+                            Override the per-part size for multipart uploads in bytes. When unset,
+                            the broker uses
+                            `krabka_remote_storage::DEFAULT_MULTIPART_CHUNK_SIZE`, which is
+                            16 MiB.
+                          format: uint64
+                          minimum: 0.0
+                          nullable: true
+                          type: integer
+                        multipartThreshold:
+                          description: |-
+                            Override the single-PUT and multipart cutoff in bytes. When unset, the
+                            broker uses `krabka_remote_storage::DEFAULT_MULTIPART_THRESHOLD`, which
+                            is 100 MiB. Lower it in tests to exercise the multipart path on small
+                            fixtures.
+                          format: uint64
+                          minimum: 0.0
+                          nullable: true
+                          type: integer
+                        prefix:
+                          description: |-
+                            Optional key prefix inside the bucket. It lets more than one Crabka
+                            cluster share a bucket without a collision.
+                          nullable: true
+                          type: string
+                      required:
+                        - bucket
+                      type: object
+                    metadataManager:
+                      description: |-
+                        KIP-405: pick the `RemoteLogMetadataManager` that the broker pods run.
+                        When the field is absent, or when it is `type: Topic`, the broker
+                        activates the durable
+                        `krabka_remote_storage_topic::TopicBasedRemoteLogMetadataManager`
+                        against the internal `__remote_log_metadata` topic. Tier-segment
+                        metadata then survives pod restarts and is consistent across the
+                        brokers in the cluster. Only an explicit `type: InMemory` selects the
+                        in-memory fixture, which is for test and dev only.
+                      nullable: true
+                      properties:
+                        topic:
+                          description: |-
+                            Topic-backed tuning. It is optional when `kind == Topic`, and the
+                            broker fills the defaults for the bootstrap and topic parameters. It
+                            must be absent in any other case.
+                          nullable: true
+                          properties:
+                            bootstrap:
+                              description: |-
+                                `host:port` that the broker pod dials to reach its own listener, so
+                                that it can publish and consume `__remote_log_metadata`. This is
+                                usually the pod's loopback inter-broker listener, for example
+                                `127.0.0.1:9094`.
+                              type: string
+                            eventQueueCapacity:
+                              description: Capacity of the shared metadata-event delivery queue.
+                              format: uint
+                              minimum: 1.0
+                              nullable: true
+                              type: integer
+                            fetchMaxBytes:
+                              description: Maximum bytes returned by each per-partition metadata fetch.
+                              nullable: true
+                              type: string
+                            fetchMaxWait:
+                              description: Maximum wait for each per-partition metadata fetch.
+                              nullable: true
+                              type: string
+                            fetchRetryBackoff:
+                              description: Backoff after a failed metadata fetch.
+                              nullable: true
+                              type: string
+                            numPartitions:
+                              description: |-
+                                Partition count for `__remote_log_metadata` on the first creation.
+                                Defaults to 50, which is the Kafka
+                                `remote.log.metadata.topic.num.partitions`.
+                              format: int32
+                              nullable: true
+                              type: integer
+                            replication:
+                              description: |-
+                                Replication factor for `__remote_log_metadata` on the first creation.
+                                Defaults to 3, which is the Kafka
+                                `remote.log.metadata.topic.replication.factor`.
+                              format: int32
+                              nullable: true
+                              type: integer
+                            snapshotInterval:
+                              description: RLMM cache snapshot cadence.
+                              nullable: true
+                              type: string
+                            topicCreateTimeout:
+                              description: Timeout for provisioning each internal metadata topic.
+                              nullable: true
+                              type: string
+                          required:
+                            - bootstrap
+                          type: object
+                        type:
+                          description: Implementation selector.
+                          enum:
+                            - InMemory
+                            - Topic
+                          type: string
+                      required:
+                        - type
+                      type: object
+                    persistence:
+                      description: |-
+                        KIP-405: durable storage for the local-tier directory. It is valid
+                        only with `type=Local`. When it is absent, which is the default, the
+                        operator renders an `emptyDir` for `tier-storage`. When `Some`, the
+                        operator renders a `volumeClaimTemplate` of the configured size and
+                        class, so tier data survives pod restarts. Together with the
+                        topic-backed RLMM, this closes the "tier data is lost on pod restart"
+                        caveat.
+                      nullable: true
+                      properties:
+                        class:
+                          description: Storage class name. `None` means the cluster default.
+                          nullable: true
+                          type: string
+                        deleteClaim:
+                          default: false
+                          description: |-
+                            `true` gives
+                            `persistentVolumeClaimRetentionPolicy.whenDeleted: Delete`. It must
+                            match the parent `KafkaNodePool.spec.storage.deleteClaim` when both
+                            PVCs are present, because K8s `StatefulSets` have one set-wide
+                            retention policy and no per-template override. The operator validates
+                            this at reconcile time, and a mismatch surfaces as
+                            `TieredStorageInvalid`.
+                          type: boolean
+                        size:
+                          description: |-
+                            K8s `Quantity`, for example `"50Gi"` or `"500Mi"`. It must be
+                            non-empty. The Kubernetes API server validates the resource-quantity
+                            form at SSA time.
+                          type: string
+                      required:
+                        - size
+                      type: object
+                    s3:
+                      description: |-
+                        S3-backend tuning. It is required when `kind == S3`, and it must be
+                        absent in any other case. The struct has the same shape as
+                        `krabka_remote_storage::S3Config`. The operator renders the
+                        non-credential fields verbatim into the broker TOML's
+                        `[remote_storage.s3]` block. The credentials come from Kubernetes
+                        Secrets, and the operator injects them as the broker-pod env vars
+                        `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
+                      nullable: true
+                      properties:
+                        allowHttp:
+                          description: |-
+                            Allow plaintext HTTP. It is off by default. Turn it on for a `MinIO`
+                            that runs without TLS. AWS S3 never needs it.
+                          type: boolean
+                        bucket:
+                          description: S3 bucket name. Required.
+                          type: string
+                        credentials:
+                          description: |-
+                            Optional explicit credentials. When `None`, the broker falls back to
+                            the AWS credential chain, such as IRSA on EKS or an instance profile on
+                            EC2.
+                          nullable: true
+                          properties:
+                            accessKeyId:
+                              description: Reference to the Secret holding the `AWS_ACCESS_KEY_ID` value.
+                              properties:
+                                key:
+                                  description: Key within the Secret's `data`. Defaults to `secret-key`.
+                                  nullable: true
+                                  type: string
+                                name:
+                                  description: Secret name in the same namespace as the `Kafka` CR.
+                                  type: string
+                              required:
+                                - name
+                              type: object
+                            secretAccessKey:
+                              description: Reference to the Secret holding the `AWS_SECRET_ACCESS_KEY` value.
+                              properties:
+                                key:
+                                  description: Key within the Secret's `data`. Defaults to `secret-key`.
+                                  nullable: true
+                                  type: string
+                                name:
+                                  description: Secret name in the same namespace as the `Kafka` CR.
+                                  type: string
+                              required:
+                                - name
+                              type: object
+                          required:
+                            - accessKeyId
+                            - secretAccessKey
+                          type: object
+                        endpoint:
+                          description: |-
+                            Optional custom endpoint URL, for example `http://minio:9000` for
+                            `MinIO`, or `https://<account>.r2.cloudflarestorage.com` for Cloudflare
+                            R2. When `None`, the broker uses the AWS S3 endpoint for the configured
+                            region.
+                          nullable: true
+                          type: string
+                        multipartChunkSize:
+                          description: |-
+                            Override the per-part size for multipart uploads in bytes. When unset,
+                            the broker uses
+                            `krabka_remote_storage::DEFAULT_MULTIPART_CHUNK_SIZE`, which is
+                            16 MiB.
+                          format: uint64
+                          minimum: 0.0
+                          nullable: true
+                          type: integer
+                        multipartThreshold:
+                          description: |-
+                            Override the single-PUT and multipart cutoff in bytes. When unset, the
+                            broker uses `krabka_remote_storage::DEFAULT_MULTIPART_THRESHOLD`, which
+                            is 100 MiB. Lower it in tests to exercise the multipart path on small
+                            fixtures.
+                          format: uint64
+                          minimum: 0.0
+                          nullable: true
+                          type: integer
+                        prefix:
+                          description: |-
+                            Optional key prefix inside the bucket. It lets more than one Crabka
+                            cluster share a bucket without a collision.
+                          nullable: true
+                          type: string
+                        region:
+                          description: |-
+                            AWS region. It is required even for the non-AWS endpoints `MinIO` and
+                            R2, because the `AmazonS3Builder` of `object_store` rejects an empty
+                            region.
+                          type: string
+                      required:
+                        - bucket
+                        - region
+                      type: object
+                    type:
+                      description: Backend kind selector.
+                      enum:
+                        - Local
+                        - S3
+                        - Gcs
                       type: string
                   required:
-                  - bootstrapServers
-                  - name
-                  - type
+                    - type
                   type: object
-                type: array
-              metadataVersion:
-                description: |-
-                  The operator-finalized metadata version. On an existing cluster it
-                  advances only after `UpdateFeatures` accepts the requested level.
-                nullable: true
-                type: string
-              readyReplicas:
-                description: The same value as `StatefulSet.status.readyReplicas`.
-                format: int32
-                nullable: true
-                type: integer
-              replicas:
-                description: The same value as `StatefulSet.status.replicas`.
-                format: int32
-                nullable: true
-                type: integer
-            type: object
-        required:
-        - spec
-        title: Kafka
-        type: object
-    served: true
-    storage: true
-    subresources:
-      status: {}
+                tracing:
+                  description: |-
+                    Distributed-tracing wiring for the broker pods. When `Some`, the
+                    operator renders the matching `KRABKA_OTLP_*` env vars onto every
+                    broker pod. The broker's telemetry pipeline reads them with
+                    `TelemetryConfig::from_env` and installs the OTLP tracer at startup.
+                    When `None`, the operator emits no OTLP env vars, and the broker leaves
+                    tracing off. That is the default.
+                  nullable: true
+                  properties:
+                    otlp:
+                      description: OTLP-backend tuning. Required when `kind == Otlp`.
+                      nullable: true
+                      properties:
+                        endpoint:
+                          description: |-
+                            Required. OTLP collector endpoint in the form `scheme://host:port`.
+                            The operator renders it as `KRABKA_OTLP_ENDPOINT`. A set field also
+                            sets `KRABKA_OTLP_ENABLED=true`.
+                          type: string
+                        protocol:
+                          description: |-
+                            OTLP wire protocol selector. It has the same shape as the broker's
+                            internal `OtlpProtocol` enum and the `OTEL_EXPORTER_OTLP_PROTOCOL` spec
+                            values.
+                          enum:
+                            - grpc
+                            - http_protobuf
+                          nullable: true
+                          type: string
+                        sampleRatio:
+                          description: |-
+                            Optional sampling ratio in `[0.0, 1.0]`. The operator renders it as
+                            `KRABKA_OTLP_SAMPLE_RATIO`. An unset field leaves the binary's own
+                            default of `1.0`, which samples every trace.
+                          format: double
+                          nullable: true
+                          type: number
+                        serviceName:
+                          description: |-
+                            Optional `service.name` resource attribute. The operator renders it as
+                            `OTEL_SERVICE_NAME`. An unset field leaves the binary's own name, which
+                            is `"krabka-broker"` for `Kafka` and `"krabka-gres"` for `Gres`.
+                          nullable: true
+                          type: string
+                        timeout:
+                          description: |-
+                            Optional export timeout. The operator renders it as
+                            `KRABKA_OTLP_TIMEOUT`. An unset field leaves the binary's own default
+                            of `10s`.
+                          nullable: true
+                          type: string
+                      required:
+                        - endpoint
+                      type: object
+                    type:
+                      description: Tracing backend selector.
+                      enum:
+                        - Otlp
+                      type: string
+                  required:
+                    - type
+                  type: object
+              required:
+                - kafkaVersion
+              type: object
+            status:
+              nullable: true
+              properties:
+                clientsCa:
+                  description: |-
+                    Status surface for one CA.
+
+                    The reconciler fills it in from the parsed CA cert and the CRD spec.
+                  nullable: true
+                  properties:
+                    certGeneration:
+                      default: 0
+                      description: |-
+                        Monotonic generation of the active signing cert. It increments on
+                        a same-key renewal and on a key promotion.
+                      format: uint64
+                      minimum: 0.0
+                      type: integer
+                    generated:
+                      description: |-
+                        `true` when the operator generated this CA, that is, when
+                        `generateCertificateAuthority == true`. `false` for a BYO CA.
+                      type: boolean
+                    keyGeneration:
+                      default: 0
+                      description: |-
+                        Monotonic generation of the active signing key. It increments only
+                        on a key replacement.
+                      format: uint64
+                      minimum: 0.0
+                      type: integer
+                    notAfter:
+                      description: |-
+                        RFC3339 `notAfter` of the current CA cert, which is the signing
+                        cert.
+                      type: string
+                    rotationPhase:
+                      description: |-
+                        Staged key-replacement phase. One of `idle`, `key-replace-trust`,
+                        and `key-replace-promote`.
+                      nullable: true
+                      type: string
+                    trustAnchors:
+                      description: Number of CA certs in the trust bundle now.
+                      format: uint
+                      minimum: 0.0
+                      nullable: true
+                      type: integer
+                  required:
+                    - generated
+                    - notAfter
+                  type: object
+                clusterCa:
+                  description: |-
+                    Status surface for one CA.
+
+                    The reconciler fills it in from the parsed CA cert and the CRD spec.
+                  nullable: true
+                  properties:
+                    certGeneration:
+                      default: 0
+                      description: |-
+                        Monotonic generation of the active signing cert. It increments on
+                        a same-key renewal and on a key promotion.
+                      format: uint64
+                      minimum: 0.0
+                      type: integer
+                    generated:
+                      description: |-
+                        `true` when the operator generated this CA, that is, when
+                        `generateCertificateAuthority == true`. `false` for a BYO CA.
+                      type: boolean
+                    keyGeneration:
+                      default: 0
+                      description: |-
+                        Monotonic generation of the active signing key. It increments only
+                        on a key replacement.
+                      format: uint64
+                      minimum: 0.0
+                      type: integer
+                    notAfter:
+                      description: |-
+                        RFC3339 `notAfter` of the current CA cert, which is the signing
+                        cert.
+                      type: string
+                    rotationPhase:
+                      description: |-
+                        Staged key-replacement phase. One of `idle`, `key-replace-trust`,
+                        and `key-replace-promote`.
+                      nullable: true
+                      type: string
+                    trustAnchors:
+                      description: Number of CA certs in the trust bundle now.
+                      format: uint
+                      minimum: 0.0
+                      nullable: true
+                      type: integer
+                  required:
+                    - generated
+                    - notAfter
+                  type: object
+                conditions:
+                  default: []
+                  description: |-
+                    Standard Kubernetes-style condition list. It shows `Ready`,
+                    `ListenersValid`, and `ListenersReady`.
+                  items:
+                    properties:
+                      lastTransitionTime:
+                        description: RFC3339 timestamp.
+                        type: string
+                      message:
+                        description: Human-readable message.
+                        type: string
+                      reason:
+                        description: CamelCase machine reason.
+                        type: string
+                      status:
+                        description: "`True`, `False`, or `Unknown`."
+                        type: string
+                      type:
+                        description: For example, `Ready`.
+                        type: string
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    type: object
+                  type: array
+                kafkaVersion:
+                  description: Echo of `spec.kafkaVersion`, for observability.
+                  nullable: true
+                  type: string
+                listeners:
+                  description: |-
+                    Per-listener resolved addresses. The operator fills them in once
+                    `ListenersReady=True`.
+                  items:
+                    properties:
+                      addresses:
+                        default: []
+                        items:
+                          properties:
+                            host:
+                              type: string
+                            port:
+                              format: int32
+                              type: integer
+                          required:
+                            - host
+                            - port
+                          type: object
+                        type: array
+                      bootstrapServers:
+                        description: "`host:port` that clients put in `bootstrap.servers`."
+                        type: string
+                      name:
+                        type: string
+                      type:
+                        enum:
+                          - internal
+                          - nodeport
+                          - loadbalancer
+                          - ingress
+                          - route
+                        type: string
+                    required:
+                      - bootstrapServers
+                      - name
+                      - type
+                    type: object
+                  type: array
+                metadataVersion:
+                  description: |-
+                    The operator-finalized metadata version. On an existing cluster it
+                    advances only after `UpdateFeatures` accepts the requested level.
+                  nullable: true
+                  type: string
+                readyReplicas:
+                  description: The same value as `StatefulSet.status.readyReplicas`.
+                  format: int32
+                  nullable: true
+                  type: integer
+                replicas:
+                  description: The same value as `StatefulSet.status.replicas`.
+                  format: int32
+                  nullable: true
+                  type: integer
+              type: object
+          required:
+            - spec
+          title: Kafka
+          type: object
+      served: true
+      storage: true
+      subresources:
+        status: {}

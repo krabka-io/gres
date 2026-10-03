@@ -7,7 +7,7 @@
 //! 1. an in-process crabka broker and schema registry
 //!    ([`harness::KafkaStack`]),
 //! 2. one registered Avro schema and 3 known records produced to `orders`,
-//! 3. an `crabka_pgexec::SqlEngine` with [`crabka_gres_fdw::KafkaFdw`]
+//! 3. an `krabka_pgexec::SqlEngine` with [`krabka_gres_fdw::KafkaFdw`]
 //!    registered, served over pgwire on an ephemeral port,
 //! 4. a `tokio-postgres` client that runs `CREATE SERVER`, `CREATE USER
 //!    MAPPING`, and `IMPORT FOREIGN SCHEMA`, then `SELECT`s the rows back.
@@ -23,11 +23,11 @@ mod harness;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use crabka_client_producer::Header;
-use crabka_pgexec::SqlEngine;
-use crabka_pgwire::session::SessionConfig;
-use crabka_schema_registry::{ids::SchemaVersion, kafkastore::record::SchemaReference};
 use harness::KafkaStack;
+use krabka_client_producer::Header;
+use krabka_pgexec::SqlEngine;
+use krabka_pgwire::session::SessionConfig;
+use krabka_schema_registry::{ids::SchemaVersion, kafkastore::record::SchemaReference};
 use prost_reflect::prost::Message as _;
 use tokio::net::TcpListener;
 use tokio_postgres::NoTls;
@@ -99,10 +99,10 @@ async fn serve_engine_with_default_bootstrap(default_bootstrap: Option<String>) 
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
     let mut engine = SqlEngine::new();
-    engine.set_foreign_scanner(Arc::new(crabka_gres_fdw::KafkaFdw::with_defaults(
+    engine.set_foreign_scanner(Arc::new(krabka_gres_fdw::KafkaFdw::with_defaults(
         default_bootstrap,
     )));
-    tokio::spawn(crabka_pgwire::server::serve(
+    tokio::spawn(krabka_pgwire::server::serve(
         listener,
         Arc::new(engine),
         Arc::new(SessionConfig::trust()),
@@ -130,11 +130,11 @@ fn avro_frame(schema: &apache_avro::Schema, schema_id: u32, id: i32, total: f64)
     rec.put("id", id);
     rec.put("total", total);
     let body = apache_avro::to_avro_datum(schema, rec).expect("encode avro datum");
-    crabka_schema_serde::wire::encode(schema_id, &body)
+    krabka_schema_serde::wire::encode(schema_id, &body)
 }
 
 fn protobuf_frame(schema_id: u32, id: i64, label: &str, active: bool) -> Bytes {
-    let descriptor = crabka_gres_fdw::decode::build_message_descriptor(
+    let descriptor = krabka_gres_fdw::decode::build_message_descriptor(
         PROTO_EVENTS_SCHEMA,
         Some("demo.ProtoEvent"),
     )
@@ -149,11 +149,11 @@ fn protobuf_frame(schema_id: u32, id: i64, label: &str, active: bool) -> Bytes {
     message
         .try_set_field_by_name("active", prost_reflect::Value::Bool(active))
         .expect("set active");
-    crabka_schema_serde::wire::encode_protobuf(schema_id, &[1], &message.encode_to_vec())
+    krabka_schema_serde::wire::encode_protobuf(schema_id, &[1], &message.encode_to_vec())
 }
 
 fn protobuf_order_frame(schema_id: u32) -> Bytes {
-    let descriptor = crabka_gres_fdw::decode::build_message_descriptor_with_references(
+    let descriptor = krabka_gres_fdw::decode::build_message_descriptor_with_references(
         PROTO_ORDER_SCHEMA,
         &std::collections::HashMap::from([("money.proto".to_string(), MONEY_SCHEMA.to_string())]),
         Some("demo.ProtoOrder"),
@@ -166,7 +166,7 @@ fn protobuf_order_frame(schema_id: u32) -> Bytes {
     message
         .try_set_field_by_name("currency", prost_reflect::Value::EnumNumber(1))
         .expect("set currency");
-    crabka_schema_serde::wire::encode_protobuf(schema_id, &[0], &message.encode_to_vec())
+    krabka_schema_serde::wire::encode_protobuf(schema_id, &[0], &message.encode_to_vec())
 }
 
 /// The whole round trip. `multi_thread` is necessary: the FDW scan drives the
@@ -192,7 +192,7 @@ async fn kafka_fdw_roundtrip_avro_and_raw_fallback() {
         .produce(
             "json_events",
             0,
-            crabka_schema_serde::wire::encode(json_schema_id, br#"{"id":17,"label":"json row"}"#),
+            krabka_schema_serde::wire::encode(json_schema_id, br#"{"id":17,"label":"json row"}"#),
         )
         .await;
     assert_eq!(json_offset, 0, "single JSON record lands at offset 0");
@@ -286,7 +286,7 @@ async fn kafka_fdw_roundtrip_avro_and_raw_fallback() {
 
     client
         .batch_execute(&format!(
-            "CREATE SERVER s FOREIGN DATA WRAPPER crabka_gres_fdw \
+            "CREATE SERVER s FOREIGN DATA WRAPPER krabka_gres_fdw \
              OPTIONS (bootstrap '{}', registry_url '{}')",
             stack.bootstrap(),
             stack.registry_url(),
@@ -432,7 +432,7 @@ async fn kafka_fdw_roundtrip_avro_and_raw_fallback() {
             .await;
     default_client
         .batch_execute(&format!(
-            "CREATE SERVER default_s FOREIGN DATA WRAPPER crabka_gres_fdw \
+            "CREATE SERVER default_s FOREIGN DATA WRAPPER krabka_gres_fdw \
              OPTIONS (registry_url '{}')",
             stack.registry_url(),
         ))
@@ -457,7 +457,7 @@ async fn kafka_fdw_roundtrip_avro_and_raw_fallback() {
         connect(serve_engine_with_default_bootstrap(Some("127.0.0.1:1".to_string())).await).await;
     override_client
         .batch_execute(&format!(
-            "CREATE SERVER override_s FOREIGN DATA WRAPPER crabka_gres_fdw \
+            "CREATE SERVER override_s FOREIGN DATA WRAPPER krabka_gres_fdw \
              OPTIONS (bootstrap '{}', registry_url '{}')",
             stack.bootstrap(),
             stack.registry_url(),

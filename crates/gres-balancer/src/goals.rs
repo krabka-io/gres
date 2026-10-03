@@ -5,8 +5,8 @@ use std::{
     collections::{BTreeMap, HashMap},
 };
 
-use crabka_gres_control::RangeBoundary;
-use crabka_units::{
+use krabka_gres_control::RangeBoundary;
+use krabka_units::{
     ByteSize, Frequency, Ratio,
     convert::{ByteSizeExt as _, FrequencyExt as _},
     gibibytes, mebibytes, percent,
@@ -32,13 +32,13 @@ pub enum GoalPriority {
 #[serde(rename_all = "camelCase")]
 pub struct GoalContext {
     /// Split any range stored above this size.
-    #[serde(with = "crabka_units::serde_units::human::byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::byte_size")]
     pub size_ceiling: ByteSize,
     /// Merge adjacent ranges whose combined size stays below this floor.
-    #[serde(with = "crabka_units::serde_units::human::byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::byte_size")]
     pub merge_floor: ByteSize,
     /// Leave load skew alone while it stays within this margin.
-    #[serde(with = "crabka_units::serde_units::human::ratio")]
+    #[serde(with = "krabka_units::serde_units::human::ratio")]
     pub load_skew_hysteresis: Ratio,
     pub max_ranges_per_compute: Option<usize>,
     pub max_operations: usize,

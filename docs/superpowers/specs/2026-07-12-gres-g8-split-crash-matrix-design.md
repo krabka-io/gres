@@ -26,33 +26,33 @@ Resuming --journal CAS--> Completed
 
 Each side-effect/receipt edge and each following journal/tenant/sidecar edge yields a distinct pre/post crash boundary. The Retiring journal-CAS post-state is already the pre-delete state, so it is represented once as `retiring_before_delete`; inventing a second case would require a forbidden non-durable scheduling hook. The exact cases and external predicates are:
 
-| Family | Case | Required pre-kill external predicate |
-|---|---|---|
-| source/restore | `initiated_before_running_cas` | journal `Initiated`; sealed Split plan; tenant current layout; no control receipt |
-| source/restore | `checkpoint_receipt_before_journal_cas` | journal `Running` with empty evidence; authenticated completed `ForceCheckpoint` receipt exists |
-| source/restore | `checkpointed_after_journal_cas` | journal `Checkpointed`; manifest and covered offset durable; pause receipt absent |
-| source/restore | `pause_receipt_before_journal_cas` | journal `Checkpointed`; completed pause receipt has barrier at or beyond covered offset; journal barrier absent |
-| source/restore | `paused_before_stage` | journal `Paused`; barrier durable; tail/marker evidence absent; stage receipt absent |
-| source/restore | `stage_receipt_before_journal_cas` | journal `Paused` without tail; completed stage receipt exists; authenticated replay returns identical tail digest; r2/r3 staged but not serving |
-| source/restore | `staged_after_journal_cas` | journal `Paused`; tail digest durable; marker receipt absent |
-| source/restore | `marker_claim_receipt_before_journal_cas` | journal `Paused` with tail but no marker digest; completed marker receipt exists; captured source/left/right partitions are exact and both distinct successor claims exist |
-| source/restore | `restored_after_journal_cas` | journal `Restored`; complete transfer evidence; tenant current layout; prologue receipt absent |
-| source/restore | `prologue_receipt_before_journal_cas` | journal `Restored`; completed prologue receipt exists; authenticated status says r2 and r3 generation 1 are serving on distinct endpoints; tenant still current layout |
-| source/restore | `activated_after_journal_cas` | journal `Activated`; r2/r3 status serving; tenant current layout; retirement sidecar absent |
-| publication | `tenant_cas_before_journal_cas` | journal `Activated`; tenant exact target `[r0,r2,r3]` at sealed version + 1; Parking sidecar exact; journal not LayoutPublished |
-| publication | `layout_published_after_journal_cas` | journal `LayoutPublished`; target tenant/sidecar exact; predecessor topic present |
-| retirement/resume | `retiring_before_delete` | journal `Retiring`; target layout; sidecar `Parking`; predecessor topic present; no retire receipt |
-| retirement/resume | `delete_success_before_sidecar_cas` | journal `Retiring`; sidecar still `Parking`; predecessor topic absent; counting admin records exactly one successful predecessor-only delete |
-| retirement/resume | `parked_after_sidecar_cas` | journal `Retiring`; sidecar `Parked`; predecessor topic absent; no retire receipt |
-| retirement/resume | `retire_receipt_before_journal_cas` | journal `Retiring`; sidecar `Parked`; durable authenticated retire receipt exists; journal not Resuming |
-| retirement/resume | `resuming_after_journal_cas` | journal `Resuming`; durable retire receipt; predecessor topic absent; source parked |
-| retirement/resume | `completed_after_journal_cas` | journal `Completed`; all terminal invariants true; SIGKILL/restart remains a no-op and leaves no operation-owned child process |
+| Family            | Case                                      | Required pre-kill external predicate                                                                                                                                       |
+| ----------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| source/restore    | `initiated_before_running_cas`            | journal `Initiated`; sealed Split plan; tenant current layout; no control receipt                                                                                          |
+| source/restore    | `checkpoint_receipt_before_journal_cas`   | journal `Running` with empty evidence; authenticated completed `ForceCheckpoint` receipt exists                                                                            |
+| source/restore    | `checkpointed_after_journal_cas`          | journal `Checkpointed`; manifest and covered offset durable; pause receipt absent                                                                                          |
+| source/restore    | `pause_receipt_before_journal_cas`        | journal `Checkpointed`; completed pause receipt has barrier at or beyond covered offset; journal barrier absent                                                            |
+| source/restore    | `paused_before_stage`                     | journal `Paused`; barrier durable; tail/marker evidence absent; stage receipt absent                                                                                       |
+| source/restore    | `stage_receipt_before_journal_cas`        | journal `Paused` without tail; completed stage receipt exists; authenticated replay returns identical tail digest; r2/r3 staged but not serving                            |
+| source/restore    | `staged_after_journal_cas`                | journal `Paused`; tail digest durable; marker receipt absent                                                                                                               |
+| source/restore    | `marker_claim_receipt_before_journal_cas` | journal `Paused` with tail but no marker digest; completed marker receipt exists; captured source/left/right partitions are exact and both distinct successor claims exist |
+| source/restore    | `restored_after_journal_cas`              | journal `Restored`; complete transfer evidence; tenant current layout; prologue receipt absent                                                                             |
+| source/restore    | `prologue_receipt_before_journal_cas`     | journal `Restored`; completed prologue receipt exists; authenticated status says r2 and r3 generation 1 are serving on distinct endpoints; tenant still current layout     |
+| source/restore    | `activated_after_journal_cas`             | journal `Activated`; r2/r3 status serving; tenant current layout; retirement sidecar absent                                                                                |
+| publication       | `tenant_cas_before_journal_cas`           | journal `Activated`; tenant exact target `[r0,r2,r3]` at sealed version + 1; Parking sidecar exact; journal not LayoutPublished                                            |
+| publication       | `layout_published_after_journal_cas`      | journal `LayoutPublished`; target tenant/sidecar exact; predecessor topic present                                                                                          |
+| retirement/resume | `retiring_before_delete`                  | journal `Retiring`; target layout; sidecar `Parking`; predecessor topic present; no retire receipt                                                                         |
+| retirement/resume | `delete_success_before_sidecar_cas`       | journal `Retiring`; sidecar still `Parking`; predecessor topic absent; counting admin records exactly one successful predecessor-only delete                               |
+| retirement/resume | `parked_after_sidecar_cas`                | journal `Retiring`; sidecar `Parked`; predecessor topic absent; no retire receipt                                                                                          |
+| retirement/resume | `retire_receipt_before_journal_cas`       | journal `Retiring`; sidecar `Parked`; durable authenticated retire receipt exists; journal not Resuming                                                                    |
+| retirement/resume | `resuming_after_journal_cas`              | journal `Resuming`; durable retire receipt; predecessor topic absent; source parked                                                                                        |
+| retirement/resume | `completed_after_journal_cas`             | journal `Completed`; all terminal invariants true; SIGKILL/restart remains a no-op and leaves no operation-owned child process                                             |
 
 The family scripts contain these literal expected name sets. Validation fails on a missing, duplicate, extra, malformed, or wrong-family evidence file.
 
 ## Harness architecture
 
-Add a Split-specific `SplitKillPoint`; do not overload Move's `SourceKillPoint`. Each variant owns its exact predicate, expected pre-kill durable evidence, restart hosted ranges, and maximum pause/operation bound. A single exact test reads `CRABKA_G8_SPLIT_KILL_POINT`, creates unique tenant/operation/sentinel identities, starts the real cluster and continuous workload, initiates Split through the CLI, and drives production reconciliation.
+Add a Split-specific `SplitKillPoint`; do not overload Move's `SourceKillPoint`. Each variant owns its exact predicate, expected pre-kill durable evidence, restart hosted ranges, and maximum pause/operation bound. A single exact test reads `KRABKA_G8_SPLIT_KILL_POINT`, creates unique tenant/operation/sentinel identities, starts the real cluster and continuous workload, initiates Split through the CLI, and drives production reconciliation.
 
 The mutation-client wrapper records authenticated requests and responses for checkpoint, pause, stage, marker/claim, prologue, status, and retire operations. Receipt probes replay the exact authorized request and may only observe the durable response; they never synthesize state. The counting retirement admin records requested topics, successful deletes, injected post-delete ambiguity, and rejects unrelated deletion.
 

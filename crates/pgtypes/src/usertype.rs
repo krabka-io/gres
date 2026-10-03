@@ -520,7 +520,7 @@ pub const USER_TYPE_DEFAULT_SCHEMA: &str = "public";
 /// [`CatalogTypes`] rather than in a `static` of its own.
 ///
 /// There is deliberately no oid counter here. Oids are allocated by the
-/// catalog that will persist them (`crabka_pgcatalog::next_user_type_oid`,
+/// catalog that will persist them (`krabka_pgcatalog::next_user_type_oid`,
 /// from a durable per-catalog KV counter) and only ever *published* here. A
 /// second counter in this process would be unreconcilable with that one rather
 /// than merely redundant: oids are written into rows and onto the wire, so two
@@ -1154,7 +1154,7 @@ mod tests {
     }
 
     /// The stride the catalog allocates user-type oids at
-    /// (`crabka_pgcatalog`'s `USER_TYPE_OID_STRIDE`). Restated here because
+    /// (`krabka_pgcatalog`'s `USER_TYPE_OID_STRIDE`). Restated here because
     /// this module derives oids *inside* that stride and nothing in it
     /// allocates; see [`derived_oids_stay_inside_the_catalog_oid_stride`].
     const CATALOG_OID_STRIDE: u32 = 4;

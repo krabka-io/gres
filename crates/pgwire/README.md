@@ -1,6 +1,6 @@
-# crabka-pgwire
+# krabka-pgwire
 
-[![crates.io](https://img.shields.io/crates/v/crabka-pgwire.svg)](https://crates.io/crates/crabka-pgwire)
+[![crates.io](https://img.shields.io/crates/v/krabka-pgwire.svg)](https://crates.io/crates/krabka-pgwire)
 PostgreSQL v3 wire-protocol server: simple and extended query protocols, SCRAM-SHA-256, TLS, and CancelRequest.
 
 Part of [Crabka](https://github.com/robot-head/crabka)'s Chapter Gres. Chapter Gres

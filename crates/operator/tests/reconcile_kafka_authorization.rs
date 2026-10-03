@@ -13,11 +13,11 @@
 use std::sync::Arc;
 
 use assert2::assert;
-use crabka_operator::{
+use http::Method;
+use krabka_operator::{
     controller::kafka::reconcile,
     crd::{Authorization, Kafka, KafkaSpec, OpaAuthorization, SimpleAuthorization},
 };
-use http::Method;
 
 #[path = "shared/mod.rs"]
 mod shared;
@@ -131,7 +131,7 @@ async fn kafka_with_opa_authorization_renders_correct_broker_toml() {
     // Round-trip parse through the broker's own FileConfig — sanity check
     // that the rendered TOML is structurally valid (matches the broker's
     // `deny_unknown_fields` schema).
-    let parsed: crabka_broker::file_config::FileConfig =
+    let parsed: krabka_broker::file_config::FileConfig =
         toml::from_str(&toml_str).expect("broker-0.toml must parse as FileConfig");
     let a = parsed
         .authorization
@@ -182,7 +182,7 @@ async fn kafka_with_simple_authorization_super_users_round_trip() {
     }
 
     // Round-trip parse for structural validity.
-    let parsed: crabka_broker::file_config::FileConfig =
+    let parsed: krabka_broker::file_config::FileConfig =
         toml::from_str(&toml_str).expect("broker-0.toml must parse as FileConfig");
     let a = parsed
         .authorization

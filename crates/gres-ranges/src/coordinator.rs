@@ -485,7 +485,7 @@ mod tests {
     };
 
     use async_trait::async_trait;
-    use crabka_gres_control::{
+    use krabka_gres_control::{
         RangeLayoutEntry, SqlUser, TenantId, TenantName, TenantRecord, TenantState,
     };
 
@@ -568,11 +568,11 @@ mod tests {
             ranges.push(RangeLayoutEntry {
                 range_id: range_id.as_u32(),
                 end_key: (index + 1 != participants.len()).then(|| {
-                    crabka_gres_control::RangeBoundary::table_start((index as u64 + 1) * 10)
+                    krabka_gres_control::RangeBoundary::table_start((index as u64 + 1) * 10)
                 }),
                 endpoint: addr.to_string(),
                 wal_generation: 1,
-                lifecycle: crabka_gres_control::RangeLifecycle::default(),
+                lifecycle: krabka_gres_control::RangeLifecycle::default(),
                 retirement: None,
             });
         }
@@ -653,7 +653,7 @@ mod tests {
 
     #[tokio::test]
     async fn local_decisions_never_squat_on_future_global_xids() {
-        use crabka_pgmvcc::xid::GLOBAL_XID_BASE;
+        use krabka_pgmvcc::xid::GLOBAL_XID_BASE;
 
         let coordinator = LocalCoordinator::default();
         let participants = vec![RangeId::new(0), RangeId::new(1)];

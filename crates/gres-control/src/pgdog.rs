@@ -7,7 +7,7 @@
 
 use std::{collections::HashSet, str::FromStr, time::Duration};
 
-use crabka_units::{Time, convert::TimeExt as _, days, minutes, secs};
+use krabka_units::{Time, convert::TimeExt as _, days, minutes, secs};
 use refined_type::rule::GreaterU16;
 use serde::Serialize;
 
@@ -512,7 +512,7 @@ fn milliseconds_rounded_up(extent: Time) -> u64 {
 #[cfg(test)]
 mod tests {
     use assert2::{assert, check};
-    use crabka_units::millis;
+    use krabka_units::millis;
 
     use super::*;
 

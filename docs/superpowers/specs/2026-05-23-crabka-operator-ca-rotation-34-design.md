@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-23
 **Status:** Plan-ready
-**Scope:** Turn the slice-30 *disruptive* CA-expiry path into a hands-off,
+**Scope:** Turn the slice-30 _disruptive_ CA-expiry path into a hands-off,
 zero-downtime rotation. The cluster-CA (and clients-CA) cert Secret becomes a
 multi-generation PEM trust bundle; the operator renews the CA cert (same key)
 automatically on expiry, and performs a staged, coordinated key replacement on
@@ -26,8 +26,8 @@ by hand, taking the mesh down. Slice 34 removes that cliff:
    distributes the new bundle. Broker leaf certs are untouched (same key →
    same SPKI → existing leafs still chain), so the only cost is one safe roll.
 2. **CA key replacement** (compromise, policy, or a forced rotation) runs a
-   three-step coordinated dance — *distribute trust → promote key + reissue
-   leafs → prune old trust* — each step a zero-downtime ordered roll, so the
+   three-step coordinated dance — _distribute trust → promote key + reissue
+   leafs → prune old trust_ — each step a zero-downtime ordered roll, so the
    inter-broker mTLS mesh stays connected throughout.
 
 The single visible behaviour change: a stock `Kafka` CR whose CA ages past
@@ -39,7 +39,7 @@ admin can force either flavour of rotation with an annotation.
 1. **Rotation lives in the reconciler, not the CronJob.** Rotation needs the
    rollout machinery (`combined_config_hash` → `plan_rollout` → per-pool
    `config-hash` label, gated on Ready). The CronJob can't roll pods. The
-   slice-30 CronJob keeps doing *leaf* renewal (same-key, hot-reload, no roll)
+   slice-30 CronJob keeps doing _leaf_ renewal (same-key, hot-reload, no roll)
    and BYO-expiry Events; it no longer sets the disruptive
    `CaRotationRequired` condition for operator-managed CAs — instead it nudges
    the reconciler (touches a `crabka.io/ca-renew-after` annotation) so the next
@@ -51,17 +51,17 @@ admin can force either flavour of rotation with an annotation.
    one-or-more CA certs, **the active signing cert first**. This keeps every
    existing reader correct with no change: `cert_not_after` and rcgen's
    `Issuer::from_ca_cert_pem` both consume the first PEM block, and the broker's
-   `RootCertStore` already loads *all* blocks from the file (slice 33). Steady
+   `RootCertStore` already loads _all_ blocks from the file (slice 33). Steady
    state is a single cert — byte-identical to slice 30.
 
 3. **The config-hash already hashes `ca.crt`.** `combined_config_hash` is fed
    `cluster_ca_outcome.material.cert_pem`, which is read from `ca.crt`. Making
-   `ca.crt` a bundle means the hash now covers the *whole trust set* for free.
+   `ca.crt` a bundle means the hash now covers the _whole trust set_ for free.
    Each rotation step deliberately rewrites the bundle string (append / reorder
    / drop a block), so each step flips the hash → one ordered roll. Routine
    leaf renewal never touches the bundle → no roll (slice-33 hot-reload). No
    canonicalisation needed: the reconciler preserves byte order when not
-   rotating, and the deliberate reorder at *promote* is exactly the roll we
+   rotating, and the deliberate reorder at _promote_ is exactly the roll we
    want.
 
 4. **Key-replacement is a 3-phase state machine, driven by Secret
@@ -98,6 +98,7 @@ admin can force either flavour of rotation with an annotation.
 ### Data model
 
 `<cluster>-cluster-ca-cert` Secret (`type: Opaque`), the broker truststore:
+
 - `ca.crt` — PEM **bundle**: `[signing_cert, …trust-only older certs]`.
 - annotations:
   - `crabka.io/ca-cert-generation` — monotonic `u64`, bumped whenever the
@@ -106,6 +107,7 @@ admin can force either flavour of rotation with an annotation.
     `key-replace-promote` (absent ≡ `idle`).
 
 `<cluster>-cluster-ca` Secret, the signing material:
+
 - `ca.key` — the **active** signing key (pairs with `ca.crt`'s first block).
 - `ca.key.next` / `ca.crt.next` — present only during `key-replace-trust`: the
   staged new key + cert awaiting promotion.
@@ -123,6 +125,7 @@ block); every truststore consumer uses the whole bundle.
 ### Trust-bundle helpers (`controller/cluster_ca.rs`)
 
 Pure, no I/O:
+
 - `split_pem_certs(bundle: &str) -> Vec<String>` — split into individual
   `-----BEGIN CERTIFICATE-----…` blocks (normalised, trailing newline each).
 - `signing_cert(bundle: &str) -> &str` — first block (the signer).
@@ -133,10 +136,11 @@ Pure, no I/O:
   first-seen order (idempotency guard so a re-reconcile doesn't grow the
   bundle).
 
-### Security crate (`crabka_security::ca`)
+### Security crate (`krabka_security::ca`)
 
 Add same-key re-sign helpers (mirror `generate_cluster_ca` / `generate_clients_ca`,
 but `KeyPair::from_pem(existing)` instead of generating a key):
+
 - `renew_cluster_ca(key_pem: &str, cn: &str, validity_days: u32) -> Result<String /*cert_pem*/, CaError>`
 - `renew_clients_ca(key_pem: &str, cn: &str, validity_days: u32) -> Result<String, CaError>`
 
@@ -182,16 +186,16 @@ pub(crate) fn plan_ca_rotation(state: &CaState, inp: &RotationInputs) -> CaRotat
 
 Decision table (operator-managed CA only; BYO never mutates and rejects force):
 
-| phase | condition | plan |
-|---|---|---|
-| Idle | `force_replace_key` | `StartKeyReplace` |
-| Idle | `force_renew` OR signing cert within `renewal_days` | `RenewCertSameKey` |
-| Idle | bundle has a prunable (expired / superseded) non-signing block | `PruneOldTrust` |
-| Idle | otherwise | `NoOp` |
-| KeyReplaceTrust | `rollout_converged` | `PromoteNewKey` |
-| KeyReplaceTrust | otherwise (roll still distributing trust) | `NoOp` |
-| KeyReplacePromote | `rollout_converged`, and clients leaf generation converged | `PruneOldTrust` (drops old cert, → Idle) |
-| KeyReplacePromote | otherwise (roll applying new key) | `NoOp` |
+| phase             | condition                                                      | plan                                     |
+| ----------------- | -------------------------------------------------------------- | ---------------------------------------- |
+| Idle              | `force_replace_key`                                            | `StartKeyReplace`                        |
+| Idle              | `force_renew` OR signing cert within `renewal_days`            | `RenewCertSameKey`                       |
+| Idle              | bundle has a prunable (expired / superseded) non-signing block | `PruneOldTrust`                          |
+| Idle              | otherwise                                                      | `NoOp`                                   |
+| KeyReplaceTrust   | `rollout_converged`                                            | `PromoteNewKey`                          |
+| KeyReplaceTrust   | otherwise (roll still distributing trust)                      | `NoOp`                                   |
+| KeyReplacePromote | `rollout_converged`, and clients leaf generation converged     | `PruneOldTrust` (drops old cert, → Idle) |
+| KeyReplacePromote | otherwise (roll applying new key)                              | `NoOp`                                   |
 
 `force_*` precedence: replace-key beats renew (a key replacement subsumes a
 cert renewal). A `force_*` while a key replacement is mid-flight is ignored
@@ -243,11 +247,11 @@ rotation-aware step per CA:
    `ensure_ca` → generation 0, phase idle.
 2. Compute `rollout_converged` from the same pool list `adopt_pools` uses
    (every pool's `config-hash` label == last-applied desired AND Ready). Since
-   the desired hash depends on the *post-rotation* bundle, convergence is
+   the desired hash depends on the _post-rotation_ bundle, convergence is
    evaluated against the bundle currently in the Secret (pre-this-reconcile),
    which is exactly “did the previous step's roll finish”.
 3. `plan = plan_ca_rotation(&state, &inputs)`; `outcome =
-   apply_ca_rotation(...)`. Re-read the (possibly rewritten) bundle for the
+apply_ca_rotation(...)`. Re-read the (possibly rewritten) bundle for the
    hash + signing material.
 4. `combined_config_hash(..., Some(&trust_bundle_pem), ...)` — the bundle, not
    just the signing cert.
@@ -275,6 +279,7 @@ convergence.
 
 Add to `KafkaStatus` (slice 34): per-CA `rotation` sub-object on the existing
 `CertificateAuthorityStatus`:
+
 ```rust
 pub struct CertificateAuthorityStatus {
     pub not_after: String,
@@ -290,7 +295,7 @@ pub struct CertificateAuthorityStatus {
 
 ### CronJob / CLI
 
-`ca-renewal-check` keeps renewing aging *leaf* certs (same-key, hot-reload) and
+`ca-renewal-check` keeps renewing aging _leaf_ certs (same-key, hot-reload) and
 emitting BYO Events. The slice-30 `flag_ca_if_expiring` operator-managed branch
 changes: instead of `CaRotationRequired=True`, it stamps a
 `crabka.io/ca-renew-after=<rfc3339>` annotation on the `Kafka` CR (idempotent),
@@ -306,9 +311,10 @@ probe (below).
 ## Testing & validation strategy
 
 **Unit (pure, no mock) — the bulk:**
-- `crabka_security::ca`: `renew_cluster_ca`/`renew_clients_ca` reuse the key
+
+- `krabka_security::ca`: `renew_cluster_ca`/`renew_clients_ca` reuse the key
   (same SPKI), keep subject DN (incl. `OU=cluster`), extend validity, and a
-  leaf signed by the *old* cert verifies against the *renewed* cert.
+  leaf signed by the _old_ cert verifies against the _renewed_ cert.
 - bundle helpers: split / signing / join round-trip; `prune_expired` keeps the
   signer; `dedup_blocks` is idempotent.
 - `plan_ca_rotation`: every row of the decision table, both CAs, immutable BYO
@@ -320,9 +326,10 @@ probe (below).
   until their generation marker converges, pending staged then cleared at prune.
 
 **Integration (FIFO mock, single-reconcile observable transitions):**
+
 1. CA cert within `renewalDays` ⇒ cert Secret patched with a 2-block bundle,
    `ca-cert-generation` 0→1, `CaRotation=True/RenewingCert`, broker leafs
-   *not* reissued (same key).
+   _not_ reissued (same key).
 2. `force-replace-ca-key` annotation ⇒ key Secret gains `*.next`, bundle grows
    to 2 blocks (old signing first), phase `key-replace-trust`,
    `CaRotation=True/DistributingTrust`, annotation stripped.
@@ -332,7 +339,7 @@ probe (below).
 4. phase `key-replace-promote` + converged ⇒ old cert pruned, bundle back to 1
    block, phase `idle`, `CaRotation=False/Idle`.
 5. BYO + `force-replace-ca-key` ⇒ no Secret writes, `CaRotation=False/
-   ByoCaImmutable`, Warning Event, annotation stripped.
+ByoCaImmutable`, Warning Event, annotation stripped.
 6. `force-replace-clients-ca-key` ⇒ two-root trust distribution precedes
    promotion; promotion re-signs TLS users before recording the leaf generation,
    and only a later converged pass prunes the old root.

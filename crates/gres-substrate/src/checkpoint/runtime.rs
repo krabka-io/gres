@@ -2,9 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use crabka_client_admin::DeleteRecordsOp;
-use crabka_pgkv::{KvError, KvPair, KvSnapshot, RestoreKv, SnapshotKv};
-use crabka_units::ByteSize;
+use krabka_client_admin::DeleteRecordsOp;
+use krabka_pgkv::{KvError, KvPair, KvSnapshot, RestoreKv, SnapshotKv};
+use krabka_units::ByteSize;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -178,7 +178,7 @@ pub struct CheckpointMetadata {
 ///
 /// Checkpoints are range/tenant scoped and not per-table, so the verified
 /// total is an upper-bound estimate for any table in that range.
-impl crabka_pgexec::plan_dist::Stats for CheckpointMetadata {
+impl krabka_pgexec::plan_dist::Stats for CheckpointMetadata {
     fn estimated_bytes(&self, _table_id: u64) -> Option<u64> {
         Some(self.total_bytes)
     }
@@ -186,7 +186,7 @@ impl crabka_pgexec::plan_dist::Stats for CheckpointMetadata {
 
 #[cfg(test)]
 mod planner_stats_tests {
-    use crabka_pgexec::plan_dist::Stats;
+    use krabka_pgexec::plan_dist::Stats;
 
     use super::CheckpointMetadata;
 
@@ -1200,10 +1200,10 @@ mod tests {
     use std::collections::BTreeMap;
 
     use assert2::assert;
-    use crabka_gres_ranges::{RangeKey, RowInterval, TableId};
-    use crabka_pgkv::{Kv, MemKv, WriteOp, key};
-    use crabka_pgmvcc::{clog, version};
-    use crabka_pgtypes::Datum;
+    use krabka_gres_ranges::{RangeKey, RowInterval, TableId};
+    use krabka_pgkv::{Kv, MemKv, WriteOp, key};
+    use krabka_pgmvcc::{clog, version};
+    use krabka_pgtypes::Datum;
 
     use super::*;
     use crate::{

@@ -16,7 +16,7 @@
 
 use std::fmt::Write as _;
 
-use crabka_pgparser::ast::{
+use krabka_pgparser::ast::{
     ArraySubscript, BinaryOp, DistinctClause, ExplainFormat, ExplainOptions, Expr, FuncArgs,
     MatchKind, OrderItem, QueryBody, QueryExpr, SelectItem, SelectStmt, SetExpr, Statement,
     TableExpr, UnaryOp, WithClause,
@@ -117,7 +117,7 @@ pub(crate) fn debug_parallel_gather(child: PlanNode) -> PlanNode {
 /// a join estimate must wait for the cost planner's join and equivalence-class
 /// machinery instead of multiplying unrelated selectivities here.
 pub(crate) fn apply_catalog_estimate(
-    catalog_kv: &dyn crabka_pgkv::Kv,
+    catalog_kv: &dyn krabka_pgkv::Kv,
     resolution: &crate::relname::ResolutionScope,
     ctx: &crate::clock::EvalCtx,
     statement: &Statement,
@@ -140,7 +140,7 @@ pub(crate) fn apply_catalog_estimate(
     ) else {
         return;
     };
-    let Ok(table) = crabka_pgcatalog::get_table(catalog_kv, &relation) else {
+    let Ok(table) = krabka_pgcatalog::get_table(catalog_kv, &relation) else {
         return;
     };
     let partitioned = crate::partition::is_partitioned(catalog_kv, &relation).unwrap_or(false);
@@ -151,7 +151,7 @@ pub(crate) fn apply_catalog_estimate(
         let mut members = vec![table.clone()];
         for descendant in crate::inheritance::descendants(catalog_kv, &relation).unwrap_or_default()
         {
-            if let Ok(table) = crabka_pgcatalog::get_table(catalog_kv, &descendant) {
+            if let Ok(table) = krabka_pgcatalog::get_table(catalog_kv, &descendant) {
                 members.push(table);
             }
         }
@@ -205,7 +205,7 @@ pub(crate) fn apply_catalog_estimate(
 /// condition can be typed and rechecked by the physical scan; every other
 /// query keeps the ordinary sequential plan.
 pub(crate) fn apply_local_text_search_path(
-    catalog_kv: &dyn crabka_pgkv::Kv,
+    catalog_kv: &dyn krabka_pgkv::Kv,
     resolution: &crate::relname::ResolutionScope,
     statement: &Statement,
     enable_indexscan: bool,
@@ -227,7 +227,7 @@ pub(crate) fn apply_local_text_search_path(
         name,
         crate::relname::SchemaDisposition::Reference,
     )?;
-    let table = match crabka_pgcatalog::get_table(catalog_kv, &relation) {
+    let table = match krabka_pgcatalog::get_table(catalog_kv, &relation) {
         Ok(table) => table,
         Err(_) if crate::exec::is_virtual_relation(&relation) => return Ok(()),
         Err(error) => return Err(error.into()),
@@ -322,13 +322,13 @@ fn typed_text_search_pair(vector: &Expr, query: &Expr, qualify: bool) -> Option<
     ))
 }
 
-fn typed_tsquery_literal(query: &crabka_pgtypes::TsQuery) -> String {
+fn typed_tsquery_literal(query: &krabka_pgtypes::TsQuery) -> String {
     format!("'{}'::tsquery", query.to_string().replace('\'', "''"))
 }
 
 fn relation_rows(
-    catalog_kv: &dyn crabka_pgkv::Kv,
-    relation: &crabka_pgcatalog::RelationName,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+    relation: &krabka_pgcatalog::RelationName,
 ) -> f64 {
     crate::relstats::of(catalog_kv, relation)
         .ok()
@@ -353,17 +353,17 @@ fn row_estimate(rows: f64) -> u64 {
 }
 
 fn estimate_group_rows(
-    catalog_kv: &dyn crabka_pgkv::Kv,
-    table: &crabka_pgcatalog::Table,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+    table: &krabka_pgcatalog::Table,
     input_rows: f64,
     inherited: bool,
-    select: &crabka_pgparser::ast::SelectStmt,
+    select: &krabka_pgparser::ast::SelectStmt,
 ) -> Option<f64> {
     if let Some(rows) = extended_group_estimate(catalog_kv, table, inherited, select) {
         return Some(rows);
     }
     let keys = group_keys(select, table)?;
-    let statistics = crabka_pgcatalog::statistics::list(catalog_kv)
+    let statistics = krabka_pgcatalog::statistics::list(catalog_kv)
         .ok()?
         .into_iter()
         .filter(|object| object.table_id == table.id)
@@ -444,8 +444,8 @@ fn estimate_group_rows(
 }
 
 fn group_keys(
-    select: &crabka_pgparser::ast::SelectStmt,
-    table: &crabka_pgcatalog::Table,
+    select: &krabka_pgparser::ast::SelectStmt,
+    table: &krabka_pgcatalog::Table,
 ) -> Option<Vec<GroupKey>> {
     if select.group_by.is_empty() {
         return None;
@@ -461,13 +461,13 @@ fn group_keys(
 }
 
 fn extended_group_estimate(
-    catalog_kv: &dyn crabka_pgkv::Kv,
-    table: &crabka_pgcatalog::Table,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+    table: &krabka_pgcatalog::Table,
     inherited: bool,
-    select: &crabka_pgparser::ast::SelectStmt,
+    select: &krabka_pgparser::ast::SelectStmt,
 ) -> Option<f64> {
     let keys = group_keys(select, table)?;
-    let statistics = crabka_pgcatalog::statistics::list(catalog_kv)
+    let statistics = krabka_pgcatalog::statistics::list(catalog_kv)
         .ok()?
         .into_iter()
         .filter(|object| object.table_id == table.id)
@@ -481,9 +481,9 @@ fn extended_group_estimate(
 }
 
 fn statistics_data(
-    object: &crabka_pgcatalog::statistics::Statistics,
+    object: &krabka_pgcatalog::statistics::Statistics,
     inherited: bool,
-) -> Option<&crabka_pgcatalog::statistics::StatisticsData> {
+) -> Option<&krabka_pgcatalog::statistics::StatisticsData> {
     if inherited {
         object.inherited_data.as_ref()
     } else {
@@ -500,7 +500,7 @@ enum GroupKey {
 fn group_key(
     expr: &Expr,
     projection: &[SelectItem],
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
 ) -> Option<GroupKey> {
     match expr {
         Expr::IntLiteral(position) => {
@@ -516,7 +516,7 @@ fn group_key(
     }
 }
 
-fn column_attnum(expr: &Expr, table: &crabka_pgcatalog::Table) -> Option<i16> {
+fn column_attnum(expr: &Expr, table: &krabka_pgcatalog::Table) -> Option<i16> {
     let column = column_name(expr)?;
     table
         .columns
@@ -543,9 +543,9 @@ fn ndistinct_for_keys(data: &str, keys: &[i16]) -> Option<f64> {
 }
 
 fn statistics_positions(
-    object: &crabka_pgcatalog::statistics::Statistics,
+    object: &krabka_pgcatalog::statistics::Statistics,
     keys: &[GroupKey],
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
 ) -> Option<Vec<i16>> {
     let object_keys = statistic_object_keys(object)?;
     let positions = matching_statistics_keys(&object_keys, keys, table)
@@ -563,7 +563,7 @@ fn statistics_positions(
 }
 
 fn statistic_object_keys(
-    object: &crabka_pgcatalog::statistics::Statistics,
+    object: &krabka_pgcatalog::statistics::Statistics,
 ) -> Option<Vec<(GroupKey, i16)>> {
     let mut expression = 0_i16;
     object
@@ -589,7 +589,7 @@ fn statistic_object_keys(
 fn matching_statistics_keys(
     object_keys: &[(GroupKey, i16)],
     keys: &[GroupKey],
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
 ) -> Vec<(GroupKey, i16)> {
     object_keys
         .iter()
@@ -604,7 +604,7 @@ fn matching_statistics_keys(
 fn statistic_key_matches_group_key(
     statistic_key: &GroupKey,
     group_key: &GroupKey,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
 ) -> bool {
     statistic_key == group_key
         || matches!(statistic_key, GroupKey::Attribute(_))
@@ -620,7 +620,7 @@ fn statistics_match_is_better(candidate: &[(GroupKey, i16)], best: &[(GroupKey, 
     (expression_matches(candidate), candidate.len()) > (expression_matches(best), best.len())
 }
 
-fn group_key_attribute(key: &GroupKey, table: &crabka_pgcatalog::Table) -> Option<i16> {
+fn group_key_attribute(key: &GroupKey, table: &krabka_pgcatalog::Table) -> Option<i16> {
     match key {
         GroupKey::Attribute(attnum) => Some(*attnum),
         GroupKey::Expression(expression) => {
@@ -629,11 +629,11 @@ fn group_key_attribute(key: &GroupKey, table: &crabka_pgcatalog::Table) -> Optio
     }
 }
 
-fn group_key_attributes(key: &GroupKey, table: &crabka_pgcatalog::Table) -> Option<Vec<i16>> {
+fn group_key_attributes(key: &GroupKey, table: &krabka_pgcatalog::Table) -> Option<Vec<i16>> {
     match key {
         GroupKey::Attribute(attnum) => Some(vec![*attnum]),
         GroupKey::Expression(expression) => {
-            let expression = crabka_pgparser::parser::parse_expression(expression).ok()?;
+            let expression = krabka_pgparser::parser::parse_expression(expression).ok()?;
             let mut attributes = Vec::new();
             (expression_group_attributes(&expression, table, &mut attributes)
                 && !attributes.is_empty())
@@ -644,10 +644,10 @@ fn group_key_attributes(key: &GroupKey, table: &crabka_pgcatalog::Table) -> Opti
 
 fn statistic_expression_inverts_attribute(
     expression: &str,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
 ) -> Option<i16> {
     let Expr::Binary { op, left, right } =
-        crabka_pgparser::parser::parse_expression(expression).ok()?
+        krabka_pgparser::parser::parse_expression(expression).ok()?
     else {
         return None;
     };
@@ -676,9 +676,9 @@ fn statistic_expression_inverts_attribute(
 fn statistic_expression_is_grouped_by_attributes(
     expression: &str,
     keys: &[GroupKey],
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
 ) -> bool {
-    let expression = match crabka_pgparser::parser::parse_expression(expression) {
+    let expression = match krabka_pgparser::parser::parse_expression(expression) {
         Ok(expression) => expression,
         Err(_) => return false,
     };
@@ -692,7 +692,7 @@ fn statistic_expression_is_grouped_by_attributes(
 
 fn expression_group_attributes(
     expression: &Expr,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     attributes: &mut Vec<i16>,
 ) -> bool {
     match expression {
@@ -720,7 +720,7 @@ fn expression_group_attributes(
 }
 
 fn statistics_key_positions(
-    object: &crabka_pgcatalog::statistics::Statistics,
+    object: &krabka_pgcatalog::statistics::Statistics,
     wanted: &GroupKey,
 ) -> Option<usize> {
     let mut expression = 0_usize;
@@ -741,7 +741,7 @@ fn statistics_key_positions(
 }
 
 fn statistics_data_position(
-    object: &crabka_pgcatalog::statistics::Statistics,
+    object: &krabka_pgcatalog::statistics::Statistics,
     wanted: usize,
 ) -> Option<i16> {
     let mut expression = 0_i16;
@@ -754,8 +754,8 @@ fn statistics_data_position(
 }
 
 fn restriction_selectivity(
-    catalog_kv: &dyn crabka_pgkv::Kv,
-    table: &crabka_pgcatalog::Table,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+    table: &krabka_pgcatalog::Table,
     rows: f64,
     inherited: bool,
     ctx: &crate::clock::EvalCtx,
@@ -836,8 +836,8 @@ fn restriction_selectivity(
 /// Adjust an equality conjunction when an `ANALYZE`-derived functional
 /// dependency says one constrained key determines another constrained key.
 fn functional_dependency_selectivity(
-    catalog_kv: &dyn crabka_pgkv::Kv,
-    table: &crabka_pgcatalog::Table,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+    table: &krabka_pgcatalog::Table,
     rows: f64,
     inherited: bool,
     ctx: &crate::clock::EvalCtx,
@@ -857,7 +857,7 @@ fn functional_dependency_selectivity(
     let mut adjusted = false;
     let mut implied = Vec::new();
     let mut applied = Vec::new();
-    for object in crabka_pgcatalog::statistics::list(catalog_kv).ok()? {
+    for object in krabka_pgcatalog::statistics::list(catalog_kv).ok()? {
         if object.table_id != table.id {
             continue;
         }
@@ -922,7 +922,7 @@ fn functional_dependency_selectivity(
 
 fn collect_functional_dependency_clauses<'a>(
     expr: &'a Expr,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     ctx: &crate::clock::EvalCtx,
     clauses: &mut Vec<(&'a Expr, McvClause)>,
 ) -> bool {
@@ -949,8 +949,8 @@ fn collect_functional_dependency_clauses<'a>(
 }
 
 fn functional_dependency_clause_selectivity(
-    catalog_kv: &dyn crabka_pgkv::Kv,
-    table: &crabka_pgcatalog::Table,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+    table: &krabka_pgcatalog::Table,
     rows: f64,
     ctx: &crate::clock::EvalCtx,
     expr: &Expr,
@@ -978,8 +978,8 @@ fn functional_dependency_clause_selectivity(
 }
 
 fn functional_dependency_mcv_selectivity(
-    catalog_kv: &dyn crabka_pgkv::Kv,
-    table: &crabka_pgcatalog::Table,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+    table: &krabka_pgcatalog::Table,
     rows: f64,
     ctx: &crate::clock::EvalCtx,
     clause: &McvClause,
@@ -988,8 +988,8 @@ fn functional_dependency_mcv_selectivity(
 }
 
 fn scalar_mcv_expression_selectivity(
-    catalog_kv: &dyn crabka_pgkv::Kv,
-    table: &crabka_pgcatalog::Table,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+    table: &krabka_pgcatalog::Table,
     rows: f64,
     ctx: &crate::clock::EvalCtx,
     expr: &Expr,
@@ -1065,14 +1065,14 @@ enum McvPredicate {
 #[derive(Debug)]
 struct McvValue {
     text: Option<String>,
-    scalar_value: Option<crabka_pgtypes::Datum>,
+    scalar_value: Option<krabka_pgtypes::Datum>,
 }
 
 /// Estimate a flat OR with a matching extended MCV list. PostgreSQL retains
 /// single-column selectivity estimates and applies MCV statistics to overlaps.
 fn extended_mcv_or_selectivity(
-    catalog_kv: &dyn crabka_pgkv::Kv,
-    table: &crabka_pgcatalog::Table,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+    table: &krabka_pgcatalog::Table,
     rows: f64,
     inherited: bool,
     ctx: &crate::clock::EvalCtx,
@@ -1092,7 +1092,7 @@ fn extended_mcv_or_selectivity(
     }
     let mut remaining = (0..expressions.len()).collect::<Vec<_>>();
     let mut applied = false;
-    for object in crabka_pgcatalog::statistics::list(catalog_kv).ok()? {
+    for object in krabka_pgcatalog::statistics::list(catalog_kv).ok()? {
         if object.table_id != table.id {
             continue;
         }
@@ -1140,7 +1140,7 @@ fn extended_mcv_or_selectivity(
 
 fn mcv_expr_has_unique_statistics_keys(
     expression: &McvExpr,
-    object: &crabka_pgcatalog::statistics::Statistics,
+    object: &krabka_pgcatalog::statistics::Statistics,
 ) -> bool {
     let mut clauses = Vec::new();
     mcv_expr_clauses(expression, &mut clauses);
@@ -1163,11 +1163,11 @@ fn mcv_expr_has_unique_statistics_keys(
 }
 
 fn mcv_or_selectivity_for_object(
-    object: &crabka_pgcatalog::statistics::Statistics,
+    object: &krabka_pgcatalog::statistics::Statistics,
     inherited: bool,
     expressions: &[&McvExpr],
     scalar: &[f64],
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     ctx: &crate::clock::EvalCtx,
 ) -> Option<f64> {
     let mut clauses = Vec::new();
@@ -1186,7 +1186,7 @@ fn mcv_or_selectivity_for_object(
         .collect::<Option<Vec<_>>>()?;
     let Some(items) = statistics_data(object, inherited)
         .and_then(|data| data.mcv.as_deref())
-        .and_then(crabka_pgcatalog::statistics::decode_mcv)
+        .and_then(krabka_pgcatalog::statistics::decode_mcv)
     else {
         return None;
     };
@@ -1256,8 +1256,8 @@ fn mcv_combine_selectivities(simple: f64, mcv: f64, mcv_base: f64, mcv_total: f6
 /// The MCV portion gives its observed frequency; the remainder retains the
 /// scalar estimate after removing the MCV population from both sides.
 fn extended_mcv_selectivity(
-    catalog_kv: &dyn crabka_pgkv::Kv,
-    table: &crabka_pgcatalog::Table,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+    table: &krabka_pgcatalog::Table,
     rows: f64,
     inherited: bool,
     ctx: &crate::clock::EvalCtx,
@@ -1270,7 +1270,7 @@ fn extended_mcv_selectivity(
         return None;
     }
     let scalar = mcv_expr_scalar(catalog_kv, table, rows, ctx, &expression);
-    for object in crabka_pgcatalog::statistics::list(catalog_kv).ok()? {
+    for object in krabka_pgcatalog::statistics::list(catalog_kv).ok()? {
         if object.table_id != table.id {
             continue;
         }
@@ -1283,7 +1283,7 @@ fn extended_mcv_selectivity(
         };
         let Some(items) = statistics_data(&object, inherited)
             .and_then(|data| data.mcv.as_deref())
-            .and_then(crabka_pgcatalog::statistics::decode_mcv)
+            .and_then(krabka_pgcatalog::statistics::decode_mcv)
         else {
             continue;
         };
@@ -1342,8 +1342,8 @@ fn extended_mcv_selectivity(
 /// Combine independent MCV objects for a conjunction when no single object
 /// covers every clause.
 fn extended_mcv_conjunction_selectivity(
-    catalog_kv: &dyn crabka_pgkv::Kv,
-    table: &crabka_pgcatalog::Table,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+    table: &krabka_pgcatalog::Table,
     rows: f64,
     inherited: bool,
     ctx: &crate::clock::EvalCtx,
@@ -1360,7 +1360,7 @@ fn extended_mcv_conjunction_selectivity(
     let mut selectivity = scalar.iter().product::<f64>();
     let mut estimated = vec![false; clauses.len()];
     let mut applied = false;
-    let objects = crabka_pgcatalog::statistics::list(catalog_kv).ok()?;
+    let objects = krabka_pgcatalog::statistics::list(catalog_kv).ok()?;
 
     loop {
         let mut best = None;
@@ -1397,7 +1397,7 @@ fn extended_mcv_conjunction_selectivity(
         };
         let Some(items) = statistics_data(object, inherited)
             .and_then(|data| data.mcv.as_deref())
-            .and_then(crabka_pgcatalog::statistics::decode_mcv)
+            .and_then(krabka_pgcatalog::statistics::decode_mcv)
         else {
             break;
         };
@@ -1467,7 +1467,7 @@ fn extended_mcv_conjunction_selectivity(
 
 fn mcv_expr_for_expr(
     expr: &Expr,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     ctx: &crate::clock::EvalCtx,
 ) -> Option<McvExpr> {
     match expr {
@@ -1506,8 +1506,8 @@ fn mcv_expr_clauses<'a>(expression: &'a McvExpr, clauses: &mut Vec<&'a McvClause
 }
 
 fn mcv_expr_scalar(
-    catalog_kv: &dyn crabka_pgkv::Kv,
-    table: &crabka_pgcatalog::Table,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+    table: &krabka_pgcatalog::Table,
     rows: f64,
     ctx: &crate::clock::EvalCtx,
     expression: &McvExpr,
@@ -1530,10 +1530,10 @@ fn mcv_expr_scalar(
 
 fn mcv_expr_matches(
     expression: &McvExpr,
-    item: &crabka_pgcatalog::statistics::McvItem,
+    item: &krabka_pgcatalog::statistics::McvItem,
     clauses: &[&McvClause],
     positions: &[usize],
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     ctx: &crate::clock::EvalCtx,
 ) -> bool {
     match expression {
@@ -1563,8 +1563,8 @@ fn mcv_expr_matches(
 }
 
 fn scalar_mcv_clause_selectivity(
-    catalog_kv: &dyn crabka_pgkv::Kv,
-    table: &crabka_pgcatalog::Table,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+    table: &krabka_pgcatalog::Table,
     rows: f64,
     ctx: &crate::clock::EvalCtx,
     clause: &McvClause,
@@ -1605,16 +1605,16 @@ fn scalar_mcv_clause_selectivity(
 fn mcv_scalar_value(
     value: &McvValue,
     expr: &Expr,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     ctx: &crate::clock::EvalCtx,
-) -> Option<crabka_pgtypes::Datum> {
+) -> Option<krabka_pgtypes::Datum> {
     value.scalar_value.clone().or_else(|| {
         crate::eval::infer_type(expr, &crate::scope::Scope::single(table, &table.name.name))
             .ok()
             .and_then(|ty| {
                 value.text.as_ref().and_then(|text| {
                     crate::eval::cast_value_in(
-                        &crabka_pgtypes::Datum::Text(text.clone()),
+                        &krabka_pgtypes::Datum::Text(text.clone()),
                         ty,
                         ctx.output_style(),
                     )
@@ -1636,7 +1636,7 @@ fn default_mcv_selectivity(predicate: &McvPredicate) -> f64 {
 
 fn collect_mcv_clauses(
     expr: &Expr,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     ctx: &crate::clock::EvalCtx,
     clauses: &mut Vec<McvClause>,
 ) -> bool {
@@ -1664,7 +1664,7 @@ fn collect_mcv_clauses(
 
 fn collect_mcv_or_expressions(
     expr: &Expr,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     ctx: &crate::clock::EvalCtx,
     expressions: &mut Vec<McvExpr>,
 ) -> bool {
@@ -1686,7 +1686,7 @@ fn collect_mcv_or_expressions(
 
 fn mcv_clause_for_expr(
     expr: &Expr,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     ctx: &crate::clock::EvalCtx,
 ) -> Option<McvClause> {
     match expr {
@@ -1776,7 +1776,7 @@ fn mcv_item_matches(
     key: &GroupKey,
     expr: &Expr,
     predicate: &McvPredicate,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     ctx: &crate::clock::EvalCtx,
 ) -> bool {
     match (value, predicate) {
@@ -1808,13 +1808,13 @@ fn mcv_item_matches(
                 return false;
             };
             let Ok(actual) = crate::eval::cast_value_in(
-                &crabka_pgtypes::Datum::Text(text.clone()),
+                &krabka_pgtypes::Datum::Text(text.clone()),
                 ty,
                 ctx.output_style(),
             ) else {
                 return false;
             };
-            let Some(ordering) = crabka_pgtypes::ops::compare(&actual, &wanted)
+            let Some(ordering) = krabka_pgtypes::ops::compare(&actual, &wanted)
                 .ok()
                 .flatten()
             else {
@@ -1853,7 +1853,7 @@ fn mcv_inequality_clause(
     key_expr: &Expr,
     literal: &Expr,
     op: BinaryOp,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     ctx: &crate::clock::EvalCtx,
 ) -> Option<McvClause> {
     let key = mcv_key(key_expr, table, ctx)?;
@@ -1869,7 +1869,7 @@ fn mcv_inequality_clause(
 fn null_mcv_clause(
     expr: &Expr,
     negated: bool,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
 ) -> Option<McvClause> {
     Some(McvClause {
         key: GroupKey::Attribute(column_attnum(expr, table)?),
@@ -1888,14 +1888,14 @@ fn null_mcv_clause(
 fn bool_mcv_clause(
     expr: &Expr,
     negated: bool,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     ctx: &crate::clock::EvalCtx,
 ) -> Option<McvClause> {
     let attnum = column_attnum(expr, table)?;
-    (table.columns.get(usize::try_from(attnum - 1).ok()?)?.ty == crabka_pgtypes::ColumnType::Bool)
+    (table.columns.get(usize::try_from(attnum - 1).ok()?)?.ty == krabka_pgtypes::ColumnType::Bool)
         .then_some(())?;
-    let value = crabka_pgtypes::Datum::Bool(!negated);
-    let text = String::from_utf8(crabka_pgtypes::encoding::encode_text_in(
+    let value = krabka_pgtypes::Datum::Bool(!negated);
+    let text = String::from_utf8(krabka_pgtypes::encoding::encode_text_in(
         &value,
         ctx.output_style(),
     ))
@@ -1913,7 +1913,7 @@ fn bool_mcv_clause(
 fn mcv_clause(
     key_expr: &Expr,
     literal: &Expr,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     ctx: &crate::clock::EvalCtx,
 ) -> Option<McvClause> {
     let key = mcv_key(key_expr, table, ctx)?;
@@ -1929,7 +1929,7 @@ fn mcv_clause(
 fn mcv_list_clause(
     key_expr: &Expr,
     literals: &[Expr],
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     ctx: &crate::clock::EvalCtx,
 ) -> Option<McvClause> {
     let key = mcv_key(key_expr, table, ctx)?;
@@ -1951,11 +1951,11 @@ fn mcv_list_clause(
 fn mcv_array_clause(
     key_expr: &Expr,
     array: &Expr,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     ctx: &crate::clock::EvalCtx,
 ) -> Option<McvClause> {
     let key = mcv_key(key_expr, table, ctx)?;
-    let crabka_pgtypes::Datum::Array(array) =
+    let krabka_pgtypes::Datum::Array(array) =
         crate::eval::eval(array, &crate::scope::Scope::empty(), &[], ctx).ok()?
     else {
         return None;
@@ -1977,16 +1977,16 @@ fn mcv_quantified_inequality_clause(
     array: &Expr,
     op: BinaryOp,
     all: bool,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     ctx: &crate::clock::EvalCtx,
 ) -> Option<McvClause> {
     let key = mcv_key(key_expr, table, ctx)?;
-    let crabka_pgtypes::Datum::Array(array) =
+    let krabka_pgtypes::Datum::Array(array) =
         crate::eval::eval(array, &crate::scope::Scope::empty(), &[], ctx).ok()?
     else {
         return None;
     };
-    if all && array.elems.iter().any(crabka_pgtypes::Datum::is_null) {
+    if all && array.elems.iter().any(krabka_pgtypes::Datum::is_null) {
         return None;
     }
     let mut values = array
@@ -2000,7 +2000,7 @@ fn mcv_quantified_inequality_clause(
         (BinaryOp::Lt | BinaryOp::Le, false) | (BinaryOp::Gt | BinaryOp::Ge, true)
     );
     for value in values {
-        let ordering = crabka_pgtypes::ops::compare(
+        let ordering = krabka_pgtypes::ops::compare(
             &mcv_scalar_value(&boundary, key_expr, table, ctx)?,
             &mcv_scalar_value(&value, key_expr, table, ctx)?,
         )
@@ -2020,8 +2020,8 @@ fn mcv_quantified_inequality_clause(
 }
 
 fn quantified_all_equality_selectivity(
-    catalog_kv: &dyn crabka_pgkv::Kv,
-    table: &crabka_pgcatalog::Table,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+    table: &krabka_pgcatalog::Table,
     rows: f64,
     ctx: &crate::clock::EvalCtx,
     expr: &Expr,
@@ -2036,7 +2036,7 @@ fn quantified_all_equality_selectivity(
         return None;
     };
     let key = mcv_key(expr, table, ctx)?;
-    let crabka_pgtypes::Datum::Array(array) =
+    let krabka_pgtypes::Datum::Array(array) =
         crate::eval::eval(array, &crate::scope::Scope::empty(), &[], ctx).ok()?
     else {
         return None;
@@ -2066,8 +2066,8 @@ fn quantified_all_equality_selectivity(
 }
 
 fn quantified_array_containment_selectivity(
-    catalog_kv: &dyn crabka_pgkv::Kv,
-    table: &crabka_pgcatalog::Table,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+    table: &krabka_pgcatalog::Table,
     ctx: &crate::clock::EvalCtx,
     expr: &Expr,
 ) -> Option<f64> {
@@ -2102,8 +2102,8 @@ fn quantified_array_containment_selectivity(
 }
 
 fn quantified_inequality_selectivity(
-    catalog_kv: &dyn crabka_pgkv::Kv,
-    table: &crabka_pgcatalog::Table,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+    table: &krabka_pgcatalog::Table,
     rows: f64,
     ctx: &crate::clock::EvalCtx,
     expr: &Expr,
@@ -2125,12 +2125,12 @@ fn quantified_inequality_selectivity(
     }
     let ty = crate::eval::infer_type(expr, &crate::scope::Scope::single(table, &table.name.name))
         .ok()?;
-    let crabka_pgtypes::Datum::Array(array) =
+    let krabka_pgtypes::Datum::Array(array) =
         crate::eval::eval(array, &crate::scope::Scope::empty(), &[], ctx).ok()?
     else {
         return None;
     };
-    if *all && array.elems.iter().any(crabka_pgtypes::Datum::is_null) {
+    if *all && array.elems.iter().any(krabka_pgtypes::Datum::is_null) {
         return Some(0.0);
     }
     let values = array
@@ -2164,7 +2164,7 @@ fn quantified_inequality_selectivity(
 
 fn mcv_key(
     key_expr: &Expr,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     ctx: &crate::clock::EvalCtx,
 ) -> Option<GroupKey> {
     Some(match key_expr {
@@ -2178,11 +2178,11 @@ fn mcv_key(
 
 fn mcv_value(
     key: GroupKey,
-    value: crabka_pgtypes::Datum,
-    table: &crabka_pgcatalog::Table,
+    value: krabka_pgtypes::Datum,
+    table: &krabka_pgcatalog::Table,
     ctx: &crate::clock::EvalCtx,
 ) -> Option<McvValue> {
-    (!matches!(value, crabka_pgtypes::Datum::Null)).then_some(())?;
+    (!matches!(value, krabka_pgtypes::Datum::Null)).then_some(())?;
     let (value, scalar_value) = match key {
         GroupKey::Attribute(attnum) => {
             let definition = table.columns.get(usize::try_from(attnum - 1).ok()?)?;
@@ -2192,7 +2192,7 @@ fn mcv_value(
         }
         GroupKey::Expression(_) => (value, None),
     };
-    let text = String::from_utf8(crabka_pgtypes::encoding::encode_text_in(
+    let text = String::from_utf8(krabka_pgtypes::encoding::encode_text_in(
         &value,
         ctx.output_style(),
     ))
@@ -2204,8 +2204,8 @@ fn mcv_value(
 }
 
 fn estimate_binary_restriction(
-    catalog_kv: &dyn crabka_pgkv::Kv,
-    table: &crabka_pgcatalog::Table,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+    table: &krabka_pgcatalog::Table,
     rows: f64,
     ctx: &crate::clock::EvalCtx,
     op: BinaryOp,
@@ -2238,7 +2238,7 @@ fn estimate_binary_restriction(
 fn decoded_restriction_selectivity(
     stats: &crate::plan::selfuncs::DecodedColumnStats,
     op: BinaryOp,
-    constant: Option<crabka_pgtypes::Datum>,
+    constant: Option<krabka_pgtypes::Datum>,
     reversed: bool,
 ) -> f64 {
     match op {
@@ -2270,8 +2270,8 @@ fn decoded_restriction_selectivity(
 }
 
 fn column_statistics(
-    catalog_kv: &dyn crabka_pgkv::Kv,
-    table: &crabka_pgcatalog::Table,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+    table: &krabka_pgcatalog::Table,
     rows: f64,
     expr: &Expr,
     ctx: &crate::clock::EvalCtx,
@@ -2297,8 +2297,8 @@ fn column_statistics(
 }
 
 fn expression_statistics(
-    catalog_kv: &dyn crabka_pgkv::Kv,
-    table: &crabka_pgcatalog::Table,
+    catalog_kv: &dyn krabka_pgkv::Kv,
+    table: &krabka_pgcatalog::Table,
     rows: f64,
     expr: &Expr,
     ctx: &crate::clock::EvalCtx,
@@ -2308,7 +2308,7 @@ fn expression_statistics(
     };
     let ty = crate::eval::infer_type(expr, &crate::scope::Scope::single(table, &table.name.name))
         .ok()?;
-    for object in crabka_pgcatalog::statistics::list(catalog_kv).ok()? {
+    for object in krabka_pgcatalog::statistics::list(catalog_kv).ok()? {
         if object.table_id != table.id {
             continue;
         }
@@ -2349,11 +2349,11 @@ fn column_name(expr: &Expr) -> Option<&str> {
 
 fn literal_for_type(
     expr: &Expr,
-    ty: crabka_pgtypes::ColumnType,
+    ty: krabka_pgtypes::ColumnType,
     ctx: &crate::clock::EvalCtx,
-) -> Option<crabka_pgtypes::Datum> {
+) -> Option<krabka_pgtypes::Datum> {
     let value = crate::eval::eval(expr, &crate::scope::Scope::empty(), &[], ctx).ok()?;
-    (!matches!(value, crabka_pgtypes::Datum::Null))
+    (!matches!(value, krabka_pgtypes::Datum::Null))
         .then(|| crate::eval::cast_value_in(&value, ty, ctx.output_style()).ok())?
 }
 
@@ -2420,7 +2420,7 @@ pub(crate) fn plan_statement(statement: &Statement) -> PlanNode {
         // CTAS runs its query to populate the new relation, so EXPLAIN exposes
         // that query's plan rather than a utility Result node.
         Statement::CreateTableAs {
-            source: crabka_pgparser::ast::CreateAsSource::Query(query),
+            source: krabka_pgparser::ast::CreateAsSource::Query(query),
             ..
         } => (plan_query(query), None),
         Statement::Insert {
@@ -2430,10 +2430,10 @@ pub(crate) fn plan_statement(statement: &Statement) -> PlanNode {
             ..
         } => {
             let child = match source {
-                crabka_pgparser::ast::InsertSource::Values(rows) if rows.len() > 1 => {
+                krabka_pgparser::ast::InsertSource::Values(rows) if rows.len() > 1 => {
                     PlanNode::new("Values Scan").with_relation("*VALUES*")
                 }
-                crabka_pgparser::ast::InsertSource::Query(query) => plan_query(query),
+                krabka_pgparser::ast::InsertSource::Query(query) => plan_query(query),
                 _ => PlanNode::new("Result"),
             };
             let mut node = PlanNode::new("Insert");
@@ -2477,14 +2477,14 @@ pub(crate) fn plan_statement(statement: &Statement) -> PlanNode {
 /// executor path applies.  The action keeps its target and conflict clause;
 /// the client statement supplies the source and outer `WITH` list.
 pub(crate) fn plan_statement_with_rewrite(
-    catalog_kv: &dyn crabka_pgkv::Kv,
+    catalog_kv: &dyn krabka_pgkv::Kv,
     resolution: &crate::relname::ResolutionScope,
     statement: &Statement,
 ) -> Result<PlanNode, crate::error::ExecError> {
     let Some((event, reference)) = (match statement {
-        Statement::Insert { table, .. } => Some((crabka_pgcatalog::rule::RuleEvent::Insert, table)),
-        Statement::Update { table, .. } => Some((crabka_pgcatalog::rule::RuleEvent::Update, table)),
-        Statement::Delete { table, .. } => Some((crabka_pgcatalog::rule::RuleEvent::Delete, table)),
+        Statement::Insert { table, .. } => Some((krabka_pgcatalog::rule::RuleEvent::Insert, table)),
+        Statement::Update { table, .. } => Some((krabka_pgcatalog::rule::RuleEvent::Update, table)),
+        Statement::Delete { table, .. } => Some((krabka_pgcatalog::rule::RuleEvent::Delete, table)),
         _ => None,
     }) else {
         return Ok(plan_statement(statement));
@@ -2495,10 +2495,10 @@ pub(crate) fn plan_statement_with_rewrite(
         reference,
         crate::relname::SchemaDisposition::Reference,
     )?;
-    let Ok(table) = crabka_pgcatalog::get_table(catalog_kv, &name) else {
+    let Ok(table) = krabka_pgcatalog::get_table(catalog_kv, &name) else {
         return Ok(plan_statement(statement));
     };
-    let mut actions = crabka_pgcatalog::rule::rules_for_table(catalog_kv, table.id)?
+    let mut actions = krabka_pgcatalog::rule::rules_for_table(catalog_kv, table.id)?
         .into_iter()
         .filter(|rule| {
             rule.instead
@@ -2518,7 +2518,7 @@ pub(crate) fn plan_statement_with_rewrite(
         .strip_prefix('(')
         .and_then(|action| action.strip_suffix(')'))
         .unwrap_or(&rule.action);
-    let mut actions = crabka_pgparser::parse(source)?;
+    let mut actions = krabka_pgparser::parse(source)?;
     let [action] = actions.as_mut_slice() else {
         return Ok(plan_statement(statement));
     };
@@ -2547,14 +2547,14 @@ pub(crate) fn plan_statement_with_rewrite(
             table,
             crate::relname::SchemaDisposition::Reference,
         )?;
-        let table = crabka_pgcatalog::get_table(catalog_kv, &name)?;
+        let table = krabka_pgcatalog::get_table(catalog_kv, &name)?;
         let indexes = crate::exec::writable_local_indexes(catalog_kv, &table)?;
         let arbiters = crate::exec::resolve_arbiter_indexes(&table, &indexes, &conflict.target)?;
         plan.details.push((
             "Conflict Resolution".into(),
             match conflict.action {
-                crabka_pgparser::ast::OnConflictAction::DoNothing => "NOTHING",
-                crabka_pgparser::ast::OnConflictAction::DoUpdate { .. } => "UPDATE",
+                krabka_pgparser::ast::OnConflictAction::DoNothing => "NOTHING",
+                krabka_pgparser::ast::OnConflictAction::DoUpdate { .. } => "UPDATE",
             }
             .into(),
         ));
@@ -2568,7 +2568,7 @@ pub(crate) fn plan_statement_with_rewrite(
                     .join(", "),
             ));
         }
-        if let crabka_pgparser::ast::OnConflictAction::DoUpdate {
+        if let krabka_pgparser::ast::OnConflictAction::DoUpdate {
             filter: Some(filter),
             ..
         } = &conflict.action
@@ -2592,8 +2592,8 @@ fn attach_ctes(node: &mut PlanNode, with: Option<&WithClause>) {
         .map(|cte| CtePlan {
             name: cte.name.clone(),
             plan: Box::new(match &cte.body {
-                crabka_pgparser::ast::CteBody::Query(query) => plan_query(query),
-                crabka_pgparser::ast::CteBody::Dml(statement) => plan_statement(statement),
+                krabka_pgparser::ast::CteBody::Query(query) => plan_query(query),
+                krabka_pgparser::ast::CteBody::Dml(statement) => plan_statement(statement),
             }),
         })
         .collect();
@@ -2616,7 +2616,7 @@ fn mark_cte_scans(node: &mut PlanNode, with: Option<&WithClause>) {
     }
 }
 
-fn type_conflict_literals(expr: &Expr, table: &crabka_pgcatalog::Table) -> Expr {
+fn type_conflict_literals(expr: &Expr, table: &krabka_pgcatalog::Table) -> Expr {
     let scope = crate::scope::Scope::single(table, "excluded");
     crate::viewwrite::map_expr(expr, false, &mut |node, _| match node {
         Expr::Binary { op, left, right } => {
@@ -2624,7 +2624,7 @@ fn type_conflict_literals(expr: &Expr, table: &crabka_pgcatalog::Table) -> Expr 
                 matches!(literal, Expr::StringLiteral(_))
                     && matches!(
                         crate::eval::infer_type(other, &scope),
-                        Ok(crabka_pgtypes::ColumnType::Char(_))
+                        Ok(krabka_pgtypes::ColumnType::Char(_))
                     )
             };
             if cast(left, right) {
@@ -2632,7 +2632,7 @@ fn type_conflict_literals(expr: &Expr, table: &crabka_pgcatalog::Table) -> Expr 
                     op: *op,
                     left: Box::new(Expr::Cast {
                         expr: left.clone(),
-                        ty: crabka_pgtypes::ColumnType::Char(None),
+                        ty: krabka_pgtypes::ColumnType::Char(None),
                     }),
                     right: right.clone(),
                 })
@@ -2642,7 +2642,7 @@ fn type_conflict_literals(expr: &Expr, table: &crabka_pgcatalog::Table) -> Expr 
                     left: left.clone(),
                     right: Box::new(Expr::Cast {
                         expr: right.clone(),
-                        ty: crabka_pgtypes::ColumnType::Char(None),
+                        ty: krabka_pgtypes::ColumnType::Char(None),
                     }),
                 })
             } else {
@@ -3147,7 +3147,7 @@ fn field_base(base: &Expr, qualify: bool) -> String {
 /// neither of which belongs in a plan line — but they must not drift: this
 /// function dropping all three modifiers while its sibling printed them is
 /// exactly the bug this comment exists to stop recurring.
-fn deparse_plain_call(call: &crabka_pgparser::ast::FuncCall, qualify: bool) -> String {
+fn deparse_plain_call(call: &krabka_pgparser::ast::FuncCall, qualify: bool) -> String {
     let args = match &call.args {
         FuncArgs::Star => "*".to_string(),
         FuncArgs::Exprs(args) => args
@@ -3265,7 +3265,7 @@ fn deparse_bare_with(expr: &Expr, qualify: bool) -> String {
         }
         Expr::Func(call) => deparse_plain_call(call, qualify),
         Expr::Cast { expr, ty } => match (&**expr, ty) {
-            (Expr::StringLiteral(text), crabka_pgtypes::ColumnType::Char(_)) => {
+            (Expr::StringLiteral(text), krabka_pgtypes::ColumnType::Char(_)) => {
                 format!("'{}'::bpchar", text.replace('\'', "''"))
             }
             _ => format!("{}::{}", cast_operand(expr, qualify), ty.name()),
@@ -3782,7 +3782,7 @@ mod tests {
     use super::*;
 
     fn plan_text(sql: &str, options: &ExplainOptions) -> Vec<String> {
-        let parsed = crabka_pgparser::parse(sql).expect("statement parses");
+        let parsed = krabka_pgparser::parse(sql).expect("statement parses");
         let [statement] = parsed.as_slice() else {
             panic!("expected exactly one statement");
         };
@@ -3841,13 +3841,13 @@ mod tests {
 
     #[test]
     fn statistics_columns_match_group_expressions_but_not_the_reverse() {
-        let table = crabka_pgcatalog::Table {
+        let table = krabka_pgcatalog::Table {
             id: 1,
-            name: crabka_pgcatalog::RelationName::public("t"),
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            name: krabka_pgcatalog::RelationName::public("t"),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             columns: vec![
-                crabka_pgcatalog::Column::new("a", crabka_pgtypes::ColumnType::Int4),
-                crabka_pgcatalog::Column::new("b", crabka_pgtypes::ColumnType::Int4),
+                krabka_pgcatalog::Column::new("a", krabka_pgtypes::ColumnType::Int4),
+                krabka_pgcatalog::Column::new("b", krabka_pgtypes::ColumnType::Int4),
             ],
             sharded: false,
             row_security: false,
@@ -3930,7 +3930,7 @@ mod tests {
     #[test]
     fn a_literal_false_table_qual_is_a_result_one_time_filter() {
         let parsed =
-            crabka_pgparser::parse("SELECT a FROM t WHERE false").expect("statement parses");
+            krabka_pgparser::parse("SELECT a FROM t WHERE false").expect("statement parses");
         let [statement] = parsed.as_slice() else {
             panic!("expected one statement");
         };
@@ -4137,7 +4137,7 @@ mod tests {
 
     #[test]
     fn offset_without_limit_still_has_a_limit_node() {
-        let parsed = crabka_pgparser::parse("SELECT id FROM d1").expect("parse");
+        let parsed = krabka_pgparser::parse("SELECT id FROM d1").expect("parse");
         let [Statement::Query(query)] = parsed.as_slice() else {
             panic!("expected query");
         };

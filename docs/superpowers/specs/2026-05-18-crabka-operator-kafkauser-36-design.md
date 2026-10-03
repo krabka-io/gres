@@ -67,8 +67,8 @@ spec:
           name: orders
           patternType: literal
         operations: [Read, Describe]
-        host: "*"        # optional, defaults to "*"
-        type: allow      # optional, defaults to "allow"
+        host: "*" # optional, defaults to "*"
+        type: allow # optional, defaults to "allow"
       - resource:
           type: group
           name: my-app
@@ -81,9 +81,9 @@ status:
       reason: Ready
       message: user in sync
   observedGeneration: 3
-  username: my-app                              # effective Kafka principal name
-  secret: my-app                                # name of the credential Secret
-  scramSha512: true                             # mechanism currently provisioned
+  username: my-app # effective Kafka principal name
+  secret: my-app # name of the credential Secret
+  scramSha512: true # mechanism currently provisioned
 ```
 
 ### Field decisions
@@ -138,8 +138,8 @@ status:
    - PBKDF2-HMAC-SHA-512 of the Secret's `password` over that salt for
      `spec.authentication.iterations` iterations.
    - `mechanism = 2` (SHA-512 wire constant).
-   The broker stores `stored_key` + `server_key` derived from the wire
-   `salted_password` — we never send the raw password.
+     The broker stores `stored_key` + `server_key` derived from the wire
+     `salted_password` — we never send the raw password.
 8. **Reconcile ACLs.** `DescribeAcls(principal_filter = User:<name>)` to list
    the cluster's current ACLs for this user, expand `spec.authorization.acls`
    into `AclEntry` tuples, diff. Apply `CreateAcls` for additions; apply one
@@ -204,13 +204,13 @@ impl AdminClient {
 
 The wire `i8` discriminants are kept private to `users.rs` — callers use
 the typed Rust enums. The slice intentionally does **not** depend on
-`crabka-metadata` or `crabka-broker`: the operator-side admin client owns
+`krabka-metadata` or `krabka-broker`: the operator-side admin client owns
 its own enum copies so client-admin stays a leaf crate. Round-trip tests
 guard the wire bytes.
 
 ### SCRAM client-side computation
 
-`crabka-security` already exposes `derive_keys_from_salted` and
+`krabka-security` already exposes `derive_keys_from_salted` and
 `scram_hash_len`. This slice adds `pbkdf2_salted_sha512` (plus a
 mechanism-aware variant) that returns the salted-password bytes for the
 KIP-554 wire field. No new crypto, just exposing the intermediate value.
@@ -221,7 +221,7 @@ Per-PR (unit + integration, no kind):
 
 - `client-admin/src/users.rs` round-trip tests for the wire-encoding helpers
   (`acl_to_creation`, `acl_to_filter`, `outcome_from_response`).
-- `client-admin/tests/users_round_trip.rs` against a live `crabka-broker`
+- `client-admin/tests/users_round_trip.rs` against a live `krabka-broker`
   spawned in-process (mirrors `tests/round_trip.rs`).
 - `crd/user.rs` serde tests (omit-optional, parse-minimum, round-trip JSON).
 - `controller/user.rs` pure-fn tests for `expand_spec_acls` and `diff_acls`.

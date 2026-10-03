@@ -9,7 +9,7 @@
     reason = "P2 exposes the complete estimator surface before P4 attaches every path type"
 )]
 
-use crabka_pgtypes::{ColumnType, Datum};
+use krabka_pgtypes::{ColumnType, Datum};
 
 /// PostgreSQL's fallback for equality predicates without usable statistics.
 pub(crate) const DEFAULT_EQ_SEL: f64 = 0.005;
@@ -98,7 +98,7 @@ impl DecodedColumnStats {
             .mcv
             .iter()
             .try_fold(0.0, |selectivity, (value, frequency)| {
-                let ordering = crabka_pgtypes::ops::compare(value, constant).ok()??;
+                let ordering = krabka_pgtypes::ops::compare(value, constant).ok()??;
                 let selected = matches!(
                     (inequality, ordering),
                     (Inequality::Less, std::cmp::Ordering::Less)
@@ -182,7 +182,7 @@ pub(crate) fn array_element_selectivity(
         .iter()
         .zip(&frequencies)
         .find_map(|(element, frequency)| {
-            (crabka_pgtypes::ops::compare(element, constant).ok()?
+            (krabka_pgtypes::ops::compare(element, constant).ok()?
                 == Some(std::cmp::Ordering::Equal))
             .then_some(*frequency)
         })
@@ -443,7 +443,7 @@ fn decode_stat_array(
     ty: ColumnType,
     ctx: &crate::clock::EvalCtx,
 ) -> Option<Vec<Datum>> {
-    crabka_pgtypes::array::parse_literal(text)
+    krabka_pgtypes::array::parse_literal(text)
         .ok()?
         .elements
         .into_iter()
@@ -455,7 +455,7 @@ fn decode_stat_array(
 }
 
 fn decode_frequency_array(text: &str) -> Option<Vec<f64>> {
-    crabka_pgtypes::array::parse_literal(text)
+    krabka_pgtypes::array::parse_literal(text)
         .ok()?
         .elements
         .into_iter()

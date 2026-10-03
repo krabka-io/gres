@@ -3,31 +3,31 @@ use std::process::Command;
 use assert2::assert;
 
 fn broker_bin() -> std::path::PathBuf {
-    let exe = std::env::var_os("CARGO_BIN_EXE_crabka-broker")
+    let exe = std::env::var_os("CARGO_BIN_EXE_krabka-broker")
         .expect("cargo provides CARGO_BIN_EXE_<bin> in test env");
     std::path::PathBuf::from(exe)
 }
 
 /// Format a fresh standalone log directory with `crabka format`.
 ///
-/// KIP-853 needs every node to be formatted before `crabka-broker` boots. The
+/// KIP-853 needs every node to be formatted before `krabka-broker` boots. The
 /// format step seeds `meta.properties.json` and the singleton
 /// `VotersRecord`. The broker treats an unformatted dir as operator error and
 /// aborts startup.
 ///
-/// `crabka` lives in the `crabka-cli` package, so its `CARGO_BIN_EXE_*` is
+/// `crabka` lives in the `krabka-cli` package, so its `CARGO_BIN_EXE_*` is
 /// not exported to this crate's test env. This function therefore shells out
-/// with `env!("CARGO")`, as `bootstrap_consumption.rs` does. The `crabka-cli`
+/// with `env!("CARGO")`, as `bootstrap_consumption.rs` does. The `krabka-cli`
 /// dev-dep keeps `crabka` in the compile graph, so this is a cache hit and
 /// not a rebuild.
-fn run_crabka_format(log_dir: &std::path::Path, node_id: u32, controller_listener: &str) {
+fn run_krabka_format(log_dir: &std::path::Path, node_id: u32, controller_listener: &str) {
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let out = Command::new(cargo)
         .args([
             "run",
             "--quiet",
             "-p",
-            "crabka-cli",
+            "krabka-cli",
             "--bin",
             "crabka",
             "--",
@@ -78,7 +78,7 @@ fn version_returns_zero() {
     assert!(out.status.success());
 }
 
-/// Boot `crabka-broker` with `--config-file` set to a minimal TOML, and
+/// Boot `krabka-broker` with `--config-file` set to a minimal TOML, and
 /// assert that the process binds the listener declared in the file. The port
 /// comes from the file, not from a CLI flag.
 #[test]
@@ -91,7 +91,7 @@ fn boots_with_config_file_listener() {
     // KIP-853: the broker refuses to boot an unformatted log dir, so seed
     // it first. `crabka format` creates the directory itself (it must be
     // empty or non-existent), so don't pre-create it.
-    run_crabka_format(&log_dir, 1, "127.0.0.1:9093");
+    run_krabka_format(&log_dir, 1, "127.0.0.1:9093");
 
     // Pick an ephemeral port by binding briefly, then release it.
     let port = {
@@ -123,7 +123,7 @@ protocol = "Plaintext"
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .expect("spawn crabka-broker");
+        .expect("spawn krabka-broker");
 
     // Poll for the port to accept connections within 10 seconds.
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
@@ -133,7 +133,7 @@ protocol = "Plaintext"
             connected = true;
             break;
         }
-        // intentional: waiting on a spawned crabka-broker subprocess to bind its
+        // intentional: waiting on a spawned krabka-broker subprocess to bind its
         // TCP listener; no in-process BrokerHandle, image, or metric to await here.
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
@@ -151,7 +151,7 @@ fn errors_when_config_file_and_listen_addr_both_set() {
         .arg("--config-file=/tmp/nonexistent.toml")
         .arg("--listen-addr=127.0.0.1:9092")
         .output()
-        .expect("spawn crabka-broker");
+        .expect("spawn krabka-broker");
 
     assert!(!out.status.success(), "expected non-zero exit");
     let stderr = String::from_utf8_lossy(&out.stderr);

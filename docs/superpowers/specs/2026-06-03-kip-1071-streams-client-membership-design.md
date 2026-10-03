@@ -16,15 +16,15 @@ A full Kafka Streams-equivalent runtime is far too large for a single spec, so
 the program is decomposed into sub-projects, each with its own spec → plan →
 implementation cycle:
 
-| # | Sub-project | Delivers | Depends on |
-|---|---|---|---|
-| **1** | **Membership client + structural topology** (this spec) | `StreamsGroupHeartbeat` lifecycle + a byte-exact topology builder | broker (done) |
-| 2 | Processor API + stateless execution engine | `Processor`/`ProcessorContext`/`forward`, the StreamTask loop, at-least-once | 1 |
-| 3 | State stores + changelog backing | local KV/window/session stores, changelog produce/restore | 2 |
-| 4 | Stateful DSL | KStream/KTable, aggregations, joins, windowing, repartitioning | 3 |
-| 5 | Standby + warmup materialization | standby replication, warmup catch-up, `TaskOffsets` reporting | 3 |
-| 6 | Interactive Queries | `UserEndpoint`, `PartitionsByUserEndpoint`, local+remote store query | 3 |
-| 7 | EOS / transactional integration | exactly-once-v2 over the existing transactional producer | 2 |
+| #     | Sub-project                                             | Delivers                                                                     | Depends on    |
+| ----- | ------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------- |
+| **1** | **Membership client + structural topology** (this spec) | `StreamsGroupHeartbeat` lifecycle + a byte-exact topology builder            | broker (done) |
+| 2     | Processor API + stateless execution engine              | `Processor`/`ProcessorContext`/`forward`, the StreamTask loop, at-least-once | 1             |
+| 3     | State stores + changelog backing                        | local KV/window/session stores, changelog produce/restore                    | 2             |
+| 4     | Stateful DSL                                            | KStream/KTable, aggregations, joins, windowing, repartitioning               | 3             |
+| 5     | Standby + warmup materialization                        | standby replication, warmup catch-up, `TaskOffsets` reporting                | 3             |
+| 6     | Interactive Queries                                     | `UserEndpoint`, `PartitionsByUserEndpoint`, local+remote store query         | 3             |
+| 7     | EOS / transactional integration                         | exactly-once-v2 over the existing transactional producer                     | 2             |
 
 This spec covers **sub-project #1** only. It is the foundation everything else
 sits on and is independently JVM-interop-validatable against the done broker.
@@ -33,7 +33,7 @@ sits on and is independently JVM-interop-validatable against the done broker.
 
 ### Goal
 
-A new `crabka-client-streams` crate that lets a Rust application:
+A new `krabka-client-streams` crate that lets a Rust application:
 
 1. **Define a topology** with a Processor-API-style builder and serialize it to
    the `StreamsGroupHeartbeatRequest.Topology` wire shape **byte-for-byte
@@ -46,7 +46,7 @@ A new `crabka-client-streams` crate that lets a Rust application:
 
 ### Non-goals (deferred to later sub-projects)
 
-- **No record processing.** Processors are *structural placeholders* in #1 — the
+- **No record processing.** Processors are _structural placeholders_ in #1 — the
   builder models the node graph (names, edges, stores) but carries no executable
   logic. Execution is sub-project #2.
 - **No state-store data path, no changelog produce/restore** (#3).
@@ -94,7 +94,7 @@ the single source of truth. (Files:
 - **`Topology.Epoch` is always `0`** in JVM 4.x (`StreamsRebalanceData.topologyEpoch()`
   hard-codes `return 0`). Send `0`.
 - **`SubtopologyId` is the node-group index as a decimal string** (`"0"`, `"1"`,
-  …), *not* a hash (`StreamThread.initBrokerTopology` →
+  …), _not_ a hash (`StreamThread.initBrokerTopology` →
   `String.valueOf(nodeGroupId)`). Index assignment: `InternalTopologyBuilder.makeNodeGroups()`
   runs union-find over the node graph (predecessor edges + shared-state-store
   connections) in **node insertion order** (`nodeFactories` is a
@@ -106,7 +106,7 @@ the single source of truth. (Files:
   - `RepartitionSourceTopics`, `StateChangelogTopics`: sorted **by name**;
     each `TopicInfo.topicConfigs` sorted **by key**.
   - The `Subtopologies` list: sorted **by `SubtopologyId` as a string** →
-    `"0","1","10","11","2",…` (lexicographic, *not* numeric — gotcha).
+    `"0","1","10","11","2",…` (lexicographic, _not_ numeric — gotcha).
   - `CopartitionGroups`: `int16` indices into the **sorted** `SourceTopics` /
     `RepartitionSourceTopics` arrays.
   - `SourceTopicRegex` (subtopology-level and copartition-level): **always
@@ -124,11 +124,11 @@ and insertion order are explicit and caller-controlled. DSL topologies
 
 ## 5. Architecture: crate and modules
 
-New crate **`crabka-client-streams`** (`crates/client-streams`), matching the
+New crate **`krabka-client-streams`** (`crates/client-streams`), matching the
 existing `client-consumer`/`-producer`/`-admin` family. Dependencies:
-`crabka-client-core` (transport + `Client::send`), `crabka-protocol`
+`krabka-client-core` (transport + `Client::send`), `krabka-protocol`
 (`streams_group_heartbeat_*` owned types), `tokio`, `uuid`, `tracing`,
-`thiserror`, `bon`. Dev-deps: `crabka-broker` with `test-helpers`, `assert2`,
+`thiserror`, `bon`. Dev-deps: `krabka-broker` with `test-helpers`, `assert2`,
 `tempfile`, `tokio` test-util — mirroring `client-consumer`.
 
 ```
@@ -211,7 +211,7 @@ rules.
 
 ## 7. Membership lifecycle (`coordinator.rs`)
 
-Mirrors `share/coordinator.rs` — the heartbeat *is* the join (no Join/Sync).
+Mirrors `share/coordinator.rs` — the heartbeat _is_ the join (no Join/Sync).
 
 - **Join.** First heartbeat: `member_epoch = 0`, client-generated UUID
   `member_id`, full `Topology`, `process_id`, `rebalance_timeout_ms`,
@@ -278,7 +278,7 @@ negotiation glue may be missing — a small, self-contained task to verify and a
    `testdata/`. The real interop gate; independent of broker leniency. Producing
    the golden frames (a JVM Streams PAPI app + captured frame) is its own plan
    task; doable on the Mac (single client RPC, no inter-broker replication).
-3. **In-process integration** — spin a `crabka-broker` via `test-helpers`
+3. **In-process integration** — spin a `krabka-broker` via `test-helpers`
    (dev-dep, like consumer/admin), enable the `streams.version` feature +
    config, join a streams group, and assert: member-id/epoch progression,
    NotReady→Ready as internal topics are created, `ActiveTasks` for a simple
@@ -303,7 +303,7 @@ negotiation glue may be missing — a small, self-contained task to verify and a
 
 ## 14. Success criteria
 
-- `cargo test -p crabka-client-streams` green, including the golden-frame
+- `cargo test -p krabka-client-streams` green, including the golden-frame
   byte-comparison and the in-process broker integration test.
 - `cargo clippy --workspace --all-targets -- -D warnings` and
   `cargo fmt --check` clean.

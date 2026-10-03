@@ -17,8 +17,8 @@ TABLE_ID = re.compile(r"\d+")
 def commit_record(line: str) -> dict | None:
     """The decoded `timestamp_primary_committed` record on `line`, if any.
 
-    gres emits structured JSON (crabka_logfmt, installed by
-    `crabka_telemetry::init`). The previous `primary_range=N` spelling this
+    gres emits structured JSON (krabka_logfmt, installed by
+    `krabka_telemetry::init`). The previous `primary_range=N` spelling this
     parsed only ever existed in tracing_subscriber's plain-text output.
     """
     if "timestamp_primary_committed" not in line:

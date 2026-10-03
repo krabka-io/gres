@@ -3,8 +3,8 @@
 use std::collections::HashSet;
 
 use bytes::Bytes;
-use crabka_metadata::{AclOperation, ClientQuotaRecord, MetadataRecord, QuotaEntity, ResourceType};
-use crabka_protocol::{
+use krabka_metadata::{AclOperation, ClientQuotaRecord, MetadataRecord, QuotaEntity, ResourceType};
+use krabka_protocol::{
     Encode, UnknownTaggedFields,
     owned::{
         alter_client_quotas_request::{AlterClientQuotasRequest, EntityData, EntryData},
@@ -256,8 +256,8 @@ mod tests {
     use std::{net::SocketAddr, sync::Arc};
 
     use assert2::assert;
-    use crabka_protocol::owned::alter_client_quotas_request::{EntityData, EntryData, OpData};
-    use crabka_security::{AuthMethod, Principal};
+    use krabka_protocol::owned::alter_client_quotas_request::{EntityData, EntryData, OpData};
+    use krabka_security::{AuthMethod, Principal};
 
     use super::*;
     use crate::{broker::BrokerHandle, test_support::DenyAll};
@@ -298,7 +298,7 @@ mod tests {
     use crate::test_support::start_broker_with_authorizer as start_broker;
 
     fn quota_value(handle: &BrokerHandle, user: &str, quota_key: &str) -> Option<f64> {
-        let key: crabka_metadata::EntityKey = vec![("user".into(), Some(user.into()))];
+        let key: krabka_metadata::EntityKey = vec![("user".into(), Some(user.into()))];
         handle
             .controller_image_for_test()
             .client_quotas()

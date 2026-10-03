@@ -5,8 +5,8 @@
 
 use std::collections::BTreeMap;
 
-use crabka_pgcatalog::largeobject::{self, AclEntry, Metadata};
-use crabka_pgkv::{Kv, WriteOp};
+use krabka_pgcatalog::largeobject::{self, AclEntry, Metadata};
+use krabka_pgkv::{Kv, WriteOp};
 
 use crate::error::ExecError;
 
@@ -247,7 +247,7 @@ impl PendingLargeObjects {
                     owner: owner.to_string(),
                     acl: compat_privileges
                         .then(|| AclEntry {
-                            grantee: crabka_pgcatalog::PUBLIC_ROLE.into(),
+                            grantee: krabka_pgcatalog::PUBLIC_ROLE.into(),
                             grantor: owner.to_string(),
                             select: true,
                             update: true,
@@ -321,7 +321,7 @@ impl PendingLargeObjects {
         owner: String,
     ) -> Result<(), ExecError> {
         let metadata = self.metadata(kv, oid)?;
-        if !crabka_pgcatalog::role_has_privs_of(kv, actor, &metadata.owner)?
+        if !krabka_pgcatalog::role_has_privs_of(kv, actor, &metadata.owner)?
             && !crate::rls::role_is_superuser(kv, actor)?
         {
             return Err(ExecError::FunctionError {
@@ -360,7 +360,7 @@ impl PendingLargeObjects {
         comment: Option<String>,
     ) -> Result<(), ExecError> {
         let metadata = self.metadata(kv, oid)?;
-        if !crabka_pgcatalog::role_has_privs_of(kv, actor, &metadata.owner)?
+        if !krabka_pgcatalog::role_has_privs_of(kv, actor, &metadata.owner)?
             && !crate::rls::role_is_superuser(kv, actor)?
         {
             return Err(ExecError::FunctionError {
@@ -386,7 +386,7 @@ impl PendingLargeObjects {
         oid: u32,
         actor: &str,
         grantees: &[String],
-        privileges: &[crabka_pgparser::ast::PrivilegeSpec],
+        privileges: &[krabka_pgparser::ast::PrivilegeSpec],
         grant_option: bool,
     ) -> Result<(), ExecError> {
         let requested = acl_privileges(privileges)?;
@@ -434,12 +434,12 @@ impl PendingLargeObjects {
         oid: u32,
         actor: &str,
         grantees: &[String],
-        privileges: &[crabka_pgparser::ast::PrivilegeSpec],
+        privileges: &[krabka_pgparser::ast::PrivilegeSpec],
         grant_option_only: bool,
     ) -> Result<(), ExecError> {
         let requested = acl_privileges(privileges)?;
         let metadata = self.metadata(kv, oid)?;
-        let owner_or_superuser = crabka_pgcatalog::role_has_privs_of(kv, actor, &metadata.owner)?
+        let owner_or_superuser = krabka_pgcatalog::role_has_privs_of(kv, actor, &metadata.owner)?
             || crate::rls::role_is_superuser(kv, actor)?;
         if !owner_or_superuser
             && !metadata
@@ -507,10 +507,10 @@ impl PendingLargeObjects {
         self.changes.is_empty()
     }
 
-    fn metadata(&self, kv: &dyn Kv, oid: u32) -> Result<Metadata, crabka_pgcatalog::CatalogError> {
+    fn metadata(&self, kv: &dyn Kv, oid: u32) -> Result<Metadata, krabka_pgcatalog::CatalogError> {
         match self.changes.get(&oid) {
             Some(Change::Present { metadata, .. }) => Ok(metadata.clone()),
-            Some(Change::Deleted) => Err(crabka_pgcatalog::CatalogError::UndefinedLargeObject(oid)),
+            Some(Change::Deleted) => Err(krabka_pgcatalog::CatalogError::UndefinedLargeObject(oid)),
             None => largeobject::get_metadata(kv, oid),
         }
     }
@@ -532,9 +532,9 @@ impl PendingLargeObjects {
                     ops.extend(largeobject::replace_sparse_page_ops(kv, oid, &bytes.pages)?);
                     if let Some(comment) = comment {
                         let oid = oid.to_string();
-                        ops.push(crabka_pgcatalog::set_comment_op(
+                        ops.push(krabka_pgcatalog::set_comment_op(
                             "large object",
-                            crabka_pgcatalog::CommentObject::Named(&oid),
+                            krabka_pgcatalog::CommentObject::Named(&oid),
                             comment.as_deref(),
                         ));
                     }
@@ -542,9 +542,9 @@ impl PendingLargeObjects {
                 Change::Deleted => {
                     ops.extend(largeobject::unlink_ops(kv, oid)?);
                     let oid = oid.to_string();
-                    ops.push(crabka_pgcatalog::set_comment_op(
+                    ops.push(krabka_pgcatalog::set_comment_op(
                         "large object",
-                        crabka_pgcatalog::CommentObject::Named(&oid),
+                        krabka_pgcatalog::CommentObject::Named(&oid),
                         None,
                     ));
                 }
@@ -575,7 +575,7 @@ impl PendingLargeObjects {
 }
 
 fn acl_privileges(
-    privileges: &[crabka_pgparser::ast::PrivilegeSpec],
+    privileges: &[krabka_pgparser::ast::PrivilegeSpec],
 ) -> Result<[bool; 2], ExecError> {
     let mut requested = [false; 2];
     for privilege in privileges {
@@ -601,15 +601,15 @@ fn acl_privileges(
 }
 
 fn acl_rights(kv: &dyn Kv, metadata: &Metadata, role: &str) -> Result<[bool; 4], ExecError> {
-    if crabka_pgcatalog::role_has_privs_of(kv, role, &metadata.owner)?
+    if krabka_pgcatalog::role_has_privs_of(kv, role, &metadata.owner)?
         || crate::rls::role_is_superuser(kv, role)?
     {
         return Ok([true; 4]);
     }
     let mut rights = [false; 4];
     for entry in &metadata.acl {
-        if entry.grantee == crabka_pgcatalog::PUBLIC_ROLE
-            || crabka_pgcatalog::role_has_privs_of(kv, role, &entry.grantee)?
+        if entry.grantee == krabka_pgcatalog::PUBLIC_ROLE
+            || krabka_pgcatalog::role_has_privs_of(kv, role, &entry.grantee)?
         {
             rights[0] |= entry.select;
             rights[1] |= entry.update;
@@ -710,8 +710,8 @@ fn has_privilege_inner(
     wanted: LoPrivilege,
     grant_option: bool,
 ) -> Result<Option<bool>, ExecError> {
-    let role = if role == crabka_pgcatalog::PUBLIC_ROLE {
-        crabka_pgcatalog::BOOTSTRAP_ROLE
+    let role = if role == krabka_pgcatalog::PUBLIC_ROLE {
+        krabka_pgcatalog::BOOTSTRAP_ROLE
     } else {
         role
     };
@@ -722,17 +722,17 @@ fn has_privilege_inner(
         .metadata(runtime.kv.as_ref(), oid)
     {
         Ok(metadata) => metadata,
-        Err(crabka_pgcatalog::CatalogError::UndefinedLargeObject(_)) => return Ok(None),
+        Err(krabka_pgcatalog::CatalogError::UndefinedLargeObject(_)) => return Ok(None),
         Err(error) => return Err(error.into()),
     };
     if crate::rls::role_is_superuser(runtime.kv.as_ref(), role)?
-        || crabka_pgcatalog::role_has_privs_of(runtime.kv.as_ref(), role, &metadata.owner)?
+        || krabka_pgcatalog::role_has_privs_of(runtime.kv.as_ref(), role, &metadata.owner)?
     {
         return Ok(Some(true));
     }
     for entry in &metadata.acl {
-        let grantee_matches = entry.grantee == crabka_pgcatalog::PUBLIC_ROLE
-            || crabka_pgcatalog::role_has_privs_of(runtime.kv.as_ref(), role, &entry.grantee)?;
+        let grantee_matches = entry.grantee == krabka_pgcatalog::PUBLIC_ROLE
+            || krabka_pgcatalog::role_has_privs_of(runtime.kv.as_ref(), role, &entry.grantee)?;
         let granted = match (wanted, grant_option) {
             (LoPrivilege::Select, false) => entry.select,
             (LoPrivilege::Update, false) => entry.update,
@@ -902,11 +902,11 @@ pub(crate) fn tell_descriptor(
 }
 
 fn undefined_oid(oid: u32) -> ExecError {
-    crabka_pgcatalog::CatalogError::UndefinedLargeObject(oid).into()
+    krabka_pgcatalog::CatalogError::UndefinedLargeObject(oid).into()
 }
 
 fn duplicate_oid(oid: u32) -> ExecError {
-    crabka_pgcatalog::CatalogError::DuplicateLargeObject(oid).into()
+    krabka_pgcatalog::CatalogError::DuplicateLargeObject(oid).into()
 }
 
 fn oid_exhausted() -> ExecError {
@@ -961,7 +961,7 @@ fn large_object_read_too_large() -> ExecError {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgkv::{Kv as _, MemKv};
+    use krabka_pgkv::{Kv as _, MemKv};
 
     use super::*;
 

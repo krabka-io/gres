@@ -5,10 +5,10 @@ Environment-qualified local evidence only; CI now repeats the same fast live wor
 Command:
 
 ```bash
-CRABKA_GRES_SKIP_BUILD=1 \
-CRABKA_GRES_RANGE_SCALING_MODE=fast \
-CRABKA_GRES_RANGE_SCALING_ARTIFACT_DIR=target/gres-scaling-task3-final \
-CRABKA_GRES_RANGE_SCALING_KEEP_ARTIFACTS=1 \
+KRABKA_GRES_SKIP_BUILD=1 \
+KRABKA_GRES_RANGE_SCALING_MODE=fast \
+KRABKA_GRES_RANGE_SCALING_ARTIFACT_DIR=target/gres-scaling-task3-final \
+KRABKA_GRES_RANGE_SCALING_KEEP_ARTIFACTS=1 \
 ./scripts/gres-range-scaling.sh
 ```
 
@@ -20,7 +20,7 @@ Fresh result on host `clod`, Linux 7.0.0-27-generic x86_64, Python 3.14.4, one s
 - measured G-9 range-4 / retained G-8 decision-ceiling contrast: `1.6279`, unflattened (passed)
 - all JSON gates: passed
 
-The local command reused already-built debug binaries (`CRABKA_GRES_SKIP_BUILD=1`). The CI job does not set that variable: `scripts/gres-range-scaling.sh` therefore executes its locked Cargo build before measuring.
+The local command reused already-built debug binaries (`KRABKA_GRES_SKIP_BUILD=1`). The CI job does not set that variable: `scripts/gres-range-scaling.sh` therefore executes its locked Cargo build before measuring.
 
 An immediately preceding live-fast run at `target/gres-scaling-current/range-scaling.json` measured range-local `3.5556`, sharded `3.0588`, and G-9/G-8 ceiling `1.5294`. These small fast workloads are scheduling-sensitive; the proof is the environment-qualified threshold result and retained raw artifact, not cross-host equality of point estimates.
 
@@ -36,7 +36,7 @@ The earlier two-transaction measurements above are retained as historical eviden
 - range-local: 515.4639, 917.4312, 1666.6667 tx/s for 1/2/4 ranges (`3.2333x`, passes 2.5 floor);
 - sharded: 155.7632, 154.6790, 149.7006 tx/s (`0.9611x`, fails 2.5 floor).
 
-Command: `CRABKA_GRES_SKIP_BUILD=1 CRABKA_GRES_RANGE_SCALING_MODE=fast CRABKA_GRES_RANGE_SCALING_ARTIFACT_DIR=target/gres-scaling-task3-review2 ./scripts/gres-range-scaling.sh`.
+Command: `KRABKA_GRES_SKIP_BUILD=1 KRABKA_GRES_RANGE_SCALING_MODE=fast KRABKA_GRES_RANGE_SCALING_ARTIFACT_DIR=target/gres-scaling-task3-review2 ./scripts/gres-range-scaling.sh`.
 
 This environment-qualified result fails the intended G-9 scaling gate and is reported rather than relabeled as passing. The corrected CI job will likewise fail until the sharded commit bottleneck is removed or the intended multi-process topology is represented by the harness.
 
@@ -47,9 +47,9 @@ The flat result above exposed two product/harness defects: sharded workers used 
 Fresh command:
 
 ```bash
-CRABKA_GRES_SKIP_BUILD=1 \
-CRABKA_GRES_RANGE_SCALING_MODE=fast \
-CRABKA_GRES_RANGE_SCALING_ARTIFACT_DIR=target/gres-scaling-primary-range-final \
+KRABKA_GRES_SKIP_BUILD=1 \
+KRABKA_GRES_RANGE_SCALING_MODE=fast \
+KRABKA_GRES_RANGE_SCALING_ARTIFACT_DIR=target/gres-scaling-primary-range-final \
 ./scripts/gres-range-scaling.sh
 ```
 

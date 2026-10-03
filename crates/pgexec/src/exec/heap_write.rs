@@ -5,11 +5,11 @@ use super::{dml_assignments::AssignedValue, *};
 pub(super) async fn apply_locked_row_update(
     write_ctx: &WriteContext<'_>,
     table: &Table,
-    local_indexes: &[crabka_pgcatalog::Index],
+    local_indexes: &[krabka_pgcatalog::Index],
     fk: &crate::fk::StatementFkContext,
     update: &LockedRowUpdate<'_>,
     writes: &mut StatementWrites,
-    ops: &mut Vec<crabka_pgkv::WriteOp>,
+    ops: &mut Vec<krabka_pgkv::WriteOp>,
 ) -> Result<u64, ExecError> {
     let LockedRowUpdate {
         rowid,
@@ -47,8 +47,8 @@ pub(super) async fn apply_locked_row_update(
     // The old physical tuple keeps its identity and receives this command's
     // xmax/cmax. The new version gets an identity at the heap tail, even when
     // both versions belong to this transaction.
-    ops.push(crabka_pgkv::WriteOp::Put {
-        key: crabka_pgmvcc::version::version_key_xid(table.id, rowid, cur_key_xid),
+    ops.push(krabka_pgkv::WriteOp::Put {
+        key: krabka_pgmvcc::version::version_key_xid(table.id, rowid, cur_key_xid),
         value: encode_table_tuple_with_update_target(
             table,
             cur_xmin,
@@ -59,16 +59,16 @@ pub(super) async fn apply_locked_row_update(
             cur_row,
         ),
     });
-    ops.push(crabka_pgkv::WriteOp::Put {
-        key: crabka_pgkv::key::update_target_key(table.id, rowid),
+    ops.push(krabka_pgkv::WriteOp::Put {
+        key: krabka_pgkv::key::update_target_key(table.id, rowid),
         value: new_rowid.to_be_bytes().to_vec(),
     });
-    ops.push(crabka_pgkv::WriteOp::Put {
-        key: crabka_pgmvcc::version::version_key_xid(table.id, new_rowid, xid),
+    ops.push(krabka_pgkv::WriteOp::Put {
+        key: krabka_pgmvcc::version::version_key_xid(table.id, new_rowid, xid),
         value: encode_table_tuple(
             table,
             xid,
-            crabka_pgmvcc::xid::INVALID_XID,
+            krabka_pgmvcc::xid::INVALID_XID,
             write_ctx.command_id,
             0,
             next,
@@ -129,17 +129,17 @@ pub(super) async fn apply_locked_row_update(
 
 /// Physical tuples whose committed update target is `rowid`.
 fn update_predecessors(
-    kv: &dyn crabka_pgkv::Kv,
+    kv: &dyn krabka_pgkv::Kv,
     table_id: u32,
     rowid: u64,
 ) -> Result<Vec<u64>, ExecError> {
     let mut predecessors = std::collections::BTreeSet::new();
-    for (key, value) in kv.scan_prefix(&crabka_pgkv::key::table_prefix(table_id))? {
-        let Some((_, predecessor, _)) = crabka_pgkv::key::primary_version_of(&key) else {
+    for (key, value) in kv.scan_prefix(&krabka_pgkv::key::table_prefix(table_id))? {
+        let Some((_, predecessor, _)) = krabka_pgkv::key::primary_version_of(&key) else {
             continue;
         };
         let (_, _, _, _, _, target) =
-            crabka_pgmvcc::version::decode_tuple_with_command_ids_and_update_target(&value)?;
+            krabka_pgmvcc::version::decode_tuple_with_command_ids_and_update_target(&value)?;
         if target == Some(rowid) {
             predecessors.insert(predecessor);
         }
@@ -169,10 +169,10 @@ pub(super) struct LockedRowDelete<'a> {
 pub(super) fn apply_locked_row_delete(
     write_ctx: &WriteContext<'_>,
     table: &Table,
-    local_indexes: &[crabka_pgcatalog::Index],
+    local_indexes: &[krabka_pgcatalog::Index],
     delete: &LockedRowDelete<'_>,
     writes: &mut StatementWrites,
-    ops: &mut Vec<crabka_pgkv::WriteOp>,
+    ops: &mut Vec<krabka_pgkv::WriteOp>,
 ) -> Result<(), ExecError> {
     let LockedRowDelete {
         rowid,
@@ -190,15 +190,15 @@ pub(super) fn apply_locked_row_delete(
         // Deleting my own uncommitted version: PostgreSQL stamps xmax=xid so it
         // is invisible to me. version_key is the same key; overwrite it with
         // xmax set.
-        ops.push(crabka_pgkv::WriteOp::Put {
-            key: crabka_pgmvcc::version::version_key_xid(table.id, rowid, xid),
+        ops.push(krabka_pgkv::WriteOp::Put {
+            key: krabka_pgmvcc::version::version_key_xid(table.id, rowid, xid),
             value: encode_table_tuple(table, xid, xid, cur_cmin, write_ctx.command_id, cur_row),
         });
     } else {
         // Set xmax = my xid on the matched version (keep its row bytes),
         // targeting its PHYSICAL key — see `apply_locked_row_update`.
-        ops.push(crabka_pgkv::WriteOp::Put {
-            key: crabka_pgmvcc::version::version_key_xid(table.id, rowid, cur_key_xid),
+        ops.push(krabka_pgkv::WriteOp::Put {
+            key: krabka_pgmvcc::version::version_key_xid(table.id, rowid, cur_key_xid),
             value: encode_table_tuple(
                 table,
                 cur_xmin,
@@ -262,11 +262,11 @@ pub(super) struct ConflictUpdate<'row, 'assignment, 'targets> {
 pub(super) async fn apply_insert_conflict_update(
     write_ctx: &WriteContext<'_>,
     table: &Table,
-    local_indexes: &[crabka_pgcatalog::Index],
+    local_indexes: &[krabka_pgcatalog::Index],
     fk: &crate::fk::StatementFkContext,
     update: &ConflictUpdate<'_, '_, '_>,
     writes: &mut StatementWrites,
-    ops: &mut Vec<crabka_pgkv::WriteOp>,
+    ops: &mut Vec<krabka_pgkv::WriteOp>,
 ) -> Result<Option<(Vec<Datum>, u64)>, ExecError> {
     let ctx = write_ctx.eval_ctx;
     // `ON CONFLICT DO UPDATE` reaches its row through the arbiter index probe,
@@ -288,7 +288,7 @@ pub(super) async fn apply_insert_conflict_update(
     crate::rls::RowSecurityCheck::compile(
         &write_ctx.policy_read_ctx(),
         table,
-        crabka_pgcatalog::policy::PolicyCommand::Update,
+        krabka_pgcatalog::policy::PolicyCommand::Update,
         crate::rls::CheckSubject::TargetRow,
     )?
     .permit_row(table, update.cur_row, ctx)?;
@@ -331,7 +331,7 @@ pub(super) async fn apply_insert_conflict_update(
             table,
             check: &write_ctx.row_check(
                 table,
-                crabka_pgcatalog::policy::PolicyCommand::Update,
+                krabka_pgcatalog::policy::PolicyCommand::Update,
                 &updated_columns,
             )?,
         },
@@ -373,8 +373,8 @@ pub(super) async fn apply_insert_conflict_update(
     Ok(Some((next, new_rowid)))
 }
 
-pub(super) fn all_committed_snapshot() -> crabka_pgmvcc::visibility::Snapshot {
-    crabka_pgmvcc::visibility::Snapshot {
+pub(super) fn all_committed_snapshot() -> krabka_pgmvcc::visibility::Snapshot {
+    krabka_pgmvcc::visibility::Snapshot {
         xmin: 0,
         xmax: u64::MAX,
         xip: Vec::new(),
@@ -383,21 +383,21 @@ pub(super) fn all_committed_snapshot() -> crabka_pgmvcc::visibility::Snapshot {
 
 pub(super) fn local_index_entry_ops(
     table: &Table,
-    indexes: &[crabka_pgcatalog::Index],
+    indexes: &[krabka_pgcatalog::Index],
     rowid: u64,
     row: &[Datum],
-) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
+) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
     let mut ops = Vec::new();
     for index in indexes {
         for values in index_entries(table, index, row)? {
-            ops.push(crabka_pgkv::WriteOp::Put {
-                key: crabka_pgkv::key::secondary_index_entry_key(
+            ops.push(krabka_pgkv::WriteOp::Put {
+                key: krabka_pgkv::key::secondary_index_entry_key(
                     table.id, index.id, &values, rowid,
                 ),
                 value: Vec::new(),
             });
             if let Some(key) = local_index_ordered_entry_key(table, index, &values, rowid) {
-                ops.push(crabka_pgkv::WriteOp::Put {
+                ops.push(krabka_pgkv::WriteOp::Put {
                     key,
                     value: Vec::new(),
                 });
@@ -409,12 +409,12 @@ pub(super) fn local_index_entry_ops(
 
 pub(super) fn local_index_ordered_entry_key(
     table: &Table,
-    index: &crabka_pgcatalog::Index,
+    index: &krabka_pgcatalog::Index,
     values: &[Datum],
     rowid: u64,
 ) -> Option<Vec<u8>> {
-    (index.method == crabka_pgcatalog::IndexMethod::Btree).then(|| {
-        crabka_pgkv::key::secondary_index_ordered_entry_key(
+    (index.method == krabka_pgcatalog::IndexMethod::Btree).then(|| {
+        krabka_pgkv::key::secondary_index_ordered_entry_key(
             table.id,
             index.id,
             values,
@@ -435,7 +435,7 @@ pub(super) fn local_index_ordered_entry_key(
 
 pub(super) fn index_entries(
     table: &Table,
-    index: &crabka_pgcatalog::Index,
+    index: &krabka_pgcatalog::Index,
     row: &[Datum],
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
     if !index_applies(table, index, row)? {
@@ -443,17 +443,17 @@ pub(super) fn index_entries(
     }
     if matches!(
         index.method,
-        crabka_pgcatalog::IndexMethod::Btree | crabka_pgcatalog::IndexMethod::Hash
+        krabka_pgcatalog::IndexMethod::Btree | krabka_pgcatalog::IndexMethod::Hash
     ) {
         return indexed_values(table, index, row).map(|values| vec![values]);
     }
     if !matches!(
         index.method,
-        crabka_pgcatalog::IndexMethod::Gin | crabka_pgcatalog::IndexMethod::Gist
+        krabka_pgcatalog::IndexMethod::Gin | krabka_pgcatalog::IndexMethod::Gist
     ) {
         return Ok(Vec::new());
     }
-    if index.method == crabka_pgcatalog::IndexMethod::Gin {
+    if index.method == krabka_pgcatalog::IndexMethod::Gin {
         let mut entries = Vec::new();
         let multiple_columns = index.columns.len() > 1;
         for (attribute, name) in index.columns.iter().enumerate() {
@@ -508,13 +508,13 @@ pub(super) fn index_entries(
 
 pub(super) fn index_applies(
     table: &Table,
-    index: &crabka_pgcatalog::Index,
+    index: &krabka_pgcatalog::Index,
     row: &[Datum],
 ) -> Result<bool, ExecError> {
     let Some(predicate) = &index.predicate else {
         return Ok(true);
     };
-    let expression = crabka_pgparser::parser::parse_expression(predicate)?;
+    let expression = krabka_pgparser::parser::parse_expression(predicate)?;
     Ok(crate::eval::eval(
         &expression,
         &Scope::single(table, &table.name.name),
@@ -525,15 +525,15 @@ pub(super) fn index_applies(
 
 pub(super) fn indexed_values(
     table: &Table,
-    index: &crabka_pgcatalog::Index,
+    index: &krabka_pgcatalog::Index,
     row: &[Datum],
 ) -> Result<Vec<Datum>, ExecError> {
     index
         .columns
         .iter()
         .map(|column| {
-            if let Some(expression) = crabka_pgcatalog::index_key_expression(column) {
-                let expression = crabka_pgparser::parser::parse_expression(expression)?;
+            if let Some(expression) = krabka_pgcatalog::index_key_expression(column) {
+                let expression = krabka_pgparser::parser::parse_expression(expression)?;
                 return crate::eval::eval(
                     &expression,
                     &Scope::single(table, &table.name.name),

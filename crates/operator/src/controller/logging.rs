@@ -239,8 +239,8 @@ mod tests {
 
     #[test]
     fn compose_target_is_target_equals_level() {
-        let f = compose_inline_filter(&loggers(&[("crabka_broker", "debug")])).unwrap();
-        assert!(f == "crabka_broker=debug");
+        let f = compose_inline_filter(&loggers(&[("krabka_broker", "debug")])).unwrap();
+        assert!(f == "krabka_broker=debug");
     }
 
     #[test]
@@ -248,11 +248,11 @@ mod tests {
         // Insertion order shouldn't matter — output is sorted.
         let f = compose_inline_filter(&loggers(&[
             ("root", "info"),
-            ("crabka_raft", "warn"),
-            ("crabka_broker", "debug"),
+            ("krabka_raft", "warn"),
+            ("krabka_broker", "debug"),
         ]))
         .unwrap();
-        assert!(f == "crabka_broker=debug,crabka_raft=warn,info");
+        assert!(f == "krabka_broker=debug,krabka_raft=warn,info");
     }
 
     #[test]
@@ -260,12 +260,12 @@ mod tests {
         // Uppercase + log4j aliases normalize to tracing levels.
         let f = compose_inline_filter(&loggers(&[
             ("root", "INFO"),
-            ("crabka_broker", "WARNING"),
-            ("crabka_log", "FATAL"),
-            ("crabka_raft", "OFF"),
+            ("krabka_broker", "WARNING"),
+            ("krabka_log", "FATAL"),
+            ("krabka_raft", "OFF"),
         ]))
         .unwrap();
-        assert!(f == "crabka_broker=warn,crabka_log=error,crabka_raft=off,info");
+        assert!(f == "krabka_broker=warn,krabka_log=error,krabka_raft=off,info");
     }
 
     #[test]
@@ -318,10 +318,10 @@ mod tests {
 
     #[test]
     fn condition_resolved_is_true_and_echoes_filter() {
-        let c = condition_for(&LoggingOutcome::Resolved("crabka_broker=debug,info".into()));
+        let c = condition_for(&LoggingOutcome::Resolved("krabka_broker=debug,info".into()));
         check!(c.status == "True");
         check!(c.reason == "Available");
-        check!(c.message.contains("crabka_broker=debug,info"));
+        check!(c.message.contains("krabka_broker=debug,info"));
     }
 
     #[test]

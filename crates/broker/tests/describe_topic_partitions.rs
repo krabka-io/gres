@@ -14,7 +14,7 @@
 use assert2::{assert, check};
 mod support;
 
-use crabka_protocol::owned::{
+use krabka_protocol::owned::{
     create_topics_request::{CreatableTopic, CreateTopicsRequest},
     describe_topic_partitions_request::{
         Cursor as RequestCursor, DescribeTopicPartitionsRequest, TopicRequest,

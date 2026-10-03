@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use crabka_pgkv::{Kv, WriteOp, is_notify_op};
+use krabka_pgkv::{Kv, WriteOp, is_notify_op};
 
 use crate::{
     apply::apply_frame,
@@ -272,8 +272,8 @@ mod tests {
     use std::collections::BTreeMap;
 
     use assert2::assert;
-    use crabka_gres_ranges::{RangeKey, TableId};
-    use crabka_pgkv::{Kv, MemKv, WriteOp};
+    use krabka_gres_ranges::{RangeKey, TableId};
+    use krabka_pgkv::{Kv, MemKv, WriteOp};
 
     use super::*;
 
@@ -282,13 +282,13 @@ mod tests {
         let filter = CheckpointFilter::new(RangeKey::new(TableId::new(51), 16), None)
             .unwrap()
             .with_physical_to_logical(BTreeMap::from([(TableId::new(1), TableId::new(52))]))
-            .with_target_range(crabka_gres_ranges::RangeId::new(3));
-        let start_ts = crabka_pgexec::TimestampTransactionId::new(9).unwrap();
-        let mut descriptor = crabka_pgexec::TimestampTxnDescriptor::begun(start_ts, 10, vec![1]);
+            .with_target_range(krabka_gres_ranges::RangeId::new(3));
+        let start_ts = krabka_pgexec::TimestampTransactionId::new(9).unwrap();
+        let mut descriptor = krabka_pgexec::TimestampTxnDescriptor::begun(start_ts, 10, vec![1]);
         descriptor
             .acknowledge_operations(
                 1,
-                &[crabka_pgexec::TimestampTxnOperation {
+                &[krabka_pgexec::TimestampTxnOperation {
                     range_id: 1,
                     table_id: 1,
                     bucket: None,
@@ -306,7 +306,7 @@ mod tests {
         identity[20..24].copy_from_slice(&1_u32.to_be_bytes());
         let ops = filter_write_ops(
             &[
-                crabka_pgexec::timestamp_txn_descriptor_op(&descriptor),
+                krabka_pgexec::timestamp_txn_descriptor_op(&descriptor),
                 WriteOp::Put {
                     key: intent_key,
                     value: identity,
@@ -319,7 +319,7 @@ mod tests {
             panic!("descriptor put")
         };
         let rewritten =
-            crabka_pgexec::decode_timestamp_txn_descriptor_value(start_ts, value).unwrap();
+            krabka_pgexec::decode_timestamp_txn_descriptor_value(start_ts, value).unwrap();
         assert_eq!(rewritten.participants, vec![3]);
         assert_eq!(rewritten.prepared, vec![3]);
         assert_eq!(rewritten.operations[0].range_id, 3);
@@ -473,8 +473,8 @@ mod tests {
     #[test]
     fn filtered_replay_skips_predecessor_owned_keys() {
         let kv = MemKv::default();
-        let predecessor_key = crabka_pgkv::key::row_key(7, 10);
-        let successor_key = crabka_pgkv::key::row_key(7, 20);
+        let predecessor_key = krabka_pgkv::key::row_key(7, 10);
+        let successor_key = krabka_pgkv::key::row_key(7, 20);
         let frames = vec![
             item(
                 0,
@@ -519,7 +519,7 @@ mod tests {
     }
 
     fn notify_record() -> Vec<u8> {
-        crabka_pgkv::NotifyRecord {
+        krabka_pgkv::NotifyRecord {
             origin: "node-a".into(),
             process_id: 7,
             channel: "c".into(),
@@ -533,7 +533,7 @@ mod tests {
     #[test]
     fn replay_never_persists_notify_records() {
         let kv = MemKv::default();
-        let row = crabka_pgkv::key::row_key(7, 1);
+        let row = krabka_pgkv::key::row_key(7, 1);
         let frames = vec![
             item(
                 0,
@@ -545,18 +545,18 @@ mod tests {
                             value: b"row".to_vec(),
                         },
                         WriteOp::Put {
-                            key: crabka_pgkv::key::notify_key(1),
+                            key: krabka_pgkv::key::notify_key(1),
                             value: notify_record(),
                         },
                         WriteOp::Put {
-                            key: crabka_pgkv::key::next_xid_key(),
+                            key: krabka_pgkv::key::next_xid_key(),
                             value: 9_u64.to_be_bytes().to_vec(),
                         },
                         WriteOp::Put {
-                            key: crabka_pgkv::key::notify_key(2),
+                            key: krabka_pgkv::key::notify_key(2),
                             value: notify_record(),
                         },
-                        crabka_pgmvcc::clog::put_op(11, crabka_pgmvcc::clog::XidStatus::Committed),
+                        krabka_pgmvcc::clog::put_op(11, krabka_pgmvcc::clog::XidStatus::Committed),
                     ],
                 },
             ),
@@ -574,16 +574,16 @@ mod tests {
         assert!(outcome.next_journal_seq == 1);
         assert!(kv.get(&row).expect("get") == Some(b"row".to_vec()));
         assert!(
-            kv.get(&crabka_pgkv::key::next_xid_key()).expect("get")
+            kv.get(&krabka_pgkv::key::next_xid_key()).expect("get")
                 == Some(9_u64.to_be_bytes().to_vec())
         );
         assert!(
-            kv.get(&crabka_pgkv::key::clog_key(11))
+            kv.get(&krabka_pgkv::key::clog_key(11))
                 .expect("get")
                 .is_some()
         );
         assert!(
-            kv.scan_prefix(&crabka_pgkv::key::notify_prefix())
+            kv.scan_prefix(&krabka_pgkv::key::notify_prefix())
                 .expect("scan")
                 .is_empty()
         );
@@ -593,7 +593,7 @@ mod tests {
     /// before their selectors ever see a key from a namespace they do not know.
     #[test]
     fn filtered_and_table_transfer_replay_never_persist_notify_records() {
-        let successor_key = crabka_pgkv::key::row_key(7, 20);
+        let successor_key = krabka_pgkv::key::row_key(7, 20);
         let frames = || {
             vec![
                 item(
@@ -602,7 +602,7 @@ mod tests {
                         journal_seq: 0,
                         ops: vec![
                             WriteOp::Put {
-                                key: crabka_pgkv::key::notify_key(1),
+                                key: krabka_pgkv::key::notify_key(1),
                                 value: notify_record(),
                             },
                             WriteOp::Put {
@@ -610,7 +610,7 @@ mod tests {
                                 value: b"successor".to_vec(),
                             },
                             WriteOp::Delete {
-                                key: crabka_pgkv::key::notify_key(2),
+                                key: krabka_pgkv::key::notify_key(2),
                             },
                         ],
                     },
@@ -639,7 +639,7 @@ mod tests {
         assert!(filtered_kv.get(&successor_key).expect("get") == Some(b"successor".to_vec()));
         assert!(
             filtered_kv
-                .scan_prefix(&crabka_pgkv::key::notify_prefix())
+                .scan_prefix(&krabka_pgkv::key::notify_prefix())
                 .expect("scan")
                 .is_empty()
         );
@@ -653,15 +653,15 @@ mod tests {
                     journal_seq: 0,
                     ops: vec![
                         WriteOp::Put {
-                            key: crabka_pgkv::key::notify_key(1),
+                            key: krabka_pgkv::key::notify_key(1),
                             value: notify_record(),
                         },
                         WriteOp::Put {
-                            key: crabka_pgkv::key::seq_key(7),
+                            key: krabka_pgkv::key::seq_key(7),
                             value: 5_u64.to_be_bytes().to_vec(),
                         },
                         WriteOp::Delete {
-                            key: crabka_pgkv::key::notify_key(2),
+                            key: krabka_pgkv::key::notify_key(2),
                         },
                     ],
                 },
@@ -685,12 +685,12 @@ mod tests {
         .expect("table transfer replay");
         assert!(outcome.next_journal_seq == 1);
         assert!(
-            transfer_kv.get(&crabka_pgkv::key::seq_key(7)).expect("get")
+            transfer_kv.get(&krabka_pgkv::key::seq_key(7)).expect("get")
                 == Some(5_u64.to_be_bytes().to_vec())
         );
         assert!(
             transfer_kv
-                .scan_prefix(&crabka_pgkv::key::notify_prefix())
+                .scan_prefix(&krabka_pgkv::key::notify_prefix())
                 .expect("scan")
                 .is_empty()
         );

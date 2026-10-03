@@ -31,10 +31,10 @@ use std::{
 };
 
 use assert2::assert;
-use crabka_broker::{Broker, BrokerConfig, BrokerHandle};
-use crabka_client_core::Client;
-use crabka_log::LogConfig;
-use crabka_protocol::{
+use krabka_broker::{Broker, BrokerConfig, BrokerHandle};
+use krabka_client_core::Client;
+use krabka_log::LogConfig;
+use krabka_protocol::{
     owned::{
         create_topics_request::{CreatableTopic, CreateTopicsRequest},
         find_coordinator_request::FindCoordinatorRequest,
@@ -67,7 +67,7 @@ async fn start_host_broker() -> (BrokerHandle, tempfile::TempDir) {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("crabka_broker=info,info")),
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("krabka_broker=info,info")),
         )
         .with_test_writer()
         .try_init();
@@ -80,15 +80,15 @@ async fn start_host_broker() -> (BrokerHandle, tempfile::TempDir) {
         advertised_listener: BOOTSTRAP.into(),
         log_dir: dir.path().to_path_buf(),
         log_config: LogConfig::default(),
-        node_id: crabka_broker::NodeId(1),
+        node_id: krabka_broker::NodeId(1),
         controller_listen_addr: controller_addr,
-        controller_quorum_voters: vec![(crabka_broker::NodeId(1), controller_addr.to_string())],
-        heartbeat_interval: crabka_units::millis(3_000),
-        heartbeat_timeout: crabka_units::millis(9_000),
-        replica_lag_time_max: crabka_units::millis(30_000),
-        controller_election_timeout: crabka_units::secs(5),
-        controller_heartbeat_interval: crabka_units::millis(500),
-        bootstrap_mode: crabka_broker::BootstrapMode::Bootstrap,
+        controller_quorum_voters: vec![(krabka_broker::NodeId(1), controller_addr.to_string())],
+        heartbeat_interval: krabka_units::millis(3_000),
+        heartbeat_timeout: krabka_units::millis(9_000),
+        replica_lag_time_max: krabka_units::millis(30_000),
+        controller_election_timeout: krabka_units::secs(5),
+        controller_heartbeat_interval: krabka_units::millis(500),
+        bootstrap_mode: krabka_broker::BootstrapMode::Bootstrap,
         ..BrokerConfig::default()
     };
     let handle = Broker::start(config).await.expect("start broker");
@@ -101,7 +101,7 @@ async fn start_host_broker() -> (BrokerHandle, tempfile::TempDir) {
 async fn connect() -> Client {
     Client::builder()
         .bootstrap(format!("127.0.0.1:{HOST_PORT}"))
-        .client_id("crabka-share-test")
+        .client_id("krabka-share-test")
         .build()
         .await
         .expect("client build")

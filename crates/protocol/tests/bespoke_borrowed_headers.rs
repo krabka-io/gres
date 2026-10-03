@@ -3,7 +3,7 @@
 // wrappers.
 
 use bytes::BytesMut;
-use crabka_protocol::{
+use krabka_protocol::{
     DecodeBorrow, Encode, UnknownTaggedFields,
     borrowed::{
         request_header::{MAX_VERSION, MIN_VERSION, RequestHeader},
@@ -51,7 +51,7 @@ fn borrowed_request_header_max_version_with_client_id() {
 
 #[test]
 fn borrowed_request_header_to_owned_matches_owned_codec() {
-    use crabka_protocol::Encode as OwnedEncode;
+    use krabka_protocol::Encode as OwnedEncode;
     let hdr = RequestHeader {
         request_api_key: 18i16,
         request_api_version: 3i16,
@@ -101,7 +101,7 @@ fn borrowed_response_header_max_version_specific_values() {
 
 #[test]
 fn borrowed_response_header_to_owned_matches_owned_codec() {
-    use crabka_protocol::Encode as OwnedEncode;
+    use krabka_protocol::Encode as OwnedEncode;
     let hdr = ResponseHeader {
         correlation_id: 5i32,
         unknown_tagged_fields: UnknownTaggedFields::default(),

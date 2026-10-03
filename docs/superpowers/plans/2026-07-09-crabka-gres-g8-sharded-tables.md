@@ -4,9 +4,9 @@
 
 **Goal:** One table spans ranges: global-visibility tables on the existing g-timeline, scatter-gather statement execution (0A000 lifted), interval rowid placement, and online checkpoint-fork splits — with the commit-rate ceiling measured against its stated envelope.
 
-**Architecture:** G-8a makes sharded tables *semantically* distributed with zero new clocks: every write is g-stamped (leased g-blocks; batched range-0 decisions), every read runs under the G-7 gsnap+barrier, and a new `RangeScanner` seam in the executor scatter-gathers scans with owning-range visibility evaluation. G-8b makes the layout *dynamic*: versioned RangeMap v2 with `(table_id, rowid)` boundaries, splits as checkpoint forks with filtered restore and parked predecessor topics.
+**Architecture:** G-8a makes sharded tables _semantically_ distributed with zero new clocks: every write is g-stamped (leased g-blocks; batched range-0 decisions), every read runs under the G-7 gsnap+barrier, and a new `RangeScanner` seam in the executor scatter-gathers scans with owning-range visibility evaluation. G-8b makes the layout _dynamic_: versioned RangeMap v2 with `(table_id, rowid)` boundaries, splits as checkpoint forks with filtered restore and parked predecessor topics.
 
-**Tech Stack:** everything G-7 built (transport, coordinator, models, harnesses), G-3 checkpoint machinery (filtered restore), G-5 parking, `crabka-pgparser` (`SHARDED`), stateright.
+**Tech Stack:** everything G-7 built (transport, coordinator, models, harnesses), G-3 checkpoint machinery (filtered restore), G-5 parking, `krabka-pgparser` (`SHARDED`), stateright.
 
 ## Global Constraints
 

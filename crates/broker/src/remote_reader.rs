@@ -8,14 +8,14 @@
 //! wraps byte-range reads, index reads, and `ListOffsets` metadata scans in
 //! `tokio::task::spawn_blocking`, so those remote-tier operations do not stall
 //! the broker's reactor. The pure index-decode helpers mirror
-//! `crabka_log::index::{OffsetIndex,TimeIndex}::lookup` against the Kafka-format
+//! `krabka_log::index::{OffsetIndex,TimeIndex}::lookup` against the Kafka-format
 //! index bytes that the copy path wrote verbatim.
 
 use std::sync::Arc;
 
-use crabka_ids::LeaderEpoch;
-use crabka_protocol::records::RecordBatch;
-use crabka_remote_storage::{
+use krabka_ids::LeaderEpoch;
+use krabka_protocol::records::RecordBatch;
+use krabka_remote_storage::{
     IndexType, RemoteLogMetadataManager, RemoteLogSegmentMetadata, RemoteLogSegmentState,
     RemoteStorageError, RemoteStorageManager, TopicIdPartition,
 };
@@ -36,7 +36,7 @@ pub(crate) type RelativeOffset = u32;
 pub(crate) type BytePosition = u32;
 
 /// 8 bytes per entry: rel u32 BE, then pos u32 BE. It mirrors
-/// `crabka_log::index::OffsetEntryRaw`, so the remote-tier copy of an
+/// `krabka_log::index::OffsetEntryRaw`, so the remote-tier copy of an
 /// `OffsetIndex` file decodes through the same byte layout that wrote the
 /// local index.
 #[derive(Debug, Clone, Copy, FromBytes, KnownLayout, Immutable, Unaligned)]
@@ -52,7 +52,7 @@ const OFFSET_INDEX_ENTRY_LEN: usize = std::mem::size_of::<OffsetIndexEntry>();
 const _: () = assert!(OFFSET_INDEX_ENTRY_LEN == 8);
 
 /// 12 bytes per entry: ts i64 BE, then rel u32 BE. It mirrors
-/// `crabka_log::index::TimeEntryRaw`.
+/// `krabka_log::index::TimeEntryRaw`.
 #[derive(Debug, Clone, Copy, FromBytes, KnownLayout, Immutable, Unaligned)]
 #[repr(C)]
 pub(crate) struct TimeIndexEntry {
@@ -66,7 +66,7 @@ const TIME_INDEX_ENTRY_LEN: usize = std::mem::size_of::<TimeIndexEntry>();
 const _: () = assert!(TIME_INDEX_ENTRY_LEN == 12);
 
 /// 24 bytes per entry: `start_offset` i64 BE, `last_offset` i64 BE, then
-/// `producer_id` i64 BE. It mirrors `crabka_log::txn_index::AbortedTxnRaw`, so
+/// `producer_id` i64 BE. It mirrors `krabka_log::txn_index::AbortedTxnRaw`, so
 /// the remote-tier copy of a `.txnindex` file decodes through the same byte
 /// layout that wrote the local index.
 #[derive(Debug, Clone, Copy, FromBytes, KnownLayout, Immutable, Unaligned)]
@@ -704,7 +704,7 @@ mod tests {
     #[test]
     fn first_batch_at_or_after_decodes_and_skips() {
         use bytes::{Bytes, BytesMut};
-        use crabka_protocol::records::Record;
+        use krabka_protocol::records::Record;
 
         // Two adjacent batches; floor=10 should skip the first (last=9) and
         // return the second.
@@ -848,24 +848,24 @@ mod tests {
 
     use std::{collections::BTreeMap, fmt::Write as _};
 
-    use crabka_log::{Log, LogConfig};
-    use crabka_protocol::records::Record;
-    use crabka_remote_storage::{
+    use krabka_log::{Log, LogConfig};
+    use krabka_protocol::records::Record;
+    use krabka_remote_storage::{
         InmemoryRemoteLogMetadataManager, LocalTieredStorage, RemoteLogMetadataManager,
         RemoteStorageManager,
     };
-    use crabka_units::convert::ByteSizeExt as _;
+    use krabka_units::convert::ByteSizeExt as _;
     use uuid::Uuid;
 
     fn tp() -> TopicIdPartition {
         TopicIdPartition::new(Uuid::from_u128(1), "orders", 0)
     }
 
-    fn batch_of(n: i32, value_size: usize) -> crabka_protocol::records::RecordBatch {
+    fn batch_of(n: i32, value_size: usize) -> krabka_protocol::records::RecordBatch {
         use bytes::Bytes;
-        let mut b = crabka_protocol::records::RecordBatch {
+        let mut b = krabka_protocol::records::RecordBatch {
             last_offset_delta: n - 1,
-            ..crabka_protocol::records::RecordBatch::default()
+            ..krabka_protocol::records::RecordBatch::default()
         };
         for i in 0..n {
             b.records.push(Record {
@@ -882,12 +882,12 @@ mod tests {
         base_offset: i64,
         record_count: i32,
         value_byte: u8,
-    ) -> crabka_protocol::records::RecordBatch {
+    ) -> krabka_protocol::records::RecordBatch {
         use bytes::Bytes;
-        let mut batch = crabka_protocol::records::RecordBatch {
+        let mut batch = krabka_protocol::records::RecordBatch {
             base_offset,
             last_offset_delta: record_count - 1,
-            ..crabka_protocol::records::RecordBatch::default()
+            ..krabka_protocol::records::RecordBatch::default()
         };
         for offset_delta in 0..record_count {
             batch.records.push(Record {
@@ -903,11 +903,11 @@ mod tests {
         base_offset: i64,
         timestamps: &[i64],
         value_byte: u8,
-    ) -> crabka_protocol::records::RecordBatch {
+    ) -> krabka_protocol::records::RecordBatch {
         use bytes::Bytes;
 
         let base_timestamp = timestamps.first().copied().unwrap_or_default();
-        crabka_protocol::records::RecordBatch {
+        krabka_protocol::records::RecordBatch {
             base_offset,
             last_offset_delta: i32::try_from(timestamps.len().saturating_sub(1)).unwrap(),
             base_timestamp,
@@ -980,7 +980,7 @@ mod tests {
             Arc::new(LocalTieredStorage::new(remote_dir.path()));
         let rlmm: Arc<dyn RemoteLogMetadataManager> =
             Arc::new(InmemoryRemoteLogMetadataManager::new());
-        let id = crabka_remote_storage::RemoteLogSegmentId::new(tp(), Uuid::new_v4());
+        let id = krabka_remote_storage::RemoteLogSegmentId::new(tp(), Uuid::new_v4());
         let md = RemoteLogSegmentMetadata::new(
             id.clone(),
             10,
@@ -988,7 +988,7 @@ mod tests {
             max_timestamp_ms,
             1,
             2_400,
-            crabka_remote_storage::RemoteLogSegmentDetails::new(
+            krabka_remote_storage::RemoteLogSegmentDetails::new(
                 i32::try_from(log_bytes.len()).unwrap_or(i32::MAX),
                 RemoteLogSegmentState::CopySegmentStarted,
                 BTreeMap::from([(LeaderEpoch(0_i32), 10_i64)]),
@@ -997,7 +997,7 @@ mod tests {
         .unwrap();
 
         rlmm.add_remote_log_segment_metadata(md.clone()).unwrap();
-        let data = crabka_remote_storage::LogSegmentData {
+        let data = krabka_remote_storage::LogSegmentData {
             log_segment: log_path,
             offset_index: offset_index_path,
             time_index: time_index_path,
@@ -1007,7 +1007,7 @@ mod tests {
         };
         rsm.copy_log_segment_data(&md, &data).unwrap();
         rlmm.update_remote_log_segment_metadata(
-            crabka_remote_storage::RemoteLogSegmentMetadataUpdate {
+            krabka_remote_storage::RemoteLogSegmentMetadataUpdate {
                 remote_log_segment_id: id,
                 event_timestamp_ms: 2_400,
                 custom_metadata: None,
@@ -1036,7 +1036,7 @@ mod tests {
         let mut log = Log::open(
             log_dir,
             LogConfig {
-                segment_size: crabka_units::bytes(256),
+                segment_size: krabka_units::bytes(256),
                 ..LogConfig::default()
             },
         )
@@ -1055,7 +1055,7 @@ mod tests {
         // `CopySegmentFinished` (mirrors the copy path's copy_eligible
         // without the broker-side dependencies).
         for ex in &exports {
-            let id = crabka_remote_storage::RemoteLogSegmentId::new(tp(), Uuid::new_v4());
+            let id = krabka_remote_storage::RemoteLogSegmentId::new(tp(), Uuid::new_v4());
             // Unwrap the log-layer `Offset`s into the remote-storage metadata's
             // `i64` world at the seam.
             let epochs: BTreeMap<LeaderEpoch, i64> = if ex.leader_epochs.is_empty() {
@@ -1073,7 +1073,7 @@ mod tests {
                 ex.max_timestamp,
                 1,
                 ex.max_timestamp,
-                crabka_remote_storage::RemoteLogSegmentDetails::new(
+                krabka_remote_storage::RemoteLogSegmentDetails::new(
                     ex.size.bytes_i32(),
                     RemoteLogSegmentState::CopySegmentStarted,
                     epochs.clone(),
@@ -1088,7 +1088,7 @@ mod tests {
             for (e, st) in &epochs {
                 let _ = writeln!(s, "{e} {st}");
             }
-            let data = crabka_remote_storage::LogSegmentData {
+            let data = krabka_remote_storage::LogSegmentData {
                 log_segment: ex.log_path.clone(),
                 offset_index: ex.offset_index_path.clone(),
                 time_index: ex.time_index_path.clone(),
@@ -1098,7 +1098,7 @@ mod tests {
             };
             rsm.copy_log_segment_data(&md, &data).unwrap();
             rlmm.update_remote_log_segment_metadata(
-                crabka_remote_storage::RemoteLogSegmentMetadataUpdate {
+                krabka_remote_storage::RemoteLogSegmentMetadataUpdate {
                     remote_log_segment_id: id,
                     event_timestamp_ms: ex.max_timestamp,
                     custom_metadata: None,
@@ -1125,7 +1125,7 @@ mod tests {
         let mut log = Log::open(
             log_dir,
             LogConfig {
-                segment_size: crabka_units::bytes(256),
+                segment_size: krabka_units::bytes(256),
                 ..LogConfig::default()
             },
         )
@@ -1160,7 +1160,7 @@ mod tests {
         let rlmm: Arc<dyn RemoteLogMetadataManager> =
             Arc::new(InmemoryRemoteLogMetadataManager::new());
         for ex in &exports {
-            let id = crabka_remote_storage::RemoteLogSegmentId::new(tp(), Uuid::new_v4());
+            let id = krabka_remote_storage::RemoteLogSegmentId::new(tp(), Uuid::new_v4());
             // Unwrap the log-layer `Offset`s into the remote-storage metadata's
             // `i64` world at the seam.
             let epochs: BTreeMap<LeaderEpoch, i64> = if ex.leader_epochs.is_empty() {
@@ -1178,7 +1178,7 @@ mod tests {
                 ex.max_timestamp,
                 1,
                 ex.max_timestamp,
-                crabka_remote_storage::RemoteLogSegmentDetails::new(
+                krabka_remote_storage::RemoteLogSegmentDetails::new(
                     ex.size.bytes_i32(),
                     RemoteLogSegmentState::CopySegmentStarted,
                     epochs.clone(),
@@ -1191,7 +1191,7 @@ mod tests {
             for (e, st) in &epochs {
                 let _ = writeln!(s, "{e} {st}");
             }
-            let data = crabka_remote_storage::LogSegmentData {
+            let data = krabka_remote_storage::LogSegmentData {
                 log_segment: ex.log_path.clone(),
                 offset_index: ex.offset_index_path.clone(),
                 time_index: ex.time_index_path.clone(),
@@ -1201,7 +1201,7 @@ mod tests {
             };
             rsm.copy_log_segment_data(&md, &data).unwrap();
             rlmm.update_remote_log_segment_metadata(
-                crabka_remote_storage::RemoteLogSegmentMetadataUpdate {
+                krabka_remote_storage::RemoteLogSegmentMetadataUpdate {
                     remote_log_segment_id: id,
                     event_timestamp_ms: ex.max_timestamp,
                     custom_metadata: None,
@@ -1338,7 +1338,7 @@ mod tests {
             Arc::new(LocalTieredStorage::new(remote_dir.path()));
         let rlmm: Arc<dyn RemoteLogMetadataManager> =
             Arc::new(InmemoryRemoteLogMetadataManager::new());
-        let id = crabka_remote_storage::RemoteLogSegmentId::new(tp(), Uuid::new_v4());
+        let id = krabka_remote_storage::RemoteLogSegmentId::new(tp(), Uuid::new_v4());
         let md = RemoteLogSegmentMetadata::new(
             id,
             0,
@@ -1346,7 +1346,7 @@ mod tests {
             100,
             1,
             100,
-            crabka_remote_storage::RemoteLogSegmentDetails::new(
+            krabka_remote_storage::RemoteLogSegmentDetails::new(
                 1024,
                 RemoteLogSegmentState::CopySegmentStarted,
                 BTreeMap::from([(LeaderEpoch(0), 0_i64)]),
@@ -1400,7 +1400,7 @@ mod tests {
             .max()
             .unwrap();
 
-        let started_id = crabka_remote_storage::RemoteLogSegmentId::new(tp(), Uuid::new_v4());
+        let started_id = krabka_remote_storage::RemoteLogSegmentId::new(tp(), Uuid::new_v4());
         reader
             .rlmm
             .add_remote_log_segment_metadata(
@@ -1411,7 +1411,7 @@ mod tests {
                     0,
                     1,
                     0,
-                    crabka_remote_storage::RemoteLogSegmentDetails::new(
+                    krabka_remote_storage::RemoteLogSegmentDetails::new(
                         1,
                         RemoteLogSegmentState::CopySegmentStarted,
                         BTreeMap::from([(LeaderEpoch(7), expected + 1)]),
@@ -1449,7 +1449,7 @@ mod tests {
 
         fn update_remote_log_segment_metadata(
             &self,
-            _update: crabka_remote_storage::RemoteLogSegmentMetadataUpdate,
+            _update: krabka_remote_storage::RemoteLogSegmentMetadataUpdate,
         ) -> Result<(), RemoteStorageError> {
             Ok(())
         }
@@ -1494,7 +1494,7 @@ mod tests {
 
         fn put_remote_partition_delete_metadata(
             &self,
-            _metadata: crabka_remote_storage::RemotePartitionDeleteMetadata,
+            _metadata: krabka_remote_storage::RemotePartitionDeleteMetadata,
         ) -> Result<(), RemoteStorageError> {
             Ok(())
         }
@@ -1613,7 +1613,7 @@ mod tests {
         }
         fn update_remote_log_segment_metadata(
             &self,
-            _u: crabka_remote_storage::RemoteLogSegmentMetadataUpdate,
+            _u: krabka_remote_storage::RemoteLogSegmentMetadataUpdate,
         ) -> Result<(), RemoteStorageError> {
             Ok(())
         }
@@ -1647,7 +1647,7 @@ mod tests {
         }
         fn put_remote_partition_delete_metadata(
             &self,
-            _m: crabka_remote_storage::RemotePartitionDeleteMetadata,
+            _m: krabka_remote_storage::RemotePartitionDeleteMetadata,
         ) -> Result<(), RemoteStorageError> {
             Ok(())
         }
@@ -1690,7 +1690,7 @@ mod tests {
     /// list path stops returning `NotReady` for `tp`. At that point the
     /// partition is caught up to its assignment-time HWM.
     async fn assign_and_wait_ready(
-        m: &Arc<crabka_remote_storage_topic::TopicBasedRemoteLogMetadataManager>,
+        m: &Arc<krabka_remote_storage_topic::TopicBasedRemoteLogMetadataManager>,
         mp: i32,
         tp: &TopicIdPartition,
     ) {
@@ -1714,7 +1714,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn list_path_observes_not_ready_and_unassigned_from_real_manager() {
-        use crabka_remote_storage_topic::{
+        use krabka_remote_storage_topic::{
             InProcessMetadataEventLog, MetadataEventLog, TopicBasedRemoteLogMetadataManager,
             metadata_partition_for,
         };
@@ -1748,7 +1748,7 @@ mod tests {
             writer
                 .reconcile_assignment(&(0..n).collect::<Vec<_>>())
                 .await;
-            let id = crabka_remote_storage::RemoteLogSegmentId::new(owned.clone(), Uuid::new_v4());
+            let id = krabka_remote_storage::RemoteLogSegmentId::new(owned.clone(), Uuid::new_v4());
             let md = RemoteLogSegmentMetadata::new(
                 id.clone(),
                 0,
@@ -1756,7 +1756,7 @@ mod tests {
                 100,
                 1,
                 100,
-                crabka_remote_storage::RemoteLogSegmentDetails::new(
+                krabka_remote_storage::RemoteLogSegmentDetails::new(
                     2048,
                     RemoteLogSegmentState::CopySegmentStarted,
                     BTreeMap::from([(LeaderEpoch(0), 0)]),
@@ -1773,7 +1773,7 @@ mod tests {
             let w2 = writer.clone();
             tokio::task::spawn_blocking(move || {
                 w2.update_remote_log_segment_metadata(
-                    crabka_remote_storage::RemoteLogSegmentMetadataUpdate {
+                    krabka_remote_storage::RemoteLogSegmentMetadataUpdate {
                         remote_log_segment_id: id,
                         event_timestamp_ms: 100,
                         custom_metadata: None,

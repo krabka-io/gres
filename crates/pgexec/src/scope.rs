@@ -2,19 +2,19 @@
 //!
 //! A `Scope` is the ordered schema of a relation's combined row. `resolve` maps
 //! a column reference, qualified or bare, to its flat index into that row. This
-//! replaces the single-`crabka_pgcatalog::Table` column lookup that every prior
+//! replaces the single-`krabka_pgcatalog::Table` column lookup that every prior
 //! slice used.
 
 use std::collections::BTreeMap;
 
-use crabka_pgcatalog::{Table, TableId};
-use crabka_pgparser::ast::{
+use krabka_pgcatalog::{Table, TableId};
+use krabka_pgparser::ast::{
     ArraySubscript, Assignment, AssignmentValue, Cte, CteBody, DistinctClause, Expr, FrameBound,
     FuncArgs, InsertSource, JoinConstraint, MergeAction, MergeSource, MergeWhen, OnConflict,
     OnConflictAction, OnConflictTarget, QueryBody, QueryExpr, Returning, SelectItem, SelectStmt,
     SetExpr, Statement, TableExpr, WindowCall, WindowRef, WindowSpec, WithClause,
 };
-use crabka_pgtypes::{ColumnType, Datum, RecordValue, usertype::UserTypeRef};
+use krabka_pgtypes::{ColumnType, Datum, RecordValue, usertype::UserTypeRef};
 
 use crate::error::ExecError;
 
@@ -151,7 +151,7 @@ pub(crate) fn reject_system_column_names<'a>(
 /// invalid item pointer.
 pub(crate) fn row_ctid(identity: u64) -> Datum {
     let ordinal = identity.saturating_sub(1);
-    Datum::Tid(crabka_pgtypes::Tid {
+    Datum::Tid(krabka_pgtypes::Tid {
         // Saturating rather than wrapping: past 2^38 rows in one relation the
         // block no longer separates them, and a pinned block is at least
         // monotone with the identity.
@@ -177,7 +177,7 @@ pub(crate) fn first_identity_in_block(block: u32) -> u64 {
 }
 
 /// The physical identity named by a `ctid` emitted by [`row_ctid`].
-pub(crate) fn ctid_identity(tid: crabka_pgtypes::Tid) -> Option<u64> {
+pub(crate) fn ctid_identity(tid: krabka_pgtypes::Tid) -> Option<u64> {
     let offset = u64::from(tid.offset);
     (1..=ROWS_PER_BLOCK)
         .contains(&offset)
@@ -725,8 +725,8 @@ impl StatementRefs {
                     for chain in chains {
                         for indirection in chain {
                             match indirection {
-                                crabka_pgparser::ast::TargetIndirection::Field(_) => {}
-                                crabka_pgparser::ast::TargetIndirection::Subscript(subscript) => {
+                                krabka_pgparser::ast::TargetIndirection::Field(_) => {}
+                                krabka_pgparser::ast::TargetIndirection::Subscript(subscript) => {
                                     match subscript {
                                         ArraySubscript::Index(expr) => self.add_expr(expr),
                                         ArraySubscript::Slice { lower, upper } => {
@@ -873,7 +873,7 @@ impl StatementRefs {
             value,
         } = assignment;
         for indirection in indirections {
-            let crabka_pgparser::ast::TargetIndirection::Subscript(subscript) = indirection else {
+            let krabka_pgparser::ast::TargetIndirection::Subscript(subscript) = indirection else {
                 continue;
             };
             match subscript {
@@ -916,7 +916,7 @@ impl StatementRefs {
                 filter,
             } => {
                 for assignment in assignments {
-                    if let crabka_pgparser::ast::AssignmentValue::Expr(expr) = &assignment.value {
+                    if let krabka_pgparser::ast::AssignmentValue::Expr(expr) = &assignment.value {
                         self.add_expr(expr);
                     }
                 }
@@ -1656,14 +1656,14 @@ impl Scope {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgcatalog::{Column, RelationName, Table};
+    use krabka_pgcatalog::{Column, RelationName, Table};
 
     use super::*;
 
     fn tbl(name: &str, cols: &[(&str, ColumnType)]) -> Table {
         Table {
             id: 1,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public(name),
             columns: cols.iter().map(|(n, t)| Column::new(*n, *t)).collect(),
             sharded: false,
@@ -1875,7 +1875,7 @@ mod tests {
             UserTypeRef {
                 oid: u32::MAX,
                 array_oid: u32::MAX - 1,
-                name: crabka_pgtypes::usertype::intern("scope_slot_test"),
+                name: krabka_pgtypes::usertype::intern("scope_slot_test"),
             },
         );
 
@@ -1922,8 +1922,8 @@ mod tests {
             ("SELECT tableoids FROM t", false),
         ];
         for (sql, expected) in cases {
-            let parsed = crabka_pgparser::parse(sql).expect("statement parses");
-            let [crabka_pgparser::ast::Statement::Query(query)] = parsed.as_slice() else {
+            let parsed = krabka_pgparser::parse(sql).expect("statement parses");
+            let [krabka_pgparser::ast::Statement::Query(query)] = parsed.as_slice() else {
                 panic!("{sql} is one query");
             };
             let SetExpr::Query(QueryBody::Select(select)) = &query.body else {
@@ -1960,8 +1960,8 @@ mod tests {
             ("SELECT ctids FROM t", (false, false)),
         ];
         for (sql, (ctid, system)) in cases {
-            let parsed = crabka_pgparser::parse(sql).expect("statement parses");
-            let [crabka_pgparser::ast::Statement::Query(query)] = parsed.as_slice() else {
+            let parsed = krabka_pgparser::parse(sql).expect("statement parses");
+            let [krabka_pgparser::ast::Statement::Query(query)] = parsed.as_slice() else {
                 panic!("{sql} is one query");
             };
             let SetExpr::Query(QueryBody::Select(select)) = &query.body else {
@@ -2036,7 +2036,7 @@ mod tests {
             ("DELETE FROM t WHERE ctids = 1", (false, false)),
         ];
         for (sql, (ctid, tableoid)) in cases {
-            let parsed = crabka_pgparser::parse(sql).expect("statement parses");
+            let parsed = krabka_pgparser::parse(sql).expect("statement parses");
             let [stmt] = parsed.as_slice() else {
                 panic!("{sql} is one statement");
             };
@@ -2052,7 +2052,7 @@ mod tests {
     fn a_data_modifying_with_entry_does_not_lend_the_outer_target_its_refs() {
         let sql = "WITH d AS (DELETE FROM p WHERE ctid = '(0,1)' RETURNING k) \
                    UPDATE t SET a = 1 FROM d WHERE t.a = d.k";
-        let parsed = crabka_pgparser::parse(sql).expect("statement parses");
+        let parsed = krabka_pgparser::parse(sql).expect("statement parses");
         let [stmt] = parsed.as_slice() else {
             panic!("one statement");
         };
@@ -2066,7 +2066,7 @@ mod tests {
     fn write_refs_collect_the_bare_names_a_returning_list_spells() {
         let sql = "UPDATE foo SET f2 = foo_v.f2 FROM foo_v WHERE foo_v.f1 = foo.f1 \
                    RETURNING foo_v";
-        let parsed = crabka_pgparser::parse(sql).expect("statement parses");
+        let parsed = krabka_pgparser::parse(sql).expect("statement parses");
         let [stmt] = parsed.as_slice() else {
             panic!("one statement");
         };
@@ -2197,13 +2197,13 @@ mod tests {
             (2 * last + 1, (2, 1)),
         ];
         for (identity, (block, offset)) in cases {
-            let expected = Datum::Tid(crabka_pgtypes::Tid { block, offset });
+            let expected = Datum::Tid(krabka_pgtypes::Tid { block, offset });
             assert!(row_ctid(identity) == expected, "{identity}");
         }
         // No identity is ever stamped `(0,0)`, the invalid item pointer, and
         // identities stay distinct up to the point the block stops separating
         // them — past every row count a heap can address.
-        let invalid = Datum::Tid(crabka_pgtypes::Tid {
+        let invalid = Datum::Tid(krabka_pgtypes::Tid {
             block: 0,
             offset: 0,
         });

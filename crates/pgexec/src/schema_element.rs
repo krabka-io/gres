@@ -20,7 +20,7 @@
 //! forward references is presently quite incomplete". Six buckets are the whole
 //! rule. Two tables that reference each other are still the author's problem.
 
-use crabka_pgparser::ast::{RelationRef, Statement};
+use krabka_pgparser::ast::{RelationRef, Statement};
 
 use crate::error::ExecError;
 
@@ -75,7 +75,7 @@ fn qualify(schema: &str, element: &mut Statement) -> Result<ElementKind, ExecErr
             name: Some(name),
             table,
             ..
-        } if table.name == crabka_pgparser::ast::SEQUENCE_RELATION => {
+        } if table.name == krabka_pgparser::ast::SEQUENCE_RELATION => {
             set_schema(schema, name)?;
             Ok(ElementKind::Sequence)
         }
@@ -126,7 +126,7 @@ fn set_schema(schema: &str, reference: &mut RelationRef) -> Result<(), ExecError
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgparser::ast::Statement;
+    use krabka_pgparser::ast::Statement;
 
     use super::plan;
 
@@ -140,7 +140,7 @@ mod tests {
 
     fn one(sql: &str) -> Statement {
         let mut parsed =
-            crabka_pgparser::parse(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+            krabka_pgparser::parse(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
         assert!(parsed.len() == 1, "{sql}");
         parsed.pop().expect("one statement")
     }
@@ -153,7 +153,7 @@ mod tests {
                 name: Some(name),
                 table,
                 ..
-            } if table.name == crabka_pgparser::ast::SEQUENCE_RELATION => {
+            } if table.name == krabka_pgparser::ast::SEQUENCE_RELATION => {
                 format!("sequence {name}")
             }
             Statement::CreateIndex { table, .. } => format!("index on {table}"),

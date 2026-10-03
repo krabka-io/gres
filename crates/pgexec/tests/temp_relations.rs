@@ -9,8 +9,8 @@
 //! silently absent.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 /// A refused statement as a whole value: its SQLSTATE and its primary message.
 type Refusal = (String, String);
@@ -54,7 +54,7 @@ impl Client {
             .expect("at least one result")
     }
 
-    async fn fails(&mut self, sql: &str) -> crabka_pgwire::error::PgError {
+    async fn fails(&mut self, sql: &str) -> krabka_pgwire::error::PgError {
         self.session
             .simple_query(sql)
             .await

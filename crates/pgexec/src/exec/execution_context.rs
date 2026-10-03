@@ -45,7 +45,7 @@ pub struct TimestampWritePlan {
     /// cross-bucket updates need a fresh one.
     pub fresh_rowid_writes: Vec<usize>,
     /// Extra durable ops folded into the timestamp commit decision batch.
-    pub commit_ops: Vec<crabka_pgkv::WriteOp>,
+    pub commit_ops: Vec<krabka_pgkv::WriteOp>,
 }
 
 /// SP40: the foreign-table read context threaded through the SELECT pipeline.
@@ -84,7 +84,7 @@ pub(crate) struct ForeignCtx<'a> {
     /// relations: `IMPORT FOREIGN SCHEMA` creates one per table the scanner
     /// discovers. `None` outside a session, where every id comes from the
     /// counter.
-    pub reserved_table_ids: Option<&'a std::sync::Mutex<Vec<crabka_pgcatalog::TableId>>>,
+    pub reserved_table_ids: Option<&'a std::sync::Mutex<Vec<krabka_pgcatalog::TableId>>>,
     /// The xid of the open transaction, when this DDL runs inside one.
     ///
     /// A unique-index backfill must see the rows its OWN transaction has written
@@ -130,8 +130,8 @@ impl ForeignCtx<'_> {
     /// session carrying it authenticated as nobody and is acting as the
     /// bootstrap superuser, which is the role its decisions must be made under.
     pub(crate) fn effective_role(&self) -> &str {
-        if self.current_user == crabka_pgcatalog::PUBLIC_ROLE {
-            crabka_pgcatalog::BOOTSTRAP_ROLE
+        if self.current_user == krabka_pgcatalog::PUBLIC_ROLE {
+            krabka_pgcatalog::BOOTSTRAP_ROLE
         } else {
             self.current_user
         }
@@ -148,20 +148,20 @@ impl ForeignCtx<'_> {
 
     /// The next reserved id, or the shared counter when there is no block or the
     /// block is spent.
-    pub(crate) fn table_id(&self) -> crabka_pgcatalog::TableIdSource {
+    pub(crate) fn table_id(&self) -> krabka_pgcatalog::TableIdSource {
         self.reserved_table_ids
             .and_then(|reserved| reserved.lock().expect("table ids").pop())
             .map_or(
-                crabka_pgcatalog::TableIdSource::Counter,
-                crabka_pgcatalog::TableIdSource::Reserved,
+                krabka_pgcatalog::TableIdSource::Counter,
+                krabka_pgcatalog::TableIdSource::Reserved,
             )
     }
 
     /// Ownership and id allocation for a relation this statement creates. Every
     /// `CREATE` path in `execute_ddl` goes through here, so a new relation
     /// cannot acquire an owner other than the session's own without naming one.
-    pub(crate) fn table_creation(&self) -> crabka_pgcatalog::TableCreation<'_> {
-        crabka_pgcatalog::TableCreation {
+    pub(crate) fn table_creation(&self) -> krabka_pgcatalog::TableCreation<'_> {
+        krabka_pgcatalog::TableCreation {
             owner: self.effective_role(),
             id: self.table_id(),
             // `CREATE MATERIALIZED VIEW` builds its own `TableCreation` so it can
@@ -185,12 +185,12 @@ pub(crate) struct WriteContext<'a> {
     pub catalog_kv: &'a dyn Kv,
     pub kv: &'a dyn Kv,
     pub global: &'a dyn Kv,
-    pub global_snapshot: &'a crabka_pgmvcc::visibility::Snapshot,
+    pub global_snapshot: &'a krabka_pgmvcc::visibility::Snapshot,
     pub procarray: &'a crate::procarray::ProcArray,
     pub lockmgr: &'a crate::lockmgr::RowLockManager,
     pub lock_owner: crate::lockmgr::LockOwner,
     pub seq: &'a crate::seq::SequenceManager,
-    pub snapshot: &'a crabka_pgmvcc::visibility::Snapshot,
+    pub snapshot: &'a krabka_pgmvcc::visibility::Snapshot,
     pub xid: u64,
     /// The PostgreSQL command number that owns this write statement.
     pub command_id: u32,
@@ -218,7 +218,7 @@ pub(crate) struct WriteContext<'a> {
     /// The ordinary-table scanner seam the same feeding queries read through.
     pub range_scanner: &'a dyn crate::scanner::RangeScanner,
     /// Memory available to blocking reads that feed this write.
-    pub blocking_query_memory: crabka_units::ByteSize,
+    pub blocking_query_memory: krabka_units::ByteSize,
     /// The CTE scope the statement starts from (empty for a plain statement).
     pub ctes: &'a crate::cte::CteContext,
     /// Claims owned by the surrounding command when trigger SQL re-enters the
@@ -350,7 +350,7 @@ impl<'a> WriteContext<'a> {
     pub(super) fn row_check(
         &self,
         table: &Table,
-        command: crabka_pgcatalog::policy::PolicyCommand,
+        command: krabka_pgcatalog::policy::PolicyCommand,
         modified: &[String],
     ) -> Result<crate::rls::WriteChecks, ExecError> {
         let governor = self.governor(table);
@@ -403,8 +403,8 @@ impl<'a> WriteContext<'a> {
 pub(super) struct MvccReadContext<'a> {
     pub(super) kv: &'a dyn Kv,
     pub(super) global: &'a dyn Kv,
-    pub(super) global_snapshot: &'a crabka_pgmvcc::visibility::Snapshot,
-    pub(super) snapshot: &'a crabka_pgmvcc::visibility::Snapshot,
+    pub(super) global_snapshot: &'a krabka_pgmvcc::visibility::Snapshot,
+    pub(super) snapshot: &'a krabka_pgmvcc::visibility::Snapshot,
     pub(super) own: Option<u64>,
     pub(super) command_id: Option<u32>,
 }
@@ -426,7 +426,7 @@ pub(super) struct MutationContext<'a> {
     pub(super) kv: &'a dyn Kv,
     pub(super) global: &'a dyn Kv,
     pub(super) procarray: &'a crate::procarray::ProcArray,
-    pub(super) snapshot: &'a crabka_pgmvcc::visibility::Snapshot,
+    pub(super) snapshot: &'a krabka_pgmvcc::visibility::Snapshot,
     pub(super) xid: u64,
     /// Command visibility used by a locked re-read.
     ///

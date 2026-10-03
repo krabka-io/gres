@@ -6,7 +6,7 @@
 //! ## Runtime configuration
 //!
 //! ```no_run
-//! use crabka_schema_registry::config::{RegistryConfig, SecurityConfig};
+//! use krabka_schema_registry::config::{RegistryConfig, SecurityConfig};
 //!
 //! let config = RegistryConfig {
 //!     bootstrap: "localhost:9092".into(),
@@ -26,7 +26,7 @@
 //! ## Compatibility checks
 //!
 //! ```no_run
-//! use crabka_schema_registry::format::{self, SchemaType};
+//! use krabka_schema_registry::format::{self, SchemaType};
 //!
 //! let prior = r#"{"type":"record","name":"Order","fields":[{"name":"id","type":"string"}]}"#;
 //! let next = r#"{"type":"record","name":"Order","fields":[{"name":"id","type":"string"},{"name":"total","type":["null","double"],"default":null}]}"#;

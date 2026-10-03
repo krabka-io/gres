@@ -1,9 +1,9 @@
-use crabka_units::{Time, convert::TimeExt as _};
 use k8s_openapi::{
     api::coordination::v1::{Lease, LeaseSpec},
     apimachinery::pkg::apis::meta::v1::{MicroTime, ObjectMeta},
     jiff,
 };
+use krabka_units::{Time, convert::TimeExt as _};
 use kube::{
     Client,
     api::{Api, PostParams},
@@ -229,7 +229,7 @@ fn is_expired(lease: &Lease, fallback_duration: Time) -> bool {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_units::secs;
+    use krabka_units::secs;
 
     use super::*;
 
@@ -276,8 +276,8 @@ mod tests {
         // The k8s field is `Option<i32>` seconds; the extent narrows there and
         // nowhere else.
         assert!(lease_duration_seconds(secs(15)).unwrap() == 15);
-        assert!(lease_duration_seconds(crabka_units::minutes(2)).unwrap() == 120);
-        assert!(lease_duration_seconds(crabka_units::days(365 * 100)).is_err());
+        assert!(lease_duration_seconds(krabka_units::minutes(2)).unwrap() == 120);
+        assert!(lease_duration_seconds(krabka_units::days(365 * 100)).is_err());
     }
 
     #[test]

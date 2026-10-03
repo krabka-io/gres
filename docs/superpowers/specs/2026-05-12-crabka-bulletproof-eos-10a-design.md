@@ -28,7 +28,7 @@ Two new guarantees:
    gets per-partition `NOT_ENOUGH_REPLICAS_AFTER_APPEND` (code 20) for
    any partition whose HW didn't catch up in time. With slice 10a's
    static ISR (= `replicas` from the metadata image, no shrink yet),
-   this means *all* replicas. The `min.insync.replicas` knob ships
+   this means _all_ replicas. The `min.insync.replicas` knob ships
    with slice 10b alongside ISR shrink.
 
 2. **Consumer fetches clamp at the High Watermark.** A consumer Fetch
@@ -73,7 +73,7 @@ every replica before the producer call returns).
 ## Architecture
 
 A new per-`Partition` `ReplicaState` struct (in a new
-`crabka-broker::replica_state` module) tracks every replica's progress
+`krabka-broker::replica_state` module) tracks every replica's progress
 on the leader side. The leader's High Watermark is the minimum LEO
 across the ISR — recomputed on every follower Fetch and every
 leader-side append, with a `Notify` fired whenever the HW advances.
@@ -402,7 +402,7 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
-cargo test -p crabka-broker --test jvm_acceptance -- --ignored --nocapture --test-threads=1
+cargo test -p krabka-broker --test jvm_acceptance -- --ignored --nocapture --test-threads=1
 ```
 
 All clean. Slice 9's `#[ignore]`d tests remain ignored; nothing new

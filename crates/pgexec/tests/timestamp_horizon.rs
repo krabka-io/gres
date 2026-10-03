@@ -9,13 +9,13 @@ use std::sync::{
 };
 
 use assert2::assert;
-use crabka_pgcatalog::RelationName;
-use crabka_pgexec::{
+use krabka_pgcatalog::RelationName;
+use krabka_pgexec::{
     CommitTimestamp, PrimaryTxnDecision, SqlEngine, TimestampTransactionId, TimestampTxnDescriptor,
     TimestampTxnOperation, TimestampWrite,
 };
-use crabka_pgkv::{Kv, KvError, KvScan, MemKv, WriteOp};
-use crabka_pgwire::engine::{Engine, Session};
+use krabka_pgkv::{Kv, KvError, KvScan, MemKv, WriteOp};
+use krabka_pgwire::engine::{Engine, Session};
 
 /// [`Kv`] decorator that counts range scans, the operation the old
 /// per-statement `durable_timestamp_horizon` implementation was built on.
@@ -65,7 +65,7 @@ fn sharded_write(table_id: u32, rowid: u64) -> TimestampWrite {
         table_id,
         bucket: None,
         rowid,
-        row: vec![crabka_pgtypes::Datum::Int4(7)],
+        row: vec![krabka_pgtypes::Datum::Int4(7)],
         delete: false,
         global_index_intents: Vec::new(),
     }
@@ -183,13 +183,13 @@ async fn reopened_engine_seeds_the_floor_from_durable_timestamp_state() {
 async fn floor_seed_covers_timestamp_state_written_before_the_engine_opened() {
     let kv: Arc<dyn Kv> = Arc::new(MemKv::new());
     kv.write_batch(&[WriteOp::Put {
-        key: crabka_pgmvcc::version::version_key_ts(7, 1, 3_000_000),
-        value: crabka_pgmvcc::version::encode_ts_tuple(
+        key: krabka_pgmvcc::version::version_key_ts(7, 1, 3_000_000),
+        value: krabka_pgmvcc::version::encode_ts_tuple(
             3_000_000,
-            crabka_pgmvcc::version::TsVersionState::Committed {
+            krabka_pgmvcc::version::TsVersionState::Committed {
                 commit_ts: 3_000_777,
             },
-            &[crabka_pgtypes::Datum::Int4(7)],
+            &[krabka_pgtypes::Datum::Int4(7)],
         ),
     }])
     .expect("seed durable timestamp tuple");

@@ -5,9 +5,9 @@
 //! the variadic name/value input into ordinary catalog operations; `session`
 //! supplies the transaction boundary and warning sink.
 
-use crabka_pgcatalog::{CatalogError, RelationName};
-use crabka_pgkv::{Kv, WriteOp};
-use crabka_pgtypes::{ColumnType, Datum, ElemType, encoding::OutputStyle};
+use krabka_pgcatalog::{CatalogError, RelationName};
+use krabka_pgkv::{Kv, WriteOp};
+use krabka_pgtypes::{ColumnType, Datum, ElemType, encoding::OutputStyle};
 
 use crate::{attrstats, error::ExecError, relstats};
 
@@ -480,13 +480,13 @@ fn clear_attribute(
 fn attribute_statistics_table(
     kv: &dyn Kv,
     relation: &RelationName,
-) -> Result<(crabka_pgcatalog::Table, crabka_pgcatalog::TableId), ExecError> {
-    if let Ok(table) = crabka_pgcatalog::get_table(kv, relation) {
+) -> Result<(krabka_pgcatalog::Table, krabka_pgcatalog::TableId), ExecError> {
+    if let Ok(table) = krabka_pgcatalog::get_table(kv, relation) {
         return Ok((table.clone(), table.id));
     }
-    let index = crabka_pgcatalog::get_index(kv, relation)
+    let index = krabka_pgcatalog::get_index(kv, relation)
         .map_err(|_| attribute_relation_error(relation))?;
-    let source = crabka_pgcatalog::get_table(kv, &index.table)?;
+    let source = krabka_pgcatalog::get_table(kv, &index.table)?;
     Ok((
         crate::exec::catalog_rows::index_attribute_table(&index, &source)?,
         index.table_id,
@@ -509,16 +509,16 @@ fn relation_name(
 ) -> Result<RelationName, ExecError> {
     let schema = schema.ok_or_else(|| null_argument("schemaname"))?;
     let relation = relation.ok_or_else(|| null_argument("relname"))?;
-    let resolved_schema = if schema == crabka_pgcatalog::PG_TEMP_ALIAS {
+    let resolved_schema = if schema == krabka_pgcatalog::PG_TEMP_ALIAS {
         resolution.temp_schema()
     } else {
         schema.clone()
     };
-    if !crabka_pgcatalog::schema_exists(kv, &resolved_schema)? {
+    if !krabka_pgcatalog::schema_exists(kv, &resolved_schema)? {
         return Err(CatalogError::UndefinedSchema(schema).into());
     }
     let name = RelationName::new(resolved_schema, relation.clone());
-    if !crabka_pgcatalog::relation_exists(kv, &name)? {
+    if !krabka_pgcatalog::relation_exists(kv, &name)? {
         let reported = RelationName::new(schema, relation);
         return Err(CatalogError::UndefinedTable(reported.to_string()).into());
     }
@@ -526,14 +526,14 @@ fn relation_name(
 }
 
 fn ensure_statistics_relation(kv: &dyn Kv, name: &RelationName) -> Result<(), ExecError> {
-    if crabka_pgcatalog::get_table(kv, name).is_ok()
-        || crabka_pgcatalog::get_index(kv, name).is_ok()
+    if krabka_pgcatalog::get_table(kv, name).is_ok()
+        || krabka_pgcatalog::get_index(kv, name).is_ok()
     {
         return Ok(());
     }
-    let detail = if crabka_pgcatalog::get_sequence(kv, name).is_ok() {
+    let detail = if krabka_pgcatalog::get_sequence(kv, name).is_ok() {
         "This operation is not supported for sequences."
-    } else if crabka_pgcatalog::get_view(kv, name).is_ok() {
+    } else if krabka_pgcatalog::get_view(kv, name).is_ok() {
         "This operation is not supported for views."
     } else {
         "This operation is not supported for this relation type."
@@ -549,13 +549,13 @@ fn statistics_locks(
     kv: &dyn Kv,
     relation: &RelationName,
 ) -> Result<Vec<(RelationName, crate::lockmgr::RelationLockTarget)>, ExecError> {
-    if let Ok(table) = crabka_pgcatalog::get_table(kv, relation) {
+    if let Ok(table) = krabka_pgcatalog::get_table(kv, relation) {
         return Ok(vec![(
             table.name,
             crate::lockmgr::RelationLockTarget::Table(table.id),
         )]);
     }
-    let index = crabka_pgcatalog::get_index(kv, relation)
+    let index = krabka_pgcatalog::get_index(kv, relation)
         .expect("statistics relation was checked as a table or index");
     Ok(vec![
         (
@@ -586,7 +586,7 @@ fn return_with_warnings(
     }
 }
 
-pub(crate) fn warning(message: String) -> crabka_pgwire::error::PgError {
+pub(crate) fn warning(message: String) -> krabka_pgwire::error::PgError {
     let detail = if message.starts_with("column ") && message.ends_with(" is not a range type") {
         Some("Cannot set STATISTIC_KIND_RANGE_LENGTH_HISTOGRAM or STATISTIC_KIND_BOUNDS_HISTOGRAM.")
     } else if message.starts_with("could not determine element type of column ") {
@@ -595,8 +595,8 @@ pub(crate) fn warning(message: String) -> crabka_pgwire::error::PgError {
         None
     };
     match detail {
-        Some(detail) => crabka_pgwire::error::PgError::warning(message).with_detail(detail),
-        None => crabka_pgwire::error::PgError::warning(message),
+        Some(detail) => krabka_pgwire::error::PgError::warning(message).with_detail(detail),
+        None => krabka_pgwire::error::PgError::warning(message),
     }
 }
 
@@ -704,7 +704,7 @@ fn real_array_argument(value: &Datum, name: &str, warnings: &mut Vec<String>) ->
     let zone = jiff::tz::TimeZone::UTC;
     let style = OutputStyle::with_zone(&zone);
     Some(
-        String::from_utf8(crabka_pgtypes::encoding::encode_text_in(value, style))
+        String::from_utf8(krabka_pgtypes::encoding::encode_text_in(value, style))
             .expect("datum text is UTF-8"),
     )
 }
@@ -721,7 +721,7 @@ fn canonical_array(
     };
     let zone = jiff::tz::TimeZone::UTC;
     let style = OutputStyle::with_zone(&zone);
-    let value = crabka_pgtypes::cast::cast_in(
+    let value = krabka_pgtypes::cast::cast_in(
         &Datum::Text(input.into()),
         ColumnType::Array(element),
         style,
@@ -736,7 +736,7 @@ fn canonical_array(
     if array.elems.iter().any(Datum::is_null) {
         return Err(format!("\"{name}\" array must not contain null values"));
     }
-    let text = String::from_utf8(crabka_pgtypes::encoding::encode_text_in(&value, style))
+    let text = String::from_utf8(krabka_pgtypes::encoding::encode_text_in(&value, style))
         .expect("datum text is UTF-8");
     Ok((text, array.elems.len()))
 }
@@ -744,7 +744,7 @@ fn canonical_array(
 fn real_array_len(input: &str) -> Result<usize, String> {
     let zone = jiff::tz::TimeZone::UTC;
     let style = OutputStyle::with_zone(&zone);
-    let value = crabka_pgtypes::cast::cast_in(
+    let value = krabka_pgtypes::cast::cast_in(
         &Datum::Text(input.into()),
         ColumnType::Array(ElemType::Float4),
         style,
@@ -801,9 +801,9 @@ fn type_name(value: &Datum) -> &'static str {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgcatalog::{Column, RelationName, create_schema_ops, create_table};
-    use crabka_pgkv::{Kv, MemKv};
-    use crabka_pgtypes::{ColumnType, Datum};
+    use krabka_pgcatalog::{Column, RelationName, create_schema_ops, create_table};
+    use krabka_pgkv::{Kv, MemKv};
+    use krabka_pgtypes::{ColumnType, Datum};
 
     use super::{
         StatisticsRequest, canonical_array, ensure_statistics_relation, execute,
@@ -820,10 +820,10 @@ mod tests {
             &relation,
             vec![
                 Column::new("id", ColumnType::Int4),
-                Column::new("tags", ColumnType::Array(crabka_pgtypes::ElemType::Text)),
+                Column::new("tags", ColumnType::Array(krabka_pgtypes::ElemType::Text)),
                 Column::new(
                     "arange",
-                    ColumnType::builtin_range(crabka_pgtypes::oids::INT4RANGE).expect("int4range"),
+                    ColumnType::builtin_range(krabka_pgtypes::oids::INT4RANGE).expect("int4range"),
                 ),
             ],
         )
@@ -1009,7 +1009,7 @@ mod tests {
                 message: "variadic arguments must be name/value pairs".into(),
             }
             .into_pg()
-                == crabka_pgwire::error::PgError::error(
+                == krabka_pgwire::error::PgError::error(
                     "22023",
                     "variadic arguments must be name/value pairs",
                 )
@@ -1031,8 +1031,8 @@ mod tests {
             (Datum::Oid(0), "oid"),
             (Datum::Text(String::new()), "text"),
             (
-                Datum::Array(crabka_pgtypes::ArrayValue::new(
-                    crabka_pgtypes::ElemType::Float8,
+                Datum::Array(krabka_pgtypes::ArrayValue::new(
+                    krabka_pgtypes::ElemType::Float8,
                     Vec::new(),
                 )),
                 "double precision[]",
@@ -1097,8 +1097,8 @@ mod tests {
             Datum::Text("most_common_vals".into()),
             Datum::Text("{2,1,3}".into()),
             Datum::Text("most_common_freqs".into()),
-            Datum::Array(crabka_pgtypes::ArrayValue::new(
-                crabka_pgtypes::ElemType::Float4,
+            Datum::Array(krabka_pgtypes::ArrayValue::new(
+                krabka_pgtypes::ElemType::Float4,
                 vec![Datum::Float4(0.3), Datum::Float4(0.25), Datum::Float4(0.05)],
             )),
             Datum::Text("histogram_bounds".into()),
@@ -1122,8 +1122,8 @@ mod tests {
             Datum::Text("most_common_vals".into()),
             Datum::Text("{2,1}".into()),
             Datum::Text("most_common_freqs".into()),
-            Datum::Array(crabka_pgtypes::ArrayValue::new(
-                crabka_pgtypes::ElemType::Float4,
+            Datum::Array(krabka_pgtypes::ArrayValue::new(
+                krabka_pgtypes::ElemType::Float4,
                 vec![Datum::Float4(0.3)],
             )),
         ])
@@ -1237,8 +1237,8 @@ mod tests {
             Datum::Text("most_common_elems".into()),
             Datum::Text("{one,three}".into()),
             Datum::Text("most_common_elem_freqs".into()),
-            Datum::Array(crabka_pgtypes::ArrayValue::new(
-                crabka_pgtypes::ElemType::Float4,
+            Datum::Array(krabka_pgtypes::ArrayValue::new(
+                krabka_pgtypes::ElemType::Float4,
                 vec![
                     Datum::Float4(0.3),
                     Datum::Float4(0.2),
@@ -1247,8 +1247,8 @@ mod tests {
                 ],
             )),
             Datum::Text("elem_count_histogram".into()),
-            Datum::Array(crabka_pgtypes::ArrayValue::new(
-                crabka_pgtypes::ElemType::Float4,
+            Datum::Array(krabka_pgtypes::ArrayValue::new(
+                krabka_pgtypes::ElemType::Float4,
                 vec![Datum::Float4(1.0), Datum::Float4(2.0)],
             )),
         ])

@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use assert2::assert;
 use bytes::BytesMut;
-use crabka_pgwire::{
+use krabka_pgwire::{
     engine::{
         BoundParam, CloseTarget, Engine, ExecuteOutcome, Notification, PortalDescription,
         PreparedDescription, QueryResult, Session, TxStatus,

@@ -7,8 +7,8 @@
 use std::time::Duration;
 
 use assert2::assert;
-use crabka_pgexec::SqlEngine;
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::SqlEngine;
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 /// Run `sql` as one simple query and return its final result.
 async fn run(engine: &SqlEngine, sql: &str) -> QueryResult {

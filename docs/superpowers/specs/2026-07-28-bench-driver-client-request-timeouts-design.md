@@ -8,7 +8,7 @@
 ## Goal
 
 Replace the fixed producer and consumer request-timeout policy in
-`crabka-bench-driver` with two validated runtime settings while preserving the
+`krabka-bench-driver` with two validated runtime settings while preserving the
 existing stack-specific defaults and client behavior.
 
 ## Scope
@@ -60,10 +60,10 @@ only at the producer and consumer builder boundaries.
 Use named constants for the existing defaults:
 
 - `DEFAULT_PRODUCER_REQUEST_TIMEOUT_SECONDS = 2`
-- `DEFAULT_CRABKA_CONSUMER_REQUEST_TIMEOUT_SECONDS = 5`
+- `DEFAULT_KRABKA_CONSUMER_REQUEST_TIMEOUT_SECONDS = 5`
 - `DEFAULT_KAFKA_CONSUMER_REQUEST_TIMEOUT_SECONDS = 30`
 
-`crabka-bench-driver` already directly depends on the workspace-pinned
+`krabka-bench-driver` already directly depends on the workspace-pinned
 `refined_type`; this slice adds no dependency and must not change `Cargo.lock`.
 
 ## Input Resolution

@@ -28,14 +28,14 @@ process-configured because one operator instance serves many clusters.
 Add optional fields directly to each owner's existing policy structure. Do not
 introduce a shared flattened CRD type.
 
-| Owner | Fields |
-|---|---|
-| `KafkaNodePool.spec` | `clientDispatchQueueCapacity`, `clientFrameMax` |
-| `Kafka.spec.gresRegistry` | `readerFetchMin` |
-| `Gres.spec.activator` | `clientDispatchQueueCapacity`, `clientFrameMax` |
-| `Gres.spec.compute` | `clientDispatchQueueCapacity`, `clientFrameMax`, `fdwFetchMin`, `walRecoveryFetchMin` |
-| `KafkaGrpcGateway.spec.tuning` | `clientDispatchQueueCapacity`, `clientFrameMax` |
-| `SchemaRegistry.spec.runtime` | `clientDispatchQueueCapacity`, `clientFrameMax` |
+| Owner                          | Fields                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------- |
+| `KafkaNodePool.spec`           | `clientDispatchQueueCapacity`, `clientFrameMax`                                       |
+| `Kafka.spec.gresRegistry`      | `readerFetchMin`                                                                      |
+| `Gres.spec.activator`          | `clientDispatchQueueCapacity`, `clientFrameMax`                                       |
+| `Gres.spec.compute`            | `clientDispatchQueueCapacity`, `clientFrameMax`, `fdwFetchMin`, `walRecoveryFetchMin` |
+| `KafkaGrpcGateway.spec.tuning` | `clientDispatchQueueCapacity`, `clientFrameMax`                                       |
+| `SchemaRegistry.spec.runtime`  | `clientDispatchQueueCapacity`, `clientFrameMax`                                       |
 
 Every field is optional and omitted from serialization when absent. Queue
 capacity is dimensionless and represented as `Option<usize>` with a schema
@@ -53,10 +53,10 @@ remains shared registry-topic policy.
 
 The activator binary gains the missing standalone
 `--client-dispatch-queue-capacity` /
-`CRABKA_GRES_ACTIVATOR_CLIENT_DISPATCH_QUEUE_CAPACITY`,
-`--client-frame-max` / `CRABKA_GRES_ACTIVATOR_CLIENT_FRAME_MAX`, and
+`KRABKA_GRES_ACTIVATOR_CLIENT_DISPATCH_QUEUE_CAPACITY`,
+`--client-frame-max` / `KRABKA_GRES_ACTIVATOR_CLIENT_FRAME_MAX`, and
 `--registry-reader-fetch-min` /
-`CRABKA_GRES_REGISTRY_READER_FETCH_MIN` inputs. This is required for its CRD
+`KRABKA_GRES_REGISTRY_READER_FETCH_MIN` inputs. This is required for its CRD
 owner to render the same validated settings; it is not a separate policy.
 
 ## Validation

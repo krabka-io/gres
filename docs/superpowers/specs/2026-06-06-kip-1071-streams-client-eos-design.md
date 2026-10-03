@@ -2,7 +2,7 @@
 
 **Status:** design approved (brainstorm)
 **Builds on:** #2b runtime (`StreamThread`/`StreamTask`, the `RecordFetcher`/`RecordProducer`/`OffsetStore` I/O traits + `io_broker` impls), #3 state stores + changelog restore, #1 membership. Branches from `main` (independent of the open punctuation PR #421; both touch `runtime/task.rs`+`thread.rs`, so rebase when one lands).
-**Ground truth:** Apache Kafka 4.1 `processing.guarantee=exactly_once_v2` (KIP-447). The Crabka broker's transaction coordinator (`crates/broker/src/txn/`) and the native `crabka-client-producer` transactional API already exist; this slice wires the streams runtime onto them.
+**Ground truth:** Apache Kafka 4.1 `processing.guarantee=exactly_once_v2` (KIP-447). The Crabka broker's transaction coordinator (`crates/broker/src/txn/`) and the native `krabka-client-producer` transactional API already exist; this slice wires the streams runtime onto them.
 
 ## 1. Goal
 
@@ -11,6 +11,7 @@ Make the streams runtime **exactly-once** under `processing.guarantee=exactly_on
 ## 2. Scope
 
 ### In scope
+
 1. **`processing.guarantee` config** on the `KafkaStreams` builder: `AtLeastOnce` (default, today's path) | `ExactlyOnceV2`.
 2. **One transaction per `StreamThread`** (KIP-447): a single transactional producer shared across the thread's tasks; the thread drives the txn boundaries.
 3. **`TransactionalProducer` I/O seam** (DI trait) + a `BrokerTransactionalProducer` impl over the native producer + a mock for unit tests.
@@ -20,6 +21,7 @@ Make the streams runtime **exactly-once** under `processing.guarantee=exactly_on
 7. **Broker integration test** (single 127.0.0.1 broker) proving atomic output+offsets and `read_committed` visibility, + mock-producer abort unit tests.
 
 ### Non-goals (deferred)
+
 - **EOS v1 / `exactly_once_beta`** — removed in Kafka 4.x; v2 only.
 - **Multi-instance `processId` fencing** — a stable per-thread `transactional.id` (`<application.id>-<threadIdx>`) only; a persisted process UUID for cross-instance zombie fencing is a follow-up.
 - **Standby / warmup task EOS**, **producer-per-task (v1 model)**, **`TopologyTestDriver` transactions** (TTD stays ALO — it is broker-free).
@@ -70,13 +72,15 @@ pub trait TransactionalProducer: Send + Sync + 'static {
     async fn abort_transaction(&self) -> Result<(), StreamsClientError>;
 }
 ```
-- `BrokerTransactionalProducer` wraps `crabka_client_producer::Producer` built with `transactional_id(Some(..))`, delegating to its `init_transactions`/`begin_transaction`/`send`/`send_offsets_to_transaction(offsets, &ConsumerGroupMetadata)`/`commit_transaction`/`abort_transaction`.
+
+- `BrokerTransactionalProducer` wraps `krabka_client_producer::Producer` built with `transactional_id(Some(..))`, delegating to its `init_transactions`/`begin_transaction`/`send`/`send_offsets_to_transaction(offsets, &ConsumerGroupMetadata)`/`commit_transaction`/`abort_transaction`.
 - A `MockTransactionalProducer` (records the call sequence + a configurable failure point) drives the abort unit tests.
 - The task's `producer: Arc<dyn RecordProducer>` is unchanged for `send` (EOS producer also impls `RecordProducer`'s `send`); the thread additionally holds the `Arc<dyn TransactionalProducer>` for the txn-control calls. (`BrokerTransactionalProducer` impls both traits over the one native producer; `flush` in EOS mode is a no-op — `commit_transaction` is the durability barrier.)
 
 ### 3.3 Commit lifecycle (EOS, per thread per interval)
 
 The thread runs a `CommitStrategy`:
+
 - **ALO** (default): each task `process_once` (send sink+changelog), then per-task `commit` (`flush` + `OffsetStore.commit`) — exactly today's behavior.
 - **EOS**:
   1. Once after assignment: `init_transactions()`.
@@ -89,6 +93,7 @@ The thread runs a `CommitStrategy`:
 ### 3.4 Abort + rollback
 
 On abort the txn's produced records (sink + changelog) and offsets are discarded by the broker. The in-memory state stores still hold the **dirty** writes from the aborted cycle, so each stateful task must roll back:
+
 1. **Rewind source offsets**: set each task's `positions` (and clear `pending`) back to the last committed offset (`OffsetStore.committed`, or the txn's last `send_offsets` baseline) so the next cycle re-reads the aborted input.
 2. **Roll back stores**: wipe each task's stores and **re-restore from the committed changelog** via the existing `StreamTask::restore` path (read_committed, §3.5). This rebuilds store state to exactly the last committed point. (Reuses `restore()`; the only addition is a `rollback()` that clears stores first.)
 
@@ -98,15 +103,15 @@ For restore/rollback to reflect only committed state, the changelog **fetch** mu
 
 ## 4. Components & boundaries
 
-| Unit | Responsibility | Depends on |
-|---|---|---|
-| `runtime/eos.rs` (new) | `ProcessingGuarantee`, `TransactionalProducer` trait, `StreamsGroupMeta`, transactional.id derivation | io traits |
-| `runtime/io_broker.rs` | `BrokerTransactionalProducer` (+ `build_eos`) | native producer |
-| `runtime/task.rs` | accumulate `pending` offsets (unchanged send path); `rollback()` (wipe + restore) | graph, restore |
-| `runtime/thread.rs` | `CommitStrategy` (ALO vs EOS); EOS txn lifecycle across tasks; group_meta | task, eos |
-| `runtime/app.rs` | `processing_guarantee` builder field; wire EOS producer + group_meta | thread, membership |
-| `runtime/io.rs` | `RecordFetcher` isolation level for read_committed restore | — |
-| `tests/` | broker integration (EOS app, atomic output+offsets, read_committed) + mock abort unit | all |
+| Unit                   | Responsibility                                                                                        | Depends on         |
+| ---------------------- | ----------------------------------------------------------------------------------------------------- | ------------------ |
+| `runtime/eos.rs` (new) | `ProcessingGuarantee`, `TransactionalProducer` trait, `StreamsGroupMeta`, transactional.id derivation | io traits          |
+| `runtime/io_broker.rs` | `BrokerTransactionalProducer` (+ `build_eos`)                                                         | native producer    |
+| `runtime/task.rs`      | accumulate `pending` offsets (unchanged send path); `rollback()` (wipe + restore)                     | graph, restore     |
+| `runtime/thread.rs`    | `CommitStrategy` (ALO vs EOS); EOS txn lifecycle across tasks; group_meta                             | task, eos          |
+| `runtime/app.rs`       | `processing_guarantee` builder field; wire EOS producer + group_meta                                  | thread, membership |
+| `runtime/io.rs`        | `RecordFetcher` isolation level for read_committed restore                                            | —                  |
+| `tests/`               | broker integration (EOS app, atomic output+offsets, read_committed) + mock abort unit                 | all                |
 
 ## 5. Testing
 

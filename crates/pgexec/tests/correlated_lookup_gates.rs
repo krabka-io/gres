@@ -35,11 +35,11 @@
 use std::sync::{Arc, Mutex};
 
 use assert2::assert;
-use crabka_pgexec::{
+use krabka_pgexec::{
     ExecError, RangeCursor, RangeScanner, ScanRequest, ScannedRow, SqlEngine, SqlSession,
     scanner::LocalRangeScanner,
 };
-use crabka_pgwire::engine::{Cell, Engine as _, QueryResult, Session as _};
+use krabka_pgwire::engine::{Cell, Engine as _, QueryResult, Session as _};
 
 /// A real local scanner that also records which relation each scan opened.
 ///

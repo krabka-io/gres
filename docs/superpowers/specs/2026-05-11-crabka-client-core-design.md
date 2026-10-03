@@ -1,4 +1,4 @@
-# `crabka-client-core` (slice 2) — Design
+# `krabka-client-core` (slice 2) — Design
 
 **Status:** Draft for review
 **Date:** 2026-05-11
@@ -9,7 +9,7 @@ is fully shipped via sub-plans 1a–1e.
 
 ## Summary
 
-`crabka-client-core` is the first Crabka crate that does I/O. It provides
+`krabka-client-core` is the first Crabka crate that does I/O. It provides
 connection management, API-version negotiation, and correlation-ID
 request/response dispatch over TCP against Apache Kafka brokers. Built
 on `tokio`. Plaintext only — TLS/SASL/ACLs are slice 11.
@@ -20,8 +20,8 @@ slices 5/6 will wrap this crate.
 
 ## North star (acceptance gate for slice 2)
 
-1. New crate `crabka-client-core` exists in the workspace.
-2. `crabka-protocol-codegen` emits `impl ProtocolRequest for <Request>`
+1. New crate `krabka-client-core` exists in the workspace.
+2. `krabka-protocol-codegen` emits `impl ProtocolRequest for <Request>`
    for every Request type generated from the schemas.
 3. `Client::builder(bootstrap).build()` connects to a Kafka broker,
    negotiates API versions, and returns a usable handle.
@@ -85,7 +85,7 @@ crates/client-core/
 
 ```toml
 [package]
-name = "crabka-client-core"
+name = "krabka-client-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -101,7 +101,7 @@ default = []
 mock = []   # exposes the in-process MockBroker beyond #[cfg(test)]
 
 [dependencies]
-crabka-protocol = { version = "0.1", path = "../protocol", default-features = false }
+krabka-protocol = { version = "0.1", path = "../protocol", default-features = false }
 bytes = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["net", "rt", "rt-multi-thread", "io-util", "macros", "sync", "time"] }
@@ -126,9 +126,10 @@ exporter. `testcontainers` + `testcontainers-modules` for the
 integration suite.
 
 `tokio` feature flags are minimal: `net` for TcpStream/TcpListener, `rt`
-+ `rt-multi-thread` for the runtime, `io-util` for `AsyncReadExt`/
-`AsyncWriteExt`, `macros` for `#[tokio::main]` + `tokio::select!`,
-`sync` for channels, `time` for timeouts.
+
+- `rt-multi-thread` for the runtime, `io-util` for `AsyncReadExt`/
+  `AsyncWriteExt`, `macros` for `#[tokio::main]` + `tokio::select!`,
+  `sync` for channels, `time` for timeouts.
 
 Add to root `[workspace.dependencies]`:
 
@@ -200,9 +201,9 @@ impl<'a> BrokerHandle<'a> {
 ```rust
 // crates/client-core/src/request.rs
 
-use crabka_protocol::{Decode, Encode};
+use krabka_protocol::{Decode, Encode};
 
-/// Marker trait implemented by `crabka-protocol`'s generated Request types.
+/// Marker trait implemented by `krabka-protocol`'s generated Request types.
 /// Provides the dispatch information (api key, version range, response type)
 /// that the client needs to send + decode.
 pub trait ProtocolRequest: Encode {
@@ -272,7 +273,7 @@ pub enum ClientError {
     Server { error_code: i16 },
 
     #[error("codec: {0}")]
-    Codec(#[from] crabka_protocol::ProtocolError),
+    Codec(#[from] krabka_protocol::ProtocolError),
 
     #[error("I/O: {0}")]
     Io(#[from] std::io::Error),
@@ -359,6 +360,7 @@ impl ApiVersionTable {
 ### Disconnect handling
 
 When the reader sees EOF or an I/O error:
+
 1. Signal shutdown to the writer (cancellation token).
 2. Drain any pending correlation-ID waiters with
    `ClientError::Disconnected`.
@@ -491,29 +493,29 @@ doesn't pull Docker in normal runs.
 
 The `ProtocolRequest` impls are emitted from the codegen. The existing
 `drift` workflow verifies no manual edits leak in. The existing
-differential and unit tests in `crabka-protocol` continue to pass —
+differential and unit tests in `krabka-protocol` continue to pass —
 the codegen change is purely additive.
 
 # 7. CI
 
-- **Existing `rust` matrix** picks up `crabka-client-core` for the
+- **Existing `rust` matrix** picks up `krabka-client-core` for the
   Linux/macOS/Windows × Rust 1.95.0 sweep.
 - **Existing `jvm-differential` job** unchanged (this slice doesn't
   touch the JVM oracle).
 - **Existing `drift` workflow** picks up the new codegen output.
 - **New `client-core-integration` job** runs Linux-only with Docker
-  available; runs `cargo test -p crabka-client-core --tests -- --ignored`.
+  available; runs `cargo test -p krabka-client-core --tests -- --ignored`.
 
 ```yaml
 # .github/workflows/ci.yml addition
-  client-core-integration:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.95.0"
-      - run: cargo test -p crabka-client-core --tests -- --ignored
+client-core-integration:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v6
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: "1.95.0"
+    - run: cargo test -p krabka-client-core --tests -- --ignored
 ```
 
 macOS / Windows runners skip the integration job; testcontainers on
@@ -524,9 +526,9 @@ those platforms has known flakiness with Docker availability.
 The slice ships when **all** of these hold:
 
 1. `crates/client-core/` exists with the modules listed in Section 1.
-2. `crabka-protocol-codegen` emits `impl ProtocolRequest for <Request>`
+2. `krabka-protocol-codegen` emits `impl ProtocolRequest for <Request>`
    for every Request type; the trait is defined in
-   `crabka-client-core::request`.
+   `krabka-client-core::request`.
 3. `Client::builder(bootstrap).build()` connects, negotiates API
    versions, and returns a usable client. Unit test via mock broker.
 4. `Client::send<R>` round-trips for at least three different request
@@ -544,7 +546,7 @@ The slice ships when **all** of these hold:
    DeleteTopic.
 9. New `client-core-integration` job runs Linux-only in CI.
 10. `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D
-    warnings`, `cargo test --workspace -- --include-ignored` all green.
+warnings`, `cargo test --workspace -- --include-ignored` all green.
 11. No regressions in existing differential tests, protocol unit
     tests, or compression tests.
 12. Rustdoc on every public type; crate-level doc explains the
@@ -567,5 +569,5 @@ None block the design.
 # 10. Next step
 
 Invoke `writing-plans` to produce a detailed implementation plan for
-slice 2. Slice 3 (`crabka-log`) is being brainstormed in parallel and
+slice 2. Slice 3 (`krabka-log`) is being brainstormed in parallel and
 gets its own spec + plan.

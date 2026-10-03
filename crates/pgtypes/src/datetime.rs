@@ -358,7 +358,7 @@ pub fn timestamptz_infinity_of_sign(sign: i32) -> Timestamp {
 }
 
 // ---------------------------------------------------------------------------
-// Value-level arithmetic helpers (called from crabka_pgtypes::ops)
+// Value-level arithmetic helpers (called from krabka_pgtypes::ops)
 // ---------------------------------------------------------------------------
 
 /// `interval out of range`: the 22008 PostgreSQL raises when two opposite
@@ -909,7 +909,7 @@ pub fn combine_date_time(d: PgDate, t: PgTime) -> Option<PgTimestamp> {
 /// `+1 day` across a DST boundary lands on the same wall-clock time the next day,
 /// not exactly 24 h later), while the microseconds are an absolute (instant)
 /// shift. This is tz-aware, so it lives here (used from the executor's
-/// `apply_binary`, which has the session zone) rather than in `crabka_pgtypes::ops`.
+/// `apply_binary`, which has the session zone) rather than in `krabka_pgtypes::ops`.
 pub fn timestamptz_plus_interval(
     ts: Timestamp,
     iv: Interval,
@@ -7837,7 +7837,7 @@ mod io_tests {
     /// out of band, so the top of the calendar is free again.
     ///
     /// The wire and on-disk form must not move with it. The storage still
-    /// reserves `i32::MIN` and `i32::MAX`, and `crabka_pgkv`'s row encoding
+    /// reserves `i32::MIN` and `i32::MAX`, and `krabka_pgkv`'s row encoding
     /// round-trips through this pair of functions.
     #[test]
     fn the_last_civil_date_is_a_date_and_not_the_infinity_sentinel() {

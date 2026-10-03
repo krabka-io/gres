@@ -16,11 +16,11 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crabka_pgparser::ast::{
+use krabka_pgparser::ast::{
     Cte, CteBody, Expr, JoinKind, QueryBody, QueryExpr, SelectItem, SelectStmt, SetExpr, SetOp,
     TableExpr, WithClause,
 };
-use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType, RecordValue};
+use krabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType, RecordValue};
 
 use crate::{
     error::ExecError,
@@ -352,10 +352,10 @@ fn evaluate_cte_relation_limited(
 }
 
 /// The statement inside a data-modifying `WITH` item.
-fn dml_body(cte: &Cte) -> &crabka_pgparser::ast::Statement {
+fn dml_body(cte: &Cte) -> &krabka_pgparser::ast::Statement {
     match &cte.body {
-        crabka_pgparser::ast::CteBody::Dml(statement) => statement,
-        crabka_pgparser::ast::CteBody::Query(_) => {
+        krabka_pgparser::ast::CteBody::Dml(statement) => statement,
+        krabka_pgparser::ast::CteBody::Query(_) => {
             unreachable!("caller checked the item is data-modifying")
         }
     }
@@ -439,7 +439,7 @@ pub(crate) fn evaluate_with_clause(
 }
 
 pub(crate) fn describe_with_clause(
-    catalog_kv: &dyn crabka_pgkv::Kv,
+    catalog_kv: &dyn krabka_pgkv::Kv,
     resolution: &crate::relname::ResolutionScope,
     with: Option<&WithClause>,
     parent: &CteContext,
@@ -461,7 +461,7 @@ pub(crate) fn describe_with_clause(
 /// A recursive item is described from its non-recursive term alone, which is
 /// also where `PostgreSQL` takes the CTE's column names and types from.
 pub(crate) fn describe_cte_relation(
-    catalog_kv: &dyn crabka_pgkv::Kv,
+    catalog_kv: &dyn krabka_pgkv::Kv,
     resolution: &crate::relname::ResolutionScope,
     cte: &Cte,
     recursive: bool,
@@ -1019,7 +1019,7 @@ fn scan_table_expr(
             };
             scan_table_expr(left, name, left_nullable, host_aggregated, refs);
             scan_table_expr(right, name, right_nullable, host_aggregated, refs);
-            if let crabka_pgparser::ast::JoinConstraint::On(on) = constraint {
+            if let krabka_pgparser::ast::JoinConstraint::On(on) = constraint {
                 scan_expr(on, name, refs);
             }
         }

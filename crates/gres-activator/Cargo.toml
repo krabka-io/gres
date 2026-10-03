@@ -1,5 +1,5 @@
 [package]
-name = "crabka-gres-activator"
+name = "krabka-gres-activator"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -19,10 +19,10 @@ workspace = true
 async-trait = { workspace = true }
 bytes = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
-crabka-client-core = { version = "0.4.1", path = "../client-core" }
-crabka-gres-control = { version = "0.4.1", path = "../gres-control" }
-crabka-pgwire = { version = "0.4.1", path = "../pgwire" }
-crabka-units = { workspace = true }
+krabka-client-core = { version = "0.4.2", path = "../client-core" }
+krabka-gres-control = { version = "0.4.2", path = "../gres-control" }
+krabka-pgwire = { version = "0.4.2", path = "../pgwire" }
+krabka-units = { workspace = true }
 futures-util = { workspace = true }
 refined_type = { workspace = true }
 thiserror = { workspace = true }
@@ -32,7 +32,7 @@ tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
 
 [dev-dependencies]
 assert2 = { workspace = true }
-crabka-gres = { version = "0.4.1", path = "../gres" }
-crabka-gres-substrate = { version = "0.4.1", path = "../gres-substrate" }
-crabka-pgkv = { version = "0.4.1", path = "../pgkv" }
+krabka-gres = { version = "0.4.2", path = "../gres" }
+krabka-gres-substrate = { version = "0.4.2", path = "../gres-substrate" }
+krabka-pgkv = { version = "0.4.2", path = "../pgkv" }
 temp-env = "0.3"

@@ -3,7 +3,7 @@
 **Date:** 2026-06-14
 **Status:** Approved (design); spec under review
 **Workstream:** A (formal verification) — the **second compositional / end-to-end** model, after the data-path
-composition (#539). Verifies the exactly-once *atomicity* pillar (the data path verified durability).
+composition (#539). Verifies the exactly-once _atomicity_ pillar (the data path verified durability).
 
 ## Goal
 
@@ -19,9 +19,9 @@ Note on "atomicity": because concurrent producers' transactional batches **inter
 a committed transaction can legitimately be only partially below the LSO at a given moment (a later batch
 sits behind another producer's still-open txn). The consumer sees the rest in order as the LSO advances —
 so the guarantee is **prefix-correctness + in-order delivery**, not whole-txn atomicity at a single snapshot.
-The all-or-nothing property is exact on the **abort** side (an aborted txn contributes *nothing*, ever).
+The all-or-nothing property is exact on the **abort** side (an aborted txn contributes _nothing_, ever).
 
-The EndTxn decision core (#523) and the visibility core (#529) are each verified *in isolation*. This targets
+The EndTxn decision core (#523) and the visibility core (#529) are each verified _in isolation_. This targets
 the **seam** between them — the LSO, which translates a coordinator's commit/abort outcome into what a
 `read_committed` consumer may read. Honest discovery odds: **low-moderate** — the subtle bit is the LSO
 "held back by the oldest open transaction" rule (an out-of-order commit must NOT become visible while an
@@ -33,6 +33,7 @@ older transaction is still open).
 begin → append → commit/abort; the LSO advancing as transactions resolve; a `read_committed` consumer.
 
 **Out (deliberate):**
+
 - **Leader changes / failover** — the data-path composition (#539) already verifies that markers + LSO + HWM
   survive leader changes through the replicated log. v1 isolates the txn ↔ LSO ↔ `read_committed` seam; a v2
   could compose with failover (large state space, the data-path layer's territory).
@@ -45,15 +46,15 @@ A single new `stateright` model `crates/broker/src/txn/eos_composition_model.rs`
 `txn`, reaching the `pub(crate)` cores). It **drives the real cores** at the seam and models the LSO + aborted
 -list bookkeeping (which are incrementally-maintained stored state, not pure fns):
 
-| Seam | Real core driven | Location |
-|------|------------------|----------|
-| coordinator commit/abort decision | `decide_phase1_transition`, `decide_end_txn_completion` (over `TxnEntry` / `TxnState::can_transition_to`) | `crates/broker/src/txn/decision.rs` |
-| `read_committed` visibility | `compute_visibility_window` (read-committed branch: `effective_lso = lso.min(hw)`) | `crates/broker/src/handlers/fetch.rs` |
+| Seam                              | Real core driven                                                                                          | Location                              |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| coordinator commit/abort decision | `decide_phase1_transition`, `decide_end_txn_completion` (over `TxnEntry` / `TxnState::can_transition_to`) | `crates/broker/src/txn/decision.rs`   |
+| `read_committed` visibility       | `compute_visibility_window` (read-committed branch: `effective_lso = lso.min(hw)`)                        | `crates/broker/src/handlers/fetch.rs` |
 
 **Modeled (faithful abstraction, NOT driving real code):** the **LSO** = the base offset of the oldest
 still-open transactional batch, else the log end (Kafka's `first-unstable-offset`; `Log::lso()`'s incremental
 maintenance is stored state, not a pure fn, so the rule is re-implemented); and the **abort filter** — a
-`Data` batch is hidden iff its transaction aborted. The abort filter is an *outcome-level* abstraction
+`Data` batch is hidden iff its transaction aborted. The abort filter is an _outcome-level_ abstraction
 equivalent to the client-side `poll.rs` / `TxnIndex::aborted_in_range` range filtering **only under** the
 one-in-flight-txn-per-producer invariant this model enforces (it does **not** drive `aborted_in_range`'s
 overlap arithmetic). An **advancing HWM** (`hw <= log_end`, bumped by an `Ack` action modelling follower
@@ -70,6 +71,7 @@ idempotent-retry arms live in `decision_model.rs`, #523; a guard `unreachable!`s
 ## State & actions
 
 **State (hashable projection):**
+
 - `log: Vec<Batch>` where `Batch { producer: u8, txn_seq: u8, kind: Data | CommitMarker | AbortMarker }` (offset
   = index). A txn = a producer's run of `Data` batches terminated by a marker.
 - per-producer `TxnEntry`-projection: `{ state: TxnState, epoch }` (the coordinator side).
@@ -78,6 +80,7 @@ idempotent-retry arms live in `decision_model.rs`, #523; a guard `unreachable!`s
 - ghost: per-txn outcome (`Open | Committed | Aborted`) for the atomicity check.
 
 **Actions:**
+
 - `Begin(p)` — producer `p` opens a txn (drive `can_transition_to(Ongoing)`).
 - `Append(p)` — `p` appends a `Data` batch to its open txn (extends its offset range).
 - `End(p, commit)` — drive `decide_phase1_transition(entry, commit)` (Ongoing→Prepare) then
@@ -91,20 +94,22 @@ idempotent-retry arms live in `decision_model.rs`, #523; a guard `unreachable!`s
 
 The `read_committed` visible set `V = { Data batch b : b.offset < effective_lso AND b's txn ∉ aborted-list }`.
 Per-transition `next_state` asserts + `Property::always`:
+
 - **`only_committed_visible`** (HEADLINE): every batch in `V` belongs to a transaction that has resolved as
   **Committed** — no open/uncommitted record and no aborted record is ever visible.
 - **`committed_prefix_complete`**: every committed `Data` batch below `effective_lso` (and not aborted) **is**
   in `V` — no committed record below the LSO is wrongly hidden or filtered. (Together with the headline,
-  `V` = *exactly* the committed records below the LSO.)
+  `V` = _exactly_ the committed records below the LSO.)
 - **`no_visible_aborted`**: no batch from an aborted transaction is ever in `V` (the abort-side all-or-nothing).
 - **`lso_blocks_open`**: the LSO never exceeds the base offset of any open transaction (an out-of-order commit
   stays invisible while an older txn is open).
 - **`lso_monotonic`**: the LSO never regresses.
 
 **Non-vacuity witnesses (`sometimes`):** a committed txn's records become visible; an aborted txn is recorded
-+ filtered; two producers' transactional batches interleave at the offset level; a younger txn commits while
-an older stays open so its committed batch sits *above* the LSO (held back); a stale-epoch `End` is fenced
-(`CompletionDecision::Reject`).
+
+- filtered; two producers' transactional batches interleave at the offset level; a younger txn commits while
+  an older stays open so its committed batch sits _above_ the LSO (held back); a stale-epoch `End` is fenced
+  (`CompletionDecision::Reject`).
 
 ## Configs
 
@@ -126,8 +131,8 @@ the model + document (as the data-path composition's three refinements did).
 
 ## Verification discipline
 
-- `stateright` wrap-real; watchdog-guarded. `cargo +nightly fmt -p crabka-broker`; `cargo clippy
-  -p crabka-broker --all-targets -- -D warnings` clean. Likely **no production change** (the cores are already
+- `stateright` wrap-real; watchdog-guarded. `cargo +nightly fmt -p krabka-broker`; `cargo clippy
+-p krabka-broker --all-targets -- -D warnings` clean. Likely **no production change** (the cores are already
   extracted; the LSO/aborted bookkeeping is modeled, not driven from file-backed `TxnIndex`/`Log`).
 
 ## Success criteria

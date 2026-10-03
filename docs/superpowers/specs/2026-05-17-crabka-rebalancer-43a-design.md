@@ -6,7 +6,7 @@
 
 ## Goal
 
-Land a standalone `crabka-rebalancer` binary that connects to a Crabka cluster as an admin client, periodically snapshots cluster state, and exposes a Connect-RPC service for "what would balance this cluster?" proposals. **No execute path** in 43a — the executor and persistence land in slice 43b.
+Land a standalone `krabka-rebalancer` binary that connects to a Crabka cluster as an admin client, periodically snapshots cluster state, and exposes a Connect-RPC service for "what would balance this cluster?" proposals. **No execute path** in 43a — the executor and persistence land in slice 43b.
 
 The slice ships the first three goals: replica-count balance (soft), leader-count balance (soft), and preferred-leader idempotency (hard).
 
@@ -32,13 +32,13 @@ crates/rebalancer/
 ├── src/
 │   ├── lib.rs                                # public surface for tests
 │   ├── bin/
-│   │   └── rebalancer.rs                     # crabka-rebalancer binary (clap CLI)
+│   │   └── rebalancer.rs                     # krabka-rebalancer binary (clap CLI)
 │   ├── api/
 │   │   ├── mod.rs                            # service impl + axum mount helpers
 │   │   └── handlers.rs                       # one fn per RPC method
 │   ├── ingest/
 │   │   ├── mod.rs                            # Ingester + snapshot loop
-│   │   └── admin_client.rs                   # thin wrapper over crabka_client_core::Client
+│   │   └── admin_client.rs                   # thin wrapper over krabka_client_core::Client
 │   ├── model/
 │   │   ├── mod.rs                            # ClusterState, BrokerView, PartitionView
 │   │   ├── proposal.rs                       # Proposal, Movement, ProposalSummary, ProposalStatus
@@ -58,38 +58,41 @@ crates/rebalancer/
 ### Crate dependencies (additions to the workspace)
 
 Workspace-level (`Cargo.toml`):
+
 - `connectrpc = "0.4"`
 - `connectrpc-axum = "0.1"`
 - `connectrpc-axum-build = "0.1"`
 - `prost = "0.13"` (matches `connectrpc`'s expected version when this lands)
 
 `crates/rebalancer/Cargo.toml`:
-- `crabka-client-core` (admin client)
-- `crabka-protocol` (typed requests for Metadata / DescribeCluster / ListPartitionReassignments)
-- `crabka-metadata` (`NodeId`)
+
+- `krabka-client-core` (admin client)
+- `krabka-protocol` (typed requests for Metadata / DescribeCluster / ListPartitionReassignments)
+- `krabka-metadata` (`NodeId`)
 - `axum` (operational endpoints) — already in workspace
 - `prometheus-client` — already in workspace
 - `arc-swap` — already in workspace
 - `serde_json`, `tokio`, `tracing`, `clap`, `anyhow`, `uuid`, `thiserror` — already in workspace
-- Dev: `tempfile`, `crabka-broker` with `test-helpers`, `tower`
+- Dev: `tempfile`, `krabka-broker` with `test-helpers`, `tower`
 
 ### Process shape & CLI
 
-One binary, `crabka-rebalancer`. Single-replica only in 43a. CLI flags (mirroring the operator binary, env-overridable):
+One binary, `krabka-rebalancer`. Single-replica only in 43a. CLI flags (mirroring the operator binary, env-overridable):
 
 ```
---bootstrap-servers <host:port,host:port>   [env CRABKA_BOOTSTRAP_SERVERS]
---listen-addr 0.0.0.0:9300                  [env CRABKA_REBALANCER_LISTEN_ADDR]
---scrape-interval-secs 10                   [env CRABKA_SCRAPE_INTERVAL_SECS]
---imbalance-threshold-pct 10                [env CRABKA_IMBALANCE_THRESHOLD_PCT]
---max-movements-per-proposal 256            [env CRABKA_MAX_MOVEMENTS_PER_PROPOSAL]
---proposal-ring-buffer-size 20              [env CRABKA_PROPOSAL_RING_BUFFER_SIZE]
+--bootstrap-servers <host:port,host:port>   [env KRABKA_BOOTSTRAP_SERVERS]
+--listen-addr 0.0.0.0:9300                  [env KRABKA_REBALANCER_LISTEN_ADDR]
+--scrape-interval-secs 10                   [env KRABKA_SCRAPE_INTERVAL_SECS]
+--imbalance-threshold-pct 10                [env KRABKA_IMBALANCE_THRESHOLD_PCT]
+--max-movements-per-proposal 256            [env KRABKA_MAX_MOVEMENTS_PER_PROPOSAL]
+--proposal-ring-buffer-size 20              [env KRABKA_PROPOSAL_RING_BUFFER_SIZE]
 ```
 
 Operational endpoints (plain axum routes, not Connect):
+
 - `GET /healthz` — 200 always
 - `GET /readyz` — 200 after first successful state snapshot; 503 before
-- `GET /metrics` — OpenMetrics text (own `prometheus-client` registry; metrics surface starts small: `crabka_rebalancer_snapshot_at_ms`, `crabka_rebalancer_snapshots_total`, `crabka_rebalancer_proposals_created_total`)
+- `GET /metrics` — OpenMetrics text (own `prometheus-client` registry; metrics surface starts small: `krabka_rebalancer_snapshot_at_ms`, `krabka_rebalancer_snapshots_total`, `krabka_rebalancer_proposals_created_total`)
 
 Connect endpoints mount under `/crabka.rebalancer.v1.Rebalancer/<MethodName>` (Connect's default path convention).
 
@@ -177,14 +180,14 @@ message ExecuteProposalResponse {}                              // empty in 43a
 
 Method behaviors specific to 43a:
 
-| RPC               | 43a behavior |
-|-------------------|--------------|
-| `GetState`        | Returns the current snapshot; `Code::Unavailable` until the first successful snapshot. |
+| RPC               | 43a behavior                                                                                                                                                                                        |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GetState`        | Returns the current snapshot; `Code::Unavailable` until the first successful snapshot.                                                                                                              |
 | `CreateProposal`  | Runs the optimizer over the current snapshot; stores the result; returns it. Empty `goals` field = all goals; unknown goal names → `Code::InvalidArgument`. `Code::Unavailable` if no snapshot yet. |
-| `DryRunProposal`  | Returns the stored proposal's summary with `estimated_bytes_moved = 0`. Idempotent. `Code::NotFound` for unknown id. |
-| `GetProposal`     | Returns one stored proposal. `Code::NotFound` for unknown id. |
-| `ListProposals`   | Most-recent-first, ring-buffer-bounded. `limit == 0` → 20; otherwise capped at `min(limit, ring_buffer_size)`. |
-| `ExecuteProposal` | `Code::Unimplemented` with message `"execute path lands in slice 43b"`. |
+| `DryRunProposal`  | Returns the stored proposal's summary with `estimated_bytes_moved = 0`. Idempotent. `Code::NotFound` for unknown id.                                                                                |
+| `GetProposal`     | Returns one stored proposal. `Code::NotFound` for unknown id.                                                                                                                                       |
+| `ListProposals`   | Most-recent-first, ring-buffer-bounded. `limit == 0` → 20; otherwise capped at `min(limit, ring_buffer_size)`.                                                                                      |
+| `ExecuteProposal` | `Code::Unimplemented` with message `"execute path lands in slice 43b"`.                                                                                                                             |
 
 Wire format: clients pick JSON (`Content-Type: application/json`) or protobuf (`application/proto`) per request — Connect handles content negotiation. `curl` + JSON workflows are supported out of the box.
 
@@ -210,13 +213,14 @@ pub struct GoalContext {
 Optimizer flow (`optimizer::optimize`):
 
 1. Sort goals: Hard first, then Soft. Ties broken by registration order.
-2. Apply each goal's `propose` against an in-memory mutable clone of `ClusterState`. Each `Movement` updates the clone *before* the next goal sees it — so soft goals see post-hard-goal counts.
+2. Apply each goal's `propose` against an in-memory mutable clone of `ClusterState`. Each `Movement` updates the clone _before_ the next goal sees it — so soft goals see post-hard-goal counts.
 3. Accumulate every `Movement` in a `Vec`; coalesce duplicates per `(topic, partition)` — last writer wins.
 4. Truncate to `max_movements_per_proposal`. If a `Hard` goal still reports unfulfilled movements after the cap is hit, return `OptimizeError::HardGoalUnsatisfied`.
 5. Compute `ProposalSummary` (before / after counts).
 6. Return `Proposal { id: Uuid::new_v4().to_string(), status: Computed, ... }`.
 
 Movement-validity invariants the optimizer enforces (any violation drops the movement):
+
 - `new_replicas.len() == old_replicas.len()` (RF unchanged in 43a)
 - `new_leader ∈ new_replicas`
 - `new_replicas` has no duplicates
@@ -228,7 +232,7 @@ The three slice-43a goals:
 
 2. **`ReplicaDistribution`** (Soft) — compute `replicas_per_broker`. If `(max - min) * 100 / total > imbalance_threshold_pct`, move replicas from the most-loaded broker to the least-loaded. Greedy: pick the most-loaded broker → pick one of its replicas whose partition currently lacks a replica on the least-loaded broker → swap. Repeat until threshold satisfied OR no valid swap remains.
 
-3. **`LeaderDistribution`** (Soft) — compute `leaders_per_broker` over the *post-replica-balance* clone. Same imbalance heuristic; movements are leader-only (no replica change). For partitions where the new-leader candidate isn't already in the replica set, skip — leader-only movements can only target existing replicas.
+3. **`LeaderDistribution`** (Soft) — compute `leaders_per_broker` over the _post-replica-balance_ clone. Same imbalance heuristic; movements are leader-only (no replica change). For partitions where the new-leader candidate isn't already in the replica set, skip — leader-only movements can only target existing replicas.
 
 ### Cluster-state ingest
 
@@ -236,7 +240,7 @@ The three slice-43a goals:
 
 ```rust
 pub struct Ingester {
-    client: crabka_client_core::Client,
+    client: krabka_client_core::Client,
     interval: Duration,
     snapshot: Arc<ArcSwap<Option<ClusterState>>>,  // None until first success
     shutdown: CancellationToken,
@@ -253,7 +257,7 @@ Combine into one `ClusterState` with `snapshot_at_ms = now_ms()`. On error: log 
 
 Snapshot storage: `ArcSwap<Option<ClusterState>>` — lock-free reads from RPC handlers, atomic swap on tick. `GetState` derefs and either returns the snapshot or maps `None` → `Code::Unavailable`.
 
-**Behavior under in-flight reassignments:** if `in_flight_reassignments` is non-empty when `CreateProposal` runs, the proposal is computed against the *current* (transition-state) placement. The response includes the in-flight list in the prior `GetState` (operators can check themselves). Slice 43a does not gate proposal creation on in-flight reassignments; slice 43b adds that gate alongside the execute path.
+**Behavior under in-flight reassignments:** if `in_flight_reassignments` is non-empty when `CreateProposal` runs, the proposal is computed against the _current_ (transition-state) placement. The response includes the in-flight list in the prior `GetState` (operators can check themselves). Slice 43a does not gate proposal creation on in-flight reassignments; slice 43b adds that gate alongside the execute path.
 
 ### `ClusterState` data model
 
@@ -292,7 +296,7 @@ Partitions are flat, not grouped by topic — most goal logic iterates the full 
 
 ### Integration test (`crates/rebalancer/tests/end_to_end.rs`)
 
-1. Spin up a single-broker Crabka via `crabka_broker::Broker::start(BrokerConfig::for_tests(...))`.
+1. Spin up a single-broker Crabka via `krabka_broker::Broker::start(BrokerConfig::for_tests(...))`.
 2. Create 3 topics, 4 partitions each, RF=1.
 3. Start an `Ingester` against the broker. Wait for `GetState` to return a non-None snapshot.
 4. Call `CreateProposal` via the in-process service handler (not over HTTP — invoke the generated trait directly).
@@ -319,8 +323,8 @@ Boot the binary in a separate test (`std::process::Command`), hit the live Conne
 
 ## Acceptance criteria
 
-1. `cargo build -p crabka-rebalancer` produces a binary.
-2. `crabka-rebalancer --bootstrap-servers <addr> --listen-addr 127.0.0.1:9300 &` starts and binds the port.
+1. `cargo build -p krabka-rebalancer` produces a binary.
+2. `krabka-rebalancer --bootstrap-servers <addr> --listen-addr 127.0.0.1:9300 &` starts and binds the port.
 3. `curl -X POST -H 'Content-Type: application/json' http://127.0.0.1:9300/crabka.rebalancer.v1.Rebalancer/GetState -d '{}'` returns either `503 Code::Unavailable` (pre-first-snapshot) or a JSON `GetStateResponse`.
 4. All unit + integration tests pass; `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo fmt --check` clean.
 5. `README.md`'s `Replication & durability` table gains a row "Cruise-Control-equivalent rebalancer (advisor)" → ✅. The execute / topology / capacity / usage / anomaly variants stay as ❌ rows until the corresponding 43b–43g slices land.

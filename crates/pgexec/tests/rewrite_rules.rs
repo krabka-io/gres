@@ -1,7 +1,7 @@
 //! Rewrite rules apply `NEW.*` actions after the base statement's rows exist.
 
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 use tokio::sync::mpsc::error::TryRecvError;
 
 async fn run(session: &mut SqlSession, sql: &str) {

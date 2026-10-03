@@ -2,8 +2,8 @@
 
 use std::collections::BTreeMap;
 
-use crabka_pgcatalog::RelationName;
-use crabka_pgkv::{Kv, WriteOp, key::push_key_part};
+use krabka_pgcatalog::RelationName;
+use krabka_pgkv::{Kv, WriteOp, key::push_key_part};
 
 use crate::error::ExecError;
 
@@ -265,13 +265,13 @@ fn key_part(cur: &mut &[u8]) -> Result<String, ExecError> {
 }
 
 fn corrupt(message: &str) -> ExecError {
-    ExecError::Kv(crabka_pgkv::KvError::CorruptRow(message.into()))
+    ExecError::Kv(krabka_pgkv::KvError::CorruptRow(message.into()))
 }
 
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     use super::{
         AttributeStats, AttributeStatsKey, PREFIX, RelationName, all, clear_op, decode, encode,

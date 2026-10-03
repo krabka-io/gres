@@ -2,8 +2,8 @@
 //!
 //! These were written while no statement could enable row security, so they
 //! reach the catalog directly through the seam the enforcement path reads:
-//! `crabka_pgcatalog::policy` for the policies and
-//! `crabka_pgcatalog::set_row_security_ops` for the relation's flag. The engine
+//! `krabka_pgcatalog::policy` for the policies and
+//! `krabka_pgcatalog::set_row_security_ops` for the relation's flag. The engine
 //! is built over a store the test also holds, so a policy written this way is
 //! exactly the policy the executor sees.
 //!
@@ -15,10 +15,10 @@
 use std::sync::Arc;
 
 use assert2::assert;
-use crabka_pgcatalog::policy::{Policy, PolicyCommand};
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgkv::{Kv, MemKv};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgcatalog::policy::{Policy, PolicyCommand};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgkv::{Kv, MemKv};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 /// An engine and the store behind it, so a test can write catalog records the
 /// SQL surface has no syntax for.
@@ -117,7 +117,7 @@ const READ_SHAPES: [&str; 11] = [
     "SELECT count(*) FROM measure",
 ];
 
-fn deny_everything(table_id: crabka_pgcatalog::TableId, name: &str) -> Policy {
+fn deny_everything(table_id: krabka_pgcatalog::TableId, name: &str) -> Policy {
     Policy {
         oid: 0,
         name: name.into(),
@@ -131,20 +131,20 @@ fn deny_everything(table_id: crabka_pgcatalog::TableId, name: &str) -> Policy {
 }
 
 fn store_policy(kv: &dyn Kv, policy: &Policy) {
-    let ops = crabka_pgcatalog::policy::create_policy_ops(kv, policy).expect("create policy");
+    let ops = krabka_pgcatalog::policy::create_policy_ops(kv, policy).expect("create policy");
     kv.write_batch(&ops).expect("apply policy");
 }
 
-fn table_id(kv: &dyn Kv, name: &str) -> crabka_pgcatalog::TableId {
-    crabka_pgcatalog::get_table(kv, &crabka_pgcatalog::RelationName::public(name))
+fn table_id(kv: &dyn Kv, name: &str) -> krabka_pgcatalog::TableId {
+    krabka_pgcatalog::get_table(kv, &krabka_pgcatalog::RelationName::public(name))
         .expect("relation exists")
         .id
 }
 
 fn enable_row_security(kv: &dyn Kv, name: &str, force: bool) {
-    let ops = crabka_pgcatalog::set_row_security_ops(
+    let ops = krabka_pgcatalog::set_row_security_ops(
         kv,
-        &crabka_pgcatalog::RelationName::public(name),
+        &krabka_pgcatalog::RelationName::public(name),
         true,
         force,
     )
@@ -246,9 +246,9 @@ fn grant_select(kv: &dyn Kv, role: &str) {
         "measure_low",
         "measure_high",
     ] {
-        let ops = crabka_pgcatalog::grant_table_privileges_ops(
+        let ops = krabka_pgcatalog::grant_table_privileges_ops(
             kv,
-            &crabka_pgcatalog::RelationName::public(relation),
+            &krabka_pgcatalog::RelationName::public(relation),
             &[role.to_string()],
             &["SELECT".to_string()],
         )
@@ -579,9 +579,9 @@ async fn the_four_row_security_subcommands_move_the_stored_flags() {
     run(&mut session, "CREATE TABLE document (id int4)").await;
     for case in cases {
         run(&mut session, case.sql).await;
-        let table = crabka_pgcatalog::get_table(
+        let table = krabka_pgcatalog::get_table(
             fixture.kv.as_ref(),
-            &crabka_pgcatalog::RelationName::public("document"),
+            &krabka_pgcatalog::RelationName::public("document"),
         )
         .expect("relation exists");
         assert!(table.row_security == case.row_security, "{}", case.sql);

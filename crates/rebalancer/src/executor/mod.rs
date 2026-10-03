@@ -11,7 +11,7 @@ pub mod throttle;
 
 use std::{fmt::Write as _, path::PathBuf, sync::Arc, time::Instant};
 
-use crabka_units::{ByteRate, Time, convert::TimeExt as _};
+use krabka_units::{ByteRate, Time, convert::TimeExt as _};
 use tokio::{sync::Mutex, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
@@ -387,7 +387,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     use assert2::check;
-    use crabka_units::{millis, secs};
+    use krabka_units::{millis, secs};
 
     use super::*;
     use crate::{
@@ -410,7 +410,7 @@ mod tests {
     }
 
     /// The binary's default KIP-73 replication throttle.
-    const DEFAULT_THROTTLE: ByteRate = crabka_units::bytes_per_sec(50_000_000);
+    const DEFAULT_THROTTLE: ByteRate = krabka_units::bytes_per_sec(50_000_000);
 
     fn cfg(dir: &std::path::Path) -> ExecutorConfig {
         ExecutorConfig {
@@ -489,7 +489,7 @@ mod tests {
     ) -> ExecutorState {
         let store = Arc::new(ProposalStore::new(20));
         store.insert(p);
-        let mut registry = prometheus_client::registry::Registry::with_prefix("crabka_rebalancer");
+        let mut registry = prometheus_client::registry::Registry::with_prefix("krabka_rebalancer");
         let metrics = RebalancerMetrics::register(&mut registry);
         ExecutorState {
             store,
@@ -690,7 +690,7 @@ mod tests {
 
         let store = Arc::new(ProposalStore::new(20));
         store.insert(p.clone());
-        let mut registry = prometheus_client::registry::Registry::with_prefix("crabka_rebalancer");
+        let mut registry = prometheus_client::registry::Registry::with_prefix("krabka_rebalancer");
         let metrics = RebalancerMetrics::register(&mut registry);
         let state = ExecutorState {
             store,

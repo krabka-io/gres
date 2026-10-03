@@ -1,4 +1,4 @@
-# crabka-units
+# krabka-units
 
 Dimensioned quantities for Crabka: byte counts, byte rates, durations, frequencies, and ratios.
 

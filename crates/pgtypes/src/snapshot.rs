@@ -5,7 +5,7 @@
 //! that had been assigned, and `xip` lists the ids that were running between
 //! them. Everything below `xmin` is settled, everything at or above `xmax`
 //! started later, and an id inside the window is invisible exactly when `xip`
-//! holds it. That is the same triple `crabka_pgmvcc::visibility::Snapshot`
+//! holds it. That is the same triple `krabka_pgmvcc::visibility::Snapshot`
 //! carries, so the type exports engine state rather than describing it.
 //!
 //! The text form is `xmin:xmax:xip_list`, with the list comma-separated and

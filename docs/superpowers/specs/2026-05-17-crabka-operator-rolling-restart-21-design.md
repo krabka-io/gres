@@ -23,17 +23,17 @@
 
 ### Out (deferred)
 
-| Concern | Slice |
-|---|---|
-| Broker actually consumes `broker.properties` from the ConfigMap | future broker-side slice |
-| Schema validation of config keys (allowlist, type-checking) | future |
-| Plugin / log-appender / `kafka.logging` config | 41 |
-| ISR-aware roll ordering across replicas | 20a / 21b once multi-replica lands |
-| Broker-side `ControlledShutdown` on SIGTERM | separate (broker-side) |
-| Per-pool overrides (`KafkaNodePool.spec.config`) | future — slice 21c if/when needed |
-| Forced restart annotation (`kubectl annotate kafka demo crabka.io/restart=now`) | future |
-| Roll progress in `Kafka.status` beyond the boolean condition | future |
-| `maxUnavailable` tuning on `StatefulSet.updateStrategy.rollingUpdate` | future (default of 1 is correct for slice 20's single-replica) |
+| Concern                                                                         | Slice                                                          |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Broker actually consumes `broker.properties` from the ConfigMap                 | future broker-side slice                                       |
+| Schema validation of config keys (allowlist, type-checking)                     | future                                                         |
+| Plugin / log-appender / `kafka.logging` config                                  | 41                                                             |
+| ISR-aware roll ordering across replicas                                         | 20a / 21b once multi-replica lands                             |
+| Broker-side `ControlledShutdown` on SIGTERM                                     | separate (broker-side)                                         |
+| Per-pool overrides (`KafkaNodePool.spec.config`)                                | future — slice 21c if/when needed                              |
+| Forced restart annotation (`kubectl annotate kafka demo crabka.io/restart=now`) | future                                                         |
+| Roll progress in `Kafka.status` beyond the boolean condition                    | future                                                         |
+| `maxUnavailable` tuning on `StatefulSet.updateStrategy.rollingUpdate`           | future (default of 1 is correct for slice 20's single-replica) |
 
 ### Constraints
 
@@ -71,7 +71,7 @@ kind: ConfigMap
 metadata: { name: demo-broker-config, ... }
 data:
   broker.env: |
-    CRABKA_LISTEN_ADDR=0.0.0.0:9092
+    KRABKA_LISTEN_ADDR=0.0.0.0:9092
   broker.properties: |
     log.retention.hours=24
     num.partitions=3
@@ -80,6 +80,7 @@ data:
 When `spec.config` is empty or `None`, `broker.properties` is omitted (so the diff is clean for "no config" clusters).
 
 Serialization rules:
+
 - Entries sorted by key (BTreeMap iteration is sorted — deterministic by construction).
 - Each line is `key=value` followed by `\n`.
 - No escaping; the operator passes the value through verbatim. Broker-side parsing handles its own escaping when it eventually consumes the file.
@@ -125,7 +126,7 @@ pub(crate) fn config_hash(broker_properties: &str) -> String {
 }
 ```
 
-(Uses the workspace's existing `sha2` dep — already pulled in by `crabka-security`.)
+(Uses the workspace's existing `sha2` dep — already pulled in by `krabka-security`.)
 
 ---
 
@@ -176,6 +177,7 @@ let patch_body = json!({
 ```
 
 SSA semantics ensure:
+
 - Operator's field manager owns both keys.
 - User-applied labels on the pool (e.g. `crabka.io/cluster=demo`) stay intact (different field manager).
 - Idempotent: same hash → no observed change.
@@ -199,6 +201,7 @@ SSA semantics ensure:
 ### Integration tests
 
 `tests/reconcile_kafka.rs`:
+
 - `kafka_writes_broker_properties_data_when_config_set` — Kafka with `spec.config`; assert the rendered ConfigMap PATCH body includes a `broker.properties` data entry with sorted lines.
 - `kafka_patches_pool_label_with_config_hash` — assert the pool adopt PATCH body contains `metadata.labels["crabka.io/config-hash"]` with the expected sha256.
 - `kafka_status_includes_rolling_condition_partial` — pool list shows a partial pool; assert the status PATCH body's conditions include `Rolling=True, reason=RollingUpdate`.
@@ -269,9 +272,9 @@ Implementation plan: **~5 tasks across 3 batches**.
 
 ## 9. Acceptance criteria
 
-1. `cargo test -p crabka-operator` green (existing + new tests).
+1. `cargo test -p krabka-operator` green (existing + new tests).
 2. `cargo clippy --workspace --all-targets -- -D warnings` clean.
-3. `helm lint charts/crabka-operator` passes.
+3. `helm lint charts/krabka-operator` passes.
 4. CRD regen stable.
 5. operator-e2e: applying `spec.config` change observes pod UID change AND StatefulSet revision change within 90 s; new pod reaches Ready.
 

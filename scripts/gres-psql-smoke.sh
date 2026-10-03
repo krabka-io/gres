@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 
 if ! command -v psql >/dev/null; then
     echo "SKIP: psql not installed"
-    cargo test -p crabka-gres runtime_serves_sql_over_pgwire
+    cargo test -p krabka-gres runtime_serves_sql_over_pgwire
     exit 0
 fi
 
@@ -73,9 +73,9 @@ expect_select_one() {
     return 1
 }
 
-cargo build -p crabka-gres
+cargo build -p krabka-gres
 
-./target/debug/crabka-gres --listen "127.0.0.1:${PORT}" \
+./target/debug/krabka-gres --listen "127.0.0.1:${PORT}" \
     --data-dir "${DATA_ROOT}/plain" \
     >"${DATA_ROOT}/plain.log" 2>&1 &
 SERVER_PID=$!
@@ -90,7 +90,7 @@ if [ ! -f "${CERT_DIR}/test-server.pem" ]; then
 fi
 
 TLS_PORT=$((PORT + 1))
-./target/debug/crabka-gres --listen "127.0.0.1:${TLS_PORT}" \
+./target/debug/krabka-gres --listen "127.0.0.1:${TLS_PORT}" \
     --data-dir "${DATA_ROOT}/tls" \
     --tls-cert "${CERT_DIR}/test-server.pem" \
     --tls-key "${CERT_DIR}/test-server-key.pem" \
@@ -102,7 +102,7 @@ wait_for_select_one "TLS" "$TLS_CONN"
 expect_select_one "psql over TLS" "$TLS_CONN"
 
 SCRAM_TLS_PORT=$((PORT + 2))
-./target/debug/crabka-gres --listen "127.0.0.1:${SCRAM_TLS_PORT}" \
+./target/debug/krabka-gres --listen "127.0.0.1:${SCRAM_TLS_PORT}" \
     --data-dir "${DATA_ROOT}/scram-tls" \
     --tls-cert "${CERT_DIR}/test-server.pem" \
     --tls-key "${CERT_DIR}/test-server-key.pem" \

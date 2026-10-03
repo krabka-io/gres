@@ -8,7 +8,7 @@ Part of the rebalancer roadmap
 
 ## Why this exists
 
-Today `crabka-rebalancer` takes `--metrics-scrape-targets
+Today `krabka-rebalancer` takes `--metrics-scrape-targets
 id:host:port,…` as a static CLI list. Scaling the broker pool or
 re-IPing a broker requires restarting the rebalancer. The roadmap
 explicitly flagged this as a deferred follow-up ("discover via
@@ -18,7 +18,7 @@ the broker list lands in `ClusterState::brokers` and is shared via
 should consume the same handle.
 
 Kafka has no protocol surface for advertising the broker's metrics
-endpoint, so the *port* still has to come from the operator. The
+endpoint, so the _port_ still has to come from the operator. The
 broker's slice-39 metrics endpoint defaults to `0.0.0.0:9404`; the
 operator templates broker pods with the same port. A single
 `--metrics-port` flag (default `9404`) handles the uniform case;
@@ -40,7 +40,7 @@ No restart needed.
   production deployment shape). Per-broker `id:port` overrides can
   be added later if a real need surfaces.
 - **Helm-chart wiring.** The chart at
-  `charts/crabka-rebalancer/` continues to expose
+  `charts/krabka-rebalancer/` continues to expose
   `--metrics-scrape-targets` for backward compatibility. A chart
   follow-up can switch the default to discovery (set the flag empty,
   expose `--metrics-port`) in a separate operator-roadmap slice.
@@ -112,8 +112,8 @@ GC's lazily: on each tick, prune entries whose `broker_id` isn't in
 /// Broker metrics-endpoint port for live discovery. Used when
 /// `--metrics-scrape-targets` is unset; targets are derived from the
 /// ingester's `Metadata` snapshot as `host:METRICS_PORT`. Defaults
-/// to crabka-broker's slice-39 default.
-#[arg(long, env = "CRABKA_REBALANCER_METRICS_PORT", default_value_t = 9404)]
+/// to krabka-broker's slice-39 default.
+#[arg(long, env = "KRABKA_REBALANCER_METRICS_PORT", default_value_t = 9404)]
 metrics_port: u16,
 ```
 
@@ -135,13 +135,13 @@ ignored; documented in the flag's doc comment.
 
 ## Error handling
 
-| Failure                                          | Surface                                                                  |
-|--------------------------------------------------|---------------------------------------------------------------------------|
-| No snapshot yet (cold start)                     | `current()` returns empty Vec; loop tick does nothing. First ingest populates; next scrape cycle picks up.|
-| Broker with empty `host` in metadata             | Skipped from `current()` with a one-time WARN per `broker_id`.            |
-| Scrape fails at a discovered target              | Existing `ScrapeLogLevel::Warn` (first-time failure) / `Recovered` / `Debug`. No new error path. |
-| Both `--metrics-scrape-targets` AND `--metrics-port` set | Static wins; port silently ignored. Documented in `--help`.       |
-| `--metrics-port 0` (or other invalid u16)        | Clap rejects at CLI parse — `u16` typed arg.                              |
+| Failure                                                  | Surface                                                                                                    |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| No snapshot yet (cold start)                             | `current()` returns empty Vec; loop tick does nothing. First ingest populates; next scrape cycle picks up. |
+| Broker with empty `host` in metadata                     | Skipped from `current()` with a one-time WARN per `broker_id`.                                             |
+| Scrape fails at a discovered target                      | Existing `ScrapeLogLevel::Warn` (first-time failure) / `Recovered` / `Debug`. No new error path.           |
+| Both `--metrics-scrape-targets` AND `--metrics-port` set | Static wins; port silently ignored. Documented in `--help`.                                                |
+| `--metrics-port 0` (or other invalid u16)                | Clap rejects at CLI parse — `u16` typed arg.                                                               |
 
 ## Testing
 

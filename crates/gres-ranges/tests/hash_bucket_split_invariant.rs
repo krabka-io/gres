@@ -5,7 +5,7 @@
 //! a value to a range that does not store all of that bucket's rows.
 
 use assert2::assert;
-use crabka_gres_ranges::{
+use krabka_gres_ranges::{
     CoLocationGroup, HashShardSpec, MapEpoch, MapValidationError, RangeId, RangeKey, RangeMap,
     RangeSpec, TableId, TenantName,
 };

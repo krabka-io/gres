@@ -7,8 +7,8 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use crabka_client_core::security::{ClientSecurity, SaslCredentials};
-use crabka_gres_control::{
+use krabka_client_core::security::{ClientSecurity, SaslCredentials};
+use krabka_gres_control::{
     CheckpointPartBytes, DEFAULT_CHECKPOINT_BYTES, DEFAULT_CHECKPOINT_DELETE_RECORDS_TIMEOUT,
     DEFAULT_CHECKPOINT_FRAMES, DEFAULT_CHECKPOINT_POLL_INTERVAL,
     DEFAULT_IDLE_SUSPEND_POLL_INTERVAL, DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL,
@@ -16,9 +16,9 @@ use crabka_gres_control::{
     FinalCheckpoint, PositiveI32, PositiveUsize, RegistryPolicy, RegistryReplicationFactor,
     TenantName, TenantRecord, decode_tenant_config_record, tenant_config_topic,
 };
-use crabka_pgexec::SqlEngine;
-use crabka_pgkv::{FjallKv, FjallOptions, Kv, KvScan, MemKv, RestoreKv, SnapshotKv};
-use crabka_pgwire::{
+use krabka_pgexec::SqlEngine;
+use krabka_pgkv::{FjallKv, FjallOptions, Kv, KvScan, MemKv, RestoreKv, SnapshotKv};
+use krabka_pgwire::{
     engine::{
         BoundParam, CloseTarget, CopyInResponse, CopyOutStream, Engine, ExecuteOutcome,
         FastpathCall, Notification, PortalDescription, PreparedDescription, QueryResult, Session,
@@ -27,10 +27,10 @@ use crabka_pgwire::{
     session::{AuthMode, SessionConfig},
     telemetry::{DEFAULT_SAMPLE_RATIO, IngressTracePolicy},
 };
-use crabka_security::{
+use krabka_security::{
     ClientAuthMode, ListenerProtocol, SaslMechanism, TlsConfig, scram::PgScramVerifier,
 };
-use crabka_units::{
+use krabka_units::{
     ByteSize, Time,
     convert::{ByteSizeExt as _, StdDurationExt as _, TimeExt as _},
     fmt::Human as _,
@@ -51,7 +51,7 @@ trait SubstrateKv: SnapshotKv + RestoreKv {}
 
 impl<T> SubstrateKv for T where T: SnapshotKv + RestoreKv {}
 
-/// Command-line arguments for the `crabka-gres` binary.
+/// Command-line arguments for the `krabka-gres` binary.
 #[derive(clap::Parser, Debug, Clone)]
 #[command(version)]
 pub struct Cli {
@@ -143,7 +143,7 @@ pub struct ServeArgs {
     /// Maximum accepted `PostgreSQL` frontend message size.
     #[arg(
         long,
-        env = "CRABKA_GRES_PGWIRE_MAX_MESSAGE_SIZE",
+        env = "KRABKA_GRES_PGWIRE_MAX_MESSAGE_SIZE",
         default_value = "64MiB",
         value_parser = parse_positive_whole_byte_size
     )]
@@ -152,8 +152,8 @@ pub struct ServeArgs {
     /// SCRAM iterations for standalone `--auth scram --user-cred` verifiers.
     #[arg(
         long,
-        env = "CRABKA_GRES_PGWIRE_SCRAM_ITERATIONS",
-        default_value_t = crabka_pgwire::scram::DEFAULT_ITERATIONS,
+        env = "KRABKA_GRES_PGWIRE_SCRAM_ITERATIONS",
+        default_value_t = krabka_pgwire::scram::DEFAULT_ITERATIONS,
         value_parser = parse_positive_u32
     )]
     pub pgwire_scram_iterations: u32,
@@ -178,8 +178,8 @@ pub struct ServeArgs {
     /// Maximum active memtable size for each on-disk substrate cache.
     #[arg(
         long = "pgkv-max-memtable-size",
-        env = "CRABKA_PGKV_MAX_MEMTABLE_SIZE",
-        value_parser = crabka_units::parse::positive_byte_size,
+        env = "KRABKA_PGKV_MAX_MEMTABLE_SIZE",
+        value_parser = krabka_units::parse::positive_byte_size,
         requires = "substrate_bootstrap"
     )]
     pub pgkv_max_memtable_size: Option<ByteSize>,
@@ -187,10 +187,10 @@ pub struct ServeArgs {
     /// Committed operations between requested substrate-cache memtable rotations.
     #[arg(
         long = "pgkv-rotate-after-ops",
-        env = "CRABKA_PGKV_ROTATE_AFTER_OPS",
+        env = "KRABKA_PGKV_ROTATE_AFTER_OPS",
         requires = "substrate_bootstrap"
     )]
-    pub pgkv_rotate_after_ops: Option<crabka_pgkv::RotateAfterOps>,
+    pub pgkv_rotate_after_ops: Option<krabka_pgkv::RotateAfterOps>,
 
     /// In-process memory:// substrate dev/test mode: comma-separated table-start range boundaries, for example 0,100,200.
     #[arg(long, requires = "substrate_bootstrap")]
@@ -199,8 +199,8 @@ pub struct ServeArgs {
     /// Periodic range-0 follower refresh cadence in multi-range substrate mode.
     #[arg(
         long = "range0-follower-poll-interval",
-        env = "CRABKA_GRES_RANGE0_FOLLOWER_POLL_INTERVAL",
-        value_parser = crabka_units::parse::positive_time,
+        env = "KRABKA_GRES_RANGE0_FOLLOWER_POLL_INTERVAL",
+        value_parser = krabka_units::parse::positive_time,
         requires = "ranges"
     )]
     pub range0_follower_poll_interval: Option<Time>,
@@ -208,8 +208,8 @@ pub struct ServeArgs {
     /// Initial delay before retrying consecutive range-0 follower rebuilds.
     #[arg(
         long = "range0-follower-rebuild-backoff-floor",
-        env = "CRABKA_GRES_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR",
-        value_parser = crabka_units::parse::positive_time,
+        env = "KRABKA_GRES_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR",
+        value_parser = krabka_units::parse::positive_time,
         requires = "ranges"
     )]
     pub range0_follower_rebuild_backoff_floor: Option<Time>,
@@ -217,8 +217,8 @@ pub struct ServeArgs {
     /// Maximum delay between consecutive range-0 follower rebuilds.
     #[arg(
         long = "range0-follower-rebuild-backoff-ceiling",
-        env = "CRABKA_GRES_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING",
-        value_parser = crabka_units::parse::positive_time,
+        env = "KRABKA_GRES_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING",
+        value_parser = krabka_units::parse::positive_time,
         requires = "ranges"
     )]
     pub range0_follower_rebuild_backoff_ceiling: Option<Time>,
@@ -226,8 +226,8 @@ pub struct ServeArgs {
     /// Deadline for one durable record inspection.
     #[arg(
         long = "durable-inspection-timeout",
-        env = "CRABKA_GRES_DURABLE_INSPECTION_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time,
+        env = "KRABKA_GRES_DURABLE_INSPECTION_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time,
         requires = "ranges"
     )]
     pub durable_inspection_timeout: Option<Time>,
@@ -235,7 +235,7 @@ pub struct ServeArgs {
     /// Maximum records materialized by one durable inspection.
     #[arg(
         long = "durable-inspection-fold-max-records",
-        env = "CRABKA_GRES_DURABLE_INSPECTION_FOLD_MAX_RECORDS",
+        env = "KRABKA_GRES_DURABLE_INSPECTION_FOLD_MAX_RECORDS",
         requires = "ranges"
     )]
     pub durable_inspection_fold_max_records: Option<PositiveUsize>,
@@ -243,8 +243,8 @@ pub struct ServeArgs {
     /// Maximum data materialized by one durable inspection.
     #[arg(
         long = "durable-inspection-fold-max-size",
-        env = "CRABKA_GRES_DURABLE_INSPECTION_FOLD_MAX_SIZE",
-        value_parser = crabka_units::parse::positive_byte_size,
+        env = "KRABKA_GRES_DURABLE_INSPECTION_FOLD_MAX_SIZE",
+        value_parser = krabka_units::parse::positive_byte_size,
         requires = "ranges"
     )]
     pub durable_inspection_fold_max_size: Option<ByteSize>,
@@ -252,8 +252,8 @@ pub struct ServeArgs {
     /// Broker long-poll wait for committed-WAL recovery fetches.
     #[arg(
         long = "wal-recovery-fetch-max-wait",
-        env = "CRABKA_GRES_WAL_RECOVERY_FETCH_MAX_WAIT",
-        value_parser = crabka_units::parse::positive_time,
+        env = "KRABKA_GRES_WAL_RECOVERY_FETCH_MAX_WAIT",
+        value_parser = krabka_units::parse::positive_time,
         requires = "substrate_bootstrap"
     )]
     pub wal_recovery_fetch_max_wait: Option<Time>,
@@ -261,8 +261,8 @@ pub struct ServeArgs {
     /// Per-partition byte limit for committed-WAL recovery fetches.
     #[arg(
         long = "wal-recovery-fetch-partition-max",
-        env = "CRABKA_GRES_WAL_RECOVERY_FETCH_PARTITION_MAX",
-        value_parser = crabka_units::parse::positive_byte_size,
+        env = "KRABKA_GRES_WAL_RECOVERY_FETCH_PARTITION_MAX",
+        value_parser = krabka_units::parse::positive_byte_size,
         requires = "substrate_bootstrap"
     )]
     pub wal_recovery_fetch_partition_max: Option<ByteSize>,
@@ -270,8 +270,8 @@ pub struct ServeArgs {
     /// Whole-response byte limit for committed-WAL recovery fetches.
     #[arg(
         long = "wal-recovery-fetch-response-max",
-        env = "CRABKA_GRES_WAL_RECOVERY_FETCH_RESPONSE_MAX",
-        value_parser = crabka_units::parse::positive_byte_size,
+        env = "KRABKA_GRES_WAL_RECOVERY_FETCH_RESPONSE_MAX",
+        value_parser = krabka_units::parse::positive_byte_size,
         requires = "substrate_bootstrap"
     )]
     pub wal_recovery_fetch_response_max: Option<ByteSize>,
@@ -279,7 +279,7 @@ pub struct ServeArgs {
     /// Consecutive empty-fetch retries after the initial recovery fetch.
     #[arg(
         long = "wal-recovery-empty-fetch-retries",
-        env = "CRABKA_GRES_WAL_RECOVERY_EMPTY_FETCH_RETRIES",
+        env = "KRABKA_GRES_WAL_RECOVERY_EMPTY_FETCH_RETRIES",
         requires = "substrate_bootstrap"
     )]
     pub wal_recovery_empty_fetch_retries: Option<PositiveUsize>,
@@ -287,8 +287,8 @@ pub struct ServeArgs {
     /// Timeout for resolving raw WAL recovery broker hostnames.
     #[arg(
         long = "wal-recovery-dns-timeout",
-        env = "CRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time,
+        env = "KRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time,
         requires = "substrate_bootstrap"
     )]
     pub wal_recovery_dns_timeout: Option<Time>,
@@ -296,8 +296,8 @@ pub struct ServeArgs {
     /// Timeout for establishing raw WAL recovery broker connections.
     #[arg(
         long = "wal-recovery-connect-timeout",
-        env = "CRABKA_GRES_WAL_RECOVERY_CONNECT_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time,
+        env = "KRABKA_GRES_WAL_RECOVERY_CONNECT_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time,
         requires = "substrate_bootstrap"
     )]
     pub wal_recovery_connect_timeout: Option<Time>,
@@ -305,8 +305,8 @@ pub struct ServeArgs {
     /// Timeout for raw WAL recovery broker requests.
     #[arg(
         long = "wal-recovery-request-timeout",
-        env = "CRABKA_GRES_WAL_RECOVERY_REQUEST_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time,
+        env = "KRABKA_GRES_WAL_RECOVERY_REQUEST_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time,
         requires = "substrate_bootstrap"
     )]
     pub wal_recovery_request_timeout: Option<Time>,
@@ -314,7 +314,7 @@ pub struct ServeArgs {
     /// Replication factor requested when creating range WAL topics.
     #[arg(
         long = "wal-topic-replication-factor",
-        env = "CRABKA_GRES_WAL_TOPIC_REPLICATION_FACTOR",
+        env = "KRABKA_GRES_WAL_TOPIC_REPLICATION_FACTOR",
         requires = "substrate_bootstrap"
     )]
     pub wal_topic_replication_factor: Option<PositiveI32>,
@@ -322,8 +322,8 @@ pub struct ServeArgs {
     /// Timeout for ensuring range WAL topics.
     #[arg(
         long = "wal-topic-ensure-timeout",
-        env = "CRABKA_GRES_WAL_TOPIC_ENSURE_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time,
+        env = "KRABKA_GRES_WAL_TOPIC_ENSURE_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time,
         requires = "substrate_bootstrap"
     )]
     pub wal_topic_ensure_timeout: Option<Time>,
@@ -331,8 +331,8 @@ pub struct ServeArgs {
     /// Timeout for establishing WAL admin broker connections.
     #[arg(
         long = "wal-admin-connect-timeout",
-        env = "CRABKA_GRES_WAL_ADMIN_CONNECT_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time,
+        env = "KRABKA_GRES_WAL_ADMIN_CONNECT_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time,
         requires = "substrate_bootstrap"
     )]
     pub wal_admin_connect_timeout: Option<Time>,
@@ -340,8 +340,8 @@ pub struct ServeArgs {
     /// Timeout for WAL admin broker requests.
     #[arg(
         long = "wal-admin-request-timeout",
-        env = "CRABKA_GRES_WAL_ADMIN_REQUEST_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time,
+        env = "KRABKA_GRES_WAL_ADMIN_REQUEST_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time,
         requires = "substrate_bootstrap"
     )]
     pub wal_admin_request_timeout: Option<Time>,
@@ -349,8 +349,8 @@ pub struct ServeArgs {
     /// Deadline for flushing all buffered and in-flight WAL records.
     #[arg(
         long = "wal-producer-flush-timeout",
-        env = "CRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time,
+        env = "KRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time,
         requires = "substrate_bootstrap"
     )]
     pub wal_producer_flush_timeout: Option<Time>,
@@ -358,8 +358,8 @@ pub struct ServeArgs {
     /// Timeout for resolving WAL producer broker hostnames.
     #[arg(
         long = "wal-producer-dns-timeout",
-        env = "CRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time,
+        env = "KRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time,
         requires = "substrate_bootstrap"
     )]
     pub wal_producer_dns_timeout: Option<Time>,
@@ -367,32 +367,32 @@ pub struct ServeArgs {
     /// Timeout for resolving Kafka broker hostnames used by the FDW.
     #[arg(
         long = "fdw-broker-dns-timeout",
-        env = "CRABKA_GRES_FDW_BROKER_DNS_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time
+        env = "KRABKA_GRES_FDW_BROKER_DNS_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time
     )]
     pub fdw_broker_dns_timeout: Option<Time>,
 
     /// Initial delay before retrying a transient Schema Registry fetch failure.
     #[arg(
         long = "schema-fetch-retry-initial-backoff",
-        env = "CRABKA_GRES_SCHEMA_FETCH_RETRY_INITIAL_BACKOFF",
-        value_parser = crabka_units::parse::positive_time
+        env = "KRABKA_GRES_SCHEMA_FETCH_RETRY_INITIAL_BACKOFF",
+        value_parser = krabka_units::parse::positive_time
     )]
     pub schema_fetch_retry_initial_backoff: Option<Time>,
 
     /// Maximum delay between transient Schema Registry fetch retries.
     #[arg(
         long = "schema-fetch-retry-max-backoff",
-        env = "CRABKA_GRES_SCHEMA_FETCH_RETRY_MAX_BACKOFF",
-        value_parser = crabka_units::parse::positive_time
+        env = "KRABKA_GRES_SCHEMA_FETCH_RETRY_MAX_BACKOFF",
+        value_parser = krabka_units::parse::positive_time
     )]
     pub schema_fetch_retry_max_backoff: Option<Time>,
 
     /// Timeout for WAL producer broker requests.
     #[arg(
         long = "wal-producer-request-timeout",
-        env = "CRABKA_GRES_WAL_PRODUCER_REQUEST_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time,
+        env = "KRABKA_GRES_WAL_PRODUCER_REQUEST_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time,
         requires = "substrate_bootstrap"
     )]
     pub wal_producer_request_timeout: Option<Time>,
@@ -400,7 +400,7 @@ pub struct ServeArgs {
     /// WAL producer retries after a batch's initial send.
     #[arg(
         long = "wal-producer-retries",
-        env = "CRABKA_GRES_WAL_PRODUCER_RETRIES",
+        env = "KRABKA_GRES_WAL_PRODUCER_RETRIES",
         requires = "substrate_bootstrap"
     )]
     pub wal_producer_retries: Option<NonNegativeI32>,
@@ -408,8 +408,8 @@ pub struct ServeArgs {
     /// WAL producer retry and producer-ID initial backoff.
     #[arg(
         long = "wal-producer-retry-backoff",
-        env = "CRABKA_GRES_WAL_PRODUCER_RETRY_BACKOFF",
-        value_parser = crabka_units::parse::positive_time,
+        env = "KRABKA_GRES_WAL_PRODUCER_RETRY_BACKOFF",
+        value_parser = krabka_units::parse::positive_time,
         requires = "substrate_bootstrap"
     )]
     pub wal_producer_retry_backoff: Option<Time>,
@@ -417,8 +417,8 @@ pub struct ServeArgs {
     /// Wall-clock routing retry budget for each WAL producer batch.
     #[arg(
         long = "wal-producer-routing-retry-budget",
-        env = "CRABKA_GRES_WAL_PRODUCER_ROUTING_RETRY_BUDGET",
-        value_parser = crabka_units::parse::positive_time,
+        env = "KRABKA_GRES_WAL_PRODUCER_ROUTING_RETRY_BUDGET",
+        value_parser = krabka_units::parse::positive_time,
         requires = "substrate_bootstrap"
     )]
     pub wal_producer_routing_retry_budget: Option<Time>,
@@ -426,8 +426,8 @@ pub struct ServeArgs {
     /// Producer-ID initialization retry timeout.
     #[arg(
         long = "wal-producer-init-retry-timeout",
-        env = "CRABKA_GRES_WAL_PRODUCER_INIT_RETRY_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time,
+        env = "KRABKA_GRES_WAL_PRODUCER_INIT_RETRY_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time,
         requires = "substrate_bootstrap"
     )]
     pub wal_producer_init_retry_timeout: Option<Time>,
@@ -435,8 +435,8 @@ pub struct ServeArgs {
     /// Producer-ID initialization retry backoff cap.
     #[arg(
         long = "wal-producer-init-max-backoff",
-        env = "CRABKA_GRES_WAL_PRODUCER_INIT_MAX_BACKOFF",
-        value_parser = crabka_units::parse::positive_time,
+        env = "KRABKA_GRES_WAL_PRODUCER_INIT_MAX_BACKOFF",
+        value_parser = krabka_units::parse::positive_time,
         requires = "substrate_bootstrap"
     )]
     pub wal_producer_init_max_backoff: Option<Time>,
@@ -444,8 +444,8 @@ pub struct ServeArgs {
     /// Transaction timeout sent by the WAL producer.
     #[arg(
         long = "wal-producer-transaction-timeout",
-        env = "CRABKA_GRES_WAL_PRODUCER_TRANSACTION_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time,
+        env = "KRABKA_GRES_WAL_PRODUCER_TRANSACTION_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time,
         requires = "substrate_bootstrap"
     )]
     pub wal_producer_transaction_timeout: Option<Time>,
@@ -453,16 +453,16 @@ pub struct ServeArgs {
     /// Compression used for WAL producer record batches.
     #[arg(
         long = "wal-producer-compression",
-        env = "CRABKA_GRES_WAL_PRODUCER_COMPRESSION",
+        env = "KRABKA_GRES_WAL_PRODUCER_COMPRESSION",
         requires = "substrate_bootstrap"
     )]
-    pub wal_producer_compression: Option<crabka_client_producer::Compression>,
+    pub wal_producer_compression: Option<krabka_client_producer::Compression>,
 
     /// WAL producer linger.
     #[arg(
         long = "wal-producer-linger",
-        env = "CRABKA_GRES_WAL_PRODUCER_LINGER",
-        value_parser = crabka_units::parse::non_negative_time,
+        env = "KRABKA_GRES_WAL_PRODUCER_LINGER",
+        value_parser = krabka_units::parse::non_negative_time,
         requires = "substrate_bootstrap"
     )]
     pub wal_producer_linger: Option<Time>,
@@ -470,8 +470,8 @@ pub struct ServeArgs {
     /// Maximum uncompressed WAL producer batch size.
     #[arg(
         long = "wal-producer-batch",
-        env = "CRABKA_GRES_WAL_PRODUCER_BATCH",
-        value_parser = crabka_units::parse::positive_byte_size,
+        env = "KRABKA_GRES_WAL_PRODUCER_BATCH",
+        value_parser = krabka_units::parse::positive_byte_size,
         requires = "substrate_bootstrap"
     )]
     pub wal_producer_batch: Option<ByteSize>,
@@ -479,8 +479,8 @@ pub struct ServeArgs {
     /// Target maximum size of one encoded logical WAL frame.
     #[arg(
         long = "wal-frame-max-size",
-        env = "CRABKA_GRES_WAL_FRAME_MAX_SIZE",
-        value_parser = crabka_units::parse::positive_byte_size,
+        env = "KRABKA_GRES_WAL_FRAME_MAX_SIZE",
+        value_parser = krabka_units::parse::positive_byte_size,
         requires = "substrate_bootstrap"
     )]
     pub wal_frame_max_size: Option<ByteSize>,
@@ -499,7 +499,7 @@ pub struct ServeArgs {
     #[arg(
         long = "hlc-max-offset",
         default_value = "250ms",
-        value_parser = crabka_units::parse::positive_time
+        value_parser = krabka_units::parse::positive_time
     )]
     pub hlc_max_offset: Time,
 
@@ -509,7 +509,7 @@ pub struct ServeArgs {
     #[arg(
         long = "hlc-wall-offset",
         default_value = "0ms",
-        value_parser = crabka_units::parse::time,
+        value_parser = krabka_units::parse::time,
         allow_negative_numbers = true
     )]
     pub hlc_wall_offset: Time,
@@ -587,50 +587,50 @@ pub struct ServeArgs {
     pub checkpoint_gcs_application_credentials_path: Option<String>,
 
     /// Checkpoint after at least this many WAL frames since the previous manifest.
-    #[arg(long = "checkpoint-frames", env = "CRABKA_GRES_CHECKPOINT_FRAMES")]
+    #[arg(long = "checkpoint-frames", env = "KRABKA_GRES_CHECKPOINT_FRAMES")]
     pub checkpoint_frames: Option<NonZeroU64>,
 
     /// Checkpoint after at least this much WAL since the previous manifest.
     #[arg(
         long = "checkpoint-size",
-        env = "CRABKA_GRES_CHECKPOINT_SIZE",
-        value_parser = crabka_units::parse::positive_byte_size
+        env = "KRABKA_GRES_CHECKPOINT_SIZE",
+        value_parser = krabka_units::parse::positive_byte_size
     )]
     pub checkpoint_size: Option<ByteSize>,
 
     /// Target maximum size per checkpoint part object.
     #[arg(
         long = "checkpoint-part-size",
-        env = "CRABKA_GRES_CHECKPOINT_PART_SIZE",
-        value_parser = crabka_units::parse::positive_byte_size
+        env = "KRABKA_GRES_CHECKPOINT_PART_SIZE",
+        value_parser = krabka_units::parse::positive_byte_size
     )]
     pub checkpoint_part_size: Option<ByteSize>,
 
     /// Number of newest checkpoint directories to retain after pruning.
-    #[arg(long = "checkpoint-retain", env = "CRABKA_GRES_CHECKPOINT_RETAIN")]
+    #[arg(long = "checkpoint-retain", env = "KRABKA_GRES_CHECKPOINT_RETAIN")]
     pub checkpoint_retain: Option<PositiveUsize>,
 
     /// Kafka `DeleteRecords` timeout used after a durable checkpoint.
     #[arg(
         long = "checkpoint-delete-records-timeout",
-        env = "CRABKA_GRES_CHECKPOINT_DELETE_RECORDS_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time
+        env = "KRABKA_GRES_CHECKPOINT_DELETE_RECORDS_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time
     )]
     pub checkpoint_delete_records_timeout: Option<Time>,
 
     /// Background checkpoint threshold polling interval.
     #[arg(
         long = "checkpoint-poll-interval",
-        env = "CRABKA_GRES_CHECKPOINT_POLL_INTERVAL",
-        value_parser = crabka_units::parse::positive_time
+        env = "KRABKA_GRES_CHECKPOINT_POLL_INTERVAL",
+        value_parser = krabka_units::parse::positive_time
     )]
     pub checkpoint_poll_interval: Option<Time>,
 
     /// Idle-tenant suspension polling interval.
     #[arg(
         long = "idle-suspend-poll-interval",
-        env = "CRABKA_GRES_IDLE_SUSPEND_POLL_INTERVAL",
-        value_parser = crabka_units::parse::positive_time
+        env = "KRABKA_GRES_IDLE_SUSPEND_POLL_INTERVAL",
+        value_parser = krabka_units::parse::positive_time
     )]
     pub idle_suspend_poll_interval: Option<Time>,
 
@@ -649,7 +649,7 @@ pub struct ServeArgs {
     ///   traces but does not give up the sampling decision.
     /// - `resample` (default) — accept the context as the parent, but recompute
     ///   the sampled flag locally from the incoming trace-id at the pipeline's
-    ///   own head-sampling ratio `CRABKA_OTLP_SAMPLE_RATIO`, which is adopted
+    ///   own head-sampling ratio `KRABKA_OTLP_SAMPLE_RATIO`, which is adopted
     ///   through [`ServeArgs::adopt_otlp_sample_ratio`] so the two cannot drift.
     ///   This mode recomputes the bit; it does not clear it. `ParentBased`
     ///   returns `Drop` for a *non-sampled* parent and does not fall through to
@@ -662,7 +662,7 @@ pub struct ServeArgs {
     ///   to whoever can open a `PostgreSQL` connection.
     #[arg(
         long = "gres-trace-ingress",
-        env = "CRABKA_GRES_TRACE_INGRESS",
+        env = "KRABKA_GRES_TRACE_INGRESS",
         value_enum,
         default_value_t = TraceIngressMode::Resample
     )]
@@ -738,116 +738,116 @@ pub struct RangeRuntimeOptions {
     /// Maximum distributed join key columns.
     #[arg(
         long = "range-join-key-columns",
-        env = "CRABKA_GRES_RANGE_JOIN_KEY_COLUMNS"
+        env = "KRABKA_GRES_RANGE_JOIN_KEY_COLUMNS"
     )]
-    pub join_key_columns: Option<crabka_gres_ranges::PositiveUsize>,
+    pub join_key_columns: Option<krabka_gres_ranges::PositiveUsize>,
     /// Maximum distributed join projection columns.
     #[arg(
         long = "range-join-projection-columns",
-        env = "CRABKA_GRES_RANGE_JOIN_PROJECTION_COLUMNS"
+        env = "KRABKA_GRES_RANGE_JOIN_PROJECTION_COLUMNS"
     )]
-    pub join_projection_columns: Option<crabka_gres_ranges::PositiveUsize>,
+    pub join_projection_columns: Option<krabka_gres_ranges::PositiveUsize>,
     /// Maximum predicates per distributed join side.
     #[arg(
         long = "range-join-predicates",
-        env = "CRABKA_GRES_RANGE_JOIN_PREDICATES"
+        env = "KRABKA_GRES_RANGE_JOIN_PREDICATES"
     )]
-    pub join_predicates: Option<crabka_gres_ranges::PositiveUsize>,
+    pub join_predicates: Option<krabka_gres_ranges::PositiveUsize>,
     /// Maximum active XIDs in each distributed join snapshot.
     #[arg(
         long = "range-join-snapshot-xids",
-        env = "CRABKA_GRES_RANGE_JOIN_SNAPSHOT_XIDS"
+        env = "KRABKA_GRES_RANGE_JOIN_SNAPSHOT_XIDS"
     )]
-    pub join_snapshot_xids: Option<crabka_gres_ranges::PositiveUsize>,
+    pub join_snapshot_xids: Option<krabka_gres_ranges::PositiveUsize>,
     /// Maximum materialized broadcast rows.
     #[arg(
         long = "range-join-broadcast-rows",
-        env = "CRABKA_GRES_RANGE_JOIN_BROADCAST_ROWS"
+        env = "KRABKA_GRES_RANGE_JOIN_BROADCAST_ROWS"
     )]
-    pub join_broadcast_rows: Option<crabka_gres_ranges::PositiveUsize>,
+    pub join_broadcast_rows: Option<krabka_gres_ranges::PositiveUsize>,
     /// Maximum encoded distributed join row size.
-    #[arg(long = "range-join-row-max", env = "CRABKA_GRES_RANGE_JOIN_ROW_MAX", value_parser = parse_positive_whole_byte_size)]
+    #[arg(long = "range-join-row-max", env = "KRABKA_GRES_RANGE_JOIN_ROW_MAX", value_parser = parse_positive_whole_byte_size)]
     pub join_row_max: Option<ByteSize>,
     /// Maximum distributed join result rows.
     #[arg(
         long = "range-join-result-rows",
-        env = "CRABKA_GRES_RANGE_JOIN_RESULT_ROWS"
+        env = "KRABKA_GRES_RANGE_JOIN_RESULT_ROWS"
     )]
-    pub join_result_rows: Option<crabka_gres_ranges::PositiveUsize>,
+    pub join_result_rows: Option<krabka_gres_ranges::PositiveUsize>,
     /// Maximum encoded range RPC frame size.
-    #[arg(long = "range-rpc-frame-max", env = "CRABKA_GRES_RANGE_RPC_FRAME_MAX", value_parser = crabka_units::parse::positive_byte_size)]
+    #[arg(long = "range-rpc-frame-max", env = "KRABKA_GRES_RANGE_RPC_FRAME_MAX", value_parser = krabka_units::parse::positive_byte_size)]
     pub rpc_frame_max: Option<ByteSize>,
     /// Deadline for one range RPC request.
-    #[arg(long = "range-rpc-request-timeout", env = "CRABKA_GRES_RANGE_RPC_REQUEST_TIMEOUT", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long = "range-rpc-request-timeout", env = "KRABKA_GRES_RANGE_RPC_REQUEST_TIMEOUT", value_parser = krabka_units::parse::positive_time)]
     pub rpc_request_timeout: Option<Time>,
     /// Server connection idle timeout.
-    #[arg(long = "range-rpc-server-idle-timeout", env = "CRABKA_GRES_RANGE_RPC_SERVER_IDLE_TIMEOUT", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long = "range-rpc-server-idle-timeout", env = "KRABKA_GRES_RANGE_RPC_SERVER_IDLE_TIMEOUT", value_parser = krabka_units::parse::positive_time)]
     pub rpc_server_idle_timeout: Option<Time>,
     /// Client pool connection idle TTL.
-    #[arg(long = "range-rpc-pool-idle-ttl", env = "CRABKA_GRES_RANGE_RPC_POOL_IDLE_TTL", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long = "range-rpc-pool-idle-ttl", env = "KRABKA_GRES_RANGE_RPC_POOL_IDLE_TTL", value_parser = krabka_units::parse::positive_time)]
     pub rpc_pool_idle_ttl: Option<Time>,
     /// Maximum idle connections retained per endpoint.
     #[arg(
         long = "range-rpc-pool-max-idle-per-endpoint",
-        env = "CRABKA_GRES_RANGE_RPC_POOL_MAX_IDLE_PER_ENDPOINT"
+        env = "KRABKA_GRES_RANGE_RPC_POOL_MAX_IDLE_PER_ENDPOINT"
     )]
-    pub rpc_pool_max_idle_per_endpoint: Option<crabka_gres_ranges::PositiveUsize>,
+    pub rpc_pool_max_idle_per_endpoint: Option<krabka_gres_ranges::PositiveUsize>,
     /// Hosted remote-session idle retention.
-    #[arg(long = "range-remote-session-idle", env = "CRABKA_GRES_RANGE_REMOTE_SESSION_IDLE", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long = "range-remote-session-idle", env = "KRABKA_GRES_RANGE_REMOTE_SESSION_IDLE", value_parser = krabka_units::parse::positive_time)]
     pub remote_session_idle: Option<Time>,
     /// Maximum hosted remote sessions.
     #[arg(
         long = "range-remote-session-max",
-        env = "CRABKA_GRES_RANGE_REMOTE_SESSION_MAX"
+        env = "KRABKA_GRES_RANGE_REMOTE_SESSION_MAX"
     )]
-    pub remote_session_max: Option<crabka_gres_ranges::PositiveUsize>,
+    pub remote_session_max: Option<krabka_gres_ranges::PositiveUsize>,
     /// Range-0 catch-up wait timeout.
-    #[arg(long = "range0-wait-timeout", env = "CRABKA_GRES_RANGE0_WAIT_TIMEOUT", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long = "range0-wait-timeout", env = "KRABKA_GRES_RANGE0_WAIT_TIMEOUT", value_parser = krabka_units::parse::positive_time)]
     pub range0_wait_timeout: Option<Time>,
     /// Whole-reply budget for range-0 barriers.
-    #[arg(long = "range0-barrier-reply-budget", env = "CRABKA_GRES_RANGE0_BARRIER_REPLY_BUDGET", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long = "range0-barrier-reply-budget", env = "KRABKA_GRES_RANGE0_BARRIER_REPLY_BUDGET", value_parser = krabka_units::parse::positive_time)]
     pub range0_barrier_reply_budget: Option<Time>,
     /// Lock-wait cap for cross-range transactions.
-    #[arg(long = "range-cross-range-lock-wait-cap", env = "CRABKA_GRES_RANGE_CROSS_RANGE_LOCK_WAIT_CAP", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long = "range-cross-range-lock-wait-cap", env = "KRABKA_GRES_RANGE_CROSS_RANGE_LOCK_WAIT_CAP", value_parser = krabka_units::parse::positive_time)]
     pub cross_range_lock_wait_cap: Option<Time>,
     /// Durable-inspection record ceiling.
     #[arg(
         long = "range-durable-inspect-max-records",
-        env = "CRABKA_GRES_RANGE_DURABLE_INSPECT_MAX_RECORDS"
+        env = "KRABKA_GRES_RANGE_DURABLE_INSPECT_MAX_RECORDS"
     )]
-    pub durable_inspect_max_records: Option<crabka_gres_ranges::PositiveU32>,
+    pub durable_inspect_max_records: Option<krabka_gres_ranges::PositiveU32>,
     /// Durable-inspection byte ceiling.
-    #[arg(long = "range-durable-inspect-max-size", env = "CRABKA_GRES_RANGE_DURABLE_INSPECT_MAX_SIZE", value_parser = crabka_units::parse::positive_byte_size)]
+    #[arg(long = "range-durable-inspect-max-size", env = "KRABKA_GRES_RANGE_DURABLE_INSPECT_MAX_SIZE", value_parser = krabka_units::parse::positive_byte_size)]
     pub durable_inspect_max_size: Option<ByteSize>,
     /// Decision-release lag retry count.
     #[arg(
         long = "range-decision-release-lag-retries",
-        env = "CRABKA_GRES_RANGE_DECISION_RELEASE_LAG_RETRIES"
+        env = "KRABKA_GRES_RANGE_DECISION_RELEASE_LAG_RETRIES"
     )]
-    pub decision_release_lag_retries: Option<crabka_gres_ranges::PositiveU32>,
+    pub decision_release_lag_retries: Option<krabka_gres_ranges::PositiveU32>,
     /// Decision-release retry backoff.
-    #[arg(long = "range-decision-release-retry-backoff", env = "CRABKA_GRES_RANGE_DECISION_RELEASE_RETRY_BACKOFF", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long = "range-decision-release-retry-backoff", env = "KRABKA_GRES_RANGE_DECISION_RELEASE_RETRY_BACKOFF", value_parser = krabka_units::parse::positive_time)]
     pub decision_release_retry_backoff: Option<Time>,
     /// Timestamp-oracle heartbeat cadence.
-    #[arg(long = "range-tso-heartbeat-interval", env = "CRABKA_GRES_RANGE_TSO_HEARTBEAT_INTERVAL", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long = "range-tso-heartbeat-interval", env = "KRABKA_GRES_RANGE_TSO_HEARTBEAT_INTERVAL", value_parser = krabka_units::parse::positive_time)]
     pub tso_heartbeat_interval: Option<Time>,
     /// Minimum interval between logical horizon persists.
-    #[arg(long = "range-logical-min-persist-interval", env = "CRABKA_GRES_RANGE_LOGICAL_MIN_PERSIST_INTERVAL", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long = "range-logical-min-persist-interval", env = "KRABKA_GRES_RANGE_LOGICAL_MIN_PERSIST_INTERVAL", value_parser = krabka_units::parse::positive_time)]
     pub logical_min_persist_interval: Option<Time>,
     /// Initial logical horizon persistence stride.
     #[arg(
         long = "range-logical-base-persist-stride",
-        env = "CRABKA_GRES_RANGE_LOGICAL_BASE_PERSIST_STRIDE"
+        env = "KRABKA_GRES_RANGE_LOGICAL_BASE_PERSIST_STRIDE"
     )]
-    pub logical_base_persist_stride: Option<crabka_gres_ranges::PositiveU64>,
+    pub logical_base_persist_stride: Option<krabka_gres_ranges::PositiveU64>,
     /// Maximum adaptive logical horizon persistence stride.
     #[arg(
         long = "range-logical-max-persist-stride",
-        env = "CRABKA_GRES_RANGE_LOGICAL_MAX_PERSIST_STRIDE"
+        env = "KRABKA_GRES_RANGE_LOGICAL_MAX_PERSIST_STRIDE"
     )]
-    pub logical_max_persist_stride: Option<crabka_gres_ranges::PositiveU64>,
+    pub logical_max_persist_stride: Option<krabka_gres_ranges::PositiveU64>,
     /// Wall-clock headroom persisted by the HLC oracle.
-    #[arg(long = "range-hlc-horizon-headroom", env = "CRABKA_GRES_RANGE_HLC_HORIZON_HEADROOM", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long = "range-hlc-horizon-headroom", env = "KRABKA_GRES_RANGE_HLC_HORIZON_HEADROOM", value_parser = krabka_units::parse::positive_time)]
     pub hlc_horizon_headroom: Option<Time>,
 }
 
@@ -855,57 +855,57 @@ pub struct RangeRuntimeOptions {
 #[derive(clap::Args, Debug, Clone, Default)]
 pub struct PgExecRuntimeOptions {
     /// Memory retained by one blocking query operator.
-    #[arg(long = "pgexec-blocking-query-memory", env = "CRABKA_GRES_PGEXEC_BLOCKING_QUERY_MEMORY", value_parser = parse_positive_whole_byte_size)]
+    #[arg(long = "pgexec-blocking-query-memory", env = "KRABKA_GRES_PGEXEC_BLOCKING_QUERY_MEMORY", value_parser = parse_positive_whole_byte_size)]
     pub blocking_query_memory: Option<ByteSize>,
     /// Maximum encoded size of one result page.
-    #[arg(long = "pgexec-result-page-max", env = "CRABKA_GRES_PGEXEC_RESULT_PAGE_MAX", value_parser = parse_positive_whole_byte_size)]
+    #[arg(long = "pgexec-result-page-max", env = "KRABKA_GRES_PGEXEC_RESULT_PAGE_MAX", value_parser = parse_positive_whole_byte_size)]
     pub result_page_max: Option<ByteSize>,
     /// Largest estimated join input eligible for broadcast.
-    #[arg(long = "pgexec-join-broadcast-threshold", env = "CRABKA_GRES_PGEXEC_JOIN_BROADCAST_THRESHOLD", value_parser = parse_positive_whole_byte_size)]
+    #[arg(long = "pgexec-join-broadcast-threshold", env = "KRABKA_GRES_PGEXEC_JOIN_BROADCAST_THRESHOLD", value_parser = parse_positive_whole_byte_size)]
     pub join_broadcast_threshold: Option<ByteSize>,
     /// Per-session LISTEN/NOTIFY queue capacity.
     #[arg(
         long = "pgexec-notify-queue-capacity",
-        env = "CRABKA_GRES_PGEXEC_NOTIFY_QUEUE_CAPACITY"
+        env = "KRABKA_GRES_PGEXEC_NOTIFY_QUEUE_CAPACITY"
     )]
     pub notify_queue_capacity: Option<PositiveUsize>,
     /// Durable XID reservation size.
     #[arg(
         long = "pgexec-xid-reservation",
-        env = "CRABKA_GRES_PGEXEC_XID_RESERVATION"
+        env = "KRABKA_GRES_PGEXEC_XID_RESERVATION"
     )]
-    pub xid_reservation: Option<crabka_gres_ranges::PositiveU64>,
+    pub xid_reservation: Option<krabka_gres_ranges::PositiveU64>,
     /// Durable internal row-ID reservation size.
     #[arg(
         long = "pgexec-rowid-reservation",
-        env = "CRABKA_GRES_PGEXEC_ROWID_RESERVATION"
+        env = "KRABKA_GRES_PGEXEC_ROWID_RESERVATION"
     )]
-    pub rowid_reservation: Option<crabka_gres_ranges::PositiveU64>,
+    pub rowid_reservation: Option<krabka_gres_ranges::PositiveU64>,
     /// Maximum timestamp versions pruned per written row.
     #[arg(
         long = "pgexec-ts-prune-versions-per-row",
-        env = "CRABKA_GRES_PGEXEC_TS_PRUNE_VERSIONS_PER_ROW"
+        env = "KRABKA_GRES_PGEXEC_TS_PRUNE_VERSIONS_PER_ROW"
     )]
     pub ts_prune_versions_per_row: Option<PositiveUsize>,
     /// Lag retained behind the timestamp GC floor.
-    #[arg(long = "pgexec-ts-gc-floor-lag", env = "CRABKA_GRES_PGEXEC_TS_GC_FLOOR_LAG", value_parser = parse_pgexec_gc_floor_lag)]
+    #[arg(long = "pgexec-ts-gc-floor-lag", env = "KRABKA_GRES_PGEXEC_TS_GC_FLOOR_LAG", value_parser = parse_pgexec_gc_floor_lag)]
     pub ts_gc_floor_lag: Option<Time>,
     /// How long a statement may run before the watchdog reports it. Diagnostic
     /// only: the watchdog logs and never cancels, so this is not a timeout.
-    #[arg(long = "pgexec-stuck-statement-threshold", env = "CRABKA_GRES_PGEXEC_STUCK_STATEMENT_THRESHOLD", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long = "pgexec-stuck-statement-threshold", env = "KRABKA_GRES_PGEXEC_STUCK_STATEMENT_THRESHOLD", value_parser = krabka_units::parse::positive_time)]
     pub stuck_statement_threshold: Option<Time>,
     /// How often the stuck-statement watchdog scans the in-flight statements.
-    #[arg(long = "pgexec-stuck-statement-poll", env = "CRABKA_GRES_PGEXEC_STUCK_STATEMENT_POLL", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long = "pgexec-stuck-statement-poll", env = "KRABKA_GRES_PGEXEC_STUCK_STATEMENT_POLL", value_parser = krabka_units::parse::positive_time)]
     pub stuck_statement_poll: Option<Time>,
     /// How long after reporting a stuck statement the watchdog reports it
     /// again, if it is still running.
-    #[arg(long = "pgexec-stuck-statement-repeat", env = "CRABKA_GRES_PGEXEC_STUCK_STATEMENT_REPEAT", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long = "pgexec-stuck-statement-repeat", env = "KRABKA_GRES_PGEXEC_STUCK_STATEMENT_REPEAT", value_parser = krabka_units::parse::positive_time)]
     pub stuck_statement_repeat: Option<Time>,
 }
 
 fn parse_pgexec_gc_floor_lag(value: &str) -> Result<Time, String> {
-    let value = crabka_units::parse::non_negative_time(value).map_err(|error| error.to_string())?;
-    crabka_pgexec::RuntimePolicy {
+    let value = krabka_units::parse::non_negative_time(value).map_err(|error| error.to_string())?;
+    krabka_pgexec::RuntimePolicy {
         ts_gc_floor_lag: value,
         ..Default::default()
     }
@@ -915,9 +915,9 @@ fn parse_pgexec_gc_floor_lag(value: &str) -> Result<Time, String> {
 }
 
 impl PgExecRuntimeOptions {
-    fn effective_policy(&self) -> crabka_pgexec::RuntimePolicy {
-        let defaults = crabka_pgexec::RuntimePolicy::default();
-        crabka_pgexec::RuntimePolicy {
+    fn effective_policy(&self) -> krabka_pgexec::RuntimePolicy {
+        let defaults = krabka_pgexec::RuntimePolicy::default();
+        krabka_pgexec::RuntimePolicy {
             blocking_query_memory: self
                 .blocking_query_memory
                 .unwrap_or(defaults.blocking_query_memory),
@@ -930,18 +930,18 @@ impl PgExecRuntimeOptions {
                 .map_or(defaults.notify_queue_capacity, PositiveUsize::into_value),
             xid_reservation: self.xid_reservation.map_or(
                 defaults.xid_reservation,
-                crabka_gres_ranges::PositiveU64::get,
+                krabka_gres_ranges::PositiveU64::get,
             ),
             rowid_reservation: self.rowid_reservation.map_or(
                 defaults.rowid_reservation,
-                crabka_gres_ranges::PositiveU64::get,
+                krabka_gres_ranges::PositiveU64::get,
             ),
             ts_prune_versions_per_row: self.ts_prune_versions_per_row.map_or(
                 defaults.ts_prune_versions_per_row,
                 PositiveUsize::into_value,
             ),
             ts_gc_floor_lag: self.ts_gc_floor_lag.unwrap_or(defaults.ts_gc_floor_lag),
-            stuck_statement: crabka_pgexec::watchdog::StuckStatementPolicy {
+            stuck_statement: krabka_pgexec::watchdog::StuckStatementPolicy {
                 threshold: self
                     .stuck_statement_threshold
                     .unwrap_or(defaults.stuck_statement.threshold),
@@ -957,37 +957,37 @@ impl PgExecRuntimeOptions {
 }
 
 impl RangeRuntimeOptions {
-    fn effective_policy(&self) -> std::io::Result<crabka_gres_ranges::RangeRuntimePolicy> {
-        let defaults = crabka_gres_ranges::RangeRuntimePolicy::default();
-        let policy = crabka_gres_ranges::RangeRuntimePolicy {
-            join: crabka_pgexec::scanner::JoinPolicy {
+    fn effective_policy(&self) -> std::io::Result<krabka_gres_ranges::RangeRuntimePolicy> {
+        let defaults = krabka_gres_ranges::RangeRuntimePolicy::default();
+        let policy = krabka_gres_ranges::RangeRuntimePolicy {
+            join: krabka_pgexec::scanner::JoinPolicy {
                 key_columns: self.join_key_columns.map_or(
                     defaults.join.key_columns,
-                    crabka_gres_ranges::PositiveUsize::get,
+                    krabka_gres_ranges::PositiveUsize::get,
                 ),
                 projection_columns: self.join_projection_columns.map_or(
                     defaults.join.projection_columns,
-                    crabka_gres_ranges::PositiveUsize::get,
+                    krabka_gres_ranges::PositiveUsize::get,
                 ),
                 predicates: self.join_predicates.map_or(
                     defaults.join.predicates,
-                    crabka_gres_ranges::PositiveUsize::get,
+                    krabka_gres_ranges::PositiveUsize::get,
                 ),
                 snapshot_xids: self.join_snapshot_xids.map_or(
                     defaults.join.snapshot_xids,
-                    crabka_gres_ranges::PositiveUsize::get,
+                    krabka_gres_ranges::PositiveUsize::get,
                 ),
                 broadcast_rows: self.join_broadcast_rows.map_or(
                     defaults.join.broadcast_rows,
-                    crabka_gres_ranges::PositiveUsize::get,
+                    krabka_gres_ranges::PositiveUsize::get,
                 ),
                 row_bytes: self.join_row_max.map_or(
                     defaults.join.row_bytes,
-                    crabka_units::convert::ByteSizeExt::bytes_usize,
+                    krabka_units::convert::ByteSizeExt::bytes_usize,
                 ),
                 result_rows: self.join_result_rows.map_or(
                     defaults.join.result_rows,
-                    crabka_gres_ranges::PositiveUsize::get,
+                    krabka_gres_ranges::PositiveUsize::get,
                 ),
             },
             rpc_frame_max: self.rpc_frame_max.unwrap_or(defaults.rpc_frame_max),
@@ -1056,47 +1056,47 @@ impl RangeRuntimeOptions {
 pub struct LocalVacuumOptions {
     #[arg(
         long = "local-vacuum-idle-interval",
-        env = "CRABKA_GRES_LOCAL_VACUUM_IDLE_INTERVAL",
-        value_parser = crabka_units::parse::positive_time
+        env = "KRABKA_GRES_LOCAL_VACUUM_IDLE_INTERVAL",
+        value_parser = krabka_units::parse::positive_time
     )]
     idle_interval: Option<Time>,
     #[arg(
         long = "local-vacuum-backoff-floor",
-        env = "CRABKA_GRES_LOCAL_VACUUM_BACKOFF_FLOOR",
-        value_parser = crabka_units::parse::positive_time
+        env = "KRABKA_GRES_LOCAL_VACUUM_BACKOFF_FLOOR",
+        value_parser = krabka_units::parse::positive_time
     )]
     backoff_floor: Option<Time>,
     #[arg(
         long = "local-vacuum-hot-debt",
-        env = "CRABKA_GRES_LOCAL_VACUUM_HOT_DEBT"
+        env = "KRABKA_GRES_LOCAL_VACUUM_HOT_DEBT"
     )]
     hot_debt: Option<NonZeroU64>,
     #[arg(
         long = "local-vacuum-key-budget",
-        env = "CRABKA_GRES_LOCAL_VACUUM_KEY_BUDGET"
+        env = "KRABKA_GRES_LOCAL_VACUUM_KEY_BUDGET"
     )]
     key_budget: Option<PositiveUsize>,
     #[arg(
         long = "local-vacuum-max-key-budget",
-        env = "CRABKA_GRES_LOCAL_VACUUM_MAX_KEY_BUDGET"
+        env = "KRABKA_GRES_LOCAL_VACUUM_MAX_KEY_BUDGET"
     )]
     max_key_budget: Option<PositiveUsize>,
     #[arg(
         long = "local-vacuum-step-fast",
-        env = "CRABKA_GRES_LOCAL_VACUUM_STEP_FAST",
-        value_parser = crabka_units::parse::positive_time
+        env = "KRABKA_GRES_LOCAL_VACUUM_STEP_FAST",
+        value_parser = krabka_units::parse::positive_time
     )]
     step_fast: Option<Time>,
     #[arg(
         long = "local-vacuum-step-slow",
-        env = "CRABKA_GRES_LOCAL_VACUUM_STEP_SLOW",
-        value_parser = crabka_units::parse::positive_time
+        env = "KRABKA_GRES_LOCAL_VACUUM_STEP_SLOW",
+        value_parser = krabka_units::parse::positive_time
     )]
     step_slow: Option<Time>,
     #[arg(
         long = "local-vacuum-idle-after",
-        env = "CRABKA_GRES_LOCAL_VACUUM_IDLE_AFTER",
-        value_parser = crabka_units::parse::positive_time
+        env = "KRABKA_GRES_LOCAL_VACUUM_IDLE_AFTER",
+        value_parser = krabka_units::parse::positive_time
     )]
     idle_after: Option<Time>,
 }
@@ -1135,7 +1135,7 @@ fn local_vacuum_policy(args: &ServeArgs) -> std::io::Result<Option<LocalVacuumPo
     }
 
     let key_budget = options.key_budget.map_or(
-        crabka_pgexec::VACUUM_STEP_KEY_BUDGET,
+        krabka_pgexec::VACUUM_STEP_KEY_BUDGET,
         PositiveUsize::into_value,
     );
     let max_key_budget = match options.max_key_budget {
@@ -1258,29 +1258,29 @@ fn validate_wal_recovery_read_policy(args: &ServeArgs) -> std::io::Result<()> {
 
 fn effective_wal_admin_policy(
     args: &ServeArgs,
-) -> std::io::Result<crabka_gres_substrate::WalAdminPolicy> {
-    crabka_gres_substrate::WalAdminPolicy::new(
+) -> std::io::Result<krabka_gres_substrate::WalAdminPolicy> {
+    krabka_gres_substrate::WalAdminPolicy::new(
         args.wal_topic_replication_factor.map_or(
-            crabka_gres_substrate::DEFAULT_WAL_TOPIC_REPLICATION_FACTOR,
+            krabka_gres_substrate::DEFAULT_WAL_TOPIC_REPLICATION_FACTOR,
             PositiveI32::into_value,
         ),
         args.wal_topic_ensure_timeout
-            .unwrap_or(crabka_gres_substrate::DEFAULT_WAL_TOPIC_ENSURE_TIMEOUT),
+            .unwrap_or(krabka_gres_substrate::DEFAULT_WAL_TOPIC_ENSURE_TIMEOUT),
         args.wal_admin_connect_timeout
-            .unwrap_or(crabka_gres_substrate::DEFAULT_WAL_ADMIN_CONNECT_TIMEOUT),
+            .unwrap_or(krabka_gres_substrate::DEFAULT_WAL_ADMIN_CONNECT_TIMEOUT),
         args.wal_admin_request_timeout
-            .unwrap_or(crabka_gres_substrate::DEFAULT_WAL_ADMIN_REQUEST_TIMEOUT),
+            .unwrap_or(krabka_gres_substrate::DEFAULT_WAL_ADMIN_REQUEST_TIMEOUT),
     )
     .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))
 }
 
 fn effective_wal_producer_flush_timeout(
     args: &ServeArgs,
-) -> std::io::Result<crabka_client_producer::ProducerFlushTimeout> {
-    crabka_client_producer::ProducerFlushTimeout::new(
+) -> std::io::Result<krabka_client_producer::ProducerFlushTimeout> {
+    krabka_client_producer::ProducerFlushTimeout::new(
         args.wal_producer_flush_timeout
             .unwrap_or_else(|| {
-                Time::from_std(crabka_client_producer::ProducerFlushTimeout::default().duration())
+                Time::from_std(krabka_client_producer::ProducerFlushTimeout::default().duration())
             })
             .to_std(),
     )
@@ -1289,11 +1289,11 @@ fn effective_wal_producer_flush_timeout(
 
 fn effective_wal_producer_dns_timeout(
     args: &ServeArgs,
-) -> std::io::Result<crabka_client_core::ClientDnsTimeout> {
+) -> std::io::Result<krabka_client_core::ClientDnsTimeout> {
     args.wal_producer_dns_timeout.map_or_else(
-        || Ok(crabka_client_core::ClientDnsTimeout::default()),
+        || Ok(krabka_client_core::ClientDnsTimeout::default()),
         |timeout| {
-            crabka_client_core::ClientDnsTimeout::new(timeout)
+            krabka_client_core::ClientDnsTimeout::new(timeout)
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))
         },
     )
@@ -1301,11 +1301,11 @@ fn effective_wal_producer_dns_timeout(
 
 fn effective_fdw_broker_dns_timeout(
     args: &ServeArgs,
-) -> std::io::Result<crabka_client_core::ClientDnsTimeout> {
+) -> std::io::Result<krabka_client_core::ClientDnsTimeout> {
     args.fdw_broker_dns_timeout.map_or_else(
-        || Ok(crabka_client_core::ClientDnsTimeout::default()),
+        || Ok(krabka_client_core::ClientDnsTimeout::default()),
         |timeout| {
-            crabka_client_core::ClientDnsTimeout::new(timeout)
+            krabka_client_core::ClientDnsTimeout::new(timeout)
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))
         },
     )
@@ -1313,9 +1313,9 @@ fn effective_fdw_broker_dns_timeout(
 
 fn effective_schema_fetch_retry_policy(
     args: &ServeArgs,
-) -> std::io::Result<crabka_gres_fdw::SchemaFetchRetryPolicy> {
-    let defaults = crabka_gres_fdw::SchemaFetchRetryPolicy::default();
-    crabka_gres_fdw::SchemaFetchRetryPolicy::new(
+) -> std::io::Result<krabka_gres_fdw::SchemaFetchRetryPolicy> {
+    let defaults = krabka_gres_fdw::SchemaFetchRetryPolicy::default();
+    krabka_gres_fdw::SchemaFetchRetryPolicy::new(
         args.schema_fetch_retry_initial_backoff
             .unwrap_or_else(|| defaults.initial_backoff()),
         args.schema_fetch_retry_max_backoff
@@ -1326,9 +1326,9 @@ fn effective_schema_fetch_retry_policy(
 
 fn effective_wal_producer_retry_policy(
     args: &ServeArgs,
-) -> std::io::Result<crabka_client_producer::ProducerRetryPolicy> {
-    let defaults = crabka_client_producer::ProducerRetryPolicy::default();
-    crabka_client_producer::ProducerRetryPolicy::new(
+) -> std::io::Result<krabka_client_producer::ProducerRetryPolicy> {
+    let defaults = krabka_client_producer::ProducerRetryPolicy::default();
+    krabka_client_producer::ProducerRetryPolicy::new(
         args.wal_producer_request_timeout
             .unwrap_or_else(|| Time::from_std(defaults.request_timeout()))
             .to_std(),
@@ -1355,9 +1355,9 @@ fn effective_wal_producer_retry_policy(
 
 fn effective_wal_producer_throughput_policy(
     args: &ServeArgs,
-) -> std::io::Result<crabka_client_producer::ProducerThroughputPolicy> {
-    let defaults = crabka_client_producer::ProducerThroughputPolicy::default();
-    crabka_client_producer::ProducerThroughputPolicy::new(
+) -> std::io::Result<krabka_client_producer::ProducerThroughputPolicy> {
+    let defaults = krabka_client_producer::ProducerThroughputPolicy::default();
+    krabka_client_producer::ProducerThroughputPolicy::new(
         args.wal_producer_compression
             .unwrap_or(defaults.compression()),
         args.wal_producer_linger
@@ -1473,28 +1473,28 @@ impl std::str::FromStr for NonNegativeI32 {
 pub struct RegistryOptions {
     #[arg(
         long = "client-dispatch-queue-capacity",
-        env = "CRABKA_GRES_CLIENT_DISPATCH_QUEUE_CAPACITY",
-        default_value_t = crabka_client_core::DEFAULT_CONNECTION_DISPATCH_QUEUE_CAPACITY,
+        env = "KRABKA_GRES_CLIENT_DISPATCH_QUEUE_CAPACITY",
+        default_value_t = krabka_client_core::DEFAULT_CONNECTION_DISPATCH_QUEUE_CAPACITY,
         value_parser = parse_client_dispatch_queue_capacity
     )]
     client_dispatch_queue_capacity: usize,
     #[arg(
         long = "client-frame-max",
-        env = "CRABKA_GRES_CLIENT_FRAME_MAX",
+        env = "KRABKA_GRES_CLIENT_FRAME_MAX",
         default_value = "100MiB",
         value_parser = parse_client_frame_max
     )]
     client_frame_max: ByteSize,
     #[arg(
         long = "fdw-fetch-min",
-        env = "CRABKA_GRES_FDW_FETCH_MIN",
+        env = "KRABKA_GRES_FDW_FETCH_MIN",
         value_parser = parse_fetch_min,
         requires = "substrate_bootstrap"
     )]
     fdw_fetch_min: Option<ByteSize>,
     #[arg(
         long = "fdw-fetch-max-wait",
-        env = "CRABKA_GRES_FDW_FETCH_MAX_WAIT",
+        env = "KRABKA_GRES_FDW_FETCH_MAX_WAIT",
         default_value = "5s",
         value_parser = parse_fdw_fetch_max_wait,
         requires = "substrate_bootstrap"
@@ -1502,7 +1502,7 @@ pub struct RegistryOptions {
     fdw_fetch_max_wait: Time,
     #[arg(
         long = "fdw-fetch-partition-max",
-        env = "CRABKA_GRES_FDW_FETCH_PARTITION_MAX",
+        env = "KRABKA_GRES_FDW_FETCH_PARTITION_MAX",
         default_value = "10MiB",
         value_parser = parse_fdw_fetch_partition_max,
         requires = "substrate_bootstrap"
@@ -1510,7 +1510,7 @@ pub struct RegistryOptions {
     fdw_fetch_partition_max: ByteSize,
     #[arg(
         long = "fdw-connect-timeout",
-        env = "CRABKA_GRES_FDW_CONNECT_TIMEOUT",
+        env = "KRABKA_GRES_FDW_CONNECT_TIMEOUT",
         default_value = "10s",
         value_parser = parse_fdw_connect_timeout,
         requires = "substrate_bootstrap"
@@ -1518,7 +1518,7 @@ pub struct RegistryOptions {
     fdw_connect_timeout: Time,
     #[arg(
         long = "fdw-request-timeout",
-        env = "CRABKA_GRES_FDW_REQUEST_TIMEOUT",
+        env = "KRABKA_GRES_FDW_REQUEST_TIMEOUT",
         default_value = "30s",
         value_parser = parse_fdw_request_timeout,
         requires = "substrate_bootstrap"
@@ -1526,7 +1526,7 @@ pub struct RegistryOptions {
     fdw_request_timeout: Time,
     #[arg(
         long = "fdw-schema-fetch-timeout",
-        env = "CRABKA_GRES_FDW_SCHEMA_FETCH_TIMEOUT",
+        env = "KRABKA_GRES_FDW_SCHEMA_FETCH_TIMEOUT",
         default_value = "10s",
         value_parser = parse_fdw_schema_fetch_timeout,
         requires = "substrate_bootstrap"
@@ -1534,7 +1534,7 @@ pub struct RegistryOptions {
     fdw_schema_fetch_timeout: Time,
     #[arg(
         long = "fdw-schema-fetch-poll",
-        env = "CRABKA_GRES_FDW_SCHEMA_FETCH_POLL",
+        env = "KRABKA_GRES_FDW_SCHEMA_FETCH_POLL",
         default_value = "20ms",
         value_parser = parse_fdw_schema_fetch_poll,
         requires = "substrate_bootstrap"
@@ -1542,88 +1542,88 @@ pub struct RegistryOptions {
     fdw_schema_fetch_poll: Time,
     #[arg(
         long = "wal-recovery-fetch-min",
-        env = "CRABKA_GRES_WAL_RECOVERY_FETCH_MIN",
+        env = "KRABKA_GRES_WAL_RECOVERY_FETCH_MIN",
         value_parser = parse_fetch_min,
         requires = "substrate_bootstrap"
     )]
     wal_recovery_fetch_min: Option<ByteSize>,
     #[arg(
         long = "registry-reader-fetch-min",
-        env = "CRABKA_GRES_REGISTRY_READER_FETCH_MIN",
+        env = "KRABKA_GRES_REGISTRY_READER_FETCH_MIN",
         default_value = "1B",
         value_parser = parse_fetch_min
     )]
     registry_reader_fetch_min: ByteSize,
     #[arg(
         long = "registry-replication-factor",
-        env = "CRABKA_GRES_REGISTRY_REPLICATION_FACTOR",
+        env = "KRABKA_GRES_REGISTRY_REPLICATION_FACTOR",
         default_value = "1"
     )]
     replication_factor: RegistryReplicationFactor,
     #[arg(
         long = "registry-topic-create-timeout",
-        env = "CRABKA_GRES_REGISTRY_TOPIC_CREATE_TIMEOUT",
+        env = "KRABKA_GRES_REGISTRY_TOPIC_CREATE_TIMEOUT",
         default_value = "15s",
-        value_parser = crabka_units::parse::positive_time
+        value_parser = krabka_units::parse::positive_time
     )]
     topic_create_timeout: Time,
     #[arg(
         long = "registry-reader-retry-backoff",
-        env = "CRABKA_GRES_REGISTRY_READER_RETRY_BACKOFF",
+        env = "KRABKA_GRES_REGISTRY_READER_RETRY_BACKOFF",
         default_value = "250ms",
-        value_parser = crabka_units::parse::positive_time
+        value_parser = krabka_units::parse::positive_time
     )]
     reader_retry_backoff: Time,
     #[arg(
         long = "registry-fetch-max-wait",
-        env = "CRABKA_GRES_REGISTRY_FETCH_MAX_WAIT",
+        env = "KRABKA_GRES_REGISTRY_FETCH_MAX_WAIT",
         default_value = "500ms",
-        value_parser = crabka_units::parse::positive_time
+        value_parser = krabka_units::parse::positive_time
     )]
     fetch_max_wait: Time,
     #[arg(
         long = "registry-fetch-partition-max",
-        env = "CRABKA_GRES_REGISTRY_FETCH_PARTITION_MAX",
+        env = "KRABKA_GRES_REGISTRY_FETCH_PARTITION_MAX",
         default_value = "1MiB",
-        value_parser = crabka_units::parse::positive_byte_size
+        value_parser = krabka_units::parse::positive_byte_size
     )]
     fetch_partition_max: ByteSize,
     #[arg(
         long = "registry-producer-dns-timeout",
-        env = "CRABKA_GRES_REGISTRY_PRODUCER_DNS_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time
+        env = "KRABKA_GRES_REGISTRY_PRODUCER_DNS_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time
     )]
     producer_dns_timeout: Option<Time>,
     #[arg(
         long = "registry-reader-admin-dns-timeout",
-        env = "CRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time
+        env = "KRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time
     )]
     reader_admin_dns_timeout: Option<Time>,
 }
 
 impl RegistryOptions {
-    fn dispatch_queue_capacity(&self) -> crabka_client_core::ConnectionDispatchQueueCapacity {
-        crabka_client_core::ConnectionDispatchQueueCapacity::new(
+    fn dispatch_queue_capacity(&self) -> krabka_client_core::ConnectionDispatchQueueCapacity {
+        krabka_client_core::ConnectionDispatchQueueCapacity::new(
             self.client_dispatch_queue_capacity,
         )
         .expect("validated Gres client dispatch queue capacity")
     }
 
-    fn frame_max(&self) -> crabka_client_core::ClientFrameMax {
-        crabka_client_core::ClientFrameMax::try_from(self.client_frame_max)
+    fn frame_max(&self) -> krabka_client_core::ClientFrameMax {
+        krabka_client_core::ClientFrameMax::try_from(self.client_frame_max)
             .expect("validated Gres client frame maximum")
     }
 
-    fn fdw_fetch_min(&self) -> crabka_client_core::FetchMinBytes {
-        crabka_client_core::FetchMinBytes::try_from(
-            self.fdw_fetch_min.unwrap_or(crabka_units::bytes(1)),
+    fn fdw_fetch_min(&self) -> krabka_client_core::FetchMinBytes {
+        krabka_client_core::FetchMinBytes::try_from(
+            self.fdw_fetch_min.unwrap_or(krabka_units::bytes(1)),
         )
         .expect("validated Gres FDW fetch minimum")
     }
 
-    fn fdw_scan_policy(&self) -> crabka_gres_fdw::FdwScanPolicy {
-        crabka_gres_fdw::FdwScanPolicy {
+    fn fdw_scan_policy(&self) -> krabka_gres_fdw::FdwScanPolicy {
+        krabka_gres_fdw::FdwScanPolicy {
             fetch_max_wait: self.fdw_fetch_max_wait,
             fetch_partition_max: self.fdw_fetch_partition_max,
             connect_timeout: self.fdw_connect_timeout,
@@ -1631,23 +1631,23 @@ impl RegistryOptions {
         }
     }
 
-    fn fdw_decode_policy(&self) -> crabka_gres_fdw::FdwDecodePolicy {
-        crabka_gres_fdw::FdwDecodePolicy {
+    fn fdw_decode_policy(&self) -> krabka_gres_fdw::FdwDecodePolicy {
+        krabka_gres_fdw::FdwDecodePolicy {
             schema_fetch_timeout: self.fdw_schema_fetch_timeout,
             schema_fetch_poll: self.fdw_schema_fetch_poll,
         }
     }
 
-    fn wal_recovery_fetch_min(&self) -> crabka_client_core::FetchMinBytes {
-        crabka_client_core::FetchMinBytes::try_from(
+    fn wal_recovery_fetch_min(&self) -> krabka_client_core::FetchMinBytes {
+        krabka_client_core::FetchMinBytes::try_from(
             self.wal_recovery_fetch_min
-                .unwrap_or(crabka_units::bytes(1)),
+                .unwrap_or(krabka_units::bytes(1)),
         )
         .expect("validated Gres WAL recovery fetch minimum")
     }
 
-    fn registry_reader_fetch_min(&self) -> crabka_client_core::FetchMinBytes {
-        crabka_client_core::FetchMinBytes::try_from(self.registry_reader_fetch_min)
+    fn registry_reader_fetch_min(&self) -> krabka_client_core::FetchMinBytes {
+        krabka_client_core::FetchMinBytes::try_from(self.registry_reader_fetch_min)
             .expect("validated Gres registry reader fetch minimum")
     }
 
@@ -1682,13 +1682,13 @@ impl RegistryOptions {
 
 fn parse_client_dispatch_queue_capacity(value: &str) -> Result<usize, String> {
     let value = value.parse::<usize>().map_err(|error| error.to_string())?;
-    crabka_client_core::ConnectionDispatchQueueCapacity::new(value)
-        .map(crabka_client_core::ConnectionDispatchQueueCapacity::get)
+    krabka_client_core::ConnectionDispatchQueueCapacity::new(value)
+        .map(krabka_client_core::ConnectionDispatchQueueCapacity::get)
 }
 
 fn parse_fdw_fetch_max_wait(value: &str) -> Result<Time, String> {
-    let value = crabka_units::parse::positive_time(value).map_err(|error| error.to_string())?;
-    crabka_gres_fdw::FdwScanPolicy {
+    let value = krabka_units::parse::positive_time(value).map_err(|error| error.to_string())?;
+    krabka_gres_fdw::FdwScanPolicy {
         fetch_max_wait: value,
         ..Default::default()
     }
@@ -1698,8 +1698,8 @@ fn parse_fdw_fetch_max_wait(value: &str) -> Result<Time, String> {
 
 fn parse_fdw_fetch_partition_max(value: &str) -> Result<ByteSize, String> {
     let value =
-        crabka_units::parse::positive_byte_size(value).map_err(|error| error.to_string())?;
-    crabka_gres_fdw::FdwScanPolicy {
+        krabka_units::parse::positive_byte_size(value).map_err(|error| error.to_string())?;
+    krabka_gres_fdw::FdwScanPolicy {
         fetch_partition_max: value,
         ..Default::default()
     }
@@ -1708,8 +1708,8 @@ fn parse_fdw_fetch_partition_max(value: &str) -> Result<ByteSize, String> {
 }
 
 fn parse_fdw_connect_timeout(value: &str) -> Result<Time, String> {
-    let value = crabka_units::parse::positive_time(value).map_err(|error| error.to_string())?;
-    crabka_gres_fdw::FdwScanPolicy {
+    let value = krabka_units::parse::positive_time(value).map_err(|error| error.to_string())?;
+    krabka_gres_fdw::FdwScanPolicy {
         connect_timeout: value,
         ..Default::default()
     }
@@ -1718,8 +1718,8 @@ fn parse_fdw_connect_timeout(value: &str) -> Result<Time, String> {
 }
 
 fn parse_fdw_request_timeout(value: &str) -> Result<Time, String> {
-    let value = crabka_units::parse::positive_time(value).map_err(|error| error.to_string())?;
-    crabka_gres_fdw::FdwScanPolicy {
+    let value = krabka_units::parse::positive_time(value).map_err(|error| error.to_string())?;
+    krabka_gres_fdw::FdwScanPolicy {
         request_timeout: value,
         ..Default::default()
     }
@@ -1728,8 +1728,8 @@ fn parse_fdw_request_timeout(value: &str) -> Result<Time, String> {
 }
 
 fn parse_fdw_schema_fetch_timeout(value: &str) -> Result<Time, String> {
-    let value = crabka_units::parse::positive_time(value).map_err(|error| error.to_string())?;
-    crabka_gres_fdw::FdwDecodePolicy {
+    let value = krabka_units::parse::positive_time(value).map_err(|error| error.to_string())?;
+    krabka_gres_fdw::FdwDecodePolicy {
         schema_fetch_timeout: value,
         schema_fetch_poll: value,
     }
@@ -1738,8 +1738,8 @@ fn parse_fdw_schema_fetch_timeout(value: &str) -> Result<Time, String> {
 }
 
 fn parse_fdw_schema_fetch_poll(value: &str) -> Result<Time, String> {
-    let value = crabka_units::parse::positive_time(value).map_err(|error| error.to_string())?;
-    crabka_gres_fdw::FdwDecodePolicy {
+    let value = krabka_units::parse::positive_time(value).map_err(|error| error.to_string())?;
+    krabka_gres_fdw::FdwDecodePolicy {
         schema_fetch_timeout: value,
         schema_fetch_poll: value,
     }
@@ -1749,20 +1749,20 @@ fn parse_fdw_schema_fetch_poll(value: &str) -> Result<Time, String> {
 
 fn parse_client_frame_max(value: &str) -> Result<ByteSize, String> {
     let value =
-        crabka_units::parse::positive_byte_size(value).map_err(|error| error.to_string())?;
-    crabka_client_core::ClientFrameMax::try_from(value)
-        .map(crabka_client_core::ClientFrameMax::size)
+        krabka_units::parse::positive_byte_size(value).map_err(|error| error.to_string())?;
+    krabka_client_core::ClientFrameMax::try_from(value)
+        .map(krabka_client_core::ClientFrameMax::size)
 }
 
 fn parse_fetch_min(value: &str) -> Result<ByteSize, String> {
     let value =
-        crabka_units::parse::positive_byte_size(value).map_err(|error| error.to_string())?;
-    crabka_client_core::FetchMinBytes::try_from(value).map(crabka_client_core::FetchMinBytes::size)
+        krabka_units::parse::positive_byte_size(value).map_err(|error| error.to_string())?;
+    krabka_client_core::FetchMinBytes::try_from(value).map(krabka_client_core::FetchMinBytes::size)
 }
 
 fn parse_positive_whole_byte_size(value: &str) -> Result<ByteSize, String> {
     let value =
-        crabka_units::parse::positive_byte_size(value).map_err(|error| error.to_string())?;
+        krabka_units::parse::positive_byte_size(value).map_err(|error| error.to_string())?;
     whole_bytes_usize("byte size", value)
         .map(|_| value)
         .map_err(|error| error.to_string())
@@ -1778,7 +1778,7 @@ fn parse_positive_u32(value: &str) -> Result<u32, String> {
 
 /// Timestamp-ordering source selected by `--timestamp-source`.
 ///
-/// The kind mirrors [`crabka_gres_ranges::TimestampSourceMode`] without the
+/// The kind mirrors [`krabka_gres_ranges::TimestampSourceMode`] without the
 /// mode's parameters. Those parameters arrive through their own flags, and
 /// [`Self::to_mode`] reattaches them.
 #[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -1793,10 +1793,10 @@ pub enum TimestampSourceKind {
 impl TimestampSourceKind {
     /// Attach the HLC uncertainty bound and produce the tenant-level mode.
     #[must_use]
-    pub fn to_mode(self, hlc_max_offset_ms: u64) -> crabka_gres_ranges::TimestampSourceMode {
+    pub fn to_mode(self, hlc_max_offset_ms: u64) -> krabka_gres_ranges::TimestampSourceMode {
         match self {
-            Self::LogicalTso => crabka_gres_ranges::TimestampSourceMode::LogicalTso,
-            Self::Hlc => crabka_gres_ranges::TimestampSourceMode::Hlc {
+            Self::LogicalTso => krabka_gres_ranges::TimestampSourceMode::LogicalTso,
+            Self::Hlc => krabka_gres_ranges::TimestampSourceMode::Hlc {
                 max_offset_ms: hlc_max_offset_ms,
             },
         }
@@ -1820,13 +1820,13 @@ pub enum CheckpointStoreKind {
 #[derive(Debug, Clone)]
 pub struct SubstrateRuntimeConfig {
     /// Capacity shared by every outbound Kafka client owned by this process.
-    pub client_dispatch_queue_capacity: crabka_client_core::ConnectionDispatchQueueCapacity,
+    pub client_dispatch_queue_capacity: krabka_client_core::ConnectionDispatchQueueCapacity,
     /// Maximum frame size shared by every outbound Kafka client.
-    pub client_frame_max: crabka_client_core::ClientFrameMax,
+    pub client_frame_max: krabka_client_core::ClientFrameMax,
     /// Minimum bytes requested by FDW fetches.
-    pub fdw_fetch_min: crabka_client_core::FetchMinBytes,
+    pub fdw_fetch_min: krabka_client_core::FetchMinBytes,
     /// Minimum bytes requested by WAL recovery fetches.
-    pub wal_recovery_fetch_min: crabka_client_core::FetchMinBytes,
+    pub wal_recovery_fetch_min: krabka_client_core::FetchMinBytes,
     /// Bootstrap address supplied by the CLI.
     pub bootstrap: String,
     /// Tenant that owns the WAL topic.
@@ -1850,37 +1850,37 @@ pub struct SubstrateRuntimeConfig {
     /// Deadline for one durable record inspection.
     pub durable_inspection_timeout: Duration,
     /// Resource ceilings for one durable record inspection.
-    pub durable_inspection_fold_limits: crabka_gres_substrate::FoldLimits,
+    pub durable_inspection_fold_limits: krabka_gres_substrate::FoldLimits,
     /// Committed-WAL recovery read limits.
-    pub recovery_read_policy: crabka_gres_substrate::RecoveryReadPolicy,
+    pub recovery_read_policy: krabka_gres_substrate::RecoveryReadPolicy,
     /// WAL topic creation and admin connection settings.
-    pub wal_admin_policy: crabka_gres_substrate::WalAdminPolicy,
+    pub wal_admin_policy: krabka_gres_substrate::WalAdminPolicy,
     /// Timeout for resolving WAL producer broker hostnames.
-    pub producer_dns_timeout: crabka_client_core::ClientDnsTimeout,
+    pub producer_dns_timeout: krabka_client_core::ClientDnsTimeout,
     /// Deadline for flushing all buffered and in-flight WAL records.
-    pub producer_flush_timeout: crabka_client_producer::ProducerFlushTimeout,
+    pub producer_flush_timeout: krabka_client_producer::ProducerFlushTimeout,
     /// WAL producer retry and transaction timing.
-    pub producer_retry_policy: crabka_client_producer::ProducerRetryPolicy,
+    pub producer_retry_policy: krabka_client_producer::ProducerRetryPolicy,
     /// WAL producer batching and compression settings.
-    pub producer_throughput_policy: crabka_client_producer::ProducerThroughputPolicy,
+    pub producer_throughput_policy: krabka_client_producer::ProducerThroughputPolicy,
     /// Target maximum size of one encoded logical WAL frame.
     pub wal_frame_max_size: ByteSize,
     /// Optional range-compute placement for distributed mode. Range 0 is always hosted.
-    pub host_ranges: Option<Vec<crabka_gres_ranges::RangeId>>,
+    pub host_ranges: Option<Vec<krabka_gres_ranges::RangeId>>,
     /// mTLS client configuration required for remote range routing.
     pub range_rpc: Option<RangeRpcRuntimeConfig>,
     /// Authenticated endpoint advertised for local range-control operations.
     pub advertised_endpoint: Option<String>,
     /// Timestamp-ordering source a multi-range tenant installs on this node.
-    pub timestamp_source_mode: crabka_gres_ranges::TimestampSourceMode,
+    pub timestamp_source_mode: krabka_gres_ranges::TimestampSourceMode,
     /// Testing-only signed HLC wall-clock skew in milliseconds for this node.
     pub hlc_wall_offset_ms: i64,
     /// Shared Gres registry policy.
     pub registry_policy: RegistryPolicy,
     /// Distributed range execution limits and pacing.
-    pub range_runtime_policy: crabka_gres_ranges::RangeRuntimePolicy,
+    pub range_runtime_policy: krabka_gres_ranges::RangeRuntimePolicy,
     /// SQL executor runtime limits and persistence pacing.
-    pub pgexec_runtime_policy: crabka_pgexec::RuntimePolicy,
+    pub pgexec_runtime_policy: krabka_pgexec::RuntimePolicy,
 }
 
 /// Validated TLS-only range RPC configuration.
@@ -2004,7 +2004,7 @@ impl SubstrateRuntimeConfig {
         let ranges = trimmed_optional(args.ranges.as_ref(), "--ranges")?;
         let durable_inspection_fold_max_size = args
             .durable_inspection_fold_max_size
-            .unwrap_or(crabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_FOLD_MAX_SIZE);
+            .unwrap_or(krabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_FOLD_MAX_SIZE);
         whole_bytes_usize(
             "durable inspection fold maximum size",
             durable_inspection_fold_max_size,
@@ -2045,40 +2045,40 @@ impl SubstrateRuntimeConfig {
                 .to_std(),
             durable_inspection_timeout: args
                 .durable_inspection_timeout
-                .unwrap_or(crabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT)
+                .unwrap_or(krabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT)
                 .to_std(),
-            durable_inspection_fold_limits: crabka_gres_substrate::FoldLimits {
+            durable_inspection_fold_limits: krabka_gres_substrate::FoldLimits {
                 max_records: args.durable_inspection_fold_max_records.map_or(
-                    crabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_FOLD_MAX_RECORDS,
+                    krabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_FOLD_MAX_RECORDS,
                     PositiveUsize::into_value,
                 ),
                 max_size: durable_inspection_fold_max_size,
             },
-            recovery_read_policy: crabka_gres_substrate::RecoveryReadPolicy::new(
+            recovery_read_policy: krabka_gres_substrate::RecoveryReadPolicy::new(
                 args.wal_recovery_fetch_max_wait
-                    .unwrap_or(crabka_gres_substrate::DEFAULT_WAL_RECOVERY_FETCH_MAX_WAIT),
+                    .unwrap_or(krabka_gres_substrate::DEFAULT_WAL_RECOVERY_FETCH_MAX_WAIT),
                 args.wal_recovery_fetch_partition_max
-                    .unwrap_or(crabka_gres_substrate::DEFAULT_WAL_RECOVERY_FETCH_PARTITION_MAX),
+                    .unwrap_or(krabka_gres_substrate::DEFAULT_WAL_RECOVERY_FETCH_PARTITION_MAX),
                 args.wal_recovery_fetch_response_max
-                    .unwrap_or(crabka_gres_substrate::DEFAULT_WAL_RECOVERY_FETCH_RESPONSE_MAX),
+                    .unwrap_or(krabka_gres_substrate::DEFAULT_WAL_RECOVERY_FETCH_RESPONSE_MAX),
                 args.wal_recovery_empty_fetch_retries.map_or(
-                    crabka_gres_substrate::DEFAULT_WAL_RECOVERY_EMPTY_FETCH_RETRIES,
+                    krabka_gres_substrate::DEFAULT_WAL_RECOVERY_EMPTY_FETCH_RETRIES,
                     PositiveUsize::into_value,
                 ),
             )
             .and_then(|policy| {
                 policy.with_dns_timeout(
                     args.wal_recovery_dns_timeout
-                        .unwrap_or(crabka_gres_substrate::DEFAULT_WAL_RECOVERY_DNS_TIMEOUT),
+                        .unwrap_or(krabka_gres_substrate::DEFAULT_WAL_RECOVERY_DNS_TIMEOUT),
                 )
             })
             .and_then(|policy| {
                 let connect_timeout = args
                     .wal_recovery_connect_timeout
-                    .unwrap_or(crabka_gres_substrate::DEFAULT_WAL_RECOVERY_CONNECT_TIMEOUT);
+                    .unwrap_or(krabka_gres_substrate::DEFAULT_WAL_RECOVERY_CONNECT_TIMEOUT);
                 let request_timeout = args
                     .wal_recovery_request_timeout
-                    .unwrap_or(crabka_gres_substrate::DEFAULT_WAL_RECOVERY_REQUEST_TIMEOUT);
+                    .unwrap_or(krabka_gres_substrate::DEFAULT_WAL_RECOVERY_REQUEST_TIMEOUT);
                 policy.with_timeouts(connect_timeout, request_timeout)
             })
             .map_err(|error| Error::new(ErrorKind::InvalidInput, error))?,
@@ -2089,7 +2089,7 @@ impl SubstrateRuntimeConfig {
             producer_throughput_policy: effective_wal_producer_throughput_policy(args)?,
             wal_frame_max_size: args
                 .wal_frame_max_size
-                .unwrap_or(crabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE),
+                .unwrap_or(krabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE),
             host_ranges: parse_host_ranges(args.host_ranges.as_deref())?,
             range_rpc: RangeRpcRuntimeConfig::from_args(args)?,
             advertised_endpoint: args.range_listen.clone(),
@@ -2109,10 +2109,10 @@ impl SubstrateRuntimeConfig {
 
     fn live_recovery_config(
         &self,
-        tenant: crabka_gres_ranges::TenantName,
-        range: crabka_gres_ranges::RangeId,
-    ) -> crabka_gres_substrate::LiveRecoveryConfig {
-        crabka_gres_substrate::LiveRecoveryConfig::new(
+        tenant: krabka_gres_ranges::TenantName,
+        range: krabka_gres_ranges::RangeId,
+    ) -> krabka_gres_substrate::LiveRecoveryConfig {
+        krabka_gres_substrate::LiveRecoveryConfig::new(
             self.bootstrap.clone(),
             tenant,
             range,
@@ -2205,10 +2205,10 @@ impl RangeRpcRuntimeConfig {
 
     fn client(
         &self,
-        policy: &crabka_gres_ranges::RangeRuntimePolicy,
-    ) -> std::io::Result<crabka_gres_ranges::FramedTcpClient> {
-        crabka_gres_ranges::FramedTcpClient::with_tls_and_policy(
-            crabka_gres_ranges::RangeTlsClientConfig {
+        policy: &krabka_gres_ranges::RangeRuntimePolicy,
+    ) -> std::io::Result<krabka_gres_ranges::FramedTcpClient> {
+        krabka_gres_ranges::FramedTcpClient::with_tls_and_policy(
+            krabka_gres_ranges::RangeTlsClientConfig {
                 tls: self.tls.clone(),
                 server_name: self.server_name.clone(),
             },
@@ -2217,8 +2217,8 @@ impl RangeRpcRuntimeConfig {
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))
     }
 
-    fn server(&self, tenant: String) -> crabka_gres_ranges::RangeTlsServerConfig {
-        crabka_gres_ranges::RangeTlsServerConfig {
+    fn server(&self, tenant: String) -> krabka_gres_ranges::RangeTlsServerConfig {
+        krabka_gres_ranges::RangeTlsServerConfig {
             tenant,
             tls: self.tls.clone(),
             range_rpc_principals: self.range_rpc_principals.clone(),
@@ -2240,7 +2240,7 @@ impl CheckpointRuntimeConfig {
         let part_max_size = CheckpointPartBytes::new(whole_bytes_usize(
             "checkpoint part size",
             args.checkpoint_part_size
-                .unwrap_or(crabka_gres_substrate::DEFAULT_PART_MAX_SIZE),
+                .unwrap_or(krabka_gres_substrate::DEFAULT_PART_MAX_SIZE),
         )?)
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?
         .into_value();
@@ -2252,7 +2252,7 @@ impl CheckpointRuntimeConfig {
             bytes_threshold: args.checkpoint_size.unwrap_or(DEFAULT_CHECKPOINT_BYTES),
             part_max_size,
             retain_newest: args.checkpoint_retain.map_or(
-                crabka_gres_substrate::DEFAULT_CHECKPOINT_RETAIN,
+                krabka_gres_substrate::DEFAULT_CHECKPOINT_RETAIN,
                 PositiveUsize::into_value,
             ),
             delete_records_timeout: Time::from_millis(i64::from(whole_millis_i32(
@@ -2347,7 +2347,7 @@ impl CheckpointObjectStoreConfig {
         Ok(Self::InMemory)
     }
 
-    fn to_object_store_config(&self) -> crabka_object_store::ObjectStoreConfig {
+    fn to_object_store_config(&self) -> krabka_object_store::ObjectStoreConfig {
         match self {
             Self::S3 {
                 bucket,
@@ -2357,7 +2357,7 @@ impl CheckpointObjectStoreConfig {
                 access_key_id,
                 secret_access_key,
                 allow_http,
-            } => crabka_object_store::ObjectStoreConfig::S3(crabka_object_store::S3Config {
+            } => krabka_object_store::ObjectStoreConfig::S3(krabka_object_store::S3Config {
                 bucket: bucket.clone(),
                 prefix: prefix.clone(),
                 region: region.clone(),
@@ -2375,7 +2375,7 @@ impl CheckpointObjectStoreConfig {
                 application_credentials_path,
                 endpoint,
                 allow_http,
-            } => crabka_object_store::ObjectStoreConfig::Gcs(crabka_object_store::GcsConfig {
+            } => krabka_object_store::ObjectStoreConfig::Gcs(krabka_object_store::GcsConfig {
                 bucket: bucket.clone(),
                 prefix: prefix.clone(),
                 service_account_path: service_account_path.clone(),
@@ -2386,9 +2386,9 @@ impl CheckpointObjectStoreConfig {
                 ..Default::default()
             }),
             Self::Local { root } => {
-                crabka_object_store::ObjectStoreConfig::Local { root: root.clone() }
+                krabka_object_store::ObjectStoreConfig::Local { root: root.clone() }
             }
-            Self::InMemory => crabka_object_store::ObjectStoreConfig::InMemory,
+            Self::InMemory => krabka_object_store::ObjectStoreConfig::InMemory,
         }
     }
 }
@@ -2421,13 +2421,13 @@ fn resolve_s3_credentials(
 /// Returns an error when the requested operation cannot be completed.
 pub fn build_checkpoint_store(
     config: &CheckpointRuntimeConfig,
-) -> std::io::Result<Arc<dyn crabka_gres_substrate::checkpoint::CheckpointStore>> {
+) -> std::io::Result<Arc<dyn krabka_gres_substrate::checkpoint::CheckpointStore>> {
     let object_store_config = config.object_store.to_object_store_config();
-    let object_store = crabka_object_store::build_object_store(&object_store_config)
+    let object_store = krabka_object_store::build_object_store(&object_store_config)
         .map_err(|error| std::io::Error::other(format!("checkpoint object store: {error}")))?;
-    let ops = Arc::new(crabka_object_store::ObjectStoreClient::new(object_store));
+    let ops = Arc::new(krabka_object_store::ObjectStoreClient::new(object_store));
     Ok(Arc::new(
-        crabka_gres_substrate::checkpoint::ObjectOpsCheckpointStore::new(ops),
+        krabka_gres_substrate::checkpoint::ObjectOpsCheckpointStore::new(ops),
     ))
 }
 
@@ -2436,8 +2436,8 @@ pub struct GresRuntime {
     /// SQL execution engine used by pgwire sessions.
     pub engine: RuntimeEngine,
     checkpoint_runtime: Option<StartedCheckpointRuntime>,
-    range_service: Option<Arc<dyn crabka_gres_ranges::RangeService>>,
-    range_transfer: Option<Arc<dyn crabka_gres_ranges::RangeTransferCapability>>,
+    range_service: Option<Arc<dyn krabka_gres_ranges::RangeService>>,
+    range_transfer: Option<Arc<dyn krabka_gres_ranges::RangeTransferCapability>>,
     staged_transfer: Option<Arc<LiveMultiRangeTransfer>>,
 }
 
@@ -2487,8 +2487,8 @@ impl GresRuntime {
         }
     }
 
-    fn multi(engine: crabka_gres_ranges::MultiRangeTenant) -> Self {
-        let mut range_service = crabka_gres_ranges::HostedRangeService::new_with_policy(
+    fn multi(engine: krabka_gres_ranges::MultiRangeTenant) -> Self {
+        let mut range_service = krabka_gres_ranges::HostedRangeService::new_with_policy(
             engine.hosted_range_engines(),
             engine.runtime_policy(),
         )
@@ -2535,7 +2535,7 @@ impl GresRuntime {
         (self.engine, self.checkpoint_runtime, self.staged_transfer)
     }
 
-    fn range_service(&self) -> Option<Arc<dyn crabka_gres_ranges::RangeService>> {
+    fn range_service(&self) -> Option<Arc<dyn krabka_gres_ranges::RangeService>> {
         self.range_service.clone()
     }
 
@@ -2543,8 +2543,8 @@ impl GresRuntime {
     #[doc(hidden)]
     pub async fn handle_range_request(
         &self,
-        request: crabka_gres_ranges::RangeRequest,
-    ) -> Option<crabka_gres_ranges::RangeResponse> {
+        request: krabka_gres_ranges::RangeRequest,
+    ) -> Option<krabka_gres_ranges::RangeResponse> {
         let service = self.range_service.as_ref()?;
         Some(service.handle(request).await)
     }
@@ -2560,35 +2560,35 @@ impl GresRuntime {
             .engines
             .read()
             .map_err(|_| "live topology lock poisoned".to_owned())?
-            .get(&crabka_gres_ranges::RangeId::COORDINATOR)
+            .get(&krabka_gres_ranges::RangeId::COORDINATOR)
             .ok_or_else(|| "replacement r0 unavailable".to_owned())?
             .clone_handle();
-        let request = crabka_gres_ranges::transport::RangeControlReq {
+        let request = krabka_gres_ranges::transport::RangeControlReq {
             tenant: transfer.config.tenant.clone(),
-            range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            range_id: krabka_gres_ranges::RangeId::COORDINATOR,
             generation: transfer
                 .ranges
                 .read()
                 .map_err(|_| "live resources lock poisoned".to_owned())?
-                .get(&crabka_gres_ranges::RangeId::COORDINATOR)
+                .get(&krabka_gres_ranges::RangeId::COORDINATOR)
                 .ok_or_else(|| "replacement r0 resources unavailable".to_owned())?
                 .generation
                 .0,
             operation_id: "post-r0-receipt".into(),
-            operation: crabka_gres_ranges::transport::RangeControlOperation::Status,
+            operation: krabka_gres_ranges::transport::RangeControlOperation::Status,
         };
-        let receipt = crabka_gres_ranges::control::RangeControlReceipt {
+        let receipt = krabka_gres_ranges::control::RangeControlReceipt {
             request,
             request_digest: "post-r0-receipt-digest".into(),
             generation: 1,
             revision: 0,
-            result: Some(crabka_gres_ranges::transport::RangeControlResp::Applied),
+            result: Some(krabka_gres_ranges::transport::RangeControlResp::Applied),
         };
-        let first = crabka_gres_ranges::control::RangeZeroReceiptStore::new(
+        let first = krabka_gres_ranges::control::RangeZeroReceiptStore::new(
             transfer.config.tenant.clone(),
             engine.clone_handle(),
         );
-        if !crabka_gres_ranges::control::RangeControlReceiptStore::compare_and_swap(
+        if !krabka_gres_ranges::control::RangeControlReceiptStore::compare_and_swap(
             &first,
             "post-r0-receipt",
             None,
@@ -2598,11 +2598,11 @@ impl GresRuntime {
         {
             return Err("replacement r0 receipt CAS failed".into());
         }
-        let reopened = crabka_gres_ranges::control::RangeZeroReceiptStore::new(
+        let reopened = krabka_gres_ranges::control::RangeZeroReceiptStore::new(
             transfer.config.tenant.clone(),
             engine,
         );
-        let loaded = crabka_gres_ranges::control::RangeControlReceiptStore::load(
+        let loaded = krabka_gres_ranges::control::RangeControlReceiptStore::load(
             &reopened,
             "post-r0-receipt",
         )
@@ -2636,14 +2636,14 @@ impl GresRuntime {
     #[must_use]
     pub fn range_transfer_capability(
         &self,
-    ) -> Option<Arc<dyn crabka_gres_ranges::RangeTransferCapability>> {
+    ) -> Option<Arc<dyn krabka_gres_ranges::RangeTransferCapability>> {
         self.range_transfer.clone()
     }
 
     /// Return the currently published range map for a multi-range runtime.
     #[doc(hidden)]
     #[must_use]
-    pub fn published_range_map(&self) -> Option<crabka_gres_ranges::RangeMap> {
+    pub fn published_range_map(&self) -> Option<krabka_gres_ranges::RangeMap> {
         match &self.engine {
             RuntimeEngine::Multi(tenant) => Some(tenant.control_range_map()),
             RuntimeEngine::Single(_) => None,
@@ -2654,8 +2654,8 @@ impl GresRuntime {
     #[doc(hidden)]
     pub fn hosted_range_kv_scan(
         &self,
-        range_id: crabka_gres_ranges::RangeId,
-    ) -> Result<crabka_pgkv::KvScan, String> {
+        range_id: krabka_gres_ranges::RangeId,
+    ) -> Result<krabka_pgkv::KvScan, String> {
         let transfer = self
             .staged_transfer
             .as_ref()
@@ -2678,18 +2678,18 @@ impl GresRuntime {
     pub async fn split_successors(
         &self,
         operation_id: impl Into<String>,
-        command: crabka_gres_ranges::SplitCommand,
-    ) -> Result<crabka_gres_ranges::SplitState, crabka_gres_ranges::LocalSqlSplitError> {
+        command: krabka_gres_ranges::SplitCommand,
+    ) -> Result<krabka_gres_ranges::SplitState, krabka_gres_ranges::LocalSqlSplitError> {
         let RuntimeEngine::Multi(tenant) = &self.engine else {
-            return Err(crabka_gres_ranges::LocalSqlSplitError::Orchestration(
-                crabka_gres_ranges::SplitError::Hook(
+            return Err(krabka_gres_ranges::LocalSqlSplitError::Orchestration(
+                krabka_gres_ranges::SplitError::Hook(
                     "populated table transfer requires a live multi-range runtime".to_owned(),
                 ),
             ));
         };
         let transfer = self.staged_transfer.as_ref().ok_or_else(|| {
-            crabka_gres_ranges::LocalSqlSplitError::Orchestration(
-                crabka_gres_ranges::SplitError::Hook(
+            krabka_gres_ranges::LocalSqlSplitError::Orchestration(
+                krabka_gres_ranges::SplitError::Hook(
                     "populated table transfer requires live substrate staging".to_owned(),
                 ),
             )
@@ -2707,7 +2707,7 @@ impl GresRuntime {
     #[doc(hidden)]
     pub fn inspect_hosted_range_kv(
         &self,
-        range_id: crabka_gres_ranges::RangeId,
+        range_id: krabka_gres_ranges::RangeId,
     ) -> std::io::Result<KvScan> {
         let RuntimeEngine::Multi(tenant) = &self.engine else {
             return invalid_input("hosted range inspection requires a multi-range runtime");
@@ -2729,7 +2729,7 @@ impl GresRuntime {
     #[doc(hidden)]
     pub fn inspect_staged_successor_kv(
         &self,
-        range_id: crabka_gres_ranges::RangeId,
+        range_id: krabka_gres_ranges::RangeId,
     ) -> std::io::Result<Option<KvScan>> {
         let Some(transfer) = &self.staged_transfer else {
             return Ok(None);
@@ -2746,15 +2746,15 @@ pub enum RuntimeEngine {
     /// Single local/substrate SQL engine.
     Single(Box<SqlEngine>),
     /// In-process multi-range gateway.
-    Multi(Box<crabka_gres_ranges::MultiRangeTenant>),
+    Multi(Box<krabka_gres_ranges::MultiRangeTenant>),
 }
 
 /// Per-connection session for [`RuntimeEngine`].
 pub enum RuntimeSession {
     /// Single-engine session.
-    Single(Box<crabka_pgexec::SqlSession>),
+    Single(Box<krabka_pgexec::SqlSession>),
     /// Multi-range gateway session.
-    Multi(Box<crabka_gres_ranges::tenant::GatewaySession>),
+    Multi(Box<krabka_gres_ranges::tenant::GatewaySession>),
 }
 
 impl Engine for RuntimeEngine {
@@ -2787,14 +2787,14 @@ impl Session for RuntimeSession {
         &mut self,
         name: &str,
         value: &str,
-    ) -> Result<(), crabka_pgwire::error::PgError> {
+    ) -> Result<(), krabka_pgwire::error::PgError> {
         match self {
             Self::Single(session) => session.startup_parameter(name, value).await,
             Self::Multi(session) => session.startup_parameter(name, value).await,
         }
     }
 
-    async fn startup(&mut self) -> Result<(), crabka_pgwire::error::PgError> {
+    async fn startup(&mut self) -> Result<(), krabka_pgwire::error::PgError> {
         match self {
             Self::Single(session) => session.startup().await,
             Self::Multi(session) => session.startup().await,
@@ -2804,7 +2804,7 @@ impl Session for RuntimeSession {
     async fn simple_query(
         &mut self,
         sql: &str,
-    ) -> Result<Vec<QueryResult>, crabka_pgwire::error::PgError> {
+    ) -> Result<Vec<QueryResult>, krabka_pgwire::error::PgError> {
         match self {
             Self::Single(session) => session.simple_query(sql).await,
             Self::Multi(session) => session.simple_query(sql).await,
@@ -2814,7 +2814,7 @@ impl Session for RuntimeSession {
     async fn fastpath(
         &mut self,
         call: FastpathCall,
-    ) -> Result<Option<bytes::Bytes>, crabka_pgwire::error::PgError> {
+    ) -> Result<Option<bytes::Bytes>, krabka_pgwire::error::PgError> {
         match self {
             Self::Single(session) => session.fastpath(call).await,
             Self::Multi(session) => session.fastpath(call).await,
@@ -2826,12 +2826,12 @@ impl Session for RuntimeSession {
     /// result through [`Session::simple_query`] before it pages, so a runtime
     /// that inherited the default would buffer every simple-protocol result,
     /// however large.
-    async fn simple_query_into<S: crabka_pgwire::engine::ResultSink>(
+    async fn simple_query_into<S: krabka_pgwire::engine::ResultSink>(
         &mut self,
         sql: &str,
         page_rows: usize,
         sink: &mut S,
-    ) -> Result<(), crabka_pgwire::error::PgError> {
+    ) -> Result<(), krabka_pgwire::error::PgError> {
         match self {
             Self::Single(session) => session.simple_query_into(sql, page_rows, sink).await,
             Self::Multi(session) => session.simple_query_into(sql, page_rows, sink).await,
@@ -2842,13 +2842,13 @@ impl Session for RuntimeSession {
     /// one more: the trait default cannot stop at a `COPY … FROM STDIN`, so a
     /// runtime that inherited it would refuse every copy that shares its query
     /// string with another statement.
-    async fn simple_query_batch_into<S: crabka_pgwire::engine::ResultSink>(
+    async fn simple_query_batch_into<S: krabka_pgwire::engine::ResultSink>(
         &mut self,
         sql: &str,
         from_statement: usize,
         page_rows: usize,
         sink: &mut S,
-    ) -> Result<crabka_pgwire::engine::SimpleQueryStop, crabka_pgwire::error::PgError> {
+    ) -> Result<krabka_pgwire::engine::SimpleQueryStop, krabka_pgwire::error::PgError> {
         match self {
             Self::Single(session) => {
                 session
@@ -2868,7 +2868,7 @@ impl Session for RuntimeSession {
         name: &str,
         sql: &str,
         parameter_types: &[u32],
-    ) -> Result<PreparedDescription, crabka_pgwire::error::PgError> {
+    ) -> Result<PreparedDescription, krabka_pgwire::error::PgError> {
         match self {
             Self::Single(session) => session.parse(name, sql, parameter_types).await,
             Self::Multi(session) => session.parse(name, sql, parameter_types).await,
@@ -2881,7 +2881,7 @@ impl Session for RuntimeSession {
         statement: &str,
         params: &[BoundParam],
         result_formats: &[i16],
-    ) -> Result<PortalDescription, crabka_pgwire::error::PgError> {
+    ) -> Result<PortalDescription, krabka_pgwire::error::PgError> {
         match self {
             Self::Single(session) => {
                 session
@@ -2899,7 +2899,7 @@ impl Session for RuntimeSession {
     async fn describe_statement(
         &mut self,
         name: &str,
-    ) -> Result<PreparedDescription, crabka_pgwire::error::PgError> {
+    ) -> Result<PreparedDescription, krabka_pgwire::error::PgError> {
         match self {
             Self::Single(session) => session.describe_statement(name).await,
             Self::Multi(session) => session.describe_statement(name).await,
@@ -2909,7 +2909,7 @@ impl Session for RuntimeSession {
     async fn describe_portal(
         &mut self,
         name: &str,
-    ) -> Result<PortalDescription, crabka_pgwire::error::PgError> {
+    ) -> Result<PortalDescription, krabka_pgwire::error::PgError> {
         match self {
             Self::Single(session) => session.describe_portal(name).await,
             Self::Multi(session) => session.describe_portal(name).await,
@@ -2920,7 +2920,7 @@ impl Session for RuntimeSession {
         &mut self,
         portal: &str,
         max_rows: u32,
-    ) -> Result<ExecuteOutcome, crabka_pgwire::error::PgError> {
+    ) -> Result<ExecuteOutcome, krabka_pgwire::error::PgError> {
         match self {
             Self::Single(session) => session.execute(portal, max_rows).await,
             Self::Multi(session) => session.execute(portal, max_rows).await,
@@ -2930,14 +2930,14 @@ impl Session for RuntimeSession {
     async fn close(
         &mut self,
         target: CloseTarget<'_>,
-    ) -> Result<(), crabka_pgwire::error::PgError> {
+    ) -> Result<(), krabka_pgwire::error::PgError> {
         match self {
             Self::Single(session) => session.close(target).await,
             Self::Multi(session) => session.close(target).await,
         }
     }
 
-    async fn sync(&mut self) -> Result<(), crabka_pgwire::error::PgError> {
+    async fn sync(&mut self) -> Result<(), krabka_pgwire::error::PgError> {
         match self {
             Self::Single(session) => session.sync().await,
             Self::Multi(session) => session.sync().await,
@@ -2947,7 +2947,7 @@ impl Session for RuntimeSession {
     async fn begin_copy_in(
         &mut self,
         sql: &str,
-    ) -> Result<Option<CopyInResponse>, crabka_pgwire::error::PgError> {
+    ) -> Result<Option<CopyInResponse>, krabka_pgwire::error::PgError> {
         match self {
             Self::Single(session) => session.begin_copy_in(sql).await,
             Self::Multi(session) => session.begin_copy_in(sql).await,
@@ -2959,7 +2959,7 @@ impl Session for RuntimeSession {
         sql: &str,
         statement_index: usize,
         data: Vec<bytes::Bytes>,
-    ) -> Result<QueryResult, crabka_pgwire::error::PgError> {
+    ) -> Result<QueryResult, krabka_pgwire::error::PgError> {
         match self {
             Self::Single(session) => session.copy_in(sql, statement_index, data).await,
             Self::Multi(session) => session.copy_in(sql, statement_index, data).await,
@@ -2969,7 +2969,7 @@ impl Session for RuntimeSession {
     async fn begin_copy_out(
         &mut self,
         sql: &str,
-    ) -> Result<Option<CopyOutStream>, crabka_pgwire::error::PgError> {
+    ) -> Result<Option<CopyOutStream>, krabka_pgwire::error::PgError> {
         match self {
             Self::Single(session) => session.begin_copy_out(sql).await,
             Self::Multi(session) => session.begin_copy_out(sql).await,
@@ -2980,7 +2980,7 @@ impl Session for RuntimeSession {
         &mut self,
         portal: &str,
         data: Vec<bytes::Bytes>,
-    ) -> Result<QueryResult, crabka_pgwire::error::PgError> {
+    ) -> Result<QueryResult, krabka_pgwire::error::PgError> {
         match self {
             Self::Single(session) => session.copy_in_portal(portal, data).await,
             Self::Multi(session) => session.copy_in_portal(portal, data).await,
@@ -2995,12 +2995,12 @@ impl Session for RuntimeSession {
     }
 
     /// This resolves through [`Session`] explicitly, because
-    /// [`crabka_pgexec::SqlSession`] also has an inherent `take_notices`. That
+    /// [`krabka_pgexec::SqlSession`] also has an inherent `take_notices`. That
     /// inherent method would otherwise win method lookup, and it could drift
     /// from the trait contract the wire layer calls.
     fn take_notices(
         &mut self,
-    ) -> Option<tokio::sync::mpsc::Receiver<crabka_pgwire::error::PgError>> {
+    ) -> Option<tokio::sync::mpsc::Receiver<krabka_pgwire::error::PgError>> {
         match self {
             Self::Single(session) => Session::take_notices(session.as_mut()),
             Self::Multi(session) => Session::take_notices(session.as_mut()),
@@ -3076,7 +3076,7 @@ pub trait FinalCheckpointer: Send + Sync {
 }
 
 struct LiveSuspendRegistry {
-    registry: crabka_gres_control::Registry,
+    registry: krabka_gres_control::Registry,
 }
 
 #[async_trait::async_trait]
@@ -3129,7 +3129,7 @@ impl SuspendPolicy {
 /// Returns an error when the requested operation cannot be completed.
 pub async fn try_suspend_idle_tenant(
     policy: &SuspendPolicy,
-    activity: &crabka_pgwire::server::ActivityTracker,
+    activity: &krabka_pgwire::server::ActivityTracker,
     checkpointer: &dyn FinalCheckpointer,
     registry: &mut dyn SuspendRegistry,
 ) -> std::io::Result<SuspendMonitorOutcome> {
@@ -3245,11 +3245,11 @@ impl GresCheckpointWalPruner {
 }
 
 #[async_trait::async_trait]
-impl crabka_gres_substrate::CheckpointWalPruner for GresCheckpointWalPruner {
+impl krabka_gres_substrate::CheckpointWalPruner for GresCheckpointWalPruner {
     async fn delete_records(
         &self,
-        ops: &[crabka_client_admin::DeleteRecordsOp],
-    ) -> Result<(), crabka_gres_substrate::SubstrateError> {
+        ops: &[krabka_client_admin::DeleteRecordsOp],
+    ) -> Result<(), krabka_gres_substrate::SubstrateError> {
         if ops.is_empty() {
             return Ok(());
         }
@@ -3257,13 +3257,13 @@ impl crabka_gres_substrate::CheckpointWalPruner for GresCheckpointWalPruner {
             return Ok(());
         };
 
-        let mut admin = crabka_client_admin::AdminClient::connect_secured(
+        let mut admin = krabka_client_admin::AdminClient::connect_secured(
             bootstrap_addrs,
             self.security.clone(),
         )
         .await
         .map_err(|error| {
-            crabka_gres_substrate::SubstrateError::Unavailable(format!(
+            krabka_gres_substrate::SubstrateError::Unavailable(format!(
                 "checkpoint pruner admin connect: {error}"
             ))
         })?;
@@ -3271,12 +3271,12 @@ impl crabka_gres_substrate::CheckpointWalPruner for GresCheckpointWalPruner {
             .delete_records(ops, self.delete_records_timeout)
             .await
             .map_err(|error| {
-                crabka_gres_substrate::SubstrateError::Unavailable(format!(
+                krabka_gres_substrate::SubstrateError::Unavailable(format!(
                     "checkpoint delete records: {error}"
                 ))
             })?;
         if let Some(outcome) = outcomes.iter().find(|outcome| outcome.error_code != 0) {
-            return Err(crabka_gres_substrate::SubstrateError::Unavailable(format!(
+            return Err(krabka_gres_substrate::SubstrateError::Unavailable(format!(
                 "checkpoint delete records for {} partition {} failed with error code {}",
                 outcome.topic, outcome.partition, outcome.error_code
             )));
@@ -3481,7 +3481,7 @@ pub async fn run_serve(args: ServeArgs) -> std::io::Result<()> {
     validate_wal_recovery_read_policy(&args)?;
     local_vacuum_policy(&args)?;
     let listener = TcpListener::bind(&args.listen).await?;
-    tracing::info!(listen = %listener.local_addr()?, "crabka-gres listening");
+    tracing::info!(listen = %listener.local_addr()?, "krabka-gres listening");
     Box::pin(serve_listener(listener, args)).await
 }
 
@@ -3529,7 +3529,7 @@ pub fn serve_listener_with_tenant_config_loader(
                 tenant_security_enabled,
             ),
         ) {
-            let mut registry = crabka_gres_control::Registry::connect_with_policy(
+            let mut registry = krabka_gres_control::Registry::connect_with_policy(
                 bootstrap,
                 args.registry.policy(),
             )
@@ -3572,7 +3572,7 @@ pub fn serve_listener_with_tenant_config_loader(
 
         let range_service = runtime.range_service();
         let (engine, checkpoint_runtime, _range_transfer_keepalive) = runtime.into_parts();
-        let activity = Arc::new(crabka_pgwire::server::ActivityTracker::new());
+        let activity = Arc::new(krabka_pgwire::server::ActivityTracker::new());
         let shutdown = CancellationToken::new();
         // Periodic dead-version sweep for the single-range LOCAL engine (mem or
         // --data-dir). Substrate/replicated engines refuse local pruning
@@ -3595,7 +3595,7 @@ pub fn serve_listener_with_tenant_config_loader(
         } else {
             None
         };
-        let serve = crabka_pgwire::server::serve_tls_with_activity_until(
+        let serve = krabka_pgwire::server::serve_tls_with_activity_until(
             listener,
             Arc::new(engine),
             Arc::new(session_config),
@@ -3646,11 +3646,11 @@ pub fn serve_listener_with_tenant_config_loader(
         // initialized. The activator treats Active as permission to connect, so an
         // earlier write can leave its held startup queued on a bound-but-unpolled
         // listener while initialization stalls.
-        tracing::info!(listen = %sql_addr, "crabka-gres ready to accept sessions");
+        tracing::info!(listen = %sql_addr, "krabka-gres ready to accept sessions");
         let range_addr = range_server
             .as_ref()
             .map_or_else(|| "-".to_string(), |(_, address)| address.to_string());
-        println!("CRABKA_GRES_READY {sql_addr} {range_addr}");
+        println!("KRABKA_GRES_READY {sql_addr} {range_addr}");
         let serve_result = if let Some((policy, registry, checkpointer)) = suspend {
             tokio::select! {
                 result = serve => result,
@@ -3854,7 +3854,7 @@ fn local_vacuum_maintenance_due(
 /// The pacing keeps the sweep cursor lapping the keyspace at sustained load.
 async fn run_local_vacuum_loop(
     engine: SqlEngine,
-    activity: Arc<crabka_pgwire::server::ActivityTracker>,
+    activity: Arc<krabka_pgwire::server::ActivityTracker>,
     shutdown: CancellationToken,
     policy: LocalVacuumPolicy,
 ) {
@@ -3936,7 +3936,7 @@ async fn run_local_vacuum_loop(
 #[cfg(test)]
 mod vacuum_pacing_tests {
     use assert2::assert;
-    use crabka_pgexec::VACUUM_STEP_KEY_BUDGET;
+    use krabka_pgexec::VACUUM_STEP_KEY_BUDGET;
 
     use super::*;
 
@@ -3955,16 +3955,16 @@ mod vacuum_pacing_tests {
 
     #[test]
     fn effective_defaults_pin_local_vacuum_policy() {
-        const CHILD: &str = "CRABKA_TEST_GRES_LOCAL_VACUUM_DEFAULTS_CHILD";
+        const CHILD: &str = "KRABKA_TEST_GRES_LOCAL_VACUUM_DEFAULTS_CHILD";
         const VARIABLES: [&str; 8] = [
-            "CRABKA_GRES_LOCAL_VACUUM_IDLE_INTERVAL",
-            "CRABKA_GRES_LOCAL_VACUUM_BACKOFF_FLOOR",
-            "CRABKA_GRES_LOCAL_VACUUM_HOT_DEBT",
-            "CRABKA_GRES_LOCAL_VACUUM_KEY_BUDGET",
-            "CRABKA_GRES_LOCAL_VACUUM_MAX_KEY_BUDGET",
-            "CRABKA_GRES_LOCAL_VACUUM_STEP_FAST",
-            "CRABKA_GRES_LOCAL_VACUUM_STEP_SLOW",
-            "CRABKA_GRES_LOCAL_VACUUM_IDLE_AFTER",
+            "KRABKA_GRES_LOCAL_VACUUM_IDLE_INTERVAL",
+            "KRABKA_GRES_LOCAL_VACUUM_BACKOFF_FLOOR",
+            "KRABKA_GRES_LOCAL_VACUUM_HOT_DEBT",
+            "KRABKA_GRES_LOCAL_VACUUM_KEY_BUDGET",
+            "KRABKA_GRES_LOCAL_VACUUM_MAX_KEY_BUDGET",
+            "KRABKA_GRES_LOCAL_VACUUM_STEP_FAST",
+            "KRABKA_GRES_LOCAL_VACUUM_STEP_SLOW",
+            "KRABKA_GRES_LOCAL_VACUUM_IDLE_AFTER",
         ];
         if std::env::var_os(CHILD).is_none() {
             let mut child = std::process::Command::new(std::env::current_exe().expect("test exe"));
@@ -3983,7 +3983,7 @@ mod vacuum_pacing_tests {
 
         assert_eq!(
             local_vacuum_policy(
-                &Cli::try_parse_from(["crabka-gres"])
+                &Cli::try_parse_from(["krabka-gres"])
                     .expect("defaults")
                     .serve,
             )
@@ -3995,7 +3995,7 @@ mod vacuum_pacing_tests {
     #[test]
     fn derived_maximum_key_budget_rejects_overflow() {
         let args = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--local-vacuum-key-budget",
             &usize::MAX.to_string(),
         ])
@@ -4336,14 +4336,14 @@ async fn bind_early_range_transport(
         return Ok(None);
     }
     let dynamic = Arc::new(DynamicLiveRangeService::new(
-        crabka_gres_ranges::HostedRangeService::new_with_policy(
+        krabka_gres_ranges::HostedRangeService::new_with_policy(
             BTreeMap::new(),
             config.range_runtime_policy,
         ),
     ));
     let server = start_range_service(
         args,
-        Some(Arc::clone(&dynamic) as Arc<dyn crabka_gres_ranges::RangeService>),
+        Some(Arc::clone(&dynamic) as Arc<dyn krabka_gres_ranges::RangeService>),
     )
     .await?
     .ok_or_else(|| std::io::Error::other("early range transport did not bind"))?;
@@ -4357,7 +4357,7 @@ async fn bind_early_range_transport(
 
 async fn start_range_service(
     args: &ServeArgs,
-    service: Option<Arc<dyn crabka_gres_ranges::RangeService>>,
+    service: Option<Arc<dyn krabka_gres_ranges::RangeService>>,
 ) -> std::io::Result<Option<(tokio::task::JoinHandle<()>, SocketAddr)>> {
     let Some(listen) = &args.range_listen else {
         return Ok(None);
@@ -4382,10 +4382,10 @@ async fn start_range_service(
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
     let listener = TcpListener::bind(listen).await?;
     let address = listener.local_addr()?;
-    tracing::info!(range_listen = %address, "crabka-gres range compute listening");
+    tracing::info!(range_listen = %address, "krabka-gres range compute listening");
     Ok(Some((
         tokio::spawn(async move {
-            if let Err(error) = crabka_gres_ranges::serve_tls_with_policy(
+            if let Err(error) = krabka_gres_ranges::serve_tls_with_policy(
                 listener,
                 service,
                 tls,
@@ -4402,7 +4402,7 @@ async fn start_range_service(
 
 async fn run_suspend_monitor(
     policy: SuspendPolicy,
-    activity: Arc<crabka_pgwire::server::ActivityTracker>,
+    activity: Arc<krabka_pgwire::server::ActivityTracker>,
     checkpointer: Box<dyn FinalCheckpointer>,
     mut registry: Box<dyn SuspendRegistry>,
     shutdown: CancellationToken,
@@ -4440,9 +4440,9 @@ async fn run_suspend_monitor(
 }
 
 async fn mark_active_after_recovery(
-    tenant_record: Option<&crabka_gres_control::TenantRecord>,
-    registry: Option<crabka_gres_control::Registry>,
-) -> std::io::Result<Option<crabka_gres_control::Registry>> {
+    tenant_record: Option<&krabka_gres_control::TenantRecord>,
+    registry: Option<krabka_gres_control::Registry>,
+) -> std::io::Result<Option<krabka_gres_control::Registry>> {
     let Some(record) = tenant_record else {
         return Ok(None);
     };
@@ -4457,7 +4457,7 @@ async fn mark_active_after_recovery(
             "tenant registry record disappeared after recovery",
         ));
     };
-    if current.state != crabka_gres_control::TenantState::ResumeRequested {
+    if current.state != krabka_gres_control::TenantState::ResumeRequested {
         return Ok(Some(registry));
     }
     let endpoint = current
@@ -4488,7 +4488,7 @@ async fn mark_active_after_recovery(
     let confirmed = registry.get(record.name.as_str()).await.map_err(|error| {
         std::io::Error::other(format!("tenant registry confirm active: {error}"))
     })?;
-    if !confirmed.is_some_and(|record| record.state == crabka_gres_control::TenantState::Active) {
+    if !confirmed.is_some_and(|record| record.state == krabka_gres_control::TenantState::Active) {
         return Err(std::io::Error::other(
             "tenant registry did not confirm Active after recovery",
         ));
@@ -4545,14 +4545,14 @@ struct LiveRangeRegistrySource {
 
 struct MustActivateRangeRegistrySource {
     live: LiveRangeRegistrySource,
-    current_layout: Vec<crabka_gres_control::RangeLayoutEntry>,
+    current_layout: Vec<krabka_gres_control::RangeLayoutEntry>,
     source_record_version: u64,
     provisional_target: TenantRecord,
 }
 
 struct LiveSplitIntentAuthority {
     bootstrap: String,
-    tenant: crabka_gres_control::TenantName,
+    tenant: krabka_gres_control::TenantName,
     policy: RegistryPolicy,
 }
 
@@ -4561,9 +4561,9 @@ struct LiveSplitIntentAuthority {
 #[must_use]
 pub fn live_split_intent_authority(
     bootstrap: String,
-    tenant: crabka_gres_control::TenantName,
+    tenant: krabka_gres_control::TenantName,
     policy: RegistryPolicy,
-) -> Arc<dyn crabka_gres_ranges::control::SplitIntentAuthority> {
+) -> Arc<dyn krabka_gres_ranges::control::SplitIntentAuthority> {
     Arc::new(LiveSplitIntentAuthority {
         bootstrap,
         tenant,
@@ -4576,20 +4576,20 @@ struct AllowSplitIntentAuthority;
 
 #[cfg(test)]
 #[async_trait::async_trait]
-impl crabka_gres_ranges::control::SplitIntentAuthority for AllowSplitIntentAuthority {
+impl krabka_gres_ranges::control::SplitIntentAuthority for AllowSplitIntentAuthority {
     async fn authorize_request(
         &self,
-        _request: &crabka_gres_ranges::transport::RangeControlReq,
-        _context: crabka_gres_ranges::control::IntentAuthorizationContext,
-    ) -> Result<Option<crabka_gres_ranges::control::AuthorizedSplitIntent>, String> {
+        _request: &krabka_gres_ranges::transport::RangeControlReq,
+        _context: krabka_gres_ranges::control::IntentAuthorizationContext,
+    ) -> Result<Option<krabka_gres_ranges::control::AuthorizedSplitIntent>, String> {
         Ok(Some(test_authorized_split_intent()?))
     }
 }
 
 #[cfg(test)]
 fn test_authorized_split_intent()
--> Result<crabka_gres_ranges::control::AuthorizedSplitIntent, String> {
-    use crabka_gres_control::{
+-> Result<krabka_gres_ranges::control::AuthorizedSplitIntent, String> {
+    use krabka_gres_control::{
         RangeBoundary, RangeLayoutEntry, RangeLayoutSplit, RangeLifecycle, SplitOperationPlan,
         SplitOperationRecord, TenantName,
     };
@@ -4640,20 +4640,20 @@ fn test_authorized_split_intent()
         target_layout: vec![left, right],
     })
     .map_err(|error| error.to_string())?;
-    crabka_gres_ranges::control::AuthorizedSplitIntent::from_record(record)
+    krabka_gres_ranges::control::AuthorizedSplitIntent::from_record(record)
 }
 
 #[async_trait::async_trait]
-impl crabka_gres_ranges::control::SplitIntentAuthority for LiveSplitIntentAuthority {
+impl krabka_gres_ranges::control::SplitIntentAuthority for LiveSplitIntentAuthority {
     async fn authorize_request(
         &self,
-        request: &crabka_gres_ranges::transport::RangeControlReq,
-        context: crabka_gres_ranges::control::IntentAuthorizationContext,
-    ) -> Result<Option<crabka_gres_ranges::control::AuthorizedSplitIntent>, String> {
+        request: &krabka_gres_ranges::transport::RangeControlReq,
+        context: krabka_gres_ranges::control::IntentAuthorizationContext,
+    ) -> Result<Option<krabka_gres_ranges::control::AuthorizedSplitIntent>, String> {
         if request.tenant != self.tenant.as_str() {
             return Ok(None);
         }
-        let mut registry = crabka_gres_control::Registry::connect_with_policy(
+        let mut registry = krabka_gres_control::Registry::connect_with_policy(
             &self.bootstrap,
             self.policy.clone(),
         )
@@ -4677,10 +4677,10 @@ impl crabka_gres_ranges::control::SplitIntentAuthority for LiveSplitIntentAuthor
             return Ok(None);
         };
         let activated_pre_cutover_status = operation.phase
-            == crabka_gres_control::SplitOperationPhase::Activated
+            == krabka_gres_control::SplitOperationPhase::Activated
             && matches!(
                 request.operation,
-                crabka_gres_ranges::transport::RangeControlOperation::Status
+                krabka_gres_ranges::transport::RangeControlOperation::Status
             );
         let target_phase = operation.phase.expects_target_registry_layout();
         let expected_layout = if target_phase {
@@ -4705,15 +4705,15 @@ impl crabka_gres_ranges::control::SplitIntentAuthority for LiveSplitIntentAuthor
         if !layout_matches {
             return Ok(None);
         }
-        crabka_gres_ranges::control::RegistrySplitIntentView::new([operation])
+        krabka_gres_ranges::control::RegistrySplitIntentView::new([operation])
             .authorize_request(request, context)
             .await
     }
 }
 
 #[async_trait::async_trait]
-impl crabka_gres_ranges::registry::RangeRegistrySource for LiveRangeRegistrySource {
-    async fn load_current(&self) -> Result<TenantRecord, crabka_gres_ranges::RegistryError> {
+impl krabka_gres_ranges::registry::RangeRegistrySource for LiveRangeRegistrySource {
+    async fn load_current(&self) -> Result<TenantRecord, krabka_gres_ranges::RegistryError> {
         load_live_tenant_config(
             &self.bootstrap,
             &self.tenant,
@@ -4721,9 +4721,9 @@ impl crabka_gres_ranges::registry::RangeRegistrySource for LiveRangeRegistrySour
             &self.policy,
         )
         .await
-        .map_err(|error| crabka_gres_ranges::RegistryError::Authoritative(error.to_string()))?
+        .map_err(|error| krabka_gres_ranges::RegistryError::Authoritative(error.to_string()))?
         .ok_or_else(|| {
-            crabka_gres_ranges::RegistryError::Authoritative(format!(
+            krabka_gres_ranges::RegistryError::Authoritative(format!(
                 "tenant {} is absent from the control registry",
                 self.tenant
             ))
@@ -4732,10 +4732,10 @@ impl crabka_gres_ranges::registry::RangeRegistrySource for LiveRangeRegistrySour
 }
 
 #[async_trait::async_trait]
-impl crabka_gres_ranges::registry::RangeRegistrySource for MustActivateRangeRegistrySource {
-    async fn load_current(&self) -> Result<TenantRecord, crabka_gres_ranges::RegistryError> {
+impl krabka_gres_ranges::registry::RangeRegistrySource for MustActivateRangeRegistrySource {
+    async fn load_current(&self) -> Result<TenantRecord, krabka_gres_ranges::RegistryError> {
         let actual =
-            crabka_gres_ranges::registry::RangeRegistrySource::load_current(&self.live).await?;
+            krabka_gres_ranges::registry::RangeRegistrySource::load_current(&self.live).await?;
         select_must_activate_registry_record(
             actual,
             &self.current_layout,
@@ -4747,15 +4747,15 @@ impl crabka_gres_ranges::registry::RangeRegistrySource for MustActivateRangeRegi
 
 fn select_must_activate_registry_record(
     actual: TenantRecord,
-    current_layout: &[crabka_gres_control::RangeLayoutEntry],
+    current_layout: &[krabka_gres_control::RangeLayoutEntry],
     source_record_version: u64,
     provisional_target: &TenantRecord,
-) -> Result<TenantRecord, crabka_gres_ranges::RegistryError> {
+) -> Result<TenantRecord, krabka_gres_ranges::RegistryError> {
     if actual.ranges == provisional_target.ranges {
         if actual.record_version >= provisional_target.record_version {
             return Ok(actual);
         }
-        return Err(crabka_gres_ranges::RegistryError::Authoritative(
+        return Err(krabka_gres_ranges::RegistryError::Authoritative(
             "must-activate target tenant version predates sealed cutover".into(),
         ));
     }
@@ -4763,11 +4763,11 @@ fn select_must_activate_registry_record(
         if actual.record_version == source_record_version {
             return Ok(provisional_target.clone());
         }
-        return Err(crabka_gres_ranges::RegistryError::Authoritative(
+        return Err(krabka_gres_ranges::RegistryError::Authoritative(
             "must-activate current tenant version differs from sealed source version".into(),
         ));
     }
-    Err(crabka_gres_ranges::RegistryError::Authoritative(
+    Err(krabka_gres_ranges::RegistryError::Authoritative(
         "must-activate tenant layout conflicts with both sealed current and target maps".into(),
     ))
 }
@@ -4865,7 +4865,7 @@ async fn load_live_tenant_config(
     let Some(addr) = resolve_bootstrap_addr(bootstrap) else {
         return invalid_input("substrate bootstrap address list is empty");
     };
-    let mut admin = crabka_client_admin::AdminClient::connect_secured(
+    let mut admin = krabka_client_admin::AdminClient::connect_secured(
         &split_bootstrap(bootstrap),
         security.clone(),
     )
@@ -4889,19 +4889,19 @@ async fn load_live_tenant_config(
     let Some(topic_id) = topic_entry.topic_id else {
         return Ok(None);
     };
-    let options = crabka_client_core::ConnectionOptions {
-        client_id: format!("crabka-gres-config-reader-{tenant}"),
+    let options = krabka_client_core::ConnectionOptions {
+        client_id: format!("krabka-gres-config-reader-{tenant}"),
         security: security.map(Box::new),
         ..Default::default()
     };
-    let conn = crabka_client_core::Connection::connect_with_options(addr, options)
+    let conn = krabka_client_core::Connection::connect_with_options(addr, options)
         .await
         .map_err(|error| std::io::Error::other(format!("tenant config connect: {error}")))?;
-    let topic_id = crabka_protocol::primitives::uuid::Uuid(*topic_id.as_bytes());
+    let topic_id = krabka_protocol::primitives::uuid::Uuid(*topic_id.as_bytes());
     let mut next_offset = 0_i64;
     let mut latest = None;
     loop {
-        let records = crabka_client_core::fetch_partition(
+        let records = krabka_client_core::fetch_partition(
             &conn,
             &topic,
             topic_id,
@@ -4939,13 +4939,13 @@ async fn load_live_split_operation(
     operation_id: &str,
     security: Option<ClientSecurity>,
     policy: &RegistryPolicy,
-) -> std::io::Result<Option<crabka_gres_control::SplitOperationRecord>> {
-    const TOPIC: &str = crabka_gres_control::TENANT_REGISTRY_TOPIC;
+) -> std::io::Result<Option<krabka_gres_control::SplitOperationRecord>> {
+    const TOPIC: &str = krabka_gres_control::TENANT_REGISTRY_TOPIC;
     const KEY_PREFIX: &[u8] = b"\0gres-split-operation\0";
     let Some(addr) = resolve_bootstrap_addr(bootstrap) else {
         return invalid_input("substrate bootstrap address list is empty");
     };
-    let mut admin = crabka_client_admin::AdminClient::connect_secured(
+    let mut admin = krabka_client_admin::AdminClient::connect_secured(
         &split_bootstrap(bootstrap),
         security.clone(),
     )
@@ -4970,7 +4970,7 @@ async fn load_live_split_operation(
         .topic_id
         .ok_or_else(|| std::io::Error::other("activation registry topic id is absent"))?;
     let options = activation_registry_connection_options(tenant, security);
-    let conn = crabka_client_core::Connection::connect_with_options(addr, options)
+    let conn = krabka_client_core::Connection::connect_with_options(addr, options)
         .await
         .map_err(|error| std::io::Error::other(format!("activation registry connect: {error}")))?;
     let mut expected_key = KEY_PREFIX.to_vec();
@@ -4978,11 +4978,11 @@ async fn load_live_split_operation(
         serde_json::to_vec(&(tenant, operation_id))
             .map_err(|error| std::io::Error::other(format!("activation registry key: {error}")))?,
     );
-    let topic_id = crabka_protocol::primitives::uuid::Uuid(*topic_id.as_bytes());
+    let topic_id = krabka_protocol::primitives::uuid::Uuid(*topic_id.as_bytes());
     let mut next_offset = 0_i64;
     let mut latest = None;
     loop {
-        let result = crabka_client_core::fetch_partition_with_isolation_progress(
+        let result = krabka_client_core::fetch_partition_with_isolation_progress(
             &conn,
             live_split_operation_fetch(policy, TOPIC, topic_id, next_offset),
         )
@@ -5010,24 +5010,24 @@ async fn load_live_split_operation(
 fn live_split_operation_fetch<'a>(
     policy: &RegistryPolicy,
     topic: &'a str,
-    topic_id: crabka_protocol::primitives::uuid::Uuid,
+    topic_id: krabka_protocol::primitives::uuid::Uuid,
     fetch_offset: i64,
-) -> crabka_client_core::IsolatedFetch<'a> {
-    crabka_client_core::IsolatedFetch {
+) -> krabka_client_core::IsolatedFetch<'a> {
+    krabka_client_core::IsolatedFetch {
         topic,
         topic_id,
         partition: 0,
         fetch_offset,
         max_wait: policy.fetch_max_wait(),
-        max: crabka_client_core::DEFAULT_FETCH_RESPONSE_MAX,
+        max: krabka_client_core::DEFAULT_FETCH_RESPONSE_MAX,
         partition_max: policy.fetch_partition_max(),
-        fetch_min: crabka_client_core::FetchMinBytes::default(),
+        fetch_min: krabka_client_core::FetchMinBytes::default(),
         isolation_level: 1,
     }
 }
 
 fn apply_live_split_operation_record(
-    latest: &mut Option<crabka_gres_control::SplitOperationRecord>,
+    latest: &mut Option<krabka_gres_control::SplitOperationRecord>,
     value: Option<&[u8]>,
     tenant: &str,
     operation_id: &str,
@@ -5036,7 +5036,7 @@ fn apply_live_split_operation_record(
         *latest = None;
         return Ok(());
     };
-    let operation = serde_json::from_slice::<crabka_gres_control::SplitOperationRecord>(value)
+    let operation = serde_json::from_slice::<krabka_gres_control::SplitOperationRecord>(value)
         .map_err(|error| {
             std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -5078,9 +5078,9 @@ fn apply_live_split_operation_record(
 fn activation_registry_connection_options(
     tenant: &str,
     security: Option<ClientSecurity>,
-) -> crabka_client_core::ConnectionOptions {
-    crabka_client_core::ConnectionOptions {
-        client_id: format!("crabka-gres-activation-reader-{tenant}"),
+) -> krabka_client_core::ConnectionOptions {
+    krabka_client_core::ConnectionOptions {
+        client_id: format!("krabka-gres-activation-reader-{tenant}"),
         security: security.map(Box::new),
         ..Default::default()
     }
@@ -5161,12 +5161,12 @@ async fn open_substrate_runtime_with_tenant_record(
         return open_live_substrate_runtime(config, store, tenant_record).await;
     }
 
-    let log = crabka_gres_substrate::InMemoryWalLog::shared();
+    let log = krabka_gres_substrate::InMemoryWalLog::shared();
     let (barrier, outcome) =
-        crabka_gres_substrate::recover_after_barrier(store.as_ref(), log.as_ref(), log.as_ref())
+        krabka_gres_substrate::recover_after_barrier(store.as_ref(), log.as_ref(), log.as_ref())
             .await
             .map_err(|error| Error::other(format!("substrate recovery: {error}")))?;
-    let snapshot_source = Arc::new(crabka_gres_substrate::CheckpointSnapshotSource::new(
+    let snapshot_source = Arc::new(krabka_gres_substrate::CheckpointSnapshotSource::new(
         barrier.offset,
         outcome.next_journal_seq,
         barrier.generation,
@@ -5175,7 +5175,7 @@ async fn open_substrate_runtime_with_tenant_record(
         config,
         Arc::clone(&store),
         Arc::clone(&snapshot_source),
-        crabka_gres_substrate::wal_topic(&config.tenant),
+        krabka_gres_substrate::wal_topic(&config.tenant),
         format!("{}/r0", config.tenant),
         None,
         |timeout| Ok(GresCheckpointWalPruner::in_memory(timeout)),
@@ -5194,7 +5194,7 @@ async fn open_substrate_runtime_with_tenant_record(
             .as_ref()
             .map(|checkpoint| Arc::clone(&checkpoint.stats)),
         checkpoint.as_ref().map(|checkpoint| {
-            Arc::clone(&checkpoint.planner_stats) as Arc<dyn crabka_pgexec::plan_dist::Stats>
+            Arc::clone(&checkpoint.planner_stats) as Arc<dyn krabka_pgexec::plan_dist::Stats>
         }),
         config.pgexec_runtime_policy,
     )?;
@@ -5204,20 +5204,20 @@ async fn open_substrate_runtime_with_tenant_record(
     })
 }
 
-fn parse_test_commit_fault(fault: &str) -> std::io::Result<crabka_gres_ranges::GatewayCommitFault> {
+fn parse_test_commit_fault(fault: &str) -> std::io::Result<krabka_gres_ranges::GatewayCommitFault> {
     match fault {
         "before_decision_after_prepare" => {
-            Ok(crabka_gres_ranges::GatewayCommitFault::BeforeDecisionAfterPrepare)
+            Ok(krabka_gres_ranges::GatewayCommitFault::BeforeDecisionAfterPrepare)
         }
         "before_release_after_commit_decision" => {
-            Ok(crabka_gres_ranges::GatewayCommitFault::BeforeReleaseAfterCommitDecision)
+            Ok(krabka_gres_ranges::GatewayCommitFault::BeforeReleaseAfterCommitDecision)
         }
         "after_timestamp_prewrite_before_decision" => {
-            Ok(crabka_gres_ranges::GatewayCommitFault::AfterTimestampPrewriteBeforeDecision)
+            Ok(krabka_gres_ranges::GatewayCommitFault::AfterTimestampPrewriteBeforeDecision)
         }
         _ => Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "invalid CRABKA_GRES_TEST_COMMIT_FAULT",
+            "invalid KRABKA_GRES_TEST_COMMIT_FAULT",
         )),
     }
 }
@@ -5266,15 +5266,15 @@ fn multirange_tenant_config(
     config: &SubstrateRuntimeConfig,
     boundaries: &str,
     tenant_record: Option<&TenantRecord>,
-) -> std::io::Result<crabka_gres_ranges::MultiRangeTenantConfig> {
-    let tenant = crabka_gres_ranges::TenantName::parse(config.tenant.clone()).map_err(|error| {
+) -> std::io::Result<krabka_gres_ranges::MultiRangeTenantConfig> {
+    let tenant = krabka_gres_ranges::TenantName::parse(config.tenant.clone()).map_err(|error| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
             format!("--tenant: {error}"),
         )
     })?;
     let mut tenant_config =
-        crabka_gres_ranges::MultiRangeTenantConfig::from_boundaries(tenant, boundaries)
+        krabka_gres_ranges::MultiRangeTenantConfig::from_boundaries(tenant, boundaries)
             .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?
             .with_timestamp_source_mode(config.timestamp_source_mode)
             .with_hlc_wall_offset_ms(config.hlc_wall_offset_ms)
@@ -5282,11 +5282,11 @@ fn multirange_tenant_config(
     if let Some(record) = tenant_record {
         tenant_config.range_map = range_map_from_tenant_layout(
             tenant_config.tenant.clone(),
-            crabka_gres_ranges::MapEpoch::new(record.record_version),
+            krabka_gres_ranges::MapEpoch::new(record.record_version),
             &record.ranges,
         )?;
     }
-    if let Ok(fault) = std::env::var("CRABKA_GRES_TEST_COMMIT_FAULT") {
+    if let Ok(fault) = std::env::var("KRABKA_GRES_TEST_COMMIT_FAULT") {
         tenant_config =
             tenant_config.with_commit_fault_for_testing(parse_test_commit_fault(&fault)?);
     }
@@ -5303,12 +5303,12 @@ fn multirange_tenant_config(
         }
     }
     if let Some(record) = tenant_record {
-        let mut registry = crabka_gres_ranges::RangeRegistry::from_tenant_record(record)
+        let mut registry = krabka_gres_ranges::RangeRegistry::from_tenant_record(record)
             .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
         if !config.is_in_memory_bootstrap() {
             registry = registry.with_authoritative_source(Arc::new(LiveRangeRegistrySource {
                 bootstrap: config.bootstrap.clone(),
-                tenant: crabka_gres_control::TenantName::try_from(config.tenant.as_str()).map_err(
+                tenant: krabka_gres_control::TenantName::try_from(config.tenant.as_str()).map_err(
                     |error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error),
                 )?,
                 security: config.kafka_security.clone(),
@@ -5332,13 +5332,13 @@ fn multirange_tenant_config(
 /// coordinator range and install its read barrier plus continuous tailing.
 async fn attach_range0_read_barrier(
     config: &SubstrateRuntimeConfig,
-    tenant_config: crabka_gres_ranges::MultiRangeTenantConfig,
-    checkpoint_store: Option<Arc<dyn crabka_gres_substrate::checkpoint::CheckpointStore>>,
-) -> std::io::Result<crabka_gres_ranges::MultiRangeTenantConfig> {
+    tenant_config: krabka_gres_ranges::MultiRangeTenantConfig,
+    checkpoint_store: Option<Arc<dyn krabka_gres_substrate::checkpoint::CheckpointStore>>,
+) -> std::io::Result<krabka_gres_ranges::MultiRangeTenantConfig> {
     let follower_config = config
         .live_recovery_config(
             tenant_config.tenant.clone(),
-            crabka_gres_ranges::RangeId::COORDINATOR,
+            krabka_gres_ranges::RangeId::COORDINATOR,
         )
         .with_optional_advertised_endpoint(config.advertised_endpoint.clone());
     // Generation 0 of the follower cache; a rebuild after a WAL trim opens the
@@ -5347,7 +5347,7 @@ async fn attach_range0_read_barrier(
     range0_follower::remove_other_follower_stores(config.cache_dir.as_deref(), 0);
     let follower_store =
         range0_follower::open_follower_store(config.cache_dir.as_deref(), 0, config.pgkv_options)?;
-    let follower = crabka_gres_substrate::bootstrap_live_range0_follower(
+    let follower = krabka_gres_substrate::bootstrap_live_range0_follower(
         &follower_config,
         follower_store,
         checkpoint_store.as_deref(),
@@ -5358,15 +5358,15 @@ async fn attach_range0_read_barrier(
     // One persistent sampler serves both the per-statement read barrier
     // and the follower poll loop: it holds a live broker connection and
     // an incremental scan cursor, so neither path re-dials per call.
-    let end_sampler = Arc::new(crabka_gres_substrate::LiveCommittedEndSampler::new(
+    let end_sampler = Arc::new(krabka_gres_substrate::LiveCommittedEndSampler::new(
         follower_config.clone(),
     ));
-    let sampler = Arc::new(crabka_gres_substrate::BrokerRange0EndSampler(
-        Arc::clone(&end_sampler) as Arc<dyn crabka_gres_substrate::CommittedEndSampler>,
+    let sampler = Arc::new(krabka_gres_substrate::BrokerRange0EndSampler(
+        Arc::clone(&end_sampler) as Arc<dyn krabka_gres_substrate::CommittedEndSampler>,
     ));
     let catalog_refresh_poke = Arc::new(tokio::sync::Notify::new());
     let tenant_config = tenant_config.with_read_only_range0_replica(
-        crabka_gres_ranges::ReadOnlyRange0Replica::new_with_policy(
+        krabka_gres_ranges::ReadOnlyRange0Replica::new_with_policy(
             tail,
             sampler,
             &config.range_runtime_policy,
@@ -5400,7 +5400,7 @@ async fn open_multirange_runtime(
                 "multi-range checkpointing requires a live substrate broker; in-memory ranges have no durable transfer capability",
             );
         }
-        let (gateway, _handles) = crabka_gres_ranges::MultiRangeTenant::start(tenant_config)
+        let (gateway, _handles) = krabka_gres_ranges::MultiRangeTenant::start(tenant_config)
             .map_err(|error| std::io::Error::other(format!("multi-range tenant: {error}")))?;
         return Ok(GresRuntime::multi(gateway));
     }
@@ -5418,7 +5418,7 @@ async fn open_multirange_runtime(
     if tenant_config
         .hosted_ranges
         .as_ref()
-        .is_some_and(|ranges| !ranges.contains(&crabka_gres_ranges::RangeId::COORDINATOR))
+        .is_some_and(|ranges| !ranges.contains(&krabka_gres_ranges::RangeId::COORDINATOR))
     {
         tenant_config =
             attach_range0_read_barrier(config, tenant_config, checkpoint_store.clone()).await?;
@@ -5456,10 +5456,10 @@ async fn open_multirange_runtime(
             .ok_or_else(|| std::io::Error::other("activation operation plan is absent"))?;
         if matches!(
             operation.phase,
-            crabka_gres_control::SplitOperationPhase::LayoutPublished
-                | crabka_gres_control::SplitOperationPhase::Retiring
-                | crabka_gres_control::SplitOperationPhase::Resuming
-                | crabka_gres_control::SplitOperationPhase::Completed
+            krabka_gres_control::SplitOperationPhase::LayoutPublished
+                | krabka_gres_control::SplitOperationPhase::Retiring
+                | krabka_gres_control::SplitOperationPhase::Resuming
+                | krabka_gres_control::SplitOperationPhase::Completed
         ) {
             discovery.promote_authoritative_target_recovery()?;
         }
@@ -5547,8 +5547,8 @@ async fn open_multirange_runtime(
 
 async fn reconcile_startup_checkpoint_pins(
     config: &SubstrateRuntimeConfig,
-    tenant_config: &crabka_gres_ranges::MultiRangeTenantConfig,
-    store: Option<&dyn crabka_gres_substrate::checkpoint::CheckpointStore>,
+    tenant_config: &krabka_gres_ranges::MultiRangeTenantConfig,
+    store: Option<&dyn krabka_gres_substrate::checkpoint::CheckpointStore>,
     activation: Option<&split_activation::ActivationDiscovery>,
 ) -> std::io::Result<()> {
     let Some(store) = store else {
@@ -5593,7 +5593,7 @@ async fn reconcile_startup_checkpoint_pins(
                 checkpoint.covered_offset,
             ))
         });
-        crabka_gres_substrate::reconcile_checkpoint_pins(store, &namespace, active)
+        krabka_gres_substrate::reconcile_checkpoint_pins(store, &namespace, active)
             .await
             .map_err(|error| {
                 std::io::Error::other(format!(
@@ -5605,38 +5605,38 @@ async fn reconcile_startup_checkpoint_pins(
 }
 
 const fn activation_requires_source_checkpoint_pin(
-    phase: crabka_gres_ranges::control::TopologyActivationPhase,
+    phase: krabka_gres_ranges::control::TopologyActivationPhase,
 ) -> bool {
     matches!(
         phase,
-        crabka_gres_ranges::control::TopologyActivationPhase::SourceCheckpoint
-            | crabka_gres_ranges::control::TopologyActivationPhase::MustActivate
-            | crabka_gres_ranges::control::TopologyActivationPhase::WriterActivated
-            | crabka_gres_ranges::control::TopologyActivationPhase::CheckpointDurable
+        krabka_gres_ranges::control::TopologyActivationPhase::SourceCheckpoint
+            | krabka_gres_ranges::control::TopologyActivationPhase::MustActivate
+            | krabka_gres_ranges::control::TopologyActivationPhase::WriterActivated
+            | krabka_gres_ranges::control::TopologyActivationPhase::CheckpointDurable
     )
 }
 
 fn range_map_from_tenant_layout(
-    tenant: crabka_gres_ranges::TenantName,
-    epoch: crabka_gres_ranges::MapEpoch,
-    layout: &[crabka_gres_control::RangeLayoutEntry],
-) -> std::io::Result<crabka_gres_ranges::RangeMap> {
-    let mut start = crabka_gres_ranges::RangeKey::table_start(crabka_gres_ranges::TableId::new(0));
+    tenant: krabka_gres_ranges::TenantName,
+    epoch: krabka_gres_ranges::MapEpoch,
+    layout: &[krabka_gres_control::RangeLayoutEntry],
+) -> std::io::Result<krabka_gres_ranges::RangeMap> {
+    let mut start = krabka_gres_ranges::RangeKey::table_start(krabka_gres_ranges::TableId::new(0));
     let mut ranges = Vec::with_capacity(layout.len());
     for entry in layout {
         let end = entry.end_key.map(|boundary| match boundary.bucket {
-            Some(bucket) => crabka_gres_ranges::RangeKey::hash(
-                crabka_gres_ranges::TableId::new(boundary.table_id),
+            Some(bucket) => krabka_gres_ranges::RangeKey::hash(
+                krabka_gres_ranges::TableId::new(boundary.table_id),
                 bucket,
                 boundary.rowid,
             ),
-            None => crabka_gres_ranges::RangeKey::new(
-                crabka_gres_ranges::TableId::new(boundary.table_id),
+            None => krabka_gres_ranges::RangeKey::new(
+                krabka_gres_ranges::TableId::new(boundary.table_id),
                 boundary.rowid,
             ),
         });
-        ranges.push(crabka_gres_ranges::RangeSpec::for_interval(
-            crabka_gres_ranges::RangeId::new(entry.range_id),
+        ranges.push(krabka_gres_ranges::RangeSpec::for_interval(
+            krabka_gres_ranges::RangeId::new(entry.range_id),
             start,
             end,
         ));
@@ -5644,14 +5644,14 @@ fn range_map_from_tenant_layout(
             start = end;
         }
     }
-    crabka_gres_ranges::RangeMap::new(tenant, epoch, ranges)
+    krabka_gres_ranges::RangeMap::new(tenant, epoch, ranges)
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))
 }
 
 fn bind_recovered_hosted_ranges(
-    tenant_config: crabka_gres_ranges::MultiRangeTenantConfig,
-    hosted_ranges: &[crabka_gres_ranges::RangeId],
-) -> std::io::Result<crabka_gres_ranges::MultiRangeTenantConfig> {
+    tenant_config: krabka_gres_ranges::MultiRangeTenantConfig,
+    hosted_ranges: &[krabka_gres_ranges::RangeId],
+) -> std::io::Result<krabka_gres_ranges::MultiRangeTenantConfig> {
     tenant_config
         .with_hosted_ranges(hosted_ranges.to_vec())
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))
@@ -5662,8 +5662,8 @@ fn remote_ranges_are_configured(config: &SubstrateRuntimeConfig, record: &Tenant
         return false;
     };
     record.ranges.iter().any(|range| {
-        let range_id = crabka_gres_ranges::RangeId::new(range.range_id);
-        !hosted_ranges.contains(&range_id) && range_id != crabka_gres_ranges::RangeId::COORDINATOR
+        let range_id = krabka_gres_ranges::RangeId::new(range.range_id);
+        !hosted_ranges.contains(&range_id) && range_id != krabka_gres_ranges::RangeId::COORDINATOR
     })
 }
 
@@ -5671,19 +5671,19 @@ fn remote_ranges_are_configured(config: &SubstrateRuntimeConfig, record: &Tenant
 fn must_activate_range_registry(
     config: &SubstrateRuntimeConfig,
     provisional: (
-        Vec<crabka_gres_control::RangeLayoutEntry>,
+        Vec<krabka_gres_control::RangeLayoutEntry>,
         u64,
         TenantRecord,
     ),
-) -> std::io::Result<crabka_gres_ranges::RangeRegistry> {
+) -> std::io::Result<krabka_gres_ranges::RangeRegistry> {
     let (current_layout, source_record_version, provisional_target) = provisional;
     Ok(
-        crabka_gres_ranges::RangeRegistry::from_tenant_record(&provisional_target)
+        krabka_gres_ranges::RangeRegistry::from_tenant_record(&provisional_target)
             .map_err(|error| std::io::Error::other(error.to_string()))?
             .with_authoritative_source(Arc::new(MustActivateRangeRegistrySource {
                 live: LiveRangeRegistrySource {
                     bootstrap: config.bootstrap.clone(),
-                    tenant: crabka_gres_control::TenantName::try_from(config.tenant.as_str())
+                    tenant: krabka_gres_control::TenantName::try_from(config.tenant.as_str())
                         .map_err(|error| {
                             std::io::Error::new(std::io::ErrorKind::InvalidInput, error)
                         })?,
@@ -5699,8 +5699,8 @@ fn must_activate_range_registry(
 
 async fn recover_live_multirange_engines(
     config: &SubstrateRuntimeConfig,
-    tenant_config: &crabka_gres_ranges::MultiRangeTenantConfig,
-    checkpoint_store: Option<Arc<dyn crabka_gres_substrate::checkpoint::CheckpointStore>>,
+    tenant_config: &krabka_gres_ranges::MultiRangeTenantConfig,
+    checkpoint_store: Option<Arc<dyn krabka_gres_substrate::checkpoint::CheckpointStore>>,
     activation: Option<&split_activation::ActivationDiscovery>,
     early_service: Option<&DynamicLiveRangeService>,
 ) -> std::io::Result<LiveMultirangeEngines> {
@@ -5724,7 +5724,7 @@ async fn recover_live_multirange_engines(
             checkpoint_store.clone(),
         )
         .await?;
-        if range_id == crabka_gres_ranges::RangeId::COORDINATOR {
+        if range_id == krabka_gres_ranges::RangeId::COORDINATOR {
             range0_tso_horizon.clone_from(&recovered.tso_horizon);
             // Range 0 is fenced and replayed: activate the timestamp oracle
             // on the already-listening transport now, so fleet-wide grants
@@ -5742,7 +5742,7 @@ async fn recover_live_multirange_engines(
                     &tenant_config.runtime_policy,
                 )?;
                 early.replace(
-                    crabka_gres_ranges::HostedRangeService::new_with_policy(
+                    krabka_gres_ranges::HostedRangeService::new_with_policy(
                         BTreeMap::new(),
                         tenant_config.runtime_policy,
                     )
@@ -5764,11 +5764,11 @@ async fn recover_live_multirange_engines(
 /// Build the range-0 timestamp oracle RPC over a recovered durable horizon,
 /// honoring the configured timestamp-source mode.
 fn build_range0_tso_rpc(
-    tso_horizon: &crabka_gres_substrate::SubstrateTsoHorizon,
-    mode: crabka_gres_ranges::TimestampSourceMode,
+    tso_horizon: &krabka_gres_substrate::SubstrateTsoHorizon,
+    mode: krabka_gres_ranges::TimestampSourceMode,
     hlc_wall_offset_ms: i64,
-    policy: &crabka_gres_ranges::RangeRuntimePolicy,
-) -> std::io::Result<Arc<dyn crabka_gres_ranges::TsoRpc>> {
+    policy: &krabka_gres_ranges::RangeRuntimePolicy,
+) -> std::io::Result<Arc<dyn krabka_gres_ranges::TsoRpc>> {
     let persisted_max_ts = tso_horizon
         .load_max_ts()
         .map_err(|error| std::io::Error::other(format!("range-0 TSO horizon: {error}")))?;
@@ -5796,17 +5796,17 @@ fn build_range0_tso_rpc(
 ///
 /// The returned RPC serves remote `RangeRequest::Tso` grants. It also serves
 /// the local tenant timestamp source, once
-/// [`crabka_gres_ranges::pgexec_timestamp_oracle_from_rpc`] wraps it.
+/// [`krabka_gres_ranges::pgexec_timestamp_oracle_from_rpc`] wraps it.
 fn mode_tso_rpc_from_horizon(
-    tso_horizon: &crabka_gres_substrate::SubstrateTsoHorizon,
+    tso_horizon: &krabka_gres_substrate::SubstrateTsoHorizon,
     persisted_max_ts: u64,
-    mode: crabka_gres_ranges::TimestampSourceMode,
+    mode: krabka_gres_ranges::TimestampSourceMode,
     hlc_wall_offset_ms: i64,
-    policy: &crabka_gres_ranges::RangeRuntimePolicy,
-) -> Result<Arc<dyn crabka_gres_ranges::TsoRpc>, crabka_gres_ranges::TsoError> {
+    policy: &krabka_gres_ranges::RangeRuntimePolicy,
+) -> Result<Arc<dyn krabka_gres_ranges::TsoRpc>, krabka_gres_ranges::TsoError> {
     match mode {
-        crabka_gres_ranges::TimestampSourceMode::LogicalTso => {
-            crabka_gres_ranges::tso_rpc_from_horizon_with_policy(
+        krabka_gres_ranges::TimestampSourceMode::LogicalTso => {
+            krabka_gres_ranges::tso_rpc_from_horizon_with_policy(
                 tso_horizon.clone(),
                 tso_horizon.clone(),
                 tso_horizon.epoch(),
@@ -5814,13 +5814,13 @@ fn mode_tso_rpc_from_horizon(
                 policy,
             )
         }
-        crabka_gres_ranges::TimestampSourceMode::Hlc { .. } => {
-            crabka_gres_ranges::hlc_tso_rpc_from_horizon_with_policy(
+        krabka_gres_ranges::TimestampSourceMode::Hlc { .. } => {
+            krabka_gres_ranges::hlc_tso_rpc_from_horizon_with_policy(
                 tso_horizon.clone(),
                 tso_horizon.clone(),
                 tso_horizon.epoch(),
                 persisted_max_ts,
-                crabka_gres_ranges::hlc_wall_clock(hlc_wall_offset_ms),
+                krabka_gres_ranges::hlc_wall_clock(hlc_wall_offset_ms),
                 policy,
             )
         }
@@ -5828,18 +5828,18 @@ fn mode_tso_rpc_from_horizon(
 }
 
 struct LiveMultirangeEngines {
-    engines: BTreeMap<crabka_gres_ranges::RangeId, LiveRangeEngine>,
-    range0_tso_horizon: Option<crabka_gres_substrate::SubstrateTsoHorizon>,
+    engines: BTreeMap<krabka_gres_ranges::RangeId, LiveRangeEngine>,
+    range0_tso_horizon: Option<krabka_gres_substrate::SubstrateTsoHorizon>,
     /// Oracle RPC already activated on the early-bound transport, reused by
     /// the assembled tenant so exactly one oracle lives per writer epoch.
-    range0_tso: Option<Arc<dyn crabka_gres_ranges::TsoRpc>>,
+    range0_tso: Option<Arc<dyn krabka_gres_ranges::TsoRpc>>,
 }
 
 fn live_multirange_recovery_configs(
     config: &SubstrateRuntimeConfig,
-    tenant_config: &crabka_gres_ranges::MultiRangeTenantConfig,
+    tenant_config: &krabka_gres_ranges::MultiRangeTenantConfig,
     activation: Option<&split_activation::ActivationDiscovery>,
-) -> Vec<crabka_gres_substrate::LiveRecoveryConfig> {
+) -> Vec<krabka_gres_substrate::LiveRecoveryConfig> {
     let mut configs = activation
         .map_or(&tenant_config.range_map, |discovery| {
             &discovery.recovery_map
@@ -5868,12 +5868,12 @@ fn live_multirange_recovery_configs(
         .collect::<Vec<_>>();
     // Recover range 0 ahead of its siblings so the timestamp oracle can start
     // serving grants before the rest of the host finishes recovering.
-    configs.sort_by_key(|recovery| recovery.range != crabka_gres_ranges::RangeId::COORDINATOR);
+    configs.sort_by_key(|recovery| recovery.range != krabka_gres_ranges::RangeId::COORDINATOR);
     configs
 }
 
 struct SingleRangeLiveWalSelection {
-    recovery_config: crabka_gres_substrate::LiveRecoveryConfig,
+    recovery_config: krabka_gres_substrate::LiveRecoveryConfig,
     writer_topic: String,
     checkpoint_topic: String,
     checkpoint_namespace: String,
@@ -5883,7 +5883,7 @@ fn single_range_live_wal_selection(
     config: &SubstrateRuntimeConfig,
     tenant_record: Option<&TenantRecord>,
 ) -> std::io::Result<SingleRangeLiveWalSelection> {
-    let tenant = crabka_gres_ranges::TenantName::parse(config.tenant.clone()).map_err(|error| {
+    let tenant = krabka_gres_ranges::TenantName::parse(config.tenant.clone()).map_err(|error| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
             format!("--tenant: {error}"),
@@ -5893,11 +5893,11 @@ fn single_range_live_wal_selection(
         record
             .ranges
             .iter()
-            .find(|range| range.range_id == crabka_gres_ranges::RangeId::COORDINATOR.as_u32())
+            .find(|range| range.range_id == krabka_gres_ranges::RangeId::COORDINATOR.as_u32())
             .map_or(record.wal_generation, |range| range.wal_generation)
     });
     let recovery_config = config
-        .live_recovery_config(tenant, crabka_gres_ranges::RangeId::COORDINATOR)
+        .live_recovery_config(tenant, krabka_gres_ranges::RangeId::COORDINATOR)
         .with_wal_generation(wal_generation)
         .with_optional_advertised_endpoint(config.advertised_endpoint.clone());
     let topic = recovery_config.wal_topic();
@@ -5911,29 +5911,29 @@ fn single_range_live_wal_selection(
 
 async fn open_live_range_substrate_engine(
     config: &SubstrateRuntimeConfig,
-    recovery_config: crabka_gres_substrate::LiveRecoveryConfig,
+    recovery_config: krabka_gres_substrate::LiveRecoveryConfig,
     store: Arc<dyn SubstrateKv>,
-    checkpoint_store: Option<Arc<dyn crabka_gres_substrate::checkpoint::CheckpointStore>>,
+    checkpoint_store: Option<Arc<dyn krabka_gres_substrate::checkpoint::CheckpointStore>>,
 ) -> std::io::Result<LiveRangeEngine> {
     let range_id = recovery_config.range;
     let topic = recovery_config.wal_topic();
     let recovery_config =
         recovery_config_with_checkpoint_store(recovery_config, checkpoint_store.as_ref());
-    let recovered = crabka_gres_substrate::recover_live_for_range_with_restore(
+    let recovered = krabka_gres_substrate::recover_live_for_range_with_restore(
         recovery_config.clone(),
         store.as_ref(),
     )
     .await
     .map_err(|error| std::io::Error::other(format!("substrate recovery: {error}")))?;
-    let producer_writer = Arc::new(crabka_gres_substrate::ProducerWalWriter::new(
+    let producer_writer = Arc::new(krabka_gres_substrate::ProducerWalWriter::new(
         recovered.producer,
         topic.clone(),
     ));
-    let writer = Arc::new(crabka_gres_substrate::DeferredWalWriter::staged());
+    let writer = Arc::new(krabka_gres_substrate::DeferredWalWriter::staged());
     writer
         .activate(producer_writer)
         .map_err(|error| std::io::Error::other(format!("activate recovered writer: {error}")))?;
-    let snapshot_source = Arc::new(crabka_gres_substrate::CheckpointSnapshotSource::new(
+    let snapshot_source = Arc::new(krabka_gres_substrate::CheckpointSnapshotSource::new(
         recovered.barrier_offset,
         recovered.next_journal_seq,
         recovered.generation,
@@ -5961,15 +5961,15 @@ async fn open_live_range_substrate_engine(
             .as_ref()
             .map(|runtime| Arc::clone(&runtime.stats)),
         checkpoint.as_ref().map(|runtime| {
-            Arc::clone(&runtime.planner_stats) as Arc<dyn crabka_pgexec::plan_dist::Stats>
+            Arc::clone(&runtime.planner_stats) as Arc<dyn krabka_pgexec::plan_dist::Stats>
         }),
         config.pgexec_runtime_policy,
     )?;
-    let tso_horizon = if range_id == crabka_gres_ranges::RangeId::COORDINATOR {
+    let tso_horizon = if range_id == krabka_gres_ranges::RangeId::COORDINATOR {
         let tso_store: Arc<dyn Kv> = store.clone();
-        let tso_committer: Arc<dyn crabka_pgexec::Committer> = committer.clone();
-        let tso_lease: Arc<dyn crabka_gres_substrate::FenceLease> = writer.clone();
-        Some(crabka_gres_substrate::SubstrateTsoHorizon::new(
+        let tso_committer: Arc<dyn krabka_pgexec::Committer> = committer.clone();
+        let tso_lease: Arc<dyn krabka_gres_substrate::FenceLease> = writer.clone();
+        Some(krabka_gres_substrate::SubstrateTsoHorizon::new(
             tso_store,
             tso_committer,
             tso_lease,
@@ -5997,35 +5997,35 @@ async fn open_live_range_substrate_engine(
 
 struct LiveRangeEngine {
     engine: SqlEngine,
-    tso_horizon: Option<crabka_gres_substrate::SubstrateTsoHorizon>,
+    tso_horizon: Option<krabka_gres_substrate::SubstrateTsoHorizon>,
     resources: LiveRangeResources,
 }
 
 struct LiveRangeResources {
     store: Arc<dyn SubstrateKv>,
-    writer: Arc<crabka_gres_substrate::DeferredWalWriter<crabka_gres_substrate::ProducerWalWriter>>,
+    writer: Arc<krabka_gres_substrate::DeferredWalWriter<krabka_gres_substrate::ProducerWalWriter>>,
     activation_committer: Arc<
-        crabka_gres_substrate::SubstrateCommitter<
-            crabka_gres_substrate::DeferredWalWriter<crabka_gres_substrate::ProducerWalWriter>,
+        krabka_gres_substrate::SubstrateCommitter<
+            krabka_gres_substrate::DeferredWalWriter<krabka_gres_substrate::ProducerWalWriter>,
         >,
     >,
-    snapshot_source: Arc<crabka_gres_substrate::CheckpointSnapshotSource>,
+    snapshot_source: Arc<krabka_gres_substrate::CheckpointSnapshotSource>,
     checkpoint: Option<Arc<StartedCheckpointRuntime>>,
-    recovery_config: crabka_gres_substrate::LiveRecoveryConfig,
-    generation: crabka_gres_substrate::WriterGeneration,
+    recovery_config: krabka_gres_substrate::LiveRecoveryConfig,
+    generation: krabka_gres_substrate::WriterGeneration,
     pause: Arc<std::sync::Mutex<RangePauseState>>,
-    tso_horizon: Option<crabka_gres_substrate::SubstrateTsoHorizon>,
+    tso_horizon: Option<krabka_gres_substrate::SubstrateTsoHorizon>,
 }
 
 struct DynamicLiveRangeService {
-    current: std::sync::RwLock<Arc<crabka_gres_ranges::HostedRangeService>>,
+    current: std::sync::RwLock<Arc<krabka_gres_ranges::HostedRangeService>>,
     range_control:
-        std::sync::RwLock<Option<Arc<crabka_gres_ranges::control::GenerationFencedRangeControl>>>,
+        std::sync::RwLock<Option<Arc<krabka_gres_ranges::control::GenerationFencedRangeControl>>>,
     publishing: std::sync::atomic::AtomicBool,
 }
 
 impl DynamicLiveRangeService {
-    fn new(service: crabka_gres_ranges::HostedRangeService) -> Self {
+    fn new(service: krabka_gres_ranges::HostedRangeService) -> Self {
         let range_control = service.range_control_dispatcher();
         Self {
             current: std::sync::RwLock::new(Arc::new(service)),
@@ -6036,12 +6036,12 @@ impl DynamicLiveRangeService {
 
     fn attach_range_control(
         &self,
-        control: Arc<crabka_gres_ranges::control::GenerationFencedRangeControl>,
+        control: Arc<krabka_gres_ranges::control::GenerationFencedRangeControl>,
     ) {
         *self.range_control.write().expect("live range control lock") = Some(control);
     }
 
-    fn replace(&self, service: crabka_gres_ranges::HostedRangeService) {
+    fn replace(&self, service: krabka_gres_ranges::HostedRangeService) {
         if let Some(control) = service.range_control_dispatcher() {
             self.attach_range_control(control);
         }
@@ -6058,13 +6058,13 @@ impl DynamicLiveRangeService {
             .store(false, std::sync::atomic::Ordering::Release);
     }
 
-    fn load(&self) -> Arc<crabka_gres_ranges::HostedRangeService> {
+    fn load(&self) -> Arc<krabka_gres_ranges::HostedRangeService> {
         Arc::clone(&self.current.read().expect("live range service lock"))
     }
 
     fn load_range_control(
         &self,
-    ) -> Option<Arc<crabka_gres_ranges::control::GenerationFencedRangeControl>> {
+    ) -> Option<Arc<krabka_gres_ranges::control::GenerationFencedRangeControl>> {
         self.range_control
             .read()
             .expect("live range control lock")
@@ -6073,30 +6073,30 @@ impl DynamicLiveRangeService {
 }
 
 #[async_trait::async_trait]
-impl crabka_gres_ranges::RangeService for DynamicLiveRangeService {
+impl krabka_gres_ranges::RangeService for DynamicLiveRangeService {
     async fn handle(
         &self,
-        request: crabka_gres_ranges::RangeRequest,
-    ) -> crabka_gres_ranges::RangeResponse {
-        if let crabka_gres_ranges::RangeRequest::Control(control_request) = request {
+        request: krabka_gres_ranges::RangeRequest,
+    ) -> krabka_gres_ranges::RangeResponse {
+        if let krabka_gres_ranges::RangeRequest::Control(control_request) = request {
             if let Some(control) = self.load_range_control() {
-                return crabka_gres_ranges::RangeResponse::Control(
+                return krabka_gres_ranges::RangeResponse::Control(
                     control.handle(control_request).await,
                 );
             }
             return self
                 .load()
-                .handle(crabka_gres_ranges::RangeRequest::Control(control_request))
+                .handle(krabka_gres_ranges::RangeRequest::Control(control_request))
                 .await;
         }
         let activation_recovery = matches!(
             &request,
-            crabka_gres_ranges::RangeRequest::TimestampRecover(_)
-                | crabka_gres_ranges::RangeRequest::TimestampPrimaryRecover(_)
+            krabka_gres_ranges::RangeRequest::TimestampRecover(_)
+                | krabka_gres_ranges::RangeRequest::TimestampPrimaryRecover(_)
         );
         if self.publishing.load(std::sync::atomic::Ordering::Acquire) && !activation_recovery {
-            return crabka_gres_ranges::RangeResponse::Error {
-                error: crabka_gres_ranges::WireErrorKind::StaleEndpoint,
+            return krabka_gres_ranges::RangeResponse::Error {
+                error: krabka_gres_ranges::WireErrorKind::StaleEndpoint,
                 message: "range topology publication is in progress; retry".into(),
             };
         }
@@ -6105,31 +6105,31 @@ impl crabka_gres_ranges::RangeService for DynamicLiveRangeService {
 
     async fn handle_connection(
         &self,
-        request: crabka_gres_ranges::RangeRequest,
+        request: krabka_gres_ranges::RangeRequest,
         writer: &mut (dyn tokio::io::AsyncWrite + Unpin + Send),
-    ) -> Result<Option<crabka_gres_ranges::RangeResponse>, crabka_gres_ranges::TransportError> {
-        if let crabka_gres_ranges::RangeRequest::Control(control_request) = request {
+    ) -> Result<Option<krabka_gres_ranges::RangeResponse>, krabka_gres_ranges::TransportError> {
+        if let krabka_gres_ranges::RangeRequest::Control(control_request) = request {
             if let Some(control) = self.load_range_control() {
-                return Ok(Some(crabka_gres_ranges::RangeResponse::Control(
+                return Ok(Some(krabka_gres_ranges::RangeResponse::Control(
                     control.handle(control_request).await,
                 )));
             }
             return self
                 .load()
                 .handle_connection(
-                    crabka_gres_ranges::RangeRequest::Control(control_request),
+                    krabka_gres_ranges::RangeRequest::Control(control_request),
                     writer,
                 )
                 .await;
         }
         let activation_recovery = matches!(
             &request,
-            crabka_gres_ranges::RangeRequest::TimestampRecover(_)
-                | crabka_gres_ranges::RangeRequest::TimestampPrimaryRecover(_)
+            krabka_gres_ranges::RangeRequest::TimestampRecover(_)
+                | krabka_gres_ranges::RangeRequest::TimestampPrimaryRecover(_)
         );
         if self.publishing.load(std::sync::atomic::Ordering::Acquire) && !activation_recovery {
-            return Ok(Some(crabka_gres_ranges::RangeResponse::Error {
-                error: crabka_gres_ranges::WireErrorKind::StaleEndpoint,
+            return Ok(Some(krabka_gres_ranges::RangeResponse::Error {
+                error: krabka_gres_ranges::WireErrorKind::StaleEndpoint,
                 message: "range topology publication is in progress; retry".into(),
             }));
         }
@@ -6140,7 +6140,7 @@ impl crabka_gres_ranges::RangeService for DynamicLiveRangeService {
 enum RangePauseState {
     Idle,
     Pausing,
-    Paused(crabka_gres_substrate::PausedWalWriter),
+    Paused(krabka_gres_substrate::PausedWalWriter),
 }
 
 struct PauseReservation {
@@ -6151,11 +6151,11 @@ struct PauseReservation {
 impl PauseReservation {
     fn reserve(
         pause: Arc<std::sync::Mutex<RangePauseState>>,
-        range_id: crabka_gres_ranges::RangeId,
-    ) -> Result<Self, crabka_gres_ranges::RangeTransferError> {
+        range_id: krabka_gres_ranges::RangeId,
+    ) -> Result<Self, krabka_gres_ranges::RangeTransferError> {
         let mut state = pause.lock().map_err(|_| range_pause_lock_error(range_id))?;
         if !matches!(&*state, RangePauseState::Idle) {
-            return Err(crabka_gres_ranges::RangeTransferError::AlreadyPaused { range_id });
+            return Err(krabka_gres_ranges::RangeTransferError::AlreadyPaused { range_id });
         }
         *state = RangePauseState::Pausing;
         drop(state);
@@ -6167,9 +6167,9 @@ impl PauseReservation {
 
     fn store(
         mut self,
-        paused: crabka_gres_substrate::PausedWalWriter,
-        range_id: crabka_gres_ranges::RangeId,
-    ) -> Result<(), crabka_gres_ranges::RangeTransferError> {
+        paused: krabka_gres_substrate::PausedWalWriter,
+        range_id: krabka_gres_ranges::RangeId,
+    ) -> Result<(), krabka_gres_ranges::RangeTransferError> {
         let mut state = self
             .pause
             .lock()
@@ -6194,22 +6194,22 @@ impl Drop for PauseReservation {
 }
 
 fn range_pause_lock_error(
-    range_id: crabka_gres_ranges::RangeId,
-) -> crabka_gres_ranges::RangeTransferError {
-    crabka_gres_ranges::RangeTransferError::Runtime {
+    range_id: krabka_gres_ranges::RangeId,
+) -> krabka_gres_ranges::RangeTransferError {
+    krabka_gres_ranges::RangeTransferError::Runtime {
         range_id,
         reason: "range pause state lock poisoned".to_owned(),
     }
 }
 
 struct StartedLiveMultirangeTenant {
-    gateway: crabka_gres_ranges::MultiRangeTenant,
-    _handles: crabka_gres_ranges::MultiRangeTenantHandles,
-    tso_rpc: Option<Arc<dyn crabka_gres_ranges::TsoRpc>>,
+    gateway: krabka_gres_ranges::MultiRangeTenant,
+    _handles: krabka_gres_ranges::MultiRangeTenantHandles,
+    tso_rpc: Option<Arc<dyn krabka_gres_ranges::TsoRpc>>,
 }
 
 async fn start_live_multirange_tenant(
-    tenant_config: crabka_gres_ranges::MultiRangeTenantConfig,
+    tenant_config: krabka_gres_ranges::MultiRangeTenantConfig,
     live_engines: &mut LiveMultirangeEngines,
 ) -> std::io::Result<StartedLiveMultirangeTenant> {
     // Reuse the oracle already activated during recovery when present: one
@@ -6232,9 +6232,9 @@ async fn start_live_multirange_tenant(
     };
     let (gateway, handles, tso_rpc) = if let Some(tso_rpc) = tso_rpc {
         let timestamp_oracle =
-            crabka_gres_ranges::pgexec_timestamp_oracle_from_rpc(Arc::clone(&tso_rpc));
+            krabka_gres_ranges::pgexec_timestamp_oracle_from_rpc(Arc::clone(&tso_rpc));
         let (gateway, handles) =
-            crabka_gres_ranges::MultiRangeTenant::start_with_engine_factory_and_timestamp_oracle(
+            krabka_gres_ranges::MultiRangeTenant::start_with_engine_factory_and_timestamp_oracle(
                 tenant_config,
                 |_data_dir, range_id| {
                     live_engines
@@ -6242,7 +6242,7 @@ async fn start_live_multirange_tenant(
                         .remove(&range_id)
                         .map(|engine| engine.engine)
                         .ok_or_else(|| {
-                            crabka_pgexec::ExecError::Unsupported(format!(
+                            krabka_pgexec::ExecError::Unsupported(format!(
                                 "recovered live substrate engine for range r{range_id} is missing"
                             ))
                         })
@@ -6252,7 +6252,7 @@ async fn start_live_multirange_tenant(
             .map_err(|error| std::io::Error::other(format!("multi-range tenant: {error}")))?;
         (gateway, handles, Some(tso_rpc))
     } else {
-        let (gateway, handles) = crabka_gres_ranges::MultiRangeTenant::start_with_engine_factory(
+        let (gateway, handles) = krabka_gres_ranges::MultiRangeTenant::start_with_engine_factory(
             tenant_config,
             |_data_dir, range_id| {
                 live_engines
@@ -6260,7 +6260,7 @@ async fn start_live_multirange_tenant(
                     .remove(&range_id)
                     .map(|engine| engine.engine)
                     .ok_or_else(|| {
-                        crabka_pgexec::ExecError::Unsupported(format!(
+                        krabka_pgexec::ExecError::Unsupported(format!(
                             "recovered live substrate engine for range r{range_id} is missing"
                         ))
                     })
@@ -6286,7 +6286,7 @@ async fn start_live_multirange_tenant(
 /// assembled service in here is what upgrades the warming node to serving.
 fn install_assembled_range_service(
     early_service: Option<Arc<DynamicLiveRangeService>>,
-    range_service: crabka_gres_ranges::HostedRangeService,
+    range_service: krabka_gres_ranges::HostedRangeService,
 ) -> Arc<DynamicLiveRangeService> {
     match early_service {
         Some(dynamic) => {
@@ -6305,10 +6305,10 @@ fn install_assembled_range_service(
 /// activation, and follower catalog barriers must observe the replica actually
 /// installed on this gateway.
 fn assembled_hosted_service(
-    gateway: &crabka_gres_ranges::MultiRangeTenant,
-    timestamp_primary_aliases: &BTreeMap<crabka_gres_ranges::RangeId, crabka_gres_ranges::RangeId>,
-) -> crabka_gres_ranges::HostedRangeService {
-    let mut service = crabka_gres_ranges::HostedRangeService::new_with_policy(
+    gateway: &krabka_gres_ranges::MultiRangeTenant,
+    timestamp_primary_aliases: &BTreeMap<krabka_gres_ranges::RangeId, krabka_gres_ranges::RangeId>,
+) -> krabka_gres_ranges::HostedRangeService {
+    let mut service = krabka_gres_ranges::HostedRangeService::new_with_policy(
         gateway.hosted_range_engines(),
         gateway.runtime_policy(),
     )
@@ -6324,10 +6324,10 @@ fn assembled_hosted_service(
 }
 
 async fn open_live_multirange_tenant(
-    tenant_config: crabka_gres_ranges::MultiRangeTenantConfig,
+    tenant_config: krabka_gres_ranges::MultiRangeTenantConfig,
     mut live_engines: LiveMultirangeEngines,
     config: &SubstrateRuntimeConfig,
-    timestamp_primary_aliases: BTreeMap<crabka_gres_ranges::RangeId, crabka_gres_ranges::RangeId>,
+    timestamp_primary_aliases: BTreeMap<krabka_gres_ranges::RangeId, krabka_gres_ranges::RangeId>,
     early_service: Option<Arc<DynamicLiveRangeService>>,
 ) -> std::io::Result<GresRuntime> {
     let live_resources = live_engines
@@ -6395,17 +6395,17 @@ async fn open_live_multirange_tenant(
         &transfer,
     ));
     let mut recovery_receipts =
-        crabka_gres_ranges::control::RangeControlReceiptStore::list(receipt_store.as_ref())
+        krabka_gres_ranges::control::RangeControlReceiptStore::list(receipt_store.as_ref())
             .await
             .map_err(|error| std::io::Error::other(format!("list control receipts: {error}")))?;
-    let activation_store = crabka_gres_ranges::control::RangeZeroTopologyActivationStore::new(
+    let activation_store = krabka_gres_ranges::control::RangeZeroTopologyActivationStore::new(
         config.tenant.clone(),
         transfer
             .current_range_zero_engine()
             .map_err(|error| std::io::Error::other(error.to_string()))?,
     );
     let activation_receipts =
-        crabka_gres_ranges::control::TopologyActivationReceiptStore::list(&activation_store)
+        krabka_gres_ranges::control::TopologyActivationReceiptStore::list(&activation_store)
             .await
             .map_err(|error| std::io::Error::other(format!("list topology receipts: {error}")))?;
     generations.extend(
@@ -6426,11 +6426,11 @@ async fn open_live_multirange_tenant(
     ));
     let intent_authority = Arc::new(LiveSplitIntentAuthority {
         bootstrap: config.bootstrap.clone(),
-        tenant: crabka_gres_control::TenantName::try_from(config.tenant.as_str())
+        tenant: krabka_gres_control::TenantName::try_from(config.tenant.as_str())
             .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?,
         policy: config.registry_policy.clone(),
     });
-    let mut control = crabka_gres_ranges::control::GenerationFencedRangeControl::new(
+    let mut control = krabka_gres_ranges::control::GenerationFencedRangeControl::new(
         config.tenant.clone(),
         first_range,
         first_generation,
@@ -6447,10 +6447,10 @@ async fn open_live_multirange_tenant(
         .filter(|receipt| {
             matches!(
                 receipt.phase,
-                crabka_gres_ranges::control::TopologyActivationPhase::MustActivate
-                    | crabka_gres_ranges::control::TopologyActivationPhase::WriterActivated
-                    | crabka_gres_ranges::control::TopologyActivationPhase::CheckpointDurable
-                    | crabka_gres_ranges::control::TopologyActivationPhase::TopologyCommitted
+                krabka_gres_ranges::control::TopologyActivationPhase::MustActivate
+                    | krabka_gres_ranges::control::TopologyActivationPhase::WriterActivated
+                    | krabka_gres_ranges::control::TopologyActivationPhase::CheckpointDurable
+                    | krabka_gres_ranges::control::TopologyActivationPhase::TopologyCommitted
             )
         })
         .map(|receipt| receipt.operation_id)
@@ -6458,7 +6458,7 @@ async fn open_live_multirange_tenant(
     for receipt in &recovery_receipts {
         if matches!(
             receipt.request.operation,
-            crabka_gres_ranges::transport::RangeControlOperation::SuccessorFencePrologue { .. }
+            krabka_gres_ranges::transport::RangeControlOperation::SuccessorFencePrologue { .. }
         ) && receipt.result.is_some()
         {
             activated_operations.insert(receipt.request.operation_id.clone());
@@ -6471,7 +6471,7 @@ async fn open_live_multirange_tenant(
         !activated_operations.contains(&receipt.request.operation_id)
             || matches!(
                 receipt.request.operation,
-                crabka_gres_ranges::transport::RangeControlOperation::RetirePredecessor
+                krabka_gres_ranges::transport::RangeControlOperation::RetirePredecessor
             )
     });
     recovery_receipts.sort_by_key(|receipt| {
@@ -6487,8 +6487,8 @@ async fn open_live_multirange_tenant(
         let response = control.handle(receipt.request).await;
         if matches!(
             response,
-            crabka_gres_ranges::transport::RangeControlResp::Rejected { .. }
-                | crabka_gres_ranges::transport::RangeControlResp::Ambiguous { .. }
+            krabka_gres_ranges::transport::RangeControlResp::Rejected { .. }
+                | krabka_gres_ranges::transport::RangeControlResp::Ambiguous { .. }
         ) {
             return Err(std::io::Error::other(format!(
                 "range-control startup reconciliation did not prove readiness: {response:?}"
@@ -6518,7 +6518,7 @@ async fn open_live_multirange_tenant(
 
 fn parse_host_ranges(
     value: Option<&str>,
-) -> std::io::Result<Option<Vec<crabka_gres_ranges::RangeId>>> {
+) -> std::io::Result<Option<Vec<krabka_gres_ranges::RangeId>>> {
     let Some(value) = value else {
         return Ok(None);
     };
@@ -6535,7 +6535,7 @@ fn parse_host_ranges(
                 format!("invalid --host-ranges token {token:?}: {error}"),
             )
         })?;
-        ranges.push(crabka_gres_ranges::RangeId::new(range_id));
+        ranges.push(krabka_gres_ranges::RangeId::new(range_id));
     }
     if ranges.is_empty() {
         return invalid_input("--host-ranges must contain at least one range id");
@@ -6546,18 +6546,18 @@ fn parse_host_ranges(
 }
 
 struct StartedCheckpointRuntime {
-    handle: crabka_gres_substrate::CheckpointHandle,
-    stats: Arc<crabka_gres_substrate::CheckpointStats>,
-    planner_stats: Arc<crabka_gres_substrate::CheckpointPlannerStats>,
-    snapshot_source: Arc<crabka_gres_substrate::CheckpointSnapshotSource>,
-    store: Arc<dyn crabka_gres_substrate::checkpoint::CheckpointStore>,
+    handle: krabka_gres_substrate::CheckpointHandle,
+    stats: Arc<krabka_gres_substrate::CheckpointStats>,
+    planner_stats: Arc<krabka_gres_substrate::CheckpointPlannerStats>,
+    snapshot_source: Arc<krabka_gres_substrate::CheckpointSnapshotSource>,
+    store: Arc<dyn krabka_gres_substrate::checkpoint::CheckpointStore>,
     tenant: String,
     latest_checkpoint_bytes: std::sync::atomic::AtomicU64,
 }
 
 async fn seed_checkpoint_planner_stats(runtime: &StartedCheckpointRuntime) -> std::io::Result<()> {
     let snapshot = runtime.snapshot_source.snapshot();
-    let metadata = crabka_gres_substrate::latest_checkpoint_metadata(
+    let metadata = krabka_gres_substrate::latest_checkpoint_metadata(
         runtime.store.as_ref(),
         &runtime.tenant,
         snapshot.wal_generation,
@@ -6615,14 +6615,14 @@ impl IrreversibleActivations {
 
 /// Live resources retained for foundation-only transfer operations.
 struct LiveMultiRangeTransfer {
-    ranges: std::sync::RwLock<BTreeMap<crabka_gres_ranges::RangeId, LiveRangeResources>>,
+    ranges: std::sync::RwLock<BTreeMap<krabka_gres_ranges::RangeId, LiveRangeResources>>,
     config: SubstrateRuntimeConfig,
-    staged: std::sync::Mutex<BTreeMap<crabka_gres_ranges::RangeId, StagedLiveRangeSuccessor>>,
-    engines: std::sync::RwLock<BTreeMap<crabka_gres_ranges::RangeId, SqlEngine>>,
-    tso_rpc: std::sync::RwLock<Option<Arc<dyn crabka_gres_ranges::TsoRpc>>>,
-    timestamp_primary_aliases: BTreeMap<crabka_gres_ranges::RangeId, crabka_gres_ranges::RangeId>,
+    staged: std::sync::Mutex<BTreeMap<krabka_gres_ranges::RangeId, StagedLiveRangeSuccessor>>,
+    engines: std::sync::RwLock<BTreeMap<krabka_gres_ranges::RangeId, SqlEngine>>,
+    tso_rpc: std::sync::RwLock<Option<Arc<dyn krabka_gres_ranges::TsoRpc>>>,
+    timestamp_primary_aliases: BTreeMap<krabka_gres_ranges::RangeId, krabka_gres_ranges::RangeId>,
     range_service: Arc<DynamicLiveRangeService>,
-    retired: std::sync::Mutex<BTreeMap<crabka_gres_ranges::RangeId, LiveRangeResources>>,
+    retired: std::sync::Mutex<BTreeMap<krabka_gres_ranges::RangeId, LiveRangeResources>>,
     pending: std::sync::Mutex<Option<PendingLiveTopology>>,
     prepared: std::sync::Mutex<Option<PreparedLiveTopology>>,
     committed_activation: std::sync::Mutex<Option<String>>,
@@ -6633,28 +6633,28 @@ struct LiveMultiRangeTransfer {
 
 struct LiveRangeGenerationWitness<'a> {
     transfer: &'a LiveMultiRangeTransfer,
-    range_id: crabka_gres_ranges::RangeId,
+    range_id: krabka_gres_ranges::RangeId,
 }
 
 #[async_trait::async_trait]
-impl crabka_gres_substrate::GenerationWitness for LiveRangeGenerationWitness<'_> {
-    async fn current_generation(&self) -> Result<u64, crabka_gres_substrate::SubstrateError> {
+impl krabka_gres_substrate::GenerationWitness for LiveRangeGenerationWitness<'_> {
+    async fn current_generation(&self) -> Result<u64, krabka_gres_substrate::SubstrateError> {
         self.transfer
             .range(self.range_id)
             .map(|resources| resources.generation.0)
-            .map_err(|error| crabka_gres_substrate::SubstrateError::Unavailable(error.to_string()))
+            .map_err(|error| krabka_gres_substrate::SubstrateError::Unavailable(error.to_string()))
     }
 }
 
 #[async_trait::async_trait]
-impl crabka_gres_ranges::DurableRecordInspector for LiveMultiRangeTransfer {
+impl krabka_gres_ranges::DurableRecordInspector for LiveMultiRangeTransfer {
     async fn inspect(
         &self,
-        request: crabka_gres_ranges::InspectDurableRecordsReq,
-    ) -> Result<crabka_gres_ranges::InspectDurableRecordsResp, String> {
+        request: krabka_gres_ranges::InspectDurableRecordsReq,
+    ) -> Result<krabka_gres_ranges::InspectDurableRecordsResp, String> {
         use std::fmt::Write as _;
 
-        use crabka_pgkv::key::KeyClass;
+        use krabka_pgkv::key::KeyClass;
         use sha2::{Digest, Sha256};
 
         if request.tenant != self.config.tenant {
@@ -6666,7 +6666,7 @@ impl crabka_gres_ranges::DurableRecordInspector for LiveMultiRangeTransfer {
         if resources.generation.0 != request.generation {
             return Err("durable inspection generation is fenced".into());
         }
-        let prefix = crabka_pgkv::key::table_prefix(request.table_id);
+        let prefix = krabka_pgkv::key::table_prefix(request.table_id);
         let mut prefix_end = prefix.clone();
         let last = prefix_end.last_mut().expect("table prefix is non-empty");
         *last = last
@@ -6680,7 +6680,7 @@ impl crabka_gres_ranges::DurableRecordInspector for LiveMultiRangeTransfer {
                 "durable inspection interval is outside the table primary namespace".into(),
             );
         }
-        let digest_request = crabka_gres_ranges::InspectDurableRecordsReq {
+        let digest_request = krabka_gres_ranges::InspectDurableRecordsReq {
             cursor: None,
             ..request.clone()
         };
@@ -6713,11 +6713,11 @@ impl crabka_gres_ranges::DurableRecordInspector for LiveMultiRangeTransfer {
             range_id: request.range_id,
         };
         let fold = tokio::time::timeout(self.config.durable_inspection_timeout, async {
-            let projection = crabka_gres_substrate::FoldProjection::All;
+            let projection = krabka_gres_substrate::FoldProjection::All;
             let limits = self.config.durable_inspection_fold_limits;
             match snapshot_offset {
                 Some(sample) => {
-                    crabka_gres_substrate::committed_fold_snapshot_live_at(
+                    krabka_gres_substrate::committed_fold_snapshot_live_at(
                         &resources.recovery_config,
                         sample,
                         &witness,
@@ -6727,7 +6727,7 @@ impl crabka_gres_ranges::DurableRecordInspector for LiveMultiRangeTransfer {
                     .await
                 }
                 None => {
-                    crabka_gres_substrate::committed_fold_snapshot_live(
+                    krabka_gres_substrate::committed_fold_snapshot_live(
                         &resources.recovery_config,
                         &witness,
                         projection,
@@ -6743,7 +6743,7 @@ impl crabka_gres_ranges::DurableRecordInspector for LiveMultiRangeTransfer {
 
         let mut selected = Vec::new();
         for ((key, value), source) in fold.records.into_iter().zip(fold.record_sources) {
-            let include = match crabka_pgkv::key::classify_key(&key) {
+            let include = match krabka_pgkv::key::classify_key(&key) {
                 KeyClass::PrimaryRow { table_id, .. }
                 | KeyClass::PrimaryVersion { table_id, .. }
                 | KeyClass::HashPrimaryRow { table_id, .. }
@@ -6768,7 +6768,7 @@ impl crabka_gres_ranges::DurableRecordInspector for LiveMultiRangeTransfer {
                 _ => false,
             };
             if include && cursor.as_ref().is_none_or(|(_, after)| key > *after) {
-                selected.push(crabka_gres_ranges::DurableRecord {
+                selected.push(krabka_gres_ranges::DurableRecord {
                     key,
                     value,
                     source_offset: Some(source.offset),
@@ -6805,10 +6805,10 @@ impl crabka_gres_ranges::DurableRecordInspector for LiveMultiRangeTransfer {
             )
         });
         let checkpoint = fold.checkpoint.as_ref();
-        Ok(crabka_gres_ranges::InspectDurableRecordsResp {
+        Ok(krabka_gres_ranges::InspectDurableRecordsResp {
             records,
             next_cursor,
-            provenance: crabka_gres_ranges::DurableInspectProvenance {
+            provenance: krabka_gres_ranges::DurableInspectProvenance {
                 sample_offset: fold.sample_offset,
                 wal_generation: fold.provenance.wal_generation,
                 replay_start_offset: fold.provenance.replay_start_offset,
@@ -6883,11 +6883,11 @@ fn timestamp_metadata_in_interval(
             return Ok(false);
         }
         let physical = match row.len() {
-            12 => crabka_pgkv::key::row_key(
+            12 => krabka_pgkv::key::row_key(
                 table_id,
                 u64::from_be_bytes(row[4..12].try_into().expect("8 bytes")),
             ),
-            17 if row[4] == 1 => crabka_pgkv::key::hash_row_key(
+            17 if row[4] == 1 => krabka_pgkv::key::hash_row_key(
                 table_id,
                 u32::from_be_bytes(row[5..9].try_into().expect("4 bytes")),
                 u64::from_be_bytes(row[9..17].try_into().expect("8 bytes")),
@@ -6900,11 +6900,11 @@ fn timestamp_metadata_in_interval(
         if raw.len() != 8 {
             return Err("malformed timestamp descriptor key".into());
         }
-        let start_ts = crabka_pgexec::TimestampTransactionId::new(u64::from_be_bytes(
+        let start_ts = krabka_pgexec::TimestampTransactionId::new(u64::from_be_bytes(
             raw.try_into().expect("8 bytes"),
         ))
         .map_err(|error| format!("malformed timestamp descriptor timestamp: {error}"))?;
-        let descriptor = crabka_pgexec::decode_timestamp_txn_descriptor_value(start_ts, value)
+        let descriptor = krabka_pgexec::decode_timestamp_txn_descriptor_value(start_ts, value)
             .map_err(|error| format!("malformed timestamp descriptor: {error}"))?;
         let mut matches = false;
         let mut crosses_table = false;
@@ -6914,8 +6914,8 @@ fn timestamp_metadata_in_interval(
                 continue;
             }
             let physical = operation.bucket.map_or_else(
-                || crabka_pgkv::key::row_key(table_id, operation.rowid),
-                |bucket| crabka_pgkv::key::hash_row_key(table_id, bucket, operation.rowid),
+                || krabka_pgkv::key::row_key(table_id, operation.rowid),
+                |bucket| krabka_pgkv::key::hash_row_key(table_id, bucket, operation.rowid),
             );
             matches |= start <= physical.as_slice() && physical.as_slice() < end;
         }
@@ -6929,14 +6929,14 @@ fn timestamp_metadata_in_interval(
 
 impl LiveMultiRangeTransfer {
     fn new(
-        ranges: BTreeMap<crabka_gres_ranges::RangeId, LiveRangeResources>,
+        ranges: BTreeMap<krabka_gres_ranges::RangeId, LiveRangeResources>,
         config: SubstrateRuntimeConfig,
         range_service: Arc<DynamicLiveRangeService>,
-        engines: BTreeMap<crabka_gres_ranges::RangeId, SqlEngine>,
-        tso_rpc: Option<Arc<dyn crabka_gres_ranges::TsoRpc>>,
+        engines: BTreeMap<krabka_gres_ranges::RangeId, SqlEngine>,
+        tso_rpc: Option<Arc<dyn krabka_gres_ranges::TsoRpc>>,
         timestamp_primary_aliases: BTreeMap<
-            crabka_gres_ranges::RangeId,
-            crabka_gres_ranges::RangeId,
+            krabka_gres_ranges::RangeId,
+            krabka_gres_ranges::RangeId,
         >,
     ) -> Self {
         Self {
@@ -6959,14 +6959,14 @@ impl LiveMultiRangeTransfer {
 
     fn range(
         &self,
-        range_id: crabka_gres_ranges::RangeId,
-    ) -> Result<LiveRangeResources, crabka_gres_ranges::RangeTransferError> {
+        range_id: krabka_gres_ranges::RangeId,
+    ) -> Result<LiveRangeResources, krabka_gres_ranges::RangeTransferError> {
         self.ranges
             .read()
             .map_err(|_| range_pause_lock_error(range_id))?
             .get(&range_id)
             .cloned()
-            .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Unavailable {
+            .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Unavailable {
                 range_id,
                 reason: "range is not hosted by this live runtime".to_owned(),
             })
@@ -6978,8 +6978,8 @@ impl LiveMultiRangeTransfer {
         receipt: &str,
         expected: Option<Vec<u8>>,
         value: Vec<u8>,
-    ) -> Result<bool, crabka_gres_ranges::RangeTransferError> {
-        let range_id = crabka_gres_ranges::RangeId::COORDINATOR;
+    ) -> Result<bool, krabka_gres_ranges::RangeTransferError> {
+        let range_id = krabka_gres_ranges::RangeId::COORDINATOR;
         let resources = self
             .retired
             .lock()
@@ -6993,7 +6993,7 @@ impl LiveMultiRangeTransfer {
                 .lock()
                 .map_err(|_| range_pause_lock_error(range_id))?;
             let RangePauseState::Paused(paused) = &*state else {
-                return Err(crabka_gres_ranges::RangeTransferError::Unavailable {
+                return Err(krabka_gres_ranges::RangeTransferError::Unavailable {
                     range_id,
                     reason: "range zero is not paused for structural receipt append".into(),
                 });
@@ -7011,7 +7011,7 @@ impl LiveMultiRangeTransfer {
                 value,
             )
             .await
-            .map_err(|error| crabka_gres_ranges::RangeTransferError::Runtime {
+            .map_err(|error| krabka_gres_ranges::RangeTransferError::Runtime {
                 range_id,
                 reason: format!("commit paused range-control receipt: {error}"),
             })
@@ -7019,22 +7019,22 @@ impl LiveMultiRangeTransfer {
 
     fn current_range_zero_engine(
         &self,
-    ) -> Result<SqlEngine, crabka_gres_ranges::RangeTransferError> {
+    ) -> Result<SqlEngine, krabka_gres_ranges::RangeTransferError> {
         self.engines
             .read()
-            .map_err(|_| range_pause_lock_error(crabka_gres_ranges::RangeId::COORDINATOR))?
-            .get(&crabka_gres_ranges::RangeId::COORDINATOR)
+            .map_err(|_| range_pause_lock_error(krabka_gres_ranges::RangeId::COORDINATOR))?
+            .get(&krabka_gres_ranges::RangeId::COORDINATOR)
             .map(SqlEngine::clone_handle)
-            .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Unavailable {
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Unavailable {
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 reason: "current range-zero receipt engine is unavailable".into(),
             })
     }
 
     fn staged_successor_kv(
         &self,
-        range_id: crabka_gres_ranges::RangeId,
-    ) -> Result<Option<KvScan>, crabka_gres_ranges::RangeTransferError> {
+        range_id: krabka_gres_ranges::RangeId,
+    ) -> Result<Option<KvScan>, krabka_gres_ranges::RangeTransferError> {
         let staged = self
             .staged
             .lock()
@@ -7047,7 +7047,7 @@ impl LiveMultiRangeTransfer {
             .store
             .scan_range(&[], &[u8::MAX])
             .map(Some)
-            .map_err(|error| crabka_gres_ranges::RangeTransferError::Runtime {
+            .map_err(|error| krabka_gres_ranges::RangeTransferError::Runtime {
                 range_id,
                 reason: format!("scan staged successor KV: {error}"),
             })
@@ -7055,23 +7055,23 @@ impl LiveMultiRangeTransfer {
 
     fn staged_successor_markers(
         &self,
-        range_id: crabka_gres_ranges::RangeId,
-        start: crabka_gres_ranges::RangeKey,
-        end: Option<crabka_gres_ranges::RangeKey>,
-    ) -> Result<Vec<crabka_gres_ranges::InDoubtMarker>, crabka_gres_ranges::RangeTransferError>
+        range_id: krabka_gres_ranges::RangeId,
+        start: krabka_gres_ranges::RangeKey,
+        end: Option<krabka_gres_ranges::RangeKey>,
+    ) -> Result<Vec<krabka_gres_ranges::InDoubtMarker>, krabka_gres_ranges::RangeTransferError>
     {
         let staged = self
             .staged
             .lock()
             .map_err(|_| range_pause_lock_error(range_id))?;
         let successor = staged.get(&range_id).ok_or_else(|| {
-            crabka_gres_ranges::RangeTransferError::Unavailable {
+            krabka_gres_ranges::RangeTransferError::Unavailable {
                 range_id,
                 reason: "staged successor is unavailable for marker verification".into(),
             }
         })?;
-        crabka_gres_ranges::tenant::in_doubt_markers_for_engine(&successor.engine, start, end)
-            .map_err(|error| crabka_gres_ranges::RangeTransferError::Runtime {
+        krabka_gres_ranges::tenant::in_doubt_markers_for_engine(&successor.engine, start, end)
+            .map_err(|error| krabka_gres_ranges::RangeTransferError::Runtime {
                 range_id,
                 reason: format!("inspect staged successor markers: {error}"),
             })
@@ -7092,8 +7092,8 @@ impl LiveMultiRangeTransfer {
     async fn release_checkpoint_pin(
         &self,
         operation_id: &str,
-        range_id: crabka_gres_ranges::RangeId,
-    ) -> Result<(), crabka_gres_ranges::RangeTransferError> {
+        range_id: krabka_gres_ranges::RangeId,
+    ) -> Result<(), krabka_gres_ranges::RangeTransferError> {
         let resources = self
             .retired
             .lock()
@@ -7102,7 +7102,7 @@ impl LiveMultiRangeTransfer {
             .cloned()
             .map_or_else(|| self.range(range_id), Ok)?;
         let checkpoint = resources.checkpoint.ok_or_else(|| {
-            crabka_gres_ranges::RangeTransferError::Unavailable {
+            krabka_gres_ranges::RangeTransferError::Unavailable {
                 range_id,
                 reason: "checkpoint runtime is unavailable for pin release".into(),
             }
@@ -7111,7 +7111,7 @@ impl LiveMultiRangeTransfer {
             .handle
             .release_pin(operation_id.to_owned())
             .await
-            .map_err(|error| crabka_gres_ranges::RangeTransferError::Runtime {
+            .map_err(|error| krabka_gres_ranges::RangeTransferError::Runtime {
                 range_id,
                 reason: format!("release checkpoint pin: {error}"),
             })
@@ -7120,12 +7120,12 @@ impl LiveMultiRangeTransfer {
     async fn retire_predecessor(
         &self,
         operation_id: &str,
-        range_id: crabka_gres_ranges::RangeId,
+        range_id: krabka_gres_ranges::RangeId,
         generation: u64,
-        current_map: &crabka_gres_ranges::RangeMap,
-    ) -> Result<(), crabka_gres_ranges::RangeTransferError> {
+        current_map: &krabka_gres_ranges::RangeMap,
+    ) -> Result<(), krabka_gres_ranges::RangeTransferError> {
         if !self.activation_is_irreversible(operation_id) {
-            return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+            return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                 range_id,
                 reason: "predecessor retirement requires irreversible successor activation".into(),
             });
@@ -7137,7 +7137,7 @@ impl LiveMultiRangeTransfer {
             .get(&range_id)
             .cloned();
         let Some(resources) = resources else {
-            use crabka_gres_ranges::control::{
+            use krabka_gres_ranges::control::{
                 RangeZeroTopologyActivationStore, TopologyActivationPhase,
                 TopologyActivationReceiptStore,
             };
@@ -7146,11 +7146,11 @@ impl LiveMultiRangeTransfer {
             let receipt = RangeZeroTopologyActivationStore::new(tenant, engine)
                 .load(operation_id)
                 .await
-                .map_err(|reason| crabka_gres_ranges::RangeTransferError::Runtime {
+                .map_err(|reason| krabka_gres_ranges::RangeTransferError::Runtime {
                     range_id,
                     reason: format!("load retirement activation proof: {reason}"),
                 })?
-                .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Boundary {
+                .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Boundary {
                     range_id,
                     reason: "retirement has no authoritative activation receipt".into(),
                 })?;
@@ -7180,7 +7180,7 @@ impl LiveMultiRangeTransfer {
             {
                 return Ok(());
             }
-            return Err(crabka_gres_ranges::RangeTransferError::Unavailable {
+            return Err(krabka_gres_ranges::RangeTransferError::Unavailable {
                 range_id,
                 reason: "retirement proof does not match the committed serving topology".into(),
             });
@@ -7191,7 +7191,7 @@ impl LiveMultiRangeTransfer {
                 .lock()
                 .map_err(|_| range_pause_lock_error(range_id))?;
             let RangePauseState::Paused(_) = &*state else {
-                return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+                return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                     range_id,
                     reason: "retired predecessor does not hold its pause fence".into(),
                 });
@@ -7209,8 +7209,8 @@ impl LiveMultiRangeTransfer {
 
     fn release_pause(
         &self,
-        barrier: crabka_gres_ranges::RangeTransferBarrier,
-    ) -> Result<(), crabka_gres_ranges::RangeTransferError> {
+        barrier: krabka_gres_ranges::RangeTransferBarrier,
+    ) -> Result<(), krabka_gres_ranges::RangeTransferError> {
         let resources = self
             .retired
             .lock()
@@ -7223,13 +7223,13 @@ impl LiveMultiRangeTransfer {
             .lock()
             .map_err(|_| range_pause_lock_error(barrier.range_id))?;
         let RangePauseState::Paused(paused) = &*state else {
-            return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+            return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                 range_id: barrier.range_id,
                 reason: "range writer is not paused".to_owned(),
             });
         };
         if paused.barrier_offset != barrier.offset {
-            return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+            return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                 range_id: barrier.range_id,
                 reason: "barrier is not held by this paused range writer".to_owned(),
             });
@@ -7253,12 +7253,12 @@ impl LiveMultiRangeTransfer {
     reason = "staging keeps every validation and durable ordering step visible at the boundary"
 )]
 #[async_trait::async_trait]
-impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
+impl krabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
     async fn record_topology_activation_intent(
         &self,
-        state: &crabka_gres_ranges::SplitState,
-    ) -> Result<(), crabka_gres_ranges::RangeTransferError> {
-        use crabka_gres_ranges::control::{
+        state: &krabka_gres_ranges::SplitState,
+    ) -> Result<(), krabka_gres_ranges::RangeTransferError> {
+        use krabka_gres_ranges::control::{
             ActivationTargetProgress, RangeZeroTopologyActivationStore, TopologyActivationPhase,
             TopologyActivationReceipt, TopologyActivationReceiptStore,
         };
@@ -7266,34 +7266,34 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
         let engine = self
             .engines
             .read()
-            .map_err(|_| range_pause_lock_error(crabka_gres_ranges::RangeId::COORDINATOR))?
-            .get(&crabka_gres_ranges::RangeId::COORDINATOR)
+            .map_err(|_| range_pause_lock_error(krabka_gres_ranges::RangeId::COORDINATOR))?
+            .get(&krabka_gres_ranges::RangeId::COORDINATOR)
             .map(SqlEngine::clone_handle)
-            .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Unavailable {
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Unavailable {
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 reason: "range-zero engine is unavailable for activation receipt".into(),
             })?;
         let tenant = self
             .ranges
             .read()
-            .map_err(|_| range_pause_lock_error(crabka_gres_ranges::RangeId::COORDINATOR))?
-            .get(&crabka_gres_ranges::RangeId::COORDINATOR)
+            .map_err(|_| range_pause_lock_error(krabka_gres_ranges::RangeId::COORDINATOR))?
+            .get(&krabka_gres_ranges::RangeId::COORDINATOR)
             .map(|resources| resources.recovery_config.tenant.to_string())
-            .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Unavailable {
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Unavailable {
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 reason: "range-zero resources are unavailable for activation receipt".into(),
             })?;
         let store = RangeZeroTopologyActivationStore::new(tenant.clone(), engine);
         if let Some(existing) = store.load(&state.operation_id).await.map_err(|reason| {
-            crabka_gres_ranges::RangeTransferError::Runtime {
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            krabka_gres_ranges::RangeTransferError::Runtime {
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 reason: format!("load topology activation receipt: {reason}"),
             }
         })? {
             if existing.split == *state {
                 return Ok(());
             }
-            return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+            return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                 range_id: state.predecessor,
                 reason: "operation id already names a different topology activation".into(),
             });
@@ -7330,14 +7330,14 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
         {
             Ok(true) => self.activation_fault(
                 TopologyActivationFault::Prepared,
-                crabka_gres_ranges::RangeId::COORDINATOR,
+                krabka_gres_ranges::RangeId::COORDINATOR,
             ),
-            Ok(false) => Err(crabka_gres_ranges::RangeTransferError::Runtime {
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            Ok(false) => Err(krabka_gres_ranges::RangeTransferError::Runtime {
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 reason: "topology activation receipt raced another writer".into(),
             }),
-            Err(reason) => Err(crabka_gres_ranges::RangeTransferError::Runtime {
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            Err(reason) => Err(krabka_gres_ranges::RangeTransferError::Runtime {
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 reason: format!("persist topology activation receipt: {reason}"),
             }),
         }
@@ -7346,86 +7346,86 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
     async fn record_topology_activation_checkpoint(
         &self,
         operation_id: &str,
-        checkpoint: &crabka_gres_ranges::CheckpointManifest,
-    ) -> Result<(), crabka_gres_ranges::RangeTransferError> {
-        use crabka_gres_ranges::control::{
+        checkpoint: &krabka_gres_ranges::CheckpointManifest,
+    ) -> Result<(), krabka_gres_ranges::RangeTransferError> {
+        use krabka_gres_ranges::control::{
             RangeZeroTopologyActivationStore, TopologyActivationReceiptStore,
         };
         let engine = self
             .engines
             .read()
-            .map_err(|_| range_pause_lock_error(crabka_gres_ranges::RangeId::COORDINATOR))?
-            .get(&crabka_gres_ranges::RangeId::COORDINATOR)
+            .map_err(|_| range_pause_lock_error(krabka_gres_ranges::RangeId::COORDINATOR))?
+            .get(&krabka_gres_ranges::RangeId::COORDINATOR)
             .map(SqlEngine::clone_handle)
-            .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Unavailable {
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Unavailable {
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 reason: "range-zero engine unavailable for checkpoint receipt".into(),
             })?;
         let tenant = self
             .ranges
             .read()
-            .map_err(|_| range_pause_lock_error(crabka_gres_ranges::RangeId::COORDINATOR))?
-            .get(&crabka_gres_ranges::RangeId::COORDINATOR)
+            .map_err(|_| range_pause_lock_error(krabka_gres_ranges::RangeId::COORDINATOR))?
+            .get(&krabka_gres_ranges::RangeId::COORDINATOR)
             .map(|resources| resources.recovery_config.tenant.to_string())
-            .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Unavailable {
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Unavailable {
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 reason: "range-zero resources unavailable for checkpoint receipt".into(),
             })?;
         let store = RangeZeroTopologyActivationStore::new(tenant, engine);
         let mut receipt = store
             .load(operation_id)
             .await
-            .map_err(|reason| crabka_gres_ranges::RangeTransferError::Runtime {
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            .map_err(|reason| krabka_gres_ranges::RangeTransferError::Runtime {
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 reason: format!("load checkpoint receipt: {reason}"),
             })?
-            .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Runtime {
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Runtime {
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 reason: "activation intent missing before checkpoint".into(),
             })?;
         if let Some(existing) = &receipt.source_checkpoint {
             return if existing == checkpoint {
                 Ok(())
             } else {
-                Err(crabka_gres_ranges::RangeTransferError::Boundary {
+                Err(krabka_gres_ranges::RangeTransferError::Boundary {
                     range_id: receipt.split.predecessor,
                     reason: "source checkpoint differs from activation receipt".into(),
                 })
             };
         }
-        if receipt.phase != crabka_gres_ranges::control::TopologyActivationPhase::Prepared {
-            return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+        if receipt.phase != krabka_gres_ranges::control::TopologyActivationPhase::Prepared {
+            return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                 range_id: receipt.split.predecessor,
                 reason: "source checkpoint requires the prepared activation phase".into(),
             });
         }
         let expected = receipt.revision;
         receipt.revision = receipt.revision.saturating_add(1);
-        receipt.phase = crabka_gres_ranges::control::TopologyActivationPhase::SourceCheckpoint;
+        receipt.phase = krabka_gres_ranges::control::TopologyActivationPhase::SourceCheckpoint;
         receipt.source_checkpoint = Some(checkpoint.clone());
         if !store
             .compare_and_swap(operation_id, Some(expected), receipt)
             .await
-            .map_err(|reason| crabka_gres_ranges::RangeTransferError::Runtime {
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            .map_err(|reason| krabka_gres_ranges::RangeTransferError::Runtime {
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 reason: format!("persist checkpoint receipt: {reason}"),
             })?
         {
-            return Err(crabka_gres_ranges::RangeTransferError::Runtime {
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            return Err(krabka_gres_ranges::RangeTransferError::Runtime {
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 reason: "checkpoint receipt CAS raced".into(),
             });
         }
         self.activation_fault(
             TopologyActivationFault::SourceCheckpoint,
-            crabka_gres_ranges::RangeId::COORDINATOR,
+            krabka_gres_ranges::RangeId::COORDINATOR,
         )
     }
 
     fn publish_serving_topology(
         &self,
-        engines: &BTreeMap<crabka_gres_ranges::RangeId, SqlEngine>,
-    ) -> Result<(), crabka_gres_ranges::RangeTransferError> {
+        engines: &BTreeMap<krabka_gres_ranges::RangeId, SqlEngine>,
+    ) -> Result<(), krabka_gres_ranges::RangeTransferError> {
         self.publish_topology(engines)
     }
 
@@ -7435,54 +7435,54 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
 
     async fn finish_topology_activation(
         &self,
-    ) -> Result<(), crabka_gres_ranges::RangeTransferError> {
-        use crabka_gres_ranges::control::{
+    ) -> Result<(), krabka_gres_ranges::RangeTransferError> {
+        use krabka_gres_ranges::control::{
             RangeZeroTopologyActivationStore, TopologyActivationPhase,
             TopologyActivationReceiptStore,
         };
         let operation_id = self
             .committed_activation
             .lock()
-            .map_err(|_| range_pause_lock_error(crabka_gres_ranges::RangeId::COORDINATOR))?
+            .map_err(|_| range_pause_lock_error(krabka_gres_ranges::RangeId::COORDINATOR))?
             .clone()
-            .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Runtime {
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Runtime {
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 reason: "committed topology is missing its activation id".into(),
             })?;
         self.activation_fault(
             TopologyActivationFault::TopologySwap,
-            crabka_gres_ranges::RangeId::COORDINATOR,
+            krabka_gres_ranges::RangeId::COORDINATOR,
         )?;
         let engine = self
             .engines
             .read()
-            .map_err(|_| range_pause_lock_error(crabka_gres_ranges::RangeId::COORDINATOR))?
-            .get(&crabka_gres_ranges::RangeId::COORDINATOR)
+            .map_err(|_| range_pause_lock_error(krabka_gres_ranges::RangeId::COORDINATOR))?
+            .get(&krabka_gres_ranges::RangeId::COORDINATOR)
             .map(SqlEngine::clone_handle)
-            .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Unavailable {
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Unavailable {
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 reason: "serving range-zero engine missing after topology commit".into(),
             })?;
         let tenant = self
             .ranges
             .read()
-            .map_err(|_| range_pause_lock_error(crabka_gres_ranges::RangeId::COORDINATOR))?
-            .get(&crabka_gres_ranges::RangeId::COORDINATOR)
+            .map_err(|_| range_pause_lock_error(krabka_gres_ranges::RangeId::COORDINATOR))?
+            .get(&krabka_gres_ranges::RangeId::COORDINATOR)
             .map(|resources| resources.recovery_config.tenant.to_string())
-            .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Unavailable {
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Unavailable {
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 reason: "serving range-zero resources missing after topology commit".into(),
             })?;
         let store = RangeZeroTopologyActivationStore::new(tenant, engine);
         let mut receipt = store
             .load(&operation_id)
             .await
-            .map_err(|reason| crabka_gres_ranges::RangeTransferError::Runtime {
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            .map_err(|reason| krabka_gres_ranges::RangeTransferError::Runtime {
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 reason: format!("load committed activation receipt: {reason}"),
             })?
-            .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Runtime {
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Runtime {
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 reason: "committed activation receipt is missing".into(),
             })?;
         if receipt.phase == TopologyActivationPhase::TopologyCommitted {
@@ -7494,19 +7494,19 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
         if !store
             .compare_and_swap(&operation_id, Some(expected), receipt)
             .await
-            .map_err(|reason| crabka_gres_ranges::RangeTransferError::Runtime {
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            .map_err(|reason| krabka_gres_ranges::RangeTransferError::Runtime {
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 reason: format!("persist committed topology receipt: {reason}"),
             })?
         {
-            return Err(crabka_gres_ranges::RangeTransferError::Runtime {
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+            return Err(krabka_gres_ranges::RangeTransferError::Runtime {
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 reason: "committed topology receipt CAS raced".into(),
             });
         }
         self.activation_fault(
             TopologyActivationFault::TopologyCommitted,
-            crabka_gres_ranges::RangeId::COORDINATOR,
+            krabka_gres_ranges::RangeId::COORDINATOR,
         )?;
         *self
             .committed_activation
@@ -7521,13 +7521,13 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
 
     async fn mark_topology_must_activate(
         &self,
-    ) -> Result<(), crabka_gres_ranges::RangeTransferError> {
+    ) -> Result<(), krabka_gres_ranges::RangeTransferError> {
         split_activation::persist_must_activate(self).await
     }
 
     async fn activate_serving_topology(
         &self,
-    ) -> Result<(), crabka_gres_ranges::RangeTransferError> {
+    ) -> Result<(), krabka_gres_ranges::RangeTransferError> {
         split_activation::activate_serving_topology(self).await
     }
     fn finish_serving_topology_publication(&self) {
@@ -7536,16 +7536,16 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
 
     fn validate_successors(
         &self,
-        plan: &crabka_gres_ranges::ValidatedSplitTransferPlan,
-    ) -> Result<(), crabka_gres_ranges::RangeTransferError> {
+        plan: &krabka_gres_ranges::ValidatedSplitTransferPlan,
+    ) -> Result<(), krabka_gres_ranges::RangeTransferError> {
         let state = plan.state();
         let cardinality_matches = match state.operation {
-            crabka_gres_ranges::SplitOperation::Split => state.right.is_some(),
-            crabka_gres_ranges::SplitOperation::Move => state.right.is_none(),
+            krabka_gres_ranges::SplitOperation::Split => state.right.is_some(),
+            krabka_gres_ranges::SplitOperation::Move => state.right.is_none(),
             _ => false,
         };
         if !cardinality_matches {
-            return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+            return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                 range_id: state.predecessor,
                 reason: "transfer plan must contain exactly one Move or two Split successors"
                     .to_owned(),
@@ -7557,12 +7557,12 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
     async fn force_checkpoint(
         &self,
         operation_id: &str,
-        range_id: crabka_gres_ranges::RangeId,
-    ) -> Result<crabka_gres_ranges::CheckpointManifest, crabka_gres_ranges::RangeTransferError>
+        range_id: krabka_gres_ranges::RangeId,
+    ) -> Result<krabka_gres_ranges::CheckpointManifest, krabka_gres_ranges::RangeTransferError>
     {
         let resources = self.range(range_id)?;
         let checkpoint = resources.checkpoint.as_ref().ok_or_else(|| {
-            crabka_gres_ranges::RangeTransferError::Unavailable {
+            krabka_gres_ranges::RangeTransferError::Unavailable {
                 range_id,
                 reason: "checkpoint flags were not configured for this runtime".to_owned(),
             }
@@ -7571,15 +7571,15 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
             .handle
             .checkpoint_from_source_pinned(
                 Arc::clone(&checkpoint.snapshot_source),
-                crabka_gres_substrate::CheckpointTrigger::Manual,
+                krabka_gres_substrate::CheckpointTrigger::Manual,
                 operation_id.to_owned(),
             )
             .await
-            .map_err(|error| crabka_gres_ranges::RangeTransferError::Runtime {
+            .map_err(|error| krabka_gres_ranges::RangeTransferError::Runtime {
                 range_id,
                 reason: format!("force checkpoint: {error}"),
             })?;
-        Ok(crabka_gres_ranges::CheckpointManifest {
+        Ok(krabka_gres_ranges::CheckpointManifest {
             range_id,
             covered_offset: run.metadata.covered_offset,
             manifest_key: run.metadata.manifest_key,
@@ -7588,12 +7588,12 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
 
     async fn pause_at_checkpoint(
         &self,
-        checkpoint: &crabka_gres_ranges::CheckpointManifest,
-    ) -> Result<crabka_gres_ranges::RangeTransferBarrier, crabka_gres_ranges::RangeTransferError>
+        checkpoint: &krabka_gres_ranges::CheckpointManifest,
+    ) -> Result<krabka_gres_ranges::RangeTransferBarrier, krabka_gres_ranges::RangeTransferError>
     {
         let resources = self.range(checkpoint.range_id)?;
         if resources.snapshot_source.snapshot().covered_offset < checkpoint.covered_offset {
-            return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+            return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                 range_id: checkpoint.range_id,
                 reason: "writer has not reached the checkpoint covered offset".to_owned(),
             });
@@ -7604,11 +7604,11 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
             .writer
             .pause_and_barrier(resources.generation)
             .await
-            .map_err(|error| crabka_gres_ranges::RangeTransferError::Runtime {
+            .map_err(|error| krabka_gres_ranges::RangeTransferError::Runtime {
                 range_id: checkpoint.range_id,
                 reason: format!("pause writer and commit barrier: {error}"),
             })?;
-        let barrier = crabka_gres_ranges::RangeTransferBarrier {
+        let barrier = krabka_gres_ranges::RangeTransferBarrier {
             range_id: checkpoint.range_id,
             offset: paused.barrier_offset,
         };
@@ -7618,13 +7618,13 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
 
     async fn read_committed_tail(
         &self,
-        range_id: crabka_gres_ranges::RangeId,
+        range_id: krabka_gres_ranges::RangeId,
         after_offset: i64,
-        barrier: crabka_gres_ranges::RangeTransferBarrier,
-    ) -> Result<Vec<crabka_gres_ranges::CommittedTailRecord>, crabka_gres_ranges::RangeTransferError>
+        barrier: krabka_gres_ranges::RangeTransferBarrier,
+    ) -> Result<Vec<krabka_gres_ranges::CommittedTailRecord>, krabka_gres_ranges::RangeTransferError>
     {
         if barrier.range_id != range_id {
-            return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+            return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                 range_id,
                 reason: "barrier belongs to another range".to_owned(),
             });
@@ -7641,12 +7641,12 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
             )
         };
         if !is_current_barrier {
-            return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+            return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                 range_id,
                 reason: "barrier is not held by this paused range writer".to_owned(),
             });
         }
-        crabka_gres_substrate::read_live_committed_tail(
+        krabka_gres_substrate::read_live_committed_tail(
             &resources.recovery_config,
             after_offset,
             barrier.offset,
@@ -7655,13 +7655,13 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
         .map(|records| {
             records
                 .into_iter()
-                .map(|record| crabka_gres_ranges::CommittedTailRecord {
+                .map(|record| krabka_gres_ranges::CommittedTailRecord {
                     offset: record.offset,
                     bytes: record.bytes,
                 })
                 .collect()
         })
-        .map_err(|error| crabka_gres_ranges::RangeTransferError::Runtime {
+        .map_err(|error| krabka_gres_ranges::RangeTransferError::Runtime {
             range_id,
             reason: format!("read committed bounded tail: {error}"),
         })
@@ -7670,23 +7670,23 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
     async fn resume(
         &self,
         _operation_id: &str,
-        barrier: crabka_gres_ranges::RangeTransferBarrier,
-    ) -> Result<(), crabka_gres_ranges::RangeTransferError> {
+        barrier: krabka_gres_ranges::RangeTransferBarrier,
+    ) -> Result<(), krabka_gres_ranges::RangeTransferError> {
         self.release_pause(barrier)
     }
 
     async fn release_checkpoint_pin(
         &self,
         operation_id: &str,
-        range_id: crabka_gres_ranges::RangeId,
-    ) -> Result<(), crabka_gres_ranges::RangeTransferError> {
+        range_id: krabka_gres_ranges::RangeId,
+    ) -> Result<(), krabka_gres_ranges::RangeTransferError> {
         LiveMultiRangeTransfer::release_checkpoint_pin(self, operation_id, range_id).await
     }
 
     fn resume_after_drop(
         &self,
         _operation_id: &str,
-        barrier: crabka_gres_ranges::RangeTransferBarrier,
+        barrier: krabka_gres_ranges::RangeTransferBarrier,
     ) {
         let irreversible_operation = self
             .pending
@@ -7713,32 +7713,32 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
 
     async fn stage_successors(
         &self,
-        plan: &crabka_gres_ranges::ValidatedSplitTransferPlan,
-        checkpoint: &crabka_gres_ranges::CheckpointManifest,
-        tail: &[crabka_gres_ranges::CommittedTailRecord],
-        barrier: crabka_gres_ranges::RangeTransferBarrier,
-    ) -> Result<crabka_gres_ranges::StagedRangeSuccessors, crabka_gres_ranges::RangeTransferError>
+        plan: &krabka_gres_ranges::ValidatedSplitTransferPlan,
+        checkpoint: &krabka_gres_ranges::CheckpointManifest,
+        tail: &[krabka_gres_ranges::CommittedTailRecord],
+        barrier: krabka_gres_ranges::RangeTransferBarrier,
+    ) -> Result<krabka_gres_ranges::StagedRangeSuccessors, krabka_gres_ranges::RangeTransferError>
     {
         self.validate_successors(plan)?;
         let state = plan.state();
         let requests = state.transfer_requests().map_err(|error| {
-            crabka_gres_ranges::RangeTransferError::Boundary {
+            krabka_gres_ranges::RangeTransferError::Boundary {
                 range_id: state.predecessor,
                 reason: format!("invalid successor partition: {error}"),
             }
         })?;
         let coordinator_catalog: Arc<dyn Kv> = self
-            .range(crabka_gres_ranges::RangeId::COORDINATOR)?
+            .range(krabka_gres_ranges::RangeId::COORDINATOR)?
             .store
             .clone();
-        let stage_range = |request: crabka_gres_ranges::TableTransferRequest| {
+        let stage_range = |request: krabka_gres_ranges::TableTransferRequest| {
             let coordinator_catalog = Arc::clone(&coordinator_catalog);
             async move {
                 let source_manifest = checkpoint.clone();
                 let source = self.range(checkpoint.range_id)?;
                 validate_staged_transfer_boundary(&request, checkpoint, tail, barrier)?;
                 if source.generation.0 != request.predecessor_generation {
-                    return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+                    return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                         range_id: checkpoint.range_id,
                         reason: format!(
                             "source generation {} differs from requested predecessor generation {}",
@@ -7754,7 +7754,7 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
                     RangePauseState::Paused(paused) if paused.barrier_offset == barrier.offset
                 );
                 if !source_holds_barrier {
-                    return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+                    return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                         range_id: checkpoint.range_id,
                         reason: "source writer does not hold the requested transfer barrier"
                             .to_owned(),
@@ -7767,7 +7767,7 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
                     .contains_key(&request.target_range)
                     && request.target_range != checkpoint.range_id
                 {
-                    return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+                    return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                         range_id: request.target_range,
                         reason: "successor range is already hosted".to_owned(),
                     });
@@ -7778,19 +7778,19 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
                     .map_err(|_| range_pause_lock_error(request.target_range))?
                     .contains_key(&request.target_range)
                 {
-                    return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+                    return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                         range_id: request.target_range,
                         reason: "successor range is already staged".to_owned(),
                     });
                 }
                 let source_checkpoint = source.checkpoint.as_ref().ok_or_else(|| {
-                    crabka_gres_ranges::RangeTransferError::Unavailable {
+                    krabka_gres_ranges::RangeTransferError::Unavailable {
                         range_id: checkpoint.range_id,
                         reason: "checkpoint flags were not configured for the source range"
                             .to_owned(),
                     }
                 })?;
-                let expected_manifest_prefix = crabka_gres_substrate::ckpt_prefix_for_range(
+                let expected_manifest_prefix = krabka_gres_substrate::ckpt_prefix_for_range(
                     &source.recovery_config.tenant,
                     checkpoint.range_id,
                 );
@@ -7798,7 +7798,7 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
                     .manifest_key
                     .starts_with(&expected_manifest_prefix)
                 {
-                    return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+                    return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                         range_id: checkpoint.range_id,
                         reason:
                             "source manifest key is outside the requested source range namespace"
@@ -7819,7 +7819,7 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
                     local_checkpoint_root(&self.config),
                 )
                 .map_err(|error| {
-                    crabka_gres_ranges::RangeTransferError::Runtime {
+                    krabka_gres_ranges::RangeTransferError::Runtime {
                         range_id: request.target_range,
                         reason: format!("reset disposable successor cache: {error}"),
                     }
@@ -7830,7 +7830,7 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
                     self.config.pgkv_options,
                 )
                 .map_err(|error| {
-                    crabka_gres_ranges::RangeTransferError::Runtime {
+                    krabka_gres_ranges::RangeTransferError::Runtime {
                         range_id: request.target_range,
                         reason: format!("open empty successor cache: {error}"),
                     }
@@ -7844,18 +7844,18 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
                     .with_wal_generation(request.wal_generation)
                     .with_optional_advertised_endpoint(self.config.advertised_endpoint.clone())
                     .with_checkpoints(Arc::clone(&source_checkpoint.store));
-                crabka_gres_substrate::ensure_live_wal_topic(&target_recovery)
+                krabka_gres_substrate::ensure_live_wal_topic(&target_recovery)
                     .await
-                    .map_err(|error| crabka_gres_ranges::RangeTransferError::Runtime {
+                    .map_err(|error| krabka_gres_ranges::RangeTransferError::Runtime {
                         range_id: request.target_range,
                         reason: format!("ensure staged successor WAL topic: {error}"),
                     })?;
-                let generation = crabka_gres_substrate::WriterGeneration(request.wal_generation);
-                let filter = crabka_gres_substrate::CheckpointFilter::new(
+                let generation = krabka_gres_substrate::WriterGeneration(request.wal_generation);
+                let filter = krabka_gres_substrate::CheckpointFilter::new(
                     request.interval.start,
                     request.interval.end,
                 )
-                .map_err(|error| crabka_gres_ranges::RangeTransferError::Boundary {
+                .map_err(|error| krabka_gres_ranges::RangeTransferError::Boundary {
                     range_id: request.target_range,
                     reason: format!("successor interval: {error}"),
                 })?
@@ -7863,18 +7863,18 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
                 .with_structural_ownership(request.target_range == state.left.range_id)
                 .with_target_range(request.target_range);
                 let restore_plan =
-                    crabka_gres_substrate::restore_filtered_from_manifest_and_replay_tail(
+                    krabka_gres_substrate::restore_filtered_from_manifest_and_replay_tail(
                         source_checkpoint.store.as_ref(),
                         &checkpoint.manifest_key,
                         &source_checkpoint.tenant,
                         checkpoint.covered_offset,
                         target_store.as_ref(),
-                        crabka_gres_substrate::RestoreTail {
+                        krabka_gres_substrate::RestoreTail {
                             current_generation: source.generation.0,
                             log_start: None,
                             committed_frames: tail
                                 .iter()
-                                .map(|record| crabka_gres_substrate::ReplayItem {
+                                .map(|record| krabka_gres_substrate::ReplayItem {
                                     offset: record.offset,
                                     bytes: record.bytes.clone(),
                                 })
@@ -7885,16 +7885,16 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
                     )
                     .await
                     .map_err(|error| {
-                        crabka_gres_ranges::RangeTransferError::Runtime {
+                        krabka_gres_ranges::RangeTransferError::Runtime {
                             range_id: request.target_range,
                             reason: format!(
                                 "restore interval checkpoint and bounded tail: {error}"
                             ),
                         }
                     })?;
-                let writer = Arc::new(crabka_gres_substrate::DeferredWalWriter::staged());
+                let writer = Arc::new(krabka_gres_substrate::DeferredWalWriter::staged());
                 let snapshot_source =
-                    Arc::new(crabka_gres_substrate::CheckpointSnapshotSource::new(
+                    Arc::new(krabka_gres_substrate::CheckpointSnapshotSource::new(
                         0,
                         restore_plan.replay.next_journal_seq,
                         generation,
@@ -7907,20 +7907,20 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
                     target_recovery.wal_topic(),
                     Some(Arc::clone(&source_checkpoint.store)),
                 )
-                .map_err(|error| crabka_gres_ranges::RangeTransferError::Runtime {
+                .map_err(|error| krabka_gres_ranges::RangeTransferError::Runtime {
                     range_id: request.target_range,
                     reason: format!("start successor checkpoint runtime: {error}"),
                 })?
                 .map(Arc::new)
                 .ok_or_else(|| {
-                    crabka_gres_ranges::RangeTransferError::Unavailable {
+                    krabka_gres_ranges::RangeTransferError::Unavailable {
                         range_id: request.target_range,
                         reason: "successor staging requires checkpoint configuration".to_owned(),
                     }
                 })?;
                 seed_checkpoint_planner_stats(&checkpoint)
                     .await
-                    .map_err(|error| crabka_gres_ranges::RangeTransferError::Runtime {
+                    .map_err(|error| krabka_gres_ranges::RangeTransferError::Runtime {
                         range_id: request.target_range,
                         reason: format!("load successor checkpoint planner stats: {error}"),
                     })?;
@@ -7933,11 +7933,11 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
                     &snapshot_source,
                     Some(Arc::clone(&checkpoint.stats)),
                     Some(Arc::clone(&checkpoint.planner_stats)
-                        as Arc<dyn crabka_pgexec::plan_dist::Stats>),
+                        as Arc<dyn krabka_pgexec::plan_dist::Stats>),
                     self.config.pgexec_runtime_policy,
                 )
                 .map_err(|error| {
-                    crabka_gres_ranges::RangeTransferError::Runtime {
+                    krabka_gres_ranges::RangeTransferError::Runtime {
                         range_id: request.target_range,
                         reason: format!("build successor SQL engine: {error}"),
                     }
@@ -7945,9 +7945,9 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
                 engine.set_catalog_kv(coordinator_catalog);
                 let tso_horizon = request.target_range.is_coordinator().then(|| {
                     let tso_store: Arc<dyn Kv> = target_store.clone();
-                    let tso_committer: Arc<dyn crabka_pgexec::Committer> = committer.clone();
-                    let tso_lease: Arc<dyn crabka_gres_substrate::FenceLease> = writer.clone();
-                    crabka_gres_substrate::SubstrateTsoHorizon::new(
+                    let tso_committer: Arc<dyn krabka_pgexec::Committer> = committer.clone();
+                    let tso_lease: Arc<dyn krabka_gres_substrate::FenceLease> = writer.clone();
+                    krabka_gres_substrate::SubstrateTsoHorizon::new(
                         tso_store,
                         tso_committer,
                         tso_lease,
@@ -7956,7 +7956,7 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
                 });
                 if let Some(horizon) = &tso_horizon {
                     let persisted_max_ts = horizon.load_max_ts().map_err(|error| {
-                        crabka_gres_ranges::RangeTransferError::Runtime {
+                        krabka_gres_ranges::RangeTransferError::Runtime {
                             range_id: request.target_range,
                             reason: format!("recover successor TSO horizon: {error}"),
                         }
@@ -7969,13 +7969,13 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
                         &self.config.range_runtime_policy,
                     )
                     .map_err(|error| {
-                        crabka_gres_ranges::RangeTransferError::Runtime {
+                        krabka_gres_ranges::RangeTransferError::Runtime {
                             range_id: request.target_range,
                             reason: format!("recover successor TSO oracle: {error}"),
                         }
                     })?;
                     engine.set_timestamp_oracle(
-                        crabka_gres_ranges::pgexec_timestamp_oracle_from_rpc(tso_rpc),
+                        krabka_gres_ranges::pgexec_timestamp_oracle_from_rpc(tso_rpc),
                     );
                 }
                 let resources = LiveRangeResources {
@@ -8005,7 +8005,7 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
                             resources,
                         },
                     );
-                Ok(crabka_gres_ranges::StagedRangeSuccessor {
+                Ok(krabka_gres_ranges::StagedRangeSuccessor {
                     range_id: request.target_range,
                     endpoint: request.endpoint,
                     wal_generation: request.wal_generation,
@@ -8016,13 +8016,13 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
         let left_request =
             requests
                 .next()
-                .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Boundary {
+                .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Boundary {
                     range_id: state.predecessor,
                     reason: "mutation has no successor".into(),
                 })?;
         let right_request = requests.next();
         if requests.next().is_some() {
-            return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+            return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                 range_id: state.predecessor,
                 reason: "mutation has more than two successors".into(),
             });
@@ -8051,14 +8051,14 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
         } else {
             (stage_range(left_request).await?, None)
         };
-        Ok(crabka_gres_ranges::StagedRangeSuccessors { left, right })
+        Ok(krabka_gres_ranges::StagedRangeSuccessors { left, right })
     }
 
     async fn claim_successors(
         &self,
-        staged: &crabka_gres_ranges::StagedRangeSuccessors,
-        barrier: crabka_gres_ranges::RangeTransferBarrier,
-    ) -> Result<crabka_gres_ranges::ClaimedStagedSuccessors, crabka_gres_ranges::RangeTransferError>
+        staged: &krabka_gres_ranges::StagedRangeSuccessors,
+        barrier: krabka_gres_ranges::RangeTransferBarrier,
+    ) -> Result<krabka_gres_ranges::ClaimedStagedSuccessors, krabka_gres_ranges::RangeTransferError>
     {
         let source = self.range(barrier.range_id)?;
         let source_holds_barrier = matches!(
@@ -8069,7 +8069,7 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
             RangePauseState::Paused(paused) if paused.barrier_offset == barrier.offset
         );
         if !source_holds_barrier {
-            return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+            return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                 range_id: barrier.range_id,
                 reason: "source writer does not hold the requested transfer barrier".to_owned(),
             });
@@ -8079,7 +8079,7 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
             .as_ref()
             .is_some_and(|right| staged.left.range_id == right.range_id)
         {
-            return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+            return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                 range_id: staged.left.range_id,
                 reason: "successor identities must be distinct".to_owned(),
             });
@@ -8094,13 +8094,13 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
                 .as_ref()
                 .is_some_and(|right| !successors.contains_key(&right.range_id))
         {
-            return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+            return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                 range_id: barrier.range_id,
                 reason: "every successor must be staged before any is claimed".to_owned(),
             });
         }
         let left = successors.remove(&staged.left.range_id).ok_or_else(|| {
-            crabka_gres_ranges::RangeTransferError::Boundary {
+            krabka_gres_ranges::RangeTransferError::Boundary {
                 range_id: staged.left.range_id,
                 reason: "left successor disappeared during atomic claim".to_owned(),
             }
@@ -8110,7 +8110,7 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
             .as_ref()
             .map(|descriptor| {
                 successors.remove(&descriptor.range_id).ok_or_else(|| {
-                    crabka_gres_ranges::RangeTransferError::Boundary {
+                    krabka_gres_ranges::RangeTransferError::Boundary {
                         range_id: descriptor.range_id,
                         reason: "right successor disappeared during atomic claim".to_owned(),
                     }
@@ -8141,8 +8141,8 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
                     )
                 }),
         });
-        Ok(crabka_gres_ranges::ClaimedStagedSuccessors {
-            left: crabka_gres_ranges::ClaimedStagedSuccessor {
+        Ok(krabka_gres_ranges::ClaimedStagedSuccessors {
+            left: krabka_gres_ranges::ClaimedStagedSuccessor {
                 range_id: staged.left.range_id,
                 endpoint: staged.left.endpoint.clone(),
                 wal_generation: staged.left.wal_generation,
@@ -8154,7 +8154,7 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
                 .as_ref()
                 .zip(right)
                 .map(
-                    |(descriptor, successor)| crabka_gres_ranges::ClaimedStagedSuccessor {
+                    |(descriptor, successor)| krabka_gres_ranges::ClaimedStagedSuccessor {
                         range_id: descriptor.range_id,
                         endpoint: descriptor.endpoint.clone(),
                         wal_generation: descriptor.wal_generation,
@@ -8167,13 +8167,13 @@ impl crabka_gres_ranges::RangeTransferCapability for LiveMultiRangeTransfer {
 }
 
 fn validate_staged_transfer_boundary(
-    request: &crabka_gres_ranges::TableTransferRequest,
-    checkpoint: &crabka_gres_ranges::CheckpointManifest,
-    tail: &[crabka_gres_ranges::CommittedTailRecord],
-    barrier: crabka_gres_ranges::RangeTransferBarrier,
-) -> Result<(), crabka_gres_ranges::RangeTransferError> {
+    request: &krabka_gres_ranges::TableTransferRequest,
+    checkpoint: &krabka_gres_ranges::CheckpointManifest,
+    tail: &[krabka_gres_ranges::CommittedTailRecord],
+    barrier: krabka_gres_ranges::RangeTransferBarrier,
+) -> Result<(), krabka_gres_ranges::RangeTransferError> {
     if request.interval.range_id != request.target_range {
-        return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+        return Err(krabka_gres_ranges::RangeTransferError::Boundary {
             range_id: request.target_range,
             reason: "successor interval range id differs from target range".to_owned(),
         });
@@ -8181,19 +8181,19 @@ fn validate_staged_transfer_boundary(
     if request.target_range == checkpoint.range_id
         && request.wal_generation <= request.predecessor_generation
     {
-        return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+        return Err(krabka_gres_ranges::RangeTransferError::Boundary {
             range_id: request.target_range,
             reason: "same-id successor must advance the fenced WAL generation".to_owned(),
         });
     }
     if barrier.range_id != checkpoint.range_id {
-        return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+        return Err(krabka_gres_ranges::RangeTransferError::Boundary {
             range_id: request.target_range,
             reason: "transfer barrier belongs to another source range".to_owned(),
         });
     }
     let Some(last) = tail.last() else {
-        return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+        return Err(krabka_gres_ranges::RangeTransferError::Boundary {
             range_id: request.target_range,
             reason: "bounded transfer tail is empty".to_owned(),
         });
@@ -8204,7 +8204,7 @@ fn validate_staged_transfer_boundary(
         })
         || tail.windows(2).any(|pair| pair[0].offset >= pair[1].offset)
     {
-        return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+        return Err(krabka_gres_ranges::RangeTransferError::Boundary {
             range_id: request.target_range,
             reason:
                 "bounded transfer tail does not exactly cover the checkpoint-to-barrier interval"
@@ -8214,7 +8214,7 @@ fn validate_staged_transfer_boundary(
     Ok(())
 }
 
-fn committed_tail_sha256(tail: &[crabka_gres_ranges::CommittedTailRecord]) -> String {
+fn committed_tail_sha256(tail: &[krabka_gres_ranges::CommittedTailRecord]) -> String {
     use std::fmt::Write as _;
 
     use sha2::Digest;
@@ -8241,7 +8241,7 @@ fn committed_tail_sha256(tail: &[crabka_gres_ranges::CommittedTailRecord]) -> St
 impl FinalCheckpointer for StartedCheckpointRuntime {
     async fn latest_checkpoint_size(&self) -> std::io::Result<ByteSize> {
         let snapshot = self.snapshot_source.snapshot();
-        let metadata = crabka_gres_substrate::latest_checkpoint_metadata(
+        let metadata = krabka_gres_substrate::latest_checkpoint_metadata(
             self.store.as_ref(),
             &self.tenant,
             snapshot.wal_generation,
@@ -8262,7 +8262,7 @@ impl FinalCheckpointer for StartedCheckpointRuntime {
             .handle
             .checkpoint_from_source(
                 Arc::clone(&self.snapshot_source),
-                crabka_gres_substrate::CheckpointTrigger::Manual,
+                krabka_gres_substrate::CheckpointTrigger::Manual,
             )
             .await
             .map_err(|error| std::io::Error::other(format!("final checkpoint: {error}")))?;
@@ -8288,10 +8288,10 @@ fn remember_latest_checkpoint_bytes(
 fn build_checkpoint_runtime(
     config: &SubstrateRuntimeConfig,
     store: Arc<dyn SubstrateKv>,
-    snapshot_source: Arc<crabka_gres_substrate::CheckpointSnapshotSource>,
+    snapshot_source: Arc<krabka_gres_substrate::CheckpointSnapshotSource>,
     wal_topic: String,
     checkpoint_namespace: String,
-    checkpoint_store: Option<Arc<dyn crabka_gres_substrate::checkpoint::CheckpointStore>>,
+    checkpoint_store: Option<Arc<dyn krabka_gres_substrate::checkpoint::CheckpointStore>>,
     pruner: impl FnOnce(Time) -> std::io::Result<GresCheckpointWalPruner>,
 ) -> std::io::Result<Option<StartedCheckpointRuntime>> {
     let Some(checkpoint_config) = &config.checkpoints else {
@@ -8303,8 +8303,8 @@ fn build_checkpoint_runtime(
     };
     let service_config =
         checkpoint_service_config(checkpoint_config, checkpoint_namespace.clone(), wal_topic)?;
-    let stats = Arc::new(crabka_gres_substrate::CheckpointStats::default());
-    let service = crabka_gres_substrate::CheckpointService::new(
+    let stats = Arc::new(krabka_gres_substrate::CheckpointStats::default());
+    let service = krabka_gres_substrate::CheckpointService::new(
         service_config,
         store,
         Arc::clone(&checkpoint_store),
@@ -8329,11 +8329,11 @@ fn build_checkpoint_runtime(
 
 fn build_range_checkpoint_runtime(
     config: &SubstrateRuntimeConfig,
-    range_id: crabka_gres_ranges::RangeId,
+    range_id: krabka_gres_ranges::RangeId,
     store: Arc<dyn SubstrateKv>,
-    snapshot_source: Arc<crabka_gres_substrate::CheckpointSnapshotSource>,
+    snapshot_source: Arc<krabka_gres_substrate::CheckpointSnapshotSource>,
     wal_topic: String,
-    checkpoint_store: Option<Arc<dyn crabka_gres_substrate::checkpoint::CheckpointStore>>,
+    checkpoint_store: Option<Arc<dyn krabka_gres_substrate::checkpoint::CheckpointStore>>,
 ) -> std::io::Result<Option<StartedCheckpointRuntime>> {
     let Some(checkpoint_config) = &config.checkpoints else {
         return Ok(None);
@@ -8347,8 +8347,8 @@ fn build_range_checkpoint_runtime(
     let namespace = format!("{}/r{}", config.tenant, range_id.as_u32());
     let service_config =
         checkpoint_service_config(checkpoint_config, namespace.clone(), wal_topic)?;
-    let stats = Arc::new(crabka_gres_substrate::CheckpointStats::default());
-    let service = crabka_gres_substrate::CheckpointService::new(
+    let stats = Arc::new(krabka_gres_substrate::CheckpointStats::default());
+    let service = krabka_gres_substrate::CheckpointService::new(
         service_config,
         store,
         Arc::clone(&checkpoint_store),
@@ -8379,8 +8379,8 @@ fn checkpoint_service_config(
     config: &CheckpointRuntimeConfig,
     checkpoint_namespace: String,
     wal_topic: String,
-) -> std::io::Result<crabka_gres_substrate::CheckpointConfig> {
-    crabka_gres_substrate::CheckpointConfig::new(
+) -> std::io::Result<krabka_gres_substrate::CheckpointConfig> {
+    krabka_gres_substrate::CheckpointConfig::new(
         checkpoint_namespace,
         wal_topic,
         config.frames_threshold,
@@ -8408,17 +8408,17 @@ async fn open_live_substrate_runtime(
         checkpoint_store.as_ref(),
     );
     let recovered =
-        crabka_gres_substrate::recover_live_for_range_with_restore(recovery_config, store.as_ref())
+        krabka_gres_substrate::recover_live_for_range_with_restore(recovery_config, store.as_ref())
             .await
             .map_err(|error| std::io::Error::other(format!("substrate recovery: {error}")))?;
-    let writer = Arc::new(crabka_gres_substrate::ProducerWalWriter::new(
+    let writer = Arc::new(krabka_gres_substrate::ProducerWalWriter::new(
         recovered.producer,
         wal_selection.writer_topic,
     ));
-    crabka_gres_substrate::FenceLease::assert_current(writer.as_ref(), recovered.generation)
+    krabka_gres_substrate::FenceLease::assert_current(writer.as_ref(), recovered.generation)
         .await
         .map_err(|error| std::io::Error::other(format!("WAL writer readiness fence: {error}")))?;
-    let snapshot_source = Arc::new(crabka_gres_substrate::CheckpointSnapshotSource::new(
+    let snapshot_source = Arc::new(krabka_gres_substrate::CheckpointSnapshotSource::new(
         recovered.barrier_offset,
         recovered.next_journal_seq,
         recovered.generation,
@@ -8452,7 +8452,7 @@ async fn open_live_substrate_runtime(
             .as_ref()
             .map(|checkpoint| Arc::clone(&checkpoint.stats)),
         checkpoint.as_ref().map(|checkpoint| {
-            Arc::clone(&checkpoint.planner_stats) as Arc<dyn crabka_pgexec::plan_dist::Stats>
+            Arc::clone(&checkpoint.planner_stats) as Arc<dyn krabka_pgexec::plan_dist::Stats>
         }),
         config.pgexec_runtime_policy,
     )?;
@@ -8463,9 +8463,9 @@ async fn open_live_substrate_runtime(
 }
 
 fn recovery_config_with_checkpoint_store(
-    recovery_config: crabka_gres_substrate::LiveRecoveryConfig,
-    checkpoint_store: Option<&Arc<dyn crabka_gres_substrate::checkpoint::CheckpointStore>>,
-) -> crabka_gres_substrate::LiveRecoveryConfig {
+    recovery_config: krabka_gres_substrate::LiveRecoveryConfig,
+    checkpoint_store: Option<&Arc<dyn krabka_gres_substrate::checkpoint::CheckpointStore>>,
+) -> krabka_gres_substrate::LiveRecoveryConfig {
     match checkpoint_store {
         Some(store) => recovery_config.with_checkpoints(Arc::clone(store)),
         None => recovery_config,
@@ -8476,16 +8476,16 @@ fn recovery_config_with_checkpoint_store(
 fn build_replicated_substrate_engine<W>(
     store: &Arc<dyn SubstrateKv>,
     writer: Arc<W>,
-    generation: crabka_gres_substrate::WriterGeneration,
+    generation: krabka_gres_substrate::WriterGeneration,
     next_journal_seq: u64,
     wal_frame_max_size: ByteSize,
-    snapshot_source: &Arc<crabka_gres_substrate::CheckpointSnapshotSource>,
-    checkpoint_stats: Option<Arc<crabka_gres_substrate::CheckpointStats>>,
-    checkpoint_planner_stats: Option<Arc<dyn crabka_pgexec::plan_dist::Stats>>,
-    pgexec_runtime_policy: crabka_pgexec::RuntimePolicy,
+    snapshot_source: &Arc<krabka_gres_substrate::CheckpointSnapshotSource>,
+    checkpoint_stats: Option<Arc<krabka_gres_substrate::CheckpointStats>>,
+    checkpoint_planner_stats: Option<Arc<dyn krabka_pgexec::plan_dist::Stats>>,
+    pgexec_runtime_policy: krabka_pgexec::RuntimePolicy,
 ) -> std::io::Result<SqlEngine>
 where
-    W: crabka_gres_substrate::TransactionalWalWriter + crabka_gres_substrate::FenceLease + 'static,
+    W: krabka_gres_substrate::TransactionalWalWriter + krabka_gres_substrate::FenceLease + 'static,
 {
     build_replicated_substrate_engine_with_committer(
         store,
@@ -8505,25 +8505,25 @@ where
 fn build_replicated_substrate_engine_with_committer<W>(
     store: &Arc<dyn SubstrateKv>,
     writer: Arc<W>,
-    generation: crabka_gres_substrate::WriterGeneration,
+    generation: krabka_gres_substrate::WriterGeneration,
     next_journal_seq: u64,
     wal_frame_max_size: ByteSize,
-    snapshot_source: &Arc<crabka_gres_substrate::CheckpointSnapshotSource>,
-    checkpoint_stats: Option<Arc<crabka_gres_substrate::CheckpointStats>>,
-    checkpoint_planner_stats: Option<Arc<dyn crabka_pgexec::plan_dist::Stats>>,
-    pgexec_runtime_policy: crabka_pgexec::RuntimePolicy,
-) -> std::io::Result<(SqlEngine, Arc<crabka_gres_substrate::SubstrateCommitter<W>>)>
+    snapshot_source: &Arc<krabka_gres_substrate::CheckpointSnapshotSource>,
+    checkpoint_stats: Option<Arc<krabka_gres_substrate::CheckpointStats>>,
+    checkpoint_planner_stats: Option<Arc<dyn krabka_pgexec::plan_dist::Stats>>,
+    pgexec_runtime_policy: krabka_pgexec::RuntimePolicy,
+) -> std::io::Result<(SqlEngine, Arc<krabka_gres_substrate::SubstrateCommitter<W>>)>
 where
-    W: crabka_gres_substrate::TransactionalWalWriter + crabka_gres_substrate::FenceLease + 'static,
+    W: krabka_gres_substrate::TransactionalWalWriter + krabka_gres_substrate::FenceLease + 'static,
 {
     snapshot_source.set_fence_lease(
-        writer.clone() as Arc<dyn crabka_gres_substrate::FenceLease>,
+        writer.clone() as Arc<dyn krabka_gres_substrate::FenceLease>,
         generation,
     );
     let committer_store: Arc<dyn Kv> = store.clone();
     let engine_read_store: Arc<dyn Kv> = store.clone();
     let engine_write_store: Arc<dyn Kv> = store.clone();
-    let committer = crabka_gres_substrate::SubstrateCommitter::new(
+    let committer = krabka_gres_substrate::SubstrateCommitter::new(
         committer_store,
         Arc::clone(&writer),
         generation,
@@ -8537,7 +8537,7 @@ where
         committer
     };
     let committer = Arc::new(committer);
-    let linearizer = crabka_gres_substrate::SubstrateLinearizer::new(writer, generation);
+    let linearizer = krabka_gres_substrate::SubstrateLinearizer::new(writer, generation);
     let mut engine = SqlEngine::replicated_with_policy(
         engine_read_store,
         engine_write_store,
@@ -8547,7 +8547,7 @@ where
     )
     .map_err(|error| std::io::Error::other(format!("engine: {error:?}")))?;
     if let Some(checkpoint_stats) = checkpoint_planner_stats {
-        engine.set_join_stats(Arc::new(crabka_pgexec::plan_dist::CombinedStats::new(
+        engine.set_join_stats(Arc::new(krabka_pgexec::plan_dist::CombinedStats::new(
             engine.join_stats(),
             checkpoint_stats,
         )));
@@ -8558,7 +8558,7 @@ where
     let horizon = engine.checkpoint_horizon_provider();
     snapshot_source.set_garbage_horizon_provider(Arc::new(move || {
         horizon().map_err(|error| {
-            crabka_gres_substrate::SubstrateError::Checkpoint(format!("garbage horizon: {error:?}"))
+            krabka_gres_substrate::SubstrateError::Checkpoint(format!("garbage horizon: {error:?}"))
         })
     }));
     Ok((engine, committer))
@@ -8580,7 +8580,7 @@ fn open_substrate_cache(
 
 fn open_substrate_range_cache(
     cache_dir: Option<&std::path::Path>,
-    range_id: crabka_gres_ranges::RangeId,
+    range_id: krabka_gres_ranges::RangeId,
     options: FjallOptions,
 ) -> std::io::Result<Arc<dyn SubstrateKv>> {
     let Some(dir) = cache_dir else {
@@ -8591,7 +8591,7 @@ fn open_substrate_range_cache(
 
 fn reset_substrate_range_cache(
     cache_dir: Option<&std::path::Path>,
-    range_id: crabka_gres_ranges::RangeId,
+    range_id: krabka_gres_ranges::RangeId,
     protected_checkpoint_root: Option<&std::path::Path>,
 ) -> std::io::Result<()> {
     let Some(base) = cache_dir else {
@@ -8672,28 +8672,28 @@ fn local_checkpoint_root(config: &SubstrateRuntimeConfig) -> Option<&std::path::
 pub fn register_kafka_scanner(engine: &mut SqlEngine) {
     engine.set_foreign_scanner(Arc::new(kafka_scanner(
         None,
-        crabka_client_core::ClientDnsTimeout::default(),
-        crabka_gres_fdw::SchemaFetchRetryPolicy::default(),
-        crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-        crabka_client_core::ClientFrameMax::default(),
-        crabka_client_core::FetchMinBytes::default(),
-        crabka_gres_fdw::FdwScanPolicy::default(),
-        crabka_gres_fdw::FdwDecodePolicy::default(),
+        krabka_client_core::ClientDnsTimeout::default(),
+        krabka_gres_fdw::SchemaFetchRetryPolicy::default(),
+        krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+        krabka_client_core::ClientFrameMax::default(),
+        krabka_client_core::FetchMinBytes::default(),
+        krabka_gres_fdw::FdwScanPolicy::default(),
+        krabka_gres_fdw::FdwDecodePolicy::default(),
     )));
 }
 
 #[allow(clippy::too_many_arguments)]
 fn kafka_scanner(
     default_bootstrap: Option<String>,
-    broker_dns_timeout: crabka_client_core::ClientDnsTimeout,
-    schema_fetch_retry_policy: crabka_gres_fdw::SchemaFetchRetryPolicy,
-    dispatch_queue_capacity: crabka_client_core::ConnectionDispatchQueueCapacity,
-    frame_max: crabka_client_core::ClientFrameMax,
-    fetch_min: crabka_client_core::FetchMinBytes,
-    scan_policy: crabka_gres_fdw::FdwScanPolicy,
-    decode_policy: crabka_gres_fdw::FdwDecodePolicy,
-) -> crabka_gres_fdw::KafkaFdw {
-    crabka_gres_fdw::KafkaFdw::with_defaults(default_bootstrap)
+    broker_dns_timeout: krabka_client_core::ClientDnsTimeout,
+    schema_fetch_retry_policy: krabka_gres_fdw::SchemaFetchRetryPolicy,
+    dispatch_queue_capacity: krabka_client_core::ConnectionDispatchQueueCapacity,
+    frame_max: krabka_client_core::ClientFrameMax,
+    fetch_min: krabka_client_core::FetchMinBytes,
+    scan_policy: krabka_gres_fdw::FdwScanPolicy,
+    decode_policy: krabka_gres_fdw::FdwDecodePolicy,
+) -> krabka_gres_fdw::KafkaFdw {
+    krabka_gres_fdw::KafkaFdw::with_defaults(default_bootstrap)
         .with_broker_dns_timeout(broker_dns_timeout)
         .with_schema_fetch_retry_policy(schema_fetch_retry_policy)
         .with_client_resource_policy(dispatch_queue_capacity, frame_max, fetch_min)
@@ -8705,19 +8705,19 @@ fn kafka_scanner(
 pub fn register_kafka_scanner_with_default_bootstrap(
     engine: &mut RuntimeEngine,
     default_bootstrap: Option<String>,
-    broker_dns_timeout: crabka_client_core::ClientDnsTimeout,
-    schema_fetch_retry_policy: crabka_gres_fdw::SchemaFetchRetryPolicy,
+    broker_dns_timeout: krabka_client_core::ClientDnsTimeout,
+    schema_fetch_retry_policy: krabka_gres_fdw::SchemaFetchRetryPolicy,
 ) {
     register_kafka_scanner_with_default_bootstrap_and_policy(
         engine,
         default_bootstrap,
         broker_dns_timeout,
         schema_fetch_retry_policy,
-        crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-        crabka_client_core::ClientFrameMax::default(),
-        crabka_client_core::FetchMinBytes::default(),
-        crabka_gres_fdw::FdwScanPolicy::default(),
-        crabka_gres_fdw::FdwDecodePolicy::default(),
+        krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+        krabka_client_core::ClientFrameMax::default(),
+        krabka_client_core::FetchMinBytes::default(),
+        krabka_gres_fdw::FdwScanPolicy::default(),
+        krabka_gres_fdw::FdwDecodePolicy::default(),
     );
 }
 
@@ -8725,15 +8725,15 @@ pub fn register_kafka_scanner_with_default_bootstrap(
 fn register_kafka_scanner_with_default_bootstrap_and_policy(
     engine: &mut RuntimeEngine,
     default_bootstrap: Option<String>,
-    broker_dns_timeout: crabka_client_core::ClientDnsTimeout,
-    schema_fetch_retry_policy: crabka_gres_fdw::SchemaFetchRetryPolicy,
-    dispatch_queue_capacity: crabka_client_core::ConnectionDispatchQueueCapacity,
-    frame_max: crabka_client_core::ClientFrameMax,
-    fetch_min: crabka_client_core::FetchMinBytes,
-    scan_policy: crabka_gres_fdw::FdwScanPolicy,
-    decode_policy: crabka_gres_fdw::FdwDecodePolicy,
+    broker_dns_timeout: krabka_client_core::ClientDnsTimeout,
+    schema_fetch_retry_policy: krabka_gres_fdw::SchemaFetchRetryPolicy,
+    dispatch_queue_capacity: krabka_client_core::ConnectionDispatchQueueCapacity,
+    frame_max: krabka_client_core::ClientFrameMax,
+    fetch_min: krabka_client_core::FetchMinBytes,
+    scan_policy: krabka_gres_fdw::FdwScanPolicy,
+    decode_policy: krabka_gres_fdw::FdwDecodePolicy,
 ) {
-    let scanner: Arc<dyn crabka_pgexec::foreign::ForeignScanner> = Arc::new(kafka_scanner(
+    let scanner: Arc<dyn krabka_pgexec::foreign::ForeignScanner> = Arc::new(kafka_scanner(
         default_bootstrap,
         broker_dns_timeout,
         schema_fetch_retry_policy,
@@ -8797,7 +8797,7 @@ fn build_tenant_scram_session_config(record: &TenantRecord) -> std::io::Result<S
             format!("tenant SCRAM verifier: {error}"),
         )
     })?;
-    let verifier = crabka_pgwire::scram::ScramVerifier::from_parts(
+    let verifier = krabka_pgwire::scram::ScramVerifier::from_parts(
         pg_verifier.salt,
         pg_verifier.iterations,
         sha256_key_array(pg_verifier.stored_key, "stored_key")?,
@@ -8851,10 +8851,10 @@ fn build_scram_session_config(
                 "--user-cred user name is empty",
             ));
         }
-        let salt: [u8; crabka_pgwire::scram::SALT_LEN] = rand::rng().random();
+        let salt: [u8; krabka_pgwire::scram::SALT_LEN] = rand::rng().random();
         verifiers.insert(
             user.to_string(),
-            crabka_pgwire::scram::ScramVerifier::from_password(password, salt.to_vec(), iterations),
+            krabka_pgwire::scram::ScramVerifier::from_password(password, salt.to_vec(), iterations),
         );
     }
 
@@ -8886,15 +8886,15 @@ mod tests {
     fn timestamp_prewrite_commit_fault_env_value_is_supported() {
         assert_eq!(
             parse_test_commit_fault("after_timestamp_prewrite_before_decision").unwrap(),
-            crabka_gres_ranges::GatewayCommitFault::AfterTimestampPrewriteBeforeDecision
+            krabka_gres_ranges::GatewayCommitFault::AfterTimestampPrewriteBeforeDecision
         );
         assert!(parse_test_commit_fault("unknown_timestamp_fault").is_err());
     }
 
     #[test]
     fn registry_policy_options_use_validated_defaults() {
-        let defaults = Cli::try_parse_from(["crabka-gres"]).expect("defaults");
-        assert!(defaults.serve.registry.policy() == crabka_gres_control::RegistryPolicy::default());
+        let defaults = Cli::try_parse_from(["krabka-gres"]).expect("defaults");
+        assert!(defaults.serve.registry.policy() == krabka_gres_control::RegistryPolicy::default());
         for option in [
             "--client-dispatch-queue-capacity=0",
             "--client-frame-max=101MiB",
@@ -8908,21 +8908,21 @@ mod tests {
             "--registry-producer-dns-timeout=0ms",
             "--registry-reader-admin-dns-timeout=0ms",
         ] {
-            assert!(Cli::try_parse_from(["crabka-gres", option]).is_err());
+            assert!(Cli::try_parse_from(["krabka-gres", option]).is_err());
         }
     }
 
     #[test]
     fn client_resource_policy_parses_defaults_overrides_and_role_restrictions() {
-        let defaults = Cli::try_parse_from(["crabka-gres"]).expect("defaults");
+        let defaults = Cli::try_parse_from(["krabka-gres"]).expect("defaults");
         assert!(defaults.serve.registry.dispatch_queue_capacity().get() == 64);
-        assert!(defaults.serve.registry.frame_max().size() == crabka_units::mebibytes(100));
+        assert!(defaults.serve.registry.frame_max().size() == krabka_units::mebibytes(100));
         assert!(defaults.serve.registry.fdw_fetch_min().bytes() == 1);
         assert!(defaults.serve.registry.wal_recovery_fetch_min().bytes() == 1);
         assert!(defaults.serve.registry.registry_reader_fetch_min().bytes() == 1);
 
         let custom = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--client-dispatch-queue-capacity=7",
@@ -8933,7 +8933,7 @@ mod tests {
         ])
         .expect("custom policy");
         assert!(custom.serve.registry.dispatch_queue_capacity().get() == 7);
-        assert!(custom.serve.registry.frame_max().size() == crabka_units::kibibytes(32));
+        assert!(custom.serve.registry.frame_max().size() == krabka_units::kibibytes(32));
         assert!(custom.serve.registry.fdw_fetch_min().bytes() == 2);
         assert!(custom.serve.registry.wal_recovery_fetch_min().bytes() == 3);
         assert!(custom.serve.registry.registry_reader_fetch_min().bytes() == 4);
@@ -8941,18 +8941,18 @@ mod tests {
             .expect("valid substrate policy")
             .expect("substrate enabled");
         assert!(substrate.client_dispatch_queue_capacity.get() == 7);
-        assert!(substrate.client_frame_max.size() == crabka_units::kibibytes(32));
+        assert!(substrate.client_frame_max.size() == krabka_units::kibibytes(32));
         assert!(substrate.fdw_fetch_min.bytes() == 2);
         assert!(substrate.wal_recovery_fetch_min.bytes() == 3);
 
         for role_specific in ["--fdw-fetch-min=2B", "--wal-recovery-fetch-min=3B"] {
-            assert!(Cli::try_parse_from(["crabka-gres", role_specific]).is_err());
+            assert!(Cli::try_parse_from(["krabka-gres", role_specific]).is_err());
         }
     }
 
     #[test]
     fn client_resource_policy_reads_environment_and_prefers_cli() {
-        const CHILD: &str = "CRABKA_TEST_GRES_CLIENT_RESOURCE_POLICY_CHILD";
+        const CHILD: &str = "KRABKA_TEST_GRES_CLIENT_RESOURCE_POLICY_CHILD";
         if std::env::var_os(CHILD).is_none() {
             let status = std::process::Command::new(std::env::current_exe().expect("test exe"))
                 .args([
@@ -8960,11 +8960,11 @@ mod tests {
                     "tests::client_resource_policy_reads_environment_and_prefers_cli",
                 ])
                 .env(CHILD, "1")
-                .env("CRABKA_GRES_CLIENT_DISPATCH_QUEUE_CAPACITY", "7")
-                .env("CRABKA_GRES_CLIENT_FRAME_MAX", "32KiB")
-                .env("CRABKA_GRES_FDW_FETCH_MIN", "2B")
-                .env("CRABKA_GRES_WAL_RECOVERY_FETCH_MIN", "3B")
-                .env("CRABKA_GRES_REGISTRY_READER_FETCH_MIN", "4B")
+                .env("KRABKA_GRES_CLIENT_DISPATCH_QUEUE_CAPACITY", "7")
+                .env("KRABKA_GRES_CLIENT_FRAME_MAX", "32KiB")
+                .env("KRABKA_GRES_FDW_FETCH_MIN", "2B")
+                .env("KRABKA_GRES_WAL_RECOVERY_FETCH_MIN", "3B")
+                .env("KRABKA_GRES_REGISTRY_READER_FETCH_MIN", "4B")
                 .status()
                 .expect("child test");
             assert!(status.success());
@@ -8972,13 +8972,13 @@ mod tests {
         }
 
         let environment = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
         ])
         .expect("environment policy");
         assert!(environment.serve.registry.dispatch_queue_capacity().get() == 7);
-        assert!(environment.serve.registry.frame_max().size() == crabka_units::kibibytes(32));
+        assert!(environment.serve.registry.frame_max().size() == krabka_units::kibibytes(32));
         assert!(environment.serve.registry.fdw_fetch_min().bytes() == 2);
         assert!(environment.serve.registry.wal_recovery_fetch_min().bytes() == 3);
         assert!(
@@ -8991,7 +8991,7 @@ mod tests {
         );
 
         let cli = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--client-dispatch-queue-capacity=9",
@@ -9002,7 +9002,7 @@ mod tests {
         ])
         .expect("CLI policy");
         assert!(cli.serve.registry.dispatch_queue_capacity().get() == 9);
-        assert!(cli.serve.registry.frame_max().size() == crabka_units::kibibytes(64));
+        assert!(cli.serve.registry.frame_max().size() == krabka_units::kibibytes(64));
         assert!(cli.serve.registry.fdw_fetch_min().bytes() == 5);
         assert!(cli.serve.registry.wal_recovery_fetch_min().bytes() == 6);
         assert!(cli.serve.registry.registry_reader_fetch_min().bytes() == 7);
@@ -9010,15 +9010,15 @@ mod tests {
 
     #[test]
     fn registry_policy_options_read_environment_and_prefer_cli() {
-        const CHILD: &str = "CRABKA_TEST_GRES_REGISTRY_ENV_CHILD";
+        const CHILD: &str = "KRABKA_TEST_GRES_REGISTRY_ENV_CHILD";
         let vars = [
-            ("CRABKA_GRES_REGISTRY_REPLICATION_FACTOR", "2"),
-            ("CRABKA_GRES_REGISTRY_TOPIC_CREATE_TIMEOUT", "15001ms"),
-            ("CRABKA_GRES_REGISTRY_READER_RETRY_BACKOFF", "251ms"),
-            ("CRABKA_GRES_REGISTRY_FETCH_MAX_WAIT", "501ms"),
-            ("CRABKA_GRES_REGISTRY_FETCH_PARTITION_MAX", "1048577B"),
-            ("CRABKA_GRES_REGISTRY_PRODUCER_DNS_TIMEOUT", "37ms"),
-            ("CRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT", "37ms"),
+            ("KRABKA_GRES_REGISTRY_REPLICATION_FACTOR", "2"),
+            ("KRABKA_GRES_REGISTRY_TOPIC_CREATE_TIMEOUT", "15001ms"),
+            ("KRABKA_GRES_REGISTRY_READER_RETRY_BACKOFF", "251ms"),
+            ("KRABKA_GRES_REGISTRY_FETCH_MAX_WAIT", "501ms"),
+            ("KRABKA_GRES_REGISTRY_FETCH_PARTITION_MAX", "1048577B"),
+            ("KRABKA_GRES_REGISTRY_PRODUCER_DNS_TIMEOUT", "37ms"),
+            ("KRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT", "37ms"),
         ];
         if std::env::var_os(CHILD).is_none() {
             let status = std::process::Command::new(std::env::current_exe().expect("test exe"))
@@ -9033,22 +9033,22 @@ mod tests {
             assert!(status.success());
             return;
         }
-        let environment = Cli::try_parse_from(["crabka-gres"]).expect("environment policy");
-        let environment_policy = crabka_gres_control::RegistryPolicy::new(
+        let environment = Cli::try_parse_from(["krabka-gres"]).expect("environment policy");
+        let environment_policy = krabka_gres_control::RegistryPolicy::new(
             2,
-            crabka_units::millis(15_001),
-            crabka_units::millis(251),
-            crabka_units::millis(501),
-            crabka_units::bytes(1_048_577),
+            krabka_units::millis(15_001),
+            krabka_units::millis(251),
+            krabka_units::millis(501),
+            krabka_units::bytes(1_048_577),
         )
         .expect("policy")
-        .with_producer_dns_timeout(crabka_units::millis(37))
+        .with_producer_dns_timeout(krabka_units::millis(37))
         .expect("environment DNS timeout")
-        .with_reader_admin_dns_timeout(crabka_units::millis(37))
+        .with_reader_admin_dns_timeout(krabka_units::millis(37))
         .expect("environment reader/admin DNS timeout");
         assert!(environment.serve.registry.policy() == environment_policy);
         let cli = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--registry-replication-factor=3",
             "--registry-topic-create-timeout=15002ms",
             "--registry-reader-retry-backoff=252ms",
@@ -9058,33 +9058,33 @@ mod tests {
             "--registry-reader-admin-dns-timeout=47ms",
         ])
         .expect("CLI policy");
-        let cli_policy = crabka_gres_control::RegistryPolicy::new(
+        let cli_policy = krabka_gres_control::RegistryPolicy::new(
             3,
-            crabka_units::millis(15_002),
-            crabka_units::millis(252),
-            crabka_units::millis(502),
-            crabka_units::bytes(1_048_578),
+            krabka_units::millis(15_002),
+            krabka_units::millis(252),
+            krabka_units::millis(502),
+            krabka_units::bytes(1_048_578),
         )
         .expect("policy")
-        .with_producer_dns_timeout(crabka_units::millis(47))
+        .with_producer_dns_timeout(krabka_units::millis(47))
         .expect("CLI DNS timeout")
-        .with_reader_admin_dns_timeout(crabka_units::millis(47))
+        .with_reader_admin_dns_timeout(krabka_units::millis(47))
         .expect("CLI reader/admin DNS timeout");
         assert!(cli.serve.registry.policy() == cli_policy);
     }
 
     #[test]
     fn local_vacuum_options_are_absent_by_default_and_cli_overrides_environment() {
-        const CHILD: &str = "CRABKA_TEST_GRES_LOCAL_VACUUM_ENV_CHILD";
+        const CHILD: &str = "KRABKA_TEST_GRES_LOCAL_VACUUM_ENV_CHILD";
         let variables = [
-            ("CRABKA_GRES_LOCAL_VACUUM_IDLE_INTERVAL", "11ms"),
-            ("CRABKA_GRES_LOCAL_VACUUM_BACKOFF_FLOOR", "12ms"),
-            ("CRABKA_GRES_LOCAL_VACUUM_HOT_DEBT", "13"),
-            ("CRABKA_GRES_LOCAL_VACUUM_KEY_BUDGET", "14"),
-            ("CRABKA_GRES_LOCAL_VACUUM_MAX_KEY_BUDGET", "15"),
-            ("CRABKA_GRES_LOCAL_VACUUM_STEP_FAST", "16ms"),
-            ("CRABKA_GRES_LOCAL_VACUUM_STEP_SLOW", "17ms"),
-            ("CRABKA_GRES_LOCAL_VACUUM_IDLE_AFTER", "18ms"),
+            ("KRABKA_GRES_LOCAL_VACUUM_IDLE_INTERVAL", "11ms"),
+            ("KRABKA_GRES_LOCAL_VACUUM_BACKOFF_FLOOR", "12ms"),
+            ("KRABKA_GRES_LOCAL_VACUUM_HOT_DEBT", "13"),
+            ("KRABKA_GRES_LOCAL_VACUUM_KEY_BUDGET", "14"),
+            ("KRABKA_GRES_LOCAL_VACUUM_MAX_KEY_BUDGET", "15"),
+            ("KRABKA_GRES_LOCAL_VACUUM_STEP_FAST", "16ms"),
+            ("KRABKA_GRES_LOCAL_VACUUM_STEP_SLOW", "17ms"),
+            ("KRABKA_GRES_LOCAL_VACUUM_IDLE_AFTER", "18ms"),
         ];
         if std::env::var_os(CHILD).is_none() {
             let mut defaults =
@@ -9114,27 +9114,27 @@ mod tests {
         }
 
         if std::env::var(CHILD).as_deref() == Ok("absent") {
-            let defaults = Cli::try_parse_from(["crabka-gres"])
+            let defaults = Cli::try_parse_from(["krabka-gres"])
                 .expect("defaults")
                 .serve;
             assert_eq!(defaults.local_vacuum, LocalVacuumOptions::default());
             return;
         }
 
-        let environment = Cli::try_parse_from(["crabka-gres"])
+        let environment = Cli::try_parse_from(["krabka-gres"])
             .expect("environment policy")
             .serve
             .local_vacuum;
         assert_eq!(
             environment
                 .idle_interval
-                .map(crabka_units::convert::TimeExt::millis_i64),
+                .map(krabka_units::convert::TimeExt::millis_i64),
             Some(11)
         );
         assert_eq!(
             environment
                 .backoff_floor
-                .map(crabka_units::convert::TimeExt::millis_i64),
+                .map(krabka_units::convert::TimeExt::millis_i64),
             Some(12)
         );
         assert_eq!(environment.hot_debt.map(NonZeroU64::get), Some(13));
@@ -9149,24 +9149,24 @@ mod tests {
         assert_eq!(
             environment
                 .step_fast
-                .map(crabka_units::convert::TimeExt::millis_i64),
+                .map(krabka_units::convert::TimeExt::millis_i64),
             Some(16)
         );
         assert_eq!(
             environment
                 .step_slow
-                .map(crabka_units::convert::TimeExt::millis_i64),
+                .map(krabka_units::convert::TimeExt::millis_i64),
             Some(17)
         );
         assert_eq!(
             environment
                 .idle_after
-                .map(crabka_units::convert::TimeExt::millis_i64),
+                .map(krabka_units::convert::TimeExt::millis_i64),
             Some(18)
         );
 
         let cli = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--local-vacuum-idle-interval",
             "21ms",
             "--local-vacuum-backoff-floor",
@@ -9189,12 +9189,12 @@ mod tests {
         .local_vacuum;
         assert_eq!(
             cli.idle_interval
-                .map(crabka_units::convert::TimeExt::millis_i64),
+                .map(krabka_units::convert::TimeExt::millis_i64),
             Some(21)
         );
         assert_eq!(
             cli.backoff_floor
-                .map(crabka_units::convert::TimeExt::millis_i64),
+                .map(krabka_units::convert::TimeExt::millis_i64),
             Some(22)
         );
         assert_eq!(cli.hot_debt.map(NonZeroU64::get), Some(23));
@@ -9202,17 +9202,17 @@ mod tests {
         assert_eq!(cli.max_key_budget.map(PositiveUsize::into_value), Some(25));
         assert_eq!(
             cli.step_fast
-                .map(crabka_units::convert::TimeExt::millis_i64),
+                .map(krabka_units::convert::TimeExt::millis_i64),
             Some(26)
         );
         assert_eq!(
             cli.step_slow
-                .map(crabka_units::convert::TimeExt::millis_i64),
+                .map(krabka_units::convert::TimeExt::millis_i64),
             Some(27)
         );
         assert_eq!(
             cli.idle_after
-                .map(crabka_units::convert::TimeExt::millis_i64),
+                .map(krabka_units::convert::TimeExt::millis_i64),
             Some(28)
         );
     }
@@ -9229,7 +9229,7 @@ mod tests {
             "--local-vacuum-step-slow=0ms",
             "--local-vacuum-idle-after=0ms",
         ] {
-            assert!(Cli::try_parse_from(["crabka-gres", option]).is_err());
+            assert!(Cli::try_parse_from(["krabka-gres", option]).is_err());
         }
 
         for arguments in [
@@ -9256,7 +9256,7 @@ mod tests {
             .as_slice(),
         ] {
             let args = Cli::try_parse_from(
-                std::iter::once("crabka-gres").chain(arguments.iter().copied()),
+                std::iter::once("krabka-gres").chain(arguments.iter().copied()),
             )
             .expect("scalar-valid arguments")
             .serve;
@@ -9274,7 +9274,7 @@ mod tests {
             "--local-vacuum-idle-after=1ms",
         ] {
             let args = Cli::try_parse_from([
-                "crabka-gres",
+                "krabka-gres",
                 "--substrate-bootstrap=memory://",
                 "--tenant=tenant-a",
                 option,
@@ -9289,7 +9289,7 @@ mod tests {
     async fn local_vacuum_validation_precedes_listener_bind() {
         let occupied = TcpListener::bind("127.0.0.1:0").await.expect("listener");
         let mut args = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--local-vacuum-hot-debt=1",
@@ -9309,7 +9309,7 @@ mod tests {
 
     #[tokio::test]
     async fn range0_follower_poll_validation_precedes_listener_bind() {
-        const CHILD: &str = "CRABKA_TEST_GRES_RANGE0_FOLLOWER_POLL_BIND_CHILD";
+        const CHILD: &str = "KRABKA_TEST_GRES_RANGE0_FOLLOWER_POLL_BIND_CHILD";
         if std::env::var_os(CHILD).is_none() {
             let status = std::process::Command::new(std::env::current_exe().expect("test exe"))
                 .args([
@@ -9317,7 +9317,7 @@ mod tests {
                     "tests::range0_follower_poll_validation_precedes_listener_bind",
                 ])
                 .env(CHILD, "1")
-                .env_remove("CRABKA_GRES_RANGE0_FOLLOWER_POLL_INTERVAL")
+                .env_remove("KRABKA_GRES_RANGE0_FOLLOWER_POLL_INTERVAL")
                 .status()
                 .expect("child test");
             assert!(status.success());
@@ -9325,11 +9325,11 @@ mod tests {
         }
 
         let occupied = TcpListener::bind("127.0.0.1:0").await.expect("listener");
-        let mut args = Cli::try_parse_from(["crabka-gres"])
+        let mut args = Cli::try_parse_from(["krabka-gres"])
             .expect("defaults")
             .serve;
         args.listen = occupied.local_addr().expect("address").to_string();
-        args.range0_follower_poll_interval = Some(crabka_units::millis(1));
+        args.range0_follower_poll_interval = Some(krabka_units::millis(1));
 
         let error = run_serve(args).await.expect_err("invalid range-0 policy");
 
@@ -9342,7 +9342,7 @@ mod tests {
 
     #[test]
     fn checkpoint_lifecycle_options_use_validated_defaults() {
-        let args = Cli::try_parse_from(["crabka-gres"])
+        let args = Cli::try_parse_from(["krabka-gres"])
             .expect("defaults")
             .serve;
 
@@ -9366,11 +9366,11 @@ mod tests {
             "--checkpoint-poll-interval=0ms",
             "--idle-suspend-poll-interval=0ms",
         ] {
-            assert!(Cli::try_parse_from(["crabka-gres", option]).is_err());
+            assert!(Cli::try_parse_from(["krabka-gres", option]).is_err());
         }
 
         let oversized = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--checkpoint-store=in-memory",
@@ -9382,15 +9382,15 @@ mod tests {
 
     #[test]
     fn checkpoint_lifecycle_options_read_environment_and_prefer_cli() {
-        const CHILD: &str = "CRABKA_TEST_GRES_CHECKPOINT_ENV_CHILD";
+        const CHILD: &str = "KRABKA_TEST_GRES_CHECKPOINT_ENV_CHILD";
         let vars = [
-            ("CRABKA_GRES_CHECKPOINT_FRAMES", "11"),
-            ("CRABKA_GRES_CHECKPOINT_SIZE", "12B"),
-            ("CRABKA_GRES_CHECKPOINT_PART_SIZE", "13B"),
-            ("CRABKA_GRES_CHECKPOINT_RETAIN", "14"),
-            ("CRABKA_GRES_CHECKPOINT_DELETE_RECORDS_TIMEOUT", "15ms"),
-            ("CRABKA_GRES_CHECKPOINT_POLL_INTERVAL", "16ms"),
-            ("CRABKA_GRES_IDLE_SUSPEND_POLL_INTERVAL", "17ms"),
+            ("KRABKA_GRES_CHECKPOINT_FRAMES", "11"),
+            ("KRABKA_GRES_CHECKPOINT_SIZE", "12B"),
+            ("KRABKA_GRES_CHECKPOINT_PART_SIZE", "13B"),
+            ("KRABKA_GRES_CHECKPOINT_RETAIN", "14"),
+            ("KRABKA_GRES_CHECKPOINT_DELETE_RECORDS_TIMEOUT", "15ms"),
+            ("KRABKA_GRES_CHECKPOINT_POLL_INTERVAL", "16ms"),
+            ("KRABKA_GRES_IDLE_SUSPEND_POLL_INTERVAL", "17ms"),
         ];
         if std::env::var_os(CHILD).is_none() {
             let status = std::process::Command::new(std::env::current_exe().expect("test exe"))
@@ -9406,39 +9406,39 @@ mod tests {
             return;
         }
 
-        let environment = Cli::try_parse_from(["crabka-gres"])
+        let environment = Cli::try_parse_from(["krabka-gres"])
             .expect("environment checkpoint policy")
             .serve;
         assert!(environment.checkpoint_frames.map(NonZeroU64::get) == Some(11));
-        assert!(environment.checkpoint_size == Some(crabka_units::bytes(12)));
+        assert!(environment.checkpoint_size == Some(krabka_units::bytes(12)));
         assert!(
             environment
                 .checkpoint_part_size
-                .map(crabka_units::convert::ByteSizeExt::bytes_usize)
+                .map(krabka_units::convert::ByteSizeExt::bytes_usize)
                 == Some(13)
         );
         assert!(environment.checkpoint_retain.map(PositiveUsize::into_value) == Some(14));
         assert!(
             environment
                 .checkpoint_delete_records_timeout
-                .map(crabka_units::convert::TimeExt::millis_i64)
+                .map(krabka_units::convert::TimeExt::millis_i64)
                 == Some(15)
         );
         assert!(
             environment
                 .checkpoint_poll_interval
-                .map(crabka_units::convert::TimeExt::millis_i64)
+                .map(krabka_units::convert::TimeExt::millis_i64)
                 == Some(16)
         );
         assert!(
             environment
                 .idle_suspend_poll_interval
-                .map(crabka_units::convert::TimeExt::millis_i64)
+                .map(krabka_units::convert::TimeExt::millis_i64)
                 == Some(17)
         );
 
         let cli = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--checkpoint-frames=21",
             "--checkpoint-size=22B",
             "--checkpoint-part-size=23B",
@@ -9450,26 +9450,26 @@ mod tests {
         .expect("CLI checkpoint policy")
         .serve;
         assert!(cli.checkpoint_frames.map(NonZeroU64::get) == Some(21));
-        assert!(cli.checkpoint_size == Some(crabka_units::bytes(22)));
+        assert!(cli.checkpoint_size == Some(krabka_units::bytes(22)));
         assert!(
             cli.checkpoint_part_size
-                .map(crabka_units::convert::ByteSizeExt::bytes_usize)
+                .map(krabka_units::convert::ByteSizeExt::bytes_usize)
                 == Some(23)
         );
         assert!(cli.checkpoint_retain.map(PositiveUsize::into_value) == Some(24));
         assert!(
             cli.checkpoint_delete_records_timeout
-                .map(crabka_units::convert::TimeExt::millis_i64)
+                .map(krabka_units::convert::TimeExt::millis_i64)
                 == Some(25)
         );
         assert!(
             cli.checkpoint_poll_interval
-                .map(crabka_units::convert::TimeExt::millis_i64)
+                .map(krabka_units::convert::TimeExt::millis_i64)
                 == Some(26)
         );
         assert!(
             cli.idle_suspend_poll_interval
-                .map(crabka_units::convert::TimeExt::millis_i64)
+                .map(krabka_units::convert::TimeExt::millis_i64)
                 == Some(27)
         );
     }
@@ -9514,7 +9514,7 @@ mod tests {
         std::fs::create_dir_all(&range_dir).expect("range cache");
         std::fs::write(range_dir.join("stale"), b"cache").expect("stale cache value");
 
-        reset_substrate_range_cache(Some(root.path()), crabka_gres_ranges::RangeId::new(1), None)
+        reset_substrate_range_cache(Some(root.path()), krabka_gres_ranges::RangeId::new(1), None)
             .expect("reset disposable cache");
 
         assert!(range_dir.is_dir());
@@ -9536,7 +9536,7 @@ mod tests {
 
         reset_substrate_range_cache(
             Some(root.path()),
-            crabka_gres_ranges::RangeId::new(2),
+            krabka_gres_ranges::RangeId::new(2),
             Some(&sibling),
         )
         .expect("reset absent disposable cache");
@@ -9560,7 +9560,7 @@ mod tests {
         for range in [0, 2] {
             reset_substrate_range_cache(
                 Some(root.path()),
-                crabka_gres_ranges::RangeId::new(range),
+                krabka_gres_ranges::RangeId::new(range),
                 None,
             )
             .expect("reset hosted range");
@@ -9584,7 +9584,7 @@ mod tests {
             std::fs::create_dir_all(&protected).expect("protected path");
             let error = reset_substrate_range_cache(
                 Some(&root.path().join("cache")),
-                crabka_gres_ranges::RangeId::new(1),
+                krabka_gres_ranges::RangeId::new(1),
                 Some(&protected),
             )
             .expect_err("overlap must fail closed");
@@ -9608,7 +9608,7 @@ mod tests {
 
         let error = reset_substrate_range_cache(
             Some(&cache),
-            crabka_gres_ranges::RangeId::new(1),
+            krabka_gres_ranges::RangeId::new(1),
             Some(&alias),
         )
         .expect_err("symlink overlap must fail closed");
@@ -9618,14 +9618,14 @@ mod tests {
 
     fn registry_test_record(
         version: u64,
-        ranges: Vec<crabka_gres_control::RangeLayoutEntry>,
+        ranges: Vec<krabka_gres_control::RangeLayoutEntry>,
     ) -> TenantRecord {
         let mut record = TenantRecord::new(
             version,
-            crabka_gres_control::TenantId::try_from("registry-overlay").expect("id"),
+            krabka_gres_control::TenantId::try_from("registry-overlay").expect("id"),
             TenantName::try_from("registry-overlay").expect("name"),
-            crabka_gres_control::TenantState::Active,
-            crabka_gres_control::SqlUser::try_from("alice").expect("user"),
+            krabka_gres_control::TenantState::Active,
+            krabka_gres_control::SqlUser::try_from("alice").expect("user"),
             "SCRAM-SHA-256$4096:salt$stored:server".into(),
             3,
         )
@@ -9636,13 +9636,13 @@ mod tests {
         record
     }
 
-    fn registry_test_range(range_id: u32, endpoint: &str) -> crabka_gres_control::RangeLayoutEntry {
-        crabka_gres_control::RangeLayoutEntry {
+    fn registry_test_range(range_id: u32, endpoint: &str) -> krabka_gres_control::RangeLayoutEntry {
+        krabka_gres_control::RangeLayoutEntry {
             range_id,
             end_key: None,
             endpoint: endpoint.into(),
             wal_generation: u64::from(range_id),
-            lifecycle: crabka_gres_control::RangeLifecycle::default(),
+            lifecycle: krabka_gres_control::RangeLifecycle::default(),
             retirement: None,
         }
     }
@@ -9710,7 +9710,7 @@ mod tests {
 
         assert_eq!(
             options.client_id,
-            "crabka-gres-activation-reader-secured-tenant"
+            "krabka-gres-activation-reader-secured-tenant"
         );
         let security = options.security.expect("security forwarded to reader");
         assert_eq!(security.protocol, ListenerProtocol::SaslPlaintext);
@@ -9772,7 +9772,7 @@ mod tests {
 
     #[test]
     fn activation_registry_reader_fails_closed_on_noncanonical_history() {
-        use crabka_gres_control::SplitOperationPhase;
+        use krabka_gres_control::SplitOperationPhase;
 
         let initiated = test_authorized_split_intent()
             .expect("intent")
@@ -9781,7 +9781,7 @@ mod tests {
         let running = initiated
             .advance(SplitOperationPhase::Running, 1, None)
             .expect("running");
-        let encode = |record: &crabka_gres_control::SplitOperationRecord| {
+        let encode = |record: &krabka_gres_control::SplitOperationRecord| {
             serde_json::to_vec(record).expect("encode operation")
         };
 
@@ -9934,22 +9934,22 @@ mod tests {
         ServeArgs {
             registry: RegistryOptions {
                 client_dispatch_queue_capacity:
-                    crabka_client_core::DEFAULT_CONNECTION_DISPATCH_QUEUE_CAPACITY,
-                client_frame_max: crabka_units::mebibytes(100),
+                    krabka_client_core::DEFAULT_CONNECTION_DISPATCH_QUEUE_CAPACITY,
+                client_frame_max: krabka_units::mebibytes(100),
                 fdw_fetch_min: None,
-                fdw_fetch_max_wait: crabka_units::secs(5),
-                fdw_fetch_partition_max: crabka_units::mebibytes(10),
-                fdw_connect_timeout: crabka_units::secs(10),
-                fdw_request_timeout: crabka_units::secs(30),
-                fdw_schema_fetch_timeout: crabka_units::secs(10),
-                fdw_schema_fetch_poll: crabka_units::millis(20),
+                fdw_fetch_max_wait: krabka_units::secs(5),
+                fdw_fetch_partition_max: krabka_units::mebibytes(10),
+                fdw_connect_timeout: krabka_units::secs(10),
+                fdw_request_timeout: krabka_units::secs(30),
+                fdw_schema_fetch_timeout: krabka_units::secs(10),
+                fdw_schema_fetch_poll: krabka_units::millis(20),
                 wal_recovery_fetch_min: None,
-                registry_reader_fetch_min: crabka_units::bytes(1),
+                registry_reader_fetch_min: krabka_units::bytes(1),
                 replication_factor: RegistryReplicationFactor::new(1).expect("default"),
-                topic_create_timeout: crabka_units::millis(15_000),
-                reader_retry_backoff: crabka_units::millis(250),
-                fetch_max_wait: crabka_units::millis(500),
-                fetch_partition_max: crabka_units::mebibytes(1),
+                topic_create_timeout: krabka_units::millis(15_000),
+                reader_retry_backoff: krabka_units::millis(250),
+                fetch_max_wait: krabka_units::millis(500),
+                fetch_partition_max: krabka_units::mebibytes(1),
                 producer_dns_timeout: None,
                 reader_admin_dns_timeout: None,
             },
@@ -9961,8 +9961,8 @@ mod tests {
             tls_key: None,
             auth: auth.map(str::to_string),
             user_creds,
-            pgwire_max_message_size: crabka_units::mebibytes(64),
-            pgwire_scram_iterations: crabka_pgwire::scram::DEFAULT_ITERATIONS,
+            pgwire_max_message_size: krabka_units::mebibytes(64),
+            pgwire_scram_iterations: krabka_pgwire::scram::DEFAULT_ITERATIONS,
             data_dir: None,
             substrate_bootstrap: None,
             tenant: None,
@@ -10005,7 +10005,7 @@ mod tests {
             wal_frame_max_size: None,
             host_ranges: None,
             timestamp_source: TimestampSourceKind::LogicalTso,
-            hlc_max_offset: crabka_units::millis(250),
+            hlc_max_offset: krabka_units::millis(250),
             hlc_wall_offset: Time::ZERO,
             range_listen: None,
             range_tls_cert: None,
@@ -10048,7 +10048,7 @@ mod tests {
 
     #[test]
     fn source_checkpoint_pin_is_kept_only_while_activation_needs_it() {
-        use crabka_gres_ranges::control::TopologyActivationPhase;
+        use krabka_gres_ranges::control::TopologyActivationPhase;
 
         for phase in [
             TopologyActivationPhase::Prepared,
@@ -10096,8 +10096,8 @@ mod tests {
             .expect("config")
             .expect("substrate config");
         let wal_selection = single_range_live_wal_selection(&config, None).expect("wal selection");
-        let checkpoint_store: Arc<dyn crabka_gres_substrate::checkpoint::CheckpointStore> =
-            crabka_gres_substrate::checkpoint::InMemoryCheckpointStore::shared();
+        let checkpoint_store: Arc<dyn krabka_gres_substrate::checkpoint::CheckpointStore> =
+            krabka_gres_substrate::checkpoint::InMemoryCheckpointStore::shared();
 
         let recovery_config = recovery_config_with_checkpoint_store(
             wal_selection.recovery_config,
@@ -10113,10 +10113,10 @@ mod tests {
             .expect("verifier");
         TenantRecord::new(
             1,
-            crabka_gres_control::TenantId::try_from("tenant-a").expect("tenant id"),
+            krabka_gres_control::TenantId::try_from("tenant-a").expect("tenant id"),
             TenantName::try_from("tenant-a").expect("tenant name"),
-            crabka_gres_control::TenantState::Active,
-            crabka_gres_control::SqlUser::try_from("alice").expect("sql user"),
+            krabka_gres_control::TenantState::Active,
+            krabka_gres_control::SqlUser::try_from("alice").expect("sql user"),
             verifier.to_string(),
             1,
         )
@@ -10127,13 +10127,13 @@ mod tests {
         SuspendPolicy {
             tenant: "tenant-a".to_string(),
             idle_window: millis(1),
-            suspend_max_checkpoint: Some(crabka_units::bytes(100)),
+            suspend_max_checkpoint: Some(krabka_units::bytes(100)),
         }
     }
 
-    fn idle_activity() -> Arc<crabka_pgwire::server::ActivityTracker> {
+    fn idle_activity() -> Arc<krabka_pgwire::server::ActivityTracker> {
         let old = current_unix_millis().expect("clock").saturating_sub(60_000);
-        Arc::new(crabka_pgwire::server::ActivityTracker::with_last_activity_unix_millis(old))
+        Arc::new(krabka_pgwire::server::ActivityTracker::with_last_activity_unix_millis(old))
     }
 
     #[tokio::test]
@@ -10216,8 +10216,8 @@ mod tests {
         assert!(
             outcome
                 == SuspendMonitorOutcome::CheckpointTooLarge {
-                    size: crabka_units::bytes(101),
-                    max: crabka_units::bytes(100),
+                    size: krabka_units::bytes(101),
+                    max: krabka_units::bytes(100),
                 }
         );
         assert_eq!(checkpointer.checkpoints.load(Ordering::SeqCst), 0);
@@ -10271,7 +10271,7 @@ mod tests {
     #[test]
     fn standalone_scram_and_message_policy_reach_session_config() {
         let mut args = serve_args(Some("scram"), vec!["alice=secret".to_owned()]);
-        args.pgwire_max_message_size = crabka_units::bytes(37);
+        args.pgwire_max_message_size = krabka_units::bytes(37);
         args.pgwire_scram_iterations = 41;
 
         let config = build_session_config(&args).expect("config");
@@ -10294,11 +10294,11 @@ mod tests {
         for (id, environment) in [
             (
                 "pgwire_max_message_size",
-                "CRABKA_GRES_PGWIRE_MAX_MESSAGE_SIZE",
+                "KRABKA_GRES_PGWIRE_MAX_MESSAGE_SIZE",
             ),
             (
                 "pgwire_scram_iterations",
-                "CRABKA_GRES_PGWIRE_SCRAM_ITERATIONS",
+                "KRABKA_GRES_PGWIRE_SCRAM_ITERATIONS",
             ),
         ] {
             let argument = command
@@ -10309,13 +10309,13 @@ mod tests {
         }
 
         let configured = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--pgwire-max-message-size=37B",
             "--pgwire-scram-iterations=41",
         ])
         .expect("configured")
         .serve;
-        assert!(configured.pgwire_max_message_size == crabka_units::bytes(37));
+        assert!(configured.pgwire_max_message_size == krabka_units::bytes(37));
         assert_eq!(configured.pgwire_scram_iterations, 41);
 
         for option in [
@@ -10324,7 +10324,7 @@ mod tests {
             "--pgwire-scram-iterations=0",
         ] {
             assert!(
-                Cli::try_parse_from(["crabka-gres", option]).is_err(),
+                Cli::try_parse_from(["krabka-gres", option]).is_err(),
                 "{option}"
             );
         }
@@ -10347,7 +10347,7 @@ mod tests {
         ];
 
         for (value, mode, policy) in cases {
-            let args = Cli::try_parse_from(["crabka-gres", "--gres-trace-ingress", value])
+            let args = Cli::try_parse_from(["krabka-gres", "--gres-trace-ingress", value])
                 .unwrap_or_else(|error| panic!("--gres-trace-ingress {value}: {error}"))
                 .serve;
             assert!(args.gres_trace_ingress == mode, "{value}");
@@ -10364,16 +10364,16 @@ mod tests {
             .get_arguments()
             .find(|argument| argument.get_id().as_str() == "gres_trace_ingress")
             .expect("trace ingress argument");
-        assert!(argument.get_env() == Some(std::ffi::OsStr::new("CRABKA_GRES_TRACE_INGRESS")));
+        assert!(argument.get_env() == Some(std::ffi::OsStr::new("KRABKA_GRES_TRACE_INGRESS")));
 
-        let default = Cli::try_parse_from(["crabka-gres"])
+        let default = Cli::try_parse_from(["krabka-gres"])
             .expect("defaults")
             .serve;
         assert!(default.gres_trace_ingress == TraceIngressMode::Resample);
 
         for value in ["", "on", "resampled", "0.5", "Off "] {
             assert!(
-                Cli::try_parse_from(["crabka-gres", "--gres-trace-ingress", value]).is_err(),
+                Cli::try_parse_from(["krabka-gres", "--gres-trace-ingress", value]).is_err(),
                 "{value}"
             );
         }
@@ -10387,13 +10387,13 @@ mod tests {
         let mut args = serve_args(None, Vec::new());
         let otlp = telemetry::OtlpConfig::from_env(
             |key| match key {
-                "CRABKA_OTLP_ENDPOINT" => Some("http://collector:4317".to_owned()),
-                "CRABKA_OTLP_SAMPLE_RATIO" => Some("0.25".to_owned()),
+                "KRABKA_OTLP_ENDPOINT" => Some("http://collector:4317".to_owned()),
+                "KRABKA_OTLP_SAMPLE_RATIO" => Some("0.25".to_owned()),
                 _ => None,
             },
             "gres-1",
             "0.0.0",
-            "crabka-gres",
+            "krabka-gres",
         )
         .expect("valid OTLP configuration")
         .expect("OTLP enabled by endpoint");
@@ -10410,7 +10410,7 @@ mod tests {
     #[test]
     fn disabled_otlp_leaves_resample_at_the_default_ratio() {
         let mut args = serve_args(None, Vec::new());
-        let otlp = telemetry::OtlpConfig::from_env(|_| None, "gres-1", "0.0.0", "crabka-gres")
+        let otlp = telemetry::OtlpConfig::from_env(|_| None, "gres-1", "0.0.0", "krabka-gres")
             .expect("valid OTLP configuration");
         assert!(otlp.is_none());
 
@@ -10521,22 +10521,22 @@ mod tests {
         let mut args = substrate_args();
         args.registry = RegistryOptions {
             client_dispatch_queue_capacity:
-                crabka_client_core::DEFAULT_CONNECTION_DISPATCH_QUEUE_CAPACITY,
-            client_frame_max: crabka_units::mebibytes(100),
+                krabka_client_core::DEFAULT_CONNECTION_DISPATCH_QUEUE_CAPACITY,
+            client_frame_max: krabka_units::mebibytes(100),
             fdw_fetch_min: None,
-            fdw_fetch_max_wait: crabka_units::secs(5),
-            fdw_fetch_partition_max: crabka_units::mebibytes(10),
-            fdw_connect_timeout: crabka_units::secs(10),
-            fdw_request_timeout: crabka_units::secs(30),
-            fdw_schema_fetch_timeout: crabka_units::secs(10),
-            fdw_schema_fetch_poll: crabka_units::millis(20),
+            fdw_fetch_max_wait: krabka_units::secs(5),
+            fdw_fetch_partition_max: krabka_units::mebibytes(10),
+            fdw_connect_timeout: krabka_units::secs(10),
+            fdw_request_timeout: krabka_units::secs(30),
+            fdw_schema_fetch_timeout: krabka_units::secs(10),
+            fdw_schema_fetch_poll: krabka_units::millis(20),
             wal_recovery_fetch_min: None,
-            registry_reader_fetch_min: crabka_units::bytes(1),
+            registry_reader_fetch_min: krabka_units::bytes(1),
             replication_factor: RegistryReplicationFactor::new(2).expect("replication factor"),
-            topic_create_timeout: crabka_units::millis(15_001),
-            reader_retry_backoff: crabka_units::millis(251),
-            fetch_max_wait: crabka_units::millis(777),
-            fetch_partition_max: crabka_units::bytes(2_000_000),
+            topic_create_timeout: krabka_units::millis(15_001),
+            reader_retry_backoff: krabka_units::millis(251),
+            fetch_max_wait: krabka_units::millis(777),
+            fetch_partition_max: krabka_units::bytes(2_000_000),
             producer_dns_timeout: None,
             reader_admin_dns_timeout: None,
         };
@@ -10559,21 +10559,21 @@ mod tests {
     fn split_operation_fetch_uses_registry_policy_limits() {
         let policy = RegistryPolicy::new(
             2,
-            crabka_units::millis(15_001),
-            crabka_units::millis(251),
-            crabka_units::millis(777),
-            crabka_units::bytes(2_000_000),
+            krabka_units::millis(15_001),
+            krabka_units::millis(251),
+            krabka_units::millis(777),
+            krabka_units::bytes(2_000_000),
         )
         .expect("registry policy");
         let fetch = live_split_operation_fetch(
             &policy,
             "topic",
-            crabka_protocol::primitives::uuid::Uuid([0; 16]),
+            krabka_protocol::primitives::uuid::Uuid([0; 16]),
             42,
         );
 
         assert!(fetch.max_wait == millis(777));
-        assert!(fetch.partition_max == crabka_units::bytes(2_000_000));
+        assert!(fetch.partition_max == krabka_units::bytes(2_000_000));
     }
 
     #[tokio::test]
@@ -10598,22 +10598,22 @@ mod tests {
         let mut record = tenant_record();
         record.bucket_prefix = Some("from-record".to_string());
         record.checkpoint_frames = Some(77);
-        record.checkpoint_size = Some(crabka_units::bytes(88));
+        record.checkpoint_size = Some(krabka_units::bytes(88));
         let mut args = substrate_args();
         args.checkpoint_store = Some(CheckpointStoreKind::InMemory);
 
         let applied = apply_tenant_runtime_defaults(args.clone(), Some(&record)).expect("defaults");
         assert_eq!(applied.checkpoint_prefix.as_deref(), Some("from-record"));
         assert_eq!(applied.checkpoint_frames.map(NonZeroU64::get), Some(77));
-        assert_eq!(applied.checkpoint_size, Some(crabka_units::bytes(88)));
+        assert_eq!(applied.checkpoint_size, Some(krabka_units::bytes(88)));
 
         args.checkpoint_prefix = Some("cli".to_string());
         args.checkpoint_frames = Some(NonZeroU64::new(7).expect("nonzero"));
-        args.checkpoint_size = Some(crabka_units::bytes(8));
+        args.checkpoint_size = Some(krabka_units::bytes(8));
         let applied = apply_tenant_runtime_defaults(args, Some(&record)).expect("overrides");
         assert_eq!(applied.checkpoint_prefix.as_deref(), Some("cli"));
         assert_eq!(applied.checkpoint_frames.map(NonZeroU64::get), Some(7));
-        assert_eq!(applied.checkpoint_size, Some(crabka_units::bytes(8)));
+        assert_eq!(applied.checkpoint_size, Some(krabka_units::bytes(8)));
     }
 
     #[test]
@@ -10621,7 +10621,7 @@ mod tests {
         let mut record = tenant_record();
         record.bucket_prefix = Some("from-record".to_string());
         record.checkpoint_frames = Some(77);
-        record.checkpoint_size = Some(crabka_units::bytes(88));
+        record.checkpoint_size = Some(krabka_units::bytes(88));
         let applied =
             apply_tenant_runtime_defaults(substrate_args(), Some(&record)).expect("defaults");
 
@@ -10651,30 +10651,30 @@ mod tests {
 
         let mut record = tenant_record();
         record.checkpoint_frames = Some(77);
-        record.checkpoint_size = Some(crabka_units::bytes(88));
+        record.checkpoint_size = Some(krabka_units::bytes(88));
         let hydrated = apply_tenant_runtime_defaults(args.clone(), Some(&record))
             .expect("tenant checkpoint policy");
         let from_record = CheckpointRuntimeConfig::from_args(&hydrated)
             .expect("record checkpoint policy")
             .expect("checkpoint config");
         assert!(from_record.frames_threshold == 77);
-        assert!(from_record.bytes_threshold == crabka_units::bytes(88));
+        assert!(from_record.bytes_threshold == krabka_units::bytes(88));
 
         args.checkpoint_frames = Some(NonZeroU64::new(7).expect("nonzero"));
-        args.checkpoint_size = Some(crabka_units::bytes(8));
+        args.checkpoint_size = Some(krabka_units::bytes(8));
         let explicit =
             apply_tenant_runtime_defaults(args, Some(&record)).expect("explicit checkpoint policy");
         let from_explicit = CheckpointRuntimeConfig::from_args(&explicit)
             .expect("explicit checkpoint policy")
             .expect("checkpoint config");
         assert!(from_explicit.frames_threshold == 7);
-        assert!(from_explicit.bytes_threshold == crabka_units::bytes(8));
+        assert!(from_explicit.bytes_threshold == krabka_units::bytes(8));
     }
 
     #[test]
     fn checkpoint_runtime_policy_reaches_service_and_pruner_consumers() {
         let args = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--checkpoint-store=in-memory",
@@ -10696,7 +10696,7 @@ mod tests {
         let pruner = GresCheckpointWalPruner::in_memory(checkpoint.delete_records_timeout);
 
         assert!(service.poll_interval == Duration::from_millis(5_678));
-        assert!(pruner.delete_records_timeout == crabka_units::millis(1_234));
+        assert!(pruner.delete_records_timeout == krabka_units::millis(1_234));
     }
 
     #[test]
@@ -10734,14 +10734,14 @@ mod tests {
 
     #[test]
     fn cli_parse_accepts_serve_options_without_subcommand() {
-        let data_dir = std::path::PathBuf::from("/tmp/crabka-gres-test");
+        let data_dir = std::path::PathBuf::from("/tmp/krabka-gres-test");
 
         let cli = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--listen",
             "127.0.0.1:15433",
             "--data-dir",
-            "/tmp/crabka-gres-test",
+            "/tmp/krabka-gres-test",
             "--auth",
             "scram",
             "--user-cred",
@@ -10758,7 +10758,7 @@ mod tests {
     #[test]
     fn cli_parse_accepts_substrate_options() {
         let cli = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--listen",
             "127.0.0.1:15433",
             "--substrate-bootstrap",
@@ -10766,7 +10766,7 @@ mod tests {
             "--tenant",
             "tenant-a",
             "--cache-dir",
-            "/tmp/crabka-gres-cache",
+            "/tmp/krabka-gres-cache",
         ])
         .expect("substrate options parse");
 
@@ -10774,14 +10774,14 @@ mod tests {
         assert_eq!(cli.serve.tenant.as_deref(), Some("tenant-a"));
         assert_eq!(
             cli.serve.cache_dir,
-            Some(std::path::PathBuf::from("/tmp/crabka-gres-cache"))
+            Some(std::path::PathBuf::from("/tmp/krabka-gres-cache"))
         );
     }
 
     #[test]
     fn range_runtime_policy_parses_overrides_and_rejects_invalid_relations() {
         let cli = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--range-rpc-frame-max=2MiB",
             "--range-rpc-request-timeout=9s",
             "--range-rpc-pool-idle-ttl=3s",
@@ -10798,8 +10798,8 @@ mod tests {
         ])
         .unwrap();
         let policy = cli.serve.range_runtime.effective_policy().unwrap();
-        assert2::assert!(policy.rpc_frame_max == crabka_units::mebibytes(2));
-        assert2::assert!(policy.rpc_request_timeout == crabka_units::secs(9));
+        assert2::assert!(policy.rpc_frame_max == krabka_units::mebibytes(2));
+        assert2::assert!(policy.rpc_request_timeout == krabka_units::secs(9));
         assert2::assert!(policy.logical_base_persist_stride.get() == 7);
         assert2::assert!(policy.join.key_columns == 3);
         assert2::assert!(policy.join.projection_columns == 4);
@@ -10810,7 +10810,7 @@ mod tests {
         assert2::assert!(policy.join.result_rows == 9);
 
         let invalid = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--range-rpc-pool-idle-ttl=8s",
             "--range-rpc-server-idle-timeout=8s",
         ])
@@ -10823,7 +10823,7 @@ mod tests {
         use assert2::assert;
 
         let cli = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap",
             "memory://",
             "--tenant",
@@ -10846,7 +10846,7 @@ mod tests {
 
         assert!(
             tenant_config.timestamp_source_mode
-                == crabka_gres_ranges::TimestampSourceMode::Hlc { max_offset_ms: 500 }
+                == krabka_gres_ranges::TimestampSourceMode::Hlc { max_offset_ms: 500 }
         );
         assert!(tenant_config.hlc_wall_offset_ms == -200);
     }
@@ -10856,7 +10856,7 @@ mod tests {
         use assert2::assert;
 
         let cli = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap",
             "memory://",
             "--tenant",
@@ -10866,7 +10866,7 @@ mod tests {
         ])
         .expect("substrate options parse");
         assert!(cli.serve.timestamp_source == TimestampSourceKind::LogicalTso);
-        assert!(cli.serve.hlc_max_offset == crabka_units::millis(250));
+        assert!(cli.serve.hlc_max_offset == krabka_units::millis(250));
         assert!(cli.serve.hlc_wall_offset == Time::ZERO);
         let config = SubstrateRuntimeConfig::from_args(&cli.serve)
             .expect("valid config")
@@ -10877,17 +10877,17 @@ mod tests {
 
         assert!(
             tenant_config.timestamp_source_mode
-                == crabka_gres_ranges::TimestampSourceMode::LogicalTso
+                == krabka_gres_ranges::TimestampSourceMode::LogicalTso
         );
         assert!(tenant_config.hlc_wall_offset_ms == 0);
     }
 
     #[test]
     fn range0_follower_poll_interval_uses_default_environment_and_cli_precedence() {
-        const CHILD: &str = "CRABKA_TEST_GRES_RANGE0_FOLLOWER_POLL_CHILD";
-        const ENV: &str = "CRABKA_GRES_RANGE0_FOLLOWER_POLL_INTERVAL";
+        const CHILD: &str = "KRABKA_TEST_GRES_RANGE0_FOLLOWER_POLL_CHILD";
+        const ENV: &str = "KRABKA_GRES_RANGE0_FOLLOWER_POLL_INTERVAL";
         let base = [
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--ranges=0,10",
@@ -10946,8 +10946,8 @@ mod tests {
 
     #[test]
     fn range0_follower_poll_interval_rejects_zero_and_non_multirange_use() {
-        const CHILD: &str = "CRABKA_TEST_GRES_RANGE0_FOLLOWER_POLL_REJECTION_CHILD";
-        const ENV: &str = "CRABKA_GRES_RANGE0_FOLLOWER_POLL_INTERVAL";
+        const CHILD: &str = "KRABKA_TEST_GRES_RANGE0_FOLLOWER_POLL_REJECTION_CHILD";
+        const ENV: &str = "KRABKA_GRES_RANGE0_FOLLOWER_POLL_INTERVAL";
         if std::env::var_os(CHILD).is_none() {
             for (mode, value) in [
                 ("scrubbed", None),
@@ -10973,7 +10973,7 @@ mod tests {
         if std::env::var(CHILD).as_deref() == Ok("environment_without_ranges") {
             assert!(
                 Cli::try_parse_from([
-                    "crabka-gres",
+                    "krabka-gres",
                     "--substrate-bootstrap=memory://",
                     "--tenant=tenant-a",
                 ])
@@ -10984,7 +10984,7 @@ mod tests {
 
         assert!(
             Cli::try_parse_from([
-                "crabka-gres",
+                "krabka-gres",
                 "--substrate-bootstrap=memory://",
                 "--tenant=tenant-a",
                 "--ranges=0,10",
@@ -10994,7 +10994,7 @@ mod tests {
         );
         assert!(
             Cli::try_parse_from([
-                "crabka-gres",
+                "krabka-gres",
                 "--substrate-bootstrap=memory://",
                 "--tenant=tenant-a",
                 "--range0-follower-poll-interval=1ms",
@@ -11002,10 +11002,10 @@ mod tests {
             .is_err()
         );
 
-        let mut programmatic = Cli::try_parse_from(["crabka-gres"])
+        let mut programmatic = Cli::try_parse_from(["krabka-gres"])
             .expect("defaults")
             .serve;
-        programmatic.range0_follower_poll_interval = Some(crabka_units::millis(1));
+        programmatic.range0_follower_poll_interval = Some(krabka_units::millis(1));
         let error = SubstrateRuntimeConfig::from_args(&programmatic)
             .expect_err("programmatic non-multirange configuration");
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
@@ -11017,23 +11017,23 @@ mod tests {
         for (id, environment) in [
             (
                 "range0_follower_rebuild_backoff_floor",
-                "CRABKA_GRES_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR",
+                "KRABKA_GRES_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR",
             ),
             (
                 "range0_follower_rebuild_backoff_ceiling",
-                "CRABKA_GRES_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING",
+                "KRABKA_GRES_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING",
             ),
             (
                 "durable_inspection_timeout",
-                "CRABKA_GRES_DURABLE_INSPECTION_TIMEOUT",
+                "KRABKA_GRES_DURABLE_INSPECTION_TIMEOUT",
             ),
             (
                 "durable_inspection_fold_max_records",
-                "CRABKA_GRES_DURABLE_INSPECTION_FOLD_MAX_RECORDS",
+                "KRABKA_GRES_DURABLE_INSPECTION_FOLD_MAX_RECORDS",
             ),
             (
                 "durable_inspection_fold_max_size",
-                "CRABKA_GRES_DURABLE_INSPECTION_FOLD_MAX_SIZE",
+                "KRABKA_GRES_DURABLE_INSPECTION_FOLD_MAX_SIZE",
             ),
         ] {
             let argument = command
@@ -11044,7 +11044,7 @@ mod tests {
         }
 
         let base = [
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--ranges=0,10",
@@ -11068,7 +11068,7 @@ mod tests {
         );
         assert_eq!(
             defaults.durable_inspection_fold_limits.max_size,
-            crabka_units::mebibytes(256)
+            krabka_units::mebibytes(256)
         );
 
         let configured = SubstrateRuntimeConfig::from_args(
@@ -11099,7 +11099,7 @@ mod tests {
         assert_eq!(configured.durable_inspection_fold_limits.max_records, 19);
         assert_eq!(
             configured.durable_inspection_fold_limits.max_size,
-            crabka_units::bytes(23)
+            krabka_units::bytes(23)
         );
 
         let inverted = Cli::try_parse_from(base.into_iter().chain([
@@ -11120,32 +11120,32 @@ mod tests {
 
     #[test]
     fn wal_recovery_read_policy_uses_defaults_environment_and_cli_precedence() {
-        const CHILD: &str = "CRABKA_TEST_GRES_WAL_RECOVERY_READ_POLICY_CHILD";
+        const CHILD: &str = "KRABKA_TEST_GRES_WAL_RECOVERY_READ_POLICY_CHILD";
         const VARS: [&str; 24] = [
-            "CRABKA_GRES_WAL_RECOVERY_FETCH_MAX_WAIT",
-            "CRABKA_GRES_WAL_RECOVERY_FETCH_PARTITION_MAX",
-            "CRABKA_GRES_WAL_RECOVERY_FETCH_RESPONSE_MAX",
-            "CRABKA_GRES_WAL_RECOVERY_EMPTY_FETCH_RETRIES",
-            "CRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT",
-            "CRABKA_GRES_WAL_RECOVERY_CONNECT_TIMEOUT",
-            "CRABKA_GRES_WAL_RECOVERY_REQUEST_TIMEOUT",
-            "CRABKA_GRES_WAL_TOPIC_REPLICATION_FACTOR",
-            "CRABKA_GRES_WAL_TOPIC_ENSURE_TIMEOUT",
-            "CRABKA_GRES_WAL_ADMIN_CONNECT_TIMEOUT",
-            "CRABKA_GRES_WAL_ADMIN_REQUEST_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_REQUEST_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_RETRIES",
-            "CRABKA_GRES_WAL_PRODUCER_RETRY_BACKOFF",
-            "CRABKA_GRES_WAL_PRODUCER_ROUTING_RETRY_BUDGET",
-            "CRABKA_GRES_WAL_PRODUCER_INIT_RETRY_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_INIT_MAX_BACKOFF",
-            "CRABKA_GRES_WAL_PRODUCER_TRANSACTION_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_COMPRESSION",
-            "CRABKA_GRES_WAL_PRODUCER_LINGER",
-            "CRABKA_GRES_WAL_PRODUCER_BATCH",
-            "CRABKA_GRES_WAL_FRAME_MAX_SIZE",
+            "KRABKA_GRES_WAL_RECOVERY_FETCH_MAX_WAIT",
+            "KRABKA_GRES_WAL_RECOVERY_FETCH_PARTITION_MAX",
+            "KRABKA_GRES_WAL_RECOVERY_FETCH_RESPONSE_MAX",
+            "KRABKA_GRES_WAL_RECOVERY_EMPTY_FETCH_RETRIES",
+            "KRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT",
+            "KRABKA_GRES_WAL_RECOVERY_CONNECT_TIMEOUT",
+            "KRABKA_GRES_WAL_RECOVERY_REQUEST_TIMEOUT",
+            "KRABKA_GRES_WAL_TOPIC_REPLICATION_FACTOR",
+            "KRABKA_GRES_WAL_TOPIC_ENSURE_TIMEOUT",
+            "KRABKA_GRES_WAL_ADMIN_CONNECT_TIMEOUT",
+            "KRABKA_GRES_WAL_ADMIN_REQUEST_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_REQUEST_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_RETRIES",
+            "KRABKA_GRES_WAL_PRODUCER_RETRY_BACKOFF",
+            "KRABKA_GRES_WAL_PRODUCER_ROUTING_RETRY_BUDGET",
+            "KRABKA_GRES_WAL_PRODUCER_INIT_RETRY_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_INIT_MAX_BACKOFF",
+            "KRABKA_GRES_WAL_PRODUCER_TRANSACTION_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_COMPRESSION",
+            "KRABKA_GRES_WAL_PRODUCER_LINGER",
+            "KRABKA_GRES_WAL_PRODUCER_BATCH",
+            "KRABKA_GRES_WAL_FRAME_MAX_SIZE",
         ];
         if std::env::var_os(CHILD).is_none() {
             for mode in ["defaults", "environment"] {
@@ -11175,7 +11175,7 @@ mod tests {
         }
 
         let base = [
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
         ];
@@ -11183,17 +11183,17 @@ mod tests {
             (17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27)
         } else {
             (
-                crabka_gres_substrate::DEFAULT_WAL_RECOVERY_FETCH_MAX_WAIT.millis_i32(),
-                crabka_gres_substrate::DEFAULT_WAL_RECOVERY_FETCH_PARTITION_MAX.bytes_i32(),
-                crabka_gres_substrate::DEFAULT_WAL_RECOVERY_FETCH_RESPONSE_MAX.bytes_i32(),
-                crabka_gres_substrate::DEFAULT_WAL_RECOVERY_EMPTY_FETCH_RETRIES,
-                millis_u64(crabka_gres_substrate::DEFAULT_WAL_RECOVERY_DNS_TIMEOUT),
-                millis_u64(crabka_gres_substrate::DEFAULT_WAL_RECOVERY_CONNECT_TIMEOUT),
-                millis_u64(crabka_gres_substrate::DEFAULT_WAL_RECOVERY_REQUEST_TIMEOUT),
-                crabka_gres_substrate::DEFAULT_WAL_TOPIC_REPLICATION_FACTOR,
-                crabka_gres_substrate::DEFAULT_WAL_TOPIC_ENSURE_TIMEOUT.millis_i32(),
-                millis_u64(crabka_gres_substrate::DEFAULT_WAL_ADMIN_CONNECT_TIMEOUT),
-                millis_u64(crabka_gres_substrate::DEFAULT_WAL_ADMIN_REQUEST_TIMEOUT),
+                krabka_gres_substrate::DEFAULT_WAL_RECOVERY_FETCH_MAX_WAIT.millis_i32(),
+                krabka_gres_substrate::DEFAULT_WAL_RECOVERY_FETCH_PARTITION_MAX.bytes_i32(),
+                krabka_gres_substrate::DEFAULT_WAL_RECOVERY_FETCH_RESPONSE_MAX.bytes_i32(),
+                krabka_gres_substrate::DEFAULT_WAL_RECOVERY_EMPTY_FETCH_RETRIES,
+                millis_u64(krabka_gres_substrate::DEFAULT_WAL_RECOVERY_DNS_TIMEOUT),
+                millis_u64(krabka_gres_substrate::DEFAULT_WAL_RECOVERY_CONNECT_TIMEOUT),
+                millis_u64(krabka_gres_substrate::DEFAULT_WAL_RECOVERY_REQUEST_TIMEOUT),
+                krabka_gres_substrate::DEFAULT_WAL_TOPIC_REPLICATION_FACTOR,
+                krabka_gres_substrate::DEFAULT_WAL_TOPIC_ENSURE_TIMEOUT.millis_i32(),
+                millis_u64(krabka_gres_substrate::DEFAULT_WAL_ADMIN_CONNECT_TIMEOUT),
+                millis_u64(krabka_gres_substrate::DEFAULT_WAL_ADMIN_REQUEST_TIMEOUT),
             )
         };
         let config = SubstrateRuntimeConfig::from_args(
@@ -11236,8 +11236,8 @@ mod tests {
             .expect("substrate config");
         let policy = config.recovery_read_policy;
         assert!(policy.fetch_max_wait() == millis(27));
-        assert!(policy.fetch_partition_max() == crabka_units::bytes(28));
-        assert!(policy.fetch_response_max() == crabka_units::bytes(29));
+        assert!(policy.fetch_partition_max() == krabka_units::bytes(28));
+        assert!(policy.fetch_response_max() == krabka_units::bytes(29));
         assert!(policy.empty_fetch_retries() == 30);
         assert!(policy.dns_timeout() == millis(30));
         assert!(policy.connect_timeout() == millis(31));
@@ -11256,29 +11256,29 @@ mod tests {
                 "--exact",
                 "tests::registry_policy_options_use_validated_defaults",
             ])
-            .env("CRABKA_GRES_WAL_RECOVERY_FETCH_MAX_WAIT", "17ms")
-            .env("CRABKA_GRES_WAL_RECOVERY_FETCH_PARTITION_MAX", "18B")
-            .env("CRABKA_GRES_WAL_RECOVERY_FETCH_RESPONSE_MAX", "19B")
-            .env("CRABKA_GRES_WAL_RECOVERY_EMPTY_FETCH_RETRIES", "20")
-            .env("CRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT", "21ms")
-            .env("CRABKA_GRES_WAL_RECOVERY_CONNECT_TIMEOUT", "21ms")
-            .env("CRABKA_GRES_WAL_RECOVERY_REQUEST_TIMEOUT", "22ms")
-            .env("CRABKA_GRES_WAL_TOPIC_REPLICATION_FACTOR", "23")
-            .env("CRABKA_GRES_WAL_TOPIC_ENSURE_TIMEOUT", "24ms")
-            .env("CRABKA_GRES_WAL_ADMIN_CONNECT_TIMEOUT", "25ms")
-            .env("CRABKA_GRES_WAL_ADMIN_REQUEST_TIMEOUT", "26ms")
-            .env("CRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT", "27ms")
-            .env("CRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT", "27ms")
-            .env("CRABKA_GRES_WAL_PRODUCER_REQUEST_TIMEOUT", "27ms")
-            .env("CRABKA_GRES_WAL_PRODUCER_RETRIES", "28")
-            .env("CRABKA_GRES_WAL_PRODUCER_RETRY_BACKOFF", "29ms")
-            .env("CRABKA_GRES_WAL_PRODUCER_ROUTING_RETRY_BUDGET", "30ms")
-            .env("CRABKA_GRES_WAL_PRODUCER_INIT_RETRY_TIMEOUT", "31ms")
-            .env("CRABKA_GRES_WAL_PRODUCER_INIT_MAX_BACKOFF", "32ms")
-            .env("CRABKA_GRES_WAL_PRODUCER_TRANSACTION_TIMEOUT", "33ms")
-            .env("CRABKA_GRES_WAL_PRODUCER_COMPRESSION", "gzip")
-            .env("CRABKA_GRES_WAL_PRODUCER_LINGER", "34ms")
-            .env("CRABKA_GRES_WAL_PRODUCER_BATCH", "35B")
+            .env("KRABKA_GRES_WAL_RECOVERY_FETCH_MAX_WAIT", "17ms")
+            .env("KRABKA_GRES_WAL_RECOVERY_FETCH_PARTITION_MAX", "18B")
+            .env("KRABKA_GRES_WAL_RECOVERY_FETCH_RESPONSE_MAX", "19B")
+            .env("KRABKA_GRES_WAL_RECOVERY_EMPTY_FETCH_RETRIES", "20")
+            .env("KRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT", "21ms")
+            .env("KRABKA_GRES_WAL_RECOVERY_CONNECT_TIMEOUT", "21ms")
+            .env("KRABKA_GRES_WAL_RECOVERY_REQUEST_TIMEOUT", "22ms")
+            .env("KRABKA_GRES_WAL_TOPIC_REPLICATION_FACTOR", "23")
+            .env("KRABKA_GRES_WAL_TOPIC_ENSURE_TIMEOUT", "24ms")
+            .env("KRABKA_GRES_WAL_ADMIN_CONNECT_TIMEOUT", "25ms")
+            .env("KRABKA_GRES_WAL_ADMIN_REQUEST_TIMEOUT", "26ms")
+            .env("KRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT", "27ms")
+            .env("KRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT", "27ms")
+            .env("KRABKA_GRES_WAL_PRODUCER_REQUEST_TIMEOUT", "27ms")
+            .env("KRABKA_GRES_WAL_PRODUCER_RETRIES", "28")
+            .env("KRABKA_GRES_WAL_PRODUCER_RETRY_BACKOFF", "29ms")
+            .env("KRABKA_GRES_WAL_PRODUCER_ROUTING_RETRY_BUDGET", "30ms")
+            .env("KRABKA_GRES_WAL_PRODUCER_INIT_RETRY_TIMEOUT", "31ms")
+            .env("KRABKA_GRES_WAL_PRODUCER_INIT_MAX_BACKOFF", "32ms")
+            .env("KRABKA_GRES_WAL_PRODUCER_TRANSACTION_TIMEOUT", "33ms")
+            .env("KRABKA_GRES_WAL_PRODUCER_COMPRESSION", "gzip")
+            .env("KRABKA_GRES_WAL_PRODUCER_LINGER", "34ms")
+            .env("KRABKA_GRES_WAL_PRODUCER_BATCH", "35B")
             .status()
             .expect("child test");
 
@@ -11310,7 +11310,7 @@ mod tests {
         ] {
             assert!(
                 Cli::try_parse_from([
-                    "crabka-gres",
+                    "krabka-gres",
                     "--substrate-bootstrap=memory://",
                     "--tenant=tenant-a",
                     option,
@@ -11339,10 +11339,10 @@ mod tests {
             "--wal-producer-linger=0ms",
             "--wal-producer-batch=1B",
         ] {
-            assert!(Cli::try_parse_from(["crabka-gres", option]).is_err());
+            assert!(Cli::try_parse_from(["krabka-gres", option]).is_err());
         }
         let oversized_replication = <Cli as clap::Parser>::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--wal-topic-replication-factor=32768",
@@ -11383,7 +11383,7 @@ mod tests {
             ),
         ] {
             let args = Cli::try_parse_from([
-                "crabka-gres",
+                "krabka-gres",
                 "--substrate-bootstrap=memory://",
                 "--tenant=tenant-a",
                 option,
@@ -11396,7 +11396,7 @@ mod tests {
             assert!(error.to_string().contains(field), "{error}");
         }
         let args = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--wal-producer-retry-backoff=2ms",
@@ -11412,7 +11412,7 @@ mod tests {
         );
         assert!(
             Cli::try_parse_from([
-                "crabka-gres",
+                "krabka-gres",
                 "--substrate-bootstrap=memory://",
                 "--tenant=tenant-a",
                 "--wal-producer-batch=0B",
@@ -11424,7 +11424,7 @@ mod tests {
             ("--wal-producer-batch=2147483648B", "batch"),
         ] {
             let args = Cli::try_parse_from([
-                "crabka-gres",
+                "krabka-gres",
                 "--substrate-bootstrap=memory://",
                 "--tenant=tenant-a",
                 option,
@@ -11438,7 +11438,7 @@ mod tests {
         }
         assert!(
             Cli::try_parse_from([
-                "crabka-gres",
+                "krabka-gres",
                 "--substrate-bootstrap=memory://",
                 "--tenant=tenant-a",
                 "--wal-producer-compression=brotli",
@@ -11446,7 +11446,7 @@ mod tests {
             .is_err()
         );
         let args = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--wal-producer-retries=0",
@@ -11464,7 +11464,7 @@ mod tests {
 
         assert!(
             Cli::try_parse_from([
-                "crabka-gres",
+                "krabka-gres",
                 "--substrate-bootstrap=memory://",
                 "--tenant=tenant-a",
                 "--wal-producer-retries=-1",
@@ -11482,32 +11482,32 @@ mod tests {
 
     #[tokio::test]
     async fn wal_recovery_read_policy_validation_precedes_listener_bind() {
-        const CHILD: &str = "CRABKA_TEST_GRES_WAL_RECOVERY_BIND_CHILD";
+        const CHILD: &str = "KRABKA_TEST_GRES_WAL_RECOVERY_BIND_CHILD";
         const VARS: [&str; 24] = [
-            "CRABKA_GRES_WAL_RECOVERY_FETCH_MAX_WAIT",
-            "CRABKA_GRES_WAL_RECOVERY_FETCH_PARTITION_MAX",
-            "CRABKA_GRES_WAL_RECOVERY_FETCH_RESPONSE_MAX",
-            "CRABKA_GRES_WAL_RECOVERY_EMPTY_FETCH_RETRIES",
-            "CRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT",
-            "CRABKA_GRES_WAL_RECOVERY_CONNECT_TIMEOUT",
-            "CRABKA_GRES_WAL_RECOVERY_REQUEST_TIMEOUT",
-            "CRABKA_GRES_WAL_TOPIC_REPLICATION_FACTOR",
-            "CRABKA_GRES_WAL_TOPIC_ENSURE_TIMEOUT",
-            "CRABKA_GRES_WAL_ADMIN_CONNECT_TIMEOUT",
-            "CRABKA_GRES_WAL_ADMIN_REQUEST_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_REQUEST_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_RETRIES",
-            "CRABKA_GRES_WAL_PRODUCER_RETRY_BACKOFF",
-            "CRABKA_GRES_WAL_PRODUCER_ROUTING_RETRY_BUDGET",
-            "CRABKA_GRES_WAL_PRODUCER_INIT_RETRY_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_INIT_MAX_BACKOFF",
-            "CRABKA_GRES_WAL_PRODUCER_TRANSACTION_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_COMPRESSION",
-            "CRABKA_GRES_WAL_PRODUCER_LINGER",
-            "CRABKA_GRES_WAL_PRODUCER_BATCH",
-            "CRABKA_GRES_WAL_FRAME_MAX_SIZE",
+            "KRABKA_GRES_WAL_RECOVERY_FETCH_MAX_WAIT",
+            "KRABKA_GRES_WAL_RECOVERY_FETCH_PARTITION_MAX",
+            "KRABKA_GRES_WAL_RECOVERY_FETCH_RESPONSE_MAX",
+            "KRABKA_GRES_WAL_RECOVERY_EMPTY_FETCH_RETRIES",
+            "KRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT",
+            "KRABKA_GRES_WAL_RECOVERY_CONNECT_TIMEOUT",
+            "KRABKA_GRES_WAL_RECOVERY_REQUEST_TIMEOUT",
+            "KRABKA_GRES_WAL_TOPIC_REPLICATION_FACTOR",
+            "KRABKA_GRES_WAL_TOPIC_ENSURE_TIMEOUT",
+            "KRABKA_GRES_WAL_ADMIN_CONNECT_TIMEOUT",
+            "KRABKA_GRES_WAL_ADMIN_REQUEST_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_REQUEST_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_RETRIES",
+            "KRABKA_GRES_WAL_PRODUCER_RETRY_BACKOFF",
+            "KRABKA_GRES_WAL_PRODUCER_ROUTING_RETRY_BUDGET",
+            "KRABKA_GRES_WAL_PRODUCER_INIT_RETRY_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_INIT_MAX_BACKOFF",
+            "KRABKA_GRES_WAL_PRODUCER_TRANSACTION_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_COMPRESSION",
+            "KRABKA_GRES_WAL_PRODUCER_LINGER",
+            "KRABKA_GRES_WAL_PRODUCER_BATCH",
+            "KRABKA_GRES_WAL_FRAME_MAX_SIZE",
         ];
         if std::env::var_os(CHILD).is_none() {
             let mut child = std::process::Command::new(std::env::current_exe().expect("test exe"));
@@ -11544,7 +11544,7 @@ mod tests {
 
         let mut args = substrate_args();
         args.listen = occupied.local_addr().expect("address").to_string();
-        args.wal_producer_batch = Some(crabka_units::bytes(0));
+        args.wal_producer_batch = Some(krabka_units::bytes(0));
         let error = run_serve(args)
             .await
             .expect_err("invalid producer throughput before bind");
@@ -11553,66 +11553,66 @@ mod tests {
 
     fn set_wal_policy_option(args: &mut ServeArgs, option: usize) {
         match option {
-            0 => args.wal_recovery_fetch_max_wait = Some(crabka_units::millis(1)),
-            1 => args.wal_recovery_fetch_partition_max = Some(crabka_units::bytes(1)),
-            2 => args.wal_recovery_fetch_response_max = Some(crabka_units::bytes(1)),
+            0 => args.wal_recovery_fetch_max_wait = Some(krabka_units::millis(1)),
+            1 => args.wal_recovery_fetch_partition_max = Some(krabka_units::bytes(1)),
+            2 => args.wal_recovery_fetch_response_max = Some(krabka_units::bytes(1)),
             3 => args.wal_recovery_empty_fetch_retries = PositiveUsize::new(1).ok(),
-            4 => args.wal_recovery_dns_timeout = Some(crabka_units::millis(1)),
-            5 => args.wal_recovery_connect_timeout = Some(crabka_units::millis(1)),
-            6 => args.wal_recovery_request_timeout = Some(crabka_units::millis(1)),
+            4 => args.wal_recovery_dns_timeout = Some(krabka_units::millis(1)),
+            5 => args.wal_recovery_connect_timeout = Some(krabka_units::millis(1)),
+            6 => args.wal_recovery_request_timeout = Some(krabka_units::millis(1)),
             7 => args.wal_topic_replication_factor = PositiveI32::new(1).ok(),
-            8 => args.wal_topic_ensure_timeout = Some(crabka_units::millis(1)),
-            9 => args.wal_admin_connect_timeout = Some(crabka_units::millis(1)),
-            10 => args.wal_admin_request_timeout = Some(crabka_units::millis(1)),
-            11 => args.wal_producer_flush_timeout = Some(crabka_units::millis(1)),
-            12 => args.wal_producer_dns_timeout = Some(crabka_units::millis(1)),
-            13 => args.wal_producer_request_timeout = Some(crabka_units::millis(1)),
+            8 => args.wal_topic_ensure_timeout = Some(krabka_units::millis(1)),
+            9 => args.wal_admin_connect_timeout = Some(krabka_units::millis(1)),
+            10 => args.wal_admin_request_timeout = Some(krabka_units::millis(1)),
+            11 => args.wal_producer_flush_timeout = Some(krabka_units::millis(1)),
+            12 => args.wal_producer_dns_timeout = Some(krabka_units::millis(1)),
+            13 => args.wal_producer_request_timeout = Some(krabka_units::millis(1)),
             14 => args.wal_producer_retries = NonNegativeI32::new(0).ok(),
-            15 => args.wal_producer_retry_backoff = Some(crabka_units::millis(1)),
-            16 => args.wal_producer_routing_retry_budget = Some(crabka_units::millis(1)),
-            17 => args.wal_producer_init_retry_timeout = Some(crabka_units::millis(1)),
-            18 => args.wal_producer_init_max_backoff = Some(crabka_units::millis(1)),
-            19 => args.wal_producer_transaction_timeout = Some(crabka_units::millis(1)),
-            20 => args.wal_producer_compression = Some(crabka_client_producer::Compression::Gzip),
+            15 => args.wal_producer_retry_backoff = Some(krabka_units::millis(1)),
+            16 => args.wal_producer_routing_retry_budget = Some(krabka_units::millis(1)),
+            17 => args.wal_producer_init_retry_timeout = Some(krabka_units::millis(1)),
+            18 => args.wal_producer_init_max_backoff = Some(krabka_units::millis(1)),
+            19 => args.wal_producer_transaction_timeout = Some(krabka_units::millis(1)),
+            20 => args.wal_producer_compression = Some(krabka_client_producer::Compression::Gzip),
             21 => args.wal_producer_linger = Some(Time::ZERO),
-            22 => args.wal_producer_batch = Some(crabka_units::bytes(1)),
-            23 => args.wal_frame_max_size = Some(crabka_units::bytes(1)),
+            22 => args.wal_producer_batch = Some(krabka_units::bytes(1)),
+            23 => args.wal_frame_max_size = Some(krabka_units::bytes(1)),
             _ => unreachable!("test policy option"),
         }
     }
 
     #[test]
     fn wal_recovery_read_policy_reaches_shared_recovery_config_helper() {
-        let policy = crabka_gres_substrate::RecoveryReadPolicy::new(
-            crabka_units::millis(31),
-            crabka_units::bytes(32),
-            crabka_units::bytes(33),
+        let policy = krabka_gres_substrate::RecoveryReadPolicy::new(
+            krabka_units::millis(31),
+            krabka_units::bytes(32),
+            krabka_units::bytes(33),
             34,
         )
         .expect("distinctive policy")
-        .with_dns_timeout(crabka_units::millis(37))
+        .with_dns_timeout(krabka_units::millis(37))
         .expect("distinctive DNS timeout")
-        .with_timeouts(crabka_units::millis(35), crabka_units::millis(36))
+        .with_timeouts(krabka_units::millis(35), krabka_units::millis(36))
         .expect("distinctive timeouts");
         let mut config = SubstrateRuntimeConfig::from_args(&substrate_args())
             .expect("config")
             .expect("substrate config");
         config.recovery_read_policy = policy;
-        let tenant = crabka_gres_ranges::TenantName::parse("tenant-a".to_string()).expect("tenant");
+        let tenant = krabka_gres_ranges::TenantName::parse("tenant-a".to_string()).expect("tenant");
 
         let recovery =
-            config.live_recovery_config(tenant.clone(), crabka_gres_ranges::RangeId::new(7));
+            config.live_recovery_config(tenant.clone(), krabka_gres_ranges::RangeId::new(7));
 
         assert_eq!(recovery.read_policy(), policy);
-        let admin = crabka_gres_substrate::WalAdminPolicy::new(
+        let admin = krabka_gres_substrate::WalAdminPolicy::new(
             41,
-            crabka_units::millis(42),
-            crabka_units::millis(43),
-            crabka_units::millis(44),
+            krabka_units::millis(42),
+            krabka_units::millis(43),
+            krabka_units::millis(44),
         )
         .expect("distinctive policy");
         config.wal_admin_policy = admin;
-        let recovery = config.live_recovery_config(tenant, crabka_gres_ranges::RangeId::new(7));
+        let recovery = config.live_recovery_config(tenant, krabka_gres_ranges::RangeId::new(7));
         assert_eq!(recovery.wal_admin_policy(), admin);
         assert_eq!(
             include_str!("lib.rs")
@@ -11634,7 +11634,7 @@ mod tests {
     #[test]
     fn wal_producer_retry_policy_accepts_distinctive_values_and_reaches_recovery() {
         let cli = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--wal-producer-request-timeout=31ms",
@@ -11659,10 +11659,10 @@ mod tests {
         assert_eq!(policy.init_max_backoff(), Duration::from_millis(36));
         assert_eq!(policy.transaction_timeout(), Duration::from_millis(37));
 
-        let tenant = crabka_gres_ranges::TenantName::parse("tenant-a").expect("tenant");
+        let tenant = krabka_gres_ranges::TenantName::parse("tenant-a").expect("tenant");
         assert_eq!(
             config
-                .live_recovery_config(tenant, crabka_gres_ranges::RangeId::new(7))
+                .live_recovery_config(tenant, krabka_gres_ranges::RangeId::new(7))
                 .producer_retry_policy(),
             policy
         );
@@ -11670,8 +11670,8 @@ mod tests {
 
     #[test]
     fn wal_producer_flush_timeout_uses_defaults_environment_and_cli_precedence() {
-        const CHILD: &str = "CRABKA_TEST_GRES_WAL_PRODUCER_FLUSH_TIMEOUT_CHILD";
-        const ENV: &str = "CRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT";
+        const CHILD: &str = "KRABKA_TEST_GRES_WAL_PRODUCER_FLUSH_TIMEOUT_CHILD";
+        const ENV: &str = "KRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT";
         if std::env::var_os(CHILD).is_none() {
             for mode in ["defaults", "environment"] {
                 let mut child =
@@ -11692,7 +11692,7 @@ mod tests {
         }
 
         let base = [
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
         ];
@@ -11726,10 +11726,10 @@ mod tests {
             Duration::from_millis(51)
         );
 
-        let tenant = crabka_gres_ranges::TenantName::parse("tenant-a").expect("tenant");
+        let tenant = krabka_gres_ranges::TenantName::parse("tenant-a").expect("tenant");
         assert_eq!(
             config
-                .live_recovery_config(tenant, crabka_gres_ranges::RangeId::new(7))
+                .live_recovery_config(tenant, krabka_gres_ranges::RangeId::new(7))
                 .producer_flush_timeout(),
             config.producer_flush_timeout
         );
@@ -11737,8 +11737,8 @@ mod tests {
 
     #[test]
     fn wal_producer_dns_timeout_uses_defaults_environment_and_cli_precedence() {
-        const CHILD: &str = "CRABKA_TEST_GRES_WAL_PRODUCER_DNS_TIMEOUT_CHILD";
-        const ENV: &str = "CRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT";
+        const CHILD: &str = "KRABKA_TEST_GRES_WAL_PRODUCER_DNS_TIMEOUT_CHILD";
+        const ENV: &str = "KRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT";
         if std::env::var_os(CHILD).is_none() {
             for mode in ["defaults", "environment"] {
                 let mut child =
@@ -11759,7 +11759,7 @@ mod tests {
         }
 
         let base = [
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
         ];
@@ -11773,7 +11773,7 @@ mod tests {
         let expected_ms = if std::env::var(CHILD).as_deref() == Ok("environment") {
             27
         } else {
-            crabka_client_core::ClientDnsTimeout::default().milliseconds()
+            krabka_client_core::ClientDnsTimeout::default().milliseconds()
         };
         assert_eq!(config.producer_dns_timeout.milliseconds(), expected_ms);
 
@@ -11786,10 +11786,10 @@ mod tests {
             .expect("substrate config");
         assert_eq!(config.producer_dns_timeout.milliseconds(), 37);
 
-        let tenant = crabka_gres_ranges::TenantName::parse("tenant-a").expect("tenant");
+        let tenant = krabka_gres_ranges::TenantName::parse("tenant-a").expect("tenant");
         assert_eq!(
             config
-                .live_recovery_config(tenant, crabka_gres_ranges::RangeId::new(7))
+                .live_recovery_config(tenant, krabka_gres_ranges::RangeId::new(7))
                 .producer_dns_timeout(),
             config.producer_dns_timeout
         );
@@ -11798,18 +11798,18 @@ mod tests {
     #[test]
     fn wal_producer_dns_timeout_rejects_zero_and_local_only_use() {
         Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=k:9092",
             "--tenant=t",
             "--wal-producer-dns-timeout=0ms",
         ])
         .expect_err("zero DNS timeout");
 
-        Cli::try_parse_from(["crabka-gres", "--wal-producer-dns-timeout=1ms"])
+        Cli::try_parse_from(["krabka-gres", "--wal-producer-dns-timeout=1ms"])
             .expect_err("substrate bootstrap required");
 
         let mut programmatic = serve_args(Some("trust"), Vec::new());
-        programmatic.wal_producer_dns_timeout = Some(crabka_units::millis(1));
+        programmatic.wal_producer_dns_timeout = Some(krabka_units::millis(1));
         let error = SubstrateRuntimeConfig::from_args(&programmatic)
             .expect_err("programmatic DNS timeout without substrate");
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
@@ -11817,8 +11817,8 @@ mod tests {
 
     #[test]
     fn fdw_broker_dns_timeout_uses_default_environment_and_cli_precedence() {
-        const CHILD: &str = "CRABKA_TEST_GRES_FDW_BROKER_DNS_TIMEOUT_CHILD";
-        const ENV: &str = "CRABKA_GRES_FDW_BROKER_DNS_TIMEOUT";
+        const CHILD: &str = "KRABKA_TEST_GRES_FDW_BROKER_DNS_TIMEOUT_CHILD";
+        const ENV: &str = "KRABKA_GRES_FDW_BROKER_DNS_TIMEOUT";
         if std::env::var_os(CHILD).is_none() {
             for mode in ["defaults", "environment"] {
                 let mut child =
@@ -11838,13 +11838,13 @@ mod tests {
             return;
         }
 
-        let args = <Cli as clap::Parser>::try_parse_from(["crabka-gres"])
+        let args = <Cli as clap::Parser>::try_parse_from(["krabka-gres"])
             .expect("default FDW DNS timeout")
             .serve;
         let expected_ms = if std::env::var(CHILD).as_deref() == Ok("environment") {
             27
         } else {
-            crabka_client_core::ClientDnsTimeout::default().milliseconds()
+            krabka_client_core::ClientDnsTimeout::default().milliseconds()
         };
         assert_eq!(
             effective_fdw_broker_dns_timeout(&args)
@@ -11854,7 +11854,7 @@ mod tests {
         );
 
         let args =
-            <Cli as clap::Parser>::try_parse_from(["crabka-gres", "--fdw-broker-dns-timeout=37ms"])
+            <Cli as clap::Parser>::try_parse_from(["krabka-gres", "--fdw-broker-dns-timeout=37ms"])
                 .expect("CLI FDW DNS timeout")
                 .serve;
         assert_eq!(
@@ -11867,17 +11867,17 @@ mod tests {
 
     #[test]
     fn fdw_broker_dns_timeout_rejects_zero_but_allows_local_mode() {
-        Cli::try_parse_from(["crabka-gres", "--fdw-broker-dns-timeout=0ms"])
+        Cli::try_parse_from(["krabka-gres", "--fdw-broker-dns-timeout=0ms"])
             .expect_err("zero DNS timeout");
-        Cli::try_parse_from(["crabka-gres", "--fdw-broker-dns-timeout=1ms"])
+        Cli::try_parse_from(["krabka-gres", "--fdw-broker-dns-timeout=1ms"])
             .expect("local FDW policy");
     }
 
     #[test]
     fn schema_fetch_retry_uses_default_environment_and_cli_precedence() {
-        const CHILD: &str = "CRABKA_TEST_GRES_SCHEMA_FETCH_RETRY_CHILD";
-        const INITIAL_ENV: &str = "CRABKA_GRES_SCHEMA_FETCH_RETRY_INITIAL_BACKOFF";
-        const MAX_ENV: &str = "CRABKA_GRES_SCHEMA_FETCH_RETRY_MAX_BACKOFF";
+        const CHILD: &str = "KRABKA_TEST_GRES_SCHEMA_FETCH_RETRY_CHILD";
+        const INITIAL_ENV: &str = "KRABKA_GRES_SCHEMA_FETCH_RETRY_INITIAL_BACKOFF";
+        const MAX_ENV: &str = "KRABKA_GRES_SCHEMA_FETCH_RETRY_MAX_BACKOFF";
         if std::env::var_os(CHILD).is_none() {
             for mode in ["defaults", "environment"] {
                 let mut child =
@@ -11898,20 +11898,20 @@ mod tests {
             return;
         }
 
-        let args = <Cli as clap::Parser>::try_parse_from(["crabka-gres"])
+        let args = <Cli as clap::Parser>::try_parse_from(["krabka-gres"])
             .expect("schema fetch retry defaults")
             .serve;
         let policy =
             effective_schema_fetch_retry_policy(&args).expect("valid schema fetch retry policy");
         let expected = if std::env::var(CHILD).as_deref() == Ok("environment") {
-            (crabka_units::millis(37), crabka_units::millis(91))
+            (krabka_units::millis(37), krabka_units::millis(91))
         } else {
-            (crabka_units::millis(10), crabka_units::secs(1))
+            (krabka_units::millis(10), krabka_units::secs(1))
         };
         assert_eq!((policy.initial_backoff(), policy.max_backoff()), expected);
 
         let args = <Cli as clap::Parser>::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--schema-fetch-retry-initial-backoff=41ms",
             "--schema-fetch-retry-max-backoff=97ms",
         ])
@@ -11919,8 +11919,8 @@ mod tests {
         .serve;
         let policy =
             effective_schema_fetch_retry_policy(&args).expect("valid CLI schema fetch retry");
-        assert_eq!(policy.initial_backoff(), crabka_units::millis(41));
-        assert_eq!(policy.max_backoff(), crabka_units::millis(97));
+        assert_eq!(policy.initial_backoff(), krabka_units::millis(41));
+        assert_eq!(policy.max_backoff(), krabka_units::millis(97));
     }
 
     #[test]
@@ -11929,11 +11929,11 @@ mod tests {
             "--schema-fetch-retry-initial-backoff=0ms",
             "--schema-fetch-retry-max-backoff=0ms",
         ] {
-            Cli::try_parse_from(["crabka-gres", flag]).expect_err("zero retry bound");
+            Cli::try_parse_from(["krabka-gres", flag]).expect_err("zero retry bound");
         }
 
         let args = <Cli as clap::Parser>::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--schema-fetch-retry-initial-backoff=91ms",
             "--schema-fetch-retry-max-backoff=37ms",
         ])
@@ -11947,7 +11947,7 @@ mod tests {
     #[test]
     fn schema_fetch_retry_reaches_registered_scanner() {
         let args = <Cli as clap::Parser>::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--schema-fetch-retry-initial-backoff=37ms",
@@ -11961,9 +11961,9 @@ mod tests {
             kafka_scanner_default_bootstrap(&args),
             effective_fdw_broker_dns_timeout(&args).expect("valid FDW DNS timeout"),
             policy,
-            crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-            crabka_client_core::ClientFrameMax::default(),
-            crabka_client_core::FetchMinBytes::default(),
+            krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+            krabka_client_core::ClientFrameMax::default(),
+            krabka_client_core::FetchMinBytes::default(),
             args.registry.fdw_scan_policy(),
             args.registry.fdw_decode_policy(),
         );
@@ -11974,7 +11974,7 @@ mod tests {
     #[test]
     fn substrate_fdw_broker_dns_timeout_reaches_registered_scanner() {
         let args = <Cli as clap::Parser>::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--fdw-broker-dns-timeout=37ms",
@@ -11991,10 +11991,10 @@ mod tests {
         let scanner = kafka_scanner(
             kafka_scanner_default_bootstrap(&args),
             effective_fdw_broker_dns_timeout(&args).expect("valid FDW DNS timeout"),
-            crabka_gres_fdw::SchemaFetchRetryPolicy::default(),
-            crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-            crabka_client_core::ClientFrameMax::default(),
-            crabka_client_core::FetchMinBytes::default(),
+            krabka_gres_fdw::SchemaFetchRetryPolicy::default(),
+            krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+            krabka_client_core::ClientFrameMax::default(),
+            krabka_client_core::FetchMinBytes::default(),
             args.registry.fdw_scan_policy(),
             args.registry.fdw_decode_policy(),
         );
@@ -12003,24 +12003,24 @@ mod tests {
         assert_eq!(scanner.broker_dns_timeout().milliseconds(), 37);
         assert_eq!(
             scanner.scan_policy(),
-            crabka_gres_fdw::FdwScanPolicy {
-                fetch_max_wait: crabka_units::millis(41),
-                fetch_partition_max: crabka_units::bytes(43),
-                connect_timeout: crabka_units::millis(47),
-                request_timeout: crabka_units::millis(53),
+            krabka_gres_fdw::FdwScanPolicy {
+                fetch_max_wait: krabka_units::millis(41),
+                fetch_partition_max: krabka_units::bytes(43),
+                connect_timeout: krabka_units::millis(47),
+                request_timeout: krabka_units::millis(53),
             }
         );
         assert_eq!(
             scanner.decode_policy(),
-            crabka_gres_fdw::FdwDecodePolicy {
-                schema_fetch_timeout: crabka_units::millis(59),
-                schema_fetch_poll: crabka_units::millis(17),
+            krabka_gres_fdw::FdwDecodePolicy {
+                schema_fetch_timeout: krabka_units::millis(59),
+                schema_fetch_poll: krabka_units::millis(17),
             }
         );
 
         assert!(
             <Cli as clap::Parser>::try_parse_from([
-                "crabka-gres",
+                "krabka-gres",
                 "--substrate-bootstrap=memory://",
                 "--tenant=tenant-a",
                 "--fdw-fetch-max-wait=0ms",
@@ -12033,7 +12033,7 @@ mod tests {
     fn wal_producer_flush_timeout_rejects_invalid_and_local_only_use() {
         assert!(
             <Cli as clap::Parser>::try_parse_from([
-                "crabka-gres",
+                "krabka-gres",
                 "--substrate-bootstrap=memory://",
                 "--tenant=tenant-a",
                 "--wal-producer-flush-timeout=0ms",
@@ -12041,7 +12041,7 @@ mod tests {
             .is_err()
         );
         let oversized = <Cli as clap::Parser>::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--wal-producer-flush-timeout=2147483648ms",
@@ -12050,7 +12050,7 @@ mod tests {
         assert!(SubstrateRuntimeConfig::from_args(&oversized.serve).is_err());
 
         let maximum = <Cli as clap::Parser>::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--wal-producer-flush-timeout=2147483647ms",
@@ -12066,7 +12066,7 @@ mod tests {
         );
 
         let fractional = <Cli as clap::Parser>::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--wal-producer-flush-timeout=1.5ms",
@@ -12076,7 +12076,7 @@ mod tests {
 
         assert!(
             <Cli as clap::Parser>::try_parse_from([
-                "crabka-gres",
+                "krabka-gres",
                 "--wal-producer-flush-timeout=1ms",
             ])
             .is_err()
@@ -12086,7 +12086,7 @@ mod tests {
     #[test]
     fn wal_producer_throughput_policy_accepts_distinctive_values_and_reaches_recovery() {
         let cli = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--wal-producer-compression=zstd",
@@ -12101,19 +12101,19 @@ mod tests {
 
         assert_eq!(
             policy.compression(),
-            crabka_client_producer::Compression::Zstd
+            krabka_client_producer::Compression::Zstd
         );
         assert_eq!(policy.linger(), Duration::from_millis(38));
         assert_eq!(policy.batch_bytes(), 39);
         assert_eq!(
             policy.max_in_flight(),
-            crabka_client_producer::DEFAULT_PRODUCER_MAX_IN_FLIGHT
+            krabka_client_producer::DEFAULT_PRODUCER_MAX_IN_FLIGHT
         );
 
-        let tenant = crabka_gres_ranges::TenantName::parse("tenant-a").expect("tenant");
+        let tenant = krabka_gres_ranges::TenantName::parse("tenant-a").expect("tenant");
         assert_eq!(
             config
-                .live_recovery_config(tenant, crabka_gres_ranges::RangeId::new(7))
+                .live_recovery_config(tenant, krabka_gres_ranges::RangeId::new(7))
                 .producer_throughput_policy(),
             policy
         );
@@ -12122,7 +12122,7 @@ mod tests {
     #[test]
     fn pgexec_runtime_policy_parses_and_reaches_substrate_config() {
         let cli = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             "--pgexec-notify-queue-capacity=37",
@@ -12144,60 +12144,60 @@ mod tests {
 
         assert!(
             config.pgexec_runtime_policy
-                == crabka_pgexec::RuntimePolicy {
-                    blocking_query_memory: crabka_units::bytes(34),
-                    result_page_max: crabka_units::bytes(35),
-                    join_broadcast_threshold: crabka_units::bytes(36),
+                == krabka_pgexec::RuntimePolicy {
+                    blocking_query_memory: krabka_units::bytes(34),
+                    result_page_max: krabka_units::bytes(35),
+                    join_broadcast_threshold: krabka_units::bytes(36),
                     notify_queue_capacity: 37,
                     xid_reservation: 38,
                     rowid_reservation: 39,
                     ts_prune_versions_per_row: 40,
-                    ts_gc_floor_lag: crabka_units::millis(41),
-                    stuck_statement: crabka_pgexec::watchdog::StuckStatementPolicy {
-                        threshold: crabka_units::millis(42),
-                        poll_interval: crabka_units::millis(43),
-                        repeat_interval: crabka_units::millis(44),
+                    ts_gc_floor_lag: krabka_units::millis(41),
+                    stuck_statement: krabka_pgexec::watchdog::StuckStatementPolicy {
+                        threshold: krabka_units::millis(42),
+                        poll_interval: krabka_units::millis(43),
+                        repeat_interval: krabka_units::millis(44),
                     },
                 }
         );
         assert!(
-            Cli::try_parse_from(["crabka-gres", "--pgexec-stuck-statement-threshold=0s"]).is_err()
+            Cli::try_parse_from(["krabka-gres", "--pgexec-stuck-statement-threshold=0s"]).is_err()
         );
-        assert!(Cli::try_parse_from(["crabka-gres", "--pgexec-notify-queue-capacity=0"]).is_err());
-        assert!(Cli::try_parse_from(["crabka-gres", "--pgexec-ts-gc-floor-lag=-1ms"]).is_err());
-        assert!(Cli::try_parse_from(["crabka-gres", "--pgexec-ts-gc-floor-lag=0.5ms"]).is_err());
+        assert!(Cli::try_parse_from(["krabka-gres", "--pgexec-notify-queue-capacity=0"]).is_err());
+        assert!(Cli::try_parse_from(["krabka-gres", "--pgexec-ts-gc-floor-lag=-1ms"]).is_err());
+        assert!(Cli::try_parse_from(["krabka-gres", "--pgexec-ts-gc-floor-lag=0.5ms"]).is_err());
     }
 
     #[test]
     fn wal_producer_throughput_policy_uses_defaults_environment_and_cli_precedence() {
-        const CHILD: &str = "CRABKA_TEST_GRES_WAL_PRODUCER_THROUGHPUT_POLICY_CHILD";
+        const CHILD: &str = "KRABKA_TEST_GRES_WAL_PRODUCER_THROUGHPUT_POLICY_CHILD";
         const VARS: [&str; 26] = [
-            "CRABKA_GRES_WAL_RECOVERY_FETCH_MAX_WAIT",
-            "CRABKA_GRES_WAL_RECOVERY_FETCH_PARTITION_MAX",
-            "CRABKA_GRES_WAL_RECOVERY_FETCH_RESPONSE_MAX",
-            "CRABKA_GRES_WAL_RECOVERY_EMPTY_FETCH_RETRIES",
-            "CRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT",
-            "CRABKA_GRES_WAL_RECOVERY_CONNECT_TIMEOUT",
-            "CRABKA_GRES_WAL_RECOVERY_REQUEST_TIMEOUT",
-            "CRABKA_GRES_WAL_TOPIC_REPLICATION_FACTOR",
-            "CRABKA_GRES_WAL_TOPIC_ENSURE_TIMEOUT",
-            "CRABKA_GRES_WAL_ADMIN_CONNECT_TIMEOUT",
-            "CRABKA_GRES_WAL_ADMIN_REQUEST_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_REQUEST_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_RETRIES",
-            "CRABKA_GRES_WAL_PRODUCER_RETRY_BACKOFF",
-            "CRABKA_GRES_WAL_PRODUCER_ROUTING_RETRY_BUDGET",
-            "CRABKA_GRES_WAL_PRODUCER_INIT_RETRY_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_INIT_MAX_BACKOFF",
-            "CRABKA_GRES_WAL_PRODUCER_TRANSACTION_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_COMPRESSION",
-            "CRABKA_GRES_WAL_PRODUCER_LINGER",
-            "CRABKA_GRES_WAL_PRODUCER_BATCH",
-            "CRABKA_GRES_WAL_FRAME_MAX_SIZE",
-            "CRABKA_PGKV_MAX_MEMTABLE_SIZE",
-            "CRABKA_PGKV_ROTATE_AFTER_OPS",
+            "KRABKA_GRES_WAL_RECOVERY_FETCH_MAX_WAIT",
+            "KRABKA_GRES_WAL_RECOVERY_FETCH_PARTITION_MAX",
+            "KRABKA_GRES_WAL_RECOVERY_FETCH_RESPONSE_MAX",
+            "KRABKA_GRES_WAL_RECOVERY_EMPTY_FETCH_RETRIES",
+            "KRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT",
+            "KRABKA_GRES_WAL_RECOVERY_CONNECT_TIMEOUT",
+            "KRABKA_GRES_WAL_RECOVERY_REQUEST_TIMEOUT",
+            "KRABKA_GRES_WAL_TOPIC_REPLICATION_FACTOR",
+            "KRABKA_GRES_WAL_TOPIC_ENSURE_TIMEOUT",
+            "KRABKA_GRES_WAL_ADMIN_CONNECT_TIMEOUT",
+            "KRABKA_GRES_WAL_ADMIN_REQUEST_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_REQUEST_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_RETRIES",
+            "KRABKA_GRES_WAL_PRODUCER_RETRY_BACKOFF",
+            "KRABKA_GRES_WAL_PRODUCER_ROUTING_RETRY_BUDGET",
+            "KRABKA_GRES_WAL_PRODUCER_INIT_RETRY_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_INIT_MAX_BACKOFF",
+            "KRABKA_GRES_WAL_PRODUCER_TRANSACTION_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_COMPRESSION",
+            "KRABKA_GRES_WAL_PRODUCER_LINGER",
+            "KRABKA_GRES_WAL_PRODUCER_BATCH",
+            "KRABKA_GRES_WAL_FRAME_MAX_SIZE",
+            "KRABKA_PGKV_MAX_MEMTABLE_SIZE",
+            "KRABKA_PGKV_ROTATE_AFTER_OPS",
         ];
         if std::env::var_os(CHILD).is_none() {
             for mode in ["defaults", "environment"] {
@@ -12227,7 +12227,7 @@ mod tests {
         }
 
         let base = [
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
         ];
@@ -12239,27 +12239,27 @@ mod tests {
         .expect("valid config")
         .expect("substrate config");
         let expected = if std::env::var(CHILD).as_deref() == Ok("environment") {
-            crabka_client_producer::ProducerThroughputPolicy::new(
-                crabka_client_producer::Compression::Gzip,
+            krabka_client_producer::ProducerThroughputPolicy::new(
+                krabka_client_producer::Compression::Gzip,
                 Duration::from_millis(41),
                 42,
-                crabka_client_producer::DEFAULT_PRODUCER_MAX_IN_FLIGHT,
+                krabka_client_producer::DEFAULT_PRODUCER_MAX_IN_FLIGHT,
             )
             .expect("environment policy")
         } else {
-            crabka_client_producer::ProducerThroughputPolicy::default()
+            krabka_client_producer::ProducerThroughputPolicy::default()
         };
         assert_eq!(config.producer_throughput_policy, expected);
         assert_eq!(
             config.wal_frame_max_size,
             if std::env::var(CHILD).as_deref() == Ok("environment") {
-                crabka_units::bytes(43)
+                krabka_units::bytes(43)
             } else {
-                crabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE
+                krabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE
             }
         );
         let expected_pgkv = if std::env::var(CHILD).as_deref() == Ok("environment") {
-            FjallOptions::new(crabka_units::bytes(44), 45).expect("environment policy")
+            FjallOptions::new(krabka_units::bytes(44), 45).expect("environment policy")
         } else {
             FjallOptions::default()
         };
@@ -12277,18 +12277,18 @@ mod tests {
         let config = SubstrateRuntimeConfig::from_args(&cli.serve)
             .expect("valid config")
             .expect("substrate config");
-        let expected = crabka_client_producer::ProducerThroughputPolicy::new(
-            crabka_client_producer::Compression::Lz4,
+        let expected = krabka_client_producer::ProducerThroughputPolicy::new(
+            krabka_client_producer::Compression::Lz4,
             Duration::from_millis(51),
             52,
-            crabka_client_producer::DEFAULT_PRODUCER_MAX_IN_FLIGHT,
+            krabka_client_producer::DEFAULT_PRODUCER_MAX_IN_FLIGHT,
         )
         .expect("CLI policy");
         assert_eq!(config.producer_throughput_policy, expected);
-        assert_eq!(config.wal_frame_max_size, crabka_units::bytes(53));
+        assert_eq!(config.wal_frame_max_size, krabka_units::bytes(53));
         assert_eq!(
             config.pgkv_options,
-            FjallOptions::new(crabka_units::bytes(54), 55).expect("CLI policy")
+            FjallOptions::new(krabka_units::bytes(54), 55).expect("CLI policy")
         );
     }
 
@@ -12297,7 +12297,7 @@ mod tests {
         for flag in ["--pgkv-max-memtable-size=0B", "--pgkv-rotate-after-ops=0"] {
             assert!(
                 <Cli as clap::Parser>::try_parse_from([
-                    "crabka-gres",
+                    "krabka-gres",
                     "--substrate-bootstrap=memory://",
                     "--tenant=tenant-a",
                     flag,
@@ -12306,7 +12306,7 @@ mod tests {
                 "accepted {flag}"
             );
             assert!(
-                <Cli as clap::Parser>::try_parse_from(["crabka-gres", flag]).is_err(),
+                <Cli as clap::Parser>::try_parse_from(["krabka-gres", flag]).is_err(),
                 "accepted local-only {flag}"
             );
         }
@@ -12314,31 +12314,31 @@ mod tests {
 
     #[test]
     fn wal_producer_retry_policy_uses_defaults_environment_and_cli_precedence() {
-        const CHILD: &str = "CRABKA_TEST_GRES_WAL_PRODUCER_POLICY_CHILD";
+        const CHILD: &str = "KRABKA_TEST_GRES_WAL_PRODUCER_POLICY_CHILD";
         const VARS: [&str; 23] = [
-            "CRABKA_GRES_WAL_RECOVERY_FETCH_MAX_WAIT",
-            "CRABKA_GRES_WAL_RECOVERY_FETCH_PARTITION_MAX",
-            "CRABKA_GRES_WAL_RECOVERY_FETCH_RESPONSE_MAX",
-            "CRABKA_GRES_WAL_RECOVERY_EMPTY_FETCH_RETRIES",
-            "CRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT",
-            "CRABKA_GRES_WAL_RECOVERY_CONNECT_TIMEOUT",
-            "CRABKA_GRES_WAL_RECOVERY_REQUEST_TIMEOUT",
-            "CRABKA_GRES_WAL_TOPIC_REPLICATION_FACTOR",
-            "CRABKA_GRES_WAL_TOPIC_ENSURE_TIMEOUT",
-            "CRABKA_GRES_WAL_ADMIN_CONNECT_TIMEOUT",
-            "CRABKA_GRES_WAL_ADMIN_REQUEST_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_REQUEST_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_RETRIES",
-            "CRABKA_GRES_WAL_PRODUCER_RETRY_BACKOFF",
-            "CRABKA_GRES_WAL_PRODUCER_ROUTING_RETRY_BUDGET",
-            "CRABKA_GRES_WAL_PRODUCER_INIT_RETRY_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_INIT_MAX_BACKOFF",
-            "CRABKA_GRES_WAL_PRODUCER_TRANSACTION_TIMEOUT",
-            "CRABKA_GRES_WAL_PRODUCER_COMPRESSION",
-            "CRABKA_GRES_WAL_PRODUCER_LINGER",
-            "CRABKA_GRES_WAL_PRODUCER_BATCH",
+            "KRABKA_GRES_WAL_RECOVERY_FETCH_MAX_WAIT",
+            "KRABKA_GRES_WAL_RECOVERY_FETCH_PARTITION_MAX",
+            "KRABKA_GRES_WAL_RECOVERY_FETCH_RESPONSE_MAX",
+            "KRABKA_GRES_WAL_RECOVERY_EMPTY_FETCH_RETRIES",
+            "KRABKA_GRES_WAL_RECOVERY_DNS_TIMEOUT",
+            "KRABKA_GRES_WAL_RECOVERY_CONNECT_TIMEOUT",
+            "KRABKA_GRES_WAL_RECOVERY_REQUEST_TIMEOUT",
+            "KRABKA_GRES_WAL_TOPIC_REPLICATION_FACTOR",
+            "KRABKA_GRES_WAL_TOPIC_ENSURE_TIMEOUT",
+            "KRABKA_GRES_WAL_ADMIN_CONNECT_TIMEOUT",
+            "KRABKA_GRES_WAL_ADMIN_REQUEST_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_REQUEST_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_RETRIES",
+            "KRABKA_GRES_WAL_PRODUCER_RETRY_BACKOFF",
+            "KRABKA_GRES_WAL_PRODUCER_ROUTING_RETRY_BUDGET",
+            "KRABKA_GRES_WAL_PRODUCER_INIT_RETRY_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_INIT_MAX_BACKOFF",
+            "KRABKA_GRES_WAL_PRODUCER_TRANSACTION_TIMEOUT",
+            "KRABKA_GRES_WAL_PRODUCER_COMPRESSION",
+            "KRABKA_GRES_WAL_PRODUCER_LINGER",
+            "KRABKA_GRES_WAL_PRODUCER_BATCH",
         ];
         if std::env::var_os(CHILD).is_none() {
             for mode in ["defaults", "environment"] {
@@ -12350,7 +12350,7 @@ mod tests {
                         "tests::wal_producer_retry_policy_uses_defaults_environment_and_cli_precedence",
                     ])
                     .env(CHILD, mode)
-                    .env("CRABKA_GRES_WAL_RECOVERY_FETCH_MAX_WAIT", "0ms");
+                    .env("KRABKA_GRES_WAL_RECOVERY_FETCH_MAX_WAIT", "0ms");
                 for variable in VARS {
                     child.env_remove(variable);
                 }
@@ -12369,7 +12369,7 @@ mod tests {
         }
 
         let base = [
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
         ];
@@ -12381,7 +12381,7 @@ mod tests {
         .expect("valid config")
         .expect("substrate config");
         let expected = if std::env::var(CHILD).as_deref() == Ok("environment") {
-            crabka_client_producer::ProducerRetryPolicy::new(
+            krabka_client_producer::ProducerRetryPolicy::new(
                 Duration::from_millis(41),
                 42,
                 Duration::from_millis(43),
@@ -12392,7 +12392,7 @@ mod tests {
             )
             .expect("environment policy")
         } else {
-            crabka_client_producer::ProducerRetryPolicy::default()
+            krabka_client_producer::ProducerRetryPolicy::default()
         };
         assert_eq!(config.producer_retry_policy, expected);
 
@@ -12409,7 +12409,7 @@ mod tests {
         let config = SubstrateRuntimeConfig::from_args(&cli.serve)
             .expect("valid config")
             .expect("substrate config");
-        let expected = crabka_client_producer::ProducerRetryPolicy::new(
+        let expected = krabka_client_producer::ProducerRetryPolicy::new(
             Duration::from_millis(51),
             52,
             Duration::from_millis(53),
@@ -12447,7 +12447,7 @@ mod tests {
     #[test]
     fn cli_parse_accepts_checkpoint_s3_options() {
         let cli = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap",
             "127.0.0.1:9092",
             "--tenant",
@@ -12474,7 +12474,7 @@ mod tests {
         assert!(config.checkpoints.as_ref().map(|cfg| cfg.frames_threshold) == Some(100));
         assert!(
             config.checkpoints.as_ref().map(|cfg| cfg.bytes_threshold)
-                == Some(crabka_units::mebibytes(1))
+                == Some(krabka_units::mebibytes(1))
         );
         assert!(config.checkpoints.as_ref().map(|cfg| cfg.retain_newest) == Some(3));
         assert!(matches!(
@@ -12493,7 +12493,7 @@ mod tests {
             "--idle-suspend-poll-interval=27ms",
         ] {
             let args = Cli::try_parse_from([
-                "crabka-gres",
+                "krabka-gres",
                 "--substrate-bootstrap=memory://",
                 "--tenant=tenant-a",
                 option,
@@ -12541,7 +12541,7 @@ mod tests {
             "--checkpoint-poll-interval=26ms",
             "--idle-suspend-poll-interval=27ms",
         ] {
-            let args = Cli::try_parse_from(["crabka-gres", option])
+            let args = Cli::try_parse_from(["krabka-gres", option])
                 .expect("checkpoint lifecycle option")
                 .serve;
             let error = SubstrateRuntimeConfig::from_args(&args).expect_err("substrate required");
@@ -12556,15 +12556,15 @@ mod tests {
 
     #[test]
     fn checkpoint_lifecycle_environment_options_require_substrate_mode() {
-        const CHILD: &str = "CRABKA_TEST_GRES_CHECKPOINT_REQUIRED_ENV_CHILD";
+        const CHILD: &str = "KRABKA_TEST_GRES_CHECKPOINT_REQUIRED_ENV_CHILD";
         const VARIABLES: [&str; 3] = [
-            "CRABKA_GRES_CHECKPOINT_DELETE_RECORDS_TIMEOUT",
-            "CRABKA_GRES_CHECKPOINT_POLL_INTERVAL",
-            "CRABKA_GRES_IDLE_SUSPEND_POLL_INTERVAL",
+            "KRABKA_GRES_CHECKPOINT_DELETE_RECORDS_TIMEOUT",
+            "KRABKA_GRES_CHECKPOINT_POLL_INTERVAL",
+            "KRABKA_GRES_IDLE_SUSPEND_POLL_INTERVAL",
         ];
 
         if let Ok(variable) = std::env::var(CHILD) {
-            let args = Cli::try_parse_from(["crabka-gres"])
+            let args = Cli::try_parse_from(["krabka-gres"])
                 .expect("checkpoint lifecycle environment option")
                 .serve;
             let error = SubstrateRuntimeConfig::from_args(&args).expect_err("substrate required");
@@ -12660,7 +12660,7 @@ mod tests {
 
     #[test]
     fn cli_parse_requires_tenant_for_substrate_mode() {
-        let error = Cli::try_parse_from(["crabka-gres", "--substrate-bootstrap", "memory://"])
+        let error = Cli::try_parse_from(["krabka-gres", "--substrate-bootstrap", "memory://"])
             .expect_err("tenant is required");
 
         assert_eq!(
@@ -12672,13 +12672,13 @@ mod tests {
     #[test]
     fn cli_parse_rejects_substrate_with_data_dir() {
         let error = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap",
             "memory://",
             "--tenant",
             "tenant-a",
             "--data-dir",
-            "/tmp/crabka-gres-data",
+            "/tmp/krabka-gres-data",
         ])
         .expect_err("data-dir conflicts with substrate mode");
 
@@ -12724,10 +12724,10 @@ mod tests {
     async fn live_substrate_multirange_uses_broker_recovery_not_local_engines() {
         let config = SubstrateRuntimeConfig {
             client_dispatch_queue_capacity:
-                crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-            client_frame_max: crabka_client_core::ClientFrameMax::default(),
-            fdw_fetch_min: crabka_client_core::FetchMinBytes::default(),
-            wal_recovery_fetch_min: crabka_client_core::FetchMinBytes::default(),
+                krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+            client_frame_max: krabka_client_core::ClientFrameMax::default(),
+            fdw_fetch_min: krabka_client_core::FetchMinBytes::default(),
+            wal_recovery_fetch_min: krabka_client_core::FetchMinBytes::default(),
             bootstrap: "127.0.0.1:1".to_string(),
             tenant: "tenant-a".to_string(),
             cache_dir: None,
@@ -12740,24 +12740,24 @@ mod tests {
                 .to_std(),
             range0_follower_rebuild_backoff_ceiling:
                 DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
-            durable_inspection_timeout: crabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
+            durable_inspection_timeout: krabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
                 .to_std(),
-            durable_inspection_fold_limits: crabka_gres_substrate::FoldLimits::default(),
-            recovery_read_policy: crabka_gres_substrate::RecoveryReadPolicy::default(),
-            wal_admin_policy: crabka_gres_substrate::WalAdminPolicy::default(),
-            producer_dns_timeout: crabka_client_core::ClientDnsTimeout::default(),
-            producer_flush_timeout: crabka_client_producer::ProducerFlushTimeout::default(),
-            producer_retry_policy: crabka_client_producer::ProducerRetryPolicy::default(),
-            producer_throughput_policy: crabka_client_producer::ProducerThroughputPolicy::default(),
-            wal_frame_max_size: crabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
+            durable_inspection_fold_limits: krabka_gres_substrate::FoldLimits::default(),
+            recovery_read_policy: krabka_gres_substrate::RecoveryReadPolicy::default(),
+            wal_admin_policy: krabka_gres_substrate::WalAdminPolicy::default(),
+            producer_dns_timeout: krabka_client_core::ClientDnsTimeout::default(),
+            producer_flush_timeout: krabka_client_producer::ProducerFlushTimeout::default(),
+            producer_retry_policy: krabka_client_producer::ProducerRetryPolicy::default(),
+            producer_throughput_policy: krabka_client_producer::ProducerThroughputPolicy::default(),
+            wal_frame_max_size: krabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
             host_ranges: None,
             range_rpc: None,
             advertised_endpoint: None,
-            timestamp_source_mode: crabka_gres_ranges::TimestampSourceMode::LogicalTso,
+            timestamp_source_mode: krabka_gres_ranges::TimestampSourceMode::LogicalTso,
             hlc_wall_offset_ms: 0,
             registry_policy: RegistryPolicy::default(),
-            range_runtime_policy: crabka_gres_ranges::RangeRuntimePolicy::default(),
-            pgexec_runtime_policy: crabka_pgexec::RuntimePolicy::default(),
+            range_runtime_policy: krabka_gres_ranges::RangeRuntimePolicy::default(),
+            pgexec_runtime_policy: krabka_pgexec::RuntimePolicy::default(),
         };
 
         let Err(error) = open_substrate_runtime(&config).await else {
@@ -12812,10 +12812,10 @@ mod tests {
     async fn single_range_checkpoint_runtime_writes_to_the_range_zero_namespace() {
         let config = SubstrateRuntimeConfig {
             client_dispatch_queue_capacity:
-                crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-            client_frame_max: crabka_client_core::ClientFrameMax::default(),
-            fdw_fetch_min: crabka_client_core::FetchMinBytes::default(),
-            wal_recovery_fetch_min: crabka_client_core::FetchMinBytes::default(),
+                krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+            client_frame_max: krabka_client_core::ClientFrameMax::default(),
+            fdw_fetch_min: krabka_client_core::FetchMinBytes::default(),
+            wal_recovery_fetch_min: krabka_client_core::FetchMinBytes::default(),
             bootstrap: "broker-a:9092".to_string(),
             tenant: "tenant-a".to_string(),
             cache_dir: None,
@@ -12823,10 +12823,10 @@ mod tests {
             checkpoints: Some(CheckpointRuntimeConfig {
                 object_store: CheckpointObjectStoreConfig::InMemory,
                 frames_threshold: 1,
-                bytes_threshold: crabka_units::bytes(1),
-                part_max_size: crabka_gres_substrate::DEFAULT_PART_MAX_SIZE,
+                bytes_threshold: krabka_units::bytes(1),
+                part_max_size: krabka_gres_substrate::DEFAULT_PART_MAX_SIZE,
                 retain_newest: 2,
-                delete_records_timeout: crabka_units::secs(30),
+                delete_records_timeout: krabka_units::secs(30),
                 poll_interval: Duration::from_secs(1),
             }),
             kafka_security: None,
@@ -12836,36 +12836,36 @@ mod tests {
                 .to_std(),
             range0_follower_rebuild_backoff_ceiling:
                 DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
-            durable_inspection_timeout: crabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
+            durable_inspection_timeout: krabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
                 .to_std(),
-            durable_inspection_fold_limits: crabka_gres_substrate::FoldLimits::default(),
-            recovery_read_policy: crabka_gres_substrate::RecoveryReadPolicy::default(),
-            wal_admin_policy: crabka_gres_substrate::WalAdminPolicy::default(),
-            producer_dns_timeout: crabka_client_core::ClientDnsTimeout::default(),
-            producer_flush_timeout: crabka_client_producer::ProducerFlushTimeout::default(),
-            producer_retry_policy: crabka_client_producer::ProducerRetryPolicy::default(),
-            producer_throughput_policy: crabka_client_producer::ProducerThroughputPolicy::default(),
-            wal_frame_max_size: crabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
+            durable_inspection_fold_limits: krabka_gres_substrate::FoldLimits::default(),
+            recovery_read_policy: krabka_gres_substrate::RecoveryReadPolicy::default(),
+            wal_admin_policy: krabka_gres_substrate::WalAdminPolicy::default(),
+            producer_dns_timeout: krabka_client_core::ClientDnsTimeout::default(),
+            producer_flush_timeout: krabka_client_producer::ProducerFlushTimeout::default(),
+            producer_retry_policy: krabka_client_producer::ProducerRetryPolicy::default(),
+            producer_throughput_policy: krabka_client_producer::ProducerThroughputPolicy::default(),
+            wal_frame_max_size: krabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
             host_ranges: None,
             range_rpc: None,
             advertised_endpoint: None,
-            timestamp_source_mode: crabka_gres_ranges::TimestampSourceMode::LogicalTso,
+            timestamp_source_mode: krabka_gres_ranges::TimestampSourceMode::LogicalTso,
             hlc_wall_offset_ms: 0,
             registry_policy: RegistryPolicy::default(),
-            range_runtime_policy: crabka_gres_ranges::RangeRuntimePolicy::default(),
-            pgexec_runtime_policy: crabka_pgexec::RuntimePolicy::default(),
+            range_runtime_policy: krabka_gres_ranges::RangeRuntimePolicy::default(),
+            pgexec_runtime_policy: krabka_pgexec::RuntimePolicy::default(),
         };
         let wal_selection = single_range_live_wal_selection(&config, None).expect("wal selection");
         let kv = Arc::new(MemKv::default());
         kv.put(b"checkpointed".to_vec(), b"value".to_vec())
             .expect("seed checkpoint data");
         let store: Arc<dyn SubstrateKv> = kv;
-        let checkpoint_store: Arc<dyn crabka_gres_substrate::checkpoint::CheckpointStore> =
-            crabka_gres_substrate::checkpoint::InMemoryCheckpointStore::shared();
-        let snapshot_source = Arc::new(crabka_gres_substrate::CheckpointSnapshotSource::new(
+        let checkpoint_store: Arc<dyn krabka_gres_substrate::checkpoint::CheckpointStore> =
+            krabka_gres_substrate::checkpoint::InMemoryCheckpointStore::shared();
+        let snapshot_source = Arc::new(krabka_gres_substrate::CheckpointSnapshotSource::new(
             7,
             8,
-            crabka_gres_substrate::WriterGeneration(0),
+            krabka_gres_substrate::WriterGeneration(0),
         ));
 
         let checkpoint_runtime = build_checkpoint_runtime(
@@ -12915,28 +12915,28 @@ mod tests {
     async fn substrate_engine_wires_nonzero_safe_checkpoint_horizon() {
         let kv = Arc::new(MemKv::default());
         let store: Arc<dyn SubstrateKv> = kv.clone();
-        let log = crabka_gres_substrate::InMemoryWalLog::shared();
-        let source = Arc::new(crabka_gres_substrate::CheckpointSnapshotSource::new(
+        let log = krabka_gres_substrate::InMemoryWalLog::shared();
+        let source = Arc::new(krabka_gres_substrate::CheckpointSnapshotSource::new(
             -1,
             0,
-            crabka_gres_substrate::WriterGeneration(0),
+            krabka_gres_substrate::WriterGeneration(0),
         ));
         let _engine = build_replicated_substrate_engine(
             &store,
             log,
-            crabka_gres_substrate::WriterGeneration(0),
+            krabka_gres_substrate::WriterGeneration(0),
             0,
-            crabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
+            krabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
             &source,
             None,
             None,
-            crabka_pgexec::RuntimePolicy::default(),
+            krabka_pgexec::RuntimePolicy::default(),
         )
         .expect("substrate engine");
 
         let (snapshot, _pairs) = source.capture(kv.as_ref()).await.expect("capture");
 
-        assert!(snapshot.garbage_horizon_xid >= crabka_pgmvcc::xid::FIRST_NORMAL_XID);
+        assert!(snapshot.garbage_horizon_xid >= krabka_pgmvcc::xid::FIRST_NORMAL_XID);
     }
 
     #[test]
@@ -12948,8 +12948,8 @@ mod tests {
         let config = SubstrateRuntimeConfig::from_args(&args)
             .expect("valid config")
             .expect("substrate config");
-        let tenant = crabka_gres_ranges::TenantName::parse(config.tenant.clone()).expect("tenant");
-        let tenant_config = crabka_gres_ranges::MultiRangeTenantConfig::from_boundaries(
+        let tenant = krabka_gres_ranges::TenantName::parse(config.tenant.clone()).expect("tenant");
+        let tenant_config = krabka_gres_ranges::MultiRangeTenantConfig::from_boundaries(
             tenant,
             config.ranges.as_deref().expect("ranges"),
         )
@@ -12960,11 +12960,11 @@ mod tests {
         let recovery_configs = live_multirange_recovery_configs(&config, &tenant_config, None);
         let topics = recovery_configs
             .iter()
-            .map(crabka_gres_substrate::LiveRecoveryConfig::wal_topic)
+            .map(krabka_gres_substrate::LiveRecoveryConfig::wal_topic)
             .collect::<Vec<_>>();
         let transactional_ids = recovery_configs
             .iter()
-            .map(crabka_gres_substrate::LiveRecoveryConfig::transactional_id)
+            .map(krabka_gres_substrate::LiveRecoveryConfig::transactional_id)
             .collect::<Vec<_>>();
 
         assert_eq!(topics, ["__gres_wal.tenant-a.r0", "__gres_wal.tenant-a.r2"]);
@@ -12985,8 +12985,8 @@ mod tests {
         let config = SubstrateRuntimeConfig::from_args(&args)
             .expect("valid config")
             .expect("substrate config");
-        let tenant = crabka_gres_ranges::TenantName::parse(config.tenant.clone()).expect("tenant");
-        let mut tenant_config = crabka_gres_ranges::MultiRangeTenantConfig::from_boundaries(
+        let tenant = krabka_gres_ranges::TenantName::parse(config.tenant.clone()).expect("tenant");
+        let mut tenant_config = krabka_gres_ranges::MultiRangeTenantConfig::from_boundaries(
             tenant,
             config.ranges.as_deref().expect("ranges"),
         )
@@ -12994,11 +12994,11 @@ mod tests {
         // Post-split maps order specs by key span, not range id: put the
         // coordinator behind a sibling to prove recovery still runs it first.
         let mut specs = tenant_config.range_map.ranges().to_vec();
-        specs[0].range_id = crabka_gres_ranges::RangeId::new(7);
-        specs[1].range_id = crabka_gres_ranges::RangeId::COORDINATOR;
-        tenant_config.range_map = crabka_gres_ranges::RangeMap::new(
+        specs[0].range_id = krabka_gres_ranges::RangeId::new(7);
+        specs[1].range_id = krabka_gres_ranges::RangeId::COORDINATOR;
+        tenant_config.range_map = krabka_gres_ranges::RangeMap::new(
             tenant_config.tenant.clone(),
-            crabka_gres_ranges::MapEpoch::new(1),
+            krabka_gres_ranges::MapEpoch::new(1),
             specs,
         )
         .expect("reordered map");
@@ -13011,8 +13011,8 @@ mod tests {
         assert!(
             recovery_ranges
                 == [
-                    crabka_gres_ranges::RangeId::COORDINATOR,
-                    crabka_gres_ranges::RangeId::new(7),
+                    krabka_gres_ranges::RangeId::COORDINATOR,
+                    krabka_gres_ranges::RangeId::new(7),
                 ]
         );
     }
@@ -13020,11 +13020,11 @@ mod tests {
     #[tokio::test]
     async fn early_range_transport_serves_grants_before_topology_swap() {
         use assert2::assert;
-        use crabka_gres_ranges::{
+        use krabka_gres_ranges::{
             RangeId, RangeRequest, RangeResponse, RangeService, TsoReq, TsoResp, WireErrorKind,
         };
 
-        let dynamic = DynamicLiveRangeService::new(crabka_gres_ranges::HostedRangeService::new(
+        let dynamic = DynamicLiveRangeService::new(krabka_gres_ranges::HostedRangeService::new(
             BTreeMap::new(),
         ));
 
@@ -13042,11 +13042,11 @@ mod tests {
 
         // Range-0 recovery installs the oracle: grants serve, SQL stays gated.
         let horizon =
-            crabka_gres_ranges::MemoryTsoHorizon::new(Arc::new(crabka_pgkv::MemKv::default()), 1);
-        let tso_rpc = crabka_gres_ranges::tso_rpc_from_horizon(horizon.clone(), horizon, 1, 0)
+            krabka_gres_ranges::MemoryTsoHorizon::new(Arc::new(krabka_pgkv::MemKv::default()), 1);
+        let tso_rpc = krabka_gres_ranges::tso_rpc_from_horizon(horizon.clone(), horizon, 1, 0)
             .expect("warming tso rpc");
         dynamic.replace(
-            crabka_gres_ranges::HostedRangeService::new(BTreeMap::new()).with_tso(tso_rpc),
+            krabka_gres_ranges::HostedRangeService::new(BTreeMap::new()).with_tso(tso_rpc),
         );
 
         let granted = dynamic
@@ -13131,63 +13131,63 @@ mod tests {
 
     #[test]
     fn deferred_hosted_ranges_validate_only_against_selected_recovery_map() {
-        let tenant = crabka_gres_ranges::TenantName::parse("deferred-hosts").expect("tenant");
+        let tenant = krabka_gres_ranges::TenantName::parse("deferred-hosts").expect("tenant");
         let current =
-            crabka_gres_ranges::MultiRangeTenantConfig::from_boundaries(tenant, "0:0,50:10")
+            krabka_gres_ranges::MultiRangeTenantConfig::from_boundaries(tenant, "0:0,50:10")
                 .expect("current map");
         let requested = [
-            crabka_gres_ranges::RangeId::COORDINATOR,
-            crabka_gres_ranges::RangeId::new(2),
+            krabka_gres_ranges::RangeId::COORDINATOR,
+            krabka_gres_ranges::RangeId::new(2),
         ];
         assert!(bind_recovered_hosted_ranges(current.clone(), &requested).is_err());
 
         let mut target = current;
         let mut specs = target.range_map.ranges().to_vec();
-        specs[1].range_id = crabka_gres_ranges::RangeId::new(2);
-        target.range_map = crabka_gres_ranges::RangeMap::new(
+        specs[1].range_id = krabka_gres_ranges::RangeId::new(2);
+        target.range_map = krabka_gres_ranges::RangeMap::new(
             target.tenant.clone(),
-            crabka_gres_ranges::MapEpoch::new(1),
+            krabka_gres_ranges::MapEpoch::new(1),
             specs,
         )
         .expect("target map");
         let bound = bind_recovered_hosted_ranges(target, &requested).expect("target hosts");
         assert_eq!(bound.hosted_ranges.as_deref(), Some(requested.as_slice()));
         assert!(
-            bind_recovered_hosted_ranges(bound, &[crabka_gres_ranges::RangeId::new(9)]).is_err()
+            bind_recovered_hosted_ranges(bound, &[krabka_gres_ranges::RangeId::new(9)]).is_err()
         );
     }
 
     #[test]
     fn registry_layout_preserves_hash_bucket_boundary_in_initial_serving_map() {
-        let tenant = crabka_gres_ranges::TenantName::parse("hash-layout").expect("tenant");
+        let tenant = krabka_gres_ranges::TenantName::parse("hash-layout").expect("tenant");
         let layout = vec![
-            crabka_gres_control::RangeLayoutEntry {
+            krabka_gres_control::RangeLayoutEntry {
                 range_id: 0,
-                end_key: Some(crabka_gres_control::RangeBoundary::hash(50, 4, 0)),
+                end_key: Some(krabka_gres_control::RangeBoundary::hash(50, 4, 0)),
                 endpoint: "127.0.0.1:1".into(),
                 wal_generation: 0,
-                lifecycle: crabka_gres_control::RangeLifecycle::default(),
+                lifecycle: krabka_gres_control::RangeLifecycle::default(),
                 retirement: None,
             },
-            crabka_gres_control::RangeLayoutEntry {
+            krabka_gres_control::RangeLayoutEntry {
                 range_id: 1,
                 end_key: None,
                 endpoint: "127.0.0.1:2".into(),
                 wal_generation: 0,
-                lifecycle: crabka_gres_control::RangeLifecycle::default(),
+                lifecycle: krabka_gres_control::RangeLifecycle::default(),
                 retirement: None,
             },
         ];
 
         let map =
-            range_map_from_tenant_layout(tenant, crabka_gres_ranges::MapEpoch::new(7), &layout)
+            range_map_from_tenant_layout(tenant, krabka_gres_ranges::MapEpoch::new(7), &layout)
                 .expect("registry map");
 
         assert_eq!(map.epoch().as_u64(), 7);
         assert_eq!(
             map.ranges()[0].end,
-            Some(crabka_gres_ranges::RangeKey::hash(
-                crabka_gres_ranges::TableId::new(50),
+            Some(krabka_gres_ranges::RangeKey::hash(
+                krabka_gres_ranges::TableId::new(50),
                 4,
                 0,
             ))
@@ -13199,10 +13199,10 @@ mod tests {
     fn live_single_range_wal_selection_matches_recovery_writer_and_checkpoint_topics() {
         let config = SubstrateRuntimeConfig {
             client_dispatch_queue_capacity:
-                crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-            client_frame_max: crabka_client_core::ClientFrameMax::default(),
-            fdw_fetch_min: crabka_client_core::FetchMinBytes::default(),
-            wal_recovery_fetch_min: crabka_client_core::FetchMinBytes::default(),
+                krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+            client_frame_max: krabka_client_core::ClientFrameMax::default(),
+            fdw_fetch_min: krabka_client_core::FetchMinBytes::default(),
+            wal_recovery_fetch_min: krabka_client_core::FetchMinBytes::default(),
             bootstrap: "broker-a:9092,broker-b:9092".to_string(),
             tenant: "tenant-a".to_string(),
             cache_dir: None,
@@ -13215,24 +13215,24 @@ mod tests {
                 .to_std(),
             range0_follower_rebuild_backoff_ceiling:
                 DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
-            durable_inspection_timeout: crabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
+            durable_inspection_timeout: krabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
                 .to_std(),
-            durable_inspection_fold_limits: crabka_gres_substrate::FoldLimits::default(),
-            recovery_read_policy: crabka_gres_substrate::RecoveryReadPolicy::default(),
-            wal_admin_policy: crabka_gres_substrate::WalAdminPolicy::default(),
-            producer_dns_timeout: crabka_client_core::ClientDnsTimeout::default(),
-            producer_flush_timeout: crabka_client_producer::ProducerFlushTimeout::default(),
-            producer_retry_policy: crabka_client_producer::ProducerRetryPolicy::default(),
-            producer_throughput_policy: crabka_client_producer::ProducerThroughputPolicy::default(),
-            wal_frame_max_size: crabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
+            durable_inspection_fold_limits: krabka_gres_substrate::FoldLimits::default(),
+            recovery_read_policy: krabka_gres_substrate::RecoveryReadPolicy::default(),
+            wal_admin_policy: krabka_gres_substrate::WalAdminPolicy::default(),
+            producer_dns_timeout: krabka_client_core::ClientDnsTimeout::default(),
+            producer_flush_timeout: krabka_client_producer::ProducerFlushTimeout::default(),
+            producer_retry_policy: krabka_client_producer::ProducerRetryPolicy::default(),
+            producer_throughput_policy: krabka_client_producer::ProducerThroughputPolicy::default(),
+            wal_frame_max_size: krabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
             host_ranges: None,
             range_rpc: None,
             advertised_endpoint: None,
-            timestamp_source_mode: crabka_gres_ranges::TimestampSourceMode::LogicalTso,
+            timestamp_source_mode: krabka_gres_ranges::TimestampSourceMode::LogicalTso,
             hlc_wall_offset_ms: 0,
             registry_policy: RegistryPolicy::default(),
-            range_runtime_policy: crabka_gres_ranges::RangeRuntimePolicy::default(),
-            pgexec_runtime_policy: crabka_pgexec::RuntimePolicy::default(),
+            range_runtime_policy: krabka_gres_ranges::RangeRuntimePolicy::default(),
+            pgexec_runtime_policy: krabka_pgexec::RuntimePolicy::default(),
         };
 
         let wal_selection = single_range_live_wal_selection(&config, None).expect("wal selection");
@@ -13260,7 +13260,7 @@ mod tests {
         );
         assert_ne!(
             wal_selection.writer_topic,
-            crabka_gres_substrate::wal_topic("tenant-a")
+            krabka_gres_substrate::wal_topic("tenant-a")
         );
 
         let mut resumed = tenant_record();
@@ -13290,8 +13290,8 @@ mod tests {
         assert_eq!(
             config.host_ranges,
             Some(vec![
-                crabka_gres_ranges::RangeId::new(0),
-                crabka_gres_ranges::RangeId::new(2),
+                krabka_gres_ranges::RangeId::new(0),
+                krabka_gres_ranges::RangeId::new(2),
             ])
         );
 
@@ -13304,10 +13304,10 @@ mod tests {
     async fn substrate_runtime_selects_live_adapter_and_reports_broker_errors() {
         let config = SubstrateRuntimeConfig {
             client_dispatch_queue_capacity:
-                crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-            client_frame_max: crabka_client_core::ClientFrameMax::default(),
-            fdw_fetch_min: crabka_client_core::FetchMinBytes::default(),
-            wal_recovery_fetch_min: crabka_client_core::FetchMinBytes::default(),
+                krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+            client_frame_max: krabka_client_core::ClientFrameMax::default(),
+            fdw_fetch_min: krabka_client_core::FetchMinBytes::default(),
+            wal_recovery_fetch_min: krabka_client_core::FetchMinBytes::default(),
             bootstrap: "127.0.0.1:1".to_string(),
             tenant: "tenant-a".to_string(),
             cache_dir: None,
@@ -13320,24 +13320,24 @@ mod tests {
                 .to_std(),
             range0_follower_rebuild_backoff_ceiling:
                 DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
-            durable_inspection_timeout: crabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
+            durable_inspection_timeout: krabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
                 .to_std(),
-            durable_inspection_fold_limits: crabka_gres_substrate::FoldLimits::default(),
-            recovery_read_policy: crabka_gres_substrate::RecoveryReadPolicy::default(),
-            wal_admin_policy: crabka_gres_substrate::WalAdminPolicy::default(),
-            producer_dns_timeout: crabka_client_core::ClientDnsTimeout::default(),
-            producer_flush_timeout: crabka_client_producer::ProducerFlushTimeout::default(),
-            producer_retry_policy: crabka_client_producer::ProducerRetryPolicy::default(),
-            producer_throughput_policy: crabka_client_producer::ProducerThroughputPolicy::default(),
-            wal_frame_max_size: crabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
+            durable_inspection_fold_limits: krabka_gres_substrate::FoldLimits::default(),
+            recovery_read_policy: krabka_gres_substrate::RecoveryReadPolicy::default(),
+            wal_admin_policy: krabka_gres_substrate::WalAdminPolicy::default(),
+            producer_dns_timeout: krabka_client_core::ClientDnsTimeout::default(),
+            producer_flush_timeout: krabka_client_producer::ProducerFlushTimeout::default(),
+            producer_retry_policy: krabka_client_producer::ProducerRetryPolicy::default(),
+            producer_throughput_policy: krabka_client_producer::ProducerThroughputPolicy::default(),
+            wal_frame_max_size: krabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
             host_ranges: None,
             range_rpc: None,
             advertised_endpoint: None,
-            timestamp_source_mode: crabka_gres_ranges::TimestampSourceMode::LogicalTso,
+            timestamp_source_mode: krabka_gres_ranges::TimestampSourceMode::LogicalTso,
             hlc_wall_offset_ms: 0,
             registry_policy: RegistryPolicy::default(),
-            range_runtime_policy: crabka_gres_ranges::RangeRuntimePolicy::default(),
-            pgexec_runtime_policy: crabka_pgexec::RuntimePolicy::default(),
+            range_runtime_policy: krabka_gres_ranges::RangeRuntimePolicy::default(),
+            pgexec_runtime_policy: krabka_pgexec::RuntimePolicy::default(),
         };
 
         let Err(error) = open_substrate_engine(&config).await else {
@@ -13350,7 +13350,7 @@ mod tests {
 
     #[test]
     fn cli_parse_rejects_removed_node_mode() {
-        let error = Cli::try_parse_from(["crabka-gres", "node", "--id", "1"])
+        let error = Cli::try_parse_from(["krabka-gres", "node", "--id", "1"])
             .expect_err("node mode is not part of the G-1 binary contract");
 
         assert_eq!(error.kind(), clap::error::ErrorKind::UnknownArgument);
@@ -13411,12 +13411,12 @@ mod tests {
         let single = RuntimeEngine::Single(Box::new(SqlEngine::new())).connect();
         assert_runtime_session_v2(single).await;
 
-        let config = crabka_gres_ranges::MultiRangeTenantConfig::from_boundaries(
-            crabka_gres_ranges::TenantName::parse("runtime_v2").expect("tenant"),
+        let config = krabka_gres_ranges::MultiRangeTenantConfig::from_boundaries(
+            krabka_gres_ranges::TenantName::parse("runtime_v2").expect("tenant"),
             "0,100,200",
         )
         .expect("config");
-        let (multi, _handles) = crabka_gres_ranges::MultiRangeTenant::start(config).expect("multi");
+        let (multi, _handles) = krabka_gres_ranges::MultiRangeTenant::start(config).expect("multi");
         assert_runtime_session_v2(RuntimeEngine::Multi(Box::new(multi)).connect()).await;
     }
 
@@ -13464,8 +13464,8 @@ mod tests {
     }
 
     /// Rows of one `Rows` page, decoded from their text format.
-    fn page_ids(page: &crabka_pgwire::engine::ResultPage) -> Vec<i32> {
-        let crabka_pgwire::engine::ResultPage::Rows { rows, .. } = page else {
+    fn page_ids(page: &krabka_pgwire::engine::ResultPage) -> Vec<i32> {
+        let krabka_pgwire::engine::ResultPage::Rows { rows, .. } = page else {
             panic!("a SELECT pages as rows");
         };
         rows.iter()
@@ -13484,7 +13484,7 @@ mod tests {
     ///
     /// Where the page boundaries fall tells the two apart. The default
     /// materializes the whole result through
-    /// [`Session::simple_query`](crabka_pgwire::engine::Session::simple_query)
+    /// [`Session::simple_query`](krabka_pgwire::engine::Session::simple_query)
     /// and only then splits it, so it can only ever produce uniform `page_rows`
     /// chunks. Every page but the last then holds exactly `page_rows` rows, and
     /// the last page is non-empty and carries the tag.
@@ -13516,7 +13516,7 @@ mod tests {
             .await
             .expect("seed");
 
-        let mut sink = crabka_pgwire::engine::CollectingResultSink::default();
+        let mut sink = krabka_pgwire::engine::CollectingResultSink::default();
         session
             .simple_query_into("SELECT id FROM stream_pages", PAGE_ROWS, &mut sink)
             .await
@@ -13546,7 +13546,7 @@ mod tests {
         let framing = pages
             .iter()
             .map(|page| match page {
-                crabka_pgwire::engine::ResultPage::Rows { fields, tag, .. } => {
+                krabka_pgwire::engine::ResultPage::Rows { fields, tag, .. } => {
                     (fields.is_some(), tag.clone())
                 }
                 _ => panic!("a SELECT pages as rows"),
@@ -13574,12 +13574,12 @@ mod tests {
     async fn runtime_session_forwards_simple_query_into_on_the_gateway_arm() {
         use assert2::assert;
 
-        let config = crabka_gres_ranges::MultiRangeTenantConfig::from_boundaries(
-            crabka_gres_ranges::TenantName::parse("runtime_stream").expect("tenant"),
+        let config = krabka_gres_ranges::MultiRangeTenantConfig::from_boundaries(
+            krabka_gres_ranges::TenantName::parse("runtime_stream").expect("tenant"),
             "0,100,200",
         )
         .expect("config");
-        let (multi, _handles) = crabka_gres_ranges::MultiRangeTenant::start(config).expect("multi");
+        let (multi, _handles) = krabka_gres_ranges::MultiRangeTenant::start(config).expect("multi");
         let mut session = RuntimeEngine::Multi(Box::new(multi)).connect();
         session
             .simple_query("CREATE TABLE gateway_pages (id int4)")
@@ -13590,7 +13590,7 @@ mod tests {
             .await
             .expect("seed");
 
-        let mut sink = crabka_pgwire::engine::CollectingResultSink::default();
+        let mut sink = krabka_pgwire::engine::CollectingResultSink::default();
         session
             .simple_query_into("SELECT id FROM gateway_pages", 2, &mut sink)
             .await
@@ -13604,28 +13604,28 @@ mod tests {
 
     #[tokio::test]
     async fn dynamic_range_service_fails_closed_during_topology_publication() {
-        let dynamic = DynamicLiveRangeService::new(crabka_gres_ranges::HostedRangeService::new(
+        let dynamic = DynamicLiveRangeService::new(krabka_gres_ranges::HostedRangeService::new(
             BTreeMap::new(),
         ));
         dynamic.begin_publication();
-        dynamic.replace(crabka_gres_ranges::HostedRangeService::new(BTreeMap::from(
-            [(crabka_gres_ranges::RangeId::COORDINATOR, SqlEngine::new())],
+        dynamic.replace(krabka_gres_ranges::HostedRangeService::new(BTreeMap::from(
+            [(krabka_gres_ranges::RangeId::COORDINATOR, SqlEngine::new())],
         )));
-        let request = crabka_gres_ranges::RangeRequest::Sql {
-            range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+        let request = krabka_gres_ranges::RangeRequest::Sql {
+            range_id: krabka_gres_ranges::RangeId::COORDINATOR,
             sql: "SELECT 1".into(),
         };
         assert!(matches!(
-            crabka_gres_ranges::RangeService::handle(&dynamic, request.clone()).await,
-            crabka_gres_ranges::RangeResponse::Error {
-                error: crabka_gres_ranges::WireErrorKind::StaleEndpoint,
+            krabka_gres_ranges::RangeService::handle(&dynamic, request.clone()).await,
+            krabka_gres_ranges::RangeResponse::Error {
+                error: krabka_gres_ranges::WireErrorKind::StaleEndpoint,
                 ..
             }
         ));
-        let recovery = crabka_gres_ranges::RangeRequest::TimestampPrimaryRecover(
-            crabka_gres_ranges::transport::TimestampPrimaryRecoverReq {
-                primary_range: crabka_gres_ranges::RangeId::COORDINATOR,
-                identity: crabka_gres_ranges::transport::WireTimestampIdentity {
+        let recovery = krabka_gres_ranges::RangeRequest::TimestampPrimaryRecover(
+            krabka_gres_ranges::transport::TimestampPrimaryRecoverReq {
+                primary_range: krabka_gres_ranges::RangeId::COORDINATOR,
+                identity: krabka_gres_ranges::transport::WireTimestampIdentity {
                     start_ts: 1,
                     global_xid: 1,
                     primary_range: 0,
@@ -13633,16 +13633,16 @@ mod tests {
             },
         );
         assert!(!matches!(
-            crabka_gres_ranges::RangeService::handle(&dynamic, recovery).await,
-            crabka_gres_ranges::RangeResponse::Error { message, .. }
+            krabka_gres_ranges::RangeService::handle(&dynamic, recovery).await,
+            krabka_gres_ranges::RangeResponse::Error { message, .. }
                 if message == "range topology publication is in progress; retry"
         ));
         dynamic.finish_publication();
-        let after = crabka_gres_ranges::RangeService::handle(&dynamic, request).await;
+        let after = krabka_gres_ranges::RangeService::handle(&dynamic, request).await;
         assert!(!matches!(
             after,
-            crabka_gres_ranges::RangeResponse::Error {
-                error: crabka_gres_ranges::WireErrorKind::StaleEndpoint,
+            krabka_gres_ranges::RangeResponse::Error {
+                error: krabka_gres_ranges::WireErrorKind::StaleEndpoint,
                 ..
             }
         ));
@@ -13653,13 +13653,13 @@ mod tests {
         struct StatusExecutor;
 
         #[async_trait::async_trait]
-        impl crabka_gres_ranges::control::RangeControlExecutor for StatusExecutor {
+        impl krabka_gres_ranges::control::RangeControlExecutor for StatusExecutor {
             async fn execute(
                 &self,
-                _request: &crabka_gres_ranges::transport::RangeControlReq,
-                _intent: &crabka_gres_ranges::control::AuthorizedSplitIntent,
-            ) -> crabka_gres_ranges::transport::RangeControlResp {
-                crabka_gres_ranges::transport::RangeControlResp::Status {
+                _request: &krabka_gres_ranges::transport::RangeControlReq,
+                _intent: &krabka_gres_ranges::control::AuthorizedSplitIntent,
+            ) -> krabka_gres_ranges::transport::RangeControlResp {
+                krabka_gres_ranges::transport::RangeControlResp::Status {
                     paused: false,
                     serving: true,
                     barrier_offset: None,
@@ -13668,50 +13668,50 @@ mod tests {
         }
 
         let control = Arc::new(
-            crabka_gres_ranges::control::GenerationFencedRangeControl::new(
+            krabka_gres_ranges::control::GenerationFencedRangeControl::new(
                 "tenant-a",
-                crabka_gres_ranges::RangeId::COORDINATOR,
+                krabka_gres_ranges::RangeId::COORDINATOR,
                 0,
                 Box::new(StatusExecutor),
                 Arc::new(AllowSplitIntentAuthority),
             ),
         );
         let dynamic = DynamicLiveRangeService::new(
-            crabka_gres_ranges::HostedRangeService::new(BTreeMap::new())
+            krabka_gres_ranges::HostedRangeService::new(BTreeMap::new())
                 .with_range_control(control),
         );
-        let request = crabka_gres_ranges::RangeRequest::Control(
-            crabka_gres_ranges::transport::RangeControlReq {
+        let request = krabka_gres_ranges::RangeRequest::Control(
+            krabka_gres_ranges::transport::RangeControlReq {
                 tenant: "tenant-a".into(),
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 generation: 0,
                 operation_id: "status-after-replace".into(),
-                operation: crabka_gres_ranges::transport::RangeControlOperation::Status,
+                operation: krabka_gres_ranges::transport::RangeControlOperation::Status,
             },
         );
         assert!(matches!(
-            crabka_gres_ranges::RangeService::handle(&dynamic, request.clone()).await,
-            crabka_gres_ranges::RangeResponse::Control(
-                crabka_gres_ranges::transport::RangeControlResp::Status { serving: true, .. }
+            krabka_gres_ranges::RangeService::handle(&dynamic, request.clone()).await,
+            krabka_gres_ranges::RangeResponse::Control(
+                krabka_gres_ranges::transport::RangeControlResp::Status { serving: true, .. }
             )
         ));
 
         dynamic.begin_publication();
         assert!(matches!(
-            crabka_gres_ranges::RangeService::handle(&dynamic, request.clone()).await,
-            crabka_gres_ranges::RangeResponse::Control(
-                crabka_gres_ranges::transport::RangeControlResp::Status { serving: true, .. }
+            krabka_gres_ranges::RangeService::handle(&dynamic, request.clone()).await,
+            krabka_gres_ranges::RangeResponse::Control(
+                krabka_gres_ranges::transport::RangeControlResp::Status { serving: true, .. }
             )
         ));
 
-        dynamic.replace(crabka_gres_ranges::HostedRangeService::new(BTreeMap::from(
-            [(crabka_gres_ranges::RangeId::COORDINATOR, SqlEngine::new())],
+        dynamic.replace(krabka_gres_ranges::HostedRangeService::new(BTreeMap::from(
+            [(krabka_gres_ranges::RangeId::COORDINATOR, SqlEngine::new())],
         )));
 
         assert!(matches!(
-            crabka_gres_ranges::RangeService::handle(&dynamic, request).await,
-            crabka_gres_ranges::RangeResponse::Control(
-                crabka_gres_ranges::transport::RangeControlResp::Status { serving: true, .. }
+            krabka_gres_ranges::RangeService::handle(&dynamic, request).await,
+            krabka_gres_ranges::RangeResponse::Control(
+                krabka_gres_ranges::transport::RangeControlResp::Status { serving: true, .. }
             )
         ));
         dynamic.finish_publication();
@@ -13719,7 +13719,7 @@ mod tests {
 
     #[test]
     fn durable_inspection_cursor_binds_digest_sample_and_exact_key() {
-        let key = crabka_pgkv::key::hash_row_key(50, 15, u64::MAX);
+        let key = krabka_pgkv::key::hash_row_key(50, 15, u64::MAX);
         let cursor = encode_durable_cursor("digest-a", 42, &key);
         assert_eq!(
             decode_durable_cursor(&cursor, "digest-a").expect("cursor"),
@@ -13731,8 +13731,8 @@ mod tests {
 
     #[test]
     fn durable_inspection_rejects_malformed_timestamp_metadata() {
-        let start = crabka_pgkv::key::row_key(50, 0);
-        let end = crabka_pgkv::key::row_key(50, 10);
+        let start = krabka_pgkv::key::row_key(50, 0);
+        let end = krabka_pgkv::key::row_key(50, 10);
         assert!(
             timestamp_metadata_in_interval(b"\0\0\0\0meta/ts_intent/bad", b"", 50, &start, &end,)
                 .is_err()

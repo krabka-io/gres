@@ -219,7 +219,7 @@ pub struct SubjectDdlTransformError {
 /// means neither leg creates anything — `PostgreSQL` refuses `MATCH PARTIAL`
 /// with `0A000` and so does the subject — so the corpus is asserting the
 /// refusal itself and the statement is the same on both legs unsharded.
-fn is_unimplemented_feature(error: &crabka_pgparser::ParseError) -> bool {
+fn is_unimplemented_feature(error: &krabka_pgparser::ParseError) -> bool {
     error.sqlstate() == "0A000"
 }
 
@@ -230,7 +230,7 @@ fn is_unimplemented_feature(error: &crabka_pgparser::ParseError) -> bool {
 /// Returns [`SubjectDdlTransformError`] when a candidate statement cannot be
 /// parsed or the rewritten statement is invalid.
 pub fn subject_sharded_statement(sql: &str) -> Result<String, SubjectDdlTransformError> {
-    let statements = match crabka_pgparser::parse(sql) {
+    let statements = match krabka_pgparser::parse(sql) {
         Ok(statements) => statements,
         // A `CREATE TABLE` the parser *cannot* parse is a harness gap: the
         // transform would silently skip a table the sharded leg is supposed to
@@ -253,7 +253,7 @@ pub fn subject_sharded_statement(sql: &str) -> Result<String, SubjectDdlTransfor
     // clause like `ON COMMIT PRESERVE ROWS` would not even parse.
     if matches!(
         statements.as_slice(),
-        [crabka_pgparser::ast::Statement::CreateTable {
+        [krabka_pgparser::ast::Statement::CreateTable {
             temporary: true,
             ..
         }]
@@ -262,14 +262,14 @@ pub fn subject_sharded_statement(sql: &str) -> Result<String, SubjectDdlTransfor
     }
     if !matches!(
         statements.as_slice(),
-        [crabka_pgparser::ast::Statement::CreateTable { .. }]
+        [krabka_pgparser::ast::Statement::CreateTable { .. }]
     ) {
         // `CREATE TABLE … AS` has no `SHARDED BY` spelling, so an ordinary table
         // is the only thing either leg can create; passing it through is the
         // faithful transform, not a silent escape.
         if matches!(
             statements.as_slice(),
-            [crabka_pgparser::ast::Statement::CreateTableAs { .. }]
+            [krabka_pgparser::ast::Statement::CreateTableAs { .. }]
         ) {
             return Ok(sql.to_string());
         }
@@ -285,7 +285,7 @@ pub fn subject_sharded_statement(sql: &str) -> Result<String, SubjectDdlTransfor
         }
         return Ok(sql.to_string());
     }
-    let [crabka_pgparser::ast::Statement::CreateTable { sharded, .. }] = statements.as_slice()
+    let [krabka_pgparser::ast::Statement::CreateTable { sharded, .. }] = statements.as_slice()
     else {
         unreachable!("CREATE TABLE shape checked above");
     };
@@ -299,13 +299,13 @@ pub fn subject_sharded_statement(sql: &str) -> Result<String, SubjectDdlTransfor
         .map_or((body, ""), |without| (without.trim_end(), ";"));
     let transformed = format!("{body} SHARDED{semicolon}{trailing_ws}");
     let reparsed =
-        crabka_pgparser::parse(&transformed).map_err(|error| SubjectDdlTransformError {
+        krabka_pgparser::parse(&transformed).map_err(|error| SubjectDdlTransformError {
             sql: sql.to_string(),
             message: format!("rewritten statement does not parse: {error}"),
         })?;
     if !matches!(
         reparsed.as_slice(),
-        [crabka_pgparser::ast::Statement::CreateTable { sharded: true, .. }]
+        [krabka_pgparser::ast::Statement::CreateTable { sharded: true, .. }]
     ) {
         return Err(SubjectDdlTransformError {
             sql: sql.to_string(),
@@ -338,9 +338,9 @@ pub fn subject_sharded_extended_case(
 }
 
 fn is_create_table_candidate(sql: &str) -> bool {
-    use crabka_pgparser::token::{Keyword, Token};
+    use krabka_pgparser::token::{Keyword, Token};
 
-    let tokens = match crabka_pgparser::lexer::lex(sql) {
+    let tokens = match krabka_pgparser::lexer::lex(sql) {
         Ok(tokens) => tokens,
         Err(error) => lex_valid_prefix(sql, error.position),
     };
@@ -351,12 +351,12 @@ fn is_create_table_candidate(sql: &str) -> bool {
             .any(|(token, _)| matches!(token, Token::Keyword(Keyword::Table)))
 }
 
-fn lex_valid_prefix(sql: &str, mut end: usize) -> Vec<(crabka_pgparser::token::Token, usize)> {
+fn lex_valid_prefix(sql: &str, mut end: usize) -> Vec<(krabka_pgparser::token::Token, usize)> {
     loop {
         while !sql.is_char_boundary(end) {
             end -= 1;
         }
-        match crabka_pgparser::lexer::lex(&sql[..end]) {
+        match krabka_pgparser::lexer::lex(&sql[..end]) {
             Ok(tokens) => return tokens,
             Err(error) if error.position < end => end = error.position,
             Err(_) if end > 0 => end -= 1,
@@ -501,7 +501,7 @@ impl Report {
     #[must_use]
     pub fn markdown_summary(&self) -> String {
         let mut md = format!(
-            "# crabka-gres conformance report\n\n**Parity: {:.1}%** ({} / {} statements match the oracle)\n\n",
+            "# krabka-gres conformance report\n\n**Parity: {:.1}%** ({} / {} statements match the oracle)\n\n",
             self.parity_percent, self.matched, self.total
         );
         let ranked = self.root_causes();
@@ -1773,10 +1773,10 @@ mod tests {
         for sql in cases {
             let transformed = subject_sharded_statement(sql).expect("valid CREATE TABLE");
             assert_eq!(transformed, format!("{sql} SHARDED"));
-            let statements = crabka_pgparser::parse(&transformed).expect("rewritten SQL reparses");
+            let statements = krabka_pgparser::parse(&transformed).expect("rewritten SQL reparses");
             assert!(matches!(
                 statements.as_slice(),
-                [crabka_pgparser::ast::Statement::CreateTable { sharded: true, .. }]
+                [krabka_pgparser::ast::Statement::CreateTable { sharded: true, .. }]
             ));
         }
         assert_eq!(
@@ -1842,7 +1842,7 @@ mod tests {
         let sql = "CREATE TABLE fk_e8 (a int4, b int4, \
                    FOREIGN KEY (a, b) REFERENCES fk_comp_p(x, y) MATCH PARTIAL)";
         assert!(is_create_table_candidate(sql));
-        let error = crabka_pgparser::parse(sql).expect_err("MATCH PARTIAL is refused");
+        let error = krabka_pgparser::parse(sql).expect_err("MATCH PARTIAL is refused");
         assert!(error.sqlstate() == "0A000");
         assert!(subject_sharded_statement(sql).expect("passes through") == sql);
     }
@@ -2092,7 +2092,7 @@ mod tests {
 
     fn temp_corpus_dir() -> PathBuf {
         tempfile::Builder::new()
-            .prefix("crabka-gres-conformance-")
+            .prefix("krabka-gres-conformance-")
             .tempdir()
             .expect("create temp corpus directory")
             .keep()

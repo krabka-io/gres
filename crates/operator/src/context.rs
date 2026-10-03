@@ -4,9 +4,9 @@ use std::{
     sync::Arc,
 };
 
-use crabka_client_admin::{AdminClient, AdminClientLike};
-use crabka_gres_substrate::checkpoint::{Manifest, ManifestValidation};
-use crabka_object_store::{
+use krabka_client_admin::{AdminClient, AdminClientLike};
+use krabka_gres_substrate::checkpoint::{Manifest, ManifestValidation};
+use krabka_object_store::{
     GcsConfig, ObjectStoreConfig, S3Config, build_object_store, read_capped,
 };
 use kube::Client;
@@ -57,7 +57,7 @@ pub trait CheckpointManifestVerifier: Send + Sync {
     /// Verifies that the durable manifest matches `record` exactly.
     async fn validate(
         &self,
-        record: &crabka_gres_control::TenantRecord,
+        record: &krabka_gres_control::TenantRecord,
     ) -> Result<(), CheckpointManifestError>;
 }
 
@@ -75,7 +75,7 @@ pub enum CheckpointManifestError {
     InvalidConfiguration(String),
     /// The operator could not construct the object store client.
     #[error("Gres checkpoint object store configuration: {0}")]
-    ObjectStoreConfiguration(#[from] crabka_object_store::ObjectStoreError),
+    ObjectStoreConfiguration(#[from] krabka_object_store::ObjectStoreError),
     /// The referenced checkpoint is absent, is corrupt, or does not match
     /// its registry record.
     #[error("Gres checkpoint manifest verification failed: {0}")]
@@ -92,7 +92,7 @@ struct UnavailableCheckpointManifestVerifier {
 impl CheckpointManifestVerifier for UnavailableCheckpointManifestVerifier {
     async fn validate(
         &self,
-        _record: &crabka_gres_control::TenantRecord,
+        _record: &krabka_gres_control::TenantRecord,
     ) -> Result<(), CheckpointManifestError> {
         if self.unconfigured {
             return Err(CheckpointManifestError::Unconfigured);
@@ -208,7 +208,7 @@ fn required_config(value: Option<&String>, name: &str) -> Result<String, Checkpo
 impl CheckpointManifestVerifier for ObjectStoreCheckpointManifestVerifier {
     async fn validate(
         &self,
-        record: &crabka_gres_control::TenantRecord,
+        record: &krabka_gres_control::TenantRecord,
     ) -> Result<(), CheckpointManifestError> {
         let checkpoint = record.final_checkpoint.as_ref().ok_or_else(|| {
             CheckpointManifestError::Verification("registry record has no final checkpoint".into())
@@ -269,7 +269,7 @@ impl CheckpointManifestVerifier for ObjectStoreCheckpointManifestVerifier {
     }
 }
 
-fn checkpoint_manifest_tenant(record: &crabka_gres_control::TenantRecord) -> String {
+fn checkpoint_manifest_tenant(record: &krabka_gres_control::TenantRecord) -> String {
     match record.ranges.as_slice() {
         [range] => format!("{}/r{}", record.name, range.range_id),
         _ => record.name.to_string(),
@@ -725,9 +725,9 @@ async fn connect_pgdog_admin(
 #[derive(Debug, thiserror::Error)]
 pub enum GresControlWriteError {
     #[error("control record: {0}")]
-    Control(#[from] crabka_gres_control::ControlError),
+    Control(#[from] krabka_gres_control::ControlError),
     #[error("producer: {0}")]
-    Producer(#[from] crabka_client_producer::ProducerError),
+    Producer(#[from] krabka_client_producer::ProducerError),
     #[error("producer completion channel closed: {0}")]
     Completion(#[from] tokio::sync::oneshot::error::RecvError),
     #[error("durable checkpoint manifest: {0}")]
@@ -738,18 +738,18 @@ pub enum GresControlWriteError {
 pub trait GresControlLike: Send + Sync {
     async fn get_tenant(
         &self,
-        tenant: &crabka_gres_control::TenantName,
-    ) -> Result<Option<crabka_gres_control::TenantRecord>, GresControlWriteError>;
+        tenant: &krabka_gres_control::TenantName,
+    ) -> Result<Option<krabka_gres_control::TenantRecord>, GresControlWriteError>;
     /// Creates a record, or replaces the exact version that the
     /// reconciler read.
     async fn replace_tenant_if_version(
         &self,
-        record: &crabka_gres_control::TenantRecord,
+        record: &krabka_gres_control::TenantRecord,
         expected_record_version: Option<u64>,
-    ) -> Result<crabka_gres_control::TenantRecord, GresControlWriteError>;
+    ) -> Result<krabka_gres_control::TenantRecord, GresControlWriteError>;
     async fn delete_tenant(
         &self,
-        tenant: &crabka_gres_control::TenantName,
+        tenant: &krabka_gres_control::TenantName,
     ) -> Result<(), GresControlWriteError>;
     /// Gets and validates the durable final checkpoint manifest that
     /// `record` refers to.
@@ -759,21 +759,21 @@ pub trait GresControlLike: Send + Sync {
     /// the checkpoint is durable.
     async fn validate_final_checkpoint_manifest(
         &self,
-        record: &crabka_gres_control::TenantRecord,
+        record: &krabka_gres_control::TenantRecord,
     ) -> Result<(), GresControlWriteError>;
     async fn list_split_operations(
         &self,
-        _tenant: &crabka_gres_control::TenantName,
-    ) -> Result<Vec<crabka_gres_control::SplitOperationRecord>, GresControlWriteError> {
+        _tenant: &krabka_gres_control::TenantName,
+    ) -> Result<Vec<krabka_gres_control::SplitOperationRecord>, GresControlWriteError> {
         Ok(Vec::new())
     }
     async fn compare_and_swap_split_operation(
         &self,
         _expected_revision: u64,
-        _operation: &crabka_gres_control::SplitOperationRecord,
-    ) -> Result<crabka_gres_control::SplitOperationRecord, GresControlWriteError> {
+        _operation: &krabka_gres_control::SplitOperationRecord,
+    ) -> Result<krabka_gres_control::SplitOperationRecord, GresControlWriteError> {
         Err(
-            crabka_gres_control::ControlError::UnsupportedRegistryMutation {
+            krabka_gres_control::ControlError::UnsupportedRegistryMutation {
                 mutation: "compare_and_swap_split_operation",
                 reason: "control backend does not expose the split journal",
             }
@@ -783,14 +783,14 @@ pub trait GresControlLike: Send + Sync {
 }
 
 struct KafkaGresControl {
-    registry: Mutex<crabka_gres_control::Registry>,
+    registry: Mutex<krabka_gres_control::Registry>,
     checkpoint_manifest_verifier: CheckpointManifestVerifierHandle,
 }
 
 #[derive(Clone)]
 struct CachedGresControl {
     bootstrap: String,
-    policy: crabka_gres_control::RegistryPolicy,
+    policy: krabka_gres_control::RegistryPolicy,
     control: GresControlHandle,
 }
 
@@ -798,16 +798,16 @@ struct CachedGresControl {
 impl GresControlLike for KafkaGresControl {
     async fn get_tenant(
         &self,
-        tenant: &crabka_gres_control::TenantName,
-    ) -> Result<Option<crabka_gres_control::TenantRecord>, GresControlWriteError> {
+        tenant: &krabka_gres_control::TenantName,
+    ) -> Result<Option<krabka_gres_control::TenantRecord>, GresControlWriteError> {
         Ok(self.registry.lock().await.get(tenant.as_str()).await?)
     }
 
     async fn replace_tenant_if_version(
         &self,
-        record: &crabka_gres_control::TenantRecord,
+        record: &krabka_gres_control::TenantRecord,
         expected_record_version: Option<u64>,
-    ) -> Result<crabka_gres_control::TenantRecord, GresControlWriteError> {
+    ) -> Result<krabka_gres_control::TenantRecord, GresControlWriteError> {
         let mut registry = self.registry.lock().await;
         registry.ensure_topic().await?;
         let stored_record = registry
@@ -821,7 +821,7 @@ impl GresControlLike for KafkaGresControl {
 
     async fn delete_tenant(
         &self,
-        tenant: &crabka_gres_control::TenantName,
+        tenant: &krabka_gres_control::TenantName,
     ) -> Result<(), GresControlWriteError> {
         self.registry.lock().await.delete(tenant.as_str()).await?;
         Ok(())
@@ -829,7 +829,7 @@ impl GresControlLike for KafkaGresControl {
 
     async fn validate_final_checkpoint_manifest(
         &self,
-        record: &crabka_gres_control::TenantRecord,
+        record: &krabka_gres_control::TenantRecord,
     ) -> Result<(), GresControlWriteError> {
         self.checkpoint_manifest_verifier
             .validate(record)
@@ -839,8 +839,8 @@ impl GresControlLike for KafkaGresControl {
 
     async fn list_split_operations(
         &self,
-        tenant: &crabka_gres_control::TenantName,
-    ) -> Result<Vec<crabka_gres_control::SplitOperationRecord>, GresControlWriteError> {
+        tenant: &krabka_gres_control::TenantName,
+    ) -> Result<Vec<krabka_gres_control::SplitOperationRecord>, GresControlWriteError> {
         Ok(self
             .registry
             .lock()
@@ -852,8 +852,8 @@ impl GresControlLike for KafkaGresControl {
     async fn compare_and_swap_split_operation(
         &self,
         expected_revision: u64,
-        operation: &crabka_gres_control::SplitOperationRecord,
-    ) -> Result<crabka_gres_control::SplitOperationRecord, GresControlWriteError> {
+        operation: &krabka_gres_control::SplitOperationRecord,
+    ) -> Result<krabka_gres_control::SplitOperationRecord, GresControlWriteError> {
         Ok(self
             .registry
             .lock()
@@ -936,7 +936,7 @@ impl Context {
         &self,
         cluster: &str,
         bootstrap: &str,
-    ) -> Result<AdminClientHandle, crabka_client_admin::AdminError> {
+    ) -> Result<AdminClientHandle, krabka_client_admin::AdminError> {
         let mut map = self.admin_clients.lock().await;
         let key = format!("{cluster}\0{bootstrap}");
         if let Some(client) = map.get(&key).or_else(|| map.get(cluster)) {
@@ -944,16 +944,16 @@ impl Context {
         }
         let admin = AdminClient::connect_with_options(
             &[bootstrap.to_string()],
-            crabka_client_core::ConnectionOptions {
-                dispatch_queue_capacity: crabka_client_core::ConnectionDispatchQueueCapacity::new(
+            krabka_client_core::ConnectionOptions {
+                dispatch_queue_capacity: krabka_client_core::ConnectionDispatchQueueCapacity::new(
                     self.config.client_dispatch_queue_capacity,
                 )
-                .map_err(crabka_client_admin::AdminError::Protocol)?,
-                frame_max: crabka_client_core::ClientFrameMax::try_from(
+                .map_err(krabka_client_admin::AdminError::Protocol)?,
+                frame_max: krabka_client_core::ClientFrameMax::try_from(
                     self.config.client_frame_max,
                 )
-                .map_err(crabka_client_admin::AdminError::Protocol)?,
-                ..crabka_client_core::ConnectionOptions::default()
+                .map_err(krabka_client_admin::AdminError::Protocol)?,
+                ..krabka_client_core::ConnectionOptions::default()
             },
         )
         .await?;
@@ -1036,14 +1036,14 @@ impl Context {
         namespace: &str,
         kafka_name: &str,
         bootstrap: &str,
-        policy: &crabka_gres_control::RegistryPolicy,
+        policy: &krabka_gres_control::RegistryPolicy,
     ) -> Result<GresControlHandle, GresControlWriteError> {
         let bootstrap_owned = bootstrap.to_owned();
         let policy_owned = policy.clone();
         let checkpoint_manifest_verifier = Arc::clone(&self.checkpoint_manifest_verifier);
         self.gres_control_for_with(namespace, kafka_name, bootstrap, policy, async move {
             let mut registry =
-                crabka_gres_control::Registry::connect_with_policy(&bootstrap_owned, policy_owned)
+                krabka_gres_control::Registry::connect_with_policy(&bootstrap_owned, policy_owned)
                     .await?;
             registry.ensure_topic().await?;
             Ok(Arc::new(KafkaGresControl {
@@ -1059,7 +1059,7 @@ impl Context {
         namespace: &str,
         kafka_name: &str,
         bootstrap: &str,
-        policy: &crabka_gres_control::RegistryPolicy,
+        policy: &krabka_gres_control::RegistryPolicy,
         build: F,
     ) -> Result<GresControlHandle, GresControlWriteError>
     where
@@ -1102,7 +1102,7 @@ impl Context {
             namespace,
             kafka_name,
             &format!("{kafka_name}-broker-headless.{namespace}.svc.cluster.local:9092"),
-            crabka_gres_control::RegistryPolicy::default(),
+            krabka_gres_control::RegistryPolicy::default(),
             control,
         )
         .await;
@@ -1113,7 +1113,7 @@ impl Context {
         namespace: &str,
         kafka_name: &str,
         bootstrap: &str,
-        policy: crabka_gres_control::RegistryPolicy,
+        policy: krabka_gres_control::RegistryPolicy,
         control: GresControlHandle,
     ) {
         self.gres_controls.lock().await.insert(
@@ -1164,29 +1164,29 @@ mod tests {
     impl GresControlLike for TestGresControl {
         async fn get_tenant(
             &self,
-            _tenant: &crabka_gres_control::TenantName,
-        ) -> Result<Option<crabka_gres_control::TenantRecord>, GresControlWriteError> {
+            _tenant: &krabka_gres_control::TenantName,
+        ) -> Result<Option<krabka_gres_control::TenantRecord>, GresControlWriteError> {
             unreachable!("cache test does not read tenants")
         }
 
         async fn replace_tenant_if_version(
             &self,
-            _record: &crabka_gres_control::TenantRecord,
+            _record: &krabka_gres_control::TenantRecord,
             _expected_record_version: Option<u64>,
-        ) -> Result<crabka_gres_control::TenantRecord, GresControlWriteError> {
+        ) -> Result<krabka_gres_control::TenantRecord, GresControlWriteError> {
             unreachable!("cache test does not write tenants")
         }
 
         async fn delete_tenant(
             &self,
-            _tenant: &crabka_gres_control::TenantName,
+            _tenant: &krabka_gres_control::TenantName,
         ) -> Result<(), GresControlWriteError> {
             unreachable!("cache test does not delete tenants")
         }
 
         async fn validate_final_checkpoint_manifest(
             &self,
-            _record: &crabka_gres_control::TenantRecord,
+            _record: &krabka_gres_control::TenantRecord,
         ) -> Result<(), GresControlWriteError> {
             unreachable!("cache test does not verify checkpoints")
         }
@@ -1216,7 +1216,7 @@ mod tests {
     #[tokio::test]
     async fn gres_control_cache_tracks_inputs_without_locking_during_build() {
         let ctx = test_context();
-        let defaults = crabka_gres_control::RegistryPolicy::default();
+        let defaults = krabka_gres_control::RegistryPolicy::default();
         let first: GresControlHandle = Arc::new(TestGresControl);
         let observed = ctx
             .gres_control_for_with("ns-a", "demo", "a:9092", &defaults, async {
@@ -1237,7 +1237,7 @@ mod tests {
 
         let changed_reader_admin_dns = defaults
             .clone()
-            .with_reader_admin_dns_timeout(crabka_units::millis(37))
+            .with_reader_admin_dns_timeout(krabka_units::millis(37))
             .expect("reader/admin DNS timeout");
         let changed_reader_admin_dns_control: GresControlHandle = Arc::new(TestGresControl);
         let replaced = ctx
@@ -1250,7 +1250,7 @@ mod tests {
 
         let changed_dns = changed_reader_admin_dns
             .clone()
-            .with_producer_dns_timeout(crabka_units::millis(37))
+            .with_producer_dns_timeout(krabka_units::millis(37))
             .expect("DNS timeout");
         let changed_dns_control: GresControlHandle = Arc::new(TestGresControl);
         let replaced = ctx
@@ -1261,12 +1261,12 @@ mod tests {
             .expect("DNS policy replacement");
         assert!(Arc::ptr_eq(&replaced, &changed_dns_control));
 
-        let custom = crabka_gres_control::RegistryPolicy::new(
+        let custom = krabka_gres_control::RegistryPolicy::new(
             2,
-            crabka_units::millis(15_001),
-            crabka_units::millis(251),
-            crabka_units::millis(501),
-            crabka_units::bytes(1_048_577),
+            krabka_units::millis(15_001),
+            krabka_units::millis(251),
+            krabka_units::millis(501),
+            krabka_units::bytes(1_048_577),
         )
         .expect("policy");
         let changed_policy: GresControlHandle = Arc::new(TestGresControl);
@@ -1308,13 +1308,13 @@ mod tests {
 
     #[test]
     fn single_range_checkpoint_manifest_identity_is_generation_namespace() {
-        let record = crabka_gres_control::TenantRecord::new(
+        let record = krabka_gres_control::TenantRecord::new(
             1,
-            crabka_gres_control::TenantId::try_from("tenant-a").unwrap(),
-            crabka_gres_control::TenantName::try_from("tenant-a").unwrap(),
-            crabka_gres_control::TenantState::Active,
-            crabka_gres_control::SqlUser::try_from("alice").unwrap(),
-            crabka_security::scram::PgScramVerifier::generate_with_salt(
+            krabka_gres_control::TenantId::try_from("tenant-a").unwrap(),
+            krabka_gres_control::TenantName::try_from("tenant-a").unwrap(),
+            krabka_gres_control::TenantState::Active,
+            krabka_gres_control::SqlUser::try_from("alice").unwrap(),
+            krabka_security::scram::PgScramVerifier::generate_with_salt(
                 &fixture_password(),
                 4096,
                 vec![1; 16],
@@ -1324,12 +1324,12 @@ mod tests {
             1,
         )
         .unwrap()
-        .with_range_layout(vec![crabka_gres_control::RangeLayoutEntry {
+        .with_range_layout(vec![krabka_gres_control::RangeLayoutEntry {
             range_id: 0,
             end_key: None,
             endpoint: "tenant-a-gres.default.svc:5432".into(),
             wal_generation: 0,
-            lifecycle: crabka_gres_control::RangeLifecycle::default(),
+            lifecycle: krabka_gres_control::RangeLifecycle::default(),
             retirement: None,
         }])
         .unwrap();
@@ -1341,12 +1341,12 @@ mod tests {
     async fn checkpoint_verifier_preserves_unconfigured_error_category() {
         let config = ConfigArgs::parse_from(["operator"]).config;
         let verifier = checkpoint_manifest_verifier(&config);
-        let record = crabka_gres_control::TenantRecord::new(
+        let record = krabka_gres_control::TenantRecord::new(
             1,
-            crabka_gres_control::TenantId::try_from("tenant-a").unwrap(),
-            crabka_gres_control::TenantName::try_from("tenant-a").unwrap(),
-            crabka_gres_control::TenantState::Suspended,
-            crabka_gres_control::SqlUser::try_from("alice").unwrap(),
+            krabka_gres_control::TenantId::try_from("tenant-a").unwrap(),
+            krabka_gres_control::TenantName::try_from("tenant-a").unwrap(),
+            krabka_gres_control::TenantState::Suspended,
+            krabka_gres_control::SqlUser::try_from("alice").unwrap(),
             "SCRAM-SHA-256$4096:salt$stored:server".into(),
             1,
         )

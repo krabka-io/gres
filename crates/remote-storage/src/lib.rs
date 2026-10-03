@@ -41,15 +41,15 @@
 //! use std::{collections::BTreeMap, path::PathBuf};
 //!
 //! use bytes::Bytes;
-//! use crabka_ids::LeaderEpoch;
-//! use crabka_remote_storage::{
+//! use krabka_ids::LeaderEpoch;
+//! use krabka_remote_storage::{
 //!     IndexType, LocalTieredStorage, LogSegmentData, RemoteLogSegmentDetails, RemoteLogSegmentId,
 //!     RemoteLogSegmentMetadata, RemoteLogSegmentState, RemoteStorageManager, TopicIdPartition,
 //! };
 //! use uuid::Uuid;
 //!
 //! # fn run() -> Result<(), Box<dyn std::error::Error>> {
-//! let storage = LocalTieredStorage::new(PathBuf::from("/var/lib/crabka-remote"));
+//! let storage = LocalTieredStorage::new(PathBuf::from("/var/lib/krabka-remote"));
 //! let topic_partition = TopicIdPartition::new(Uuid::new_v4(), "orders", 0);
 //! let segment_id = RemoteLogSegmentId::new(topic_partition, Uuid::new_v4());
 //! let mut leader_epochs = BTreeMap::new();
@@ -84,7 +84,7 @@
 //! # }
 //! ```
 
-#![doc(html_root_url = "https://docs.rs/crabka-remote-storage/0.4.1")]
+#![doc(html_root_url = "https://docs.rs/krabka-remote-storage/0.4.2")]
 
 mod cache;
 pub mod dump;
@@ -97,13 +97,13 @@ mod metadata_manager;
 mod s3;
 mod storage_manager;
 
-pub use crabka_object_store::{
-    DEFAULT_MULTIPART_CHUNK_SIZE, DEFAULT_MULTIPART_THRESHOLD, GcsConfig, ObjectStoreConfig,
-    S3Config,
-};
 pub use dump::{PartitionDump, RlmmCacheDump};
 pub use error::RemoteStorageError;
 pub use inmemory::InmemoryRemoteLogMetadataManager;
+pub use krabka_object_store::{
+    DEFAULT_MULTIPART_CHUNK_SIZE, DEFAULT_MULTIPART_THRESHOLD, GcsConfig, ObjectStoreConfig,
+    S3Config,
+};
 pub use local::LocalTieredStorage;
 pub use metadata::{
     CustomMetadata, RemoteLogSegmentDetails, RemoteLogSegmentId, RemoteLogSegmentMetadata,

@@ -9,7 +9,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crabka_kafka_tap::{Recorder, frame::CapturedFrame, spawn};
+use krabka_kafka_tap::{Recorder, frame::CapturedFrame, spawn};
 
 fn framed(body: &[u8]) -> Vec<u8> {
     let mut v = (body.len() as i32).to_be_bytes().to_vec();

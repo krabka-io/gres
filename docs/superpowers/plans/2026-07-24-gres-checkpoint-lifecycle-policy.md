@@ -41,13 +41,13 @@
 - Modify: `crates/gres/src/lib.rs`
 - Modify required Gres test constructors
 
-- [x] Keep `--checkpoint-frames` and `--checkpoint-bytes` optional with no Clap defaults; add `CRABKA_GRES_CHECKPOINT_FRAMES` / `CRABKA_GRES_CHECKPOINT_BYTES`.
+- [x] Keep `--checkpoint-frames` and `--checkpoint-bytes` optional with no Clap defaults; add `KRABKA_GRES_CHECKPOINT_FRAMES` / `KRABKA_GRES_CHECKPOINT_BYTES`.
 - [x] Preserve precedence: explicit CLI/environment, tenant record, compiled 10,000 frames / 67,108,864 bytes.
 - [x] Add environment bindings to `--checkpoint-part-bytes` and `--checkpoint-retain`.
 - [x] Add exact positive flags/environment/defaults:
-  - `--checkpoint-delete-records-timeout-ms` / `CRABKA_GRES_CHECKPOINT_DELETE_RECORDS_TIMEOUT_MS` / 30000
-  - `--checkpoint-poll-interval-ms` / `CRABKA_GRES_CHECKPOINT_POLL_INTERVAL_MS` / 1000
-  - `--idle-suspend-poll-interval-ms` / `CRABKA_GRES_IDLE_SUSPEND_POLL_INTERVAL_MS` / 1000
+  - `--checkpoint-delete-records-timeout-ms` / `KRABKA_GRES_CHECKPOINT_DELETE_RECORDS_TIMEOUT_MS` / 30000
+  - `--checkpoint-poll-interval-ms` / `KRABKA_GRES_CHECKPOINT_POLL_INTERVAL_MS` / 1000
+  - `--idle-suspend-poll-interval-ms` / `KRABKA_GRES_IDLE_SUSPEND_POLL_INTERVAL_MS` / 1000
 - [x] Validate part bytes as at least 8, retention as positive, delete timeout within positive `i32`, and durations as positive using shared `refined_type`-backed types.
 - [x] Thread the values to checkpoint construction, WAL pruning, and the idle-suspend loop; remove the five Gres hardcoded constants.
 - [x] Do not let always-present runtime defaults independently enable checkpointing or mask a tenant record.

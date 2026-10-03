@@ -5,14 +5,14 @@
 //! [`Scenario::from_yaml_file`] parses and validates it. Every other module
 //! consumes the parsed types.
 //!
-//! Every dimensioned field is a [`crabka_units`] quantity and carries its unit
+//! Every dimensioned field is a [`krabka_units`] quantity and carries its unit
 //! in the YAML: `duration: 60s`, `rate: { fixed: { target_rate: 500/s } }`,
 //! and `throttle: { rate: 128KiB/s }`. The parser rejects a bare number
 //! instead of a guess at its unit, which is the whole point of the types.
 
 use std::{collections::BTreeMap, fmt, path::Path, str::FromStr};
 
-use crabka_units::{
+use krabka_units::{
     fmt::Human as _,
     prelude::*,
     serde_units::human::{byte_rate, frequency, option_time, time},
@@ -49,7 +49,7 @@ pub struct Scenario {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TopologySpec {
-    /// Number of `crabka-gres` compute processes.
+    /// Number of `krabka-gres` compute processes.
     pub nodes: u16,
     /// Number of ranges, r0..rN-1. Range 0 is the coordinator range.
     pub ranges: u16,
@@ -87,7 +87,7 @@ pub struct TopologySpec {
 mod skew_map {
     use std::collections::BTreeMap;
 
-    use crabka_units::{Time, fmt::Human as _, parse};
+    use krabka_units::{Time, fmt::Human as _, parse};
     use serde::{
         Deserialize as _, Deserializer, Serializer,
         de::Error as _,

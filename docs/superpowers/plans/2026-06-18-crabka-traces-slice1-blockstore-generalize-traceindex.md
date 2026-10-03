@@ -1,11 +1,11 @@
-# crabka-traces Slice 1 — Blockstore generalization + span block schema (nested-set) + `TraceIndex` (bloom)
+# krabka-traces Slice 1 — Blockstore generalization + span block schema (nested-set) + `TraceIndex` (bloom)
 
 > **COMPLETION STATUS (as-built):** Done and green. The `BlockIndex` trait, span
 > block schema (incl. nested-set columns + DFS pre-order), `ShardedTraceBloom`,
 > `TraceIndex`, the span-row builder, and the end-to-end pipeline test
 > (`crates/blockstore/tests/trace_pipeline_e2e.rs`) are implemented and tested.
-> **Two boxes left unchecked by design (Task 2 Steps 4–5):** `BlockStore` was *not*
-> parameterized as `BlockStore<I: BlockIndex>`. The concrete index *is* named
+> **Two boxes left unchecked by design (Task 2 Steps 4–5):** `BlockStore` was _not_
+> parameterized as `BlockStore<I: BlockIndex>`. The concrete index _is_ named
 > `SeriesIndex` and implements `BlockIndex` (alongside `TraceIndex`, and the profiles
 > signal's `ProfileIndex`, which embeds `SeriesIndex`); the traces path uses
 > `BlockWriter` + `TraceIndex` + `span_block_decl()` validation directly, so a generic
@@ -15,9 +15,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Generalize `crabka-blockstore` so a signal declares its own schema + index instead of assuming the mandatory `series_fingerprint`+`timestamp` columns. Extract a `BlockIndex` trait, make the existing logs/metrics index a `SeriesIndex` impl (no behavior change — regression-tested against the existing blockstore tests), and add a `TraceIndex` impl. Define the flattened span-per-row Arrow/Parquet span block schema (identity + the load-bearing **nested-set** structural columns + trace-denormalized + intrinsics + dedicated/promoted attr columns + typed-list generic attrs + nested events/links), and provide the **DFS pre-order nested-set builder** with interval-containment property tests. Wire a span-block write/read path through `BlockWriter` and the `TraceIndex` queries (candidate blocks by FNV-sharded `trace_id` bloom; tag-set pruning) so by-id retrieval is **index-less** (no global `trace_id → block` map).
+**Goal:** Generalize `krabka-blockstore` so a signal declares its own schema + index instead of assuming the mandatory `series_fingerprint`+`timestamp` columns. Extract a `BlockIndex` trait, make the existing logs/metrics index a `SeriesIndex` impl (no behavior change — regression-tested against the existing blockstore tests), and add a `TraceIndex` impl. Define the flattened span-per-row Arrow/Parquet span block schema (identity + the load-bearing **nested-set** structural columns + trace-denormalized + intrinsics + dedicated/promoted attr columns + typed-list generic attrs + nested events/links), and provide the **DFS pre-order nested-set builder** with interval-containment property tests. Wire a span-block write/read path through `BlockWriter` and the `TraceIndex` queries (candidate blocks by FNV-sharded `trace_id` bloom; tag-set pruning) so by-id retrieval is **index-less** (no global `trace_id → block` map).
 
-**Architecture:** This slice is pure data layer on `crabka-blockstore` (no networking, no TraceQL, no Kafka). The existing concrete `Index` is split: the matcher→series→block logic becomes `SeriesIndex` behind a new `BlockIndex` trait; `BlockStore` becomes parameterized/`dyn` over `BlockIndex` so logs/metrics (`SeriesIndex`) and traces (`TraceIndex`) share one facade. The mandatory-column assumption moves from a hard `validate_block_schema` to a per-signal `BlockSchema` declaration. The span block is a deliberate Crabka flattening (TraceQL-semantic compat, **not** vParquet byte-format compat): one row per span, sorted/grouped by `trace_id`, carrying `nested_set_left/right/parent_id` (Int32, DFS pre-order over each trace's span tree). `TraceIndex` carries, per block, FNV-1 32-bit-sharded `trace_id` bloom filters (for index-less by-id locate: time/block prefilter → bloom test → Parquet row-group min/max binary search) plus per-block tag-name/value sets + blooms (search pruning + tag discovery). The bloom is implemented inline (FNV-seeded bit-array, Tempo's `0.01` FP default) — no external bloom crate — with a note to swap to parquet's `Sbbf` in production.
+**Architecture:** This slice is pure data layer on `krabka-blockstore` (no networking, no TraceQL, no Kafka). The existing concrete `Index` is split: the matcher→series→block logic becomes `SeriesIndex` behind a new `BlockIndex` trait; `BlockStore` becomes parameterized/`dyn` over `BlockIndex` so logs/metrics (`SeriesIndex`) and traces (`TraceIndex`) share one facade. The mandatory-column assumption moves from a hard `validate_block_schema` to a per-signal `BlockSchema` declaration. The span block is a deliberate Crabka flattening (TraceQL-semantic compat, **not** vParquet byte-format compat): one row per span, sorted/grouped by `trace_id`, carrying `nested_set_left/right/parent_id` (Int32, DFS pre-order over each trace's span tree). `TraceIndex` carries, per block, FNV-1 32-bit-sharded `trace_id` bloom filters (for index-less by-id locate: time/block prefilter → bloom test → Parquet row-group min/max binary search) plus per-block tag-name/value sets + blooms (search pruning + tag discovery). The bloom is implemented inline (FNV-seeded bit-array, Tempo's `0.01` FP default) — no external bloom crate — with a note to swap to parquet's `Sbbf` in production.
 
 **Tech Stack:** Rust 2024 · `datafusion` (git `main`, pinned — see Global Constraints) · `arrow` 59 · `parquet` 59 · `object_store` 0.13 · `tokio` · `thiserror` · `serde` / `serde_json` (index snapshot) · `regex`. Tests: `assert2`, `proptest`, `tempfile`, `object_store::memory::InMemory`, `#[tokio::test]`.
 
@@ -25,8 +25,8 @@
 
 - **No backwards compatibility.** Crabka is greenfield/undeployed. No `#[serde(default)]` shims, no V2-alongside-V1 enum variants, no migration code, no default-off feature gates. The `BlockIndex` extraction **replaces** the concrete `Index` — there is no "keep `Index` around for old snapshots." Wipe any local index snapshots during development. (Only Kafka wire compat matters — and this crate touches none of it.)
 - **`unsafe_code = "forbid"`** workspace-wide. No `unsafe` (the inline bloom is a safe `Vec<u64>` bit-array).
-- **Lints:** `clippy::pedantic` is `warn` workspace-wide (`module_name_repetitions`, `missing_errors_doc`, `missing_panics_doc` allowed). New code must be clippy-pedantic clean. Run `cargo clippy -p crabka-blockstore --all-targets` before each commit.
-- **Formatting:** run `cargo fmt -p crabka-blockstore` before every commit. **NEVER** run `cargo +nightly fmt --all` — it fails with OS error 206 / path-too-long in deep worktrees on Windows; always scope with `-p`.
+- **Lints:** `clippy::pedantic` is `warn` workspace-wide (`module_name_repetitions`, `missing_errors_doc`, `missing_panics_doc` allowed). New code must be clippy-pedantic clean. Run `cargo clippy -p krabka-blockstore --all-targets` before each commit.
+- **Formatting:** run `cargo fmt -p krabka-blockstore` before every commit. **NEVER** run `cargo +nightly fmt --all` — it fails with OS error 206 / path-too-long in deep worktrees on Windows; always scope with `-p`.
 - **Assertions:** use `assert2::assert!` / `assert2::check!` in tests, `prop_assert*` inside `proptest!`.
 - **Async tests:** `#[tokio::test]`. Crate dev-dep `tokio` features = `["macros", "rt-multi-thread"]`.
 - **Dependency pin (locked):** `datafusion = { git = "https://github.com/apache/datafusion", rev = "0838a4ddb902535b0e95a1c5a254be7e9c7fe9bf" }`. This `main` revision tracks arrow 59 / parquet 59 / object_store 0.13.2, which unify with the workspace pins (same major → cargo unifies to one crate instance, so arrow types cross the DataFusion boundary cleanly). Do **not** substitute a released `datafusion` (54.x is on arrow 58 and pulls a second, incompatible arrow major).
@@ -39,12 +39,12 @@
 
 ## Dependency & slice roadmap
 
-**Depends on:** `crabka-blockstore` *(as designed in `docs/superpowers/plans/2026-06-18-crabka-blockstore.md`)* — `BlockStore`, `BlockWriter`, `BlockMeta`, `Index` (becomes `SeriesIndex` here), `Labels`, `LabelMatcher`, `MatchOp`, `SeriesFingerprint`, `COL_FINGERPRINT`, `COL_TIMESTAMP`, `validate_block_schema`, `read_block`, `scan_context`. This slice **modifies** blockstore in place (extract trait, add `TraceIndex` + span schema). It adds **no** new crate; `crabka-traces` is *not* started here (no shared types module is needed — span-block column constants live in blockstore alongside the metrics signal's column constants, and the WAL `SpanRecord` belongs to slice 4).
+**Depends on:** `krabka-blockstore` _(as designed in `docs/superpowers/plans/2026-06-18-crabka-blockstore.md`)_ — `BlockStore`, `BlockWriter`, `BlockMeta`, `Index` (becomes `SeriesIndex` here), `Labels`, `LabelMatcher`, `MatchOp`, `SeriesFingerprint`, `COL_FINGERPRINT`, `COL_TIMESTAMP`, `validate_block_schema`, `read_block`, `scan_context`. This slice **modifies** blockstore in place (extract trait, add `TraceIndex` + span schema). It adds **no** new crate; `krabka-traces` is _not_ started here (no shared types module is needed — span-block column constants live in blockstore alongside the metrics signal's column constants, and the WAL `SpanRecord` belongs to slice 4).
 
-**The 8 traces slices** (this plan = Slice 1; each later slice gets its own plan; commands use the slice's crate — `crabka-blockstore` here, `crabka-traceql` for 2–3, `crabka-traces` for 4–8):
+**The 8 traces slices** (this plan = Slice 1; each later slice gets its own plan; commands use the slice's crate — `krabka-blockstore` here, `krabka-traceql` for 2–3, `krabka-traces` for 4–8):
 
-1. **Blockstore generalization + span block schema + `TraceIndex`** *(this plan)* — `BlockIndex` trait; `Index`→`SeriesIndex`; relax mandatory columns; flattened span block (incl. **nested-set columns + DFS pre-order**); `TraceIndex` (FNV-sharded `trace_id` bloom + per-block tag sets/blooms); span-block write/read path. **Freezes:** `BlockIndex`, `SeriesIndex`, `TraceIndex`, the span-block column constants + `span_block_schema()`, `NestedSetBuilder` + `SpanNode`, and the `TraceIndex` query surface (`candidate_blocks_for_trace`, `prune_blocks_by_tag`, `tag_names`/`tag_values`).
-2. **`crabka-traceql` core** — parser + planner + selectors + non-structural pushdown + the `SpanStructuralJoin` lowering for the **core** structural operators. Defines the `SpanStore` trait + pinned result types. **Consumes** this slice's nested-set columns (the join keys) + `TraceIndex` semantics.
+1. **Blockstore generalization + span block schema + `TraceIndex`** _(this plan)_ — `BlockIndex` trait; `Index`→`SeriesIndex`; relax mandatory columns; flattened span block (incl. **nested-set columns + DFS pre-order**); `TraceIndex` (FNV-sharded `trace_id` bloom + per-block tag sets/blooms); span-block write/read path. **Freezes:** `BlockIndex`, `SeriesIndex`, `TraceIndex`, the span-block column constants + `span_block_schema()`, `NestedSetBuilder` + `SpanNode`, and the `TraceIndex` query surface (`candidate_blocks_for_trace`, `prune_blocks_by_tag`, `tag_names`/`tag_values`).
+2. **`krabka-traceql` core** — parser + planner + selectors + non-structural pushdown + the `SpanStructuralJoin` lowering for the **core** structural operators. Defines the `SpanStore` trait + pinned result types. **Consumes** this slice's nested-set columns (the join keys) + `TraceIndex` semantics.
 3. **TraceQL completeness** — negated/union structural forms, pipeline aggregations, TraceQL metrics, tag discovery. Consumes the same nested-set columns + `TraceIndex` tag sets.
 4. **Ingest service** — `distributor` → `trace_id`-partitioned WAL; `block-builder` consumer group → span blocks (calls **this slice's** `NestedSetBuilder` + `span_block_schema()` + `BlockWriter` + `TraceIndex`); `live-store` hot tier. Defines `SpanRecord`.
 5. **Querier + Tempo HTTP API** — implements `SpanStore` as hot/cold UNION over **this slice's** `TraceIndex` by-id path + span blocks.
@@ -56,18 +56,18 @@
 
 ## File structure (`crates/blockstore/` — modified + new files)
 
-| File | Responsibility | Change |
-|---|---|---|
-| `src/lib.rs` | module decls + public re-exports | **modify** — re-export `BlockIndex`, `SeriesIndex`, `TraceIndex`, span constants, `NestedSetBuilder`, `SpanNode`, `BlockSchema` |
-| `src/block_index.rs` | the `BlockIndex` trait + `BlockSchema` declaration | **create** |
-| `src/index.rs` (logs/metrics) | the existing series index | **modify** — rename `Index` → `SeriesIndex`; `impl BlockIndex for SeriesIndex` |
-| `src/block.rs` | column constants + schema validation | **modify** — relax `validate_block_schema` to validate against a declared `BlockSchema` |
-| `src/store.rs` | `BlockStore` facade | **modify** — parameterize over `BlockIndex` (`BlockStore<I>`); keep `scan_context` |
-| `src/span_schema.rs` | span-block column constants + `span_block_schema()` + enums (`SpanKind`, `StatusCode`) | **create** |
-| `src/nested_set.rs` | `SpanNode` + `NestedSetBuilder` (DFS pre-order) + interval-containment property tests | **create** |
-| `src/span_block.rs` | span-row builder: `(SpanRow)` → `RecordBatch` matching `span_block_schema()` (typed-list attrs, nested events/links) | **create** |
-| `src/bloom.rs` | `ShardedTraceBloom` (FNV-1 32-bit sharded `trace_id` bloom) | **create** |
-| `src/trace_index.rs` | `TraceIndex` (impl `BlockIndex`): per-block sharded bloom + tag-name/value sets + tag blooms; by-id candidate blocks; tag pruning; snapshot serde | **create** |
+| File                          | Responsibility                                                                                                                                    | Change                                                                                                                          |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib.rs`                  | module decls + public re-exports                                                                                                                  | **modify** — re-export `BlockIndex`, `SeriesIndex`, `TraceIndex`, span constants, `NestedSetBuilder`, `SpanNode`, `BlockSchema` |
+| `src/block_index.rs`          | the `BlockIndex` trait + `BlockSchema` declaration                                                                                                | **create**                                                                                                                      |
+| `src/index.rs` (logs/metrics) | the existing series index                                                                                                                         | **modify** — rename `Index` → `SeriesIndex`; `impl BlockIndex for SeriesIndex`                                                  |
+| `src/block.rs`                | column constants + schema validation                                                                                                              | **modify** — relax `validate_block_schema` to validate against a declared `BlockSchema`                                         |
+| `src/store.rs`                | `BlockStore` facade                                                                                                                               | **modify** — parameterize over `BlockIndex` (`BlockStore<I>`); keep `scan_context`                                              |
+| `src/span_schema.rs`          | span-block column constants + `span_block_schema()` + enums (`SpanKind`, `StatusCode`)                                                            | **create**                                                                                                                      |
+| `src/nested_set.rs`           | `SpanNode` + `NestedSetBuilder` (DFS pre-order) + interval-containment property tests                                                             | **create**                                                                                                                      |
+| `src/span_block.rs`           | span-row builder: `(SpanRow)` → `RecordBatch` matching `span_block_schema()` (typed-list attrs, nested events/links)                              | **create**                                                                                                                      |
+| `src/bloom.rs`                | `ShardedTraceBloom` (FNV-1 32-bit sharded `trace_id` bloom)                                                                                       | **create**                                                                                                                      |
+| `src/trace_index.rs`          | `TraceIndex` (impl `BlockIndex`): per-block sharded bloom + tag-name/value sets + tag blooms; by-id candidate blocks; tag pruning; snapshot serde | **create**                                                                                                                      |
 
 `store.rs` remains the only file depending on DataFusion's query layer. The nested-set DFS (`nested_set.rs`) and the bloom (`bloom.rs`) are pure-compute, fully unit/property-tested without IO.
 
@@ -76,11 +76,13 @@
 ### Task 1: Extract the `BlockIndex` trait + `BlockSchema` declaration
 
 **Files:**
+
 - Create: `crates/blockstore/src/block_index.rs`
 - Modify: `crates/blockstore/src/block.rs` (relax `validate_block_schema` to take a `BlockSchema`)
 - Modify: `crates/blockstore/src/lib.rs` (declare module + re-export)
 
 **Interfaces:**
+
 - Consumes: `Result`, `BlockStoreError`, `BlockMeta`, `SeriesFingerprint`, `arrow::datatypes::Schema`.
 - Produces:
   - `pub trait BlockIndex: Default + serde::Serialize + serde::de::DeserializeOwned` with:
@@ -138,7 +140,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-blockstore --lib block_index`
+Run: `cargo test -p krabka-blockstore --lib block_index`
 Expected: FAIL — `cannot find function series_block_schema` / `cannot find function validate_against`.
 
 - [x] **Step 3: Implement `block_index.rs`**
@@ -271,14 +273,14 @@ pub use block::{BlockMeta, COL_FINGERPRINT, COL_TIMESTAMP, validate_against, val
 
 - [x] **Step 6: Run to verify it passes**
 
-Run: `cargo test -p crabka-blockstore --lib block_index && cargo test -p crabka-blockstore --lib block`
+Run: `cargo test -p krabka-blockstore --lib block_index && cargo test -p krabka-blockstore --lib block`
 Expected: PASS (3 new `block_index` tests + the existing `block` tests unchanged).
 
 - [x] **Step 7: Commit**
 
 ```bash
-cargo fmt -p crabka-blockstore
-cargo clippy -p crabka-blockstore --all-targets
+cargo fmt -p krabka-blockstore
+cargo clippy -p krabka-blockstore --all-targets
 git add crates/blockstore/
 git commit -m "feat(blockstore): extract BlockIndex trait + per-signal BlockSchema declaration"
 ```
@@ -288,11 +290,13 @@ git commit -m "feat(blockstore): extract BlockIndex trait + per-signal BlockSche
 ### Task 2: Rename `Index` → `SeriesIndex`, `impl BlockIndex`, parameterize `BlockStore`
 
 **Files:**
+
 - Modify: `crates/blockstore/src/index.rs` (rename type + impl the trait)
 - Modify: `crates/blockstore/src/store.rs` (`BlockStore` → `BlockStore<I: BlockIndex>`)
 - Modify: `crates/blockstore/src/lib.rs` (re-export `SeriesIndex`; drop `Index`)
 
 **Interfaces:**
+
 - Consumes: `BlockIndex`, `BlockMeta`, `Labels`, `LabelMatcher`, `MatchOp`, `SeriesFingerprint`, `Result`.
 - Produces:
   - `pub struct SeriesIndex` (was `Index`) — same fields/methods (`new`, `add_series`, `add_block`, `resolve`, `candidate_blocks`, `label_names`, `label_values`, `save`, `load`), **plus** `impl BlockIndex for SeriesIndex`.
@@ -304,7 +308,7 @@ In `index.rs`, rename `pub struct Index` → `pub struct SeriesIndex`, `impl Ind
 
 - [x] **Step 2: Run to verify the rename compiles + tests still pass**
 
-Run: `cargo test -p crabka-blockstore --lib index`
+Run: `cargo test -p krabka-blockstore --lib index`
 Expected: PASS (all 7 existing index tests, now against `SeriesIndex`).
 
 - [x] **Step 3: Implement `BlockIndex` for `SeriesIndex`**
@@ -398,14 +402,14 @@ In `store.rs` tests, change `BlockStore::new(...)` to `BlockStore::<SeriesIndex>
 
 - [x] **Step 6: Run the whole crate (regression gate)**
 
-Run: `cargo test -p crabka-blockstore`
+Run: `cargo test -p krabka-blockstore`
 Expected: PASS — every pre-existing test green against `SeriesIndex` + `BlockStore<SeriesIndex>`; **no behavior change**.
 
 - [x] **Step 7: Commit**
 
 ```bash
-cargo fmt -p crabka-blockstore
-cargo clippy -p crabka-blockstore --all-targets
+cargo fmt -p krabka-blockstore
+cargo clippy -p krabka-blockstore --all-targets
 git add crates/blockstore/
 git commit -m "refactor(blockstore): Index -> SeriesIndex impl BlockIndex; BlockStore<I> generic over index"
 ```
@@ -415,10 +419,12 @@ git commit -m "refactor(blockstore): Index -> SeriesIndex impl BlockIndex; Block
 ### Task 3: Span-block schema — column constants, enums, `span_block_schema()`
 
 **Files:**
+
 - Create: `crates/blockstore/src/span_schema.rs`
 - Modify: `crates/blockstore/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `arrow::datatypes::{DataType, Field, Fields, Schema, SchemaRef}`, `BlockSchema`, `RequiredColumn`.
 - Produces:
   - Span column-name constants: `SCOL_TRACE_ID`, `SCOL_SPAN_ID`, `SCOL_PARENT_SPAN_ID`, `SCOL_NESTED_SET_LEFT`, `SCOL_NESTED_SET_RIGHT`, `SCOL_PARENT_ID`, `SCOL_ROOT_SERVICE_NAME`, `SCOL_ROOT_SPAN_NAME`, `SCOL_TRACE_START_NANO`, `SCOL_TRACE_DURATION_NANOS`, `SCOL_NAME`, `SCOL_KIND`, `SCOL_START_NANO`, `SCOL_DURATION_NANOS`, `SCOL_STATUS_CODE`, `SCOL_STATUS_MESSAGE`, `SCOL_ATTR_KEYS`, `SCOL_ATTR_IS_ARRAY`, `SCOL_ATTR_VALUE`, `SCOL_ATTR_VALUE_INT`, `SCOL_ATTR_VALUE_DOUBLE`, `SCOL_ATTR_VALUE_BOOL`, `SCOL_EVENTS`, `SCOL_LINKS`.
@@ -501,7 +507,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-blockstore --lib span_schema`
+Run: `cargo test -p krabka-blockstore --lib span_schema`
 Expected: FAIL — `cannot find function span_block_schema`.
 
 - [x] **Step 3: Implement `span_schema.rs`**
@@ -713,14 +719,14 @@ Add `mod span_schema;` and re-export every `SCOL_*` constant + `SpanKind`, `Stat
 
 - [x] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-blockstore --lib span_schema`
+Run: `cargo test -p krabka-blockstore --lib span_schema`
 Expected: PASS (6 tests).
 
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-blockstore
-cargo clippy -p crabka-blockstore --all-targets
+cargo fmt -p krabka-blockstore
+cargo clippy -p krabka-blockstore --all-targets
 git add crates/blockstore/
 git commit -m "feat(blockstore): flattened span-per-row block schema + SpanKind/StatusCode enums"
 ```
@@ -730,10 +736,12 @@ git commit -m "feat(blockstore): flattened span-per-row block schema + SpanKind/
 ### Task 4: Nested-set DFS pre-order builder (the headline) + interval-containment property tests
 
 **Files:**
+
 - Create: `crates/blockstore/src/nested_set.rs`
 - Modify: `crates/blockstore/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: nothing from blockstore (pure compute over raw `span_id`/`parent_span_id` bytes).
 - Produces:
   - `pub struct SpanNode { pub span_id: [u8; 8], pub parent_span_id: Option<[u8; 8]> }`
@@ -835,7 +843,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-blockstore --lib nested_set`
+Run: `cargo test -p krabka-blockstore --lib nested_set`
 Expected: FAIL — `cannot find type SpanNode` / `cannot find function assign_nested_set`.
 
 - [x] **Step 3: Implement `nested_set.rs`**
@@ -940,7 +948,7 @@ Add `mod nested_set;` and `pub use nested_set::{NestedSet, SpanNode, assign_nest
 
 - [x] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-blockstore --lib nested_set`
+Run: `cargo test -p krabka-blockstore --lib nested_set`
 Expected: PASS (5 tests).
 
 - [x] **Step 6: Property test — random forests preserve the interval-containment invariants**
@@ -955,7 +963,7 @@ Create `crates/blockstore/tests/nested_set_proptest.rs`:
 
 use std::collections::HashMap;
 
-use crabka_blockstore::{SpanNode, assign_nested_set};
+use krabka_blockstore::{SpanNode, assign_nested_set};
 use proptest::prelude::*;
 
 fn sid(n: u32) -> [u8; 8] {
@@ -1029,14 +1037,14 @@ proptest! {
 
 - [x] **Step 7: Run the property test**
 
-Run: `cargo test -p crabka-blockstore --test nested_set_proptest`
+Run: `cargo test -p krabka-blockstore --test nested_set_proptest`
 Expected: PASS (256 cases).
 
 - [x] **Step 8: Commit**
 
 ```bash
-cargo fmt -p crabka-blockstore
-cargo clippy -p crabka-blockstore --all-targets
+cargo fmt -p krabka-blockstore
+cargo clippy -p krabka-blockstore --all-targets
 git add crates/blockstore/
 git commit -m "feat(blockstore): nested-set DFS pre-order builder + interval-containment property tests"
 ```
@@ -1046,10 +1054,12 @@ git commit -m "feat(blockstore): nested-set DFS pre-order builder + interval-con
 ### Task 5: Span-row builder — `SpanRow` → `RecordBatch` matching `span_block_schema()`
 
 **Files:**
+
 - Create: `crates/blockstore/src/span_block.rs`
 - Modify: `crates/blockstore/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: every `SCOL_*` constant, `span_block_schema`, `SpanKind`, `StatusCode`, `NestedSet`, `Result`, `BlockStoreError`.
 - Produces:
   - `pub struct AttrValue` enum: `Str(Vec<String>)`, `Int(Vec<i64>)`, `Double(Vec<f64>)`, `Bool(Vec<bool>)` (a value list; scalar = single element).
@@ -1146,7 +1156,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-blockstore --lib span_block`
+Run: `cargo test -p krabka-blockstore --lib span_block`
 Expected: FAIL — `cannot find type SpanRow` / `cannot find function encode_span_rows`.
 
 - [x] **Step 3: Implement `span_block.rs`**
@@ -1504,7 +1514,7 @@ fn append_kv(sb: &mut StructBuilder, attrs: &[(String, String)]) {
 }
 ```
 
-> **Arrow-builder verification (do this if compile/test fails — verify against arrow 59):** `StructBuilder::field_builder::<T>(i)`, `ListBuilder::values()` (returns the inner builder; for a `ListBuilder<ListBuilder<T>>` you call `.values().values()` to reach the scalar builder), `FixedSizeBinaryBuilder::append_value(impl AsRef<[u8]>) -> Result<(), ArrowError>`, and the `append(true)`/`append_null()`/`append_option(..)` conventions are arrow-59 API. If a builder method name or the inner list field name (`"item"`) differs, align the impl AND the Task-3 schema to the builder's actual output (the builder is the source of truth) — keep the *behavior* (`batch.schema() == span_block_schema()` + the column-value asserts) the test pins. The schema-equality assertion is the tripwire that catches any inner-field-name drift.
+> **Arrow-builder verification (do this if compile/test fails — verify against arrow 59):** `StructBuilder::field_builder::<T>(i)`, `ListBuilder::values()` (returns the inner builder; for a `ListBuilder<ListBuilder<T>>` you call `.values().values()` to reach the scalar builder), `FixedSizeBinaryBuilder::append_value(impl AsRef<[u8]>) -> Result<(), ArrowError>`, and the `append(true)`/`append_null()`/`append_option(..)` conventions are arrow-59 API. If a builder method name or the inner list field name (`"item"`) differs, align the impl AND the Task-3 schema to the builder's actual output (the builder is the source of truth) — keep the _behavior_ (`batch.schema() == span_block_schema()` + the column-value asserts) the test pins. The schema-equality assertion is the tripwire that catches any inner-field-name drift.
 
 - [x] **Step 4: Wire `lib.rs`**
 
@@ -1512,7 +1522,7 @@ Add `mod span_block;` and `pub use span_block::{AttrValue, SpanAttr, SpanEvent, 
 
 - [x] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-blockstore --lib span_block`
+Run: `cargo test -p krabka-blockstore --lib span_block`
 Expected: PASS.
 
 - [x] **Step 6: Round-trip integration test — write a span block through `BlockWriter` and read it back**
@@ -1527,7 +1537,7 @@ use std::sync::Arc;
 
 use arrow::array::FixedSizeBinaryArray;
 use arrow::record_batch::RecordBatch;
-use crabka_blockstore::{
+use krabka_blockstore::{
     AttrValue, BlockWriter, NestedSet, SpanAttr, SpanKind, SpanRow, StatusCode, encode_span_rows,
     read_block, span_block_decl, span_block_schema, validate_against,
 };
@@ -1589,14 +1599,14 @@ async fn span_block_validates_and_round_trips() {
 
 - [x] **Step 7: Run the round-trip test**
 
-Run: `cargo test -p crabka-blockstore --test span_block_roundtrip`
+Run: `cargo test -p krabka-blockstore --test span_block_roundtrip`
 Expected: PASS.
 
 - [x] **Step 8: Commit**
 
 ```bash
-cargo fmt -p crabka-blockstore
-cargo clippy -p crabka-blockstore --all-targets
+cargo fmt -p krabka-blockstore
+cargo clippy -p krabka-blockstore --all-targets
 git add crates/blockstore/
 git commit -m "feat(blockstore): span-row builder (typed-list attrs + nested events/links) + write/read round-trip"
 ```
@@ -1606,10 +1616,12 @@ git commit -m "feat(blockstore): span-row builder (typed-list attrs + nested eve
 ### Task 6: `ShardedTraceBloom` — FNV-1 32-bit sharded `trace_id` bloom
 
 **Files:**
+
 - Create: `crates/blockstore/src/bloom.rs`
 - Modify: `crates/blockstore/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `serde::{Serialize, Deserialize}`.
 - Produces:
   - `pub struct ShardedTraceBloom` (`Clone`, `Serialize`, `Deserialize`) — `shard_count` blooms; each a bit-array sized from `(expected_items, fp_rate)`.
@@ -1700,7 +1712,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-blockstore --lib bloom`
+Run: `cargo test -p krabka-blockstore --lib bloom`
 Expected: FAIL — `cannot find type ShardedTraceBloom`.
 
 - [x] **Step 3: Implement `bloom.rs`**
@@ -1837,14 +1849,14 @@ Add `mod bloom;` and `pub use bloom::{ShardedTraceBloom, fnv1_32};`.
 
 - [x] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-blockstore --lib bloom`
+Run: `cargo test -p krabka-blockstore --lib bloom`
 Expected: PASS (5 tests).
 
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-blockstore
-cargo clippy -p crabka-blockstore --all-targets
+cargo fmt -p krabka-blockstore
+cargo clippy -p krabka-blockstore --all-targets
 git add crates/blockstore/
 git commit -m "feat(blockstore): ShardedTraceBloom — FNV-1 32-bit sharded trace_id bloom for index-less by-id"
 ```
@@ -1854,10 +1866,12 @@ git commit -m "feat(blockstore): ShardedTraceBloom — FNV-1 32-bit sharded trac
 ### Task 7: `TraceIndex` (impl `BlockIndex`) — sharded bloom + tag sets/blooms + by-id candidates + tag pruning + snapshot
 
 **Files:**
+
 - Create: `crates/blockstore/src/trace_index.rs`
 - Modify: `crates/blockstore/src/lib.rs`
 
 **Interfaces:**
+
 - Consumes: `BlockIndex`, `BlockMeta`, `ShardedTraceBloom`, `Result`, `BlockStoreError`, `serde`.
 - Produces:
   - `pub struct TraceIndex` (`Default`, `Serialize`, `Deserialize`, `impl BlockIndex`).
@@ -1967,7 +1981,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-blockstore --lib trace_index`
+Run: `cargo test -p krabka-blockstore --lib trace_index`
 Expected: FAIL — `cannot find type TraceIndex`.
 
 - [x] **Step 3: Implement `trace_index.rs`**
@@ -2174,7 +2188,7 @@ Add `mod trace_index;` and `pub use trace_index::{TraceBlockStats, TraceIndex};`
 
 - [x] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-blockstore --lib trace_index`
+Run: `cargo test -p krabka-blockstore --lib trace_index`
 Expected: PASS (4 tests).
 
 - [x] **Step 6: Snapshot round-trip test**
@@ -2198,14 +2212,14 @@ Append to the `tests` module in `trace_index.rs`:
 
 - [x] **Step 7: Run the snapshot test**
 
-Run: `cargo test -p crabka-blockstore --lib trace_index::tests::snapshot_round_trips`
+Run: `cargo test -p krabka-blockstore --lib trace_index::tests::snapshot_round_trips`
 Expected: PASS.
 
 - [x] **Step 8: Commit**
 
 ```bash
-cargo fmt -p crabka-blockstore
-cargo clippy -p crabka-blockstore --all-targets
+cargo fmt -p krabka-blockstore
+cargo clippy -p krabka-blockstore --all-targets
 git add crates/blockstore/
 git commit -m "feat(blockstore): TraceIndex — sharded trace_id bloom + tag sets for index-less by-id + search pruning"
 ```
@@ -2215,9 +2229,11 @@ git commit -m "feat(blockstore): TraceIndex — sharded trace_id bloom + tag set
 ### Task 8: Whole-crate integration — span block + nested-set + TraceIndex end-to-end + final gate
 
 **Files:**
+
 - Create: `crates/blockstore/tests/trace_pipeline_e2e.rs`
 
 **Interfaces:**
+
 - Consumes the full public surface: `assign_nested_set`, `SpanNode`, `encode_span_rows`, `SpanRow`, `BlockWriter`, `read_block`, `span_block_schema`, `TraceIndex`, `TraceBlockStats`, `ShardedTraceBloom`, `SpanKind`, `StatusCode`, `NestedSet`, `AttrValue`, `SpanAttr`.
 
 - [x] **Step 1: Write the end-to-end test**
@@ -2234,7 +2250,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use arrow::array::Int32Array;
-use crabka_blockstore::{
+use krabka_blockstore::{
     AttrValue, BlockWriter, NestedSet, ShardedTraceBloom, SpanAttr, SpanKind, SpanNode, SpanRow,
     StatusCode, TraceBlockStats, TraceIndex, assign_nested_set, encode_span_rows, read_block,
     span_block_schema,
@@ -2346,14 +2362,14 @@ async fn trace_block_built_indexed_and_located_by_id() {
 
 - [x] **Step 2: Run the end-to-end test**
 
-Run: `cargo test -p crabka-blockstore --test trace_pipeline_e2e`
+Run: `cargo test -p krabka-blockstore --test trace_pipeline_e2e`
 Expected: PASS.
 
 > If `candidate_blocks_for_trace` for the `other` id flakes to non-empty (a bloom false positive against a single-item bloom is vanishingly unlikely but possible), pick a different `other` constant — the assertion documents intent; a 1-in-N FP is acceptable bloom behavior and not a regression. With `with_tempo_defaults(1)` the bloom is sized for one item, so FP is far below 1%.
 
 - [x] **Step 3: Final whole-crate gate**
 
-Run: `cargo test -p crabka-blockstore && cargo clippy -p crabka-blockstore --all-targets && cargo fmt -p crabka-blockstore --check`
+Run: `cargo test -p krabka-blockstore && cargo clippy -p krabka-blockstore --all-targets && cargo fmt -p krabka-blockstore --check`
 Expected: all PASS (every pre-existing `SeriesIndex`/`BlockStore` test + all new span/nested-set/bloom/trace-index tests), no clippy warnings, formatting clean.
 
 - [x] **Step 4: Commit**
@@ -2368,16 +2384,18 @@ git commit -m "test(blockstore): slice-1 end-to-end — DFS nested-set -> span b
 ## Self-review
 
 **Spec coverage (against §3.3 Decision A + §4 data model + §11 Slice 1):**
+
 - Extract `BlockIndex` trait; relax mandatory `series_fingerprint`+`timestamp` to a per-signal `BlockSchema` declaration → Task 1.
 - Existing logs/metrics index becomes `SeriesIndex` (impl `BlockIndex`), **no behavior change, regression-tested**; `BlockStore` parameterized over `BlockIndex` → Task 2.
-- Flattened span-per-row block schema — identity (FixedSizeBinary), nested-set columns (Int32), trace-denormalized, intrinsics, generic typed-list attrs (`List<List<T>>`, `is_array`, scalar=single-element list), nested events/links (`List<Struct>`) → Tasks 3, 5. (Dedicated/promoted attribute columns are *configuration* applied at block-build by slice 4's block-builder over this schema's column set — the schema supports promoted columns as ordinary extra dict-encoded columns; the promotion *policy* is slice 4. Flagged below.)
+- Flattened span-per-row block schema — identity (FixedSizeBinary), nested-set columns (Int32), trace-denormalized, intrinsics, generic typed-list attrs (`List<List<T>>`, `is_array`, scalar=single-element list), nested events/links (`List<Struct>`) → Tasks 3, 5. (Dedicated/promoted attribute columns are _configuration_ applied at block-build by slice 4's block-builder over this schema's column set — the schema supports promoted columns as ordinary extra dict-encoded columns; the promotion _policy_ is slice 4. Flagged below.)
 - Nested-set DFS pre-order builder (the headline) + interval-containment property tests → Task 4.
 - `TraceIndex` (impl `BlockIndex`): FNV-1 32-bit sharded `trace_id` bloom for **index-less** by-id (time/block prefilter → bloom test → caller's Parquet row-group min/max binary search; **no global `trace_id → block` map**) + per-block tag-name/value sets for search pruning + tag discovery → Tasks 6, 7.
 - Span-block write/read path through `BlockWriter` + `TraceIndex` queries; end-to-end → Tasks 5, 8.
 
 **Deviations flagged (not hidden):**
-1. **Attribute promotion policy** is slice 4, not here. The span schema carries the *generic* typed-list attr columns; a *promoted* attr is just an extra dict-encoded column the block-builder hoists at write time. This slice provides the column-set the promotion writes into (ordinary Arrow columns alongside `span_block_schema()`), but the per-tenant promotion config + the hoisting logic belong to the block-builder (§5.3, slice 4). The schema is open to extra columns (Parquet/DataFusion read by name), so promotion needs no schema change.
-2. **The Parquet row-group min/max binary search** inside a bloom-surviving block is the *caller's* final by-id step (slice 5 querier), driven by DataFusion's native page statistics on the `trace_id` column. This slice delivers the locate-to-block half (bloom + time); the within-block half is a DataFusion predicate the querier pushes down. Pinning it needs a registered Parquet table (the querier's job), so it is correctly deferred — flagged so a reviewer doesn't expect the binary search here.
+
+1. **Attribute promotion policy** is slice 4, not here. The span schema carries the _generic_ typed-list attr columns; a _promoted_ attr is just an extra dict-encoded column the block-builder hoists at write time. This slice provides the column-set the promotion writes into (ordinary Arrow columns alongside `span_block_schema()`), but the per-tenant promotion config + the hoisting logic belong to the block-builder (§5.3, slice 4). The schema is open to extra columns (Parquet/DataFusion read by name), so promotion needs no schema change.
+2. **The Parquet row-group min/max binary search** inside a bloom-surviving block is the _caller's_ final by-id step (slice 5 querier), driven by DataFusion's native page statistics on the `trace_id` column. This slice delivers the locate-to-block half (bloom + time); the within-block half is a DataFusion predicate the querier pushes down. Pinning it needs a registered Parquet table (the querier's job), so it is correctly deferred — flagged so a reviewer doesn't expect the binary search here.
 3. **`write_block` declaration-awareness** (Task 5 Step 6 note): the blockstore plan's `write_block` hardcodes the series columns for its summary scan. Span blocks need a declaration-aware variant (`write_block_with_decl` / a `SummaryColumns { id_col, ts_col }`). This is called out as a potential standalone task (non-overlapping file set, `writer.rs`) if mechanically large; it is pinned by the Task 5 round-trip + Task 8 e2e tests rather than left vague.
 4. **Bloom implementation** is an inline FNV double-hash bit-array, not Tempo's SBBF. Deliberate: self-contained, dependency-free, property-testable; production swap to `parquet::bloom_filter::Sbbf` or `fastbloom` is a localized change behind `ShardedTraceBloom`'s frozen method set. Flagged in Task 6.
 

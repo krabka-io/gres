@@ -5,6 +5,7 @@
 **Goal:** Bundle per-request connection state (`principal`, `peer`, `client_id`) into a single `RequestContext` struct passed to every inline-intercept handler. Use it to close the slice-16 gap where 5 quota call sites pass `""` for `client_id`, defeating `(user, client-id)` tuple quotas.
 
 **Out of scope:**
+
 - `HandlerTable`-routed handlers (`list_offsets`, `find_coordinator`, etc.) — they don't need ctx; no quota call sites in them.
 - Changing the `HandlerFn` typedef. Inline-intercept handlers don't go through the table, so the table stays as-is.
 - KIP-219 cross-broker throttle propagation.
@@ -40,7 +41,7 @@ Slice 17b plumbs `client_id` through every inline-intercept handler by introduci
 ```rust
 use std::net::SocketAddr;
 
-use crabka_security::Principal;
+use krabka_security::Principal;
 
 /// Per-request connection metadata threaded through every inline-intercept
 /// handler. Constructed once per frame in `network::dispatch` from the
@@ -100,11 +101,14 @@ In-handler references `principal` / `peer` become `ctx.principal` / `ctx.peer`. 
 Enumerated from `grep '^async fn handle_\w+_frame' crates/broker/src/network/dispatch.rs` (30 frame fns).
 
 **Family A — "raw bytes" handlers** (20 modules). Current signature:
+
 ```rust
 pub(crate) async fn handle(broker: &Broker, version: i16, _correlation_id: i32,
     req_bytes: &[u8], principal: &Principal, peer: &SocketAddr) -> Result<Bytes, BrokerError>
 ```
+
 becomes
+
 ```rust
 pub(crate) async fn handle(broker: &Broker, version: i16, _correlation_id: i32,
     req_bytes: &[u8], ctx: &RequestContext<'_>) -> Result<Bytes, BrokerError>
@@ -113,11 +117,14 @@ pub(crate) async fn handle(broker: &Broker, version: i16, _correlation_id: i32,
 Modules: `produce` (0), `fetch` (1), `metadata` (3), `offset_commit` (8), `offset_fetch` (9), `join_group` (11), `describe_groups` (15), `list_groups` (16), `create_topics` (19), `delete_topics` (20), `delete_records` (21), `init_producer_id` (22), `txn::handlers::add_partitions_to_txn` (24), `txn::handlers::end_txn` (26), `txn::handlers::txn_offset_commit` (28), `alter_configs` (33), `create_partitions` (37), `delete_groups` (42), `incremental_alter_configs` (44), `describe_cluster` (60).
 
 **Family B — "decoded request" handlers** (10 modules). Current signature:
+
 ```rust
 pub(crate) async fn handle(broker: &Broker, req: <Type>,
     principal: &Principal, peer: &SocketAddr, api_version: i16) -> Result<Bytes, BrokerError>
 ```
+
 becomes
+
 ```rust
 pub(crate) async fn handle(broker: &Broker, req: <Type>,
     ctx: &RequestContext<'_>, api_version: i16) -> Result<Bytes, BrokerError>
@@ -147,9 +154,9 @@ async fn handle_produce_frame(
     let principal = auth
         .principal()
         .cloned()
-        .unwrap_or_else(|| crabka_security::Principal {
+        .unwrap_or_else(|| krabka_security::Principal {
             name: "ANONYMOUS".to_string(),
-            mechanism: crabka_security::SaslMechanism::Plain,
+            mechanism: krabka_security::SaslMechanism::Plain,
         });
     let client_id = peek_client_id(frame).unwrap_or("");
     let ctx = crate::handlers::RequestContext {
@@ -178,13 +185,13 @@ async fn handle_produce_frame(
 
 The actual bug being closed. After step 3, each handler has `ctx.client_id` available:
 
-| File:line | Before | After |
-|---|---|---|
-| `crates/broker/src/handlers/produce.rs:449` | `""` | `ctx.client_id` |
-| `crates/broker/src/handlers/fetch.rs:355` | `""` | `ctx.client_id` |
-| `crates/broker/src/handlers/create_topics.rs:306` | `""` | `ctx.client_id` |
-| `crates/broker/src/handlers/delete_topics.rs:160` | `""` | `ctx.client_id` |
-| `crates/broker/src/handlers/create_partitions.rs:211` | `""` | `ctx.client_id` |
+| File:line                                             | Before | After           |
+| ----------------------------------------------------- | ------ | --------------- |
+| `crates/broker/src/handlers/produce.rs:449`           | `""`   | `ctx.client_id` |
+| `crates/broker/src/handlers/fetch.rs:355`             | `""`   | `ctx.client_id` |
+| `crates/broker/src/handlers/create_topics.rs:306`     | `""`   | `ctx.client_id` |
+| `crates/broker/src/handlers/delete_topics.rs:160`     | `""`   | `ctx.client_id` |
+| `crates/broker/src/handlers/create_partitions.rs:211` | `""`   | `ctx.client_id` |
 
 Drop the stale `// client_id is not yet threaded ...` / `// slice-16 known limitation` comments at those sites.
 
@@ -215,7 +222,7 @@ The other CRUD handlers (`delete_topics`, `create_partitions`) and the txn / gro
 
 ### No JVM acceptance change
 
-Slice 16 already exercises `AlterClientQuotas` against the JVM `kafka-configs` tool. Tuple-quota *enforcement* is wire-internal — JVM tools don't expose throttle timings on the client side in a way that's easy to assert on, and the broker-side integration test above covers it.
+Slice 16 already exercises `AlterClientQuotas` against the JVM `kafka-configs` tool. Tuple-quota _enforcement_ is wire-internal — JVM tools don't expose throttle timings on the client side in a way that's easy to assert on, and the broker-side integration test above covers it.
 
 ---
 

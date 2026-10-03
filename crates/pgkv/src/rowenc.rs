@@ -2,7 +2,7 @@
 //! per column. It is NOT order-preserving. Values are never sorted by raw
 //! bytes.
 
-use crabka_pgtypes::Datum;
+use krabka_pgtypes::Datum;
 
 use crate::KvError;
 
@@ -252,32 +252,32 @@ fn encode_fields(cols: &[Datum], out: &mut Vec<u8>) {
                 }
             }
             Datum::Numeric(d) => {
-                let s = crabka_pgtypes::numeric::to_text(d);
+                let s = krabka_pgtypes::numeric::to_text(d);
                 push_tagged_bytes(out, tag::NUMERIC, s.as_bytes(), "numeric text");
             }
             Datum::Date(d) => {
                 out.push(tag::DATE);
-                out.extend_from_slice(&crabka_pgtypes::datetime::date_to_binary(*d));
+                out.extend_from_slice(&krabka_pgtypes::datetime::date_to_binary(*d));
             }
             Datum::Time(t) => {
                 out.push(tag::TIME);
-                out.extend_from_slice(&crabka_pgtypes::datetime::time_to_binary(*t));
+                out.extend_from_slice(&krabka_pgtypes::datetime::time_to_binary(*t));
             }
             Datum::Timetz(t) => {
                 out.push(tag::TIMETZ);
-                out.extend_from_slice(&crabka_pgtypes::datetime::timetz_to_binary(*t));
+                out.extend_from_slice(&krabka_pgtypes::datetime::timetz_to_binary(*t));
             }
             Datum::Timestamp(ts) => {
                 out.push(tag::TIMESTAMP);
-                out.extend_from_slice(&crabka_pgtypes::datetime::timestamp_to_binary(*ts));
+                out.extend_from_slice(&krabka_pgtypes::datetime::timestamp_to_binary(*ts));
             }
             Datum::Timestamptz(ts) => {
                 out.push(tag::TIMESTAMPTZ);
-                out.extend_from_slice(&crabka_pgtypes::datetime::timestamptz_to_binary(*ts));
+                out.extend_from_slice(&krabka_pgtypes::datetime::timestamptz_to_binary(*ts));
             }
             Datum::Interval(iv) => {
                 out.push(tag::INTERVAL);
-                out.extend_from_slice(&crabka_pgtypes::datetime::interval_to_binary(*iv));
+                out.extend_from_slice(&krabka_pgtypes::datetime::interval_to_binary(*iv));
             }
             Datum::Bytea(b) => push_tagged_bytes(out, tag::BYTEA, b, "bytea column"),
             Datum::Jsonb(j) => {
@@ -383,7 +383,7 @@ fn encode_fields(cols: &[Datum], out: &mut Vec<u8>) {
 ///
 /// [`tag::ARRAY`] and [`tag::OIDVECTOR`] share this payload, so the two differ
 /// on disk by their tag alone — which is what makes the decode unambiguous.
-fn encode_array(tag: u8, value: &crabka_pgtypes::ArrayValue, out: &mut Vec<u8>) {
+fn encode_array(tag: u8, value: &krabka_pgtypes::ArrayValue, out: &mut Vec<u8>) {
     out.push(tag);
     value.elem.write_code(out);
     let ndim = u8::try_from(value.dims.len()).expect("array dimensions exceed a byte");
@@ -444,7 +444,7 @@ fn encode_money(value: i64, out: &mut Vec<u8>) {
 
 /// Append one bit string: which of the two SQL types produced it, the bit
 /// count, then the packed bytes.
-fn encode_bit_string(bits: &crabka_pgtypes::BitString, out: &mut Vec<u8>) {
+fn encode_bit_string(bits: &krabka_pgtypes::BitString, out: &mut Vec<u8>) {
     out.push(tag::BITSTRING);
     out.push(u8::from(bits.varying));
     out.extend_from_slice(&bits.len().to_be_bytes());
@@ -559,49 +559,49 @@ fn decode_field(cur: &mut &[u8]) -> Result<Datum, KvError> {
             let s = std::str::from_utf8(raw)
                 .map_err(|_| KvError::CorruptRow("numeric text is not valid UTF-8".into()))?;
             Datum::Numeric(
-                crabka_pgtypes::numeric::parse(s)
+                krabka_pgtypes::numeric::parse(s)
                     .ok_or_else(|| KvError::CorruptRow(format!("invalid numeric {s:?}")))?,
             )
         }
         tag::DATE => {
             let raw = take_n(cur, 4)?;
             Datum::Date(
-                crabka_pgtypes::datetime::date_from_binary(raw)
+                krabka_pgtypes::datetime::date_from_binary(raw)
                     .map_err(|e| KvError::CorruptRow(format!("corrupt date: {e}")))?,
             )
         }
         tag::TIME => {
             let raw = take_n(cur, 8)?;
             Datum::Time(
-                crabka_pgtypes::datetime::time_from_binary(raw)
+                krabka_pgtypes::datetime::time_from_binary(raw)
                     .map_err(|e| KvError::CorruptRow(format!("corrupt time: {e}")))?,
             )
         }
         tag::TIMETZ => {
             let raw = take_n(cur, 12)?;
             Datum::Timetz(
-                crabka_pgtypes::datetime::timetz_from_binary(raw)
+                krabka_pgtypes::datetime::timetz_from_binary(raw)
                     .map_err(|e| KvError::CorruptRow(format!("corrupt timetz: {e}")))?,
             )
         }
         tag::TIMESTAMP => {
             let raw = take_n(cur, 8)?;
             Datum::Timestamp(
-                crabka_pgtypes::datetime::timestamp_from_binary(raw)
+                krabka_pgtypes::datetime::timestamp_from_binary(raw)
                     .map_err(|e| KvError::CorruptRow(format!("corrupt timestamp: {e}")))?,
             )
         }
         tag::TIMESTAMPTZ => {
             let raw = take_n(cur, 8)?;
             Datum::Timestamptz(
-                crabka_pgtypes::datetime::timestamptz_from_binary(raw)
+                krabka_pgtypes::datetime::timestamptz_from_binary(raw)
                     .map_err(|e| KvError::CorruptRow(format!("corrupt timestamptz: {e}")))?,
             )
         }
         tag::INTERVAL => {
             let raw = take_n(cur, 16)?;
             Datum::Interval(
-                crabka_pgtypes::datetime::interval_from_binary(raw)
+                krabka_pgtypes::datetime::interval_from_binary(raw)
                     .map_err(|e| KvError::CorruptRow(format!("corrupt interval: {e}")))?,
             )
         }
@@ -616,7 +616,7 @@ fn decode_field(cur: &mut &[u8]) -> Result<Datum, KvError> {
                     .try_into()
                     .expect("8 bytes fit a point coordinate"),
             );
-            Datum::Point(crabka_pgtypes::Point { x, y })
+            Datum::Point(krabka_pgtypes::Point { x, y })
         }
         tag::PATH => {
             let closed = match take_u8(cur)? {
@@ -634,9 +634,9 @@ fn decode_field(cur: &mut &[u8]) -> Result<Datum, KvError> {
             for _ in 0..count {
                 let x = f64::from_be_bytes(take_n(cur, 8)?.try_into().expect("8"));
                 let y = f64::from_be_bytes(take_n(cur, 8)?.try_into().expect("8"));
-                points.push(crabka_pgtypes::Point { x, y });
+                points.push(krabka_pgtypes::Point { x, y });
             }
-            Datum::Path(crabka_pgtypes::Path { closed, points })
+            Datum::Path(krabka_pgtypes::Path { closed, points })
         }
         tag::POLYGON => {
             let count = usize::try_from(u32::from_be_bytes(take_n(cur, 4)?.try_into().expect("4")))
@@ -645,21 +645,21 @@ fn decode_field(cur: &mut &[u8]) -> Result<Datum, KvError> {
             for _ in 0..count {
                 let x = f64::from_be_bytes(take_n(cur, 8)?.try_into().expect("8"));
                 let y = f64::from_be_bytes(take_n(cur, 8)?.try_into().expect("8"));
-                points.push(crabka_pgtypes::Point { x, y });
+                points.push(krabka_pgtypes::Point { x, y });
             }
-            Datum::Polygon(crabka_pgtypes::Polygon { points })
+            Datum::Polygon(krabka_pgtypes::Polygon { points })
         }
         tag::BOX => {
             let mut values = [0.0_f64; 4];
             for value in &mut values {
                 *value = f64::from_be_bytes(take_n(cur, 8)?.try_into().expect("8"));
             }
-            Datum::Box(crabka_pgtypes::geometry::Box2 {
-                high: crabka_pgtypes::Point {
+            Datum::Box(krabka_pgtypes::geometry::Box2 {
+                high: krabka_pgtypes::Point {
                     x: values[0],
                     y: values[1],
                 },
-                low: crabka_pgtypes::Point {
+                low: krabka_pgtypes::Point {
                     x: values[2],
                     y: values[3],
                 },
@@ -670,8 +670,8 @@ fn decode_field(cur: &mut &[u8]) -> Result<Datum, KvError> {
             for value in &mut values {
                 *value = f64::from_be_bytes(take_n(cur, 8)?.try_into().expect("8"));
             }
-            Datum::Circle(crabka_pgtypes::geometry::Circle {
-                center: crabka_pgtypes::Point {
+            Datum::Circle(krabka_pgtypes::geometry::Circle {
+                center: krabka_pgtypes::Point {
                     x: values[0],
                     y: values[1],
                 },
@@ -683,7 +683,7 @@ fn decode_field(cur: &mut &[u8]) -> Result<Datum, KvError> {
             for coefficient in &mut coefficients {
                 *coefficient = f64::from_be_bytes(take_n(cur, 8)?.try_into().expect("8"));
             }
-            Datum::Line(crabka_pgtypes::geometry::Line {
+            Datum::Line(krabka_pgtypes::geometry::Line {
                 a: coefficients[0],
                 b: coefficients[1],
                 c: coefficients[2],
@@ -694,12 +694,12 @@ fn decode_field(cur: &mut &[u8]) -> Result<Datum, KvError> {
             for coordinate in &mut coordinates {
                 *coordinate = f64::from_be_bytes(take_n(cur, 8)?.try_into().expect("8"));
             }
-            Datum::Lseg(crabka_pgtypes::geometry::Lseg {
-                start: crabka_pgtypes::Point {
+            Datum::Lseg(krabka_pgtypes::geometry::Lseg {
+                start: krabka_pgtypes::Point {
                     x: coordinates[0],
                     y: coordinates[1],
                 },
-                end: crabka_pgtypes::Point {
+                end: krabka_pgtypes::Point {
                     x: coordinates[2],
                     y: coordinates[3],
                 },
@@ -716,7 +716,7 @@ fn decode_field(cur: &mut &[u8]) -> Result<Datum, KvError> {
             let text = std::str::from_utf8(raw)
                 .map_err(|_| KvError::CorruptRow("jsonb text is not valid UTF-8".into()))?;
             Datum::Jsonb(
-                crabka_pgtypes::jsonb::parse(text)
+                krabka_pgtypes::jsonb::parse(text)
                     .map_err(|e| KvError::CorruptRow(format!("corrupt jsonb: {e}")))?,
             )
         }
@@ -752,19 +752,19 @@ fn decode_field(cur: &mut &[u8]) -> Result<Datum, KvError> {
             let ty = u32::try_from(type_oid)
                 .ok()
                 .filter(|oid| *oid != 0)
-                .and_then(|oid| crabka_pgtypes::usertype::lookup_oid(oid).map(|ty| ty.type_ref()));
-            Datum::Record(crabka_pgtypes::RecordValue::named(ty, names.into(), values))
+                .and_then(|oid| krabka_pgtypes::usertype::lookup_oid(oid).map(|ty| ty.type_ref()));
+            Datum::Record(krabka_pgtypes::RecordValue::named(ty, names.into(), values))
         }
         tag::ENUM => {
             let type_oid = u32::try_from(take_u32_len(cur)?)
                 .map_err(|_| KvError::CorruptRow("enum type oid out of range".into()))?;
             let label = take_text(cur, "enum label")?;
-            let ty = crabka_pgtypes::usertype::lookup_oid(type_oid)
+            let ty = krabka_pgtypes::usertype::lookup_oid(type_oid)
                 .ok_or_else(|| {
                     KvError::CorruptRow(format!("enum type {type_oid} is no longer registered"))
                 })?
                 .type_ref();
-            Datum::Enum(crabka_pgtypes::EnumValue { ty, label })
+            Datum::Enum(krabka_pgtypes::EnumValue { ty, label })
         }
         tag::TSVECTOR => take_text(cur, "tsvector")?
             .parse()
@@ -780,14 +780,14 @@ fn decode_field(cur: &mut &[u8]) -> Result<Datum, KvError> {
             .map_err(|error| KvError::CorruptRow(format!("corrupt pg_snapshot: {error}")))?,
         tag::INET => {
             let is_cidr = take_u8(cur)? != 0;
-            let family = crabka_pgtypes::InetFamily::from_wire_code(take_u8(cur)?)
+            let family = krabka_pgtypes::InetFamily::from_wire_code(take_u8(cur)?)
                 .ok_or_else(|| KvError::CorruptRow("unknown inet address family".into()))?;
             let bits = take_u8(cur)?;
             if bits > family.max_bits() {
                 return Err(KvError::CorruptRow("inet netmask out of range".into()));
             }
             let addr: [u8; 16] = take_n(cur, 16)?.try_into().expect("16");
-            Datum::Inet(crabka_pgtypes::Inet::new(is_cidr, family, bits, addr))
+            Datum::Inet(krabka_pgtypes::Inet::new(is_cidr, family, bits, addr))
         }
         tag::MONEY => Datum::Money(i64::from_be_bytes(
             take_n(cur, 8)?.try_into().expect("eight bytes make an i64"),
@@ -799,14 +799,14 @@ fn decode_field(cur: &mut &[u8]) -> Result<Datum, KvError> {
                 u32::from_be_bytes(take_n(cur, 4)?.try_into().expect("four bytes make a u32"));
             let bytes = take_n(cur, usize::try_from(len.div_ceil(8)).unwrap_or(usize::MAX))?;
             Datum::BitString(
-                crabka_pgtypes::BitString::from_parts(varying, len, bytes.to_vec())
+                krabka_pgtypes::BitString::from_parts(varying, len, bytes.to_vec())
                     .ok_or_else(|| KvError::CorruptRow("corrupt bit string".into()))?,
             )
         }
-        tag::MACADDR => Datum::MacAddr(crabka_pgtypes::MacAddr(
+        tag::MACADDR => Datum::MacAddr(krabka_pgtypes::MacAddr(
             take_n(cur, 6)?.try_into().expect("6"),
         )),
-        tag::MACADDR8 => Datum::MacAddr8(crabka_pgtypes::MacAddr8(
+        tag::MACADDR8 => Datum::MacAddr8(krabka_pgtypes::MacAddr8(
             take_n(cur, 8)?.try_into().expect("8"),
         )),
         tag::OID => Datum::Oid(u32::from_be_bytes(
@@ -824,16 +824,16 @@ fn decode_field(cur: &mut &[u8]) -> Result<Datum, KvError> {
         tag::PG_LSN => Datum::PgLsn(u64::from_be_bytes(
             take_n(cur, 8)?.try_into().expect("eight bytes make a u64"),
         )),
-        tag::TID => Datum::Tid(crabka_pgtypes::Tid {
+        tag::TID => Datum::Tid(krabka_pgtypes::Tid {
             block: u32::from_be_bytes(take_n(cur, 4)?.try_into().expect("four bytes make a u32")),
             offset: u16::from_be_bytes(take_n(cur, 2)?.try_into().expect("two bytes make a u16")),
         }),
         tag::RANGE => {
             let oid = u32::try_from(take_u32_len(cur)?)
                 .map_err(|_| KvError::CorruptRow("range type oid out of range".into()))?;
-            let Some(crabka_pgtypes::ColumnType::Range(ty)) =
-                crabka_pgtypes::ColumnType::builtin_range(oid)
-                    .or_else(|| crabka_pgtypes::usertype::column_type_for_oid(oid))
+            let Some(krabka_pgtypes::ColumnType::Range(ty)) =
+                krabka_pgtypes::ColumnType::builtin_range(oid)
+                    .or_else(|| krabka_pgtypes::usertype::column_type_for_oid(oid))
             else {
                 return Err(KvError::CorruptRow(format!(
                     "range type {oid} is not registered"
@@ -850,7 +850,7 @@ fn decode_field(cur: &mut &[u8]) -> Result<Datum, KvError> {
             let upper = (!empty && flags & 0x10 == 0)
                 .then(|| decode_field(cur).map(Box::new))
                 .transpose()?;
-            Datum::Range(crabka_pgtypes::RangeValue {
+            Datum::Range(krabka_pgtypes::RangeValue {
                 ty,
                 lower,
                 upper,
@@ -862,9 +862,9 @@ fn decode_field(cur: &mut &[u8]) -> Result<Datum, KvError> {
         tag::MULTIRANGE => {
             let oid = u32::try_from(take_u32_len(cur)?)
                 .map_err(|_| KvError::CorruptRow("multirange type oid out of range".into()))?;
-            let Some(crabka_pgtypes::ColumnType::Multirange(ty)) =
-                crabka_pgtypes::ColumnType::builtin_multirange(oid)
-                    .or_else(|| crabka_pgtypes::usertype::column_type_for_oid(oid))
+            let Some(krabka_pgtypes::ColumnType::Multirange(ty)) =
+                krabka_pgtypes::ColumnType::builtin_multirange(oid)
+                    .or_else(|| krabka_pgtypes::usertype::column_type_for_oid(oid))
             else {
                 return Err(KvError::CorruptRow(format!(
                     "multirange type {oid} is not registered"
@@ -885,7 +885,7 @@ fn decode_field(cur: &mut &[u8]) -> Result<Datum, KvError> {
                 }
                 ranges.push(range);
             }
-            Datum::Multirange(crabka_pgtypes::MultirangeValue { ty, ranges })
+            Datum::Multirange(krabka_pgtypes::MultirangeValue { ty, ranges })
         }
         other => return Err(KvError::CorruptRow(format!("unknown field tag {other}"))),
     })
@@ -894,22 +894,22 @@ fn decode_field(cur: &mut &[u8]) -> Result<Datum, KvError> {
 /// Read the payload [`tag::ARRAY`] and [`tag::OIDVECTOR`] share: the element
 /// type code, the dimension header, the element count, then the elements. The
 /// caller's tag decides which datum wraps the result.
-fn decode_array(cur: &mut &[u8]) -> Result<crabka_pgtypes::ArrayValue, KvError> {
-    let elem = crabka_pgtypes::ElemType::read_code(cur)
+fn decode_array(cur: &mut &[u8]) -> Result<krabka_pgtypes::ArrayValue, KvError> {
+    let elem = krabka_pgtypes::ElemType::read_code(cur)
         .ok_or_else(|| KvError::CorruptRow("unknown array element code".to_string()))?;
     let ndim = take_u8(cur)?;
     let mut dims = Vec::new();
     for _ in 0..ndim {
         let lower = take_i32(cur)?;
         let len = take_i32(cur)?;
-        dims.push(crabka_pgtypes::ArrayDim::new(lower, len));
+        dims.push(krabka_pgtypes::ArrayDim::new(lower, len));
     }
     let count = take_u32_len(cur)?;
     let mut elems = Vec::new();
     for _ in 0..count {
         elems.push(decode_field(cur)?);
     }
-    Ok(crabka_pgtypes::ArrayValue::with_dims(elem, elems, dims))
+    Ok(krabka_pgtypes::ArrayValue::with_dims(elem, elems, dims))
 }
 
 /// A length-prefixed UTF-8 string, the shape every name and label field uses.
@@ -958,15 +958,15 @@ fn take_n<'a>(cur: &mut &'a [u8], n: usize) -> Result<&'a [u8], KvError> {
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgtypes::Datum;
+    use krabka_pgtypes::Datum;
     use proptest::prelude::*;
 
     use super::*;
 
     #[test]
     fn roundtrip_all_datum_kinds_including_null() {
-        let crabka_pgtypes::ColumnType::Range(int4range) =
-            crabka_pgtypes::ColumnType::builtin_range(crabka_pgtypes::oids::INT4RANGE)
+        let krabka_pgtypes::ColumnType::Range(int4range) =
+            krabka_pgtypes::ColumnType::builtin_range(krabka_pgtypes::oids::INT4RANGE)
                 .expect("built-in range")
         else {
             unreachable!()
@@ -986,10 +986,10 @@ mod tests {
             Datum::Float8(-1.5),
             Datum::Float8(f64::NAN),
             Datum::Float8(-0.0),
-            Datum::Numeric(crabka_pgtypes::numeric::parse("1.50").expect("n")),
-            Datum::Numeric(crabka_pgtypes::numeric::parse("-9999999999999999999.0001").expect("n")),
+            Datum::Numeric(krabka_pgtypes::numeric::parse("1.50").expect("n")),
+            Datum::Numeric(krabka_pgtypes::numeric::parse("-9999999999999999999.0001").expect("n")),
             Datum::Range(
-                crabka_pgtypes::range::parse("[1,4)", int4range, &jiff::tz::TimeZone::UTC)
+                krabka_pgtypes::range::parse("[1,4)", int4range, &jiff::tz::TimeZone::UTC)
                     .expect("range"),
             ),
         ];
@@ -1000,9 +1000,9 @@ mod tests {
     #[test]
     fn jsonb_and_array_tags_round_trip() {
         use assert2::assert;
-        use crabka_pgtypes::{ArrayValue, ElemType};
+        use krabka_pgtypes::{ArrayValue, ElemType};
 
-        let json = |s: &str| Datum::Jsonb(crabka_pgtypes::jsonb::parse(s).expect("jsonb"));
+        let json = |s: &str| Datum::Jsonb(krabka_pgtypes::jsonb::parse(s).expect("jsonb"));
         let row = vec![
             json(r#"{"b":1,"a":[1,2],"c":"x"}"#),
             json("null"),
@@ -1027,7 +1027,7 @@ mod tests {
             Datum::Array(ArrayValue::new(
                 ElemType::Numeric,
                 vec![Datum::Numeric(
-                    crabka_pgtypes::numeric::parse("1.50").expect("n"),
+                    krabka_pgtypes::numeric::parse("1.50").expect("n"),
                 )],
             )),
             // A scalar after the arrays pins that element counts are honoured.
@@ -1045,7 +1045,7 @@ mod tests {
     #[test]
     fn a_vector_decodes_back_as_a_vector_and_never_as_an_array() {
         use assert2::assert;
-        use crabka_pgtypes::{ArrayDim, ArrayValue, ElemType};
+        use krabka_pgtypes::{ArrayDim, ArrayValue, ElemType};
 
         let vector = |elem, elems: Vec<Datum>| {
             let len = i32::try_from(elems.len()).expect("a test vector is short");
@@ -1115,7 +1115,7 @@ mod tests {
     #[test]
     fn the_field_tag_is_the_only_byte_that_separates_a_vector_from_its_array() {
         use assert2::assert;
-        use crabka_pgtypes::{ArrayDim, ArrayValue, ElemType};
+        use krabka_pgtypes::{ArrayDim, ArrayValue, ElemType};
 
         let value = ArrayValue::with_dims(
             ElemType::Int4,
@@ -1151,7 +1151,7 @@ mod tests {
     fn jsonb_tag_layout_is_a_length_prefixed_canonical_text() {
         use assert2::assert;
 
-        let value = Datum::Jsonb(crabka_pgtypes::jsonb::parse(r#"{"b":1,"a":2}"#).expect("jsonb"));
+        let value = Datum::Jsonb(krabka_pgtypes::jsonb::parse(r#"{"b":1,"a":2}"#).expect("jsonb"));
         let text = br#"{"a": 2, "b": 1}"#;
         let mut expected = vec![ROW_VERSION, tag::JSONB];
         expected.extend_from_slice(&u32::try_from(text.len()).expect("small").to_be_bytes());
@@ -1248,7 +1248,7 @@ mod tests {
             any::<f64>().prop_map(Datum::Float8),
             (any::<i64>(), 0u32..6).prop_map(|(m, s)| {
                 Datum::Numeric(
-                    crabka_pgtypes::numeric::parse(&format!("{m}e-{s}")).expect("numeric"),
+                    krabka_pgtypes::numeric::parse(&format!("{m}e-{s}")).expect("numeric"),
                 )
             }),
         ]
@@ -1264,16 +1264,16 @@ mod tests {
 
     #[test]
     fn datetime_row_round_trip() {
-        use crabka_pgtypes::datetime::Interval;
+        use krabka_pgtypes::datetime::Interval;
 
         let row = vec![
-            Datum::Date(crabka_pgtypes::datetime::parse_date("2024-01-15").expect("d")),
-            Datum::Time(crabka_pgtypes::datetime::parse_time("13:45:06.5").expect("t")),
+            Datum::Date(krabka_pgtypes::datetime::parse_date("2024-01-15").expect("d")),
+            Datum::Time(krabka_pgtypes::datetime::parse_time("13:45:06.5").expect("t")),
             Datum::Timestamp(
-                crabka_pgtypes::datetime::parse_timestamp("2024-01-15 13:45:06").expect("ts"),
+                krabka_pgtypes::datetime::parse_timestamp("2024-01-15 13:45:06").expect("ts"),
             ),
             Datum::Timestamptz(
-                crabka_pgtypes::datetime::parse_timestamptz(
+                krabka_pgtypes::datetime::parse_timestamptz(
                     "2024-01-15 13:45:06+00",
                     &jiff::tz::TimeZone::UTC,
                 )
@@ -1288,8 +1288,8 @@ mod tests {
         assert_eq!(decode_row(&encode_row(&row)).expect("decode"), row);
     }
 
-    fn geometric(ty: crabka_pgtypes::ColumnType, text: &str) -> Datum {
-        crabka_pgtypes::cast::cast(&Datum::Text(text.into()), ty, &jiff::tz::TimeZone::UTC)
+    fn geometric(ty: krabka_pgtypes::ColumnType, text: &str) -> Datum {
+        krabka_pgtypes::cast::cast(&Datum::Text(text.into()), ty, &jiff::tz::TimeZone::UTC)
             .unwrap_or_else(|_| panic!("{text} is a {ty:?}"))
     }
 
@@ -1299,13 +1299,13 @@ mod tests {
     #[test]
     fn geometric_row_round_trip_keeps_every_other_tag_working() {
         use assert2::assert;
-        use crabka_pgtypes::{ArrayValue, ColumnType, ElemType};
+        use krabka_pgtypes::{ArrayValue, ColumnType, ElemType};
 
         let row = vec![
             // The controls: unchanged tags on either side of the new one.
             Datum::Int4(-7),
             Datum::Text("héllo".into()),
-            Datum::Jsonb(crabka_pgtypes::jsonb::parse(r#"{"b":1,"a":2}"#).expect("jsonb")),
+            Datum::Jsonb(krabka_pgtypes::jsonb::parse(r#"{"b":1,"a":2}"#).expect("jsonb")),
             Datum::Array(ArrayValue::new(
                 ElemType::Int4,
                 vec![Datum::Int4(1), Datum::Null, Datum::Int4(3)],
@@ -1352,7 +1352,7 @@ mod tests {
     #[test]
     fn polygon_field_layout_is_the_tag_then_the_count_then_the_points() {
         use assert2::assert;
-        use crabka_pgtypes::ColumnType;
+        use krabka_pgtypes::ColumnType;
 
         let encoded = encode_row(std::slice::from_ref(&geometric(
             ColumnType::Polygon,

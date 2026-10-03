@@ -8,7 +8,7 @@
 ## Goal
 
 Replace the fixed consumer poll wait and poll-error sleep in
-`crabka-bench-driver` with two validated runtime settings while preserving the
+`krabka-bench-driver` with two validated runtime settings while preserving the
 existing consumer loop and defaults.
 
 ## Scope

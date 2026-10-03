@@ -2,7 +2,7 @@
 //! rendering, and `serde`.
 
 use assert2::{assert, check};
-use crabka_units::{
+use krabka_units::{
     convert::wire, fmt::Human as _, parse, parse::ParseError, prelude::*, serde_units,
 };
 use proptest::prelude::*;

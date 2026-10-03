@@ -5,7 +5,7 @@ use super::*;
 pub(super) fn record_write_outcome(
     span: &tracing::Span,
     outcome: &WriteOutcome,
-    ops: &[crabka_pgkv::WriteOp],
+    ops: &[krabka_pgkv::WriteOp],
     triggers_fired: u64,
 ) {
     if span.is_disabled() {
@@ -23,17 +23,17 @@ pub(super) fn record_write_outcome(
     span.record("pg.returning", outcome.returning.is_some());
 }
 
-fn index_ops(ops: &[crabka_pgkv::WriteOp]) -> usize {
+fn index_ops(ops: &[krabka_pgkv::WriteOp]) -> usize {
     ops.iter()
         .filter(|op| {
             let key = match op {
-                crabka_pgkv::WriteOp::Put { key, .. }
-                | crabka_pgkv::WriteOp::ConditionalPut { key, .. }
-                | crabka_pgkv::WriteOp::Delete { key } => key,
+                krabka_pgkv::WriteOp::Put { key, .. }
+                | krabka_pgkv::WriteOp::ConditionalPut { key, .. }
+                | krabka_pgkv::WriteOp::Delete { key } => key,
             };
             matches!(
-                crabka_pgkv::key::classify_key(key),
-                crabka_pgkv::key::KeyClass::SecondaryIndex { .. }
+                krabka_pgkv::key::classify_key(key),
+                krabka_pgkv::key::KeyClass::SecondaryIndex { .. }
             )
         })
         .count()

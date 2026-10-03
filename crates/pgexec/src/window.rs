@@ -2,7 +2,7 @@
 //!
 //! The parser lifts every `f(…) OVER …` call out of the expression tree onto
 //! [`SelectStmt::window_calls`] and leaves a
-//! [`crabka_pgparser::ast::window_placeholder`] column reference behind. This
+//! [`krabka_pgparser::ast::window_placeholder`] column reference behind. This
 //! module is the plan node that fills those columns in. It takes the rows the
 //! `WHERE` already produced, and for a grouped query the rows the
 //! `GROUP BY`/`HAVING` produced. It appends one synthetic column per window
@@ -18,12 +18,12 @@
 
 use std::{cmp::Ordering, collections::HashMap};
 
-use crabka_pgparser::ast::{
+use krabka_pgparser::ast::{
     BinaryOp, DistinctClause, Expr, FrameBound, FrameExclusion, FrameMode, FuncArgs, FuncCall,
     NamedWindow, OrderItem, SelectItem, SelectStmt, WindowCall, WindowFrame, WindowRef, WindowSpec,
 };
-use crabka_pgtypes::{ColumnType, Datum};
-use crabka_pgwire::engine::FieldDescription;
+use krabka_pgtypes::{ColumnType, Datum};
+use krabka_pgwire::engine::FieldDescription;
 
 use crate::{
     clock::EvalCtx,
@@ -113,7 +113,7 @@ pub(crate) fn has_window_calls(s: &SelectStmt) -> bool {
 
 /// Does `expr`, or a subexpression of it, stand in for a window call?
 fn contains_placeholder(expr: &Expr) -> bool {
-    if crabka_pgparser::ast::window_placeholder_index(expr).is_some() {
+    if krabka_pgparser::ast::window_placeholder_index(expr).is_some() {
         return true;
     }
     match expr {
@@ -202,8 +202,8 @@ pub(crate) fn reject_misplaced_calls(s: &SelectStmt) -> Result<(), ExecError> {
 }
 
 /// `JOIN … ON` is evaluated below the window node, exactly like `WHERE`.
-fn reject_in_join_tree(table: &crabka_pgparser::ast::TableExpr) -> Result<(), ExecError> {
-    let crabka_pgparser::ast::TableExpr::Join {
+fn reject_in_join_tree(table: &krabka_pgparser::ast::TableExpr) -> Result<(), ExecError> {
+    let krabka_pgparser::ast::TableExpr::Join {
         left,
         right,
         constraint,
@@ -212,7 +212,7 @@ fn reject_in_join_tree(table: &crabka_pgparser::ast::TableExpr) -> Result<(), Ex
     else {
         return Ok(());
     };
-    if let crabka_pgparser::ast::JoinConstraint::On(on) = constraint {
+    if let krabka_pgparser::ast::JoinConstraint::On(on) = constraint {
         reject_clause(Some(on), "JOIN conditions")?;
     }
     reject_in_join_tree(left)?;
@@ -509,8 +509,8 @@ fn extend_scope(scope: &Scope, calls: &[PlannedCall], names: &[String]) -> Scope
     for (index, (call, label)) in calls.iter().zip(names).enumerate() {
         extended.columns.push(ColumnBinding {
             exposure: Exposure::Output,
-            qualifier: Some(crabka_pgparser::ast::WINDOW_QUALIFIER.to_string()),
-            name: crabka_pgparser::ast::window_binding_name(index, label),
+            qualifier: Some(krabka_pgparser::ast::WINDOW_QUALIFIER.to_string()),
+            name: krabka_pgparser::ast::window_binding_name(index, label),
             ty: call.result_ty,
         });
     }
@@ -739,13 +739,13 @@ fn canonicalize_calls(
     crate::grouping::rewrite(
         expr,
         &mut |node| {
-            let Some(index) = crabka_pgparser::ast::window_placeholder_index(node) else {
+            let Some(index) = krabka_pgparser::ast::window_placeholder_index(node) else {
                 return Ok(None);
             };
             let Some((&canon, label)) = canonical.get(index).zip(names.get(index)) else {
                 return Ok(None);
             };
-            Ok((canon != index).then(|| crabka_pgparser::ast::window_placeholder(canon, label)))
+            Ok((canon != index).then(|| krabka_pgparser::ast::window_placeholder(canon, label)))
         },
         true,
     )
@@ -990,7 +990,7 @@ fn is_output_label(s: &SelectStmt, expr: &Expr) -> bool {
 /// Replace every maximal window-free subexpression of `expr` with a reference to
 /// the grouped leaf projection, and register it there on first sight.
 fn split(expr: &Expr, leaves: &mut Vec<Expr>) -> Result<Expr, ExecError> {
-    if crabka_pgparser::ast::window_placeholder_index(expr).is_some() {
+    if krabka_pgparser::ast::window_placeholder_index(expr).is_some() {
         return Ok(expr.clone());
     }
     if !contains_placeholder(expr) {
@@ -1307,14 +1307,14 @@ fn evaluate_default_prefix_aggregate(
                 if value.as_ref().is_none_or(|value| !value.is_null()) {
                     count = count
                         .checked_add(1)
-                        .ok_or(crabka_pgtypes::TypeError::Overflow)?;
+                        .ok_or(krabka_pgtypes::TypeError::Overflow)?;
                 }
             } else if let Some(value) = value
                 && !value.is_null()
             {
-                let value = crabka_pgtypes::cast::cast(&value, call.result_ty, &ctx.time_zone)?;
+                let value = krabka_pgtypes::cast::cast(&value, call.result_ty, &ctx.time_zone)?;
                 sum = Some(match sum {
-                    Some(current) => crabka_pgtypes::ops::add(&current, &value)?,
+                    Some(current) => krabka_pgtypes::ops::add(&current, &value)?,
                     None => value,
                 });
             }
@@ -1757,7 +1757,7 @@ fn resolve_bound(
         && crate::eval::is_unknown_literal(offset)
         && !value.is_null()
     {
-        value = crabka_pgtypes::cast::cast(&value, ty, &ctx.time_zone)?;
+        value = krabka_pgtypes::cast::cast(&value, ty, &ctx.time_zone)?;
     }
     if value.is_null() {
         return Err(ExecError::FunctionError {
@@ -1767,7 +1767,7 @@ fn resolve_bound(
     }
     let value = match mode {
         FrameMode::Rows | FrameMode::Groups => {
-            let count = crabka_pgtypes::cast::cast(&value, ColumnType::Int8, &ctx.time_zone)?;
+            let count = krabka_pgtypes::cast::cast(&value, ColumnType::Int8, &ctx.time_zone)?;
             if matches!(count, Datum::Int8(n) if n < 0) {
                 return Err(ExecError::FunctionError {
                     sqlstate: "22013",
@@ -1837,7 +1837,7 @@ fn is_negative_infinity(value: &Datum) -> bool {
     match value {
         Datum::Float4(f) => *f < 0.0,
         Datum::Float8(f) => *f < 0.0,
-        Datum::Numeric(n) => matches!(n, crabka_pgtypes::numeric::NumericValue::NegInfinity),
+        Datum::Numeric(n) => matches!(n, krabka_pgtypes::numeric::NumericValue::NegInfinity),
         _ => false,
     }
 }
@@ -1991,7 +1991,7 @@ fn offset_value(
             if value.is_null() {
                 return Ok(Datum::Null);
             }
-            match crabka_pgtypes::cast::cast(&value, ColumnType::Int8, &ctx.time_zone)? {
+            match krabka_pgtypes::cast::cast(&value, ColumnType::Int8, &ctx.time_zone)? {
                 Datum::Int8(n) => n,
                 _ => 1,
             }
@@ -2022,7 +2022,7 @@ fn offset_value(
     if value.is_null() || value.column_type() == Some(call.result_ty) {
         return Ok(value);
     }
-    Ok(crabka_pgtypes::cast::cast(
+    Ok(krabka_pgtypes::cast::cast(
         &value,
         call.result_ty,
         &ctx.time_zone,
@@ -2098,7 +2098,7 @@ fn positive_count(
     if value.is_null() {
         return Ok(None);
     }
-    let count = match crabka_pgtypes::cast::cast(value, ColumnType::Int8, tz)? {
+    let count = match krabka_pgtypes::cast::cast(value, ColumnType::Int8, tz)? {
         Datum::Int8(n) => n,
         _ => 0,
     };
@@ -2437,7 +2437,7 @@ fn range_bound_position(
         let order = match &limit {
             RangeLimit::EveryOrderedValue => Ordering::Equal,
             RangeLimit::Value(limit) => {
-                let Some(order) = crabka_pgtypes::ops::compare(value, limit)? else {
+                let Some(order) = krabka_pgtypes::ops::compare(value, limit)? else {
                     continue;
                 };
                 if ascending { order } else { order.reverse() }

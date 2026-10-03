@@ -1,7 +1,7 @@
 # pg_regress 231/231 — synthesis of the triage (2026-08-18)
 
-Inputs: 16 cluster ledgers (analysis/*/findings.md + StructuredOutput), 36 adversarial verify notes
-(analysis/verify/*.md), the EXPLAIN census (analysis/explain_census), the executor architecture
+Inputs: 16 cluster ledgers (analysis/_/findings.md + StructuredOutput), 36 adversarial verify notes
+(analysis/verify/_.md), the EXPLAIN census (analysis/explain_census), the executor architecture
 report (analysis/executor_architecture/report.md), file_stats.json (175 files, 110,197 changed lines).
 Counting rule: whole change block attributed to the producing root; a one-line Gres error that
 replaces a 30-row result costs 31 lines. Numbers below are +-30 % (verify notes recounted every
@@ -13,13 +13,13 @@ Total: 110,197 changed lines in 175 failing files (56 exact).
 
 By kind (corpus-wide, verified counts where a verify note exists):
 
-| kind | lines | notes |
-|---|---:|---|
+| kind                                                                                                                                                                |   lines | notes                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Cost-planner-only (plan-node choice, join order/method, index/bitmap/tid access, Materialize/Memoize/Sort/Incremental Sort, parallel, partitionwise, row estimates) | ~23,000 | census: 15,971 visible inside QUERY PLAN blocks + ~2,050 join cross-join row order + ~3,500 hidden behind cascade producers (join_hash 700, select_parallel 900, memoize 240, explain 165, partitioning 1,182, indexes 433) + stats_ext estimated-selectivity rows 762 + ~250 misc |
-| Deterministic plan-shape / EXPLAIN renderer (needs a plan tree and typed deparse but no cost model) | ~6,600 | structural transforms 1,835 (join removal, SJE, pull-up, One-Time Filter), partition Append/prune 2,430, VERBOSE Output ~1,100, InitPlan/SubPlan/CTE/WindowAgg/ProjectSet/Merge/Conflict nodes, JSON/YAML/XML field sets, EXPLAIN EXECUTE/CTAS dispatch |
-| Reorder lines fixable by a join-side heuristic (larger post-filter side outer) | ~1,340 | geometry 1,334, interval 4 — not planner-only under the brief's rule (verify dgr-planner-only) |
-| Sort tie order (pg_qsort port + window ordering) | ~1,200 | window 1,196 (+ small counts elsewhere) |
-| Everything else: parser, executor, catalog, DDL, types, functions, subsystems absent (text search, rules, FDW, pubsub, LO, stats system, jsonpath, xml, ...) | ~78,000 | see workstreams |
+| Deterministic plan-shape / EXPLAIN renderer (needs a plan tree and typed deparse but no cost model)                                                                 |  ~6,600 | structural transforms 1,835 (join removal, SJE, pull-up, One-Time Filter), partition Append/prune 2,430, VERBOSE Output ~1,100, InitPlan/SubPlan/CTE/WindowAgg/ProjectSet/Merge/Conflict nodes, JSON/YAML/XML field sets, EXPLAIN EXECUTE/CTAS dispatch                            |
+| Reorder lines fixable by a join-side heuristic (larger post-filter side outer)                                                                                      |  ~1,340 | geometry 1,334, interval 4 — not planner-only under the brief's rule (verify dgr-planner-only)                                                                                                                                                                                     |
+| Sort tie order (pg_qsort port + window ordering)                                                                                                                    |  ~1,200 | window 1,196 (+ small counts elsewhere)                                                                                                                                                                                                                                            |
+| Everything else: parser, executor, catalog, DDL, types, functions, subsystems absent (text search, rules, FDW, pubsub, LO, stats system, jsonpath, xml, ...)        | ~78,000 | see workstreams                                                                                                                                                                                                                                                                    |
 
 Planner separation, per cluster (cost-planner-only lines): planner_join 10,900 (+1,835 structural),
 partitioning 5,817 (+2,430 shape), agg_window 1,577, indexes_storage 1,809 (+433 hidden),
@@ -106,9 +106,9 @@ shared bottlenecks and are annotated with the region/function each workstream ma
   namespace 27, explain 4, select_parallel ~20, work_mem 4x, ...). Roots planner_join-guc-gaps,
   sec-guc-registry-and-session-state, sec-guc-runtime-scope, txn-prepared-transactions-guc. Files:
   crates/pgexec/src/session.rs GUC table (~976-1360, guc_enum 999) only: every planner GUC (enable_* x20,
-  work_mem, hash_mem_multiplier, seq/random_page_cost, cpu_*_cost, parallel_*_cost,
-  min_parallel_*_scan_size, max_parallel_workers[_per_gather], debug_parallel_query bool spellings,
-  jit*, track_io_timing, compute_query_id, plan_cache_mode, geqo*, join/from_collapse_limit,
+  work_mem, hash_mem_multiplier, seq/random_page_cost, cpu__*cost, parallel*__cost,
+  min_parallel__\_scan_size, max_parallel_workers[\_per_gather], debug_parallel_query bool spellings,
+  jit_, track_io_timing, compute_query_id, plan_cache_mode, geqo*, join/from_collapse_limit,
   constraint_exclusion, enable_partition_pruning, enable_partitionwise_*, default_statistics_target,
   effective_cache_size, cursor_tuple_fraction, max_prepared_transactions=0, role in SET clauses,
   intervalstyle/password_encryption HINT texts).
@@ -128,9 +128,9 @@ shared bottlenecks and are annotated with the region/function each workstream ma
   crates/pgexec/src/plan/{mod,query,bind,rewrite(skeleton),createplan}.rs, plan/exec/*, exec.rs READ
   PATH ONLY (execute_read 23750, execute_read_locking 23808, select_to_relation_with_ctes 19170 and the
   region 13300-19330 / 24100-24900 deleted at the end), query.rs, session.rs run_select_traced (7902)
-  + explain (5176) call sites; join.rs/agg.rs/grouping.rs/window.rs/setops.rs/values.rs/srf.rs/cte.rs/
-  subquery.rs are CALLED as node bodies, not moved or renamed (so N16-N19 can run in parallel).
-  Certify alone at each milestone. Absorbs N11 (lateral binder) if it lands first.
+  - explain (5176) call sites; join.rs/agg.rs/grouping.rs/window.rs/setops.rs/values.rs/srf.rs/cte.rs/
+    subquery.rs are CALLED as node bodies, not moved or renamed (so N16-N19 can run in parallel).
+    Certify alone at each milestone. Absorbs N11 (lateral binder) if it lands first.
 - P0b EXPLAIN renderer + typed deparser + ExplainOptions (L, ~3,000 lines: VERBOSE Output ~1,100 across
   join 418/subselect 174/with 76/returning 49/rangetypes 97/sqljson 105+56/tsrf 67/fast_default 52,
   planner_join-explain-renderer-gaps 250, explain-typed-deparse 200, explain-utility-formats-options
@@ -147,12 +147,12 @@ shared bottlenecks and are annotated with the region/function each workstream ma
   Filter; executor must gate const quals once — subselect tattle NOTICE count). Files: crates/pgexec/
   src/plan/rewrite.rs, plan/bind.rs (nullability, RTE identity), plan/deparse.rs (qualify iff >1 RTE).
 - P2 statistics subsystem (XL-XXL, ~2,000 direct: stats_ext 384+69+762, stats_import 645, pg_stats refs
-  ~60, CREATE STATISTICS refusals 143 sites; prerequisite for P4 cost fidelity). Roots stats-ext-*,
-  stats-import-*, PLANNER-row-estimate, cat-pg-statistic, statistics-import-functions. Files: NEW
+  ~60, CREATE STATISTICS refusals 143 sites; prerequisite for P4 cost fidelity). Roots stats-ext-_,
+  stats-import-_, PLANNER-row-estimate, cat-pg-statistic, statistics-import-functions. Files: NEW
   crates/pgexec/src/plan/stats.rs (compute_scalar_stats, estimate_rel_size, relpages emulation),
-  plan/selfuncs.rs (eqsel/scalarltsel/eqjoinsel/nulltestsel/estimate_num_groups, DEFAULT_*),
-  relstats.rs, catalog_rel.rs (pg_statistic, pg_stats, pg_statistic_ext[_data], pg_stats_ext), NEW
-  stats_fn.rs (pg_restore_relation_stats/pg_restore_attribute_stats/pg_clear_* with a notice sink on
+  plan/selfuncs.rs (eqsel/scalarltsel/eqjoinsel/nulltestsel/estimate_num_groups, DEFAULT__),
+  relstats.rs, catalog_rel.rs (pg_statistic, pg_stats, pg_statistic_ext[*data], pg_stats_ext), NEW
+  stats_fn.rs (pg_restore_relation_stats/pg_restore_attribute_stats/pg_clear*_ with a notice sink on
   EvalCtx — clock.rs), session.rs run_maintenance ANALYZE (~5299), exec.rs CREATE STATISTICS DDL arm +
   ALTER COLUMN SET STATISTICS, parser.rs CREATE STATISTICS (qualified names).
 - P3 index storage: ordered keys + full index catalog (L-XL, ~700 direct: index_including 256+83,
@@ -246,7 +246,7 @@ shared bottlenecks and are annotated with the region/function each workstream ma
   rangefuncs whole-row params 60, generated 40). Files: crates/pgexec/src/usertype.rs (register relation
   composite types on CREATE/ALTER/DROP TABLE|VIEW, pg_type typrelid), routine.rs resolve_type (468),
   scope.rs 1299, eval.rs 4199 whole_row_reference (55), exec.rs 14892, rowexpr.rs row-type coercion,
-  parser.rs `$1.f1` / `alias.*` args (shared with N07).
+  parser.rs `$1.f1`/`alias.*` args (shared with N07).
 - N12c row comparison semantics + row-valued subqueries (M, ~260 lines: planner_join-row-subquery-
   comparisons 160, agg R16 97). Files: crates/pgexec/src/subquery.rs run_scalar/run_single_column
   (640/660), eval.rs InSubquery/Quantified with Row lhs + apply_binary on records, rowexpr.rs,
@@ -305,12 +305,12 @@ shared bottlenecks and are annotated with the region/function each workstream ma
 - N20 datetime typmod precision (L, ~1,980 lines: timestamp 726, timestamptz 870, interval 91,
   horology 296; certify alone — SCHEMA_VERSION bump). Root dgr-datetime-typmod-precision (verified).
   Files: crates/pgtypes/src/datum.rs ColumnType::{Time,Timetz,Timestamp,Timestamptz,Interval} payload
-  + typmod() 1391, crates/pgtypes/src/cast.rs cast_in 512 / cast_assign_in 423 (round half away from
-  zero, interval field-mask truncation), crates/pgtypes/src/datetime.rs helpers next to IntervalField
-  1977 / parse_interval_ranged 2086, crates/pgparser/src/parser.rs parse_type_name 651-663 +
-  interval_literal 1852-1880, crates/pgexec/src/exec.rs coerce 12800-12813 + catalog_typmod 21529,
-  crates/pgcatalog/src/serde.rs 355-376 / 500-524 + SCHEMA_VERSION 50, crates/pgexec/src/func.rs
-  builtin_format_type 2745 (interval typmod spelling), viewdef.rs cast deparse.
+  - typmod() 1391, crates/pgtypes/src/cast.rs cast_in 512 / cast_assign_in 423 (round half away from
+    zero, interval field-mask truncation), crates/pgtypes/src/datetime.rs helpers next to IntervalField
+    1977 / parse_interval_ranged 2086, crates/pgparser/src/parser.rs parse_type_name 651-663 +
+    interval_literal 1852-1880, crates/pgexec/src/exec.rs coerce 12800-12813 + catalog_typmod 21529,
+    crates/pgcatalog/src/serde.rs 355-376 / 500-524 + SCHEMA_VERSION 50, crates/pgexec/src/func.rs
+    builtin_format_type 2745 (interval typmod spelling), viewdef.rs cast deparse.
 - N21 datetime / geometry / range function fidelity (M-L, ~880 lines: dgr-missing-datetime-functions
   165 (pg_sleep, timestamptz(date,time), date_add/subtract, interval_hash, avg(interval)),
   dgr-overlaps-predicate 96, multirange literal parser 83, format-fn fidelity 76, generate_series
@@ -331,7 +331,7 @@ shared bottlenecks and are annotated with the region/function each workstream ma
   1784-1807, printer 2118-2246 round-trip escaping), crates/pgtypes/src/datetime.rs template engine
   std mode (parse_by_template 5481, Scanner 5049, Assembly 5490, tokenize_template 4613; new error
   texts + field mask), json_fn.rs path_args/eval_path_func 874-945 + jsonb_path_query_rows 1714 (use_tz
-  + ctx.time_zone), jsontable.rs 346/385/532, EvalCtx warning sink for 'TIME(10) precision reduced'.
+  - ctx.time_zone), jsontable.rs 346/385/532, EvalCtx warning sink for 'TIME(10) precision reduced'.
 - N23 JSON/JSONB function fidelity (L, ~1,900 lines: sqljson constructors 293 + aggregates 248 +
   JSON_ARRAY(subquery) 50, sqljson_queryfuncs returning coercion 201 + analysis checks 184 + constraint
   deparse 40 + index immutability 27, sqljson_jsontable deparse 143 + cursor 40 + user-type oid in view
@@ -366,7 +366,7 @@ shared bottlenecks and are annotated with the region/function each workstream ma
   crates/pgcatalog/src/lib.rs 610-633 (owner/handler/validator/type/version/acl/oid) + 268
   ForeignTableMeta per-column options (SCHEMA_VERSION bump) + 6279/6355/6321/6538 ops, serde.rs
   1973/2313/2342, crates/pgexec/src/catalog_rel.rs (pg_foreign_data_wrapper, pg_foreign_server,
-  pg_user_mapping[s], pg_foreign_table, information_schema.foreign_*/user_mapping*/usage_privileges/
+  pg_user_mapping[s], pg_foreign_table, information_schema.foreign__/user_mapping_/usage_privileges/
   role_usage_grants), catalog_fn.rs privilege functions (has_server_privilege etc.),
   pg_options_to_table SRF, exec.rs 1826-1952 arms + comment_ops 31868.
 - N27 logical replication DDL + catalogs (XL, ~1,550 lines: publication-ddl 1,144 (catalog/psql 539,
@@ -379,8 +379,8 @@ shared bottlenecks and are annotated with the region/function each workstream ma
   (prattrs int2vector, prqual), pg_publication_namespace, pg_publication_tables view +
   pg_get_publication_tables(), pg_subscription, pg_subscription_rel, pg_stat_subscription_stats,
   catalog_fn.rs pg_relation_is_publishable (732), exec.rs comment_ops + DropColumn dependency (28370)
-  + execute_write_parts replica-identity check (4361), session.rs dispatch 6921/6973,
-  docs/PG_COMPAT_MATRIX.md rows 145/201/251.
+  - execute_write_parts replica-identity check (4361), session.rs dispatch 6921/6973,
+    docs/PG_COMPAT_MATRIX.md rows 145/201/251.
 - N28 rule system (XXL, ~1,450 lines: views R1 1,002 (rules 805, updatable_views 183, create_view 14),
   copydml 52, returning 147, with ~200, generated_* 40, errors drop-rule 10, foreign_key 8, portals 2).
   Files: parser.rs CREATE [OR REPLACE] RULE / DROP RULE / ALTER RULE / COMMENT ON RULE / ALTER TABLE
@@ -391,9 +391,9 @@ shared bottlenecks and are annotated with the region/function each workstream ma
   viewdef.rs, docs/PG_COMPAT_MATRIX.md rows 148/203/254.
 - N29a cumulative statistics system (XL, ~1,300 lines: stats relation counters 442, pg_stat_io 290,
   cluster-wide views 189, function counters 174, snapshot/have-stats 147, pg_stat_database 61, GUCs 14,
-  vacuum pg_stat_*_tables 74, select_parallel pg_stat_database/pg_stat_force_next_flush 23). Files:
+  vacuum pg_stat__\_tables 74, select_parallel pg_stat_database/pg_stat_force_next_flush 23). Files:
   NEW crates/pgexec/src/pgstat.rs (per-relation/function/io/database counters, snapshot semantics,
-  pg_stat_force_next_flush/pg_stat_reset*/pg_stat_have_stats/pg_stat_get_*), catalog_rel.rs pg_stat_*
+  pg_stat_force_next_flush/pg_stat_reset_/pg_stat_have_stats/pg_stat_get__), catalog_rel.rs pg_stat__
   / pg_statio_* views, scan leaf + execute_write counter hooks (plan/exec after P0a), session.rs GUCs
   track_functions/track_counts/track_io_timing/stats_fetch_consistency.
 - N29b pg_locks / pg_prepared_statements / pg_prepared_xacts / pg_database rows (M, ~320 lines: lock 73,
@@ -582,7 +582,7 @@ shared bottlenecks and are annotated with the region/function each workstream ma
   options), sec-nonrelation-object-privileges 144, sec-role-attributes-lifecycle 131+65 (create_role,
   password), views R7 view privileges 98, zeropriv 37, role grant options 23, dgr type privileges 12,
   fn privileges 32, seq privileges 38, GRANT ON DATABASE/TABLESPACE, SET ROLE for non-bootstrap
-  superuser (crabka_pgcatalog::role_can_set), predefined roles). Files: crates/pgexec/src/privilege.rs
+  superuser (krabka_pgcatalog::role_can_set), predefined roles). Files: crates/pgexec/src/privilege.rs
   (542 ReadPermit, 42/1127 column grants), crates/pgcatalog/src/lib.rs roles/ACL records +
   role_can_set, parser.rs GRANT/REVOKE/ALTER DEFAULT PRIVILEGES/CREATE ROLE options, exec.rs grant
   arms + role DDL, catalog_fn.rs has_*_privilege family, catalog_rel.rs pg_default_acl/pg_auth_members
@@ -593,8 +593,8 @@ shared bottlenecks and are annotated with the region/function each workstream ma
   with owner/ACL, lo_compat_privileges GUC), catalog_rel.rs rows, func.rs dispatch, session.rs COPY?
   none.
 - N37c misc admin functions, sysviews, routine namespaces (M-L, ~600 lines: sec-misc-admin-functions 404
-  (num_nonnulls/num_nulls, pg_ls_*, pg_current_logfile, pg_settings_get_flags, pg_input_is_valid family,
-  pg_get_wal_*, gen_random_uuid, ...), sec-sysviews-catalog-views 130 (pg_available_extension_versions,
+  (num_nonnulls/num_nulls, pg_ls__, pg_current_logfile, pg_settings_get_flags, pg_input_is_valid family,
+  pg_get_wal__, gen_random_uuid, ...), sec-sysviews-catalog-views 130 (pg_available_extension_versions,
   pg_timezone_abbrevs, pg_backend_memory_contexts, pg_config, ...), pg_temp function schema 28+9+1,
   schema-qualified routine names (parser routine_name), harness \gset wal_segment_size). Files:
   crates/pgexec/src/func.rs, catalog_rel.rs, parser.rs routine_name qualifier, routine.rs schema field,
@@ -647,20 +647,20 @@ shared bottlenecks and are annotated with the region/function each workstream ma
 - N40b scalar type fidelity (L-XL, ~2,600 lines: name type 63-byte truncation 82 (datum.rs 1002 name ->
   Text), float8 send/recv 247 + math/pow special cases 116 + erf/gamma 100, numeric typmod-overflow/
   negscale 69 + overflow-detect 22 + width_bucket 40+9 + to_char/to_number 18 + arith 12 + gen-series 22
-  + lcm 24, uuid assignment cast I/O-to-string 165 (pgtypes cast.rs 314) + uuidv7/extract 89, enum
-  pg_enum 79 + funcs 104+8 + unknown-literal-adopts-type 128 + anyenum 9 + unsafe-new-value 18 + alter
-  msgs 8, strings scs 82 + bytea input msgs 24 + to_bin/oct 64 + int-bytea 96 + unistr 15 + toast 6,
-  unknown-literal typing (dgr 59, tsearch/tstypes 244+282 -> shared with N25), expressions sql-value-fn
-  precision 62 + current_catalog 6 + typmod-casts-views 50, case const-folding 33 + operator-on-domain
-  13, text undefined-object-msg 5 + datestyle-concat 4 + format(*) 47, arrays array-fn-family 89 +
-  point-subscript 24 + concat-op 7 + anyall-msgs 8 + array-literal-detail 26 + pg_input-type-brackets
-  24 + assign-validation 5 + width_bucket 9 + fipshash-resolution 18 (UDF overload with column args,
-  also brin_multi/rowsecurity 440 cascade!), collate literal-collate-fold, int->text assignment cast
-  (planner_join-xc, stats_ext 8, views R36 3)). Files: crates/pgtypes/src/{datum.rs 1002, cast.rs 314,
-  numeric.rs 48 Typmod, float8 I/O}, crates/pgexec/src/{func.rs 3128 power, eval.rs 1370 Pow / 1473
-  coerce_untyped_literal_operands, math_fn.rs 792 width_bucket, string_fn.rs 1119 format_sql,
-  usertype.rs 505-535/1281 enum + pg_enum rows, routine.rs resolve_call (fipshash overload with column
-  args), catalog_rel.rs pg_enum}.
+  - lcm 24, uuid assignment cast I/O-to-string 165 (pgtypes cast.rs 314) + uuidv7/extract 89, enum
+    pg_enum 79 + funcs 104+8 + unknown-literal-adopts-type 128 + anyenum 9 + unsafe-new-value 18 + alter
+    msgs 8, strings scs 82 + bytea input msgs 24 + to_bin/oct 64 + int-bytea 96 + unistr 15 + toast 6,
+    unknown-literal typing (dgr 59, tsearch/tstypes 244+282 -> shared with N25), expressions sql-value-fn
+    precision 62 + current_catalog 6 + typmod-casts-views 50, case const-folding 33 + operator-on-domain
+    13, text undefined-object-msg 5 + datestyle-concat 4 + format(*) 47, arrays array-fn-family 89 +
+    point-subscript 24 + concat-op 7 + anyall-msgs 8 + array-literal-detail 26 + pg_input-type-brackets
+    24 + assign-validation 5 + width_bucket 9 + fipshash-resolution 18 (UDF overload with column args,
+    also brin_multi/rowsecurity 440 cascade!), collate literal-collate-fold, int->text assignment cast
+    (planner_join-xc, stats_ext 8, views R36 3)). Files: crates/pgtypes/src/{datum.rs 1002, cast.rs 314,
+    numeric.rs 48 Typmod, float8 I/O}, crates/pgexec/src/{func.rs 3128 power, eval.rs 1370 Pow / 1473
+    coerce_untyped_literal_operands, math_fn.rs 792 width_bucket, string_fn.rs 1119 format_sql,
+    usertype.rs 505-535/1281 enum + pg_enum rows, routine.rs resolve_call (fipshash overload with column
+    args), catalog_rel.rs pg_enum}.
 - N40c collations (L, ~450 lines: collation-derivation 119, create-collation 82 + collate.utf8 168 +
   publication 12 (CREATE COLLATION incl. provider = builtin, locale, deterministic), collation-for 20,
   index-collation 14, explain-sortkey-collation 12, domain-func-resolution 7, ...; ordered-index text
@@ -812,14 +812,14 @@ read path, query.rs, session.rs run_select_traced/explain, pgparser ExplainOptio
 utility dispatch, describe-path errors ~500) and to hold every currently-exact file exact. Exit:
 zero regressions on the 56 exact files + Phase-0 gains; explain.out format/option blocks match except
 the parallel JSON block; select_into, tsrf, rangetypes, fast_default EXPLAIN blocks match; EXPLAIN
-ANALYZE prints per-node actual rows/loops and '(never executed)'; `cargo test -p crabka-pgexec` green
+ANALYZE prints per-node actual rows/loops and '(never executed)'; `cargo test -p krabka-pgexec` green
 with the read path served only by plan/exec.
 
 Phase 2a — rule-based transforms (batch 3: P1): pull_up_subqueries, distribute quals to scans vs
 joins, flatten AND/OR, IN -> = ANY, X = X -> IS NOT NULL, NullTest reduction on NOT NULL columns,
 constant-false -> Result / One-Time Filter: false (also Join Filter: false), remove_useless_joins,
 self-join elimination, sublink -> semi/anti join, single-row VALUES -> Result, non-materialized CTE
-inlining, immutable call folding, alias numbering (_1.._n, "*VALUES*_1", unnamed_subquery), Var
+inlining, immutable call folding, alias numbering (_1.._n, "_VALUES__1", unnamed_subquery), Var
 qualification iff >1 RTE, join-type suffixes with ON quals; executor gates one-time quals once.
 Files: plan/rewrite.rs, plan/bind.rs, plan/deparse.rs. Moves ~2,500 (predicate 238 exact, equivclass
 structural, join ~1,200 structural, union pushdown, window/rowsecurity shape). Exit: predicate.out
@@ -829,7 +829,7 @@ Memoize node matches; subselect tattle NOTICE counts match.
 Phase 2b — statistics (batch 2: P2, in parallel with Phase 1): ANALYZE computes PG's
 compute_scalar_stats (nullfrac, width, ndistinct, MCV, histogram, correlation; deterministic for
 <= 30k rows), pg_statistic + pg_stats + pg_statistic_ext[_data] + pg_stats_ext, extended statistics
-(ndistinct/dependencies/mcv), pg_restore_*/pg_clear_* import functions with WARNINGs, relpages/
+(ndistinct/dependencies/mcv), pg_restore__/pg_clear__ import functions with WARNINGs, relpages/
 relallvisible emulation (estimate_rel_size + heap-page simulator per table), selfuncs port. Files:
 plan/stats.rs, plan/selfuncs.rs, relstats.rs, catalog_rel.rs, stats_fn.rs, session.rs run_maintenance,
 exec.rs CREATE STATISTICS. Moves ~2,000 (stats_ext 1,215, stats_import 645, pg_stats refs). Exit:
@@ -847,7 +847,7 @@ pg_get_indexdef / \d index output match for indexing/index_including/create_inde
 over an indexed column can be served by the index cursor in a unit test.
 
 Phase 3 — cost-based planner core (batch 4: P4, certify alone): cost.rs (all cost_* + PG 18
-disabled_nodes + enable_*/work_mem/random_page_cost/... GUCs), paths.rs (RelOptInfo, add_path,
+disabled_nodes + enable__/work_mem/random_page_cost/... GUCs), paths.rs (RelOptInfo, add_path,
 pathkeys, equivalence classes), indexpath.rs (clause matching via builtin_opclasses/opfamilies, Index
 Cond vs Filter, bitmap AND/OR, index-only eligibility with a visibility-map analogue -> Heap Fetches),
 joinpath.rs (join_search_one_level, nestloop/hash/merge, parameterised inner paths, Materialize/
@@ -863,7 +863,7 @@ tidrangescan ~130, memoize 48+, join_hash 93+, updatable_views 405, select_views
 txn ~250, views 614, geometry 1,334, misc). Exit: EXPLAIN (COSTS OFF) of every statement in join.sql,
 subselect.sql, equivclass.sql, select.sql, limit.sql, tidscan.sql, tidrangescan.sql, aggregates.sql
 planagg section, create_index.sql btree section matches upstream node choice on the tenk1/onek/int4_tbl/
-int8_tbl data under the schedule's enable_* GUCs; unsorted result order of join.sql cross joins and
+int8_tbl data under the schedule's enable__ GUCs; unsorted result order of join.sql cross joins and
 geometry.sql cross joins matches; union.sql / select_distinct.sql hashed output order matches.
 
 Phase 4 — upper relations and sort fidelity (batch 5: P5, certify alone): pg_qsort (sort_template.h)

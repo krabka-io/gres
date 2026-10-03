@@ -1,11 +1,11 @@
 use std::sync::{Arc, Mutex};
 
 use assert2::assert;
-use crabka_pgcatalog::{Column, ForeignServer, Table, TableId, UserMapping, list_tables};
-use crabka_pgexec::{Committer, LocalLinearizer, SqlEngine, foreign};
-use crabka_pgkv::{Kv, MemKv, WriteOp};
-use crabka_pgtypes::{ColumnType, Datum};
-use crabka_pgwire::engine::{Engine, Session};
+use krabka_pgcatalog::{Column, ForeignServer, Table, TableId, UserMapping, list_tables};
+use krabka_pgexec::{Committer, LocalLinearizer, SqlEngine, foreign};
+use krabka_pgkv::{Kv, MemKv, WriteOp};
+use krabka_pgtypes::{ColumnType, Datum};
+use krabka_pgwire::engine::{Engine, Session};
 
 struct RecordingCommitter {
     kv: Arc<dyn Kv>,
@@ -34,7 +34,7 @@ impl RecordingCommitter {
             .filter(|batch| {
                 matches!(
                     batch.as_slice(),
-                    [WriteOp::Put { key, .. }] if *key == crabka_pgkv::key::meta_next_table_id_key()
+                    [WriteOp::Put { key, .. }] if *key == krabka_pgkv::key::meta_next_table_id_key()
                 )
             })
             .count()
@@ -43,7 +43,7 @@ impl RecordingCommitter {
 
 #[async_trait::async_trait]
 impl Committer for RecordingCommitter {
-    async fn commit(&self, ops: Vec<WriteOp>) -> Result<(), crabka_pgexec::ExecError> {
+    async fn commit(&self, ops: Vec<WriteOp>) -> Result<(), krabka_pgexec::ExecError> {
         self.kv.write_batch(&ops)?;
         self.batches.lock().expect("batches mutex").push(ops);
         Ok(())
@@ -63,8 +63,8 @@ impl foreign::ForeignScanner for ThreeTableScanner {
         _server: &ForeignServer,
         _mapping: Option<&UserMapping>,
         _bounds: &foreign::ScanBounds,
-        _ctx: &crabka_pgexec::clock::EvalCtx,
-    ) -> Result<Vec<Vec<Datum>>, crabka_pgexec::ExecError> {
+        _ctx: &krabka_pgexec::clock::EvalCtx,
+    ) -> Result<Vec<Vec<Datum>>, krabka_pgexec::ExecError> {
         Ok(Vec::new())
     }
 
@@ -73,7 +73,7 @@ impl foreign::ForeignScanner for ThreeTableScanner {
         _server: &ForeignServer,
         _mapping: Option<&UserMapping>,
         filter: &foreign::ImportFilter,
-    ) -> Result<Vec<foreign::ImportedTable>, crabka_pgexec::ExecError> {
+    ) -> Result<Vec<foreign::ImportedTable>, krabka_pgexec::ExecError> {
         Ok(IMPORTED
             .into_iter()
             .filter(|name| filter.retains(name))
@@ -100,7 +100,7 @@ fn engine_with_recording_committer() -> (SqlEngine, Arc<RecordingCommitter>) {
     (engine, committer)
 }
 
-async fn run(session: &mut crabka_pgexec::SqlSession, sql: &str) {
+async fn run(session: &mut krabka_pgexec::SqlSession, sql: &str) {
     session.simple_query(sql).await.expect(sql);
 }
 
@@ -209,6 +209,6 @@ async fn import_foreign_schema_gives_every_imported_table_a_distinct_id() {
     assert!(catalog_table_names(&engine) == IMPORTED);
     let (sorted, deduped) = sorted_and_deduped(&catalog_table_ids(&engine));
     assert!(sorted == deduped);
-    let counter = crabka_pgcatalog::read_next_table_id(engine.catalog_kv()).expect("next table id");
+    let counter = krabka_pgcatalog::read_next_table_id(engine.catalog_kv()).expect("next table id");
     assert!(counter > *sorted.last().expect("an imported table id"));
 }

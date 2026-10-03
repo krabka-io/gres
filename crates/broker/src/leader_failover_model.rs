@@ -1,6 +1,6 @@
 //! Exhaustive stateright models of the controller leader-failover decision
 //! (`failover_one`) and the KIP-966 winner selection (Task 3). See
-//! `docs/superpowers/specs/2026-06-13-crabka-failover-recovery-model-design.md`.
+//! `docs/superpowers/specs/2026-06-13-krabka-failover-recovery-model-design.md`.
 //!
 //! Memory safety: stateright BFS keeps every visited unique state resident, so
 //! `within_boundary` + `target_state_count` + `timeout` fence each run. You
@@ -12,8 +12,8 @@ use std::{
     time::Duration,
 };
 
-use crabka_metadata::PartitionRecord;
-use crabka_raft::NodeId;
+use krabka_metadata::PartitionRecord;
+use krabka_raft::NodeId;
 use stateright::{Checker, Model, Property};
 
 use super::{FailoverDecision, failover_one};
@@ -56,9 +56,9 @@ impl FailoverModel {
     fn config(strategy: RecoveryStrategy, unclean_enabled: bool) -> Self {
         Self {
             replicas: vec![
-                crabka_audit::NodeId(1),
-                crabka_audit::NodeId(2),
-                crabka_audit::NodeId(3),
+                krabka_audit::NodeId(1),
+                krabka_audit::NodeId(2),
+                krabka_audit::NodeId(3),
             ],
             strategy,
             unclean_enabled,
@@ -77,7 +77,7 @@ fn pr_of(s: &FailoverState) -> PartitionRecord {
         leader: s.leader,
         replicas: s.replicas.clone(),
         isr: s.isr.clone(),
-        leader_epoch: crabka_metadata::LeaderEpoch(s.leader_epoch),
+        leader_epoch: krabka_metadata::LeaderEpoch(s.leader_epoch),
         adding_replicas: vec![],
         removing_replicas: vec![],
         directories: vec![],
@@ -326,9 +326,9 @@ impl RecoveryModel {
     fn offset_recovery() -> Self {
         Self {
             replicas: vec![
-                crabka_audit::NodeId(1),
-                crabka_audit::NodeId(2),
-                crabka_audit::NodeId(3),
+                krabka_audit::NodeId(1),
+                krabka_audit::NodeId(2),
+                krabka_audit::NodeId(3),
             ],
             max_epoch: 2,
             max_leo: 2,

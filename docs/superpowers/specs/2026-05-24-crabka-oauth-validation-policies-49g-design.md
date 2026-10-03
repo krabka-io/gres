@@ -55,7 +55,7 @@ jsonpath-rust; see <crate-link> for full syntax."
 
 **Broker (`crates/security/`, `crates/broker/`):**
 
-- New `jsonpath-rust` runtime dependency in `crabka-security`.
+- New `jsonpath-rust` runtime dependency in `krabka-security`.
 - New `[oauthbearer].custom_claim_check: Option<String>` TOML key.
   Holds a JsonPath expression evaluated against the token's claim
   set. Token is rejected when the expression yields empty/false.
@@ -64,20 +64,20 @@ jsonpath-rust; see <crate-link> for full syntax."
   validators (unsecured + signed JWS) check; introspection skips
   (no JWT header).
 - Both validators (`UnsecuredJwsValidator`, `SignedJwsValidator`)
-  + `IntrospectionValidator` gain `Option<JsonPathInst>` field for
-  the precompiled expression. JWT-mode validators additionally gain
-  `Option<String>` for the `typ` check.
+  - `IntrospectionValidator` gain `Option<JsonPathInst>` field for
+    the precompiled expression. JWT-mode validators additionally gain
+    `Option<String>` for the `typ` check.
 - Compile-once-at-construction: malformed expressions error at
   validator construction, not per-token validation.
 - Replace slice 50's `required_scope` + `scope_claim_name` fields
   on the validators with the JsonPath mechanism. Operators rewrite
   `customClaimCheck: { scope: 'X' }` to `customClaimCheck: "@.scope
-  == 'X'"`. Greenfield: no compat shim.
+== 'X'"`. Greenfield: no compat shim.
 
 **Operator (`crates/operator/`):**
 
 - Replace `ListenerAuthenticationOAuth.custom_claim_check:
-  Option<OAuthCustomClaimCheck>` (typed struct, slice 50) with
+Option<OAuthCustomClaimCheck>` (typed struct, slice 50) with
   `Option<String>` (the raw expression). Delete the
   `OAuthCustomClaimCheck` type entirely.
 - Add `valid_token_type: Option<String>` field on
@@ -144,7 +144,7 @@ authentication:
   validIssuerUri: https://...
   jwksEndpointUri: https://.../jwks
   customClaimCheck: "@.scope == 'kafka.write'"
-  validTokenType: JWT          # optional, JWT-mode only
+  validTokenType: JWT # optional, JWT-mode only
 ```
 
 Reconciler emits the broker TOML keys above. Both fields are
@@ -339,14 +339,14 @@ JVM admin tools don't read listener OAuth config.
 
 Six tasks across four batches (mirrors slice 50d's shape):
 
-| Batch | Task | Files |
-|---|---|---|
-| 1 | T1 — Broker dep + validator integration + unit tests + delete slice-50 stub | `crates/security/*`, `crates/broker/src/file_config.rs`, `crates/broker/src/config.rs` |
-| 2 | T2 — Operator CRD shape change + add validTokenType + own-file fixture sweep | `crates/operator/src/crd/listener.rs` |
-| 2 | T3 — Operator reconciler: render + cross-mode validation + divergence walk + own-file fixture sweep + sibling-file (kafka.rs / kafka_node_pool.rs) sweep | `crates/operator/src/controller/listeners.rs`, `controller/kafka.rs`, `controller/kafka_node_pool.rs` |
-| 3 | T4 — Operator integration tests + sample + CRD regen | `crates/operator/tests/reconcile_*.rs`, `crates/operator/sample/*`, `deploy/crds/*` |
-| 3 | T5 — kind-oauth e2e CR YAML rewrite | `.github/workflows/operator-e2e.yml` |
-| 4 | T6 — STATUS.md + final gate | `STATUS.md` |
+| Batch | Task                                                                                                                                                     | Files                                                                                                 |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 1     | T1 — Broker dep + validator integration + unit tests + delete slice-50 stub                                                                              | `crates/security/*`, `crates/broker/src/file_config.rs`, `crates/broker/src/config.rs`                |
+| 2     | T2 — Operator CRD shape change + add validTokenType + own-file fixture sweep                                                                             | `crates/operator/src/crd/listener.rs`                                                                 |
+| 2     | T3 — Operator reconciler: render + cross-mode validation + divergence walk + own-file fixture sweep + sibling-file (kafka.rs / kafka_node_pool.rs) sweep | `crates/operator/src/controller/listeners.rs`, `controller/kafka.rs`, `controller/kafka_node_pool.rs` |
+| 3     | T4 — Operator integration tests + sample + CRD regen                                                                                                     | `crates/operator/tests/reconcile_*.rs`, `crates/operator/sample/*`, `deploy/crds/*`                   |
+| 3     | T5 — kind-oauth e2e CR YAML rewrite                                                                                                                      | `.github/workflows/operator-e2e.yml`                                                                  |
+| 4     | T6 — STATUS.md + final gate                                                                                                                              | `STATUS.md`                                                                                           |
 
 Dependency chain: T1 → T2 → T3 → (T4 ‖ T5) → T6. Same pattern as
 slice 50d:
@@ -385,7 +385,7 @@ field). 49g RENAMES the existing `customClaimCheck` shape:
 Tracking sites that get rewritten (per task ownership):
 
 - T1: broker validators' `required_scope`/`scope_claim_name` fields
-  + helpers deleted; ~5 broker tests touched in `oauthbearer.rs`.
+  - helpers deleted; ~5 broker tests touched in `oauthbearer.rs`.
 - T2: operator CRD `OAuthCustomClaimCheck` struct deleted; schema
   entry rewritten; ~9 sweep sites in `crd/listener.rs` tests.
 - T3: operator reconciler render code deleted/rewritten; ~10+

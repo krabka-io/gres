@@ -14,7 +14,7 @@
 
 - [x] Add a failing test proving object-store args do not inject a checkpoint threshold.
 - [x] Remove the unconditional `--checkpoint-frames 1`.
-- [x] Preserve object-store/credential forwarding and final-checkpoint support: when registry thresholds are absent, `crabka-gres` uses its validated standalone defaults.
+- [x] Preserve object-store/credential forwarding and final-checkpoint support: when registry thresholds are absent, `krabka-gres` uses its validated standalone defaults.
 - [x] Prove tenant-record checkpoint values remain the effective source and CLI still wins only when explicitly supplied outside the operator path.
 - [x] Run focused and full operator tests, strict all-target/all-feature Clippy, nightly formatting, generated CRD equality, and `git diff --check`.
 - [x] Commit only implementation files.

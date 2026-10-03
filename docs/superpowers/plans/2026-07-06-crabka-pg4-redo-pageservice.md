@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A pure native-Rust redo engine (`crabka-postgres-redo`, v1 rmgrs: XLOG-FPI/HEAP/HEAP2/BTREE/SEQ, loud `UnsupportedRmgr`), `get_page@LSN` + materializing compaction + horizon GC in `crabka-page-store` behind a `Redo` trait, and a Connect-RPC page service (`crabka-pageserver`) — gated by byte-exact comparison against a WAL-replayed stock-Postgres standby.
+**Goal:** A pure native-Rust redo engine (`krabka-postgres-redo`, v1 rmgrs: XLOG-FPI/HEAP/HEAP2/BTREE/SEQ, loud `UnsupportedRmgr`), `get_page@LSN` + materializing compaction + horizon GC in `krabka-page-store` behind a `Redo` trait, and a Connect-RPC page service (`krabka-pageserver`) — gated by byte-exact comparison against a WAL-replayed stock-Postgres standby.
 
 **Architecture:** `postgres-redo` dispatches per `(rmid, info)` over PG-2's decoded envelope, panic-free; `page-store` composes `get_reconstruct_data ⊕ Redo` into pages and drives image creation/GC through the trait; `pageserver` wires them behind unary `GetPage`/`GetRelSize` on the gateway's connectrpc-axum idiom. The oracle is redo-vs-redo: our pages vs a standby's files at the same LSN.
 
@@ -10,7 +10,7 @@
 
 **Spec:** [`docs/superpowers/specs/2026-07-06-crabka-pg4-redo-pageservice-design.md`](../specs/2026-07-06-crabka-pg4-redo-pageservice-design.md).
 
-**PREREQUISITES (unlanded):** **PG-2** (`crabka-postgres-wal` + corpus) and **PG-3** (`crabka-page-store`). A local Postgres 17 once, to extend the fixture corpus with the standby capture.
+**PREREQUISITES (unlanded):** **PG-2** (`krabka-postgres-wal` + corpus) and **PG-3** (`krabka-page-store`). A local Postgres 17 once, to extend the fixture corpus with the standby capture.
 
 ---
 
@@ -33,9 +33,9 @@
 
 ## File Structure
 
-- **`crates/postgres-redo/`** (new `crabka-postgres-redo`): `src/lib.rs`, `src/page.rs` (page layout + checked helpers), `src/dispatch.rs`, `src/rm_xlog.rs`, `src/rm_heap.rs`, `src/rm_btree.rs`, `src/rm_seq.rs`, `src/consts_v17.rs`, `fuzz/` harness.
+- **`crates/postgres-redo/`** (new `krabka-postgres-redo`): `src/lib.rs`, `src/page.rs` (page layout + checked helpers), `src/dispatch.rs`, `src/rm_xlog.rs`, `src/rm_heap.rs`, `src/rm_btree.rs`, `src/rm_seq.rs`, `src/consts_v17.rs`, `fuzz/` harness.
 - **`crates/page-store/`** (extend): `src/redo_seam.rs` (`trait Redo`, `get_page`), `src/materialize.rs` (image creation + GC).
-- **`crates/pageserver/`** (new `crabka-pageserver`): `proto/crabka/pageserver/v1/pageserver.proto`, `build.rs` (gateway idiom), `src/lib.rs`, `src/service.rs`, `tests/serve.rs`.
+- **`crates/pageserver/`** (new `krabka-pageserver`): `proto/crabka/pageserver/v1/pageserver.proto`, `build.rs` (gateway idiom), `src/lib.rs`, `src/service.rs`, `tests/serve.rs`.
 - **`tools/gen-pg-wal-fixtures.sh`** (extend): standby capture + manifest.
 - **`release-plz.toml`** — two private entries.
 
@@ -43,9 +43,10 @@
 
 ---
 
-## Task 1: `crabka-postgres-redo` scaffold — dispatch, page module, the FPI arm
+## Task 1: `krabka-postgres-redo` scaffold — dispatch, page module, the FPI arm
 
 **Files:**
+
 - Create: `crates/postgres-redo/{Cargo.toml, src/lib.rs, src/page.rs, src/dispatch.rs, src/rm_xlog.rs, src/consts_v17.rs}`
 - Modify: `release-plz.toml`
 
@@ -91,7 +92,7 @@
 
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-postgres-redo` → PASS; `./tools/check-publish-allowlist.sh` → exit 0.
+Run: `cargo test -p krabka-postgres-redo` → PASS; `./tools/check-publish-allowlist.sh` → exit 0.
 
 ```bash
 git add crates/postgres-redo release-plz.toml
@@ -103,9 +104,10 @@ git commit -m "feat(postgres-redo): scaffold, checked page module, FPI arm, loud
 ## Task 2: HEAP + HEAP2 arms
 
 **Files:**
+
 - Create: `crates/postgres-redo/src/rm_heap.rs`
 
-- [ ] **Step 1: Write the failing tests** — one per arm, each against a fixture-extracted record with a known before/after page (extract via a test helper that replays the corpus up to the record's LSN using FPI bases + already-shipped arms; where the corpus lacks isolation, craft the *before* page with `PageBuf` and take the *after* from the standby capture in Task 4 — mark those `#[ignore]` until Task 4 lands, then un-ignore):
+- [ ] **Step 1: Write the failing tests** — one per arm, each against a fixture-extracted record with a known before/after page (extract via a test helper that replays the corpus up to the record's LSN using FPI bases + already-shipped arms; where the corpus lacks isolation, craft the _before_ page with `PageBuf` and take the _after_ from the standby capture in Task 4 — mark those `#[ignore]` until Task 4 lands, then un-ignore):
 
 `insert` (place tuple at `offnum`, header from `xl_heap_header {t_infomask2, t_infomask, t_hoff}`), `delete` (set `xmax`, infomask bits from `infobits_set`, clear HOT/moved bits), `update` + `hot_update` (old page: `xmax`+ctid; new page: insert), `lock`, `inplace`; HEAP2: `multi_insert` (N tuples, `XLH_INSERT_LAST_IN_MULTI` accounting), `prune` (redirect/dead/unused line-pointer arrays), `vacuum`, `visible` (PD_ALL_VISIBLE on the heap page; the vm-fork block ref sets the vm bits).
 
@@ -115,7 +117,7 @@ Arms keyed by `info & XLOG_HEAP_OPMASK` (+ `INIT_PAGE` handling via the zeroed b
 
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-postgres-redo rm_heap` → PASS (non-ignored set).
+Run: `cargo test -p krabka-postgres-redo rm_heap` → PASS (non-ignored set).
 
 ```bash
 git add crates/postgres-redo/src
@@ -127,6 +129,7 @@ git commit -m "feat(postgres-redo): HEAP/HEAP2 redo arms"
 ## Task 3: BTREE + SEQ arms
 
 **Files:**
+
 - Create: `crates/postgres-redo/src/rm_btree.rs`, `src/rm_seq.rs`
 
 - [ ] **Step 1: Tests** (same fixture-extraction pattern): btree `insert_leaf`, `insert_upper`, `split_l`/`split_r` (the dense ones: left-page truncation to `firstrightoff`, high-key install, right-page build from the record payload — the record carries the full new right page content), `dedup`, `vacuum`/`delete`; `seq_log` (the whole 1-tuple page is in the record — near-FPI).
@@ -145,6 +148,7 @@ git commit -m "feat(postgres-redo): BTREE and SEQ redo arms"
 ## Task 4: Standby capture + the differential gate
 
 **Files:**
+
 - Modify: `tools/gen-pg-wal-fixtures.sh`
 - Create: `crates/postgres-redo/tests/standby_gate.rs`; fixture additions under `crates/postgres-wal/tests/fixtures/standby/`
 
@@ -154,7 +158,7 @@ git commit -m "feat(postgres-redo): BTREE and SEQ redo arms"
 
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-postgres-redo --test standby_gate` → PASS.
+Run: `cargo test -p krabka-postgres-redo --test standby_gate` → PASS.
 
 ```bash
 git add tools/gen-pg-wal-fixtures.sh crates/postgres-wal/tests/fixtures crates/postgres-redo/tests
@@ -166,6 +170,7 @@ git commit -m "test(postgres-redo): byte-exact standby differential gate"
 ## Task 5: `page-store` — `Redo` seam, `get_page`, materializing compaction, GC
 
 **Files:**
+
 - Create: `crates/page-store/src/redo_seam.rs`, `src/materialize.rs`
 
 - [ ] **Step 1 (5a, parallel-safe with Task 1): the seam + `get_page`**
@@ -181,11 +186,11 @@ TDD with a `NoopRedo` (image-base pass-through) so PG-3's tests keep passing; th
 
 - [ ] **Step 2 (5b): materializing compaction + horizon GC**
 
-Image creation: when a key's delta stack above its newest image exceeds `IMAGE_CREATE_THRESHOLD`, materialize (via `Redo`) every key in the range at the stack-top LSN into an image layer; register-then-deregister as in PG-3's compaction. GC: delete layers with `lsn_range.end < gc_horizon` whose key range is fully covered by a later image. **Tests:** a probe grid of `get_page(key, lsn ≥ horizon)` results is *identical* before/after image creation and after GC; GC refuses when coverage is incomplete.
+Image creation: when a key's delta stack above its newest image exceeds `IMAGE_CREATE_THRESHOLD`, materialize (via `Redo`) every key in the range at the stack-top LSN into an image layer; register-then-deregister as in PG-3's compaction. GC: delete layers with `lsn_range.end < gc_horizon` whose key range is fully covered by a later image. **Tests:** a probe grid of `get_page(key, lsn ≥ horizon)` results is _identical_ before/after image creation and after GC; GC refuses when coverage is incomplete.
 
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-page-store` → PASS (old + new).
+Run: `cargo test -p krabka-page-store` → PASS (old + new).
 
 ```bash
 git add crates/page-store/src
@@ -194,9 +199,10 @@ git commit -m "feat(page-store): Redo seam, get_page, image materialization + ho
 
 ---
 
-## Task 6: `crabka-pageserver` — the Connect page service
+## Task 6: `krabka-pageserver` — the Connect page service
 
 **Files:**
+
 - Create: `crates/pageserver/{Cargo.toml, build.rs, proto/crabka/pageserver/v1/pageserver.proto, src/lib.rs, src/service.rs, tests/serve.rs}`
 - Modify: `release-plz.toml`
 
@@ -217,11 +223,11 @@ message GetRelSizeResponse { uint32 nblocks = 1; bool exact = 2; } // v1: hint, 
 
 - [ ] **Step 2: Write the failing integration test** (`tests/serve.rs`): ingest the corpus on `InMemory`; serve the router in-process (`axum::serve` on an ephemeral port, the gateway test pattern); a Connect client `GetPage`s a covered page at `capture_lsn` → byte-equal to the standby file; an unknown relation → NotFound; a GIN-ish key (synthetic unsupported delta) → the explicit unsupported-rmgr error code surfaced.
 
-- [ ] **Step 3: Implement** — `service.rs` holds `Arc<LayerMap>/ops/Arc<dyn Redo>` (wired to `crabka-postgres-redo`), handlers call `get_page`/the rel-size hint; `.build_connect()`. `publish = false` + release-plz entry.
+- [ ] **Step 3: Implement** — `service.rs` holds `Arc<LayerMap>/ops/Arc<dyn Redo>` (wired to `krabka-postgres-redo`), handlers call `get_page`/the rel-size hint; `.build_connect()`. `publish = false` + release-plz entry.
 
 - [ ] **Step 4: Verify + commit**
 
-Run: `cargo test -p crabka-pageserver` → PASS; allowlist → exit 0.
+Run: `cargo test -p krabka-pageserver` → PASS; allowlist → exit 0.
 
 ```bash
 git add crates/pageserver release-plz.toml
@@ -233,7 +239,7 @@ git commit -m "feat(pageserver): Connect page service (GetPage, GetRelSize hint)
 ## Task 7: Fuzz harness + final gate
 
 - [ ] **Step 1:** A fuzz/property harness in `postgres-redo` (`proptest`-driven arbitrary-bytes → decode → `apply`; assert no panic, only `Ok`/`RedoError`). Run a bounded corpus in CI (`proptest` cases), full fuzzing locally.
-- [ ] **Step 2:** `cargo +nightly fmt --check`; `cargo clippy -p crabka-postgres-redo -p crabka-page-store -p crabka-pageserver --all-targets -- -D warnings`; `cargo nextest run -p crabka-postgres-redo -p crabka-page-store -p crabka-pageserver`; `./tools/check-publish-allowlist.sh` — all green.
+- [ ] **Step 2:** `cargo +nightly fmt --check`; `cargo clippy -p krabka-postgres-redo -p krabka-page-store -p krabka-pageserver --all-targets -- -D warnings`; `cargo nextest run -p krabka-postgres-redo -p krabka-page-store -p krabka-pageserver`; `./tools/check-publish-allowlist.sh` — all green.
 - [ ] **Step 3:** Commit.
 
 ```bash

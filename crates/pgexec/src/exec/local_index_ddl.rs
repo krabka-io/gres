@@ -4,12 +4,12 @@ use super::*;
 
 pub(crate) fn table_requires_unique_local_serialization(
     catalog_kv: &dyn Kv,
-    table_name: &crabka_pgcatalog::RelationName,
+    table_name: &krabka_pgcatalog::RelationName,
 ) -> Result<UniqueLocalSerialization, ExecError> {
-    let table = match crabka_pgcatalog::get_table(catalog_kv, table_name) {
+    let table = match krabka_pgcatalog::get_table(catalog_kv, table_name) {
         Ok(table) => table,
-        Err(crabka_pgcatalog::CatalogError::UndefinedTable(_))
-            if crabka_pgcatalog::get_view(catalog_kv, table_name).is_ok() =>
+        Err(krabka_pgcatalog::CatalogError::UndefinedTable(_))
+            if krabka_pgcatalog::get_view(catalog_kv, table_name).is_ok() =>
         {
             return Ok(UniqueLocalSerialization::None);
         }
@@ -18,9 +18,9 @@ pub(crate) fn table_requires_unique_local_serialization(
     if table.sharded {
         return Ok(UniqueLocalSerialization::None);
     }
-    let indexes = crabka_pgcatalog::list_table_indexes(catalog_kv, table_name)?;
+    let indexes = krabka_pgcatalog::list_table_indexes(catalog_kv, table_name)?;
     for index in indexes {
-        if index.unique && index.placement != crabka_pgcatalog::IndexPlacement::Local {
+        if index.unique && index.placement != krabka_pgcatalog::IndexPlacement::Local {
             return Err(ExecError::Unsupported(
                 "unique global indexes are not supported until global enforcement exists".into(),
             ));
@@ -41,10 +41,10 @@ pub(crate) fn reject_unwritable_local_index(table: &Table) -> Result<(), ExecErr
 pub(crate) fn local_index_backfill_ops(
     kv: &dyn Kv,
     table: &Table,
-    index: &crabka_pgcatalog::Index,
+    index: &krabka_pgcatalog::Index,
     own_xid: Option<u64>,
     build: &IndexBuild<'_>,
-) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
+) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
     let all_committed = all_committed_snapshot();
     // `own_xid` makes the open transaction's own uncommitted rows visible to the
     // back-validation; the all-committed snapshot alone does not, because the
@@ -84,7 +84,7 @@ impl<'a> IndexBuild<'a> {
         &self,
         kv: &dyn Kv,
         table: &Table,
-        index: &crabka_pgcatalog::Index,
+        index: &krabka_pgcatalog::Index,
         values: &[Datum],
     ) -> ExecError {
         ExecError::UniqueIndexBuildViolation(Box::new(crate::error::UniqueViolation {
@@ -107,9 +107,9 @@ pub(crate) fn local_index_backfill_ops_for_rows(
     kv: &dyn Kv,
     rows: &[(u64, u64, Vec<Datum>)],
     table: &Table,
-    index: &crabka_pgcatalog::Index,
+    index: &krabka_pgcatalog::Index,
     build: &IndexBuild<'_>,
-) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
+) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
     let mut seen = HashSet::new();
     let mut ops = Vec::with_capacity(rows.len());
     for (rowid, _xmin, row) in rows {
@@ -120,14 +120,14 @@ pub(crate) fn local_index_backfill_ops_for_rows(
             if index.unique && !seen.insert(values.clone()) {
                 return Err(build.duplicate(kv, table, index, &values));
             }
-            ops.push(crabka_pgkv::WriteOp::Put {
-                key: crabka_pgkv::key::secondary_index_entry_key(
+            ops.push(krabka_pgkv::WriteOp::Put {
+                key: krabka_pgkv::key::secondary_index_entry_key(
                     table.id, index.id, &values, *rowid,
                 ),
                 value: Vec::new(),
             });
             if let Some(key) = local_index_ordered_entry_key(table, index, &values, *rowid) {
-                ops.push(crabka_pgkv::WriteOp::Put {
+                ops.push(krabka_pgkv::WriteOp::Put {
                     key,
                     value: Vec::new(),
                 });

@@ -2,8 +2,8 @@
 
 use std::{borrow::Cow, collections::BTreeMap};
 
-use crabka_pgparser::ast::{Expr, FuncArgs, FuncCall};
-use crabka_pgtypes::{
+use krabka_pgparser::ast::{Expr, FuncArgs, FuncCall};
+use krabka_pgtypes::{
     ArrayValue, ColumnType, Datum, ElemType, JsonbValue, Lexeme, Position, QueryTerm, TsQuery,
     TsVector, Weight, text_search::MAX_POSITION,
 };
@@ -48,7 +48,7 @@ enum TextSearchFunc {
     JsonToTsVector,
 }
 
-type Catalog<'a> = Option<&'a dyn crabka_pgkv::Kv>;
+type Catalog<'a> = Option<&'a dyn krabka_pgkv::Kv>;
 
 #[derive(Debug, Clone)]
 pub(crate) struct TsRewriteQueryRequest {
@@ -810,7 +810,7 @@ fn collect_json_text(value: &JsonbValue, filter: JsonTextFilter, out: &mut Vec<S
             out.push(value.clone());
         }
         JsonbValue::Number(value) if filter.contains(JsonTextFilter::NUMERIC) => {
-            out.push(crabka_pgtypes::numeric::finite_to_text(value));
+            out.push(krabka_pgtypes::numeric::finite_to_text(value));
         }
         JsonbValue::Bool(value) if filter.contains(JsonTextFilter::BOOLEAN) => {
             out.push(value.to_string());
@@ -844,7 +844,7 @@ fn json_to_vector(
     // reaches `json::as_text` -- and a `\u0000` or an unpaired surrogate lands
     // in a stored `tsvector`, which is the corruption the other eleven `json`
     // entry points were closed against.
-    crabka_pgtypes::json::validate_escapes(document)?;
+    krabka_pgtypes::json::validate_escapes(document)?;
     let mut pieces = Vec::new();
     collect_json_document_text(document, filter, &mut pieces);
     Ok(Datum::TsVector(vector_from_pieces(
@@ -855,7 +855,7 @@ fn json_to_vector(
 /// [`collect_json_text`]'s twin over `json` text: object fields in input order
 /// with duplicates kept, and numbers as the token the document actually holds.
 fn collect_json_document_text(value: &str, filter: JsonTextFilter, out: &mut Vec<String>) {
-    use crabka_pgtypes::json::{self, Kind};
+    use krabka_pgtypes::json::{self, Kind};
     match json::kind(value) {
         Kind::Object => {
             for (key, item) in json::object_fields(value).unwrap_or_default() {
@@ -2338,7 +2338,7 @@ fn literal_text(expr: &Expr) -> Option<&str> {
     }
 }
 
-fn text_array(array: &crabka_pgtypes::ArrayValue) -> Result<Vec<String>, ExecError> {
+fn text_array(array: &krabka_pgtypes::ArrayValue) -> Result<Vec<String>, ExecError> {
     array
         .elems
         .iter()
@@ -2633,8 +2633,8 @@ fn is_stopword(word: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgkv::{Kv, MemKv};
-    use crabka_pgparser::ast::{TextSearchDdl, TextSearchObjectKind};
+    use krabka_pgkv::{Kv, MemKv};
+    use krabka_pgparser::ast::{TextSearchDdl, TextSearchObjectKind};
 
     use super::*;
     use crate::{clock::EvalCtx, scope::Scope};
@@ -2656,7 +2656,7 @@ mod tests {
                 "text-search query contains only stop words or doesn't contain lexemes, ignored",
             ),
         ] {
-            let expression = crabka_pgparser::parser::parse_expr_for_test(sql).unwrap();
+            let expression = krabka_pgparser::parser::parse_expr_for_test(sql).unwrap();
             crate::eval::eval(&expression, &Scope::empty(), &[], &ctx).unwrap();
             assert_eq!(notices.try_recv().unwrap().message, expected);
         }

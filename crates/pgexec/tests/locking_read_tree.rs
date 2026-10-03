@@ -3,7 +3,7 @@
 //! The locking read is the executor's seventh way to read a stored relation,
 //! and it was the one that went around every check the other six share. It
 //! scanned the named relation with a `ScanRequest` of its own, so it took no
-//! [`crabka_pgexec`] read permit, ran no row-security gate, and never expanded
+//! [`krabka_pgexec`] read permit, ran no row-security gate, and never expanded
 //! an inheritance parent to its children. All three were silent: a role holding
 //! no grant read the table by asking to lock it, a policy that hid a row hid it
 //! from every other path and not from this one, and `SELECT * FROM parent FOR
@@ -17,8 +17,8 @@
 //! `FOR UPDATE`.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 async fn run(session: &mut SqlSession, sql: &str) -> Vec<QueryResult> {
     session

@@ -1,5 +1,5 @@
 //! Versioned (de)serialization of a table schema — the value stored under
-//! `crabka_pgkv::key::catalog_key(name)`. Format: version byte, `table_id`
+//! `krabka_pgkv::key::catalog_key(name)`. Format: version byte, `table_id`
 //! (u32 BE), column count (u32 BE), then per column: u32 name length, name bytes,
 //! type tag; table option flags (u8: sharded, row security, forced row
 //! security); the owning role (u32 length + name bytes);
@@ -13,8 +13,8 @@
 //! Foreign-data-wrapper, foreign-server, and user-mapping objects use their own
 //! simple binary format, not the schema format.
 
-use crabka_pgkv::KvError;
-use crabka_pgtypes::{
+use krabka_pgkv::KvError;
+use krabka_pgtypes::{
     ColumnType, Datum,
     numeric::Typmod,
     usertype::{
@@ -114,7 +114,7 @@ mod datum_tag {
     pub const JSONB: u8 = 7;
     /// A one-dimensional array, followed by the element type's
     /// `ElemType::code()` byte. The elements then follow as a
-    /// `crabka_pgkv::rowenc` row, a u32 length and the bytes. Reuse of the row
+    /// `krabka_pgkv::rowenc` row, a u32 length and the bytes. Reuse of the row
     /// encoder keeps a second full datum encoder out of the catalog, and covers
     /// every element type at no cost, NULL and nested `jsonb` included.
     /// Append-only, with no version bump.
@@ -137,12 +137,12 @@ mod datum_tag {
     pub const MULTIRANGE: u8 = 15;
     pub const JSONPATH: u8 = 16;
     /// A network address — `inet`, `cidr`, `macaddr` or `macaddr8` — stored as
-    /// a one-column `crabka_pgkv::rowenc` row (u32 length + bytes), which
+    /// a one-column `krabka_pgkv::rowenc` row (u32 length + bytes), which
     /// already tags the variant and holds the `is_cidr` flag. Append-only — no
     /// version bump.
     pub const NETWORK: u8 = 17;
     /// A `bit` / `bit varying` value, stored as a one-column
-    /// `crabka_pgkv::rowenc` row, which already carries the bit count and the
+    /// `krabka_pgkv::rowenc` row, which already carries the bit count and the
     /// `varying` flag. Append-only — no version bump.
     pub const BITSTRING: u8 = 18;
     /// A `money` value, stored as its `i64` minor-unit count. Append-only — no
@@ -153,7 +153,7 @@ mod datum_tag {
     /// would normalise it. Append-only — no version bump.
     pub const JSON: u8 = 20;
     /// A system identifier value — `oid`, `xid`, `xid8`, `cid`, `tid` or
-    /// `pg_lsn` — stored as a one-column `crabka_pgkv::rowenc` row, which
+    /// `pg_lsn` — stored as a one-column `krabka_pgkv::rowenc` row, which
     /// already tags which of the six it is. Append-only — no version bump.
     pub const SYSID: u8 = 21;
     /// `xml` — followed by the document text (u32 length + bytes), stored and
@@ -340,15 +340,15 @@ pub(crate) fn write_type(out: &mut Vec<u8>, ty: ColumnType) {
         ColumnType::Text => out.push(type_tag::TEXT),
         ColumnType::Name => {
             out.push(type_tag::USER);
-            out.extend_from_slice(&crabka_pgtypes::oids::NAME.to_be_bytes());
+            out.extend_from_slice(&krabka_pgtypes::oids::NAME.to_be_bytes());
         }
         ColumnType::Aclitem => {
             out.push(type_tag::USER);
-            out.extend_from_slice(&crabka_pgtypes::oids::ACLITEM.to_be_bytes());
+            out.extend_from_slice(&krabka_pgtypes::oids::ACLITEM.to_be_bytes());
         }
         ColumnType::Refcursor => {
             out.push(type_tag::USER);
-            out.extend_from_slice(&crabka_pgtypes::oids::REFCURSOR.to_be_bytes());
+            out.extend_from_slice(&krabka_pgtypes::oids::REFCURSOR.to_be_bytes());
         }
         ColumnType::Varchar(limit) => write_optional_u16_type(out, type_tag::VARCHAR, limit),
         ColumnType::Char(limit) => write_optional_u16_type(out, type_tag::BPCHAR, limit),
@@ -395,11 +395,11 @@ pub(crate) fn write_type(out: &mut Vec<u8>, ty: ColumnType) {
         }
         ColumnType::Temporal(kind, precision) => {
             out.push(match kind {
-                crabka_pgtypes::TemporalType::Time => type_tag::TIME,
-                crabka_pgtypes::TemporalType::Timetz => type_tag::TIMETZ,
-                crabka_pgtypes::TemporalType::Timestamp => type_tag::TIMESTAMP,
-                crabka_pgtypes::TemporalType::Timestamptz => type_tag::TIMESTAMPTZ,
-                crabka_pgtypes::TemporalType::Interval => type_tag::INTERVAL,
+                krabka_pgtypes::TemporalType::Time => type_tag::TIME,
+                krabka_pgtypes::TemporalType::Timetz => type_tag::TIMETZ,
+                krabka_pgtypes::TemporalType::Timestamp => type_tag::TIMESTAMP,
+                krabka_pgtypes::TemporalType::Timestamptz => type_tag::TIMESTAMPTZ,
+                krabka_pgtypes::TemporalType::Interval => type_tag::INTERVAL,
             });
             out.push(precision);
         }
@@ -458,7 +458,7 @@ pub(crate) fn write_type(out: &mut Vec<u8>, ty: ColumnType) {
             out.push(type_tag::USER);
             out.extend_from_slice(
                 &named
-                    .map_or(crabka_pgtypes::oids::RECORD, |ty| ty.oid)
+                    .map_or(krabka_pgtypes::oids::RECORD, |ty| ty.oid)
                     .to_be_bytes(),
             );
         }
@@ -487,7 +487,7 @@ pub(crate) fn write_type(out: &mut Vec<u8>, ty: ColumnType) {
 
 /// Read a column's type, consuming the tag (and the numeric typmod payload).
 pub(crate) fn read_type(cur: &mut &[u8]) -> Result<ColumnType, KvError> {
-    read_type_with(cur, &crabka_pgtypes::usertype::column_type_for_oid)
+    read_type_with(cur, &krabka_pgtypes::usertype::column_type_for_oid)
         .map_err(UserTypeDecodeError::into_kv_error)
 }
 
@@ -530,7 +530,7 @@ fn read_type_with(
             if precision == u8::MAX {
                 ColumnType::Time
             } else {
-                ColumnType::Temporal(crabka_pgtypes::TemporalType::Time, precision)
+                ColumnType::Temporal(krabka_pgtypes::TemporalType::Time, precision)
             }
         }
         type_tag::TIMETZ => {
@@ -541,7 +541,7 @@ fn read_type_with(
             if precision == u8::MAX {
                 ColumnType::Timetz
             } else {
-                ColumnType::Temporal(crabka_pgtypes::TemporalType::Timetz, precision)
+                ColumnType::Temporal(krabka_pgtypes::TemporalType::Timetz, precision)
             }
         }
         type_tag::TIMESTAMP => {
@@ -552,7 +552,7 @@ fn read_type_with(
             if precision == u8::MAX {
                 ColumnType::Timestamp
             } else {
-                ColumnType::Temporal(crabka_pgtypes::TemporalType::Timestamp, precision)
+                ColumnType::Temporal(krabka_pgtypes::TemporalType::Timestamp, precision)
             }
         }
         type_tag::TIMESTAMPTZ => {
@@ -563,7 +563,7 @@ fn read_type_with(
             if precision == u8::MAX {
                 ColumnType::Timestamptz
             } else {
-                ColumnType::Temporal(crabka_pgtypes::TemporalType::Timestamptz, precision)
+                ColumnType::Temporal(krabka_pgtypes::TemporalType::Timestamptz, precision)
             }
         }
         type_tag::INTERVAL => {
@@ -571,7 +571,7 @@ fn read_type_with(
             if precision == INTERVAL_RANGE_TYPMOD {
                 let packed = i32::from_be_bytes(take_n(cur, 4)?.try_into().expect("4"));
                 let typmod =
-                    crabka_pgtypes::IntervalTypmod::from_typmod(packed).ok_or_else(|| {
+                    krabka_pgtypes::IntervalTypmod::from_typmod(packed).ok_or_else(|| {
                         KvError::CorruptRow("unsupported interval field range".into())
                     })?;
                 return Ok(ColumnType::IntervalTypmod(typmod));
@@ -582,7 +582,7 @@ fn read_type_with(
             if precision == u8::MAX {
                 ColumnType::Interval
             } else {
-                ColumnType::Temporal(crabka_pgtypes::TemporalType::Interval, precision)
+                ColumnType::Temporal(krabka_pgtypes::TemporalType::Interval, precision)
             }
         }
         type_tag::BYTEA => ColumnType::Bytea,
@@ -626,17 +626,17 @@ fn read_type_with(
         type_tag::USER => {
             let raw = take_n(cur, 4)?;
             let oid = u32::from_be_bytes(raw.try_into().expect("4 bytes fit u32"));
-            if oid == crabka_pgtypes::oids::RECORD {
+            if oid == krabka_pgtypes::oids::RECORD {
                 ColumnType::Record(None)
-            } else if oid == crabka_pgtypes::oids::NAME {
+            } else if oid == krabka_pgtypes::oids::NAME {
                 ColumnType::Name
-            } else if oid == crabka_pgtypes::oids::ACLITEM {
+            } else if oid == krabka_pgtypes::oids::ACLITEM {
                 ColumnType::Aclitem
-            } else if oid == crabka_pgtypes::oids::REFCURSOR {
+            } else if oid == krabka_pgtypes::oids::REFCURSOR {
                 ColumnType::Refcursor
-            } else if let Some(builtin) = crabka_pgtypes::ColumnType::builtin_range(oid)
-                .or_else(|| crabka_pgtypes::ColumnType::builtin_multirange(oid))
-                .or_else(|| crabka_pgtypes::ColumnType::information_schema_domain_by_oid(oid))
+            } else if let Some(builtin) = krabka_pgtypes::ColumnType::builtin_range(oid)
+                .or_else(|| krabka_pgtypes::ColumnType::builtin_multirange(oid))
+                .or_else(|| krabka_pgtypes::ColumnType::information_schema_domain_by_oid(oid))
             {
                 builtin
             } else {
@@ -652,12 +652,12 @@ fn read_type_with(
 fn read_elem_type_with(
     cur: &mut &[u8],
     resolve_user_type: &dyn Fn(u32) -> Option<ColumnType>,
-) -> Result<crabka_pgtypes::ElemType, UserTypeDecodeError> {
+) -> Result<krabka_pgtypes::ElemType, UserTypeDecodeError> {
     let Some(code) = cur.first().copied() else {
         return Err(KvError::CorruptRow("unknown array element type encoding".into()).into());
     };
     if !matches!(code, 18 | 19 | 25 | 26) {
-        return crabka_pgtypes::ElemType::read_code(cur).ok_or_else(|| {
+        return krabka_pgtypes::ElemType::read_code(cur).ok_or_else(|| {
             KvError::CorruptRow("unknown array element type encoding".into()).into()
         });
     }
@@ -672,21 +672,21 @@ fn read_elem_type_with(
         ColumnType::builtin_range(oid).or_else(|| resolve_user_type(oid))
     } else if code == 19 {
         ColumnType::builtin_multirange(oid).or_else(|| resolve_user_type(oid))
-    } else if code == 25 && oid == crabka_pgtypes::oids::RECORD {
+    } else if code == 25 && oid == krabka_pgtypes::oids::RECORD {
         Some(ColumnType::Record(None))
     } else {
         resolve_user_type(oid)
     }
     .ok_or(UserTypeDecodeError::UnresolvedUserType(oid))?;
     match (code, ty) {
-        (18, ColumnType::Range(range)) => Ok(crabka_pgtypes::ElemType::Range(range)),
+        (18, ColumnType::Range(range)) => Ok(krabka_pgtypes::ElemType::Range(range)),
         (19, ColumnType::Multirange(multirange)) => {
-            Ok(crabka_pgtypes::ElemType::Multirange(multirange))
+            Ok(krabka_pgtypes::ElemType::Multirange(multirange))
         }
-        (25, ColumnType::Record(record)) => Ok(crabka_pgtypes::ElemType::Record(record)),
-        (26, ColumnType::Enum(user)) => Ok(crabka_pgtypes::ElemType::User(user)),
-        (26, ColumnType::Domain(domain)) => Ok(crabka_pgtypes::ElemType::User(domain.as_ref())),
-        (26, ColumnType::Base(base)) => Ok(crabka_pgtypes::ElemType::User(base.as_ref())),
+        (25, ColumnType::Record(record)) => Ok(krabka_pgtypes::ElemType::Record(record)),
+        (26, ColumnType::Enum(user)) => Ok(krabka_pgtypes::ElemType::User(user)),
+        (26, ColumnType::Domain(domain)) => Ok(krabka_pgtypes::ElemType::User(domain.as_ref())),
+        (26, ColumnType::Base(base)) => Ok(krabka_pgtypes::ElemType::User(base.as_ref())),
         _ => Err(
             KvError::CorruptRow(format!("array element oid {oid} has the wrong type kind")).into(),
         ),
@@ -816,7 +816,7 @@ fn write_default_value(out: &mut Vec<u8>, default: &Datum) {
         Datum::Array(array) => {
             out.push(datum_tag::ARRAY);
             array.elem.write_code(out);
-            write_bytes(out, &crabka_pgkv::rowenc::encode_row(&array.elems));
+            write_bytes(out, &krabka_pgkv::rowenc::encode_row(&array.elems));
         }
         // Only the oid: the relation name is re-derived on read.
         Datum::Regclass(value) => {
@@ -851,14 +851,14 @@ fn write_default_value(out: &mut Vec<u8>, default: &Datum) {
             out.push(datum_tag::BITSTRING);
             write_bytes(
                 out,
-                &crabka_pgkv::rowenc::encode_row(std::slice::from_ref(default)),
+                &krabka_pgkv::rowenc::encode_row(std::slice::from_ref(default)),
             );
         }
         Datum::Inet(_) | Datum::MacAddr(_) | Datum::MacAddr8(_) => {
             out.push(datum_tag::NETWORK);
             write_bytes(
                 out,
-                &crabka_pgkv::rowenc::encode_row(std::slice::from_ref(default)),
+                &krabka_pgkv::rowenc::encode_row(std::slice::from_ref(default)),
             );
         }
         Datum::Oid(_)
@@ -870,21 +870,21 @@ fn write_default_value(out: &mut Vec<u8>, default: &Datum) {
             out.push(datum_tag::SYSID);
             write_bytes(
                 out,
-                &crabka_pgkv::rowenc::encode_row(std::slice::from_ref(default)),
+                &krabka_pgkv::rowenc::encode_row(std::slice::from_ref(default)),
             );
         }
         Datum::Range(_) => {
             out.push(datum_tag::RANGE);
             write_bytes(
                 out,
-                &crabka_pgkv::rowenc::encode_row(std::slice::from_ref(default)),
+                &krabka_pgkv::rowenc::encode_row(std::slice::from_ref(default)),
             );
         }
         Datum::Multirange(_) => {
             out.push(datum_tag::MULTIRANGE);
             write_bytes(
                 out,
-                &crabka_pgkv::rowenc::encode_row(std::slice::from_ref(default)),
+                &krabka_pgkv::rowenc::encode_row(std::slice::from_ref(default)),
             );
         }
         Datum::Date(_)
@@ -951,7 +951,7 @@ fn read_default_value(cur: &mut &[u8]) -> Result<Datum, KvError> {
         datum_tag::NUMERIC => {
             let raw = read_string(cur)?;
             Datum::Numeric(
-                crabka_pgtypes::numeric::parse(&raw).ok_or_else(|| {
+                krabka_pgtypes::numeric::parse(&raw).ok_or_else(|| {
                     KvError::CorruptRow(format!("invalid numeric default {raw:?}"))
                 })?,
             )
@@ -959,21 +959,21 @@ fn read_default_value(cur: &mut &[u8]) -> Result<Datum, KvError> {
         datum_tag::JSONB => {
             let raw = read_string(cur)?;
             Datum::Jsonb(
-                crabka_pgtypes::jsonb::parse(&raw)
+                krabka_pgtypes::jsonb::parse(&raw)
                     .map_err(|_| KvError::CorruptRow(format!("invalid jsonb default {raw:?}")))?,
             )
         }
         datum_tag::JSON => Datum::Json(read_string(cur)?),
         datum_tag::XML => Datum::Xml(read_string(cur)?),
         datum_tag::ARRAY => {
-            let elem = crabka_pgtypes::ElemType::read_code(cur)
+            let elem = krabka_pgtypes::ElemType::read_code(cur)
                 .ok_or_else(|| KvError::CorruptRow("unknown array element type code".into()))?;
-            let elems = crabka_pgkv::rowenc::decode_row(read_str(cur)?)?;
-            Datum::Array(crabka_pgtypes::ArrayValue::new(elem, elems))
+            let elems = krabka_pgkv::rowenc::decode_row(read_str(cur)?)?;
+            Datum::Array(krabka_pgtypes::ArrayValue::new(elem, elems))
         }
         // Only the oid was stored, so the value comes back unresolved: the
         // catalog-aware layer above re-derives the name it prints.
-        datum_tag::REGCLASS => Datum::Regclass(crabka_pgtypes::RegclassValue::unresolved(
+        datum_tag::REGCLASS => Datum::Regclass(krabka_pgtypes::RegclassValue::unresolved(
             i32::from_be_bytes(take_n(cur, 4)?.try_into().expect("4")),
         )),
         datum_tag::TSVECTOR => {
@@ -998,14 +998,14 @@ fn read_default_value(cur: &mut &[u8]) -> Result<Datum, KvError> {
         )),
         datum_tag::INTERNAL_CHAR => Datum::InternalChar(take_u8(cur)?),
         datum_tag::BITSTRING => {
-            let mut values = crabka_pgkv::rowenc::decode_row(read_str(cur)?)?;
+            let mut values = krabka_pgkv::rowenc::decode_row(read_str(cur)?)?;
             if values.len() != 1 || !matches!(values.first(), Some(Datum::BitString(_))) {
                 return Err(KvError::CorruptRow("invalid bit string default".into()));
             }
             values.pop().expect("length checked")
         }
         datum_tag::NETWORK => {
-            let mut values = crabka_pgkv::rowenc::decode_row(read_str(cur)?)?;
+            let mut values = krabka_pgkv::rowenc::decode_row(read_str(cur)?)?;
             if values.len() != 1
                 || !matches!(
                     values.first(),
@@ -1019,7 +1019,7 @@ fn read_default_value(cur: &mut &[u8]) -> Result<Datum, KvError> {
             values.pop().expect("length checked")
         }
         datum_tag::SYSID => {
-            let mut values = crabka_pgkv::rowenc::decode_row(read_str(cur)?)?;
+            let mut values = krabka_pgkv::rowenc::decode_row(read_str(cur)?)?;
             if values.len() != 1
                 || !matches!(
                     values.first(),
@@ -1040,14 +1040,14 @@ fn read_default_value(cur: &mut &[u8]) -> Result<Datum, KvError> {
             values.pop().expect("length checked")
         }
         datum_tag::RANGE => {
-            let mut values = crabka_pgkv::rowenc::decode_row(read_str(cur)?)?;
+            let mut values = krabka_pgkv::rowenc::decode_row(read_str(cur)?)?;
             if values.len() != 1 || !matches!(values.first(), Some(Datum::Range(_))) {
                 return Err(KvError::CorruptRow("invalid range default".into()));
             }
             values.pop().expect("length checked")
         }
         datum_tag::MULTIRANGE => {
-            let mut values = crabka_pgkv::rowenc::decode_row(read_str(cur)?)?;
+            let mut values = krabka_pgkv::rowenc::decode_row(read_str(cur)?)?;
             if values.len() != 1 || !matches!(values.first(), Some(Datum::Multirange(_))) {
                 return Err(KvError::CorruptRow("invalid multirange default".into()));
             }
@@ -2391,7 +2391,7 @@ pub fn serialize_user_type(ty: &UserType) -> Vec<u8> {
                     out.push(1);
                     write_str(
                         &mut out,
-                        &if schema == crabka_pgtypes::usertype::USER_TYPE_DEFAULT_SCHEMA {
+                        &if schema == krabka_pgtypes::usertype::USER_TYPE_DEFAULT_SCHEMA {
                             name.clone()
                         } else {
                             format!("{schema}.{name}")
@@ -2479,7 +2479,7 @@ pub fn serialize_user_type(ty: &UserType) -> Vec<u8> {
 /// reader just asked for. That cannot happen: `take_n` either yields exactly
 /// that many bytes or returns the corruption error above.
 pub fn deserialize_user_type(bytes: &[u8]) -> Result<UserType, KvError> {
-    deserialize_user_type_with(bytes, &crabka_pgtypes::usertype::column_type_for_oid)
+    deserialize_user_type_with(bytes, &krabka_pgtypes::usertype::column_type_for_oid)
         .map_err(UserTypeDecodeError::into_kv_error)
 }
 
@@ -2588,7 +2588,7 @@ pub(crate) fn deserialize_user_type_with(
         USER_TYPE_SHELL => UserTypeBody::Shell,
         USER_TYPE_BASE => {
             let representation = read_type_with(&mut cur, resolve_user_type)?;
-            let layout = crabka_pgtypes::usertype::BaseLayout {
+            let layout = krabka_pgtypes::usertype::BaseLayout {
                 length: i16::from_be_bytes(take_n(&mut cur, 2)?.try_into().expect("2")),
                 by_value: take_u8(&mut cur)? != 0,
                 alignment: char::from(take_u8(&mut cur)?),
@@ -2686,7 +2686,7 @@ pub(crate) fn deserialize_user_type_with(
     }
     Ok(UserType {
         oid,
-        array_oid: crabka_pgtypes::usertype::user_array_oid(oid),
+        array_oid: krabka_pgtypes::usertype::user_array_oid(oid),
         schema,
         name,
         body,
@@ -2703,7 +2703,7 @@ fn legacy_user_type_identity(name: &str) -> (String, String) {
     name.rsplit_once('.').map_or_else(
         || {
             (
-                crabka_pgtypes::usertype::USER_TYPE_DEFAULT_SCHEMA.to_string(),
+                krabka_pgtypes::usertype::USER_TYPE_DEFAULT_SCHEMA.to_string(),
                 name.to_string(),
             )
         },
@@ -2961,7 +2961,7 @@ pub(crate) fn take_n<'a>(cur: &mut &'a [u8], n: usize) -> Result<&'a [u8], KvErr
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgtypes::{ColumnType, Datum};
+    use krabka_pgtypes::{ColumnType, Datum};
 
     use super::*;
     use crate::{
@@ -2980,7 +2980,7 @@ mod tests {
             Column {
                 name: "amount".into(),
                 dropped: false,
-                ty: ColumnType::Numeric(Some(crabka_pgtypes::numeric::Typmod {
+                ty: ColumnType::Numeric(Some(krabka_pgtypes::numeric::Typmod {
                     precision: 10,
                     scale: 2,
                 })),
@@ -3183,9 +3183,9 @@ mod tests {
     #[test]
     fn roundtrip_jsonb_and_array_column_defaults() {
         use assert2::assert;
-        use crabka_pgtypes::{ArrayValue, ElemType};
+        use krabka_pgtypes::{ArrayValue, ElemType};
 
-        let doc = crabka_pgtypes::jsonb::parse(r#"{"b":[1,{"c":null}],"a":"x"}"#).expect("jsonb");
+        let doc = krabka_pgtypes::jsonb::parse(r#"{"b":[1,{"c":null}],"a":"x"}"#).expect("jsonb");
         let columns = vec![
             Column {
                 name: "doc".into(),
@@ -3332,7 +3332,7 @@ mod tests {
     #[test]
     fn roundtrip_schema_jsonb_and_array_types() {
         use assert2::assert;
-        use crabka_pgtypes::ElemType;
+        use krabka_pgtypes::ElemType;
 
         let table_id = 21u32;
         let mut columns = vec![Column::new("doc", ColumnType::Jsonb)];
@@ -3347,7 +3347,7 @@ mod tests {
             ColumnType::Array(ElemType::Record(None)),
         ));
         let ColumnType::Range(range) =
-            ColumnType::builtin_range(crabka_pgtypes::oids::INT8RANGE).expect("int8range")
+            ColumnType::builtin_range(krabka_pgtypes::oids::INT8RANGE).expect("int8range")
         else {
             unreachable!()
         };
@@ -3373,20 +3373,20 @@ mod tests {
     #[test]
     fn roundtrip_schema_with_every_user_array_element_kind() {
         let users = [
-            crabka_pgtypes::usertype::UserType {
+            krabka_pgtypes::usertype::UserType {
                 oid: 301_120,
-                array_oid: crabka_pgtypes::usertype::user_array_oid(301_120),
-                schema: crabka_pgtypes::usertype::USER_TYPE_DEFAULT_SCHEMA.into(),
+                array_oid: krabka_pgtypes::usertype::user_array_oid(301_120),
+                schema: krabka_pgtypes::usertype::USER_TYPE_DEFAULT_SCHEMA.into(),
                 name: "serde_enum_array".into(),
-                body: crabka_pgtypes::usertype::UserTypeBody::Enum(vec!["ok".into()]),
+                body: krabka_pgtypes::usertype::UserTypeBody::Enum(vec!["ok".into()]),
             },
-            crabka_pgtypes::usertype::UserType {
+            krabka_pgtypes::usertype::UserType {
                 oid: 301_124,
-                array_oid: crabka_pgtypes::usertype::user_array_oid(301_124),
-                schema: crabka_pgtypes::usertype::USER_TYPE_DEFAULT_SCHEMA.into(),
+                array_oid: krabka_pgtypes::usertype::user_array_oid(301_124),
+                schema: krabka_pgtypes::usertype::USER_TYPE_DEFAULT_SCHEMA.into(),
                 name: "serde_domain_array".into(),
-                body: crabka_pgtypes::usertype::UserTypeBody::Domain(
-                    crabka_pgtypes::usertype::DomainBody {
+                body: krabka_pgtypes::usertype::UserTypeBody::Domain(
+                    krabka_pgtypes::usertype::DomainBody {
                         base: ColumnType::Int4,
                         not_null: false,
                         not_null_name: None,
@@ -3395,15 +3395,15 @@ mod tests {
                     },
                 ),
             },
-            crabka_pgtypes::usertype::UserType {
+            krabka_pgtypes::usertype::UserType {
                 oid: 301_128,
-                array_oid: crabka_pgtypes::usertype::user_array_oid(301_128),
-                schema: crabka_pgtypes::usertype::USER_TYPE_DEFAULT_SCHEMA.into(),
+                array_oid: krabka_pgtypes::usertype::user_array_oid(301_128),
+                schema: krabka_pgtypes::usertype::USER_TYPE_DEFAULT_SCHEMA.into(),
                 name: "serde_base_array".into(),
-                body: crabka_pgtypes::usertype::UserTypeBody::Base(
-                    crabka_pgtypes::usertype::BaseBody {
+                body: krabka_pgtypes::usertype::UserTypeBody::Base(
+                    krabka_pgtypes::usertype::BaseBody {
                         representation: ColumnType::Int4,
-                        layout: crabka_pgtypes::usertype::BaseLayout::from_representation(
+                        layout: krabka_pgtypes::usertype::BaseLayout::from_representation(
                             ColumnType::Int4,
                         ),
                         element: None,
@@ -3425,14 +3425,14 @@ mod tests {
             },
         ];
         for user in &users {
-            crabka_pgtypes::usertype::replace(user);
+            krabka_pgtypes::usertype::replace(user);
         }
         let columns = users
             .iter()
             .map(|user| {
                 Column::new(
                     &user.name,
-                    ColumnType::Array(crabka_pgtypes::ElemType::User(user.type_ref())),
+                    ColumnType::Array(krabka_pgtypes::ElemType::User(user.type_ref())),
                 )
             })
             .collect::<Vec<_>>();
@@ -3461,7 +3461,7 @@ mod tests {
             .is_err()
         );
         for user in &users {
-            crabka_pgtypes::usertype::unregister(&user.name);
+            krabka_pgtypes::usertype::unregister(&user.name);
         }
     }
 
@@ -3483,7 +3483,7 @@ mod tests {
             Column::new(
                 "multirange_values",
                 ColumnType::array_of(
-                    ColumnType::builtin_multirange(crabka_pgtypes::oids::INT4MULTIRANGE)
+                    ColumnType::builtin_multirange(krabka_pgtypes::oids::INT4MULTIRANGE)
                         .expect("int4multirange"),
                 )
                 .expect("int4multirange[]"),
@@ -3512,7 +3512,7 @@ mod tests {
 
         let columns = vec![Column::new(
             "arr",
-            ColumnType::Array(crabka_pgtypes::ElemType::Int4),
+            ColumnType::Array(krabka_pgtypes::ElemType::Int4),
         )];
         let mut bytes = serialize_schema(
             3,
@@ -3580,16 +3580,16 @@ mod tests {
             ColumnType::Line,
             ColumnType::Circle,
             ColumnType::Record(None),
-            ColumnType::builtin_range(crabka_pgtypes::oids::INT4RANGE).expect("built-in range"),
+            ColumnType::builtin_range(krabka_pgtypes::oids::INT4RANGE).expect("built-in range"),
         ];
 
         // Every element type has an array type, and the length-modified families
         // carry their modifier on the element — a `varchar(3)[]` column must not
         // read back as an unbounded `varchar[]`, which is what a bare element
         // code byte would give.
-        let arrays = crabka_pgtypes::ElemType::ALL.into_iter().chain([
-            crabka_pgtypes::ElemType::Varchar(Some(3)),
-            crabka_pgtypes::ElemType::Char(Some(2)),
+        let arrays = krabka_pgtypes::ElemType::ALL.into_iter().chain([
+            krabka_pgtypes::ElemType::Varchar(Some(3)),
+            krabka_pgtypes::ElemType::Char(Some(2)),
         ]);
 
         for ty in types.into_iter().chain(arrays.map(ColumnType::Array)) {
@@ -3698,7 +3698,7 @@ mod tests {
             Column::new("doc", ColumnType::Jsonb),
             Column::new(
                 "tags",
-                ColumnType::Array(crabka_pgtypes::ElemType::Varchar(Some(3))),
+                ColumnType::Array(krabka_pgtypes::ElemType::Varchar(Some(3))),
             ),
         ];
         let bytes = serialize_schema(
@@ -3807,7 +3807,7 @@ mod tests {
     fn roundtrip_range_type_metadata() {
         let ty = UserType {
             oid: 300_000,
-            array_oid: crabka_pgtypes::usertype::user_array_oid(300_000),
+            array_oid: krabka_pgtypes::usertype::user_array_oid(300_000),
             schema: "catalog_types".into(),
             name: "textrange".into(),
             body: UserTypeBody::Range(RangeBody {
@@ -3824,7 +3824,7 @@ mod tests {
     fn roundtrip_composite_type_keeps_dropped_attributes() {
         let ty = UserType {
             oid: 300_001,
-            array_oid: crabka_pgtypes::usertype::user_array_oid(300_001),
+            array_oid: krabka_pgtypes::usertype::user_array_oid(300_001),
             schema: "catalog_types".into(),
             name: "composite_with_gap".into(),
             body: UserTypeBody::Composite(vec![
@@ -3847,12 +3847,12 @@ mod tests {
     fn base_type_metadata_roundtrips() {
         let ty = UserType {
             oid: 300_002,
-            array_oid: crabka_pgtypes::usertype::user_array_oid(300_002),
+            array_oid: krabka_pgtypes::usertype::user_array_oid(300_002),
             schema: "catalog_types".into(),
             name: "stored_text".into(),
             body: UserTypeBody::Base(BaseBody {
                 representation: ColumnType::Text,
-                layout: crabka_pgtypes::usertype::BaseLayout::from_representation(ColumnType::Text),
+                layout: krabka_pgtypes::usertype::BaseLayout::from_representation(ColumnType::Text),
                 element: Some(ColumnType::Int4),
                 default: Some("'stored default'".into()),
                 input: "stored_text_in".into(),
@@ -3876,7 +3876,7 @@ mod tests {
     fn domain_constraint_validation_state_roundtrips() {
         let ty = UserType {
             oid: 300_004,
-            array_oid: crabka_pgtypes::usertype::user_array_oid(300_004),
+            array_oid: krabka_pgtypes::usertype::user_array_oid(300_004),
             schema: "catalog_types".into(),
             name: "unvalidated_domain".into(),
             body: UserTypeBody::Domain(DomainBody {
@@ -3898,7 +3898,7 @@ mod tests {
     fn user_type_identity_roundtrips_dotted_identifiers() {
         let ty = UserType {
             oid: 300_004,
-            array_oid: crabka_pgtypes::usertype::user_array_oid(300_004),
+            array_oid: krabka_pgtypes::usertype::user_array_oid(300_004),
             schema: "schema.with.dot".into(),
             name: "type.with.dot".into(),
             body: UserTypeBody::Composite(Vec::new()),
@@ -4651,7 +4651,7 @@ mod tests {
     #[test]
     fn temporal_precision_round_trips_through_schema_encoding() {
         use assert2::assert;
-        use crabka_pgtypes::{ColumnType, IntervalTypmod, TemporalType, datetime::IntervalField};
+        use krabka_pgtypes::{ColumnType, IntervalTypmod, TemporalType, datetime::IntervalField};
 
         let ty = ColumnType::Temporal(TemporalType::Timestamptz, 2);
         let mut bytes = Vec::new();

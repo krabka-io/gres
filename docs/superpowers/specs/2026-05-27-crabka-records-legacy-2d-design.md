@@ -11,7 +11,7 @@ handlers for legacy versions are all on `main`.
 
 Prove the legacy-client path works end-to-end by driving a real
 Apache Kafka 0.10.0 console-producer and console-consumer (inside a
-`cp-kafka:3.1.2` container) against a Rust `crabka-broker` running on
+`cp-kafka:3.1.2` container) against a Rust `krabka-broker` running on
 the host. Cover the pure-legacy round-trip and both cross-version
 directions (legacy↔modern) so down-conversion and up-conversion are
 each exercised against a genuine JVM client.
@@ -48,7 +48,7 @@ Reuse the existing helpers as-is:
   advertised as `host.docker.internal:9092`.
 - `docker_run_kafka_tool_with_image(image, args)` → invokes
   `docker run --rm --add-host=host.docker.internal:host-gateway <image>
-  <args...>`. Already parameterized over the image.
+<args...>`. Already parameterized over the image.
 - `nc_check_connectivity()` → optional bridge-network sanity check.
 
 ### Tests (all `#[ignore = "requires Docker"]`)
@@ -93,7 +93,7 @@ Reuse the existing helpers as-is:
 No workflow changes. The existing `broker-jvm-acceptance` job already runs:
 
 ```
-cargo llvm-cov -p crabka-broker --test jvm_acceptance --lcov \
+cargo llvm-cov -p krabka-broker --test jvm_acceptance --lcov \
   --output-path coverage/broker-jvm-acceptance.lcov \
   -- --ignored --nocapture --test-threads=1
 ```
@@ -104,6 +104,7 @@ adds a one-time pull (~400 MB) per CI run.
 ### Error handling
 
 Same pattern as the existing JVM tests:
+
 - Docker unavailable → test panics; framework reports failure.
 - Image pull timeout → test panics.
 - Record mismatch → assertion failure prints actual vs. expected.
@@ -113,7 +114,7 @@ Same pattern as the existing JVM tests:
 
 ## Testing strategy
 
-These tests *are* the testing strategy for this slice — they're the
+These tests _are_ the testing strategy for this slice — they're the
 end-to-end validation that the v0/v1 down-conversion plan works
 against a real JVM client. No new unit tests are added; the unit and
 integration coverage from slices 2a/2b/2c already covers the
@@ -123,7 +124,7 @@ internals.
 
 1. Add `KAFKA_IMAGE_LEGACY` const.
 2. Test 1 (round-trip): write the test, run with `--ignored
-   --nocapture`, debug any framing/connectivity issues, commit.
+--nocapture`, debug any framing/connectivity issues, commit.
 3. Test 2 (up-conv): same pattern.
 4. Test 3 (down-conv): same pattern; the most likely place to find a
    real wire-format bug.
@@ -144,5 +145,5 @@ the legacy image misbehaves on a specific test.
   goes away mid-PR, fall back to `wurstmeister/kafka:0.10.0.1`.
 - **`host.docker.internal` resolution** on the GHA ubuntu-24.04
   runner. The existing tests already use `--add-host=
-  host.docker.internal:host-gateway` and document why
+host.docker.internal:host-gateway` and document why
   `--network host` is unreliable; the new tests follow that pattern.

@@ -1,5 +1,5 @@
 [package]
-name = "crabka-object-store"
+name = "krabka-object-store"
 # Internal plumbing (shared object-store construction); not part of the curated
 # public crate surface — see the allowlist in tools/check-publish-allowlist.sh.
 publish = false
@@ -11,7 +11,7 @@ rust-version.workspace = true
 description = "Unified object-store construction (typed config -> object_store handle) shared by Crabka's KIP-405 tiered storage and observability blockstore"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-object-store"
+documentation = "https://docs.rs/krabka-object-store"
 readme = "README.md"
 keywords = ["kafka", "object-store", "s3", "gcs", "crabka"]
 categories = ["database-implementations", "filesystem"]

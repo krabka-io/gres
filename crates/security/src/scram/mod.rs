@@ -149,7 +149,7 @@ pub fn hash_scram_password_with_salt(
 /// KIP-554 and RFC 5802 call this output the "salted password". Its length
 /// matches [`scram_hash_len`]: 32 bytes for SHA-256, 64 bytes for SHA-512.
 ///
-/// `crabka-client-admin` uses this function to populate
+/// `krabka-client-admin` uses this function to populate
 /// `AlterUserScramCredentialsRequest.upsertions[].salted_password`. It does so
 /// without leaking the broker-side `derive_keys_from_salted` machinery or the
 /// raw password into the operator. This function panics on a non-SCRAM

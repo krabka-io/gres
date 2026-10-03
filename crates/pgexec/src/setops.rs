@@ -10,9 +10,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crabka_pgkv::Kv;
-use crabka_pgparser::ast::{Expr, QueryBody, SetExpr, SetOp};
-use crabka_pgtypes::{ColumnType, Datum};
+use krabka_pgkv::Kv;
+use krabka_pgparser::ast::{Expr, QueryBody, SetExpr, SetOp};
+use krabka_pgtypes::{ColumnType, Datum};
 
 use crate::{
     clock::EvalCtx,
@@ -209,7 +209,7 @@ pub(crate) fn describe_set_expr_with_ctes(
     resolution: &crate::relname::ResolutionScope,
     body: &SetExpr,
     ctes: &crate::cte::CteContext,
-) -> Result<Vec<crabka_pgwire::engine::FieldDescription>, ExecError> {
+) -> Result<Vec<krabka_pgwire::engine::FieldDescription>, ExecError> {
     let cols = resolve_set_columns(catalog_kv, resolution, body, ctes, 0)?;
     Ok(cols
         .iter()
@@ -246,7 +246,7 @@ pub(crate) fn set_expr_relation(
 pub(crate) fn set_expr_to_relation(
     ctx: &crate::subquery::SubCtx<'_>,
     body: &SetExpr,
-    order_by: &[crabka_pgparser::ast::OrderItem],
+    order_by: &[krabka_pgparser::ast::OrderItem],
     window: crate::exec::RowWindow,
 ) -> Result<crate::join::Relation, ExecError> {
     let cols = resolve_set_columns(ctx.catalog_kv, ctx.fctx.resolution, body, ctx.ctes, 0)?;
@@ -584,7 +584,7 @@ mod tests {
     /// session dispatch.
     #[tokio::test]
     async fn union_runs_end_to_end() {
-        use crabka_pgwire::engine::{Engine, QueryResult, Session};
+        use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
         use crate::SqlEngine;
 
@@ -619,10 +619,10 @@ mod tests {
     #[tokio::test]
     async fn runtime_policy_caps_set_operation_materialization() {
         use assert2::assert;
-        use crabka_pgwire::engine::{Engine, Session};
+        use krabka_pgwire::engine::{Engine, Session};
 
         let engine = crate::SqlEngine::new_with_policy(crate::RuntimePolicy {
-            blocking_query_memory: crabka_units::bytes(1),
+            blocking_query_memory: krabka_units::bytes(1),
             ..Default::default()
         })
         .expect("policy");
@@ -637,7 +637,7 @@ mod tests {
 
     /// Every value of column 0, as wire text (`None` for SQL NULL).
     async fn column0(engine: &crate::SqlEngine, sql: &str) -> Vec<Option<String>> {
-        use crabka_pgwire::engine::{Engine, QueryResult, Session};
+        use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
         let r = engine
             .connect()
@@ -668,7 +668,7 @@ mod tests {
     #[tokio::test]
     async fn subquery_under_every_expr_form_in_a_union_branch() {
         use assert2::assert;
-        use crabka_pgwire::engine::{Engine, Session};
+        use krabka_pgwire::engine::{Engine, Session};
 
         let engine = crate::SqlEngine::new();
         let mut s = engine.connect();
@@ -775,7 +775,7 @@ mod tests {
     #[tokio::test]
     async fn correlated_case_subquery_in_a_union_branch() {
         use assert2::assert;
-        use crabka_pgwire::engine::{Engine, Session};
+        use krabka_pgwire::engine::{Engine, Session};
 
         let engine = crate::SqlEngine::new();
         let mut s = engine.connect();
@@ -828,7 +828,7 @@ mod tests {
     /// (invalid_column_reference), NOT 0A000.
     #[tokio::test]
     async fn order_by_position_out_of_range_is_42p10() {
-        use crabka_pgwire::engine::{Engine, Session};
+        use krabka_pgwire::engine::{Engine, Session};
 
         use crate::SqlEngine;
 

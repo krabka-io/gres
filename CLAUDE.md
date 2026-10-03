@@ -22,7 +22,7 @@ When in doubt, match Kafka. If Kafka's behavior is undocumented or version-depen
 
 ## Code & Documentation Style
 
-Follow the style guides in [`docs/style_guides/`](docs/style_guides/README.md): [code](docs/style_guides/code_style_guide.md), [rustdoc](docs/style_guides/rustdoc_style_guide.md), [README](docs/style_guides/readme_style_guide.md), [design docs](docs/style_guides/design_doc_style_guide.md), and [coverage reports](docs/style_guides/coverage_report_style_guide.md). The guides record Crabka's conventions. Examples are the pinned stable toolchain, `cargo +nightly fmt`, forbidden `unsafe`, and `clippy::pedantic`. The guides also cover workspace lints and dependencies, `crabka-<name>` crates, thiserror error enums, tokio, and `assert2`/`nextest`/mutation testing.
+Follow the style guides in [`docs/style_guides/`](docs/style_guides/README.md): [code](docs/style_guides/code_style_guide.md), [rustdoc](docs/style_guides/rustdoc_style_guide.md), [README](docs/style_guides/readme_style_guide.md), [design docs](docs/style_guides/design_doc_style_guide.md), and [coverage reports](docs/style_guides/coverage_report_style_guide.md). The guides record Crabka's conventions. Examples are the pinned stable toolchain, `cargo +nightly fmt`, forbidden `unsafe`, and `clippy::pedantic`. The guides also cover workspace lints and dependencies, `krabka-<name>` crates, thiserror error enums, tokio, and `assert2`/`nextest`/mutation testing.
 
 Do not make style-only sweeps across untouched files. Bring a file into line with the guides only when you already edit it. Keep the tidy-up proportionate to the change.
 
@@ -39,7 +39,7 @@ Sequential dispatch of one task at a time wastes wall-clock time. Use sequential
 
 A "conflict" between parallel implementers occurs only when both edit the same file. Tasks such as "add wire codes" in codes.rs and "add metadata fields" in records.rs do not conflict, and you should run them together. When in doubt, list the file set that each task touches before you decide.
 
-**Never discard working-tree state while parallel implementers run.** `git checkout -- <path>`, `git restore`, `git stash`, and `git clean` all destroy *every* uncommitted change in the files they touch, not only yours. In a shared worktree, those files usually hold the unfinished work of another agent. To undo your own edit, reverse it directly. Re-edit the region, or apply a reverse patch of your own diff. This has already destroyed the uncommitted work of one agent.
+**Never discard working-tree state while parallel implementers run.** `git checkout -- <path>`, `git restore`, `git stash`, and `git clean` all destroy _every_ uncommitted change in the files they touch, not only yours. In a shared worktree, those files usually hold the unfinished work of another agent. To undo your own edit, reverse it directly. Re-edit the region, or apply a reverse patch of your own diff. This has already destroyed the uncommitted work of one agent.
 
 Tests must exercise behavior, not source text. Do not read source files in tests and assert against their contents. `include_str!` and `fs::read_to_string` are examples of such reads. If a behavior is hard to test, add a narrow helper or seam. Then test that behavior directly.
 

@@ -12,13 +12,13 @@ use std::{
 };
 
 use bytes::{BufMut, Bytes, BytesMut};
-use crabka_ids::{ApiKey, ApiVersion};
-use crabka_units::{
+use dashmap::DashMap;
+use krabka_ids::{ApiKey, ApiVersion};
+use krabka_units::{
     ByteSize, Time,
     convert::{ByteSizeExt as _, TimeExt as _},
     mebibytes, secs,
 };
-use dashmap::DashMap;
 use refined_type::rule::{GreaterI64, GreaterUsize};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -476,7 +476,7 @@ impl Connection {
             cursor = &cursor[1..];
         }
 
-        let resp = <R::Response as crabka_protocol::Decode>::decode(&mut cursor, version)?;
+        let resp = <R::Response as krabka_protocol::Decode>::decode(&mut cursor, version)?;
         Ok(resp)
     }
 
@@ -512,7 +512,7 @@ impl Connection {
     ///
     /// This method bypasses the typed [`ProtocolRequest`] codegen path so
     /// callers can speak Crabka-private APIs whose wire types live outside
-    /// `crabka-protocol`, for example the controller's Raft RPCs at api keys
+    /// `krabka-protocol`, for example the controller's Raft RPCs at api keys
     /// 1000+.
     ///
     /// This method always writes the header as `RequestHeader v2` (flexible)
@@ -616,7 +616,7 @@ impl Connection {
 /// buffered, no inbound traffic ever re-drives the loop, and the caller's
 /// request never reaches the wire.
 ///
-/// This is what made `crabka-client-consumer`'s group rejoin hang under the
+/// This is what made `krabka-client-consumer`'s group rejoin hang under the
 /// jemalloc heap-profiling allocator. Its per-alloc sampling latency widened
 /// that window enough to trip the hang deterministically. Independent halves
 /// keep an inbound frame pollable while an outbound write is in flight, and
@@ -739,7 +739,7 @@ fn build_request_header(
 /// version 0.
 #[tracing::instrument(level = "debug", skip_all, err)]
 async fn fetch_api_versions(conn: &Connection) -> Result<ApiVersionTable, ClientError> {
-    use crabka_protocol::{
+    use krabka_protocol::{
         Encode,
         owned::{
             api_versions_request::ApiVersionsRequest, api_versions_response::ApiVersionsResponse,
@@ -778,7 +778,7 @@ async fn fetch_api_versions(conn: &Connection) -> Result<ApiVersionTable, Client
     // No tagged-fields byte — this holds for all ApiVersionsResponse versions,
     // including flexible ones (the Kafka asymmetry documented in `send`).
     let mut cursor: &[u8] = &body_bytes;
-    let resp = <ApiVersionsResponse as crabka_protocol::Decode>::decode(&mut cursor, 0)?;
+    let resp = <ApiVersionsResponse as krabka_protocol::Decode>::decode(&mut cursor, 0)?;
     if resp.error_code != 0 {
         return Err(ClientError::Server {
             error_code: resp.error_code,
@@ -795,7 +795,7 @@ async fn fetch_api_versions(conn: &Connection) -> Result<ApiVersionTable, Client
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_units::{
+    use krabka_units::{
         ByteSize, bytes, convert::ByteSizeExt as _, kibibytes, mebibytes, micros, millis,
     };
 
@@ -848,7 +848,7 @@ mod tests {
 
 #[cfg(test)]
 mod secured_tests {
-    use crabka_security::ListenerProtocol;
+    use krabka_security::ListenerProtocol;
 
     use super::*;
     use crate::security::{ClientSecurity, SaslCredentials};
@@ -858,7 +858,7 @@ mod secured_tests {
     // then a minimal ApiVersionsResponse v0 so from_stream succeeds.
     #[tokio::test]
     async fn connect_secured_runs_sasl_then_api_versions() {
-        use crabka_protocol::{
+        use krabka_protocol::{
             Encode,
             owned::{
                 api_versions_response::ApiVersionsResponse,
@@ -940,7 +940,7 @@ mod secured_tests {
 mod io_task_tests {
     use std::time::{Duration, Instant};
 
-    use crabka_protocol::{
+    use krabka_protocol::{
         Encode,
         owned::{
             api_versions_response::{ApiVersion, ApiVersionsResponse},

@@ -5,10 +5,10 @@ pub(super) type TableFunctionRows = (Vec<(String, ColumnType)>, Vec<Vec<Datum>>)
 /// Read a table's durable next-rowid (1 if unset). Single source of truth for
 /// the sequence read.
 pub(crate) fn read_seq_kv(kv: &dyn Kv, table: TableId) -> Result<u64, ExecError> {
-    match kv.get(&crabka_pgkv::key::seq_key(table))? {
+    match kv.get(&krabka_pgkv::key::seq_key(table))? {
         Some(b) => {
             let (v, _) = U64::read_from_prefix(b.as_slice())
-                .map_err(|_| crabka_pgkv::KvError::CorruptRow("sequence is not u64".into()))?;
+                .map_err(|_| krabka_pgkv::KvError::CorruptRow("sequence is not u64".into()))?;
             Ok(v.get())
         }
         None => Ok(1),
@@ -21,7 +21,7 @@ pub(super) fn command(tag: &str) -> QueryResult {
 }
 
 pub(super) fn trigger_modified_row_error(operation: CommandOperation) -> ExecError {
-    ExecError::Remote(crabka_pgwire::error::PgError::error(
+    ExecError::Remote(krabka_pgwire::error::PgError::error(
         "27000",
         format!(
             "tuple to be {} was already modified by an operation triggered by the current command",
@@ -177,7 +177,7 @@ pub(super) fn route_row_to_leaf(
                 .transpose()?,
         });
     };
-    let child = crabka_pgcatalog::get_table(kv, &chosen.name)?;
+    let child = krabka_pgcatalog::get_table(kv, &chosen.name)?;
     let child_row = permuted_row(row, &column_mapping(&child, parent)?);
     route_row_to_leaf(write_ctx, &child, &child_row)
 }
@@ -211,7 +211,7 @@ pub(crate) struct BuiltinTypeRow {
     pub(super) elem: i32,
     /// `pg_type.typarray`: the array type over a scalar, 0 for an array type
     /// and for the scalars crabka has no array type for (`varchar`, `char(n)`,
-    /// `regclass`). [`crabka_pgtypes::ElemType::from_column_type`] refuses
+    /// `regclass`). [`krabka_pgtypes::ElemType::from_column_type`] refuses
     /// those, so a pointer at an absent row would be worse than a report of
     /// none.
     pub(super) array: i32,
@@ -219,7 +219,7 @@ pub(crate) struct BuiltinTypeRow {
 
 /// `pg_type.oid` of `_timetz`. `ElemType` has no `timetz` variant, so crabka
 /// cannot build a `timetz[]` value, but `timetz.typarray` still has to resolve
-/// — the same position `_inet` and `_money` are in. `crabka_pgtypes::oids` has
+/// — the same position `_inet` and `_money` are in. `krabka_pgtypes::oids` has
 /// no constant for an array type it cannot construct.
 pub(super) const TIMETZ_ARRAY_OID: i32 = 1270;
 

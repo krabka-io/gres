@@ -1,26 +1,26 @@
-# `crabka-client-producer` (slice 6) design
+# `krabka-client-producer` (slice 6) design
 
 **Status:** draft — slice 6 of the Crabka meta-spec.
-**Depends on:** slice 1 (`crabka-protocol`), slice 2 (`crabka-client-core`), slice 3 (`crabka-log`), slice 4 (`crabka-broker`). All shipped to `main`.
+**Depends on:** slice 1 (`krabka-protocol`), slice 2 (`krabka-client-core`), slice 3 (`krabka-log`), slice 4 (`krabka-broker`). All shipped to `main`.
 **Tracks the meta-spec at:** [`2026-05-10-crabka-rust-rewrite-design.md`](2026-05-10-crabka-rust-rewrite-design.md).
 
 ## Goal
 
-Ship a full-idempotent Rust Kafka producer + the broker-side support that backs it. End artifact: a `crabka-client-producer` crate that writes records to a Crabka broker; a JVM `kafka-console-consumer --partition 0 --from-beginning` reads them back. The broker grows real `InitProducerId` handling plus a per-(producer_id, partition) last-sequence tracker that dedupes retries and fences old-epoch writes — the standard idempotent-producer contract.
+Ship a full-idempotent Rust Kafka producer + the broker-side support that backs it. End artifact: a `krabka-client-producer` crate that writes records to a Crabka broker; a JVM `kafka-console-consumer --partition 0 --from-beginning` reads them back. The broker grows real `InitProducerId` handling plus a per-(producer_id, partition) last-sequence tracker that dedupes retries and fences old-epoch writes — the standard idempotent-producer contract.
 
 ## In scope
 
 Two crates change:
 
-- **`crabka-broker`** gains a `ProducerIdManager` + per-partition `ProducerState` and a real `InitProducerId` handler. The slice-4 `Produce` handler is extended to read `(producer_id, producer_epoch, base_sequence)` off each record batch and run the standard dedup / out-of-order / epoch-fence checks before appending.
-- **`crabka-client-producer`** is a new crate: a high-level `Producer` built on top of `crabka-client-core`, with a `bon`-generated builder, a single sender task draining per-partition accumulators, and pluggable compression.
+- **`krabka-broker`** gains a `ProducerIdManager` + per-partition `ProducerState` and a real `InitProducerId` handler. The slice-4 `Produce` handler is extended to read `(producer_id, producer_epoch, base_sequence)` off each record batch and run the standard dedup / out-of-order / epoch-fence checks before appending.
+- **`krabka-client-producer`** is a new crate: a high-level `Producer` built on top of `krabka-client-core`, with a `bon`-generated builder, a single sender task draining per-partition accumulators, and pluggable compression.
 
 ### Wire surface (added or extended)
 
-| API key | Name              | Notes |
-|--------:|-------------------|-------|
-| 22      | InitProducerId    | Real impl; returns `(producer_id, producer_epoch)`. Rejects non-empty `transactional_id` with `TRANSACTIONAL_ID_AUTHORIZATION_FAILED`. |
-| 0       | Produce           | Extended (slice 4). Reads `(pid, epoch, base_seq)` from each batch; consults `ProducerState`; emits `OUT_OF_ORDER_SEQUENCE_NUMBER` (45), `DUPLICATE_SEQUENCE_NUMBER` (46), or `INVALID_PRODUCER_EPOCH` (90) where appropriate. |
+| API key | Name           | Notes                                                                                                                                                                                                                          |
+| ------: | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+|      22 | InitProducerId | Real impl; returns `(producer_id, producer_epoch)`. Rejects non-empty `transactional_id` with `TRANSACTIONAL_ID_AUTHORIZATION_FAILED`.                                                                                         |
+|       0 | Produce        | Extended (slice 4). Reads `(pid, epoch, base_seq)` from each batch; consults `ProducerState`; emits `OUT_OF_ORDER_SEQUENCE_NUMBER` (45), `DUPLICATE_SEQUENCE_NUMBER` (46), or `INVALID_PRODUCER_EPOCH` (90) where appropriate. |
 
 KIP-360 (producer-id-recovery) wire points (`TxnOffsetCommit`, `AddPartitionsToTxn`, etc.) stay `UNSUPPORTED_VERSION` — they're slice 9 (transactions).
 
@@ -54,14 +54,14 @@ producer.close().await?;
 
 The slice also retrofits the two existing crate builders to `bon`:
 
-- `crabka-client-core::Client::builder` (slice 2) — public API unchanged (`Client::builder().bootstrap(...).client_id(...).build().await?`).
-- `crabka-client-consumer::Consumer::builder` (slice 5) — public API unchanged.
+- `krabka-client-core::Client::builder` (slice 2) — public API unchanged (`Client::builder().bootstrap(...).client_id(...).build().await?`).
+- `krabka-client-consumer::Consumer::builder` (slice 5) — public API unchanged.
 
 The retrofits drop hand-written `ClientBuilder` / `ConsumerBuilder` types in favor of `bon`-generated builders. Existing tests should compile as-is; if any call-site uses an internal constructor, it gets a mechanical fix-up.
 
 ### Compression
 
-The producer accepts `Compression::{None, Gzip, Snappy, Lz4, Zstd}`. Codecs live in `crabka-compression` (shipped in slice 1); the producer maps each variant to the `compression_type` bits on the v2 `RecordBatch` header and calls the codec on the batch body before framing. The default is `Compression::None` to match Kafka's defaults.
+The producer accepts `Compression::{None, Gzip, Snappy, Lz4, Zstd}`. Codecs live in `krabka-compression` (shipped in slice 1); the producer maps each variant to the `compression_type` bits on the v2 `RecordBatch` header and calls the codec on the batch body before framing. The default is `Compression::None` to match Kafka's defaults.
 
 ### Partitioner
 
@@ -157,9 +157,10 @@ The workspace `Cargo.toml` adds `bon = "3"` to `[workspace.dependencies]`.
 - **`Producer::close()`** — `flush()`, then cancel the sender, then drop the inner client.
 
 - **`ProducerBuilder`** — `#[bon::builder]` on an async `Producer::start` constructor. Fields:
+
   ```rust
   bootstrap: String,
-  client_id: String,                // default "crabka-producer"
+  client_id: String,                // default "krabka-producer"
   compression: Compression,         // default None
   enable_idempotence: bool,         // default true
   acks: Acks,                       // default One (overridden to All when idempotence on)
@@ -171,6 +172,7 @@ The workspace `Cargo.toml` adds `bon = "3"` to `[workspace.dependencies]`.
   retries: i32,                     // default i32::MAX
   retry_backoff: Duration,          // default 100ms
   ```
+
   `.build()` runs ApiVersions, fetches Metadata for the bootstrap topic list (empty by default → no preload), conditionally calls `InitProducerId` when `enable_idempotence = true`, then spawns the sender task and returns the `Producer`. Idempotence + `acks=Zero` is a build-time error (`ProducerError::InvalidConfig`).
 
 - **`Accumulator`** — per-(topic, partition). State: `VecDeque<InProgressBatch>` plus `current_batch: Option<InProgressBatch>`. Each `InProgressBatch` contains the raw record bytes, the per-record metadata (oneshot tx + offset_delta), `base_sequence` (assigned at send-time), and the current uncompressed size. `try_append(record) -> AppendResult` returns `Appended(oneshot_rx)`, `BatchFull`, or `Backpressure` (when `max_block` exceeded).
@@ -191,13 +193,13 @@ The workspace `Cargo.toml` adds `bon = "3"` to `[workspace.dependencies]`.
        - `error_code == OUT_OF_ORDER (45)` OR `INVALID_PRODUCER_EPOCH (53)` → `state = Fenced`; resolve every queued record's oneshot with `Err(FencedProducer)`; future `send()` returns `Err(Closed)`.
        - Retryable codes (`NOT_LEADER_OR_FOLLOWER`, `LEADER_NOT_AVAILABLE`, network errors) → re-enqueue the batch with the same `base_sequence` (dedup guarantees correctness); back off `retry_backoff`. Stop after `retries` attempts → resolve every record with `Err(Client(...))`.
 
-- **`Compression`** — enum + per-variant `compress(&[u8]) -> Result<Vec<u8>, CompressionError>` that delegates to `crabka-compression`.
+- **`Compression`** — enum + per-variant `compress(&[u8]) -> Result<Vec<u8>, CompressionError>` that delegates to `krabka-compression`.
 
 ### Retrofits (existing crates)
 
-**`crabka-client-core`**: replace `pub struct ClientBuilder { ... }` + `impl ClientBuilder { ... }` with `#[bon::builder]` on an async `Client::start` constructor. `Client::builder()` keeps the same call sites. Drop the now-dead `ClientBuilder` type.
+**`krabka-client-core`**: replace `pub struct ClientBuilder { ... }` + `impl ClientBuilder { ... }` with `#[bon::builder]` on an async `Client::start` constructor. `Client::builder()` keeps the same call sites. Drop the now-dead `ClientBuilder` type.
 
-**`crabka-client-consumer`**: same treatment for `ConsumerBuilder` on `Consumer::start`. The `.subscribe(&[&str])` call becomes a `bon`-style setter that accepts `Vec<String>` or `&[&str]` (via `impl Into<Vec<String>>` via `bon`'s `#[builder(into)]` attribute).
+**`krabka-client-consumer`**: same treatment for `ConsumerBuilder` on `Consumer::start`. The `.subscribe(&[&str])` call becomes a `bon`-style setter that accepts `Vec<String>` or `&[&str]` (via `impl Into<Vec<String>>` via `bon`'s `#[builder(into)]` attribute).
 
 ## Data flow
 
@@ -264,13 +266,13 @@ The `check_and_reserve` / `commit` split keeps the per-partition mutex held only
 
 ### Wire codes (new in `crates/broker/src/codes.rs`)
 
-| Code | Name                                    | Where |
-|-----:|-----------------------------------------|-------|
-| 45   | OUT_OF_ORDER_SEQUENCE_NUMBER            | Produce dedup check fails: `base_sequence != last_seq + 1`. |
-| 46   | DUPLICATE_SEQUENCE_NUMBER               | Produce sees a previously-committed `base_sequence` — reply with cached `base_offset`. |
-| 47   | INVALID_PRODUCER_ID_MAPPING             | Reserved (slice 9). |
-| 53   | INVALID_PRODUCER_EPOCH                  | Lower-epoch producer fenced by newer instance. |
-| 67   | TRANSACTIONAL_ID_AUTHORIZATION_FAILED   | `InitProducerId` carries a `transactional_id` that we don't support. |
+| Code | Name                                  | Where                                                                                  |
+| ---: | ------------------------------------- | -------------------------------------------------------------------------------------- |
+|   45 | OUT_OF_ORDER_SEQUENCE_NUMBER          | Produce dedup check fails: `base_sequence != last_seq + 1`.                            |
+|   46 | DUPLICATE_SEQUENCE_NUMBER             | Produce sees a previously-committed `base_sequence` — reply with cached `base_offset`. |
+|   47 | INVALID_PRODUCER_ID_MAPPING           | Reserved (slice 9).                                                                    |
+|   53 | INVALID_PRODUCER_EPOCH                | Lower-epoch producer fenced by newer instance.                                         |
+|   67 | TRANSACTIONAL_ID_AUTHORIZATION_FAILED | `InitProducerId` carries a `transactional_id` that we don't support.                   |
 
 ### Internal `BrokerError` (one new variant)
 
@@ -286,8 +288,8 @@ Maps to `INVALID_PRODUCER_EPOCH` (53) at the handler boundary.
 ```rust
 #[non_exhaustive]
 pub enum ProducerError {
-    #[error("client: {0}")] Client(#[from] crabka_client_core::ClientError),
-    #[error("protocol: {0}")] Protocol(#[from] crabka_protocol::ProtocolError),
+    #[error("client: {0}")] Client(#[from] krabka_client_core::ClientError),
+    #[error("protocol: {0}")] Protocol(#[from] krabka_protocol::ProtocolError),
     #[error("broker error_code {0}")] Server(i16),
     #[error("fenced by newer producer instance")] FencedProducer,
     #[error("invalid config: {0}")] InvalidConfig(&'static str),
@@ -338,7 +340,7 @@ Sender task is `tokio::spawn`'d under a `JoinHandle`. On panic: every queued one
 
 `crates/client-producer/tests/integration.rs` (new; in-process broker; no Docker):
 
-- `idempotent_produce_then_consume`: send 1000 records, consume via `crabka-client-consumer`, assert all 1000 present, in order, no duplicates.
+- `idempotent_produce_then_consume`: send 1000 records, consume via `krabka-client-consumer`, assert all 1000 present, in order, no duplicates.
 - `duplicate_send_resolves_as_success`: force a transport retry (white-box) on the same batch; both `await`s return `Ok` with the same offset.
 - `compression_round_trip`: one test per codec; consume the produced records back via the in-process consumer.
 - `out_of_order_fence_terminates_producer`: white-box inject an out-of-order sequence into the sender; assert subsequent `send()`s return `Closed`.
@@ -348,7 +350,7 @@ Sender task is `tokio::spawn`'d under a `JoinHandle`. On panic: every queued one
 
 `crates/broker/tests/jvm_acceptance.rs` adds one test:
 
-- `rust_producer_to_console_consumer`: build a `crabka-client-producer` on the host pointed at the host broker; send 3 records; `docker run --rm --add-host=host.docker.internal:host-gateway mirror.gcr.io/confluentinc/cp-kafka:6.1.1 kafka-console-consumer --bootstrap-server host.docker.internal:9092 --topic crabka-rust-producer-itest --partition 0 --from-beginning --max-messages 3`; assert all 3 records appear. Joins the existing `broker-jvm-acceptance` job.
+- `rust_producer_to_console_consumer`: build a `krabka-client-producer` on the host pointed at the host broker; send 3 records; `docker run --rm --add-host=host.docker.internal:host-gateway mirror.gcr.io/confluentinc/cp-kafka:6.1.1 kafka-console-consumer --bootstrap-server host.docker.internal:9092 --topic krabka-rust-producer-itest --partition 0 --from-beginning --max-messages 3`; assert all 3 records appear. Joins the existing `broker-jvm-acceptance` job.
 
 ### Out of scope for testing
 
@@ -366,7 +368,7 @@ Transactions, multi-broker producer redirection on `NOT_LEADER_OR_FOLLOWER`, par
 - **`max.in.flight.requests.per.connection > 1` with non-idempotent retries** — automatically capped at 1 when idempotence is off and retries > 0.
 - **Sender thread pool** — one task drains all partitions.
 - **Sender metrics** — `tracing` only; no per-record-rate gauges.
-- **`crabka-producer` binary CLI** — slice 10.
+- **`krabka-producer` binary CLI** — slice 10.
 
 ## Acceptance gate
 
@@ -374,11 +376,11 @@ The slice is done when, in CI:
 
 1. `cargo fmt --all -- --check` clean.
 2. `cargo clippy --workspace --all-targets -- -D warnings` clean.
-3. `cargo test -p crabka-broker`, `cargo test -p crabka-client-producer` pass.
+3. `cargo test -p krabka-broker`, `cargo test -p krabka-client-producer` pass.
 4. `cargo test --workspace --include-ignored` no regressions in slices 1-5.
 5. `broker-jvm-acceptance` job green AND includes `rust_producer_to_console_consumer`.
-6. `cargo doc -p crabka-broker --no-deps` and `cargo doc -p crabka-client-producer --no-deps` build without warnings.
-7. Public API of `crabka-client-producer`: `Producer`, `ProducerRecord`, `RecordMetadata`, `Header`, `Compression`, `Acks`, `ProducerError`. Builder via `Producer::builder()`. No transactional API surface.
+6. `cargo doc -p krabka-broker --no-deps` and `cargo doc -p krabka-client-producer --no-deps` build without warnings.
+7. Public API of `krabka-client-producer`: `Producer`, `ProducerRecord`, `RecordMetadata`, `Header`, `Compression`, `Acks`, `ProducerError`. Builder via `Producer::builder()`. No transactional API surface.
 8. Retrofitted `Client::builder()` and `Consumer::builder()` still compile and tests still pass.
 
 ## Reference

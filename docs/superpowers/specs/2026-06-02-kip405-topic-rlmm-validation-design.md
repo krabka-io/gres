@@ -6,22 +6,22 @@
 
 ## Problem & motivation
 
-Tiered storage is marked ⚠️ *partial* in the README, with the prose
-"the `crabka-remote-storage-topic` (KIP-405 production RLMM) crate is in
+Tiered storage is marked ⚠️ _partial_ in the README, with the prose
+"the `krabka-remote-storage-topic` (KIP-405 production RLMM) crate is in
 tree but not yet wired into the broker." **That prose is stale.** PR #227
 wired `TopicBasedRemoteLogMetadataManager` into `Broker::start`, and PR
 #313 ("Finish Tiered Storage: slices 48m–48r") closed the remaining
 functional gaps. What exists and is tested today:
 
-| Piece | State |
-|---|---|
-| SPI + in-memory RLMM (default) | wired |
-| Topic-backed RLMM (`__remote_log_metadata`) | wired, opt-in via `[remote_storage.kafka_metadata]` |
-| Copy path, local retention, remote read (incl. read-committed aborted txns), `ListOffsets`-by-timestamp, remote retention, partition-delete | done |
-| Snapshots / fast-bootstrap (48p), dynamic per-broker metadata-partition assignment (48q), TLS/SASL on the metadata client (48r) | done |
-| Local + S3 (MinIO/R2/GCS) RSM backends | done |
-| Operator CRD (`TieredStorage` Local/S3 + `metadataManager`) | done |
-| JVM-validated MinIO acceptance (`tiered_storage_round_trip_through_minio`) | done — but uses the **in-memory** RLMM |
+| Piece                                                                                                                                       | State                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| SPI + in-memory RLMM (default)                                                                                                              | wired                                               |
+| Topic-backed RLMM (`__remote_log_metadata`)                                                                                                 | wired, opt-in via `[remote_storage.kafka_metadata]` |
+| Copy path, local retention, remote read (incl. read-committed aborted txns), `ListOffsets`-by-timestamp, remote retention, partition-delete | done                                                |
+| Snapshots / fast-bootstrap (48p), dynamic per-broker metadata-partition assignment (48q), TLS/SASL on the metadata client (48r)             | done                                                |
+| Local + S3 (MinIO/R2/GCS) RSM backends                                                                                                      | done                                                |
+| Operator CRD (`TieredStorage` Local/S3 + `metadataManager`)                                                                                 | done                                                |
+| JVM-validated MinIO acceptance (`tiered_storage_round_trip_through_minio`)                                                                  | done — but uses the **in-memory** RLMM              |
 
 The ⚠️ is therefore a **deliberate hold**, not missing wiring. Two real
 gaps justify it:
@@ -30,12 +30,12 @@ gaps justify it:
    Only Crabka-internal loopback / in-process tests exercise it. The one
    JVM acceptance test (`tiered_storage_round_trip_through_minio`,
    `crates/broker/tests/jvm_acceptance.rs:7903`) deliberately runs the
-   *in-memory* RLMM — it sets `remote_storage_backend: Some(S3(..))` but
+   _in-memory_ RLMM — it sets `remote_storage_backend: Some(S3(..))` but
    not `remote_log_metadata_kafka`.
 2. **A real tiered cluster silently runs the non-durable in-memory RLMM
    by default.** Topic-backed is opt-in (`remote_log_metadata_kafka:
-   Option<KafkaRlmmConfig>`, `None` ⇒ in-memory). This is backwards from
-   Kafka, where `TopicBasedRemoteLogMetadataManager` *is* the RLMM and
+Option<KafkaRlmmConfig>`, `None` ⇒ in-memory). This is backwards from
+   Kafka, where `TopicBasedRemoteLogMetadataManager` _is_ the RLMM and
    there is no in-memory option in production.
 
 Plus the fire-and-forget bootstrap has a fail-open hole (below).
@@ -90,9 +90,9 @@ pub enum RlmmKind {
 - **Default:** when a `RemoteStorageBackend` is configured and no explicit
   RLMM kind is given, the broker uses `TopicBacked` with a `KafkaRlmmConfig`
   whose `bootstrap` is **auto-derived** from the broker's own advertised /
-  inter-broker listener. The bootstrap task already derives the *security*
+  inter-broker listener. The bootstrap task already derives the _security_
   policy from the inter-broker listener (`bootstrap_topic_rlmm`,
-  `crates/broker/src/broker.rs:2461-2468`); extend it to derive the *address*
+  `crates/broker/src/broker.rs:2461-2468`); extend it to derive the _address_
   too when not explicitly set, so single-node "just works".
 - **In-memory opt-out:** in-process integration tests (`remote_reader.rs`
   tests and any test harness with no real serving listener) set
@@ -121,7 +121,7 @@ Two defects in the current fire-and-forget bootstrap
    serving, transient connect error), the task logs `warn!` and returns —
    the broker stays on the placeholder **forever**.
 2. **Silent metadata-loss window.** The `SwappableRlmm` placeholder is an
-   `InmemoryRemoteLogMetadataManager` that *silently accepts writes*
+   `InmemoryRemoteLogMetadataManager` that _silently accepts writes_
    (`crates/remote-storage-topic/src/swappable.rs`). During the bootstrap
    window the copy task tiers segments to the RSM and records their metadata
    in the placeholder; then `swap()` discards it. Result: **orphaned RSM
@@ -250,7 +250,7 @@ snapshot (48p). This directly validates durability/fast-bootstrap.
 ## Risks
 
 - **Auto-derived bootstrap address** must resolve correctly for single-node
-  loopback *and* multi-broker inter-broker listeners; covered by T1 (loopback)
+  loopback _and_ multi-broker inter-broker listeners; covered by T1 (loopback)
   and T2 (inter-broker).
 - **Making topic-backed the default** changes the existing
   `tiered_storage_round_trip_through_minio` test to run topic-backed; either

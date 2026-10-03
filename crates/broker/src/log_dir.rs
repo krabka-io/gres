@@ -1,6 +1,6 @@
 //! Per-partition directory layout: `<log_dir>/<topic>-<partition>/`.
 //!
-//! This layout mirrors the Apache Kafka convention, so `crabka-log` can open
+//! This layout mirrors the Apache Kafka convention, so `krabka-log` can open
 //! existing Kafka log directories with byte compatibility.
 
 use std::path::{Path, PathBuf};

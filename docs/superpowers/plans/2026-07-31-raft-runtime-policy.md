@@ -6,7 +6,7 @@
 
 **Architecture:** Raft owns validated policy types and consumes them in the engine. Broker CLI/environment/runtime TOML retains heartbeat explicitness and forwards the three new settings; `Kafka.spec.brokerTuning` renders the same runtime TOML keys. Bounded application and replay loop until their target offset while replication and snapshot requests remain single-chunk operations.
 
-**Tech Stack:** Rust, Tokio, `refined_type`, `crabka-units`, Clap, Serde TOML, kube CRDs, Cargo.
+**Tech Stack:** Rust, Tokio, `refined_type`, `krabka-units`, Clap, Serde TOML, kube CRDs, Cargo.
 
 ## Global Constraints
 
@@ -28,6 +28,7 @@
 ### Task 1: Raft-owned policy types and engine behavior
 
 **Files:**
+
 - Modify: `crates/raft/Cargo.toml`
 - Modify: `crates/raft/src/lib.rs`
 - Modify: `crates/raft/src/config.rs`
@@ -35,6 +36,7 @@
 - Modify: `crates/raft/src/kraft/controller.rs`
 
 **Interfaces:**
+
 - Produces: `ControllerFetchMissLimit`, `MetadataRaftCommandQueueCapacity`, and `MetadataRaftFetchMax`.
 - `ControllerConfig::heartbeat_interval`: `Option<Time>`.
 - `ControllerConfig` and `KraftConfig` carry all three validated policy types.
@@ -79,7 +81,7 @@ Run:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-raft raft_runtime_policy_defaults_and_validation --locked
+  cargo test -p krabka-raft raft_runtime_policy_defaults_and_validation --locked
 ```
 
 Expected: compilation fails because the three types and optional-heartbeat
@@ -380,9 +382,9 @@ Run:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-raft --all-targets --locked
+  cargo test -p krabka-raft --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-raft --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-raft --all-targets --locked -- -D warnings
 cargo +nightly fmt --all
 git diff --check
 ```
@@ -398,6 +400,7 @@ git commit -m "feat(raft): expose runtime policy"
 ### Task 2: Broker CLI, environment, and runtime TOML ownership
 
 **Files:**
+
 - Modify: `crates/broker/src/config.rs`
 - Modify: `crates/broker/src/file_config.rs`
 - Modify: `crates/broker/src/bin/broker.rs`
@@ -405,6 +408,7 @@ git commit -m "feat(raft): expose runtime policy"
 - Modify: broker configuration tests in those files
 
 **Interfaces:**
+
 - Consumes: the three validated Raft types from Task 1.
 - Produces: four broker runtime keys and exact explicit-heartbeat tracking.
 - `BrokerConfig::controller_heartbeat_interval_explicit: bool` distinguishes omission from an explicit default-valued input.
@@ -441,7 +445,7 @@ Run:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-broker raft_runtime_policy --locked
+  cargo test -p krabka-broker raft_runtime_policy --locked
 ```
 
 Expected: compilation fails because the new broker fields and runtime keys do
@@ -453,9 +457,9 @@ Add these `BrokerConfig` fields:
 
 ```rust
 pub controller_heartbeat_interval_explicit: bool,
-pub controller_fetch_miss_limit: crabka_raft::ControllerFetchMissLimit,
-pub metadata_raft_command_queue_capacity: crabka_raft::MetadataRaftCommandQueueCapacity,
-pub metadata_raft_fetch_max: crabka_raft::MetadataRaftFetchMax,
+pub controller_fetch_miss_limit: krabka_raft::ControllerFetchMissLimit,
+pub metadata_raft_command_queue_capacity: krabka_raft::MetadataRaftCommandQueueCapacity,
+pub metadata_raft_fetch_max: krabka_raft::MetadataRaftFetchMax,
 ```
 
 Default explicitness to `false` and the three policies through their `Default`
@@ -464,7 +468,7 @@ implementations. Extend `RuntimeFileConfig` with raw optional serde fields:
 ```rust
 pub controller_fetch_miss_limit: Option<u32>,
 pub metadata_raft_command_queue_capacity: Option<usize>,
-#[serde(with = "crabka_units::serde_units::human::option_byte_size")]
+#[serde(with = "krabka_units::serde_units::human::option_byte_size")]
 pub metadata_raft_fetch_max: Option<ByteSize>,
 ```
 
@@ -481,16 +485,16 @@ if let Some(value) = self.controller_heartbeat_interval {
 }
 if let Some(value) = self.controller_fetch_miss_limit {
     cfg.controller_fetch_miss_limit =
-        crabka_raft::ControllerFetchMissLimit::new(value)
+        krabka_raft::ControllerFetchMissLimit::new(value)
             .map_err(FileConfigError::InvalidConfig)?;
 }
 if let Some(value) = self.metadata_raft_command_queue_capacity {
     cfg.metadata_raft_command_queue_capacity =
-        crabka_raft::MetadataRaftCommandQueueCapacity::new(value)
+        krabka_raft::MetadataRaftCommandQueueCapacity::new(value)
             .map_err(FileConfigError::InvalidConfig)?;
 }
 if let Some(value) = self.metadata_raft_fetch_max {
-    cfg.metadata_raft_fetch_max = crabka_raft::MetadataRaftFetchMax::try_from(value)
+    cfg.metadata_raft_fetch_max = krabka_raft::MetadataRaftFetchMax::try_from(value)
         .map_err(FileConfigError::InvalidConfig)?;
 }
 ```
@@ -503,7 +507,7 @@ Extend broker binary tests to assert:
 
 ```rust
 let parsed = Args::try_parse_from([
-    "crabka-broker",
+    "krabka-broker",
     "--controller-fetch-miss-limit", "5",
     "--metadata-raft-command-queue-capacity", "7",
     "--metadata-raft-fetch-max", "512KiB",
@@ -519,9 +523,9 @@ check!(config.metadata_raft_fetch_max.size() == kibibytes(512));
 Add subprocess or Clap environment tests for:
 
 ```text
-CRABKA_CONTROLLER_FETCH_MISS_LIMIT=5
-CRABKA_METADATA_RAFT_COMMAND_QUEUE_CAPACITY=7
-CRABKA_METADATA_RAFT_FETCH_MAX=512KiB
+KRABKA_CONTROLLER_FETCH_MISS_LIMIT=5
+KRABKA_METADATA_RAFT_COMMAND_QUEUE_CAPACITY=7
+KRABKA_METADATA_RAFT_FETCH_MAX=512KiB
 ```
 
 Assert CLI values override environment values and zero/fractional/overflow
@@ -532,14 +536,14 @@ inputs fail before startup.
 Add exact CLI fields:
 
 ```rust
-#[arg(long, env = "CRABKA_CONTROLLER_FETCH_MISS_LIMIT")]
-controller_fetch_miss_limit: Option<crabka_raft::ControllerFetchMissLimit>,
+#[arg(long, env = "KRABKA_CONTROLLER_FETCH_MISS_LIMIT")]
+controller_fetch_miss_limit: Option<krabka_raft::ControllerFetchMissLimit>,
 
-#[arg(long, env = "CRABKA_METADATA_RAFT_COMMAND_QUEUE_CAPACITY")]
-metadata_raft_command_queue_capacity: Option<crabka_raft::MetadataRaftCommandQueueCapacity>,
+#[arg(long, env = "KRABKA_METADATA_RAFT_COMMAND_QUEUE_CAPACITY")]
+metadata_raft_command_queue_capacity: Option<krabka_raft::MetadataRaftCommandQueueCapacity>,
 
-#[arg(long, env = "CRABKA_METADATA_RAFT_FETCH_MAX")]
-metadata_raft_fetch_max: Option<crabka_raft::MetadataRaftFetchMax>,
+#[arg(long, env = "KRABKA_METADATA_RAFT_FETCH_MAX")]
+metadata_raft_fetch_max: Option<krabka_raft::MetadataRaftFetchMax>,
 ```
 
 Implement `FromStr` on the three Task 1 types so Clap parses through their
@@ -576,9 +580,9 @@ Run:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-broker --all-targets --locked
+  cargo test -p krabka-broker --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-broker --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-broker --all-targets --locked -- -D warnings
 cargo +nightly fmt --all
 git diff --check
 ```
@@ -594,11 +598,13 @@ git commit -m "feat(broker): expose raft runtime policy"
 ### Task 3: Kafka CRD propagation
 
 **Files:**
+
 - Modify: `crates/operator/src/crd/kafka.rs`
 - Modify: operator CRD/rendering tests
 - Modify generated: `deploy/crds/crabka.io_kafkas.yaml`
 
 **Interfaces:**
+
 - Consumes: broker runtime TOML keys from Task 2.
 - Produces: optional `Kafka.spec.brokerTuning` fields `controllerFetchMissLimit`, `metadataRaftCommandQueueCapacity`, and `metadataRaftFetchMax`.
 
@@ -630,7 +636,7 @@ Run:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator raft_runtime_policy --locked
+  cargo test -p krabka-operator raft_runtime_policy --locked
 ```
 
 Expected: compilation fails because the three CRD fields do not exist.
@@ -645,7 +651,7 @@ controller_fetch_miss_limit: u32 => refined_type::rule::GreaterU32<0>;
 refined #[schemars(range(min = 1))]
 metadata_raft_command_queue_capacity: usize => refined_type::rule::GreaterUsize<0>;
 size_i32
-#[serde(with = "crabka_units::serde_units::human::option_byte_size")]
+#[serde(with = "krabka_units::serde_units::human::option_byte_size")]
 #[schemars(with = "Option<String>")]
 metadata_raft_fetch_max: ByteSize => ();
 ```
@@ -676,9 +682,9 @@ Run:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator --all-targets --locked
+  cargo test -p krabka-operator --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-operator --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-operator --all-targets --locked -- -D warnings
 cargo +nightly fmt --all
 git diff --check
 ```
@@ -693,10 +699,12 @@ git commit -m "feat(operator): expose raft runtime policy"
 ### Task 4: Audit and close the slice
 
 **Files:**
+
 - Modify: `docs/configuration-audit.md`
 - Modify: `docs/superpowers/plans/2026-07-31-raft-runtime-policy.md`
 
 **Interfaces:**
+
 - Consumes: verified implementation and exact test counts from Tasks 1-3.
 - Produces: completed plan and permanent audit record.
 
@@ -730,7 +738,7 @@ Run:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-raft -p crabka-broker -p crabka-operator \
+  cargo test -p krabka-raft -p krabka-broker -p krabka-operator \
   --all-targets --locked
 ```
 

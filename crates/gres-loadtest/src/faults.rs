@@ -23,7 +23,7 @@
 use std::{cmp::Ordering, collections::BTreeMap, fmt};
 
 use anyhow::Context as _;
-use crabka_units::{fmt::Human as _, prelude::*};
+use krabka_units::{fmt::Human as _, prelude::*};
 use tokio::time::Instant;
 
 use crate::{

@@ -2,11 +2,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crabka_pgkv::{
+use krabka_pgkv::{
     KvPair, WriteOp,
     key::{self, KeyClass},
 };
-use crabka_pgmvcc::{
+use krabka_pgmvcc::{
     FROZEN_XID, INVALID_XID,
     clog::{self, XidStatus},
     version,
@@ -278,12 +278,12 @@ fn materialization(
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgkv::{Kv, MemKv};
-    use crabka_pgmvcc::{
+    use krabka_pgkv::{Kv, MemKv};
+    use krabka_pgmvcc::{
         clog::put_op,
         visibility::{Snapshot, satisfies_mvcc},
     };
-    use crabka_pgtypes::Datum;
+    use krabka_pgtypes::Datum;
 
     use super::*;
     use crate::{
@@ -367,7 +367,7 @@ mod tests {
         assert!(
             target
                 .get(&key::catalog_key(
-                    crabka_pgcatalog::PUBLIC_SCHEMA,
+                    krabka_pgcatalog::PUBLIC_SCHEMA,
                     "table_7"
                 ))
                 .expect("catalog")
@@ -415,7 +415,7 @@ mod tests {
                 version::encode_tuple(5, 0, &[Datum::Int4(99)]),
             ),
             (
-                key::catalog_key(crabka_pgcatalog::PUBLIC_SCHEMA, "table_7"),
+                key::catalog_key(krabka_pgcatalog::PUBLIC_SCHEMA, "table_7"),
                 b"catalog".to_vec(),
             ),
         ] {

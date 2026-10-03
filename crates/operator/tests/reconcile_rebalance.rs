@@ -1,21 +1,21 @@
 //! Reconcile-level tests for the `KafkaRebalance` controller.
 //!
 //! These tests drive the annotation-driven state machine of the controller
-//! against a faked `crabka-rebalancer`, the `FakeRebalancerClient`. They
+//! against a faked `krabka-rebalancer`, the `FakeRebalancerClient`. They
 //! assert on the Connect-RPC sequence, and on the status patches and the
 //! annotation patches on the kube side.
 
 use std::{collections::BTreeMap, sync::Arc};
 
 use assert2::{assert, check};
-use crabka_operator::{
+use http::{Method, Request};
+use hyper::body::Bytes;
+use krabka_operator::{
     controller::rebalance::reconcile,
     crd::{KafkaCondition, KafkaRebalance, KafkaRebalanceSpec, KafkaRebalanceStatus},
     rebalancer_client::ProposalStatus,
 };
-use crabka_units::mebibytes_per_sec;
-use http::{Method, Request};
-use hyper::body::Bytes;
+use krabka_units::mebibytes_per_sec;
 
 #[path = "shared/mod.rs"]
 mod shared;
@@ -257,7 +257,7 @@ async fn transport_error_leaves_status_untouched() {
     // Zero rules: any kube call would 404 and surface as an unexpected
     // request. The reconcile must short-circuit before patching.
     let mut config = op_config(NS);
-    config.controller_error_requeue = crabka_units::millis(1_234);
+    config.controller_error_requeue = krabka_units::millis(1_234);
     let (ctx, state) = build_ctx_with_config(NS, vec![], config);
     let fake = Arc::new(
         FakeRebalancerClient::new().with_create(FakeResp::Transport("connection refused".into())),

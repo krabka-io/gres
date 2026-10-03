@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Move the duplicated "`head()` an object, reject it if it exceeds a byte cap, then `get()` it" guard — which today exists as two verbatim copies in `crabka-blockstore` (`index.rs::load_with_cap` and `profile_index.rs::load_path_with_cap`) — into a single tested `read_capped` helper in `crabka-object-store`, and adopt it at both sites.
+**Goal:** Move the duplicated "`head()` an object, reject it if it exceeds a byte cap, then `get()` it" guard — which today exists as two verbatim copies in `krabka-blockstore` (`index.rs::load_with_cap` and `profile_index.rs::load_path_with_cap`) — into a single tested `read_capped` helper in `krabka-object-store`, and adopt it at both sites.
 
-**Architecture:** This is a focused consolidation of a *safety* invariant, not a feature. Both blockstore index-snapshot loaders buffer a whole JSON object from shared object storage into memory before deserializing; each first `head()`s the object and errors if its size exceeds a per-signal cap (`MAX_INDEX_SNAPSHOT_BYTES` / `MAX_PROFILE_INDEX_SNAPSHOT_BYTES`), so a corrupt or malicious oversized snapshot cannot OOM the process. That guard is currently copy-pasted. This plan gives `crabka-object-store` a `read_capped(store, key, max_bytes) -> Bytes` helper (returning a structured `ObjectStoreError::TooLarge` on breach), and rewrites both blockstore sites to call it — mapping `TooLarge` back to the exact same `BlockStoreError::InvalidBlock` message per site so behavior is preserved.
+**Architecture:** This is a focused consolidation of a _safety_ invariant, not a feature. Both blockstore index-snapshot loaders buffer a whole JSON object from shared object storage into memory before deserializing; each first `head()`s the object and errors if its size exceeds a per-signal cap (`MAX_INDEX_SNAPSHOT_BYTES` / `MAX_PROFILE_INDEX_SNAPSHOT_BYTES`), so a corrupt or malicious oversized snapshot cannot OOM the process. That guard is currently copy-pasted. This plan gives `krabka-object-store` a `read_capped(store, key, max_bytes) -> Bytes` helper (returning a structured `ObjectStoreError::TooLarge` on breach), and rewrites both blockstore sites to call it — mapping `TooLarge` back to the exact same `BlockStoreError::InvalidBlock` message per site so behavior is preserved.
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `object_store` 0.13 (workspace-pinned), `bytes`, `thiserror`, `tokio`, `assert2`, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
-**Spec:** [`docs/superpowers/specs/2026-07-05-crabka-north-star-roadmap-design.md`](../specs/2026-07-05-crabka-north-star-roadmap-design.md) — Chapter 0 (the `read_capped` follow-up deferred from the ObjectOps plan). **Prerequisite:** plans `2026-07-05-crabka-object-store-substrate-crate.md` and `2026-07-05-crabka-object-store-objectops.md` are merged (`crabka-object-store` exists with `error`/`config`/`build`/`ops`; it depends on `bytes`; `blockstore` depends on `crabka-object-store`).
+**Spec:** [`docs/superpowers/specs/2026-07-05-crabka-north-star-roadmap-design.md`](../specs/2026-07-05-crabka-north-star-roadmap-design.md) — Chapter 0 (the `read_capped` follow-up deferred from the ObjectOps plan). **Prerequisite:** plans `2026-07-05-crabka-object-store-substrate-crate.md` and `2026-07-05-crabka-object-store-objectops.md` are merged (`krabka-object-store` exists with `error`/`config`/`build`/`ops`; it depends on `bytes`; `blockstore` depends on `krabka-object-store`).
 
 ---
 
@@ -16,7 +16,7 @@
 
 1. **Behavior preserved at both blockstore sites.** Oversize still yields `BlockStoreError::InvalidBlock` with the **exact same message text** (`"index snapshot ... exceeds cap of ... bytes"` / `"profile index snapshot ... exceeds cap of ... bytes"`); under-cap still returns the deserialized index; a missing object still surfaces as it does today. The existing blockstore tests are the regression net.
 2. **Accepted minor change:** the `size` field recorded on the two `#[instrument]` load spans (via `tracing::Span::current().record("size", meta.size)`) is dropped, because the `head()` now happens inside `read_capped`. This is a debug-level tracing field, not behavior. Documented, intentional.
-3. **`crabka-object-store` stays publishable** (no `datafusion`/`parquet`; `read_capped` uses only `object_store` + `bytes`).
+3. **`krabka-object-store` stays publishable** (no `datafusion`/`parquet`; `read_capped` uses only `object_store` + `bytes`).
 4. **`read_capped` operates on the raw `Arc<dyn object_store::ObjectStore>`** (what the blockstore call sites hold) — it does NOT require `ObjectOps`, and it never `block_on`s.
 5. **Every task leaves the workspace compiling and green** before its commit.
 
@@ -30,11 +30,13 @@
 ## File Structure
 
 **Modified — `crates/object-store/`:**
+
 - `src/error.rs` — add an `ObjectStoreError::TooLarge { key, size, max_bytes }` variant.
 - `src/read.rs` — **new** — the `read_capped` helper. One responsibility: capped buffered read.
 - `src/lib.rs` — export `read_capped`.
 
 **Modified — `crates/blockstore/`:**
+
 - `src/index.rs` — `load_with_cap` calls `read_capped`.
 - `src/profile_index.rs` — `load_path_with_cap` calls `read_capped`.
 
@@ -43,6 +45,7 @@
 ## Task 1: Add the `TooLarge` variant to `ObjectStoreError`
 
 **Files:**
+
 - Modify: `crates/object-store/src/error.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -65,7 +68,7 @@ In `crates/object-store/src/error.rs`, add to the `#[cfg(test)] mod tests` block
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `cargo test -p crabka-object-store too_large_display_includes_sizes`
+Run: `cargo test -p krabka-object-store too_large_display_includes_sizes`
 Expected: FAIL — `ObjectStoreError` has no `TooLarge` variant.
 
 - [ ] **Step 3: Add the variant**
@@ -88,7 +91,7 @@ In `crates/object-store/src/error.rs`, add to the enum (after `NotFound`):
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `cargo test -p crabka-object-store error::`
+Run: `cargo test -p krabka-object-store error::`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -103,6 +106,7 @@ git commit -m "feat(object-store): add ObjectStoreError::TooLarge variant"
 ## Task 2: Add the `read_capped` helper
 
 **Files:**
+
 - Create: `crates/object-store/src/read.rs`
 - Modify: `crates/object-store/src/lib.rs`
 
@@ -161,7 +165,7 @@ mod tests {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cargo test -p crabka-object-store read::`
+Run: `cargo test -p krabka-object-store read::`
 Expected: FAIL — `read_capped` is not defined.
 
 - [ ] **Step 3: Add the implementation above the test module**
@@ -209,7 +213,7 @@ pub async fn read_capped(
 
 - [ ] **Step 4: Add the `futures` dev-dependency (for the test's `block_on`)**
 
-The test module uses `futures::executor::block_on`. `futures` is already a normal dependency of `crabka-object-store` (added in the ObjectOps plan), so it is available to tests too — no manifest change needed. (If `cargo test` reports `unresolved import futures`, confirm `futures = { workspace = true }` is under `[dependencies]` in `crates/object-store/Cargo.toml`.)
+The test module uses `futures::executor::block_on`. `futures` is already a normal dependency of `krabka-object-store` (added in the ObjectOps plan), so it is available to tests too — no manifest change needed. (If `cargo test` reports `unresolved import futures`, confirm `futures = { workspace = true }` is under `[dependencies]` in `crates/object-store/Cargo.toml`.)
 
 - [ ] **Step 5: Wire the module into `lib.rs`**
 
@@ -223,7 +227,7 @@ pub use read::read_capped;
 
 - [ ] **Step 6: Run tests to verify they pass**
 
-Run: `cargo test -p crabka-object-store read::`
+Run: `cargo test -p krabka-object-store read::`
 Expected: PASS — under-cap returns bytes, over-cap returns `TooLarge { size: 11, max_bytes: 4 }`, missing maps to `NotFound`.
 
 - [ ] **Step 7: Commit**
@@ -235,11 +239,12 @@ git commit -m "feat(object-store): add read_capped buffered-read OOM guard"
 
 ---
 
-## Task 3: Adopt `read_capped` in `crabka-blockstore`'s two load paths
+## Task 3: Adopt `read_capped` in `krabka-blockstore`'s two load paths
 
 Rewrite both duplicated guards to call `read_capped`, mapping `TooLarge` back to the exact `BlockStoreError::InvalidBlock` message each site produces today. The existing blockstore tests guard behavior.
 
 **Files:**
+
 - Modify: `crates/blockstore/src/index.rs`
 - Modify: `crates/blockstore/src/profile_index.rs`
 
@@ -254,10 +259,10 @@ In `crates/blockstore/src/index.rs`, replace the body of `load_with_cap` (curren
         max_bytes: usize,
     ) -> Result<Self> {
         let path = Path::from(object_key);
-        let bytes = crabka_object_store::read_capped(store, &path, max_bytes as u64)
+        let bytes = krabka_object_store::read_capped(store, &path, max_bytes as u64)
             .await
             .map_err(|e| match e {
-                crabka_object_store::ObjectStoreError::TooLarge { size, max_bytes, .. } => {
+                krabka_object_store::ObjectStoreError::TooLarge { size, max_bytes, .. } => {
                     BlockStoreError::InvalidBlock(format!(
                         "index snapshot `{object_key}` is {size} bytes, exceeds cap of {max_bytes} bytes"
                     ))
@@ -280,10 +285,10 @@ In `crates/blockstore/src/profile_index.rs`, replace the body of `load_path_with
         path: &Path,
         max_bytes: usize,
     ) -> Result<Self> {
-        let bytes = crabka_object_store::read_capped(store, path, max_bytes as u64)
+        let bytes = krabka_object_store::read_capped(store, path, max_bytes as u64)
             .await
             .map_err(|e| match e {
-                crabka_object_store::ObjectStoreError::TooLarge { size, max_bytes, .. } => {
+                krabka_object_store::ObjectStoreError::TooLarge { size, max_bytes, .. } => {
                     BlockStoreError::InvalidBlock(format!(
                         "profile index snapshot `{path}` is {size} bytes, exceeds cap of {max_bytes} bytes"
                     ))
@@ -298,18 +303,18 @@ In `crates/blockstore/src/profile_index.rs`, replace the body of `load_path_with
 
 - [ ] **Step 3: Remove now-unused imports if the compiler flags them**
 
-`head`/`get` may no longer be called directly in these two files (check `index.rs` / `profile_index.rs` for other `store.head(`/`store.get(` uses first — `index.rs` still uses `store.put` in its save path, and other index files are untouched). If `PutPayload`, `ObjectStoreExt`, or an `ObjectMeta` import becomes unused *in these two files only*, remove it. Do not touch imports used by remaining code.
+`head`/`get` may no longer be called directly in these two files (check `index.rs` / `profile_index.rs` for other `store.head(`/`store.get(` uses first — `index.rs` still uses `store.put` in its save path, and other index files are untouched). If `PutPayload`, `ObjectStoreExt`, or an `ObjectMeta` import becomes unused _in these two files only_, remove it. Do not touch imports used by remaining code.
 
 - [ ] **Step 4: Run the blockstore suite (regression net)**
 
-Run: `cargo test -p crabka-blockstore`
+Run: `cargo test -p krabka-blockstore`
 Expected: PASS — including any oversize test (the `InvalidBlock` message text is byte-identical to before) and the under-cap load/round-trip tests. `MAX_INDEX_SNAPSHOT_BYTES`/`MAX_PROFILE_INDEX_SNAPSHOT_BYTES` constant tests unchanged.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add crates/blockstore/src/index.rs crates/blockstore/src/profile_index.rs
-git commit -m "refactor(blockstore): use crabka-object-store read_capped for snapshot loads"
+git commit -m "refactor(blockstore): use krabka-object-store read_capped for snapshot loads"
 ```
 
 ---
@@ -350,6 +355,7 @@ git commit -m "style(object-store): cargo +nightly fmt"
 ## Self-Review
 
 **1. Spec coverage (Ch. 0 — the `read_capped` follow-up deferred from the ObjectOps plan):**
+
 - Shared capped-read helper → Task 2 (`read_capped` in the substrate). ✅
 - Both blockstore duplicates adopt it → Task 3 (`index.rs::load_with_cap`, `profile_index.rs::load_path_with_cap`). ✅
 - The `reader.rs` parquet-sizing `head()`s and `index_snapshot` op-routing are explicitly out of scope (Scope boundary), not silently skipped. ✅

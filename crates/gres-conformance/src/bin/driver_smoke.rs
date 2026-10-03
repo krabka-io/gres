@@ -1,5 +1,5 @@
 use clap::{Parser, ValueEnum};
-use crabka_gres_conformance::tls;
+use krabka_gres_conformance::tls;
 use sqlx::{Connection as _, PgConnection};
 
 #[derive(Debug, Parser)]

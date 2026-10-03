@@ -1,5 +1,5 @@
 use assert2::{assert, check};
-use crabka_trace_context::{TRACEPARENT, TRACESTATE, TraceCarrier, TraceContextError};
+use krabka_trace_context::{TRACEPARENT, TRACESTATE, TraceCarrier, TraceContextError};
 use opentelemetry::trace::{SpanId, TraceId, TracerProvider as _};
 use opentelemetry_sdk::trace::{InMemorySpanExporter, Sampler, SdkTracerProvider, SpanData};
 use tracing_subscriber::layer::SubscriberExt as _;

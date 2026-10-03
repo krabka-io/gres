@@ -2,22 +2,22 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A new async crate `crabka-page-store`: immutable delta/image layers (one container format, footer + sparse index, byte-range reads) on the object bucket, an open-layer ingest of PG-2's `Sharded` stream with idempotent flush, a `list()`-rebuildable layer map, `get_reconstruct_data(key, lsn)`, and structural L0→L1 compaction — gated by an FPI byte-match test over the PG-2 fixture corpus.
+**Goal:** A new async crate `krabka-page-store`: immutable delta/image layers (one container format, footer + sparse index, byte-range reads) on the object bucket, an open-layer ingest of PG-2's `Sharded` stream with idempotent flush, a `list()`-rebuildable layer map, `get_reconstruct_data(key, lsn)`, and structural L0→L1 compaction — gated by an FPI byte-match test over the PG-2 fixture corpus.
 
-**Architecture:** Single-writer ingest per timeline fills a `BTreeMap` open layer (`Value::Image` for FPIs, `Value::Wal{will_init}` otherwise; `Meta` retained verbatim), flushing L0 delta layers via `ObjectOps::put_from_path`; readers query an `Arc<RwLock<LayerMap>>` and read layers by `get_range`. No redo — reads return a reconstruction *plan*.
+**Architecture:** Single-writer ingest per timeline fills a `BTreeMap` open layer (`Value::Image` for FPIs, `Value::Wal{will_init}` otherwise; `Meta` retained verbatim), flushing L0 delta layers via `ObjectOps::put_from_path`; readers query an `Arc<RwLock<LayerMap>>` and read layers by `get_range`. No redo — reads return a reconstruction _plan_.
 
-**Tech Stack:** Rust 2024 (pinned stable 1.96.0), `tokio`, `bytes`, `thiserror`, `crabka-postgres-wal` (PG-2 types), `crabka-object-store` (`ObjectOps`, `InMemory` for tests), `assert2`/`nextest`, `cargo +nightly fmt`, `clippy::pedantic`.
+**Tech Stack:** Rust 2024 (pinned stable 1.96.0), `tokio`, `bytes`, `thiserror`, `krabka-postgres-wal` (PG-2 types), `krabka-object-store` (`ObjectOps`, `InMemory` for tests), `assert2`/`nextest`, `cargo +nightly fmt`, `clippy::pedantic`.
 
 **Spec:** [`docs/superpowers/specs/2026-07-06-crabka-pg3-layer-store-design.md`](../specs/2026-07-06-crabka-pg3-layer-store-design.md).
 
-**PREREQUISITES (unlanded):** **PG-2** (`crabka-postgres-wal` — its `Lsn`/`PageKey`/`RelTag`/`Sharded`/decoder types and its committed fixture corpus). Nothing else; the object-store crate is landed.
+**PREREQUISITES (unlanded):** **PG-2** (`krabka-postgres-wal` — its `Lsn`/`PageKey`/`RelTag`/`Sharded`/decoder types and its committed fixture corpus). Nothing else; the object-store crate is landed.
 
 ---
 
 ## Invariants
 
 1. **Layers are immutable** — written once, never overwritten; point reads via footer→index→`get_range`, never whole-object downloads.
-2. **Gap-safe history:** `get_reconstruct_data(K, L)` returns the newest base ≤ L (image or `will_init`) and *exactly* the deltas in `(base, L]`, oldest-first — never a delta below the base, never a missing delta.
+2. **Gap-safe history:** `get_reconstruct_data(K, L)` returns the newest base ≤ L (image or `will_init`) and _exactly_ the deltas in `(base, L]`, oldest-first — never a delta below the base, never a missing delta.
 3. **Idempotent ingest:** re-feeding WAL ≤ `disk_consistent_lsn` changes nothing.
 4. **Rebuildable:** the layer map is a pure function of the bucket listing (names encode kind/key-range/LSN-range).
 5. **FPI byte fidelity:** a stored FPI base is byte-identical to the WAL's hole-reconstructed image.
@@ -27,14 +27,14 @@
 ## Scope boundary
 
 - **In scope:** container format (both kinds) + reader/writer; open layer + flush + `disk_consistent_lsn`; layer map + rebuild; `get_reconstruct_data`; meta-lane retention; L0→L1 structural compaction; the fixture-corpus gate.
-- **Deferred:** redo/materialization, image-layer *creation*, GC (PG-4); rmgr interpretation/SLRU (PG-4+); `nblocks` service (PG-5); branching (PG-6); live ingest (PG-1); multi-node sharding.
+- **Deferred:** redo/materialization, image-layer _creation_, GC (PG-4); rmgr interpretation/SLRU (PG-4+); `nblocks` service (PG-5); branching (PG-6); live ingest (PG-1); multi-node sharding.
 
 ---
 
 ## File Structure
 
-- **`crates/page-store/`** (new crate `crabka-page-store`):
-  - `Cargo.toml` (`publish = false`; deps: `crabka-postgres-wal`, `crabka-object-store`, `tokio`, `bytes`, `thiserror`)
+- **`crates/page-store/`** (new crate `krabka-page-store`):
+  - `Cargo.toml` (`publish = false`; deps: `krabka-postgres-wal`, `krabka-object-store`, `tokio`, `bytes`, `thiserror`)
   - `src/lib.rs`, `src/value.rs` (`Value`), `src/name.rs` (`LayerName` encode/parse)
   - `src/container.rs` — the shared layer file format (writer + reader)
   - `src/open_layer.rs` — the ingest buffer + flush
@@ -50,6 +50,7 @@ Tasks 1–2 are foundation; Tasks 3 and 4 both build on 2 and touch disjoint fil
 ## Task 1: Scaffold + core types (`Value`, `LayerName`)
 
 **Files:**
+
 - Create: `crates/page-store/{Cargo.toml, src/lib.rs, src/value.rs, src/name.rs}`
 - Modify: `release-plz.toml`
 
@@ -87,11 +88,11 @@ Tasks 1–2 are foundation; Tasks 3 and 4 both build on 2 and touch disjoint fil
 
 - [ ] **Step 2: Run to verify failure, then implement**
 
-`Value::{Image(Bytes), Wal{will_init: bool, rec: Bytes}}` with the 8192-byte image guard; `LayerKind::{Delta, Image}`; `LayerName` with fixed-width lowercase-hex encoding of `(spc, db, rel, fork, blk)` fields and LSNs — `pg/<tenant>/<timeline>/<key_start>-<key_end>__<lsn_start>-<lsn_end>.<delta|image>`. `Cargo.toml` with `publish = false` (comment: internal; see the publish allowlist). Add the `crabka-page-store` private entry to `release-plz.toml` (alphabetical slot, `publish = false` / `release = false`).
+`Value::{Image(Bytes), Wal{will_init: bool, rec: Bytes}}` with the 8192-byte image guard; `LayerKind::{Delta, Image}`; `LayerName` with fixed-width lowercase-hex encoding of `(spc, db, rel, fork, blk)` fields and LSNs — `pg/<tenant>/<timeline>/<key_start>-<key_end>__<lsn_start>-<lsn_end>.<delta|image>`. `Cargo.toml` with `publish = false` (comment: internal; see the publish allowlist). Add the `krabka-page-store` private entry to `release-plz.toml` (alphabetical slot, `publish = false` / `release = false`).
 
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-page-store --lib` → PASS; `./tools/check-publish-allowlist.sh` → exit 0.
+Run: `cargo test -p krabka-page-store --lib` → PASS; `./tools/check-publish-allowlist.sh` → exit 0.
 
 ```bash
 git add crates/page-store release-plz.toml
@@ -103,6 +104,7 @@ git commit -m "feat(page-store): scaffold + layer naming and value types"
 ## Task 2: The layer container format (writer + reader)
 
 **Files:**
+
 - Create: `crates/page-store/src/container.rs`
 
 - [ ] **Step 1: Write the failing tests** (over `ObjectStoreConfig::InMemory` via `ObjectOps`)
@@ -136,7 +138,7 @@ Writer: stream entries (sorted by `(key, lsn)`; enforce sortedness) to a temp fi
 
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-page-store --lib container` → PASS.
+Run: `cargo test -p krabka-page-store --lib container` → PASS.
 
 ```bash
 git add crates/page-store/src/container.rs crates/page-store/src/lib.rs
@@ -148,6 +150,7 @@ git commit -m "feat(page-store): immutable layer container with footer index + r
 ## Task 3 (∥ Task 4): Open layer, flush, `disk_consistent_lsn`, idempotence
 
 **Files:**
+
 - Create: `crates/page-store/src/open_layer.rs`
 
 - [ ] **Step 1: Write the failing tests**
@@ -179,7 +182,7 @@ git commit -m "feat(page-store): immutable layer container with footer index + r
 
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-page-store --lib open_layer` → PASS.
+Run: `cargo test -p krabka-page-store --lib open_layer` → PASS.
 
 ```bash
 git add crates/page-store/src/open_layer.rs crates/page-store/src/lib.rs
@@ -191,6 +194,7 @@ git commit -m "feat(page-store): open-layer ingest with idempotent flush to L0"
 ## Task 4 (∥ Task 3): Layer map + `get_reconstruct_data` + rebuild
 
 **Files:**
+
 - Create: `crates/page-store/src/layer_map.rs`
 
 - [ ] **Step 1: Write the failing tests** (synthetic layers via Task 2's writer)
@@ -226,7 +230,7 @@ git commit -m "feat(page-store): open-layer ingest with idempotent flush to L0"
 
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-page-store --lib layer_map` → PASS.
+Run: `cargo test -p krabka-page-store --lib layer_map` → PASS.
 
 ```bash
 git add crates/page-store/src/layer_map.rs crates/page-store/src/lib.rs
@@ -238,6 +242,7 @@ git commit -m "feat(page-store): layer map, get_reconstruct_data, rebuild-from-l
 ## Task 5: The fixture gate — end-to-end FPI byte match
 
 **Files:**
+
 - Create: `crates/page-store/tests/fixture_gate.rs`
 
 Depends on Tasks 3 + 4 (+ PG-2's landed corpus).
@@ -248,7 +253,7 @@ Drive the full path on `InMemory`: `WalStreamDecoder` over PG-2's committed segm
 
 - [ ] **Step 2: Run to verify it passes**
 
-Run: `cargo test -p crabka-page-store --test fixture_gate` → PASS. A base/byte mismatch here is a real ingest/container bug — fix the store, never the assertion.
+Run: `cargo test -p krabka-page-store --test fixture_gate` → PASS. A base/byte mismatch here is a real ingest/container bug — fix the store, never the assertion.
 
 - [ ] **Step 3: Commit**
 
@@ -262,6 +267,7 @@ git commit -m "test(page-store): end-to-end fixture gate with FPI byte-match ora
 ## Task 6: Structural compaction (L0 → L1)
 
 **Files:**
+
 - Create: `crates/page-store/src/compact.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -274,7 +280,7 @@ K-way merge of the L0 entry streams (already `(key, lsn)`-sorted) split into key
 
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-page-store` → PASS (compaction + all prior).
+Run: `cargo test -p krabka-page-store` → PASS (compaction + all prior).
 
 ```bash
 git add crates/page-store/src/compact.rs crates/page-store/src/lib.rs
@@ -286,8 +292,8 @@ git commit -m "feat(page-store): structural L0->L1 compaction preserving reconst
 ## Task 7: Final gate
 
 - [ ] **Step 1:** `cargo +nightly fmt --check` — no diff.
-- [ ] **Step 2:** `cargo clippy -p crabka-page-store --all-targets -- -D warnings` — no warnings.
-- [ ] **Step 3:** `cargo nextest run -p crabka-page-store` — PASS (container, ingest, map, gate, compaction).
+- [ ] **Step 2:** `cargo clippy -p krabka-page-store --all-targets -- -D warnings` — no warnings.
+- [ ] **Step 3:** `cargo nextest run -p krabka-page-store` — PASS (container, ingest, map, gate, compaction).
 - [ ] **Step 4:** `./tools/check-publish-allowlist.sh` — exit 0.
 - [ ] **Step 5:** Commit any formatting.
 
@@ -299,8 +305,8 @@ git commit -m "feat(page-store): structural L0->L1 compaction preserving reconst
 
 **2. Placeholder scan:** container layout, termination semantics, and the compaction swap discipline are spelled out; test bodies given for every pure/decisive behavior; I/O test helpers (`in_memory_ops`, `ingest_on_inmemory`) are small fixtures the implementer writes alongside. No `TBD`.
 
-**3. Type consistency:** `Value` (Task 1) is written/read by the container (Task 2), produced by ingest (Task 3), interpreted by `get_reconstruct_data` (Task 4), and asserted in the gate (Task 5); `LayerName` (Task 1) is the rebuild contract (Task 4); `ReconstructData{base, deltas}` shape is identical in Tasks 4–6 tests; `Lsn`/`PageKey`/`Sharded` come from `crabka-postgres-wal` throughout.
+**3. Type consistency:** `Value` (Task 1) is written/read by the container (Task 2), produced by ingest (Task 3), interpreted by `get_reconstruct_data` (Task 4), and asserted in the gate (Task 5); `LayerName` (Task 1) is the rebuild contract (Task 4); `ReconstructData{base, deltas}` shape is identical in Tasks 4–6 tests; `Lsn`/`PageKey`/`Sharded` come from `krabka-postgres-wal` throughout.
 
 **4. Invariant check:** immutability + ranged reads (Task 2); gap-safe plan semantics (Task 4 tests); idempotence (Tasks 3, 5); rebuildability (Task 4); FPI byte fidelity (Task 5); compaction equivalence (Task 6); allowlist green (Tasks 1, 7). Each task green before commit.
 
-**5. Prerequisites flagged:** PG-2 (`crabka-postgres-wal` + its corpus) is the one unlanded prerequisite — stated in the header. Batching: 1 → 2 → (3 ∥ 4) → 5 → 6 → 7.
+**5. Prerequisites flagged:** PG-2 (`krabka-postgres-wal` + its corpus) is the one unlanded prerequisite — stated in the header. Batching: 1 → 2 → (3 ∥ 4) → 5 → 6 → 7.

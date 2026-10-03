@@ -20,8 +20,8 @@ if [[ "$(git -C "$kafka_dir" rev-parse HEAD)" != "$kafka_ref" ]]; then
     exit 2
 fi
 
-cargo build --release --locked -p crabka-broker -p crabka-cli
-cp "$repo_root/target/release/crabka-broker" "$kafka_dir/crabka-broker"
+cargo build --release --locked -p krabka-broker -p krabka-cli
+cp "$repo_root/target/release/krabka-broker" "$kafka_dir/krabka-broker"
 cp "$repo_root/target/release/crabka" "$kafka_dir/crabka"
 
 tests=(

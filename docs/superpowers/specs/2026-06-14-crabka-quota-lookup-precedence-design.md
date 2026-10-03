@@ -44,6 +44,7 @@ For a fixed probe `(principal="u", client_id="c", quota_key="k")`, enumerate **a
 8 candidate keys. For each subset, build a `MetadataImage` configuring exactly those candidate keys
 (each with a distinct value so the matched value is identifiable), call `lookup_quota_with_key`, and
 assert:
+
 - **first-match-wins / precedence**: the returned key is the **minimum-index present** candidate; no
   earlier (higher-priority) candidate is present.
 - **value-match**: the returned value equals the configured value of that candidate.
@@ -61,6 +62,7 @@ Generate random images: a random set of quota entities drawn from a universe tha
 candidate keys for a random probe **plus non-matching decoys** (`(client-id=other, user=other)`,
 mismatched specifics, unrelated entity types), each with random values across multiple `quota_key`s;
 and random probes (principal/client-id strings; IPv4 + IPv6 peers). Assert:
+
 - precedence: the returned key, if any, is the first present candidate in the fixed order for that
   probe;
 - **non-matching ignored**: a decoy entity (not a candidate for the probe) is never returned;
@@ -69,14 +71,14 @@ and random probes (principal/client-id strings; IPv4 + IPv6 peers). Assert:
 
 ## Out of scope (YAGNI)
 
-- The quota *enforcement* / throttle-time computation (separate; the token-bucket slice #531 covered
-  the bucket). This slice is the *lookup precedence* only.
+- The quota _enforcement_ / throttle-time computation (separate; the token-bucket slice #531 covered
+  the bucket). This slice is the _lookup precedence_ only.
 - Dynamic `AlterClientQuotas` add/remove ordering — precedence is a pure function of the current
   config, so add/remove order is irrelevant (no temporal property).
 
 ## Verification discipline
 
-- `cargo +nightly fmt -p crabka-broker`; `cargo clippy -p crabka-broker --all-targets -- -D warnings`
+- `cargo +nightly fmt -p krabka-broker`; `cargo clippy -p krabka-broker --all-targets -- -D warnings`
   clean. No watchdog needed (no stateright; the exhaustive loop + proptest are bounded and fast).
 
 ## Success criteria

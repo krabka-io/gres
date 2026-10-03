@@ -17,9 +17,9 @@ consumer load scales with a broker's share rather than the whole cluster.
 
 Today every broker consumes the entire metadata topic with a unique group
 id (`kafka_log.rs:200`, `subscribe(vec![topic])`). The 48f design records
-this as a deliberate first cut: *"consumes all metadata-topic partitions
+this as a deliberate first cut: _"consumes all metadata-topic partitions
 on every broker. Partition-set assignment is an optimization deferred to a
-follow-up."* 48o made the consumer assignment-driven; 48q supplies the
+follow-up."_ 48o made the consumer assignment-driven; 48q supplies the
 assignment.
 
 ## Approach (dynamic, leadership-driven)
@@ -46,19 +46,19 @@ A reconciler task in `manager.rs` (or the broker bootstrap) subscribes to
 the watch and diffs against the current `AssignmentHandle::assigned()`:
 
 - **added** partition → `handle.add(PartitionStart { partition,
-  start_offset: snapshot_committed + 1 })` (reuses 48p's resume offsets;
+start_offset: snapshot_committed + 1 })` (reuses 48p's resume offsets;
   falls back to 0 when the snapshot has nothing for it). It then catches
   up from that offset to the partition's current HWM.
 - **removed** partition → `handle.remove(partition)`.
 
 ### Readiness gate (correctness)
 
-A user-partition the broker has *newly* become leader for must not serve
+A user-partition the broker has _newly_ become leader for must not serve
 remote reads from a metadata partition that hasn't caught up yet —
 otherwise `remote_log_segment_metadata` would return a misleading "no
 segment" and the consumer would see a spurious end-of-tier.
 
-Track per-metadata-partition readiness: a partition is *ready* once the
+Track per-metadata-partition readiness: a partition is _ready_ once the
 pump's `applied[partition]` (from `manager.rs`) reaches the HWM observed
 at assignment time. Add to the RLMM read surface a way to distinguish
 "not ready" from "no segment":
@@ -129,6 +129,6 @@ with 48p), so sequence after 48p.
 
 - `cargo fmt --all --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test -p crabka-remote-storage-topic -p crabka-broker`
+- `cargo test -p krabka-remote-storage-topic -p krabka-broker`
 - `cargo test --workspace` (no regressions)
 - No CRD drift.

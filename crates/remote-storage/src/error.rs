@@ -75,9 +75,9 @@ pub enum RemoteStorageError {
     },
 }
 
-impl From<crabka_object_store::ObjectStoreError> for RemoteStorageError {
-    fn from(err: crabka_object_store::ObjectStoreError) -> Self {
-        use crabka_object_store::ObjectStoreError as E;
+impl From<krabka_object_store::ObjectStoreError> for RemoteStorageError {
+    fn from(err: krabka_object_store::ObjectStoreError) -> Self {
+        use krabka_object_store::ObjectStoreError as E;
 
         match err {
             E::Io(e) => Self::Io(e),
@@ -105,7 +105,7 @@ mod tests {
 
     #[test]
     fn object_store_too_large_converts_to_backend_message() {
-        let err = crabka_object_store::ObjectStoreError::TooLarge {
+        let err = krabka_object_store::ObjectStoreError::TooLarge {
             key: Path::from("index/snapshot.json"),
             size: 1000,
             max_bytes: 256,

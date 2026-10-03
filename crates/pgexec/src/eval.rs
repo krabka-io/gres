@@ -5,8 +5,8 @@
 
 use std::{borrow::Cow, cmp::Ordering};
 
-use crabka_pgparser::ast::{BinaryOp, Expr, MatchKind, UnaryOp};
-use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType, TypeError, ops};
+use krabka_pgparser::ast::{BinaryOp, Expr, MatchKind, UnaryOp};
+use krabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType, TypeError, ops};
 
 use crate::{
     array_fn::{self, ConcatForm, Quantifier},
@@ -21,7 +21,7 @@ use crate::{
 /// `54001` (statement_too_complex).
 ///
 /// This limit is DEFENSE-IN-DEPTH. The parser already caps the AST depth at
-/// `crabka_pgparser::parser::MAX_DEPTH` (50) at parse time, so a tree deeper
+/// `krabka_pgparser::parser::MAX_DEPTH` (50) at parse time, so a tree deeper
 /// than 50 can never reach here in practice. `150` leaves 3x headroom above
 /// that cap, so the guard never wrongly rejects a parser-admitted tree. The
 /// value also stays well below the depth at which `eval` itself would overflow.
@@ -87,7 +87,7 @@ pub(crate) fn cast_value(
     cast_value_in(
         value,
         target,
-        crabka_pgtypes::encoding::OutputStyle::with_zone(time_zone),
+        krabka_pgtypes::encoding::OutputStyle::with_zone(time_zone),
     )
 }
 
@@ -99,7 +99,7 @@ pub(crate) fn cast_value(
 /// padded string says the padding is a `character(n)` artifact rather than data
 /// a `text` column really holds. Only the static type knows, and only the
 /// executor holds the static type — so the cast that
-/// [`crabka_pgtypes::string::bpchar_to_text`] describes is applied here, at each
+/// [`krabka_pgtypes::string::bpchar_to_text`] describes is applied here, at each
 /// point a `character` expression enters a `text` context.
 ///
 /// Both guards are load-bearing. The trailing-space test settles the ordinary
@@ -120,7 +120,7 @@ pub(crate) fn bpchar_to_text_value(
         return Ok(None);
     }
     Ok(Some(Datum::Text(
-        crabka_pgtypes::string::bpchar_to_text(text).to_owned(),
+        krabka_pgtypes::string::bpchar_to_text(text).to_owned(),
     )))
 }
 
@@ -205,7 +205,7 @@ pub(crate) fn cast_operand(
                     .ok_or_else(|| ExecError::TypeMismatch("cannot cast oid to regtype".into()))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        return Ok(Datum::Array(crabka_pgtypes::ArrayValue::with_dims(
+        return Ok(Datum::Array(krabka_pgtypes::ArrayValue::with_dims(
             ElemType::Regtype,
             elems,
             dims.clone(),
@@ -214,7 +214,7 @@ pub(crate) fn cast_operand(
     let cast = if ty.storage_type() == ColumnType::Xml {
         match value {
             Datum::Text(text) => {
-                crabka_pgtypes::xml::validate(text, ctx.xml_option)?;
+                krabka_pgtypes::xml::validate(text, ctx.xml_option)?;
                 Datum::Xml(text.clone())
             }
             _ => cast_value_in_at(value, ty, ctx.output_style(), ctx.now)?,
@@ -235,13 +235,13 @@ pub(crate) fn ensure_enum_datum_safe(ctx: &EvalCtx, datum: &Datum) -> Result<(),
     let Some(transaction) = &ctx.txn else {
         return Ok(());
     };
-    let check = |value: &crabka_pgtypes::datum::EnumValue| {
+    let check = |value: &krabka_pgtypes::datum::EnumValue| {
         if transaction
             .unsafe_enum_values
             .contains(&(value.ty.oid, value.label.clone()))
         {
             Err(ExecError::Remote(
-                crabka_pgwire::error::PgError::error(
+                krabka_pgwire::error::PgError::error(
                     "55P04",
                     format!(
                         "unsafe use of new value \"{}\" of enum type {}",
@@ -273,7 +273,7 @@ pub(crate) fn ensure_enum_datum_safe(ctx: &EvalCtx, datum: &Datum) -> Result<(),
 pub(crate) fn cast_value_in(
     value: &Datum,
     target: ColumnType,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> Result<Datum, ExecError> {
     cast_value_in_at(value, target, style, jiff::Timestamp::now())
 }
@@ -283,7 +283,7 @@ pub(crate) fn cast_value_in(
 pub(crate) fn cast_value_in_at(
     value: &Datum,
     target: ColumnType,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
     now: jiff::Timestamp,
 ) -> Result<Datum, ExecError> {
     if matches!(target, ColumnType::Aclitem | ColumnType::Refcursor) {
@@ -294,11 +294,11 @@ pub(crate) fn cast_value_in_at(
         return crate::usertype::normalize_base_input(base, value);
     }
     if let ColumnType::Array(ElemType::User(reference)) = target
-        && crabka_pgtypes::usertype::lookup_oid(reference.oid)
-            .is_some_and(|ty| matches!(ty.body, crabka_pgtypes::usertype::UserTypeBody::Base(_)))
+        && krabka_pgtypes::usertype::lookup_oid(reference.oid)
+            .is_some_and(|ty| matches!(ty.body, krabka_pgtypes::usertype::UserTypeBody::Base(_)))
         && let Datum::Text(text) = value
     {
-        let raw = crabka_pgtypes::array::parse_literal(text)?;
+        let raw = krabka_pgtypes::array::parse_literal(text)?;
         let element = ElemType::User(reference).column_type();
         let elems = raw
             .elements
@@ -320,7 +320,7 @@ pub(crate) fn cast_value_in_at(
     if let Datum::Text(text) = value {
         let parsed = match base {
             ColumnType::Date => Some(
-                crabka_pgtypes::datetime::parse_date_in_at(
+                krabka_pgtypes::datetime::parse_date_in_at(
                     text,
                     style.date_order,
                     style.time_zone,
@@ -329,7 +329,7 @@ pub(crate) fn cast_value_in_at(
                 .map(Datum::Date)?,
             ),
             ColumnType::Timestamp => Some(
-                crabka_pgtypes::datetime::parse_timestamp_in_at(
+                krabka_pgtypes::datetime::parse_timestamp_in_at(
                     text,
                     style.date_order,
                     style.time_zone,
@@ -338,7 +338,7 @@ pub(crate) fn cast_value_in_at(
                 .map(Datum::Timestamp)?,
             ),
             ColumnType::Timestamptz => Some(
-                crabka_pgtypes::datetime::parse_timestamptz_in_at(
+                krabka_pgtypes::datetime::parse_timestamptz_in_at(
                     text,
                     style.date_order,
                     style.time_zone,
@@ -347,7 +347,7 @@ pub(crate) fn cast_value_in_at(
                 .map(Datum::Timestamptz)?,
             ),
             ColumnType::Time => Some(
-                crabka_pgtypes::datetime::parse_time_in_at(
+                krabka_pgtypes::datetime::parse_time_in_at(
                     text,
                     style.date_order,
                     style.time_zone,
@@ -356,7 +356,7 @@ pub(crate) fn cast_value_in_at(
                 .map(Datum::Time)?,
             ),
             ColumnType::Timetz => Some(
-                crabka_pgtypes::datetime::parse_timetz_in_at(
+                krabka_pgtypes::datetime::parse_timetz_in_at(
                     text,
                     style.date_order,
                     style.time_zone,
@@ -367,13 +367,13 @@ pub(crate) fn cast_value_in_at(
             _ => None,
         };
         if let Some(parsed) = parsed {
-            return crabka_pgtypes::cast::cast_in(&parsed, target, style).map_err(ExecError::from);
+            return krabka_pgtypes::cast::cast_in(&parsed, target, style).map_err(ExecError::from);
         }
     }
     match target.storage_type() {
         ColumnType::JsonPath => crate::jsonpath::cast_datum(value),
         ColumnType::Array(ElemType::JsonPath) => crate::jsonpath::cast_array_datum(value),
-        _ => crabka_pgtypes::cast::cast_in(value, target, style).map_err(ExecError::from),
+        _ => krabka_pgtypes::cast::cast_in(value, target, style).map_err(ExecError::from),
     }
 }
 
@@ -381,7 +381,7 @@ pub(crate) fn cast_value_in_at(
 pub(crate) fn cast_assign_value_in_at(
     value: &Datum,
     target: ColumnType,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
     now: jiff::Timestamp,
 ) -> Result<Datum, ExecError> {
     if matches!(target, ColumnType::Aclitem | ColumnType::Refcursor) {
@@ -403,10 +403,10 @@ pub(crate) fn cast_assign_value_in_at(
         )
     {
         let parsed = cast_value_in_at(value, base, style, now)?;
-        return crabka_pgtypes::cast::cast_assign_in(&parsed, target, style)
+        return krabka_pgtypes::cast::cast_assign_in(&parsed, target, style)
             .map_err(ExecError::from);
     }
-    crabka_pgtypes::cast::cast_assign_in(value, target, style).map_err(ExecError::from)
+    krabka_pgtypes::cast::cast_assign_in(value, target, style).map_err(ExecError::from)
 }
 
 /// Depth-tracking core of [`eval`]. `depth` is the current recursion level; every
@@ -426,7 +426,7 @@ fn eval_depth(
     if depth == EVAL_STACK_SWITCH_DEPTH {
         return std::thread::scope(|thread_scope| {
             let handle = std::thread::Builder::new()
-                .name("crabka-deep-expression".into())
+                .name("krabka-deep-expression".into())
                 .stack_size(DEEP_EVAL_STACK_BYTES)
                 .spawn_scoped(thread_scope, || {
                     eval_depth_inner(expr, scope, values, ctx, depth)
@@ -454,7 +454,7 @@ fn eval_depth_inner(
         Expr::IntLiteral(s) => Ok(ops::int_literal(s)?),
         // SP32: a bare decimal/exponent literal is `numeric` (arbitrary precision —
         // no overflow; the lexer already guaranteed a well-formed decimal lexeme).
-        Expr::NumericLiteral(s) => crabka_pgtypes::numeric::parse(s)
+        Expr::NumericLiteral(s) => krabka_pgtypes::numeric::parse(s)
             .map(Datum::Numeric)
             .ok_or_else(|| {
                 ExecError::Type(TypeError::InvalidText {
@@ -466,7 +466,7 @@ fn eval_depth_inner(
         // `B'…'` / `X'…'` — already decoded to binary digits by the parser,
         // which also ran `bit_in`, so the value cannot fail here.
         Expr::BitStringLiteral(bits) => Ok(Datum::BitString(
-            crabka_pgtypes::BitString::parse(bits, false)
+            krabka_pgtypes::BitString::parse(bits, false)
                 .expect("the parser validated the bit-string literal"),
         )),
         Expr::BoolLiteral(b) => Ok(Datum::Bool(*b)),
@@ -475,7 +475,7 @@ fn eval_depth_inner(
         // protocol supplies none, so PostgreSQL reports the placeholder as
         // undefined rather than as an unimplemented feature -- 42P02, the same
         // code and wording a view body already raises.
-        Expr::Param(number) => Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+        Expr::Param(number) => Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
             "42P02",
             format!("there is no parameter ${number}"),
         ))),
@@ -734,7 +734,7 @@ fn eval_depth_inner(
             // A cast the user declared with `CREATE CAST` is the only route in
             // or out of a user-defined base type, and the built-in conversion
             // table below knows nothing about it.
-            if crabka_pgtypes::usercast::any_declared()
+            if krabka_pgtypes::usercast::any_declared()
                 && let Some(coerced) = crate::usercast::coerce_declared(expr, *ty, &v, scope, ctx)?
             {
                 return Ok(coerced);
@@ -816,7 +816,7 @@ fn eval_depth_inner(
                     // `array_in` runs the element type's input function, so
                     // the session's `DateStyle` order decides how an ambiguous
                     // all-numeric element is read.
-                    crabka_pgtypes::cast::cast_in(&a, target, ctx.output_style())?
+                    krabka_pgtypes::cast::cast_in(&a, target, ctx.output_style())?
                 }
                 _ => a,
             };
@@ -1127,7 +1127,7 @@ pub(crate) fn apply_unary(op: UnaryOp, v: &Datum, _ctx: &EvalCtx) -> Result<Datu
         UnaryOp::Not => Ok(ops::not(v)?),
         UnaryOp::TsNot => match v {
             Datum::Null => Ok(Datum::Null),
-            Datum::TsQuery(query) => Ok(Datum::TsQuery(crabka_pgtypes::TsQuery::Not(Box::new(
+            Datum::TsQuery(query) => Ok(Datum::TsQuery(krabka_pgtypes::TsQuery::Not(Box::new(
                 query.clone(),
             )))),
             other => Err(undefined_prefix_operator(op, other)),
@@ -1135,7 +1135,7 @@ pub(crate) fn apply_unary(op: UnaryOp, v: &Datum, _ctx: &EvalCtx) -> Result<Datu
         // SP37: unary minus on an interval negates each field (`0 - interval` has no
         // defined operator). Everything else is `0 - v` (int/numeric/float negation).
         UnaryOp::Neg => match v {
-            Datum::Interval(i) => Ok(Datum::Interval(crabka_pgtypes::datetime::neg_interval(*i)?)),
+            Datum::Interval(i) => Ok(Datum::Interval(krabka_pgtypes::datetime::neg_interval(*i)?)),
             // Negation stays at the operand's own width, so `-((-32768)::int2)`
             // is 22003 rather than a silently widened 32768.
             Datum::Int2(_) => Ok(ops::sub(&Datum::Int2(0), v)?),
@@ -1147,7 +1147,7 @@ pub(crate) fn apply_unary(op: UnaryOp, v: &Datum, _ctx: &EvalCtx) -> Result<Datu
             // `numeric` has its own `numeric_uminus`, which flips the sign
             // without inventing a zero operand — so `-'NaN'::numeric` is `NaN`
             // and the display scale is the operand's own.
-            Datum::Numeric(n) => Ok(Datum::Numeric(crabka_pgtypes::numeric::neg(n))),
+            Datum::Numeric(n) => Ok(Datum::Numeric(krabka_pgtypes::numeric::neg(n))),
             // `money` has no unary minus at all in PostgreSQL, and the generic
             // `0 - v` fallback would otherwise report an integer-operand
             // mismatch instead of the missing operator.
@@ -1214,7 +1214,7 @@ fn boolean_test_operand(op: UnaryOp, v: &Datum) -> Result<Option<bool>, ExecErro
         Datum::Null => Ok(None),
         Datum::Bool(b) => Ok(Some(*b)),
         Datum::Text(_) => {
-            match crabka_pgtypes::cast::cast(v, ColumnType::Bool, &jiff::tz::TimeZone::UTC)? {
+            match krabka_pgtypes::cast::cast(v, ColumnType::Bool, &jiff::tz::TimeZone::UTC)? {
                 Datum::Bool(b) => Ok(Some(b)),
                 _ => Ok(None),
             }
@@ -1294,7 +1294,7 @@ fn apply_prefix_op(op: UnaryOp, v: &Datum) -> Result<Datum, ExecError> {
                 .ok_or(ExecError::Type(TypeError::Overflow)),
             Datum::Float4(f) => Ok(Datum::Float4(f.abs())),
             Datum::Float8(f) => Ok(Datum::Float8(f.abs())),
-            Datum::Numeric(d) => Ok(Datum::Numeric(crabka_pgtypes::numeric::abs(d))),
+            Datum::Numeric(d) => Ok(Datum::Numeric(krabka_pgtypes::numeric::abs(d))),
             other => Err(undefined_prefix_operator(op, other)),
         },
         UnaryOp::Sqrt | UnaryOp::Cbrt => {
@@ -1382,11 +1382,11 @@ fn to_f64(d: &Datum) -> Option<f64> {
         Datum::Int2(n) => Some(f64::from(*n)),
         Datum::Float4(f) => Some(f64::from(*f)),
         Datum::Int4(n) => Some(f64::from(*n)),
-        Datum::Int8(n) => Some(crabka_pgtypes::numeric::to_f64(
-            &crabka_pgtypes::numeric::from_i64(*n),
+        Datum::Int8(n) => Some(krabka_pgtypes::numeric::to_f64(
+            &krabka_pgtypes::numeric::from_i64(*n),
         )),
         Datum::Float8(f) => Some(*f),
-        Datum::Numeric(d) => Some(crabka_pgtypes::numeric::to_f64(d)),
+        Datum::Numeric(d) => Some(krabka_pgtypes::numeric::to_f64(d)),
         _ => None,
     }
 }
@@ -1560,16 +1560,16 @@ fn apply_pow(l: &Datum, r: &Datum) -> Result<Datum, ExecError> {
         return Ok(Datum::Null);
     }
     let numeric_pair = |d: &Datum| match d {
-        Datum::Int2(n) => Some(crabka_pgtypes::numeric::from_i64(i64::from(*n))),
-        Datum::Int4(n) => Some(crabka_pgtypes::numeric::from_i64(i64::from(*n))),
-        Datum::Int8(n) => Some(crabka_pgtypes::numeric::from_i64(*n)),
+        Datum::Int2(n) => Some(krabka_pgtypes::numeric::from_i64(i64::from(*n))),
+        Datum::Int4(n) => Some(krabka_pgtypes::numeric::from_i64(i64::from(*n))),
+        Datum::Int8(n) => Some(krabka_pgtypes::numeric::from_i64(*n)),
         Datum::Numeric(d) => Some(d.clone()),
         _ => None,
     };
     if (matches!(l, Datum::Numeric(_)) || matches!(r, Datum::Numeric(_)))
         && let (Some(base), Some(exp)) = (numeric_pair(l), numeric_pair(r))
     {
-        return crabka_pgtypes::numeric::num_power(&base, &exp)
+        return krabka_pgtypes::numeric::num_power(&base, &exp)
             .map(Datum::Numeric)
             .map_err(ExecError::Type);
     }
@@ -1791,7 +1791,7 @@ fn coerce_untyped_literal_operands(
         // `ARRAY['a'] || 'b'` must stay `anyarray || anyelement`.
         let array_type = match other {
             Datum::Array(array) => Some(array.column_type()),
-            Datum::OidVector(v) => Some(if v.elem == crabka_pgtypes::ElemType::Int2 {
+            Datum::OidVector(v) => Some(if v.elem == krabka_pgtypes::ElemType::Int2 {
                 ColumnType::Int2Vector
             } else {
                 ColumnType::OidVector
@@ -2230,7 +2230,7 @@ pub(crate) fn apply_binary(
     };
     let (l, r) = (left.as_ref(), right.as_ref());
     // SP37: tz-AWARE temporal arithmetic involving `timestamptz` is computed here
-    // (where `ctx.time_zone` is available) — `crabka_pgtypes::ops` would `TypeMismatch` on
+    // (where `ctx.time_zone` is available) — `krabka_pgtypes::ops` would `TypeMismatch` on
     // a `Timestamptz` operand. A non-timestamptz pair falls through to `ops`, so all
     // existing (tz-free) behavior is unchanged.
     if matches!(op, BinaryOp::Add | BinaryOp::Sub)
@@ -2303,13 +2303,13 @@ pub(crate) fn apply_binary(
             let (Datum::Range(a), Datum::Range(b)) = (l, r) else {
                 unreachable!()
             };
-            Ok(Datum::Range(crabka_pgtypes::range::union(a, b)?))
+            Ok(Datum::Range(krabka_pgtypes::range::union(a, b)?))
         }
         BinaryOp::Add if matches!((l, r), (Datum::Multirange(_), Datum::Multirange(_))) => {
             let (Datum::Multirange(a), Datum::Multirange(b)) = (l, r) else {
                 unreachable!()
             };
-            Ok(Datum::Multirange(crabka_pgtypes::multirange::union(a, b)?))
+            Ok(Datum::Multirange(krabka_pgtypes::multirange::union(a, b)?))
         }
         BinaryOp::Add => Ok(ops::add(l, r)?),
         // jsonb `-` (delete a key, an index, or a set of keys) overloads the
@@ -2322,13 +2322,13 @@ pub(crate) fn apply_binary(
             let (Datum::Range(a), Datum::Range(b)) = (l, r) else {
                 unreachable!()
             };
-            Ok(Datum::Range(crabka_pgtypes::range::difference(a, b)?))
+            Ok(Datum::Range(krabka_pgtypes::range::difference(a, b)?))
         }
         BinaryOp::Sub if matches!((l, r), (Datum::Multirange(_), Datum::Multirange(_))) => {
             let (Datum::Multirange(a), Datum::Multirange(b)) = (l, r) else {
                 unreachable!()
             };
-            Ok(Datum::Multirange(crabka_pgtypes::multirange::difference(
+            Ok(Datum::Multirange(krabka_pgtypes::multirange::difference(
                 a, b,
             )?))
         }
@@ -2337,13 +2337,13 @@ pub(crate) fn apply_binary(
             let (Datum::Range(a), Datum::Range(b)) = (l, r) else {
                 unreachable!()
             };
-            Ok(Datum::Range(crabka_pgtypes::range::intersection(a, b)?))
+            Ok(Datum::Range(krabka_pgtypes::range::intersection(a, b)?))
         }
         BinaryOp::Mul if matches!((l, r), (Datum::Multirange(_), Datum::Multirange(_))) => {
             let (Datum::Multirange(a), Datum::Multirange(b)) = (l, r) else {
                 unreachable!()
             };
-            Ok(Datum::Multirange(crabka_pgtypes::multirange::intersection(
+            Ok(Datum::Multirange(krabka_pgtypes::multirange::intersection(
                 a, b,
             )?))
         }
@@ -2385,13 +2385,13 @@ pub(crate) fn apply_binary(
             let (Datum::Range(left), Datum::Range(right)) = (l, r) else {
                 unreachable!()
             };
-            Ok(Datum::Bool(crabka_pgtypes::range::overlaps(left, right)?))
+            Ok(Datum::Bool(krabka_pgtypes::range::overlaps(left, right)?))
         }
         BinaryOp::Overlaps if matches!((l, r), (Datum::TsQuery(_), Datum::TsQuery(_))) => {
             let (Datum::TsQuery(left), Datum::TsQuery(right)) = (l, r) else {
                 unreachable!()
             };
-            Ok(Datum::TsQuery(crabka_pgtypes::TsQuery::And(
+            Ok(Datum::TsQuery(krabka_pgtypes::TsQuery::And(
                 Box::new(left.clone()),
                 Box::new(right.clone()),
             )))
@@ -2400,10 +2400,10 @@ pub(crate) fn apply_binary(
         BinaryOp::Overlaps => match (l, r) {
             (Datum::Range(range), Datum::Multirange(multirange))
             | (Datum::Multirange(multirange), Datum::Range(range)) => Ok(Datum::Bool(
-                crabka_pgtypes::multirange::overlaps_range(multirange, range)?,
+                krabka_pgtypes::multirange::overlaps_range(multirange, range)?,
             )),
             (Datum::Multirange(left), Datum::Multirange(right)) => Ok(Datum::Bool(
-                crabka_pgtypes::multirange::overlaps(left, right)?,
+                krabka_pgtypes::multirange::overlaps(left, right)?,
             )),
             _ => array_fn::array_overlap(l, r),
         },
@@ -2441,7 +2441,7 @@ pub(crate) fn apply_binary(
         // was already claimed by `apply_geometric_operator` above.
         BinaryOp::Phrase => match (l, r) {
             (Datum::TsQuery(left), Datum::TsQuery(right)) => Ok(Datum::TsQuery(
-                crabka_pgtypes::TsQuery::Phrase(Box::new(left.clone()), Box::new(right.clone()), 1),
+                krabka_pgtypes::TsQuery::Phrase(Box::new(left.clone()), Box::new(right.clone()), 1),
             )),
             (Datum::Null, _) | (_, Datum::Null) => Ok(Datum::Null),
             _ => Err(undefined_operator_for(op, l, r)),
@@ -2514,31 +2514,31 @@ fn apply_containment(op: BinaryOp, l: &Datum, r: &Datum) -> Result<Datum, ExecEr
     let contains = op == BinaryOp::Contains;
     if let (Datum::Range(left), Datum::Range(right)) = (l, r) {
         return Ok(Datum::Bool(if contains {
-            crabka_pgtypes::range::contains_range(left, right)?
+            krabka_pgtypes::range::contains_range(left, right)?
         } else {
-            crabka_pgtypes::range::contains_range(right, left)?
+            krabka_pgtypes::range::contains_range(right, left)?
         }));
     }
     match (l, r, contains) {
         (Datum::Range(range), Datum::Multirange(multirange), true)
         | (Datum::Multirange(multirange), Datum::Range(range), false) => {
-            return Ok(Datum::Bool(crabka_pgtypes::multirange::range_contains(
+            return Ok(Datum::Bool(krabka_pgtypes::multirange::range_contains(
                 range, multirange,
             )?));
         }
         (Datum::Multirange(multirange), Datum::Range(range), true)
         | (Datum::Range(range), Datum::Multirange(multirange), false) => {
-            return Ok(Datum::Bool(crabka_pgtypes::multirange::contains_range(
+            return Ok(Datum::Bool(krabka_pgtypes::multirange::contains_range(
                 multirange, range,
             )?));
         }
         (Datum::Multirange(left), Datum::Multirange(right), true) => {
-            return Ok(Datum::Bool(crabka_pgtypes::multirange::contains(
+            return Ok(Datum::Bool(krabka_pgtypes::multirange::contains(
                 left, right,
             )?));
         }
         (Datum::Multirange(left), Datum::Multirange(right), false) => {
-            return Ok(Datum::Bool(crabka_pgtypes::multirange::contains(
+            return Ok(Datum::Bool(krabka_pgtypes::multirange::contains(
                 right, left,
             )?));
         }
@@ -2546,21 +2546,21 @@ fn apply_containment(op: BinaryOp, l: &Datum, r: &Datum) -> Result<Datum, ExecEr
     }
     if contains {
         if let Datum::Range(range) = l {
-            return Ok(Datum::Bool(crabka_pgtypes::range::contains_element(
+            return Ok(Datum::Bool(krabka_pgtypes::range::contains_element(
                 range, r,
             )?));
         }
         if let Datum::Multirange(multirange) = l {
-            return Ok(Datum::Bool(crabka_pgtypes::multirange::contains_element(
+            return Ok(Datum::Bool(krabka_pgtypes::multirange::contains_element(
                 multirange, r,
             )?));
         }
     } else if let Datum::Range(range) = r {
-        return Ok(Datum::Bool(crabka_pgtypes::range::contains_element(
+        return Ok(Datum::Bool(krabka_pgtypes::range::contains_element(
             range, l,
         )?));
     } else if let Datum::Multirange(multirange) = r {
-        return Ok(Datum::Bool(crabka_pgtypes::multirange::contains_element(
+        return Ok(Datum::Bool(krabka_pgtypes::multirange::contains_element(
             multirange, l,
         )?));
     }
@@ -2596,27 +2596,27 @@ fn apply_containment(op: BinaryOp, l: &Datum, r: &Datum) -> Result<Datum, ExecEr
 
 fn apply_range_directional(op: BinaryOp, l: &Datum, r: &Datum) -> Result<bool, ExecError> {
     type RangeRelation = fn(
-        &crabka_pgtypes::RangeValue,
-        &crabka_pgtypes::RangeValue,
-    ) -> Result<bool, crabka_pgtypes::TypeError>;
+        &krabka_pgtypes::RangeValue,
+        &krabka_pgtypes::RangeValue,
+    ) -> Result<bool, krabka_pgtypes::TypeError>;
     let (left_last, right_last, relation): (bool, bool, RangeRelation) = match op {
         BinaryOp::DoesNotExtendRight => (
             true,
             true,
-            crabka_pgtypes::range::does_not_extend_right as _,
+            krabka_pgtypes::range::does_not_extend_right as _,
         ),
         BinaryOp::DoesNotExtendLeft => (
             false,
             false,
-            crabka_pgtypes::range::does_not_extend_left as _,
+            krabka_pgtypes::range::does_not_extend_left as _,
         ),
-        BinaryOp::Shl => (true, false, crabka_pgtypes::range::strictly_left as _),
-        BinaryOp::Shr => (false, true, crabka_pgtypes::range::strictly_right as _),
+        BinaryOp::Shl => (true, false, krabka_pgtypes::range::strictly_left as _),
+        BinaryOp::Shr => (false, true, krabka_pgtypes::range::strictly_right as _),
         BinaryOp::Adjacent => {
             if let (Datum::Multirange(multirange), Datum::Range(range))
             | (Datum::Range(range), Datum::Multirange(multirange)) = (l, r)
             {
-                return Ok(crabka_pgtypes::multirange::adjacent_range(
+                return Ok(krabka_pgtypes::multirange::adjacent_range(
                     multirange, range,
                 )?);
             }
@@ -2632,8 +2632,8 @@ fn apply_range_directional(op: BinaryOp, l: &Datum, r: &Datum) -> Result<bool, E
             let Some(right_last) = range_boundary(r, true) else {
                 return Ok(false);
             };
-            return Ok(crabka_pgtypes::range::adjacent(left_last, right_first)?
-                || crabka_pgtypes::range::adjacent(left_first, right_last)?);
+            return Ok(krabka_pgtypes::range::adjacent(left_last, right_first)?
+                || krabka_pgtypes::range::adjacent(left_first, right_last)?);
         }
         _ => unreachable!(),
     };
@@ -2644,7 +2644,7 @@ fn apply_range_directional(op: BinaryOp, l: &Datum, r: &Datum) -> Result<bool, E
     Ok(relation(left, right)?)
 }
 
-fn range_boundary(value: &Datum, last: bool) -> Option<&crabka_pgtypes::RangeValue> {
+fn range_boundary(value: &Datum, last: bool) -> Option<&krabka_pgtypes::RangeValue> {
     match value {
         Datum::Range(range) if !range.empty => Some(range),
         Datum::Multirange(multirange) if last => multirange.ranges.last(),
@@ -3184,7 +3184,7 @@ fn apply_concat(kind: ConcatKind, l: &Datum, r: &Datum, ctx: &EvalCtx) -> Result
         },
         ConcatKind::TsQuery => match (l, r) {
             (Datum::TsQuery(left), Datum::TsQuery(right)) => Ok(Datum::TsQuery(
-                crabka_pgtypes::TsQuery::Or(Box::new(left.clone()), Box::new(right.clone())),
+                krabka_pgtypes::TsQuery::Or(Box::new(left.clone()), Box::new(right.clone())),
             )),
             (Datum::Null, _) | (_, Datum::Null) => Ok(Datum::Null),
             _ => Err(undefined_operator_for(BinaryOp::Concat, l, r)),
@@ -3606,8 +3606,8 @@ fn geometric_arithmetic_result(op: BinaryOp, left: GeoType, right: GeoType) -> O
 /// positional tests, which is the one place `PostgreSQL` genuinely reduces to
 /// one: `box_left`, `circle_left` and `poly_left` are each written as a
 /// comparison of the operands' extents. A point bounds to itself.
-fn bounding_box(value: &Datum) -> Option<crabka_pgtypes::geometry::Box2> {
-    use crabka_pgtypes::geometry::Box2;
+fn bounding_box(value: &Datum) -> Option<krabka_pgtypes::geometry::Box2> {
+    use krabka_pgtypes::geometry::Box2;
     match value {
         Datum::Point(point) => Some(Box2::of_point(*point)),
         Datum::Box(value) => Some(*value),
@@ -4341,14 +4341,14 @@ pub(crate) fn quantifier_of(all: bool) -> Quantifier {
 
 /// SP37: tz-AWARE `timestamptz` arithmetic.
 ///
-/// These are the cells deferred from `crabka_pgtypes::ops` because they need
+/// These are the cells deferred from `krabka_pgtypes::ops` because they need
 /// the session zone `ctx.time_zone`. They are
 /// `timestamptz ± interval → timestamptz`, which is calendar-aware in the zone,
 /// and `timestamptz − timestamptz → interval`, which is an absolute-instant
 /// difference.
 ///
 /// This function returns `Ok(None)` when neither operand is a `Timestamptz`, so
-/// the caller then uses `crabka_pgtypes::ops`. It propagates NULL as `ops`
+/// the caller then uses `krabka_pgtypes::ops`. It propagates NULL as `ops`
 /// does. Result types match `datetime_result_type`'s `Timestamptz`/`Interval`
 /// predictions, so plan-time inference and runtime never disagree.
 fn apply_timestamptz_arith(
@@ -4357,7 +4357,7 @@ fn apply_timestamptz_arith(
     r: &Datum,
     ctx: &EvalCtx,
 ) -> Result<Option<Datum>, ExecError> {
-    use crabka_pgtypes::datetime::{timestamptz_diff, timestamptz_plus_interval};
+    use krabka_pgtypes::datetime::{timestamptz_diff, timestamptz_plus_interval};
     // Only engage when a Timestamptz operand is present.
     if !matches!(l, Datum::Timestamptz(_)) && !matches!(r, Datum::Timestamptz(_)) {
         return Ok(None);
@@ -4375,7 +4375,7 @@ fn apply_timestamptz_arith(
         }
         // timestamptz - interval → timestamptz.
         (BinaryOp::Sub, Datum::Timestamptz(ts), Datum::Interval(iv)) => {
-            let neg = crabka_pgtypes::datetime::neg_interval(*iv)?;
+            let neg = krabka_pgtypes::datetime::neg_interval(*iv)?;
             Datum::Timestamptz(timestamptz_plus_interval(*ts, neg, tz)?)
         }
         // timestamptz - timestamptz → interval (absolute-instant difference).
@@ -4383,7 +4383,7 @@ fn apply_timestamptz_arith(
             Datum::Interval(timestamptz_diff(*a, *b)?)
         }
         // Any other combination with a timestamptz operand is undefined — surface
-        // the genuine type error via `crabka_pgtypes::ops` (which yields TypeMismatch).
+        // the genuine type error via `krabka_pgtypes::ops` (which yields TypeMismatch).
         _ => return Ok(None),
     };
     Ok(Some(result))
@@ -4450,7 +4450,7 @@ pub(crate) fn select_field(value: &Datum, field: &str) -> Result<Datum, ExecErro
             "column notation .{field} applied to type {}, which is not a composite type",
             other
                 .column_type()
-                .map_or("unknown", crabka_pgtypes::ColumnType::name)
+                .map_or("unknown", krabka_pgtypes::ColumnType::name)
         ))),
     }
 }
@@ -4471,7 +4471,7 @@ fn field_type(base: ColumnType, field: &str) -> Result<ColumnType, ExecError> {
     let Some(named) = named else {
         return Ok(ColumnType::Text);
     };
-    let Some(ty) = crabka_pgtypes::usertype::lookup_oid(named.oid) else {
+    let Some(ty) = krabka_pgtypes::usertype::lookup_oid(named.oid) else {
         return Err(ExecError::UndefinedObject(format!(
             "type \"{}\" does not exist",
             named.name
@@ -4514,7 +4514,7 @@ pub(crate) fn infer_type(expr: &Expr, scope: &Scope) -> Result<ColumnType, ExecE
         // protocol supplies none, so PostgreSQL reports the placeholder as
         // undefined rather than as an unimplemented feature -- 42P02, the same
         // code and wording a view body already raises.
-        Expr::Param(number) => Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+        Expr::Param(number) => Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
             "42P02",
             format!("there is no parameter ${number}"),
         ))),
@@ -4661,7 +4661,7 @@ pub(crate) fn infer_type(expr: &Expr, scope: &Scope) -> Result<ColumnType, ExecE
             for child in json.children() {
                 types.push(infer_type(child, scope)?);
             }
-            if let crabka_pgparser::ast::SqlJsonExpr::IsJson { .. } = json.as_ref() {
+            if let krabka_pgparser::ast::SqlJsonExpr::IsJson { .. } = json.as_ref() {
                 // `IS JSON` is the one form whose operand type is constrained.
                 json_fn::is_json_operand_type(types[0])?;
             }
@@ -4709,7 +4709,7 @@ pub(crate) fn infer_type(expr: &Expr, scope: &Scope) -> Result<ColumnType, ExecE
                 return Ok(*ty);
             }
             let from = infer_type(expr, scope)?;
-            if crabka_pgtypes::cast::cast_allowed(from, *ty)
+            if krabka_pgtypes::cast::cast_allowed(from, *ty)
                 || (matches!(ty, ColumnType::Base(_))
                     && matches!(expr.as_ref(), Expr::StringLiteral(_)))
             {
@@ -4807,7 +4807,7 @@ pub(crate) fn infer_type(expr: &Expr, scope: &Scope) -> Result<ColumnType, ExecE
                 .ok_or_else(|| cannot_subscript(bt))?;
             if subscripts
                 .iter()
-                .any(crabka_pgparser::ast::ArraySubscript::is_slice)
+                .any(krabka_pgparser::ast::ArraySubscript::is_slice)
             {
                 Ok(bt)
             } else {
@@ -5507,7 +5507,7 @@ pub(crate) fn eval_array_constructor_with_elem(
 #[inline(never)]
 fn eval_array_ref(
     base: &Expr,
-    subscripts: &[crabka_pgparser::ast::ArraySubscript],
+    subscripts: &[krabka_pgparser::ast::ArraySubscript],
     scope: &Scope,
     values: &[Datum],
     ctx: &EvalCtx,
@@ -5635,7 +5635,7 @@ fn cannot_subscript(ty: ColumnType) -> ExecError {
 /// [`eval_subscripts`] for an assignment target, whose bounds are evaluated
 /// against the joined row instead of a projection scope.
 pub(crate) fn eval_assignment_subscripts(
-    subscripts: &[crabka_pgparser::ast::ArraySubscript],
+    subscripts: &[krabka_pgparser::ast::ArraySubscript],
     scope: &Scope,
     values: &[Datum],
     ctx: &EvalCtx,
@@ -5646,13 +5646,13 @@ pub(crate) fn eval_assignment_subscripts(
 /// Evaluate each bound of a subscript chain into the executor's
 /// [`array_fn::SubscriptArg`] form.
 fn eval_subscripts(
-    subscripts: &[crabka_pgparser::ast::ArraySubscript],
+    subscripts: &[krabka_pgparser::ast::ArraySubscript],
     scope: &Scope,
     values: &[Datum],
     ctx: &EvalCtx,
     depth: usize,
 ) -> Result<Vec<array_fn::SubscriptArg>, ExecError> {
-    use crabka_pgparser::ast::ArraySubscript;
+    use krabka_pgparser::ast::ArraySubscript;
 
     let bound = |e: &Option<Expr>| -> Result<Option<Datum>, ExecError> {
         e.as_ref()
@@ -5677,12 +5677,12 @@ fn eval_subscripts(
 /// from left to right. `jsonb` has no slice operator.
 fn eval_jsonb_subscript_chain(
     base: &Datum,
-    subscripts: &[crabka_pgparser::ast::ArraySubscript],
+    subscripts: &[krabka_pgparser::ast::ArraySubscript],
     args: &[array_fn::SubscriptArg],
 ) -> Result<Datum, ExecError> {
     if subscripts
         .iter()
-        .any(crabka_pgparser::ast::ArraySubscript::is_slice)
+        .any(krabka_pgparser::ast::ArraySubscript::is_slice)
     {
         return Err(ExecError::TypeMismatch(
             "jsonb subscript does not support slices".into(),
@@ -5969,16 +5969,16 @@ mod tests {
                 == Datum::Null
         );
     }
-    use crabka_pgcatalog::{Column, RelationName, Table};
-    use crabka_pgparser::parser::parse_expr_for_test as pexpr;
-    use crabka_pgtypes::{ColumnType, Datum};
+    use krabka_pgcatalog::{Column, RelationName, Table};
+    use krabka_pgparser::parser::parse_expr_for_test as pexpr;
+    use krabka_pgtypes::{ColumnType, Datum};
 
     use super::*;
 
     fn table() -> Table {
         Table {
             id: 1,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public("t"),
             columns: vec![
                 Column::new("a", ColumnType::Int4),
@@ -6024,23 +6024,23 @@ mod tests {
         for (sql, expected) in [
             (
                 "date 'today'",
-                Datum::Date(crabka_pgtypes::datetime::parse_date("2024-03-10").expect("date")),
+                Datum::Date(krabka_pgtypes::datetime::parse_date("2024-03-10").expect("date")),
             ),
             (
                 "timestamp 'now'",
                 Datum::Timestamp(
-                    crabka_pgtypes::datetime::parse_timestamp("2024-03-10 05:06:07")
+                    krabka_pgtypes::datetime::parse_timestamp("2024-03-10 05:06:07")
                         .expect("timestamp"),
                 ),
             ),
             (
                 "time 'now'",
-                Datum::Time(crabka_pgtypes::datetime::parse_time("05:06:07").expect("time")),
+                Datum::Time(krabka_pgtypes::datetime::parse_time("05:06:07").expect("time")),
             ),
             (
                 "timetz 'now'",
                 Datum::Timetz(
-                    crabka_pgtypes::datetime::parse_timetz("05:06:07+00", &jiff::tz::TimeZone::UTC)
+                    krabka_pgtypes::datetime::parse_timetz("05:06:07+00", &jiff::tz::TimeZone::UTC)
                         .expect("timetz"),
                 ),
             ),
@@ -6058,14 +6058,14 @@ mod tests {
     fn context_aware_cast_keeps_jsonpath_input_forms() {
         let now = jiff::Timestamp::UNIX_EPOCH;
         let zone = jiff::tz::TimeZone::UTC;
-        let style = crabka_pgtypes::encoding::OutputStyle::with_zone(&zone);
+        let style = krabka_pgtypes::encoding::OutputStyle::with_zone(&zone);
         assert!(matches!(
             cast_value_in_at(&Datum::Text("$.a".into()), ColumnType::JsonPath, style, now),
             Ok(Datum::JsonPath(_))
         ));
         assert!(matches!(
             cast_value_in_at(
-                &Datum::Array(crabka_pgtypes::ArrayValue::new(
+                &Datum::Array(krabka_pgtypes::ArrayValue::new(
                     ElemType::Text,
                     vec![Datum::Text("$.a".into())],
                 )),
@@ -6080,7 +6080,7 @@ mod tests {
     #[test]
     fn refcursor_uses_texts_input_and_assignment_representation() {
         let zone = jiff::tz::TimeZone::UTC;
-        let style = crabka_pgtypes::encoding::OutputStyle::with_zone(&zone);
+        let style = krabka_pgtypes::encoding::OutputStyle::with_zone(&zone);
         for cast in [cast_value_in_at, cast_assign_value_in_at] {
             assert!(
                 cast(
@@ -6474,7 +6474,7 @@ mod tests {
             ("ROW('a b', '')", "(\"a b\",\"\")"),
         ] {
             let value = ev(sql, None, &[]);
-            let bytes = crabka_pgtypes::encoding::encode_text(&value, &jiff::tz::TimeZone::UTC);
+            let bytes = krabka_pgtypes::encoding::encode_text(&value, &jiff::tz::TimeZone::UTC);
             let rendered = String::from_utf8(bytes).expect("composite text is utf-8");
             assert!(rendered == expected, "{sql}: {rendered} != {expected}");
         }
@@ -6549,7 +6549,7 @@ mod tests {
     #[test]
     fn eval_takes_ctx_and_ignores_it_for_non_temporal() {
         let ctx = crate::clock::EvalCtx::test_default();
-        let e = crabka_pgparser::parser::parse_expr_for_test("1 + 2").expect("parse");
+        let e = krabka_pgparser::parser::parse_expr_for_test("1 + 2").expect("parse");
         assert_eq!(
             eval(&e, &Scope::empty(), &[], &ctx).expect("eval"),
             Datum::Int4(3)
@@ -6687,7 +6687,7 @@ mod tests {
 
     #[test]
     fn numeric_literals_arithmetic_and_inference() {
-        let num = |s: &str| Datum::Numeric(crabka_pgtypes::numeric::parse(s).expect("n"));
+        let num = |s: &str| Datum::Numeric(krabka_pgtypes::numeric::parse(s).expect("n"));
         // SP32: a bare decimal literal evaluates and types as `numeric`.
         assert_eq!(ev("1.5", None, &[]), num("1.5"));
         assert_eq!(
@@ -6729,7 +6729,7 @@ mod tests {
     /// no infer/eval mismatch.
     #[test]
     fn timestamptz_arithmetic_is_tz_aware_in_apply_binary() {
-        use crabka_pgtypes::datetime;
+        use krabka_pgtypes::datetime;
         // A non-UTC session zone proves the tz path is actually exercised
         // (a `timestamptz` literal without an explicit offset is interpreted in it,
         // and the calendar shift is applied in it).
@@ -6776,7 +6776,7 @@ mod tests {
         // infer_type agrees on the result types for these cells (no plan/eval drift).
         let tstz_col = Table {
             id: 9,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public("tz"),
             columns: vec![
                 Column::new("ts", ColumnType::Timestamptz),
@@ -6898,7 +6898,7 @@ mod tests {
             let rendered = if value.is_null() {
                 "NULL".to_string()
             } else {
-                let bytes = crabka_pgtypes::encoding::encode_text(&value, &ctx.time_zone);
+                let bytes = krabka_pgtypes::encoding::encode_text(&value, &ctx.time_zone);
                 String::from_utf8(bytes).expect("temporal text is utf-8")
             };
             assert!(
@@ -7126,7 +7126,7 @@ mod tests {
         // a float8 column → bool has no defined cast.
         let ft = Table {
             id: 1,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public("t"),
             columns: vec![Column::new("a", ColumnType::Float8)],
             sharded: false,
@@ -7207,10 +7207,10 @@ mod tests {
     fn datetime_literal_eval_and_infer() {
         let ctx = crate::clock::EvalCtx::test_default();
         let scope = Scope::empty();
-        let p = |s: &str| crabka_pgparser::parser::parse_expr_for_test(s).expect("parse");
+        let p = |s: &str| krabka_pgparser::parser::parse_expr_for_test(s).expect("parse");
         assert_eq!(
             eval(&p("DATE '2024-01-15'"), &scope, &[], &ctx).expect("eval"),
-            Datum::Date(crabka_pgtypes::datetime::parse_date("2024-01-15").expect("d"))
+            Datum::Date(krabka_pgtypes::datetime::parse_date("2024-01-15").expect("d"))
         );
         assert_eq!(
             infer_type(&p("DATE '2024-01-15'"), &scope).expect("inf"),
@@ -7233,7 +7233,7 @@ mod tests {
     fn jt() -> Table {
         Table {
             id: 2,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public("jt"),
             columns: vec![
                 Column::new("j", ColumnType::Jsonb),
@@ -7254,12 +7254,12 @@ mod tests {
     }
 
     fn jb(text: &str) -> Datum {
-        Datum::Jsonb(crabka_pgtypes::jsonb::parse(text).expect("jsonb literal"))
+        Datum::Jsonb(krabka_pgtypes::jsonb::parse(text).expect("jsonb literal"))
     }
 
     /// A `json` value, which is its input text and nothing else.
     fn jn(text: &str) -> Datum {
-        crabka_pgtypes::json::validate(text).expect("json literal");
+        krabka_pgtypes::json::validate(text).expect("json literal");
         Datum::Json(text.to_string())
     }
 
@@ -7920,10 +7920,10 @@ mod tests {
     fn unary_minus_interval() {
         let ctx = crate::clock::EvalCtx::test_default();
         let scope = Scope::empty();
-        let p = crabka_pgparser::parser::parse_expr_for_test("- INTERVAL '1 day'").expect("parse");
+        let p = krabka_pgparser::parser::parse_expr_for_test("- INTERVAL '1 day'").expect("parse");
         assert_eq!(
             eval(&p, &scope, &[], &ctx).expect("eval"),
-            Datum::Interval(crabka_pgtypes::datetime::Interval {
+            Datum::Interval(krabka_pgtypes::datetime::Interval {
                 months: 0,
                 days: -1,
                 micros: 0
@@ -8043,7 +8043,7 @@ mod tests {
                 "a ^ '2.5'",
                 Some(&float_table),
                 &[Datum::Numeric(
-                    crabka_pgtypes::numeric::parse("4").expect("numeric")
+                    krabka_pgtypes::numeric::parse("4").expect("numeric")
                 )],
             ),
             Datum::Float8(32.0)
@@ -8057,7 +8057,7 @@ mod tests {
 
     #[tokio::test]
     async fn float8_column_power_coerces_an_unknown_exponent_before_evaluation() {
-        use crabka_pgwire::engine::{Engine, Session};
+        use krabka_pgwire::engine::{Engine, Session};
 
         let engine = crate::SqlEngine::new();
         let mut session = engine.connect();
@@ -8147,10 +8147,10 @@ mod tests {
     #[test]
     fn range_operators_resolve_domains_by_their_storage_type() {
         let base = Box::leak(Box::new(
-            ColumnType::builtin_multirange(crabka_pgtypes::oids::INT4MULTIRANGE)
+            ColumnType::builtin_multirange(krabka_pgtypes::oids::INT4MULTIRANGE)
                 .expect("int4multirange"),
         ));
-        let domain = ColumnType::Domain(crabka_pgtypes::usertype::DomainRef {
+        let domain = ColumnType::Domain(krabka_pgtypes::usertype::DomainRef {
             oid: 900_001,
             name: "restrictedmultirange_test",
             base,
@@ -8161,18 +8161,18 @@ mod tests {
         );
 
         let subtype = Box::leak(Box::new(ColumnType::Domain(
-            crabka_pgtypes::usertype::DomainRef {
+            krabka_pgtypes::usertype::DomainRef {
                 oid: 900_002,
                 name: "range_subtype_domain_test",
                 base: Box::leak(Box::new(ColumnType::Int4)),
             },
         )));
-        let range = crabka_pgtypes::usertype::RangeRef {
+        let range = krabka_pgtypes::usertype::RangeRef {
             oid: 900_003,
             name: "range_over_domain_test",
             subtype,
         };
-        let multirange = ColumnType::Multirange(crabka_pgtypes::usertype::MultirangeRef {
+        let multirange = ColumnType::Multirange(krabka_pgtypes::usertype::MultirangeRef {
             oid: 900_004,
             name: "multirange_over_domain_test",
             range,
@@ -8340,7 +8340,7 @@ mod tests {
     /// so no pair overflows, divides by zero or leaves an operand empty — the
     /// point of the sweep is which pairs RESOLVE, not what they answer.
     fn geometric_samples() -> [(ColumnType, Datum); 7] {
-        use crabka_pgtypes::{
+        use krabka_pgtypes::{
             Path, Point, Polygon,
             geometry::{Box2, Circle, Line, Lseg},
         };

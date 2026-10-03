@@ -11,16 +11,16 @@ use std::{
     sync::Arc,
 };
 
-use crabka_pgcatalog::routine::{Routine, RoutineKind, RoutineResult};
-use crabka_pgparser::ast::{
+use krabka_pgcatalog::routine::{Routine, RoutineKind, RoutineResult};
+use krabka_pgparser::ast::{
     ArraySubscript, AssignmentValue, BinaryOp, CteBody, CursorTarget, Expr, FetchCount,
     FetchDirection, FuncArgs, JoinConstraint, PlPgSqlBlock, PlPgSqlCursorArgument,
     PlPgSqlDeclaration, PlPgSqlInto, PlPgSqlLoop, PlPgSqlRaise, PlPgSqlRaiseLevel,
     PlPgSqlStatement, PlPgSqlTarget, PlPgSqlVariableConflict, QueryBody, QueryExpr, RoutineType,
     SelectItem, SetExpr, Statement, TableExpr,
 };
-use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType, RecordValue};
-use crabka_pgwire::{
+use krabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType, RecordValue};
+use krabka_pgwire::{
     engine::{FieldDescription, QueryResult},
     error::PgError,
 };
@@ -96,7 +96,7 @@ fn check_composite_return_type(expr: &Expr, target: ColumnType) -> Result<(), Ex
     let (Expr::Row(items), ColumnType::Record(Some(target))) = (expr, target) else {
         return Ok(());
     };
-    let Some(target) = crabka_pgtypes::usertype::lookup_oid(target.oid) else {
+    let Some(target) = krabka_pgtypes::usertype::lookup_oid(target.oid) else {
         return Ok(());
     };
     let Some(fields) = target.fields() else {
@@ -146,7 +146,7 @@ fn return_cast_input(
         return Ok(value);
     }
     Ok(Datum::Text(
-        String::from_utf8_lossy(&crabka_pgtypes::encoding::encode_text(&value, time_zone))
+        String::from_utf8_lossy(&krabka_pgtypes::encoding::encode_text(&value, time_zone))
             .into_owned(),
     ))
 }
@@ -239,7 +239,7 @@ pub(crate) async fn execute_do(
         return Err(crate::routine::do_block(language));
     }
     let block =
-        crabka_pgparser::parse_plpgsql(body).map_err(|error| ExecError::Syntax(error.message))?;
+        krabka_pgparser::parse_plpgsql(body).map_err(|error| ExecError::Syntax(error.message))?;
     if crate::routine::plpgsql_has_return_value(&block) {
         return Err(ExecError::FunctionError {
             sqlstate: "42804",
@@ -399,7 +399,7 @@ async fn execute_call_body(
         )));
     }
     let frame = bind_parameters(session, &routine, &bound.args).await?;
-    let block = crabka_pgparser::parse_plpgsql(&routine.body)
+    let block = krabka_pgparser::parse_plpgsql(&routine.body)
         .map_err(|error| ExecError::Syntax(error.message))?;
     execute_procedure_invocation(session, &routine, block, frame, allow_transaction_control).await
 }
@@ -627,7 +627,7 @@ pub(crate) async fn execute_trigger_function(
         Datum::Array(ArrayValue::with_dims(
             ElemType::Text,
             arguments,
-            vec![crabka_pgtypes::ArrayDim::new(0, nargs)],
+            vec![krabka_pgtypes::ArrayDim::new(0, nargs)],
         )),
         ColumnType::Array(ElemType::Text),
         true,
@@ -867,7 +867,7 @@ pub(crate) async fn execute_sql_table_function(
                     ExecError::Syntax(format!("invalid UTF-8 query result: {error}"))
                 })?;
                 let fields =
-                    crabka_pgtypes::composite::record_fields(text).map_err(ExecError::from)?;
+                    krabka_pgtypes::composite::record_fields(text).map_err(ExecError::from)?;
                 if fields.len() != columns.len() {
                     return Err(ExecError::TypeMismatch(
                         "SQL function result has the wrong number of columns".into(),
@@ -916,7 +916,7 @@ fn validate_record_column_definitions(
     }
     for (index, (field, (_, expected))) in fields.iter().zip(columns).enumerate() {
         let actual = crate::exec::column_type_from_oid(field.type_oid)?;
-        if crabka_pgtypes::cast::assignment_cast_allowed(actual, *expected) {
+        if krabka_pgtypes::cast::assignment_cast_allowed(actual, *expected) {
             continue;
         }
         return Err(sql_statement_error(
@@ -1082,11 +1082,11 @@ fn scalar_function_result(routine: &Routine, returned: Option<Datum>) -> Result<
 /// Whether a scalar body needs the owning SQL session rather than the pure
 /// expression and control interpreter.
 pub(crate) fn scalar_function_requires_session(
-    catalog: &dyn crabka_pgkv::Kv,
+    catalog: &dyn krabka_pgkv::Kv,
     routine: &Routine,
 ) -> Result<bool, ExecError> {
     struct Scanner<'a> {
-        catalog: &'a dyn crabka_pgkv::Kv,
+        catalog: &'a dyn krabka_pgkv::Kv,
         visiting: HashSet<String>,
     }
 
@@ -1349,7 +1349,7 @@ fn bind_scalar_parameters(
                 .clone()
                 .unwrap_or_else(|| format!("column{output_index}"));
             output_slot = Some(name.clone());
-            if param.mode == crabka_pgcatalog::routine::ParamMode::InOut {
+            if param.mode == krabka_pgcatalog::routine::ParamMode::InOut {
                 if param.name.is_none() {
                     frame.aliases.insert(name, format!("${}", index + 1));
                 }
@@ -1377,7 +1377,7 @@ fn bind_scalar_parameters(
             );
             frame.aliases.insert(format!("${}", index + 1), name);
         }
-        if let crabka_pgcatalog::routine::RoutineResult::Table(columns) = &routine.result {
+        if let krabka_pgcatalog::routine::RoutineResult::Table(columns) = &routine.result {
             for (name, ty) in columns {
                 let ty = ty.column.unwrap_or(ColumnType::Text);
                 frame.slots.insert(
@@ -1698,7 +1698,7 @@ impl ScalarInterpreter<'_> {
                     for condition in conditions {
                         let matched = if let Some(value) = &operand {
                             let right = self.eval(condition)?;
-                            crabka_pgtypes::ops::compare(value, &right)?.is_some_and(|ordering| {
+                            krabka_pgtypes::ops::compare(value, &right)?.is_some_and(|ordering| {
                                 ordering == std::cmp::Ordering::Equal
                             })
                         } else {
@@ -1781,7 +1781,7 @@ impl ScalarInterpreter<'_> {
                             || DEFAULT_ASSERT_MESSAGE.to_string(),
                             |value| {
                                 String::from_utf8_lossy(
-                                    &crabka_pgtypes::encoding::encode_text(
+                                    &krabka_pgtypes::encoding::encode_text(
                                         &value,
                                         &self.ctx.time_zone,
                                     ),
@@ -2183,7 +2183,7 @@ impl ScalarInterpreter<'_> {
                 if let Some(expr) = expr {
                     check_composite_return_type(expr, ty)?;
                 }
-                if crabka_pgtypes::usercast::any_declared()
+                if krabka_pgtypes::usercast::any_declared()
                     && let Some(expr) = expr
                     && let Some(value) = crate::usercast::coerce_declared(
                         expr,
@@ -2234,7 +2234,7 @@ impl ScalarInterpreter<'_> {
                         if value.is_null() {
                             return NULL_RAISE_PARAMETER.to_string();
                         }
-                        String::from_utf8_lossy(&crabka_pgtypes::encoding::encode_text(
+                        String::from_utf8_lossy(&krabka_pgtypes::encoding::encode_text(
                             &value,
                             &self.ctx.time_zone,
                         ))
@@ -2250,7 +2250,7 @@ impl ScalarInterpreter<'_> {
                 reject_null_raise_option(&value)?;
                 Ok((
                     name.as_str(),
-                    String::from_utf8_lossy(&crabka_pgtypes::encoding::encode_text(
+                    String::from_utf8_lossy(&krabka_pgtypes::encoding::encode_text(
                         &value,
                         &self.ctx.time_zone,
                     ))
@@ -3466,7 +3466,7 @@ impl Interpreter<'_> {
             values.push(self.eval_async(expr).await?);
         }
         let mut statements =
-            crabka_pgparser::parse(&source).map_err(|error| ExecError::Syntax(error.message))?;
+            krabka_pgparser::parse(&source).map_err(|error| ExecError::Syntax(error.message))?;
         if statements.len() != 1 {
             return Err(ExecError::Syntax(
                 "EXECUTE query string must contain one statement".into(),
@@ -3969,7 +3969,7 @@ impl Interpreter<'_> {
         &mut self,
         targets: &[PlPgSqlTarget],
         fields: &[FieldDescription],
-        row: Option<&Vec<Option<crabka_pgwire::engine::Cell>>>,
+        row: Option<&Vec<Option<krabka_pgwire::engine::Cell>>>,
     ) -> Result<(), ExecError> {
         let expected_fields = if let [target] = targets
             && target.path.len() == 1
@@ -3977,7 +3977,7 @@ impl Interpreter<'_> {
             && let Some(ColumnType::Record(Some(rowtype))) =
                 self.lookup_slot(&target.path[0]).map(|slot| slot.ty)
         {
-            crabka_pgtypes::usertype::lookup_oid(rowtype.oid)
+            krabka_pgtypes::usertype::lookup_oid(rowtype.oid)
                 .map_or(1, |ty| ty.fields().map_or(1, <[_]>::len))
         } else {
             targets.len()
@@ -4560,7 +4560,7 @@ fn initialize_declared_record(slot: &mut Slot) {
         return;
     };
     let Some((names, types)) =
-        crabka_pgtypes::usertype::lookup_oid(rowtype.oid).and_then(|definition| {
+        krabka_pgtypes::usertype::lookup_oid(rowtype.oid).and_then(|definition| {
             definition.fields().map(|fields| {
                 (
                     fields
@@ -4657,7 +4657,7 @@ fn rewrite_expr_with(
             left: boxed(left)?,
             right: boxed(right)?,
         },
-        Expr::Func(call) => Expr::Func(crabka_pgparser::ast::FuncCall {
+        Expr::Func(call) => Expr::Func(krabka_pgparser::ast::FuncCall {
             sql_syntax: call.sql_syntax,
             name: call.name.clone(),
             distinct: call.distinct,
@@ -4682,7 +4682,7 @@ fn rewrite_expr_with(
                 .order_by
                 .iter()
                 .map(|item| {
-                    Ok(crabka_pgparser::ast::OrderItem {
+                    Ok(krabka_pgparser::ast::OrderItem {
                         expr: one(&item.expr)?,
                         asc: item.asc,
                         nulls_first: item.nulls_first,
@@ -4852,36 +4852,36 @@ fn rewrite_statement_with_ctes(
             let ctes = binder.rewrite_with(with, parent_ctes)?;
             let empty = crate::scope::Scope::empty();
             match source {
-                crabka_pgparser::ast::InsertSource::Values(rows) => {
+                krabka_pgparser::ast::InsertSource::Values(rows) => {
                     for row in rows {
                         for expr in row {
                             *expr = binder.rewrite_expr(expr, &empty, &ctes)?;
                         }
                     }
                 }
-                crabka_pgparser::ast::InsertSource::Query(query) => {
+                krabka_pgparser::ast::InsertSource::Query(query) => {
                     **query = binder.rewrite_query(query, &ctes)?;
                 }
-                crabka_pgparser::ast::InsertSource::DefaultValues => {}
+                krabka_pgparser::ast::InsertSource::DefaultValues => {}
             }
             let target = binder.table(table)?;
             let scope = crate::scope::Scope::single(&target, &target.name.name);
             if let Some(on_conflict) = on_conflict {
                 let conflict_scope = crate::scope::Scope::insert_conflict(&target);
-                if let crabka_pgparser::ast::OnConflictTarget::Columns {
+                if let krabka_pgparser::ast::OnConflictTarget::Columns {
                     index_predicate: Some(expr),
                     ..
                 } = &mut on_conflict.target
                 {
                     *expr = binder.rewrite_expr(expr, &scope, &ctes)?;
                 }
-                if let crabka_pgparser::ast::OnConflictAction::DoUpdate {
+                if let krabka_pgparser::ast::OnConflictAction::DoUpdate {
                     assignments,
                     filter,
                 } = &mut on_conflict.action
                 {
                     for assignment in assignments {
-                        if let crabka_pgparser::ast::AssignmentValue::Expr(expr) =
+                        if let krabka_pgparser::ast::AssignmentValue::Expr(expr) =
                             &mut assignment.value
                         {
                             *expr = binder.rewrite_expr(expr, &conflict_scope, &ctes)?;
@@ -4924,7 +4924,7 @@ fn rewrite_statement_with_ctes(
             }
             for assignment in assignments {
                 for indirection in &mut assignment.indirections {
-                    if let crabka_pgparser::ast::TargetIndirection::Subscript(subscript) =
+                    if let krabka_pgparser::ast::TargetIndirection::Subscript(subscript) =
                         indirection
                     {
                         for bound in subscript.bounds_mut() {
@@ -5001,14 +5001,14 @@ fn rewrite_statement_with_ctes(
             let qualifier = alias.as_deref().unwrap_or(&target.name.name);
             let mut scope = crate::scope::Scope::single(&target, qualifier);
             let source_table = match source {
-                crabka_pgparser::ast::MergeSource::Table { name, alias } => TableExpr::Table {
+                krabka_pgparser::ast::MergeSource::Table { name, alias } => TableExpr::Table {
                     name: name.clone(),
                     only: false,
                     alias: alias.clone(),
                     columns: None,
                     sample: None,
                 },
-                crabka_pgparser::ast::MergeSource::Query {
+                krabka_pgparser::ast::MergeSource::Query {
                     query,
                     alias,
                     columns,
@@ -5039,10 +5039,10 @@ fn rewrite_statement_with_ctes(
                     *condition = binder.rewrite_expr(condition, &scope, &ctes)?;
                 }
                 match &mut clause.action {
-                    crabka_pgparser::ast::MergeAction::Update(assignments) => {
+                    krabka_pgparser::ast::MergeAction::Update(assignments) => {
                         for assignment in assignments {
                             for indirection in &mut assignment.indirections {
-                                if let crabka_pgparser::ast::TargetIndirection::Subscript(
+                                if let krabka_pgparser::ast::TargetIndirection::Subscript(
                                     subscript,
                                 ) = indirection
                                 {
@@ -5070,7 +5070,7 @@ fn rewrite_statement_with_ctes(
                             }
                         }
                     }
-                    crabka_pgparser::ast::MergeAction::Insert {
+                    krabka_pgparser::ast::MergeAction::Insert {
                         values: Some(values),
                         ..
                     } => {
@@ -5078,9 +5078,9 @@ fn rewrite_statement_with_ctes(
                             *expr = binder.rewrite_expr(expr, &scope, &ctes)?;
                         }
                     }
-                    crabka_pgparser::ast::MergeAction::Delete
-                    | crabka_pgparser::ast::MergeAction::DoNothing
-                    | crabka_pgparser::ast::MergeAction::Insert { values: None, .. } => {}
+                    krabka_pgparser::ast::MergeAction::Delete
+                    | krabka_pgparser::ast::MergeAction::DoNothing
+                    | krabka_pgparser::ast::MergeAction::Insert { values: None, .. } => {}
                 }
             }
             binder.rewrite_returning(returning, &scope, &ctes)?;
@@ -5113,7 +5113,7 @@ struct SqlBinder<'i, 's> {
 }
 
 impl SqlBinder<'_, '_> {
-    fn catalog(&self) -> &dyn crabka_pgkv::Kv {
+    fn catalog(&self) -> &dyn krabka_pgkv::Kv {
         self.interpreter.session.plpgsql_catalog()
     }
 
@@ -5123,15 +5123,15 @@ impl SqlBinder<'_, '_> {
 
     fn table(
         &self,
-        reference: &crabka_pgparser::ast::RelationRef,
-    ) -> Result<crabka_pgcatalog::Table, ExecError> {
+        reference: &krabka_pgparser::ast::RelationRef,
+    ) -> Result<krabka_pgcatalog::Table, ExecError> {
         let name = crate::relname::resolve_relation(
             self.catalog(),
             self.resolution(),
             reference,
             crate::relname::SchemaDisposition::Reference,
         )?;
-        Ok(crabka_pgcatalog::get_table(self.catalog(), &name)?)
+        Ok(krabka_pgcatalog::get_table(self.catalog(), &name)?)
     }
 
     fn slot_expr(slot: &Slot) -> Expr {
@@ -5432,11 +5432,11 @@ impl SqlBinder<'_, '_> {
                     if let Some(expr) = &mut call.filter {
                         *expr = self.rewrite_expr_outer(expr, &scope, outers, ctes)?;
                     }
-                    if let crabka_pgparser::ast::WindowRef::Spec(spec) = &mut call.over {
+                    if let krabka_pgparser::ast::WindowRef::Spec(spec) = &mut call.over {
                         self.rewrite_window_spec(spec, &scope, outers, ctes)?;
                     }
                 }
-                if let crabka_pgparser::ast::DistinctClause::On(exprs) = &mut select.distinct {
+                if let krabka_pgparser::ast::DistinctClause::On(exprs) = &mut select.distinct {
                     for expr in exprs {
                         *expr = self.rewrite_expr_outer(expr, &scope, outers, ctes)?;
                     }
@@ -5543,7 +5543,7 @@ impl SqlBinder<'_, '_> {
 
     fn rewrite_window_spec(
         &self,
-        spec: &mut crabka_pgparser::ast::WindowSpec,
+        spec: &mut krabka_pgparser::ast::WindowSpec,
         scope: &crate::scope::Scope,
         outers: &[crate::scope::Scope],
         ctes: &crate::cte::CteContext,
@@ -5557,13 +5557,13 @@ impl SqlBinder<'_, '_> {
         if let Some(frame) = &mut spec.frame {
             for bound in [&mut frame.start, &mut frame.end] {
                 match bound {
-                    crabka_pgparser::ast::FrameBound::Preceding(expr)
-                    | crabka_pgparser::ast::FrameBound::Following(expr) => {
+                    krabka_pgparser::ast::FrameBound::Preceding(expr)
+                    | krabka_pgparser::ast::FrameBound::Following(expr) => {
                         *expr = self.rewrite_expr_outer(expr, scope, outers, ctes)?;
                     }
-                    crabka_pgparser::ast::FrameBound::UnboundedPreceding
-                    | crabka_pgparser::ast::FrameBound::CurrentRow
-                    | crabka_pgparser::ast::FrameBound::UnboundedFollowing => {}
+                    krabka_pgparser::ast::FrameBound::UnboundedPreceding
+                    | krabka_pgparser::ast::FrameBound::CurrentRow
+                    | krabka_pgparser::ast::FrameBound::UnboundedFollowing => {}
                 }
             }
         }
@@ -5686,7 +5686,7 @@ impl SqlBinder<'_, '_> {
 
     fn rewrite_with(
         &self,
-        with: &mut Option<crabka_pgparser::ast::WithClause>,
+        with: &mut Option<krabka_pgparser::ast::WithClause>,
         parent: &crate::cte::CteContext,
     ) -> Result<crate::cte::CteContext, ExecError> {
         let Some(with) = with else {
@@ -5737,7 +5737,7 @@ impl SqlBinder<'_, '_> {
 
     fn rewrite_returning(
         &self,
-        returning: &mut Option<crabka_pgparser::ast::Returning>,
+        returning: &mut Option<krabka_pgparser::ast::Returning>,
         scope: &crate::scope::Scope,
         ctes: &crate::cte::CteContext,
     ) -> Result<(), ExecError> {
@@ -5755,8 +5755,8 @@ impl SqlBinder<'_, '_> {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgtypes::{ColumnType, Datum};
-    use crabka_pgwire::engine::{Engine, QueryResult, Session};
+    use krabka_pgtypes::{ColumnType, Datum};
+    use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
     use super::execute_sql_table_function;
     use crate::{SqlEngine, eval::ArgType};

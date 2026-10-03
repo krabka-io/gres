@@ -16,7 +16,7 @@
 
 use std::fs;
 
-use crabka_units::prelude::*;
+use krabka_units::prelude::*;
 use tokio::{
     sync::oneshot,
     task::JoinHandle,
@@ -254,7 +254,7 @@ fn u64_as_f64(value: u64) -> f64 {
 #[cfg(test)]
 mod tests {
     use assert2::{assert, check};
-    use crabka_units::fmt::Human as _;
+    use krabka_units::fmt::Human as _;
 
     use super::*;
 
@@ -292,7 +292,7 @@ mod tests {
 
     #[test]
     fn parse_vm_rss_reads_kibibytes() {
-        let realistic = "Name:\tcrabka-gres\nUmask:\t0022\nState:\tS (sleeping)\n\
+        let realistic = "Name:\tkrabka-gres\nUmask:\t0022\nState:\tS (sleeping)\n\
                          VmPeak:\t  204800 kB\nVmHWM:\t   12345 kB\nVmRSS:\t    5348 kB\n\
                          RssAnon:\t    4000 kB\n";
         let cases = [

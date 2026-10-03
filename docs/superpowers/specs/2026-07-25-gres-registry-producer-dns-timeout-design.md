@@ -10,7 +10,7 @@ policy and every process that constructs the registry producer.
 
 ## Goals
 
-The producer inside `crabka-gres-control::Registry` must not inherit an
+The producer inside `krabka-gres-control::Registry` must not inherit an
 untunable DNS deadline. Kubernetes users configure it through the existing
 Kafka-owned Gres registry CRD policy. Standalone processes configure it with a
 command-line argument backed by an environment variable.
@@ -32,10 +32,10 @@ the Gres CLI, and the load-test harness.
 The standalone surface is:
 
 - `--registry-producer-dns-timeout-ms`
-- `CRABKA_GRES_REGISTRY_PRODUCER_DNS_TIMEOUT_MS`
+- `KRABKA_GRES_REGISTRY_PRODUCER_DNS_TIMEOUT_MS`
 
-It is added to the existing registry options in `crabka-gres`, `crabka gres`,
-`crabka-gres-activator`, and `crabka-gres-loadtest`. Load-test child processes
+It is added to the existing registry options in `krabka-gres`, `crabka gres`,
+`krabka-gres-activator`, and `krabka-gres-loadtest`. Load-test child processes
 receive the effective value through the existing registry-policy argument
 renderer.
 

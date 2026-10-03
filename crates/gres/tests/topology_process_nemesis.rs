@@ -14,11 +14,12 @@ use std::{
 };
 
 use async_trait::async_trait;
-use crabka_gres_control::{
+use futures_util::FutureExt as _;
+use krabka_gres_control::{
     RangeRetirementPhase, Registry, SplitOperationPhase, SplitOperationRecord, TenantName,
     TenantRecord,
 };
-use crabka_operator::{
+use krabka_operator::{
     context::{GresControlHandle, GresControlLike, GresControlWriteError},
     controller::{
         gres_split_operation::{
@@ -28,7 +29,6 @@ use crabka_operator::{
         gres_tenant::{RangeRetirementAdmin, reconcile_one_retiring_range_wal},
     },
 };
-use futures_util::FutureExt as _;
 use process::ProcessHarness;
 use tokio::sync::Mutex;
 
@@ -111,10 +111,10 @@ struct RetirementDeleteLedger {
 #[derive(Debug, Clone)]
 struct MarkerObservation {
     endpoint: String,
-    request: crabka_gres_ranges::RangeControlReq,
-    markers: Vec<crabka_gres_ranges::WireInDoubtMarker>,
-    left_markers: Vec<crabka_gres_ranges::WireInDoubtMarker>,
-    right_markers: Vec<crabka_gres_ranges::WireInDoubtMarker>,
+    request: krabka_gres_ranges::RangeControlReq,
+    markers: Vec<krabka_gres_ranges::WireInDoubtMarker>,
+    left_markers: Vec<krabka_gres_ranges::WireInDoubtMarker>,
+    right_markers: Vec<krabka_gres_ranges::WireInDoubtMarker>,
     digest: String,
 }
 
@@ -128,15 +128,15 @@ impl RangeMutationClient for RecordingRangeMutationClient {
     async fn mutate(
         &self,
         endpoint: &str,
-        request: crabka_gres_ranges::RangeControlReq,
-    ) -> Result<crabka_gres_ranges::RangeControlResp, SplitReconcileError> {
+        request: krabka_gres_ranges::RangeControlReq,
+    ) -> Result<krabka_gres_ranges::RangeControlResp, SplitReconcileError> {
         let records_markers = matches!(
             &request.operation,
-            crabka_gres_ranges::RangeControlOperation::InheritMarkers { .. }
+            krabka_gres_ranges::RangeControlOperation::InheritMarkers { .. }
         );
         let response = self.inner.mutate(endpoint, request.clone()).await?;
         if records_markers
-            && let crabka_gres_ranges::RangeControlResp::Markers {
+            && let krabka_gres_ranges::RangeControlResp::Markers {
                 markers,
                 left_markers,
                 right_markers,
@@ -164,7 +164,7 @@ impl RangeMutationClient for RecordingRangeMutationClient {
 }
 
 struct CountingRetirementAdmin {
-    inner: crabka_client_admin::AdminClient,
+    inner: krabka_client_admin::AdminClient,
     expected_topic: String,
     ledger: Arc<std::sync::Mutex<RetirementDeleteLedger>>,
     error_after_delete: bool,
@@ -172,7 +172,7 @@ struct CountingRetirementAdmin {
 
 impl CountingRetirementAdmin {
     fn new(
-        inner: crabka_client_admin::AdminClient,
+        inner: krabka_client_admin::AdminClient,
         expected_topic: String,
         ledger: Arc<std::sync::Mutex<RetirementDeleteLedger>>,
     ) -> Self {
@@ -194,20 +194,20 @@ impl RangeRetirementAdmin for CountingRetirementAdmin {
     async fn metadata(
         &mut self,
         topics: &[&str],
-    ) -> Result<crabka_client_admin::TopicMetadata, crabka_client_admin::AdminError> {
+    ) -> Result<krabka_client_admin::TopicMetadata, krabka_client_admin::AdminError> {
         self.inner.metadata(topics).await
     }
 
     async fn delete_topics(
         &mut self,
         names: &[&str],
-        timeout: crabka_units::Time,
-    ) -> Result<Vec<crabka_client_admin::DeleteTopicOutcome>, crabka_client_admin::AdminError> {
+        timeout: krabka_units::Time,
+    ) -> Result<Vec<krabka_client_admin::DeleteTopicOutcome>, krabka_client_admin::AdminError> {
         self.ledger
             .lock()
             .expect("retirement delete ledger")
             .record_delete_request(&self.expected_topic, names)
-            .map_err(crabka_client_admin::AdminError::Protocol)?;
+            .map_err(krabka_client_admin::AdminError::Protocol)?;
         let outcomes = self.inner.delete_topics(names, timeout).await?;
         if self.error_after_delete && outcomes.iter().all(|outcome| outcome.error.is_none()) {
             self.error_after_delete = false;
@@ -215,7 +215,7 @@ impl RangeRetirementAdmin for CountingRetirementAdmin {
                 .lock()
                 .expect("retirement delete ledger")
                 .injected_after_delete_errors += 1;
-            return Err(crabka_client_admin::AdminError::Protocol(
+            return Err(krabka_client_admin::AdminError::Protocol(
                 "injected ambiguity after exact predecessor delete".into(),
             ));
         }
@@ -243,9 +243,9 @@ impl RetirementDeleteLedger {
 
 impl SourceKillPoint {
     fn from_env() -> Self {
-        match std::env::var("CRABKA_G8_RETIREMENT_KILL_POINT")
-            .or_else(|_| std::env::var("CRABKA_G8_CUTOVER_KILL_POINT"))
-            .or_else(|_| std::env::var("CRABKA_G8_SOURCE_KILL_POINT"))
+        match std::env::var("KRABKA_G8_RETIREMENT_KILL_POINT")
+            .or_else(|_| std::env::var("KRABKA_G8_CUTOVER_KILL_POINT"))
+            .or_else(|_| std::env::var("KRABKA_G8_SOURCE_KILL_POINT"))
             .as_deref()
             .unwrap_or("paused_after_stage")
         {
@@ -325,7 +325,7 @@ impl SourceKillPoint {
         match self {
             Self::Running => {
                 record.phase == SplitOperationPhase::Running
-                    && record.evidence == crabka_gres_control::SplitOperationEvidence::default()
+                    && record.evidence == krabka_gres_control::SplitOperationEvidence::default()
             }
             Self::Checkpointed => {
                 record.phase == SplitOperationPhase::Checkpointed
@@ -431,7 +431,7 @@ struct KillObservation {
     publication_ms: Option<u128>,
     post_publication_ack_ms: Option<u128>,
     phase: SplitOperationPhase,
-    evidence: crabka_gres_control::SplitOperationEvidence,
+    evidence: krabka_gres_control::SplitOperationEvidence,
     cutover: CutoverObservation,
     tenant_layout: &'static str,
     retirement_phase: Option<RangeRetirementPhase>,
@@ -455,12 +455,12 @@ async fn probe_durable_retire_receipt(
         .find(|range| range.range_id == record.source_range_id())
         .map(|range| range.endpoint.as_str())
         .expect("source endpoint");
-    let request = crabka_gres_ranges::RangeControlReq {
+    let request = krabka_gres_ranges::RangeControlReq {
         tenant: record.tenant.as_str().into(),
-        range_id: crabka_gres_ranges::RangeId::new(record.source_range_id()),
+        range_id: krabka_gres_ranges::RangeId::new(record.source_range_id()),
         generation: record.predecessor_generation(),
         operation_id: record.operation_id.clone(),
-        operation: crabka_gres_ranges::RangeControlOperation::RetirePredecessor,
+        operation: krabka_gres_ranges::RangeControlOperation::RetirePredecessor,
     };
     let response = client
         .mutate(endpoint, request)
@@ -468,7 +468,7 @@ async fn probe_durable_retire_receipt(
         .expect("probe durable retire receipt");
     assert_eq!(
         response,
-        crabka_gres_ranges::RangeControlResp::AlreadyApplied,
+        krabka_gres_ranges::RangeControlResp::AlreadyApplied,
         "{boundary} retire receipt probe must replay the durable completed receipt; source log: {}",
         system.log(0)
     );
@@ -971,7 +971,7 @@ fn retirement_restart_uses_authoritative_target_ranges() {
 
 #[tokio::test]
 async fn split_successor_proxies_are_distinct_and_retargeted() {
-    if std::env::var_os("CRABKA_G8_PROCESS_NEMESIS").is_none() {
+    if std::env::var_os("KRABKA_G8_PROCESS_NEMESIS").is_none() {
         return;
     }
     let mut system = ProcessHarness::start_all_on_zero(&format!(
@@ -997,15 +997,15 @@ impl GresControlLike for BrokerControl {
     async fn get_tenant(
         &self,
         tenant: &TenantName,
-    ) -> Result<Option<crabka_gres_control::TenantRecord>, GresControlWriteError> {
+    ) -> Result<Option<krabka_gres_control::TenantRecord>, GresControlWriteError> {
         Ok(self.registry.lock().await.get(tenant.as_str()).await?)
     }
 
     async fn replace_tenant_if_version(
         &self,
-        record: &crabka_gres_control::TenantRecord,
+        record: &krabka_gres_control::TenantRecord,
         expected: Option<u64>,
-    ) -> Result<crabka_gres_control::TenantRecord, GresControlWriteError> {
+    ) -> Result<krabka_gres_control::TenantRecord, GresControlWriteError> {
         Ok(self
             .registry
             .lock()
@@ -1021,7 +1021,7 @@ impl GresControlLike for BrokerControl {
 
     async fn validate_final_checkpoint_manifest(
         &self,
-        _record: &crabka_gres_control::TenantRecord,
+        _record: &krabka_gres_control::TenantRecord,
     ) -> Result<(), GresControlWriteError> {
         Ok(())
     }
@@ -1041,7 +1041,7 @@ impl GresControlLike for BrokerControl {
 }
 
 fn cli_binary() -> PathBuf {
-    std::env::var_os("CRABKA_G8_CLI_BIN").map_or_else(
+    std::env::var_os("KRABKA_G8_CLI_BIN").map_or_else(
         || {
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("../..")
@@ -1157,18 +1157,18 @@ async fn prepare_split_foundation() -> SplitFoundationSetup {
     );
     let sentinel_topic = format!("__gres_g8_split_sentinel.{}", system.tenant());
     let mut sentinel_admin =
-        crabka_client_admin::AdminClient::connect(&[system.bootstrap().to_owned()])
+        krabka_client_admin::AdminClient::connect(&[system.bootstrap().to_owned()])
             .await
             .expect("split sentinel admin");
     let outcomes = sentinel_admin
         .create_topics(
-            &[crabka_client_admin::CreateTopicSpec {
+            &[krabka_client_admin::CreateTopicSpec {
                 name: sentinel_topic.clone(),
                 partitions: 1,
                 replicas: 1,
                 configs: BTreeMap::default(),
             }],
-            crabka_units::secs(30),
+            krabka_units::secs(30),
         )
         .await
         .expect("create split sentinel");
@@ -1247,16 +1247,16 @@ async fn direct_successor_rows(
     start: Option<u64>,
     end: Option<u64>,
 ) -> Vec<SplitLedgerRow> {
-    let scan = crabka_gres_ranges::transport::ScanRangeReq {
-        range_id: crabka_gres_ranges::RangeId::new(range_id),
+    let scan = krabka_gres_ranges::transport::ScanRangeReq {
+        range_id: krabka_gres_ranges::RangeId::new(range_id),
         table_name: format!("live_ledger{routing_table_id}"),
-        interval: crabka_gres_ranges::transport::WireRowInterval { start, end },
-        local_snapshot: crabka_gres_ranges::transport::WireSnapshot {
+        interval: krabka_gres_ranges::transport::WireRowInterval { start, end },
+        local_snapshot: krabka_gres_ranges::transport::WireSnapshot {
             xmin: 1,
             xmax: u64::MAX,
             xip: vec![],
         },
-        global_snapshot: crabka_gres_ranges::transport::WireSnapshot {
+        global_snapshot: krabka_gres_ranges::transport::WireSnapshot {
             xmin: 1,
             xmax: u64::MAX,
             xip: vec![],
@@ -1264,32 +1264,32 @@ async fn direct_successor_rows(
         own_xid: None,
         read_ts: Some(u64::MAX),
         own_start_ts: None,
-        predicate: crabka_gres_ranges::transport::WirePredicatePushdown::FullScan,
-        projection: crabka_gres_ranges::transport::WireProjectionPushdown::All,
+        predicate: krabka_gres_ranges::transport::WirePredicatePushdown::FullScan,
+        projection: krabka_gres_ranges::transport::WireProjectionPushdown::All,
         partial_aggregate: None,
         top_k: None,
     };
     eprintln!("direct r{range_id} ScanRange request: {scan:?}");
-    let request = crabka_gres_ranges::RangeRequest::ScanRange(scan);
+    let request = krabka_gres_ranges::RangeRequest::ScanRange(scan);
     let response = system
         .operator_control_client()
         .call(&system.range_endpoint(range_id), &request)
         .await
         .unwrap_or_else(|error| panic!("direct r{range_id} scan: {error}"));
     eprintln!("direct r{range_id} ScanRange response: {response:?}");
-    let crabka_gres_ranges::RangeResponse::ScanRange(response) = response else {
+    let krabka_gres_ranges::RangeResponse::ScanRange(response) = response else {
         panic!("direct r{range_id} scan returned {response:?}");
     };
     response
         .rows
         .into_iter()
         .map(|row| {
-            let (_, _, values) = crabka_pgmvcc::version::decode_tuple(&row.tuple)
+            let (_, _, values) = krabka_pgmvcc::version::decode_tuple(&row.tuple)
                 .expect("decode direct split ledger tuple");
             let [
-                crabka_pgtypes::Datum::Int4(seq),
-                crabka_pgtypes::Datum::Int4(route_key),
-                crabka_pgtypes::Datum::Text(checksum),
+                krabka_pgtypes::Datum::Int4(seq),
+                krabka_pgtypes::Datum::Int4(route_key),
+                krabka_pgtypes::Datum::Text(checksum),
             ] = values.as_slice()
             else {
                 panic!("unexpected direct split ledger tuple {values:?}");
@@ -1375,7 +1375,7 @@ async fn restart_operation_source(input: OperationRestartInput<'_>) -> KillObser
         marker_observations: Arc::clone(input.marker_observations),
     };
     let fresh_admin =
-        crabka_client_admin::AdminClient::connect(&[input.system.bootstrap().to_owned()])
+        krabka_client_admin::AdminClient::connect(&[input.system.bootstrap().to_owned()])
             .await
             .expect("fresh retirement admin");
     *input.retirement_admin = CountingRetirementAdmin::new(
@@ -1590,7 +1590,7 @@ async fn drive_operation(
     };
     let predecessor_topic = format!("__gres_wal.{}.r1", system.tenant());
     let delete_ledger = Arc::new(std::sync::Mutex::new(RetirementDeleteLedger::default()));
-    let admin = crabka_client_admin::AdminClient::connect(&[system.bootstrap().to_owned()])
+    let admin = krabka_client_admin::AdminClient::connect(&[system.bootstrap().to_owned()])
         .await
         .expect("retirement admin");
     let mut retirement_admin =
@@ -1730,7 +1730,7 @@ async fn drive_operation(
                         &control,
                         &mut retirement_admin,
                         &tenant,
-                        crabka_units::secs(30),
+                        krabka_units::secs(30),
                     )
                     .await
                     .expect_err("AfterDelete must stop before sidecar CAS");
@@ -1742,7 +1742,7 @@ async fn drive_operation(
                         &control,
                         &mut retirement_admin,
                         &tenant,
-                        crabka_units::secs(30),
+                        krabka_units::secs(30),
                     )
                     .await
                     .expect("WAL retirement")
@@ -1784,7 +1784,7 @@ async fn drive_operation(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn real_process_move_cli_operator_and_wal_retirement() {
-    if std::env::var_os("CRABKA_G8_PROCESS_NEMESIS").is_none() {
+    if std::env::var_os("KRABKA_G8_PROCESS_NEMESIS").is_none() {
         return;
     }
     assert!(cli_binary().is_file(), "dedicated CI must build crabka CLI");
@@ -1822,7 +1822,7 @@ async fn real_process_move_cli_operator_and_wal_retirement() {
         .expect("target ledger")
         .get(0);
     assert_eq!(count, 32, "exact acknowledged ledger, no resurrection/loss");
-    if let Some(path) = std::env::var_os("CRABKA_G8_NEMESIS_EVIDENCE") {
+    if let Some(path) = std::env::var_os("KRABKA_G8_NEMESIS_EVIDENCE") {
         let path = PathBuf::from(path);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).expect("create evidence directory");
@@ -1859,7 +1859,7 @@ struct SplitFoundationEvidence<'a> {
     marker_observation: &'a MarkerObservation,
     journal_revision: u64,
     journal_digest: &'a str,
-    partition_union: &'a [crabka_gres_ranges::WireInDoubtMarker],
+    partition_union: &'a [krabka_gres_ranges::WireInDoubtMarker],
     delete_observation: &'a RetirementDeleteLedger,
     operation_elapsed_ms: u128,
 }
@@ -1868,7 +1868,7 @@ struct VerifiedSplitMarkers {
     observation: MarkerObservation,
     journal_revision: u64,
     journal_digest: String,
-    partition_union: Vec<crabka_gres_ranges::WireInDoubtMarker>,
+    partition_union: Vec<krabka_gres_ranges::WireInDoubtMarker>,
 }
 
 fn verify_split_markers(
@@ -1891,7 +1891,7 @@ fn verify_split_markers(
         .find(|range| range.range_id == 1)
         .expect("predecessor r1");
     assert_eq!(observation.endpoint, predecessor.endpoint);
-    let crabka_gres_ranges::RangeControlOperation::InheritMarkers {
+    let krabka_gres_ranges::RangeControlOperation::InheritMarkers {
         journal_revision,
         journal_digest,
     } = &observation.request.operation
@@ -1929,7 +1929,7 @@ fn verify_split_markers(
 
 async fn write_split_foundation_evidence(input: SplitFoundationEvidence<'_>) {
     let mut admin =
-        crabka_client_admin::AdminClient::connect(&[input.system.bootstrap().to_owned()])
+        krabka_client_admin::AdminClient::connect(&[input.system.bootstrap().to_owned()])
             .await
             .expect("split topic admin");
     let topics = admin
@@ -1951,7 +1951,7 @@ async fn write_split_foundation_evidence(input: SplitFoundationEvidence<'_>) {
     ] {
         assert!(topics.contains(&topic));
     }
-    let Some(path) = std::env::var_os("CRABKA_G8_SPLIT_EVIDENCE") else {
+    let Some(path) = std::env::var_os("KRABKA_G8_SPLIT_EVIDENCE") else {
         return;
     };
     let path = PathBuf::from(path);
@@ -2010,7 +2010,7 @@ async fn write_split_foundation_evidence(input: SplitFoundationEvidence<'_>) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn real_process_split_two_successor_foundation() {
-    if std::env::var_os("CRABKA_G8_SPLIT_FOUNDATION").is_none() {
+    if std::env::var_os("KRABKA_G8_SPLIT_FOUNDATION").is_none() {
         return;
     }
     let SplitFoundationSetup {
@@ -2213,18 +2213,18 @@ async fn prepare_move_nemesis(kill_point: SourceKillPoint) -> PreparedMoveNemesi
     );
     let sentinel_topic = format!("__gres_g8_retirement_sentinel.{}", system.tenant());
     let mut sentinel_admin =
-        crabka_client_admin::AdminClient::connect(&[system.bootstrap().to_owned()])
+        krabka_client_admin::AdminClient::connect(&[system.bootstrap().to_owned()])
             .await
             .expect("sentinel admin");
     let outcomes = sentinel_admin
         .create_topics(
-            &[crabka_client_admin::CreateTopicSpec {
+            &[krabka_client_admin::CreateTopicSpec {
                 name: sentinel_topic.clone(),
                 partitions: 1,
                 replicas: 1,
                 configs: BTreeMap::default(),
             }],
-            crabka_units::secs(30),
+            krabka_units::secs(30),
         )
         .await
         .expect("create sentinel topic");
@@ -2250,18 +2250,18 @@ async fn prepare_move_nemesis(kill_point: SourceKillPoint) -> PreparedMoveNemesi
     let script = r#"
 set -u
 seq=0
-while [[ ! -e "$CRABKA_G8_WORKLOAD_STOP" ]]; do
+while [[ ! -e "$KRABKA_G8_WORKLOAD_STOP" ]]; do
   checksum=$(printf 'g8-%016x' "$seq")
   now_raw=$(date +%s%N); now=$((now_raw / 1000000))
-  printf '{"kind":"attempt","seq":%s,"timestamp_ms":%s}\n' "$seq" "$now" >> "$CRABKA_G8_WORKLOAD_LEDGER"
-  sync -d "$CRABKA_G8_WORKLOAD_LEDGER"
+  printf '{"kind":"attempt","seq":%s,"timestamp_ms":%s}\n' "$seq" "$now" >> "$KRABKA_G8_WORKLOAD_LEDGER"
+  sync -d "$KRABKA_G8_WORKLOAD_LEDGER"
   # The client timeout must exceed every observed-safe ack-gap bound below:
   # abandoning a statement the server may still commit is what creates
   # unresolvable ambiguity, so a statement is only abandoned once the run has
   # already blown its liveness bound. Connection-phase failures stay fast via
   # PGCONNECT_TIMEOUT.
-  if timeout 25s psql -X -q -v ON_ERROR_STOP=1 -c "INSERT INTO live_ledger (id, checksum) VALUES ($seq, '$checksum')" >/dev/null 2>>"$CRABKA_G8_WORKLOAD_ERRORS"; then
-    if [[ "$seq" -eq 2 && ! -e "$CRABKA_G8_RESPONSE_LOSS" ]]; then touch "$CRABKA_G8_RESPONSE_LOSS"; response_known=false; else response_known=true; fi
+  if timeout 25s psql -X -q -v ON_ERROR_STOP=1 -c "INSERT INTO live_ledger (id, checksum) VALUES ($seq, '$checksum')" >/dev/null 2>>"$KRABKA_G8_WORKLOAD_ERRORS"; then
+    if [[ "$seq" -eq 2 && ! -e "$KRABKA_G8_RESPONSE_LOSS" ]]; then touch "$KRABKA_G8_RESPONSE_LOSS"; response_known=false; else response_known=true; fi
   else response_known=false; fi
   if [[ "$response_known" == true ]]; then kind=ack; else
     # Ambiguous outcome: the attempt may still commit server-side. Resolve by
@@ -2271,8 +2271,8 @@ while [[ ! -e "$CRABKA_G8_WORKLOAD_STOP" ]]; do
     # before any re-INSERT.
     kind=""
     empty_streak_start=""
-    while [[ ! -e "$CRABKA_G8_WORKLOAD_STOP" ]]; do
-      if actual=$(timeout 5s psql -X -A -t -q -v ON_ERROR_STOP=1 -c "SELECT checksum FROM live_ledger WHERE id = $seq" 2>>"$CRABKA_G8_WORKLOAD_ERRORS"); then
+    while [[ ! -e "$KRABKA_G8_WORKLOAD_STOP" ]]; do
+      if actual=$(timeout 5s psql -X -A -t -q -v ON_ERROR_STOP=1 -c "SELECT checksum FROM live_ledger WHERE id = $seq" 2>>"$KRABKA_G8_WORKLOAD_ERRORS"); then
         if [[ -n "$actual" ]]; then kind=recovered_ack; break; fi
         now_raw=$(date +%s%N); now=$((now_raw / 1000000))
         if [[ -z "$empty_streak_start" ]]; then empty_streak_start=$now; fi
@@ -2283,26 +2283,26 @@ while [[ ! -e "$CRABKA_G8_WORKLOAD_STOP" ]]; do
       sleep 0.25
     done
     if [[ -z "$kind" ]]; then
-      [[ -e "$CRABKA_G8_WORKLOAD_STOP" ]] && break
+      [[ -e "$KRABKA_G8_WORKLOAD_STOP" ]] && break
       now_raw=$(date +%s%N); now=$((now_raw / 1000000))
-      printf '{"kind":"retry","seq":%s,"timestamp_ms":%s}\n' "$seq" "$now" >> "$CRABKA_G8_WORKLOAD_LEDGER"
-      sync -d "$CRABKA_G8_WORKLOAD_LEDGER"
+      printf '{"kind":"retry","seq":%s,"timestamp_ms":%s}\n' "$seq" "$now" >> "$KRABKA_G8_WORKLOAD_LEDGER"
+      sync -d "$KRABKA_G8_WORKLOAD_LEDGER"
       continue
     fi
   fi
   now_raw=$(date +%s%N); now=$((now_raw / 1000000))
-  printf '{"kind":"%s","seq":%s,"timestamp_ms":%s}\n' "$kind" "$seq" "$now" >> "$CRABKA_G8_WORKLOAD_LEDGER"
-  sync -d "$CRABKA_G8_WORKLOAD_LEDGER"
+  printf '{"kind":"%s","seq":%s,"timestamp_ms":%s}\n' "$kind" "$seq" "$now" >> "$KRABKA_G8_WORKLOAD_LEDGER"
+  sync -d "$KRABKA_G8_WORKLOAD_LEDGER"
   seq=$((seq + 1)); sleep 0.02
 done
 "#;
     let mut command = tokio::process::Command::new("bash");
     command
         .args(["-c", script])
-        .env("CRABKA_G8_WORKLOAD_LEDGER", &ledger_path)
-        .env("CRABKA_G8_WORKLOAD_STOP", &stop_path)
-        .env("CRABKA_G8_WORKLOAD_ERRORS", &workload_error_path)
-        .env("CRABKA_G8_RESPONSE_LOSS", &response_loss_path)
+        .env("KRABKA_G8_WORKLOAD_LEDGER", &ledger_path)
+        .env("KRABKA_G8_WORKLOAD_STOP", &stop_path)
+        .env("KRABKA_G8_WORKLOAD_ERRORS", &workload_error_path)
+        .env("KRABKA_G8_RESPONSE_LOSS", &response_loss_path)
         .env("PGHOST", "127.0.0.1")
         .env("PGCONNECT_TIMEOUT", "3")
         .env("PGPORT", system.stable_sql_port().to_string())
@@ -2366,7 +2366,7 @@ async fn verify_move_terminal_topology(
         completed.evidence.marker_digest.as_deref(),
         Some(retirement.checkpoint.marker_digest.as_str())
     );
-    let mut admin = crabka_client_admin::AdminClient::connect(&[system.bootstrap().to_owned()])
+    let mut admin = krabka_client_admin::AdminClient::connect(&[system.bootstrap().to_owned()])
         .await
         .expect("admin");
     let topic_names = admin
@@ -2440,7 +2440,7 @@ struct MoveKillEvidence<'a> {
 }
 
 fn write_move_kill_evidence(input: &MoveKillEvidence<'_>) {
-    let Some(path) = std::env::var_os("CRABKA_G8_KILL_EVIDENCE") else {
+    let Some(path) = std::env::var_os("KRABKA_G8_KILL_EVIDENCE") else {
         return;
     };
     let restart = input.restart;
@@ -2512,7 +2512,7 @@ fn write_move_kill_evidence(input: &MoveKillEvidence<'_>) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn real_process_move_source_phase_sigkill_with_exact_ack_ledger() {
-    if std::env::var_os("CRABKA_G8_PROCESS_NEMESIS").is_none() {
+    if std::env::var_os("KRABKA_G8_PROCESS_NEMESIS").is_none() {
         return;
     }
     let kill_point = SourceKillPoint::from_env();
@@ -2698,7 +2698,7 @@ async fn real_process_move_source_phase_sigkill_with_exact_ack_ledger() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn real_child_keeps_range_control_receipt_runtime_alive_while_serving() {
-    if std::env::var_os("CRABKA_G8_PROCESS_NEMESIS").is_none() {
+    if std::env::var_os("KRABKA_G8_PROCESS_NEMESIS").is_none() {
         return;
     }
     let system = ProcessHarness::start_all_on_zero("tenant-g8-receipt-lifetime").await;
@@ -2706,12 +2706,12 @@ async fn real_child_keeps_range_control_receipt_runtime_alive_while_serving() {
     let response = client
         .mutate(
             &system.range_endpoint(0),
-            crabka_gres_ranges::RangeControlReq {
+            krabka_gres_ranges::RangeControlReq {
                 tenant: system.tenant().into(),
-                range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+                range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                 generation: 0,
                 operation_id: "missing-operation".into(),
-                operation: crabka_gres_ranges::RangeControlOperation::Status,
+                operation: krabka_gres_ranges::RangeControlOperation::Status,
             },
         )
         .await
@@ -2719,7 +2719,7 @@ async fn real_child_keeps_range_control_receipt_runtime_alive_while_serving() {
     assert!(
         !matches!(
             response,
-            crabka_gres_ranges::RangeControlResp::Rejected { ref code, .. }
+            krabka_gres_ranges::RangeControlResp::Rejected { ref code, .. }
                 if code == "receipt_store"
         ),
         "serve path must retain the transfer backing durable receipts"

@@ -25,7 +25,7 @@ machinery:
   external read happen only in the `Kafka` reconciler), renders it into the
   cluster's broker `ConfigMap` under a `rust.log` key, and points each broker
   pod's `RUST_LOG` env at that key via `configMapKeyRef` (`optional: true`).
-- The filter string is folded into `combined_config_hash`, so a *value* change
+- The filter string is folded into `combined_config_hash`, so a _value_ change
   rolls the cluster via slice 21 (the broker only re-reads `RUST_LOG` at
   startup — a live `ConfigMap` edit alone would not take effect).
 
@@ -34,11 +34,11 @@ machinery:
 ```yaml
 # inline
 logging:
-  type: inline          # default
+  type: inline # default
   loggers:
-    root: info          # `root` (case-insensitive) -> bare global level
-    crabka_broker: debug
-    crabka_raft: warn
+    root: info # `root` (case-insensitive) -> bare global level
+    krabka_broker: debug
+    krabka_raft: warn
 # external
 logging:
   type: external
@@ -49,12 +49,12 @@ logging:
 ```
 
 - `loggers` keys are **tracing targets** (Rust module paths, e.g.
-  `crabka_broker`), not log4j logger names. `root` sets the env-filter global
+  `krabka_broker`), not log4j logger names. `root` sets the env-filter global
   default. Levels are `trace|debug|info|warn|error|off` (case-insensitive;
   `warning`→`warn`, `fatal`→`error`, `none`→`off`).
 - Inline composition is pure + deterministic (directives sorted), so the hash
   is stable across reconciles regardless of map iteration order. Example:
-  `{root: info, crabka_broker: debug}` → `crabka_broker=debug,info`.
+  `{root: info, krabka_broker: debug}` → `krabka_broker=debug,info`.
 - `external` reads the referenced `ConfigMap` key verbatim (one extra GET,
   only on the external path). RBAC already grants `configmaps` get.
 
@@ -94,7 +94,7 @@ collapses to `config_hash(config_part)`.
   spec; the node-pool reads `parent.spec.logging`).
 - Live log-level hot-reload without a restart (broker reads `RUST_LOG` only at
   startup; would need a broker-core control surface — a future core slice).
-- Mapping log4j logger names to tracing targets (loggers keys *are* tracing
+- Mapping log4j logger names to tracing targets (loggers keys _are_ tracing
   targets).
 - OTLP / structured-logging knobs (slice 42 territory).
 

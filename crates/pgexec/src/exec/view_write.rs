@@ -2,16 +2,16 @@ use super::*;
 
 /// The catalog's spelling of a parsed check-option level.
 ///
-/// The two enums are deliberately separate: `crabka_pgcatalog` is the durable
+/// The two enums are deliberately separate: `krabka_pgcatalog` is the durable
 /// catalog and depends on no SQL grammar, so the executor is where the syntax
 /// becomes storage.
 pub(crate) const fn catalog_check_option(
-    level: crabka_pgparser::ast::ViewCheckOption,
-) -> crabka_pgcatalog::ViewCheckOption {
+    level: krabka_pgparser::ast::ViewCheckOption,
+) -> krabka_pgcatalog::ViewCheckOption {
     match level {
-        crabka_pgparser::ast::ViewCheckOption::Local => crabka_pgcatalog::ViewCheckOption::Local,
-        crabka_pgparser::ast::ViewCheckOption::Cascaded => {
-            crabka_pgcatalog::ViewCheckOption::Cascaded
+        krabka_pgparser::ast::ViewCheckOption::Local => krabka_pgcatalog::ViewCheckOption::Local,
+        krabka_pgparser::ast::ViewCheckOption::Cascaded => {
+            krabka_pgcatalog::ViewCheckOption::Cascaded
         }
     }
 }
@@ -62,18 +62,18 @@ fn rewrite_view_write(
     write_ctx: &WriteContext<'_>,
     ctes: &crate::cte::CteContext,
     stmt: &Statement,
-    name: &crabka_pgcatalog::RelationName,
+    name: &krabka_pgcatalog::RelationName,
 ) -> Result<RewrittenViewWrite, ExecError> {
-    use crabka_pgparser::ast::{InsertSource, SelectItem};
+    use krabka_pgparser::ast::{InsertSource, SelectItem};
 
     let catalog_kv = write_ctx.catalog_kv;
     let resolution = write_ctx.eval_ctx.resolution();
-    let stored = crabka_pgcatalog::get_view(catalog_kv, name)?;
+    let stored = krabka_pgcatalog::get_view(catalog_kv, name)?;
     let writes = view_writes(stmt);
     let alias = view_write_alias(stmt);
     let qualifier = view_write_qualifier(name, alias).to_string();
     let privileges = write_ctx.privileges();
-    let permit = |view: &crabka_pgcatalog::View, role: &str| {
+    let permit = |view: &krabka_pgcatalog::View, role: &str| {
         let ctx = crate::privilege::PrivilegeCtx::new(catalog_kv, role);
         for write in &writes {
             crate::privilege::require(
@@ -86,7 +86,7 @@ fn rewrite_view_write(
         }
         Ok(())
     };
-    let instead = |relation: &crabka_pgcatalog::RelationName| {
+    let instead = |relation: &krabka_pgcatalog::RelationName| {
         let id = crate::catalog_rel::view_oids(catalog_kv)?
             .get(relation)
             .copied()
@@ -176,13 +176,13 @@ fn rewrite_view_write(
         Ok(mapped)
     };
     // The same for an assignment list, shared with `MERGE`'s update action.
-    let update_assignments = |assignments: &[crabka_pgparser::ast::Assignment],
+    let update_assignments = |assignments: &[krabka_pgparser::ast::Assignment],
                               write: crate::viewwrite::ViewWrite|
-     -> Result<Vec<crabka_pgparser::ast::Assignment>, ExecError> {
+     -> Result<Vec<krabka_pgparser::ast::Assignment>, ExecError> {
         assignments
             .iter()
             .map(|assignment| {
-                Ok(crabka_pgparser::ast::Assignment {
+                Ok(krabka_pgparser::ast::Assignment {
                     targets: assignment
                         .targets
                         .iter()
@@ -194,7 +194,7 @@ fn rewrite_view_write(
             })
             .collect()
     };
-    let returning_items = |returning: &Option<crabka_pgparser::ast::Returning>| {
+    let returning_items = |returning: &Option<krabka_pgparser::ast::Returning>| {
         returning.as_ref().map(|returning| {
             let items = returning
                 .items
@@ -222,7 +222,7 @@ fn rewrite_view_write(
                     other => other,
                 })
                 .collect();
-            crabka_pgparser::ast::Returning {
+            krabka_pgparser::ast::Returning {
                 old_alias: returning.old_alias.clone(),
                 new_alias: returning.new_alias.clone(),
                 items,
@@ -257,7 +257,7 @@ fn rewrite_view_write(
             // expanded to, and there is nothing left to tell apart.
             rewrite.reject_foreign_returning(returning.as_ref(), &qualifier, true)?;
             let returning =
-                returning_items(returning).map(|returning| crabka_pgparser::ast::Returning {
+                returning_items(returning).map(|returning| krabka_pgparser::ast::Returning {
                     items: returning
                         .items
                         .iter()
@@ -339,7 +339,7 @@ fn rewrite_view_write(
             returning,
             ..
         } => {
-            use crabka_pgparser::ast::{MergeAction, MergeWhen};
+            use krabka_pgparser::ast::{MergeAction, MergeWhen};
 
             // A MERGE always has a source relation of its own, so an
             // unqualified name in the `ON` condition, a clause condition or the
@@ -436,12 +436,12 @@ fn rewrite_view_write(
 /// assignments and take the same refusal an ordinary target column does; the
 /// expressions go through the `excluded`-aware rewrite.
 fn rewrite_view_conflict(
-    clause: &crabka_pgparser::ast::OnConflict,
+    clause: &krabka_pgparser::ast::OnConflict,
     rewrite: &crate::viewwrite::ViewRewrite,
     qualifier: &str,
     view: &str,
-) -> Result<crabka_pgparser::ast::OnConflict, ExecError> {
-    use crabka_pgparser::ast::{OnConflict, OnConflictAction, OnConflictTarget};
+) -> Result<krabka_pgparser::ast::OnConflict, ExecError> {
+    use krabka_pgparser::ast::{OnConflict, OnConflictAction, OnConflictTarget};
 
     let write = crate::viewwrite::ViewWrite::direct(crate::viewwrite::ViewCommand::Insert);
     // An INSERT has no alias to hang the statement's qualifier on, so a
@@ -479,7 +479,7 @@ fn rewrite_view_conflict(
             assignments: assignments
                 .iter()
                 .map(|assignment| {
-                    Ok(crabka_pgparser::ast::Assignment {
+                    Ok(krabka_pgparser::ast::Assignment {
                         targets: assignment
                             .targets
                             .iter()
@@ -499,10 +499,10 @@ fn rewrite_view_conflict(
 /// Apply a rewrite to an assignment's right-hand side, whichever spelling it
 /// has.
 fn rewrite_assignment_value(
-    value: &crabka_pgparser::ast::AssignmentValue,
+    value: &krabka_pgparser::ast::AssignmentValue,
     sub: &impl Fn(&Expr) -> Expr,
-) -> crabka_pgparser::ast::AssignmentValue {
-    use crabka_pgparser::ast::AssignmentValue;
+) -> krabka_pgparser::ast::AssignmentValue {
+    use krabka_pgparser::ast::AssignmentValue;
     match value {
         AssignmentValue::Expr(expr) => AssignmentValue::Expr(sub(expr)),
         AssignmentValue::Row(exprs) => AssignmentValue::Row(exprs.iter().map(sub).collect()),
@@ -512,8 +512,8 @@ fn rewrite_assignment_value(
 
 /// A `RelationRef` naming a resolved relation, for a statement this executor
 /// builds rather than parses.
-fn relation_ref_of(name: &crabka_pgcatalog::RelationName) -> crabka_pgparser::ast::RelationRef {
-    crabka_pgparser::ast::RelationRef {
+fn relation_ref_of(name: &krabka_pgcatalog::RelationName) -> krabka_pgparser::ast::RelationRef {
+    krabka_pgparser::ast::RelationRef {
         schema: Some(name.schema.clone()),
         name: name.name.clone(),
     }
@@ -540,7 +540,7 @@ fn relation_ref_of(name: &crabka_pgcatalog::RelationName) -> crabka_pgparser::as
 fn merge_instead_of_triggers(
     write_ctx: &WriteContext<'_>,
     view: &Table,
-    stored: &crabka_pgcatalog::View,
+    stored: &krabka_pgcatalog::View,
     stmt: &Statement,
 ) -> Result<bool, ExecError> {
     let writes = view_writes(stmt);
@@ -571,7 +571,7 @@ fn merge_instead_of_triggers(
             hint: first_uncovered.hint(),
         }),
         None => Err(ExecError::Remote(
-            crabka_pgwire::error::PgError::error(
+            krabka_pgwire::error::PgError::error(
                 "0A000",
                 format!("cannot merge into view \"{}\"", view.name.name),
             )
@@ -609,7 +609,7 @@ pub(super) async fn execute_view_dml(
     ctes: &crate::cte::CteContext,
     stmt: &Statement,
     writes: &mut StatementWrites,
-) -> Result<(WriteOutcome, Vec<crabka_pgkv::WriteOp>), ExecError> {
+) -> Result<(WriteOutcome, Vec<krabka_pgkv::WriteOp>), ExecError> {
     let reference = match stmt {
         Statement::Insert { table, .. }
         | Statement::Update { table, .. }
@@ -647,15 +647,15 @@ pub(super) async fn execute_view_dml(
         return Ok((WriteOutcome::command("MERGE 0".into()), Vec::new()));
     }
     let instead = if let Statement::Merge { .. } = stmt {
-        let stored = crabka_pgcatalog::get_view(write_ctx.catalog_kv, &name)?;
+        let stored = krabka_pgcatalog::get_view(write_ctx.catalog_kv, &name)?;
         merge_instead_of_triggers(write_ctx, &view, &stored, stmt)?
     } else {
         crate::trigger::has_instead_row_trigger(write_ctx.catalog_kv, view.id, event, &updated)?
     };
     let rewrite_event = match event {
-        crate::trigger::DmlEvent::Insert => crabka_pgcatalog::rule::RuleEvent::Insert,
-        crate::trigger::DmlEvent::Update => crabka_pgcatalog::rule::RuleEvent::Update,
-        crate::trigger::DmlEvent::Delete => crabka_pgcatalog::rule::RuleEvent::Delete,
+        crate::trigger::DmlEvent::Insert => krabka_pgcatalog::rule::RuleEvent::Insert,
+        crate::trigger::DmlEvent::Update => krabka_pgcatalog::rule::RuleEvent::Update,
+        crate::trigger::DmlEvent::Delete => krabka_pgcatalog::rule::RuleEvent::Delete,
         crate::trigger::DmlEvent::Truncate => unreachable!("views cannot be truncated"),
     };
     if !matches!(stmt, Statement::Merge { .. })
@@ -801,7 +801,7 @@ pub(super) async fn execute_view_dml(
         } => {
             let qualifier = table_qualifier(&view, alias);
             let read = write_ctx.read_ctx(ctes);
-            let target_expr = crabka_pgparser::ast::TableExpr::Table {
+            let target_expr = krabka_pgparser::ast::TableExpr::Table {
                 name: reference.clone(),
                 // Pinned to `true` whatever the statement wrote. UPDATE and
                 // DELETE do not descend into inheritance children yet, so
@@ -912,7 +912,7 @@ pub(super) async fn execute_view_dml(
         } => {
             let qualifier = table_qualifier(&view, alias);
             let read = write_ctx.read_ctx(ctes);
-            let target_expr = crabka_pgparser::ast::TableExpr::Table {
+            let target_expr = krabka_pgparser::ast::TableExpr::Table {
                 name: reference.clone(),
                 // Pinned to `true` whatever the statement wrote. UPDATE and
                 // DELETE do not descend into inheritance children yet, so

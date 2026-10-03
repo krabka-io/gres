@@ -20,7 +20,7 @@ fn only_a_leakproof_predicate_may_cross_a_security_policy() {
         ("a.x / a.y = 1", false),
     ];
     for (sql, expected) in cases {
-        let expr = crabka_pgparser::parser::parse_expr_for_test(sql).expect("parse");
+        let expr = krabka_pgparser::parser::parse_expr_for_test(sql).expect("parse");
         assert2::assert!(super::leakproof_predicate(&expr) == *expected, "{sql}");
     }
 }
@@ -33,7 +33,7 @@ fn immutable_row_predicate_rejects_volatile_calls() {
         ("count(*) > 0", false),
     ];
     for (sql, expected) in cases {
-        let expr = crabka_pgparser::parser::parse_expr_for_test(sql).expect("parse");
+        let expr = krabka_pgparser::parser::parse_expr_for_test(sql).expect("parse");
         assert2::assert!(super::immutable_row_predicate(&expr) == *expected, "{sql}");
     }
 }
@@ -45,19 +45,19 @@ fn inner_join_predicate_keeps_equality_with_a_volatile_residual() {
             ColumnBinding {
                 qualifier: Some("a".into()),
                 name: "id".into(),
-                ty: crabka_pgtypes::ColumnType::Int4,
+                ty: krabka_pgtypes::ColumnType::Int4,
                 exposure: Exposure::Output,
             },
             ColumnBinding {
                 qualifier: Some("b".into()),
                 name: "id".into(),
-                ty: crabka_pgtypes::ColumnType::Int4,
+                ty: krabka_pgtypes::ColumnType::Int4,
                 exposure: Exposure::Output,
             },
         ],
         ..Default::default()
     };
-    let filter = crabka_pgparser::parser::parse_expr_for_test("a.id = b.id AND random() > -1")
+    let filter = krabka_pgparser::parser::parse_expr_for_test("a.id = b.id AND random() > -1")
         .expect("parse");
 
     let predicate = super::inner_join_predicate(Some(&filter), &scope, false)
@@ -65,7 +65,7 @@ fn inner_join_predicate_keeps_equality_with_a_volatile_residual() {
     assert2::assert!(matches!(
         predicate,
         Expr::Binary {
-            op: crabka_pgparser::ast::BinaryOp::Eq,
+            op: krabka_pgparser::ast::BinaryOp::Eq,
             ..
         }
     ));
@@ -83,14 +83,14 @@ fn structural_figure_colnames_match_parser_rules() {
         ("EXISTS (SELECT 1)", "exists"),
     ];
     for (sql, expected) in cases {
-        let expr = crabka_pgparser::parser::parse_expr_for_test(sql).expect("parse");
+        let expr = krabka_pgparser::parser::parse_expr_for_test(sql).expect("parse");
         assert2::assert!(super::derived_name(&expr) == *expected, "{sql}");
     }
     for (sql, expected) in [
         ("'{}'::integer[]", "int4"),
         ("'{}'::double precision[]", "float8"),
     ] {
-        let expr = crabka_pgparser::parser::parse_expr_for_test(sql).expect("parse");
+        let expr = krabka_pgparser::parser::parse_expr_for_test(sql).expect("parse");
         assert2::assert!(super::derived_name(&expr) == expected, "{sql}");
     }
 
@@ -116,13 +116,13 @@ fn pruning_a_relation_keeps_its_visible_shape() {
         exposure: Exposure::Output,
         qualifier: Some("v".into()),
         name: "live".into(),
-        ty: crabka_pgtypes::ColumnType::Int4,
+        ty: krabka_pgtypes::ColumnType::Int4,
     };
     let dead = ColumnBinding {
         exposure: Exposure::Output,
         qualifier: Some("v".into()),
         name: "dead".into(),
-        ty: crabka_pgtypes::ColumnType::Text,
+        ty: krabka_pgtypes::ColumnType::Text,
     };
     let relation = super::Relation {
         scope: Scope {
@@ -130,8 +130,8 @@ fn pruning_a_relation_keeps_its_visible_shape() {
             ..Default::default()
         },
         rows: vec![vec![
-            crabka_pgtypes::Datum::Int4(1),
-            crabka_pgtypes::Datum::Text("unused".into()),
+            krabka_pgtypes::Datum::Int4(1),
+            krabka_pgtypes::Datum::Text("unused".into()),
         ]],
     };
 
@@ -140,8 +140,8 @@ fn pruning_a_relation_keeps_its_visible_shape() {
     assert2::assert!(
         pruned.rows
             == vec![vec![
-                crabka_pgtypes::Datum::Int4(1),
-                crabka_pgtypes::Datum::Null
+                krabka_pgtypes::Datum::Int4(1),
+                krabka_pgtypes::Datum::Null
             ]]
     );
     assert2::assert!(pruned.scope.width() == 2);
@@ -155,41 +155,41 @@ fn lateral_filter_pushdown_distinguishes_security_free_relations() {
                 exposure: Exposure::Output,
                 qualifier: Some("t".into()),
                 name: "id".into(),
-                ty: crabka_pgtypes::ColumnType::Int4,
+                ty: krabka_pgtypes::ColumnType::Int4,
             }],
             ..Default::default()
         },
-        rows: vec![vec![crabka_pgtypes::Datum::Int4(2)]],
+        rows: vec![vec![krabka_pgtypes::Datum::Int4(2)]],
     };
     let ctx = crate::clock::EvalCtx::test_default();
 
-    let non_leakproof = crabka_pgparser::parser::parse_expr_for_test("t.id::text = '1'")
+    let non_leakproof = krabka_pgparser::parser::parse_expr_for_test("t.id::text = '1'")
         .expect("parse cast predicate");
     super::push_left_where(
         &mut relation,
-        crabka_pgparser::ast::JoinKind::Cross,
+        krabka_pgparser::ast::JoinKind::Cross,
         &non_leakproof,
         &ctx,
         false,
     )
     .expect("do not push a cast");
-    assert_eq!(relation.rows, vec![vec![crabka_pgtypes::Datum::Int4(2)]]);
+    assert_eq!(relation.rows, vec![vec![krabka_pgtypes::Datum::Int4(2)]]);
 
     super::push_left_where(
         &mut relation,
-        crabka_pgparser::ast::JoinKind::Cross,
+        krabka_pgparser::ast::JoinKind::Cross,
         &non_leakproof,
         &ctx,
         true,
     )
     .expect("push a cast for a security-free virtual catalog relation");
-    assert_eq!(relation.rows, Vec::<Vec<crabka_pgtypes::Datum>>::new());
+    assert_eq!(relation.rows, Vec::<Vec<krabka_pgtypes::Datum>>::new());
 
-    let unresolved = crabka_pgparser::parser::parse_expr_for_test("t.id = missing")
+    let unresolved = krabka_pgparser::parser::parse_expr_for_test("t.id = missing")
         .expect("parse unresolved predicate");
     super::push_left_where(
         &mut relation,
-        crabka_pgparser::ast::JoinKind::Cross,
+        krabka_pgparser::ast::JoinKind::Cross,
         &unresolved,
         &ctx,
         false,
@@ -205,17 +205,17 @@ fn local_filter_pushdown_requires_security_free_right_scope() {
                 exposure: Exposure::Output,
                 qualifier: Some(qualifier.into()),
                 name: "id".into(),
-                ty: crabka_pgtypes::ColumnType::Int4,
+                ty: krabka_pgtypes::ColumnType::Int4,
             }],
             ..Default::default()
         },
         rows: values
             .iter()
-            .map(|value| vec![crabka_pgtypes::Datum::Int4(*value)])
+            .map(|value| vec![krabka_pgtypes::Datum::Int4(*value)])
             .collect(),
     };
     let ctx = crate::clock::EvalCtx::test_default();
-    let cast = crabka_pgparser::parser::parse_expr_for_test("r.id::text = '1'")
+    let cast = krabka_pgparser::parser::parse_expr_for_test("r.id::text = '1'")
         .expect("parse right cast predicate");
     let mut left = relation("l", &[1, 2]);
     let mut right = relation("r", &[1, 2]);
@@ -223,7 +223,7 @@ fn local_filter_pushdown_requires_security_free_right_scope() {
     super::push_local_where(
         &mut left,
         &mut right,
-        crabka_pgparser::ast::JoinKind::Cross,
+        krabka_pgparser::ast::JoinKind::Cross,
         &cast,
         &ctx,
         false,
@@ -235,22 +235,22 @@ fn local_filter_pushdown_requires_security_free_right_scope() {
     super::push_local_where(
         &mut left,
         &mut right,
-        crabka_pgparser::ast::JoinKind::Cross,
+        krabka_pgparser::ast::JoinKind::Cross,
         &cast,
         &ctx,
         false,
         true,
     )
     .expect("push a cast for a security-free right relation");
-    assert_eq!(right.rows, vec![vec![crabka_pgtypes::Datum::Int4(1)]]);
+    assert_eq!(right.rows, vec![vec![krabka_pgtypes::Datum::Int4(1)]]);
 
     let left_only =
-        crabka_pgparser::parser::parse_expr_for_test("l.id = 1").expect("parse left predicate");
+        krabka_pgparser::parser::parse_expr_for_test("l.id = 1").expect("parse left predicate");
     let mut right = relation("r", &[1, 2]);
     super::push_local_where(
         &mut left,
         &mut right,
-        crabka_pgparser::ast::JoinKind::Cross,
+        krabka_pgparser::ast::JoinKind::Cross,
         &left_only,
         &ctx,
         false,
@@ -262,10 +262,10 @@ fn local_filter_pushdown_requires_security_free_right_scope() {
 
 #[test]
 fn security_free_from_item_requires_only_virtual_catalog_relations() {
-    use crabka_units::convert::ByteSizeExt;
+    use krabka_units::convert::ByteSizeExt;
 
-    let kv = crabka_pgkv::MemKv::new();
-    let snapshot = crabka_pgmvcc::visibility::Snapshot {
+    let kv = krabka_pgkv::MemKv::new();
+    let snapshot = krabka_pgmvcc::visibility::Snapshot {
         xmin: 0,
         xmax: u64::MAX,
         xip: Vec::new(),
@@ -287,8 +287,8 @@ fn security_free_from_item_requires_only_virtual_catalog_relations() {
         eval_ctx: &eval_ctx,
         fctx: crate::exec::ForeignCtx::none(),
         range_scanner: &scanner,
-        blocking_query_memory: crabka_units::ByteSize::from_bytes(1),
-        statement_memory: crate::scanner::StatementMemory::new(crabka_units::ByteSize::from_bytes(
+        blocking_query_memory: krabka_units::ByteSize::from_bytes(1),
+        statement_memory: crate::scanner::StatementMemory::new(krabka_units::ByteSize::from_bytes(
             1,
         )),
         security_role: "owner",
@@ -370,9 +370,9 @@ async fn pg_class_statistics_updates_persist() {
     );
 }
 
-use crabka_pgcatalog::RelationName;
-use crabka_pgparser::ast::{Expr, QueryBody, SelectStmt, SetExpr, Statement};
-use crabka_pgwire::engine::{Cell, Engine, FieldDescription, QueryResult, Session};
+use krabka_pgcatalog::RelationName;
+use krabka_pgparser::ast::{Expr, QueryBody, SelectStmt, SetExpr, Statement};
+use krabka_pgwire::engine::{Cell, Engine, FieldDescription, QueryResult, Session};
 
 use crate::{
     ExecError, PartialAggregateFunction, PartialAggregateSpec, SqlEngine, SqlSession, TopKColumn,
@@ -442,8 +442,8 @@ fn scan_pushdown_retry_is_limited_to_optional_predicate_or_projection() {
 
 #[test]
 fn global_status_derefs_prepared_to_range0_global_clog() {
-    use crabka_pgkv::{Kv, MemKv};
-    use crabka_pgmvcc::{
+    use krabka_pgkv::{Kv, MemKv};
+    use krabka_pgmvcc::{
         clog::{XidStatus, put_op},
         xid::GLOBAL_XID_BASE,
     };
@@ -456,7 +456,7 @@ fn global_status_derefs_prepared_to_range0_global_clog() {
         .write_batch(&[put_op(li, XidStatus::Prepared(g))])
         .expect("put prepared marker");
     // G in-doubt (not in global clog, gsnap says running) => InProgress (invisible)
-    let running = crabka_pgmvcc::visibility::Snapshot {
+    let running = krabka_pgmvcc::visibility::Snapshot {
         xmin: g,
         xmax: g + 1,
         xip: vec![g],
@@ -469,7 +469,7 @@ fn global_status_derefs_prepared_to_range0_global_clog() {
     global
         .write_batch(&[put_op(g, XidStatus::Committed)])
         .expect("put global commit");
-    let settled = crabka_pgmvcc::visibility::Snapshot {
+    let settled = krabka_pgmvcc::visibility::Snapshot {
         xmin: g + 2,
         xmax: g + 2,
         xip: vec![],
@@ -490,8 +490,8 @@ fn global_status_derefs_prepared_to_range0_global_clog() {
 
 #[test]
 fn durable_global_snapshot_resolves_committed_against_range0() {
-    use crabka_pgkv::{Kv, MemKv};
-    use crabka_pgmvcc::{
+    use krabka_pgkv::{Kv, MemKv};
+    use krabka_pgmvcc::{
         clog::{XidStatus, put_op},
         xid::GLOBAL_XID_BASE,
     };
@@ -508,8 +508,8 @@ fn durable_global_snapshot_resolves_committed_against_range0() {
         .write_batch(&[put_op(g, XidStatus::Committed)])
         .expect("global committed");
     global
-        .write_batch(&[crabka_pgkv::WriteOp::Put {
-            key: crabka_pgkv::key::meta_next_global_xid_key(),
+        .write_batch(&[krabka_pgkv::WriteOp::Put {
+            key: krabka_pgkv::key::meta_next_global_xid_key(),
             value: (g + 1).to_be_bytes().to_vec(),
         }])
         .expect("persist next_global");
@@ -527,8 +527,8 @@ fn durable_global_snapshot_resolves_committed_against_range0() {
         .write_batch(&[put_op(4, XidStatus::Prepared(g2))])
         .expect("local prepared 2");
     global
-        .write_batch(&[crabka_pgkv::WriteOp::Put {
-            key: crabka_pgkv::key::meta_next_global_xid_key(),
+        .write_batch(&[krabka_pgkv::WriteOp::Put {
+            key: krabka_pgkv::key::meta_next_global_xid_key(),
             value: (g2 + 1).to_be_bytes().to_vec(),
         }])
         .expect("advance next_global past g2");
@@ -3534,7 +3534,7 @@ async fn regression_c_base_types_keep_their_declared_layouts() {
         .await
             == vec![text_row(&["4", "t", "i"])]
     );
-    let widget = crabka_pgtypes::usertype::lookup("widget")
+    let widget = krabka_pgtypes::usertype::lookup("widget")
         .and_then(|definition| definition.column_type())
         .expect("widget type");
     assert!(super::result_types::field("value", widget).type_size == 24);
@@ -3710,7 +3710,7 @@ async fn a_base_type_takes_its_layout_written_out() {
 /// casts after the first process registry has gone away.
 #[tokio::test]
 async fn reopening_a_catalog_hydrates_its_user_casts() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv: Arc<dyn Kv> = Arc::new(MemKv::new());
     let engine = SqlEngine::with_kv(Arc::clone(&kv)).expect("engine");
@@ -3741,16 +3741,16 @@ async fn reopening_a_catalog_hydrates_its_user_casts() {
     )
     .await;
 
-    let durable = crabka_pgcatalog::list_user_casts(kv.as_ref()).expect("durable cast");
+    let durable = krabka_pgcatalog::list_user_casts(kv.as_ref()).expect("durable cast");
     let removed = durable
         .iter()
-        .map(|cast| crabka_pgtypes::usercast::DeclaredCast {
+        .map(|cast| krabka_pgtypes::usercast::DeclaredCast {
             source: cast.source,
             target: cast.target,
-            method: crabka_pgtypes::usercast::CastMethod::Binary,
+            method: krabka_pgtypes::usercast::CastMethod::Binary,
         })
         .collect::<Vec<_>>();
-    crabka_pgtypes::usercast::publish_catalog_delta(&removed, &[]);
+    krabka_pgtypes::usercast::publish_catalog_delta(&removed, &[]);
 
     let reopened = SqlEngine::with_kv(kv).expect("reopened engine");
     let mut reopened_session = reopened.connect();
@@ -3766,7 +3766,7 @@ async fn reopening_a_catalog_hydrates_its_user_casts() {
 
 #[tokio::test]
 async fn reopening_a_catalog_hydrates_a_domain_over_a_relation_rowtype() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv: Arc<dyn Kv> = Arc::new(MemKv::new());
     let engine = SqlEngine::with_kv(Arc::clone(&kv)).expect("engine");
@@ -3782,8 +3782,8 @@ async fn reopening_a_catalog_hydrates_a_domain_over_a_relation_rowtype() {
     )
     .await;
 
-    crabka_pgtypes::usertype::unregister_in("public", "durable_rowtype_domain");
-    crabka_pgtypes::usertype::unregister_in("public", "durable_rowtype_source");
+    krabka_pgtypes::usertype::unregister_in("public", "durable_rowtype_domain");
+    krabka_pgtypes::usertype::unregister_in("public", "durable_rowtype_source");
 
     let reopened = SqlEngine::with_kv(kv).expect("reopened engine");
     let mut reopened_session = reopened.connect();
@@ -4280,7 +4280,7 @@ async fn unnamed_check_constraints_take_postgresql_default_names() {
             "CREATE TABLE t (a int4 CHECK (a > 0), b int4 CHECK (b > 0), CHECK (a < b), CHECK (a <> 5))",
         )
         .await;
-    let table = crabka_pgcatalog::get_table(engine.catalog_kv(), &RelationName::public("t"))
+    let table = krabka_pgcatalog::get_table(engine.catalog_kv(), &RelationName::public("t"))
         .expect("table");
     assert!(
         table
@@ -4621,7 +4621,7 @@ async fn index_key_ordering_options_are_persisted() {
     // The supported spellings still build, including the default name.
     run_s(&mut session, "CREATE INDEX ON t (a)").await;
     assert!(
-        crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_a_idx")).is_ok()
+        krabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_a_idx")).is_ok()
     );
 
     run_s(
@@ -4639,22 +4639,22 @@ async fn index_key_ordering_options_are_persisted() {
             == vec![text_row(&["1"])]
     );
     let expression =
-        crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_expr_idx"))
+        krabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_expr_idx"))
             .expect("expression index");
     assert!(
-        crabka_pgcatalog::index_key_expression(&expression.columns[0])
+        krabka_pgcatalog::index_key_expression(&expression.columns[0])
             == Some("int4range(a, a + 10)")
     );
     run_s(&mut session, "ALTER TABLE t RENAME COLUMN a TO n").await;
     let renamed =
-        crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_expr_idx"))
+        krabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_expr_idx"))
             .expect("renamed expression index");
     assert!(
-        crabka_pgcatalog::index_key_expression(&renamed.columns[0]) == Some("int4range(n, n + 10)")
+        krabka_pgcatalog::index_key_expression(&renamed.columns[0]) == Some("int4range(n, n + 10)")
     );
     run_s(&mut session, "ALTER TABLE t DROP COLUMN n").await;
     assert!(
-        crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_expr_idx"))
+        krabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_expr_idx"))
             .is_err()
     );
 }
@@ -4673,7 +4673,7 @@ async fn index_include_columns_are_catalogued_but_not_keyed() {
     .await;
 
     let index =
-        crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_a_include_b"))
+        krabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_a_include_b"))
             .expect("index");
     assert!(index.columns == ["a"]);
     assert!(index.include == ["b"]);
@@ -4697,14 +4697,14 @@ async fn index_include_columns_are_catalogued_but_not_keyed() {
     assert!(sqlstate_of(&mut session, "INSERT INTO t VALUES (1, 'second')").await == "23505");
     run_s(&mut session, "ALTER TABLE t RENAME COLUMN b TO c").await;
     assert!(
-        crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_a_include_b"),)
+        krabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_a_include_b"),)
             .expect("renamed index")
             .include
             == ["c"]
     );
     run_s(&mut session, "ALTER TABLE t DROP COLUMN c").await;
     assert!(
-        crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_a_include_b"),)
+        krabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_a_include_b"),)
             .is_err()
     );
 }
@@ -4723,7 +4723,7 @@ async fn partial_unique_indexes_store_and_enforce_only_matching_rows() {
     .await;
 
     let index =
-        crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_a_positive"))
+        krabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_a_positive"))
             .expect("partial index");
     assert!(index.predicate.as_deref() == Some("b > 0"));
     assert!(text_rows_of(
@@ -4785,10 +4785,10 @@ async fn btree_expression_indexes_store_physical_entries() {
             == "42P17"
     );
     let index =
-        crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_expr_idx"))
+        krabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_expr_idx"))
             .expect("expression index");
-    assert!(index.method == crabka_pgcatalog::IndexMethod::Btree);
-    assert!(crabka_pgcatalog::index_key_expression(&index.columns[0]) == Some("(1)"));
+    assert!(index.method == krabka_pgcatalog::IndexMethod::Btree);
+    assert!(krabka_pgcatalog::index_key_expression(&index.columns[0]) == Some("(1)"));
 
     run_s(&mut session, "INSERT INTO t VALUES (3)").await;
     run_s(&mut session, "UPDATE t SET a = 20 WHERE a = 2").await;
@@ -4799,7 +4799,7 @@ async fn btree_expression_indexes_store_physical_entries() {
     assert!(
         !engine
             .kv
-            .scan_prefix(&crabka_pgkv::key::secondary_index_prefix(
+            .scan_prefix(&krabka_pgkv::key::secondary_index_prefix(
                 index.table_id,
                 index.id,
             ))
@@ -4807,7 +4807,7 @@ async fn btree_expression_indexes_store_physical_entries() {
             .is_empty()
     );
     assert!(
-        crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_expr_idx"))
+        krabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_expr_idx"))
             .expect("persisted expression index")
             == index
     );
@@ -4823,10 +4823,10 @@ async fn hash_indexes_backfill_and_maintain_equality_entries() {
     run_s(&mut session, "INSERT INTO t VALUES (1), (2)").await;
     run_s(&mut session, "CREATE INDEX t_a_hash ON t USING hash (a)").await;
 
-    let index = crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_a_hash"))
+    let index = krabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_a_hash"))
         .expect("hash index");
-    assert!(index.method == crabka_pgcatalog::IndexMethod::Hash);
-    let prefix = crabka_pgkv::key::secondary_index_prefix(index.table_id, index.id);
+    assert!(index.method == krabka_pgcatalog::IndexMethod::Hash);
+    let prefix = krabka_pgkv::key::secondary_index_prefix(index.table_id, index.id);
     assert!(
         engine
             .kv
@@ -4880,7 +4880,7 @@ async fn unique_indexes_can_treat_nulls_as_not_distinct() {
     )
     .await;
 
-    let index = crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_a_key"))
+    let index = krabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("t_a_key"))
         .expect("unique index");
     assert!(index.nulls_not_distinct);
     assert!(
@@ -4969,7 +4969,7 @@ async fn create_index_resolves_and_validates_operator_classes() {
             == Some("This operation is not supported for partitioned indexes.")
     );
     run_s(&mut session, "CREATE INDEX i7 ON t ((b || b) text_ops)").await;
-    let index = crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("i6"))
+    let index = krabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("i6"))
         .expect("index metadata");
     assert!(index.key_options[0].collation.as_deref() == Some("C"));
     assert!(index.key_options[0].opclass.as_deref() == Some("text_ops"));
@@ -4988,7 +4988,7 @@ async fn create_index_resolves_and_validates_operator_classes() {
             == vec![text_row(&["320004"])]
     );
     let expression_index =
-        crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("i7"))
+        krabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("i7"))
             .expect("expression index metadata");
     assert!(expression_index.key_options[0].opclass.as_deref() == Some("text_ops"));
     let opclass_options = session
@@ -5005,7 +5005,7 @@ async fn create_index_resolves_and_validates_operator_classes() {
     .await;
     run_s(&mut session, "REINDEX TABLE g").await;
     let option_index =
-        crabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("i8"))
+        krabka_pgcatalog::get_index(engine.catalog_kv(), &RelationName::public("i8"))
             .expect("opclass option metadata");
     assert!(option_index.key_options[0].opclass_options.as_deref() == Some("(siglen='1000')"));
     for (options, message) in [
@@ -5129,8 +5129,8 @@ async fn multi_subcommand_alter_table_is_atomic() {
     assert!(sqlstate_of(&mut session, "SELECT d FROM t").await == "42703");
 }
 
-fn settled_snapshot() -> crabka_pgmvcc::visibility::Snapshot {
-    crabka_pgmvcc::visibility::Snapshot {
+fn settled_snapshot() -> krabka_pgmvcc::visibility::Snapshot {
+    krabka_pgmvcc::visibility::Snapshot {
         xmin: 0,
         xmax: u64::MAX,
         xip: Vec::new(),
@@ -5139,10 +5139,10 @@ fn settled_snapshot() -> crabka_pgmvcc::visibility::Snapshot {
 
 fn lookup_index_text(
     engine: &SqlEngine,
-    table: &crabka_pgcatalog::Table,
-    index: &crabka_pgcatalog::Index,
+    table: &krabka_pgcatalog::Table,
+    index: &krabka_pgcatalog::Index,
     value: &str,
-) -> Vec<Vec<crabka_pgtypes::Datum>> {
+) -> Vec<Vec<krabka_pgtypes::Datum>> {
     let snapshot = engine.procarray.snapshot();
     let gsnap = settled_snapshot();
     super::lookup_local_index_equal(
@@ -5156,7 +5156,7 @@ fn lookup_index_text(
         },
         table,
         index,
-        &[crabka_pgtypes::Datum::Text(value.into())],
+        &[krabka_pgtypes::Datum::Text(value.into())],
     )
     .expect("index lookup")
     .into_iter()
@@ -5181,9 +5181,9 @@ async fn local_secondary_index_lookup_tracks_insert_update_delete() {
         .await
         .expect("insert");
 
-    let table = crabka_pgcatalog::get_table(engine.catalog_kv.as_ref(), &RelationName::public("t"))
+    let table = krabka_pgcatalog::get_table(engine.catalog_kv.as_ref(), &RelationName::public("t"))
         .expect("table");
-    let index = crabka_pgcatalog::list_table_indexes(
+    let index = krabka_pgcatalog::list_table_indexes(
         engine.catalog_kv.as_ref(),
         &RelationName::public("t"),
     )
@@ -5213,8 +5213,8 @@ async fn local_secondary_index_lookup_tracks_insert_update_delete() {
     assert_eq!(
         ids,
         vec![
-            crabka_pgtypes::Datum::Int4(3),
-            crabka_pgtypes::Datum::Int4(2)
+            krabka_pgtypes::Datum::Int4(3),
+            krabka_pgtypes::Datum::Int4(2)
         ]
     );
 }
@@ -5239,9 +5239,9 @@ async fn local_gist_tsvector_index_probes_matching_lexemes() {
         .await
         .expect("insert vectors");
 
-    let table = crabka_pgcatalog::get_table(engine.catalog_kv.as_ref(), &RelationName::public("t"))
+    let table = krabka_pgcatalog::get_table(engine.catalog_kv.as_ref(), &RelationName::public("t"))
         .expect("table");
-    let index = crabka_pgcatalog::list_table_indexes(
+    let index = krabka_pgcatalog::list_table_indexes(
         engine.catalog_kv.as_ref(),
         &RelationName::public("t"),
     )
@@ -5272,7 +5272,7 @@ async fn local_gist_tsvector_index_probes_matching_lexemes() {
 #[tokio::test]
 async fn local_gin_indexes_array_elements_as_distinct_postings() {
     use assert2::assert;
-    use crabka_pgtypes::Datum;
+    use krabka_pgtypes::Datum;
 
     let engine = SqlEngine::new();
     let mut session = engine.connect();
@@ -5290,15 +5290,15 @@ async fn local_gin_indexes_array_elements_as_distinct_postings() {
     )
     .await;
 
-    let table = crabka_pgcatalog::get_table(engine.catalog_kv.as_ref(), &RelationName::public("t"))
+    let table = krabka_pgcatalog::get_table(engine.catalog_kv.as_ref(), &RelationName::public("t"))
         .expect("table");
     let postings = |index: &str, values: &[Datum]| {
         let index =
-            crabka_pgcatalog::get_index(engine.catalog_kv.as_ref(), &RelationName::public(index))
+            krabka_pgcatalog::get_index(engine.catalog_kv.as_ref(), &RelationName::public(index))
                 .expect("index");
         engine
             .kv
-            .scan_prefix(&crabka_pgkv::key::secondary_index_entry_prefix(
+            .scan_prefix(&krabka_pgkv::key::secondary_index_entry_prefix(
                 table.id, index.id, values,
             ))
             .expect("postings")
@@ -5481,12 +5481,12 @@ async fn drop_index_removes_catalog_metadata_and_local_entries_in_one_ddl_batch(
         .await
         .expect("insert indexed row");
 
-    let index = crabka_pgcatalog::get_index(
+    let index = krabka_pgcatalog::get_index(
         engine.catalog_kv.as_ref(),
         &RelationName::public("t_name_idx"),
     )
     .expect("index metadata");
-    let entry_prefix = crabka_pgkv::key::secondary_index_prefix(index.table_id, index.id);
+    let entry_prefix = krabka_pgkv::key::secondary_index_prefix(index.table_id, index.id);
     assert_eq!(
         engine
             .kv
@@ -5502,7 +5502,7 @@ async fn drop_index_removes_catalog_metadata_and_local_entries_in_one_ddl_batch(
         .expect("drop index");
 
     assert_eq!(
-        crabka_pgcatalog::get_index(
+        krabka_pgcatalog::get_index(
             engine.catalog_kv.as_ref(),
             &RelationName::public("t_name_idx")
         )
@@ -5543,7 +5543,7 @@ async fn drop_index_list_removes_every_named_index() {
 
     for name in ["t_id_idx", "t_name_idx"] {
         assert_eq!(
-            crabka_pgcatalog::get_index(engine.catalog_kv.as_ref(), &RelationName::public(name))
+            krabka_pgcatalog::get_index(engine.catalog_kv.as_ref(), &RelationName::public(name))
                 .expect_err("index metadata removed")
                 .sqlstate(),
             "42704"
@@ -5661,10 +5661,10 @@ async fn ordered_local_index_stream_returns_order_by_order() {
     run(&engine, "CREATE TABLE t (a int4 NOT NULL)").await;
     run(&engine, "INSERT INTO t VALUES (2), (1), (3)").await;
     run(&engine, "CREATE INDEX t_a_idx ON t (a DESC)").await;
-    let table = crabka_pgcatalog::get_table(engine.catalog_kv.as_ref(), &RelationName::public("t"))
+    let table = krabka_pgcatalog::get_table(engine.catalog_kv.as_ref(), &RelationName::public("t"))
         .expect("table");
     let index =
-        crabka_pgcatalog::get_index(engine.catalog_kv.as_ref(), &RelationName::public("t_a_idx"))
+        krabka_pgcatalog::get_index(engine.catalog_kv.as_ref(), &RelationName::public("t_a_idx"))
             .expect("index");
     let snapshot = engine.procarray.snapshot();
     let gsnap = settled_snapshot();
@@ -5700,7 +5700,7 @@ async fn ordered_local_index_stream_returns_order_by_order() {
         .chain(second.rows)
         .map(|row| row.row[0].clone())
         .map(|value| match value {
-            crabka_pgtypes::Datum::Int4(value) => value,
+            krabka_pgtypes::Datum::Int4(value) => value,
             got => panic!("expected int4, got {got:?}"),
         })
         .collect::<Vec<_>>();
@@ -5733,12 +5733,12 @@ async fn forced_index_scan_orders_array_range_results() {
     }
     run_s(&mut session, "SET enable_seqscan = off").await;
     run_s(&mut session, "SET enable_bitmapscan = off").await;
-    let table = crabka_pgcatalog::list_tables(engine.catalog_kv.as_ref())
+    let table = krabka_pgcatalog::list_tables(engine.catalog_kv.as_ref())
         .expect("tables")
         .into_iter()
         .find(|table| table.name.name == "arr_tbl")
         .expect("temporary table");
-    let index = crabka_pgcatalog::list_table_indexes(engine.catalog_kv.as_ref(), &table.name)
+    let index = krabka_pgcatalog::list_table_indexes(engine.catalog_kv.as_ref(), &table.name)
         .expect("indexes")
         .into_iter()
         .next()
@@ -5821,9 +5821,9 @@ async fn local_secondary_index_entries_survive_durable_reopen() {
 
     let reopened = SqlEngine::open(dir.path()).expect("reopen");
     let table =
-        crabka_pgcatalog::get_table(reopened.catalog_kv.as_ref(), &RelationName::public("t"))
+        krabka_pgcatalog::get_table(reopened.catalog_kv.as_ref(), &RelationName::public("t"))
             .expect("table");
-    let index = crabka_pgcatalog::list_table_indexes(
+    let index = krabka_pgcatalog::list_table_indexes(
         reopened.catalog_kv.as_ref(),
         &RelationName::public("t"),
     )
@@ -5833,7 +5833,7 @@ async fn local_secondary_index_entries_survive_durable_reopen() {
     let rows = lookup_index_text(&reopened, &table, &index, "persisted");
 
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0][0], crabka_pgtypes::Datum::Int4(1));
+    assert_eq!(rows[0][0], krabka_pgtypes::Datum::Int4(1));
 }
 
 #[tokio::test]
@@ -6003,10 +6003,10 @@ async fn network_address_types_round_trip_through_the_engine() {
             .map(|field| field.type_oid)
             .collect::<Vec<_>>()
             == vec![
-                crabka_pgtypes::oids::CIDR,
-                crabka_pgtypes::oids::INET,
-                crabka_pgtypes::oids::MACADDR,
-                crabka_pgtypes::oids::MACADDR8,
+                krabka_pgtypes::oids::CIDR,
+                krabka_pgtypes::oids::INET,
+                krabka_pgtypes::oids::MACADDR,
+                krabka_pgtypes::oids::MACADDR8,
             ]
     );
 
@@ -6030,7 +6030,7 @@ async fn select_literal_no_from() {
     let engine = SqlEngine::new();
     let r = &run(&engine, "SELECT 1 + 1 AS two").await[0];
     assert_eq!(fields_of(r)[0].name, "two");
-    assert_eq!(fields_of(r)[0].type_oid, crabka_pgtypes::oids::INT4);
+    assert_eq!(fields_of(r)[0].type_oid, krabka_pgtypes::oids::INT4);
     assert_eq!(text(&rows_of(r)[0][0]), Some("2".into()));
 }
 
@@ -6379,13 +6379,13 @@ fn order_scope() -> Scope {
                 exposure: Exposure::Output,
                 qualifier: Some("t".into()),
                 name: "a".into(),
-                ty: crabka_pgtypes::ColumnType::Int4,
+                ty: krabka_pgtypes::ColumnType::Int4,
             },
             ColumnBinding {
                 exposure: Exposure::Output,
                 qualifier: Some("t".into()),
                 name: "b".into(),
-                ty: crabka_pgtypes::ColumnType::Int4,
+                ty: krabka_pgtypes::ColumnType::Int4,
             },
         ],
         ..Default::default()
@@ -6393,7 +6393,7 @@ fn order_scope() -> Scope {
 }
 
 fn parsed_select(sql: &str) -> SelectStmt {
-    match crabka_pgparser::parse(sql)
+    match krabka_pgparser::parse(sql)
         .expect("parse")
         .pop()
         .expect("one")
@@ -6490,14 +6490,14 @@ fn ordered_rows_use_the_callers_statement_memory() {
     let scope = order_scope();
     let (fields, out_exprs, _) =
         super::resolve_projection(&select.projection, &scope).expect("projection");
-    let statement_memory = crate::scanner::StatementMemory::new(crabka_units::bytes(1));
+    let statement_memory = crate::scanner::StatementMemory::new(krabka_units::bytes(1));
 
     let error = super::project_rows_ordered_with_memory(
         &select,
         &scope,
         &fields,
         &out_exprs,
-        vec![vec![crabka_pgtypes::Datum::Int4(1)]],
+        vec![vec![krabka_pgtypes::Datum::Int4(1)]],
         &crate::clock::EvalCtx::test_default(),
         &statement_memory,
     )
@@ -6515,14 +6515,14 @@ fn distinct_rows_use_the_callers_statement_memory() {
     let scope = order_scope();
     let (fields, out_exprs, _) =
         super::resolve_projection(&select.projection, &scope).expect("projection");
-    let statement_memory = crate::scanner::StatementMemory::new(crabka_units::bytes(1));
+    let statement_memory = crate::scanner::StatementMemory::new(krabka_units::bytes(1));
 
     let error = super::project_rows_ordered_with_memory(
         &select,
         &scope,
         &fields,
         &out_exprs,
-        vec![vec![crabka_pgtypes::Datum::Int4(1)]],
+        vec![vec![krabka_pgtypes::Datum::Int4(1)]],
         &crate::clock::EvalCtx::test_default(),
         &statement_memory,
     )
@@ -6535,13 +6535,13 @@ fn distinct_rows_use_the_callers_statement_memory() {
 #[test]
 fn distinct_rows_are_deduplicated_and_ordered() {
     use assert2::assert;
-    use crabka_pgtypes::Datum;
+    use krabka_pgtypes::Datum;
 
     let select = parsed_select("SELECT DISTINCT a FROM t ORDER BY a");
     let scope = order_scope();
     let (fields, out_exprs, _) =
         super::resolve_projection(&select.projection, &scope).expect("projection");
-    let statement_memory = crate::scanner::StatementMemory::new(crabka_units::bytes(1024));
+    let statement_memory = crate::scanner::StatementMemory::new(krabka_units::bytes(1024));
 
     let rows = super::project_rows_ordered_with_memory(
         &select,
@@ -7797,7 +7797,7 @@ async fn drop_role_if_exists_skips_only_a_missing_role() {
     let results = run(&engine, "DROP ROLE IF EXISTS existing_role").await;
     assert!(tag_of(&results[0]) == "DROP ROLE");
     assert!(
-        !crabka_pgcatalog::role_exists(engine.catalog_kv(), "existing_role").expect("role lookup")
+        !krabka_pgcatalog::role_exists(engine.catalog_kv(), "existing_role").expect("role lookup")
     );
 
     run(&engine, "CREATE ROLE first_role; CREATE ROLE second_role").await;
@@ -7808,7 +7808,7 @@ async fn drop_role_if_exists_skips_only_a_missing_role() {
     .await;
     assert!(tag_of(&results[0]) == "DROP ROLE");
     for name in ["first_role", "second_role"] {
-        assert!(!crabka_pgcatalog::role_exists(engine.catalog_kv(), name).expect("role lookup"));
+        assert!(!krabka_pgcatalog::role_exists(engine.catalog_kv(), name).expect("role lookup"));
     }
 }
 
@@ -7939,7 +7939,7 @@ async fn drop_user_after_rule_and_owner_cleanup_terminates() {
         )
         .await
         .expect("drop user after the rule cleanup");
-    assert!(!crabka_pgcatalog::role_exists(engine.catalog_kv(), "rule_user").expect("role lookup"));
+    assert!(!krabka_pgcatalog::role_exists(engine.catalog_kv(), "rule_user").expect("role lookup"));
 }
 
 #[tokio::test]
@@ -9248,7 +9248,7 @@ async fn describe_select_returns_field_types_without_executing() {
         .expect("describe");
     assert_eq!(
         fields.iter().map(|f| f.type_oid).collect::<Vec<_>>(),
-        vec![crabka_pgtypes::oids::INT4, crabka_pgtypes::oids::TEXT]
+        vec![krabka_pgtypes::oids::INT4, krabka_pgtypes::oids::TEXT]
     );
 }
 
@@ -9288,7 +9288,7 @@ async fn describe_set_op_unifies_branch_types() {
         .expect("describe");
     assert_eq!(fields.len(), 1);
     assert_eq!(fields[0].name, "x");
-    assert_eq!(fields[0].type_oid, crabka_pgtypes::ColumnType::Int8.oid());
+    assert_eq!(fields[0].type_oid, krabka_pgtypes::ColumnType::Int8.oid());
 }
 
 #[tokio::test]
@@ -9367,15 +9367,15 @@ async fn for_update_in_txn_then_commit_releases() {
 fn eval_plan_qual_settled_global_sees_committed_cross_range_version() {
     use std::sync::Arc;
 
-    use crabka_pgcatalog::{Column, Table};
-    use crabka_pgkv::{Kv, MemKv};
-    use crabka_pgmvcc::{
+    use krabka_pgcatalog::{Column, Table};
+    use krabka_pgkv::{Kv, MemKv};
+    use krabka_pgmvcc::{
         clog::{XidStatus, put_op},
         version::{encode_tuple, version_key_xid},
         visibility::Snapshot,
         xid::{FIRST_NORMAL_XID, GLOBAL_XID_BASE, INVALID_XID},
     };
-    use crabka_pgtypes::{ColumnType, Datum};
+    use krabka_pgtypes::{ColumnType, Datum};
 
     use super::eval_plan_qual;
 
@@ -9395,7 +9395,7 @@ fn eval_plan_qual_settled_global_sees_committed_cross_range_version() {
     // Table id 1, single int4 column "val".
     let table = Table {
         id: 1,
-        owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+        owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
         name: RelationName::public("t"),
         columns: vec![Column::new("val", ColumnType::Int4)],
         sharded: false,
@@ -9410,13 +9410,13 @@ fn eval_plan_qual_settled_global_sees_committed_cross_range_version() {
 
     // ── write two versions of row R ──────────────────────────────────────────
     // v1: created by x0, deleted (xmax) by la — value 100 (the old row)
-    kv.write_batch(&[crabka_pgkv::WriteOp::Put {
+    kv.write_batch(&[krabka_pgkv::WriteOp::Put {
         key: version_key_xid(table.id, rowid, x0),
         value: encode_tuple(x0, la, &[Datum::Int4(100)]),
     }])
     .expect("write v1");
     // v2: created by la, live (xmax=INVALID_XID) — value 70 (the updated row)
-    kv.write_batch(&[crabka_pgkv::WriteOp::Put {
+    kv.write_batch(&[krabka_pgkv::WriteOp::Put {
         key: version_key_xid(table.id, rowid, la),
         value: encode_tuple(la, INVALID_XID, &[Datum::Int4(70)]),
     }])
@@ -9450,7 +9450,7 @@ fn eval_plan_qual_settled_global_sees_committed_cross_range_version() {
     // meaning satisfies_mvcc will ask the clog for la → Prepared(g1) →
     // settled_global → Committed → v2 visible. Correct.
     let procarray = crate::procarray::ProcArray::open(
-        Arc::clone(&kv) as Arc<dyn crabka_pgkv::Kv>,
+        Arc::clone(&kv) as Arc<dyn krabka_pgkv::Kv>,
         crate::PersistMode::Durable,
     )
     .expect("procarray open");
@@ -9545,19 +9545,19 @@ fn eval_plan_qual_settled_global_sees_committed_cross_range_version() {
 fn eval_plan_qual_hides_own_current_command_delete() {
     use std::sync::Arc;
 
-    use crabka_pgcatalog::{Column, Table};
-    use crabka_pgkv::{Kv, MemKv};
-    use crabka_pgmvcc::{
+    use krabka_pgcatalog::{Column, Table};
+    use krabka_pgkv::{Kv, MemKv};
+    use krabka_pgmvcc::{
         clog::{XidStatus, put_op},
         version::{encode_tuple_with_command_ids, version_key_xid},
     };
-    use crabka_pgtypes::{ColumnType, Datum};
+    use krabka_pgtypes::{ColumnType, Datum};
 
     use super::eval_plan_qual;
 
     let kv = Arc::new(MemKv::new());
     let procarray = crate::procarray::ProcArray::open(
-        Arc::clone(&kv) as Arc<dyn crabka_pgkv::Kv>,
+        Arc::clone(&kv) as Arc<dyn krabka_pgkv::Kv>,
         crate::PersistMode::Durable,
     )
     .expect("procarray open");
@@ -9566,7 +9566,7 @@ fn eval_plan_qual_hides_own_current_command_delete() {
     procarray.finish(original);
     let table = Table {
         id: 1,
-        owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+        owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
         name: RelationName::public("t"),
         columns: vec![Column::new("val", ColumnType::Int4)],
         sharded: false,
@@ -9578,11 +9578,11 @@ fn eval_plan_qual_hides_own_current_command_delete() {
         checks: Vec::new(),
     };
     kv.write_batch(&[
-        crabka_pgkv::WriteOp::Put {
+        krabka_pgkv::WriteOp::Put {
             key: version_key_xid(table.id, 1, original),
             value: encode_tuple_with_command_ids(original, writer, 0, 0, &[Datum::Int4(42)]),
         },
-        crabka_pgkv::WriteOp::Put {
+        krabka_pgkv::WriteOp::Put {
             key: version_key_xid(table.id, 2, original),
             value: encode_tuple_with_command_ids(original, 0, 0, 0, &[Datum::Int4(7)]),
         },
@@ -9619,19 +9619,19 @@ fn eval_plan_qual_hides_own_current_command_delete() {
 fn eval_plan_qual_restarts_only_for_a_newly_committed_change() {
     use std::sync::Arc;
 
-    use crabka_pgcatalog::{Column, Table};
-    use crabka_pgkv::{Kv, MemKv};
-    use crabka_pgmvcc::{
+    use krabka_pgcatalog::{Column, Table};
+    use krabka_pgkv::{Kv, MemKv};
+    use krabka_pgmvcc::{
         clog::{XidStatus, put_op},
         version::{encode_tuple, version_key_xid},
     };
-    use crabka_pgtypes::{ColumnType, Datum};
+    use krabka_pgtypes::{ColumnType, Datum};
 
     use super::eval_plan_qual;
 
     let kv = Arc::new(MemKv::new());
     let procarray = crate::procarray::ProcArray::open(
-        Arc::clone(&kv) as Arc<dyn crabka_pgkv::Kv>,
+        Arc::clone(&kv) as Arc<dyn krabka_pgkv::Kv>,
         crate::PersistMode::Durable,
     )
     .expect("procarray open");
@@ -9644,7 +9644,7 @@ fn eval_plan_qual_restarts_only_for_a_newly_committed_change() {
     let pending = procarray.begin_write().expect("pending xid");
     let table = Table {
         id: 1,
-        owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+        owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
         name: RelationName::public("t"),
         columns: vec![Column::new("val", ColumnType::Int4)],
         sharded: false,
@@ -9656,11 +9656,11 @@ fn eval_plan_qual_restarts_only_for_a_newly_committed_change() {
         checks: Vec::new(),
     };
     kv.write_batch(&[
-        crabka_pgkv::WriteOp::Put {
+        krabka_pgkv::WriteOp::Put {
             key: version_key_xid(table.id, 1, original),
             value: encode_tuple(original, completed, &[Datum::Int4(1)]),
         },
-        crabka_pgkv::WriteOp::Put {
+        krabka_pgkv::WriteOp::Put {
             key: version_key_xid(table.id, 2, original),
             value: encode_tuple(original, pending, &[Datum::Int4(2)]),
         },
@@ -9702,13 +9702,13 @@ fn eval_plan_qual_restarts_only_for_a_newly_committed_change() {
 fn find_visible_one_returns_committed_reattempt_over_aborted_shadow() {
     use std::sync::Arc;
 
-    use crabka_pgkv::{Kv, MemKv};
-    use crabka_pgmvcc::{
+    use krabka_pgkv::{Kv, MemKv};
+    use krabka_pgmvcc::{
         clog::{XidStatus, put_op},
         visibility::Snapshot,
         xid::{GLOBAL_XID_BASE, INVALID_XID},
     };
-    use crabka_pgtypes::Datum;
+    use krabka_pgtypes::Datum;
 
     use super::{find_visible_one, global_status};
 
@@ -9787,13 +9787,13 @@ fn find_visible_one_returns_committed_reattempt_over_aborted_shadow() {
 fn find_visible_one_orders_by_xmin_and_flags_multiple_live() {
     use std::sync::Arc;
 
-    use crabka_pgkv::{Kv, MemKv};
-    use crabka_pgmvcc::{
+    use krabka_pgkv::{Kv, MemKv};
+    use krabka_pgmvcc::{
         clog::{XidStatus, put_op},
         visibility::Snapshot,
         xid::INVALID_XID,
     };
-    use crabka_pgtypes::Datum;
+    use krabka_pgtypes::Datum;
 
     use super::find_visible_one;
 
@@ -9838,9 +9838,9 @@ fn find_visible_one_orders_by_xmin_and_flags_multiple_live() {
 mod pushdown {
     use std::sync::{Arc, Mutex};
 
-    use crabka_pgcatalog::{ForeignServer, Table, UserMapping};
-    use crabka_pgtypes::Datum;
-    use crabka_pgwire::engine::{Engine, QueryResult, Session};
+    use krabka_pgcatalog::{ForeignServer, Table, UserMapping};
+    use krabka_pgtypes::Datum;
+    use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
     use crate::{
         SqlEngine,
@@ -9853,7 +9853,7 @@ mod pushdown {
     /// Parse `where_sql` into a WHERE [`Expr`] and run it through
     /// `extract_scan_bounds`. The argument is the predicate text only.
     fn bounds_of(where_sql: &str) -> ScanBounds {
-        let expr = crabka_pgparser::parser::parse_expr_for_test(where_sql)
+        let expr = krabka_pgparser::parser::parse_expr_for_test(where_sql)
             .expect("the WHERE predicate parses");
         extract_scan_bounds(Some(&expr))
     }
@@ -10002,7 +10002,7 @@ mod pushdown {
         (engine, seen)
     }
 
-    fn rows_of(r: &QueryResult) -> &Vec<Vec<Option<crabka_pgwire::engine::Cell>>> {
+    fn rows_of(r: &QueryResult) -> &Vec<Vec<Option<krabka_pgwire::engine::Cell>>> {
         match r {
             QueryResult::Rows { rows, .. } => rows,
             other => panic!("expected Rows, got {other:?}"),
@@ -10074,21 +10074,21 @@ mod pushdown {
 }
 
 /// `CREATE USER MAPPING FOR CURRENT_USER` must be findable via
-/// `crabka_pgcatalog::get_user_mapping(kv, current_user, server)`, rather than
+/// `krabka_pgcatalog::get_user_mapping(kv, current_user, server)`, rather than
 /// under the literal `"current_user"` or the unrelated `PUBLIC` pseudo-role.
 #[test]
 fn create_user_mapping_for_current_user_stored_under_current_role() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
-    let mut owner_attributes = crabka_pgcatalog::RoleAttributes::default();
-    owner_attributes.set(crabka_pgcatalog::RoleAttribute::Superuser, true);
+    let mut owner_attributes = krabka_pgcatalog::RoleAttributes::default();
+    owner_attributes.set(krabka_pgcatalog::RoleAttribute::Superuser, true);
     kv.write_batch(
-        &crabka_pgcatalog::create_role_ops(&kv, "owner", true, owner_attributes)
+        &krabka_pgcatalog::create_role_ops(&kv, "owner", true, owner_attributes)
             .expect("create superuser role"),
     )
     .expect("store superuser role");
-    crabka_pgcatalog::create_role(&kv, "alice", true).expect("create role");
+    krabka_pgcatalog::create_role(&kv, "alice", true).expect("create role");
     let owner = super::ForeignCtx {
         current_user: "owner",
         session_user: "owner",
@@ -10099,7 +10099,7 @@ fn create_user_mapping_for_current_user_stored_under_current_role() {
         "CREATE SERVER s FOREIGN DATA WRAPPER w",
         "GRANT USAGE ON FOREIGN SERVER s TO alice",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10107,7 +10107,7 @@ fn create_user_mapping_for_current_user_stored_under_current_role() {
         let (_, ops) = super::execute_ddl(&kv, &stmt, owner, true).expect(sql);
         kv.write_batch(&ops).expect("apply setup DDL");
     }
-    let stmt = crabka_pgparser::parser::parse(
+    let stmt = krabka_pgparser::parser::parse(
         "CREATE USER MAPPING FOR CURRENT_USER SERVER s OPTIONS (username 'u', password 'p')",
     )
     .expect("parse")
@@ -10123,12 +10123,12 @@ fn create_user_mapping_for_current_user_stored_under_current_role() {
     };
     let (result, ops) = super::execute_ddl(&kv, &stmt, fctx, true).expect("execute_ddl ok");
     assert!(
-        matches!(result, crabka_pgwire::engine::QueryResult::Command { tag } if tag == "CREATE USER MAPPING"),
+        matches!(result, krabka_pgwire::engine::QueryResult::Command { tag } if tag == "CREATE USER MAPPING"),
         "expected CREATE USER MAPPING command tag"
     );
     kv.write_batch(&ops).expect("apply DDL ops");
 
-    let mapping = crabka_pgcatalog::get_user_mapping(&kv, "alice", "s")
+    let mapping = krabka_pgcatalog::get_user_mapping(&kv, "alice", "s")
         .expect("FOR CURRENT_USER mapping must be stored under the session role");
     assert!(
         mapping.options.iter().any(|(k, _)| k == "username"),
@@ -10138,18 +10138,18 @@ fn create_user_mapping_for_current_user_stored_under_current_role() {
 
 #[test]
 fn user_mapping_requires_server_ownership_or_usage_for_the_mapped_role() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
-    let mut owner_attributes = crabka_pgcatalog::RoleAttributes::default();
-    owner_attributes.set(crabka_pgcatalog::RoleAttribute::Superuser, true);
+    let mut owner_attributes = krabka_pgcatalog::RoleAttributes::default();
+    owner_attributes.set(krabka_pgcatalog::RoleAttribute::Superuser, true);
     kv.write_batch(
-        &crabka_pgcatalog::create_role_ops(&kv, "owner", true, owner_attributes)
+        &krabka_pgcatalog::create_role_ops(&kv, "owner", true, owner_attributes)
             .expect("create superuser role"),
     )
     .expect("store superuser role");
     for role in ["reader", "other"] {
-        crabka_pgcatalog::create_role(&kv, role, true).expect("create role");
+        krabka_pgcatalog::create_role(&kv, role, true).expect("create role");
     }
     let owner = super::ForeignCtx {
         current_user: "owner",
@@ -10166,7 +10166,7 @@ fn user_mapping_requires_server_ownership_or_usage_for_the_mapped_role() {
         "CREATE SERVER s FOREIGN DATA WRAPPER w",
         "GRANT USAGE ON FOREIGN SERVER s TO reader",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10174,7 +10174,7 @@ fn user_mapping_requires_server_ownership_or_usage_for_the_mapped_role() {
         let (_, ops) = super::execute_ddl(&kv, &stmt, owner, true).expect(sql);
         kv.write_batch(&ops).expect("apply setup DDL");
     }
-    let own = crabka_pgparser::parser::parse("CREATE USER MAPPING FOR reader SERVER s")
+    let own = krabka_pgparser::parser::parse("CREATE USER MAPPING FOR reader SERVER s")
         .expect("parse own mapping")
         .into_iter()
         .next()
@@ -10187,7 +10187,7 @@ fn user_mapping_requires_server_ownership_or_usage_for_the_mapped_role() {
         "ALTER USER MAPPING FOR other SERVER s OPTIONS (SET username 'other')",
         "DROP USER MAPPING FOR other SERVER s",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10199,7 +10199,7 @@ fn user_mapping_requires_server_ownership_or_usage_for_the_mapped_role() {
 
 #[test]
 fn create_fdw_objects_if_not_exists_skip_duplicates() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
     for (sql, creates) in [
@@ -10227,7 +10227,7 @@ fn create_fdw_objects_if_not_exists_skip_duplicates() {
             false,
         ),
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10241,11 +10241,11 @@ fn create_fdw_objects_if_not_exists_skip_duplicates() {
 
 #[test]
 fn creating_an_fdw_requires_a_superuser() {
-    use crabka_pgkv::MemKv;
+    use krabka_pgkv::MemKv;
 
     let kv = MemKv::new();
-    crabka_pgcatalog::create_role(&kv, "alice", true).expect("create role");
-    let stmt = crabka_pgparser::parser::parse("CREATE FOREIGN DATA WRAPPER w")
+    krabka_pgcatalog::create_role(&kv, "alice", true).expect("create role");
+    let stmt = krabka_pgparser::parser::parse("CREATE FOREIGN DATA WRAPPER w")
         .expect("parse")
         .into_iter()
         .next()
@@ -10263,19 +10263,19 @@ fn creating_an_fdw_requires_a_superuser() {
 
 #[test]
 fn foreign_owner_changes_enforce_fdw_and_server_rules() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
-    let mut superuser = crabka_pgcatalog::RoleAttributes::default();
-    superuser.set(crabka_pgcatalog::RoleAttribute::Superuser, true);
+    let mut superuser = krabka_pgcatalog::RoleAttributes::default();
+    superuser.set(krabka_pgcatalog::RoleAttribute::Superuser, true);
     for role in ["owner", "other_super"] {
         kv.write_batch(
-            &crabka_pgcatalog::create_role_ops(&kv, role, true, superuser)
+            &krabka_pgcatalog::create_role_ops(&kv, role, true, superuser)
                 .expect("create superuser role"),
         )
         .expect("store superuser role");
     }
-    crabka_pgcatalog::create_role(&kv, "alice", true).expect("create role");
+    krabka_pgcatalog::create_role(&kv, "alice", true).expect("create role");
     let owner = super::ForeignCtx {
         current_user: "owner",
         session_user: "owner",
@@ -10285,7 +10285,7 @@ fn foreign_owner_changes_enforce_fdw_and_server_rules() {
         "CREATE FOREIGN DATA WRAPPER w",
         "CREATE SERVER s FOREIGN DATA WRAPPER w",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10295,7 +10295,7 @@ fn foreign_owner_changes_enforce_fdw_and_server_rules() {
     }
 
     let alter = |sql| {
-        crabka_pgparser::parser::parse(sql)
+        krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10323,7 +10323,7 @@ fn foreign_owner_changes_enforce_fdw_and_server_rules() {
     .expect("superuser FDW owner is valid");
     kv.write_batch(&ops).expect("apply FDW owner change");
     assert_eq!(
-        crabka_pgcatalog::get_fdw(&kv, "w").expect("FDW").owner,
+        krabka_pgcatalog::get_fdw(&kv, "w").expect("FDW").owner,
         "other_super"
     );
 
@@ -10331,7 +10331,7 @@ fn foreign_owner_changes_enforce_fdw_and_server_rules() {
         .expect("superuser can transfer server ownership");
     kv.write_batch(&ops).expect("apply server owner change");
     assert_eq!(
-        crabka_pgcatalog::get_server(&kv, "s")
+        krabka_pgcatalog::get_server(&kv, "s")
             .expect("server")
             .owner,
         "alice"
@@ -10394,18 +10394,18 @@ fn foreign_owner_changes_enforce_fdw_and_server_rules() {
 
 #[test]
 fn foreign_usage_is_required_to_create_servers_and_foreign_tables() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
-    let mut owner_attributes = crabka_pgcatalog::RoleAttributes::default();
-    owner_attributes.set(crabka_pgcatalog::RoleAttribute::Superuser, true);
+    let mut owner_attributes = krabka_pgcatalog::RoleAttributes::default();
+    owner_attributes.set(krabka_pgcatalog::RoleAttribute::Superuser, true);
     kv.write_batch(
-        &crabka_pgcatalog::create_role_ops(&kv, "owner", true, owner_attributes)
+        &krabka_pgcatalog::create_role_ops(&kv, "owner", true, owner_attributes)
             .expect("create superuser role"),
     )
     .expect("store superuser role");
     for role in ["reader", "delegate"] {
-        crabka_pgcatalog::create_role(&kv, role, true).expect("create role");
+        krabka_pgcatalog::create_role(&kv, role, true).expect("create role");
     }
     let owner = super::ForeignCtx {
         current_user: "owner",
@@ -10421,7 +10421,7 @@ fn foreign_usage_is_required_to_create_servers_and_foreign_tables() {
         "CREATE FOREIGN DATA WRAPPER w",
         "CREATE SERVER s FOREIGN DATA WRAPPER w",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10433,7 +10433,7 @@ fn foreign_usage_is_required_to_create_servers_and_foreign_tables() {
         "CREATE SERVER reader_s FOREIGN DATA WRAPPER w",
         "CREATE FOREIGN TABLE reader_t (id int4) SERVER s",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10442,10 +10442,10 @@ fn foreign_usage_is_required_to_create_servers_and_foreign_tables() {
         assert!(matches!(error, super::ExecError::Remote(ref error) if error.code == "42501"));
     }
     for (target, name) in [
-        (crabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper, "w"),
-        (crabka_pgcatalog::ForeignPrivilegeTarget::Server, "s"),
+        (krabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper, "w"),
+        (krabka_pgcatalog::ForeignPrivilegeTarget::Server, "s"),
     ] {
-        let ops = crabka_pgcatalog::grant_foreign_privileges_with_option_ops(
+        let ops = krabka_pgcatalog::grant_foreign_privileges_with_option_ops(
             &kv,
             target,
             &[name.into()],
@@ -10460,7 +10460,7 @@ fn foreign_usage_is_required_to_create_servers_and_foreign_tables() {
         "CREATE SERVER reader_s FOREIGN DATA WRAPPER w",
         "CREATE FOREIGN TABLE reader_t (id int4) SERVER s",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10472,7 +10472,7 @@ fn foreign_usage_is_required_to_create_servers_and_foreign_tables() {
         "GRANT USAGE ON FOREIGN DATA WRAPPER w TO delegate",
         "GRANT USAGE ON FOREIGN SERVER s TO delegate",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10481,11 +10481,11 @@ fn foreign_usage_is_required_to_create_servers_and_foreign_tables() {
         kv.write_batch(&ops).expect("delegate usage grant");
     }
     for (target, name) in [
-        (crabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper, "w"),
-        (crabka_pgcatalog::ForeignPrivilegeTarget::Server, "s"),
+        (krabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper, "w"),
+        (krabka_pgcatalog::ForeignPrivilegeTarget::Server, "s"),
     ] {
         assert!(
-            crabka_pgcatalog::foreign_privilege_is_granted(&kv, target, name, "delegate", "USAGE")
+            krabka_pgcatalog::foreign_privilege_is_granted(&kv, target, name, "delegate", "USAGE")
                 .expect("delegate grant")
         );
     }
@@ -10493,17 +10493,17 @@ fn foreign_usage_is_required_to_create_servers_and_foreign_tables() {
 
 #[test]
 fn foreign_privilege_revoke_reports_and_cascades_delegated_grants() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
-    let mut attributes = crabka_pgcatalog::RoleAttributes::default();
-    attributes.set(crabka_pgcatalog::RoleAttribute::Superuser, true);
+    let mut attributes = krabka_pgcatalog::RoleAttributes::default();
+    attributes.set(krabka_pgcatalog::RoleAttribute::Superuser, true);
     kv.write_batch(
-        &crabka_pgcatalog::create_role_ops(&kv, "owner", true, attributes).expect("create owner"),
+        &krabka_pgcatalog::create_role_ops(&kv, "owner", true, attributes).expect("create owner"),
     )
     .expect("store owner");
     for role in ["delegate", "reader"] {
-        crabka_pgcatalog::create_role(&kv, role, true).expect("create role");
+        krabka_pgcatalog::create_role(&kv, role, true).expect("create role");
     }
     let owner = super::ForeignCtx {
         current_user: "owner",
@@ -10516,7 +10516,7 @@ fn foreign_privilege_revoke_reports_and_cascades_delegated_grants() {
         ..super::ForeignCtx::none()
     };
     let execute = |sql: &str, fctx| {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10553,9 +10553,9 @@ fn foreign_privilege_revoke_reports_and_cascades_delegated_grants() {
     kv.write_batch(&ops).expect("apply cascade revoke");
     for grantee in ["delegate", "reader"] {
         assert!(
-            !crabka_pgcatalog::foreign_privilege_is_granted(
+            !krabka_pgcatalog::foreign_privilege_is_granted(
                 &kv,
-                crabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper,
+                krabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper,
                 "w",
                 grantee,
                 "USAGE",
@@ -10567,7 +10567,7 @@ fn foreign_privilege_revoke_reports_and_cascades_delegated_grants() {
 
 #[test]
 fn foreign_usage_lookup_names_the_missing_object() {
-    use crabka_pgkv::MemKv;
+    use krabka_pgkv::MemKv;
 
     let kv = MemKv::new();
     for (sql, message) in [
@@ -10592,7 +10592,7 @@ fn foreign_usage_lookup_names_the_missing_object() {
             "server \"missing_server\" does not exist",
         ),
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10606,7 +10606,7 @@ fn foreign_usage_lookup_names_the_missing_object() {
 
 #[test]
 fn duplicate_foreign_objects_name_their_kind() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
     for (sql, expected_error) in [
@@ -10621,7 +10621,7 @@ fn duplicate_foreign_objects_name_their_kind() {
             Some("server \"s\" already exists"),
         ),
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10644,17 +10644,17 @@ fn duplicate_foreign_objects_name_their_kind() {
 
 #[test]
 fn foreign_object_usage_grants_follow_rename_and_require_the_owner() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
-    let mut alice_attributes = crabka_pgcatalog::RoleAttributes::default();
-    alice_attributes.set(crabka_pgcatalog::RoleAttribute::Superuser, true);
+    let mut alice_attributes = krabka_pgcatalog::RoleAttributes::default();
+    alice_attributes.set(krabka_pgcatalog::RoleAttribute::Superuser, true);
     kv.write_batch(
-        &crabka_pgcatalog::create_role_ops(&kv, "alice", true, alice_attributes)
+        &krabka_pgcatalog::create_role_ops(&kv, "alice", true, alice_attributes)
             .expect("create superuser role"),
     )
     .expect("store superuser role");
-    crabka_pgcatalog::create_role(&kv, "reader", true).expect("create role");
+    krabka_pgcatalog::create_role(&kv, "reader", true).expect("create role");
     let owner = super::ForeignCtx {
         current_user: "alice",
         session_user: "alice",
@@ -10668,7 +10668,7 @@ fn foreign_object_usage_grants_follow_rename_and_require_the_owner() {
         "ALTER FOREIGN DATA WRAPPER w RENAME TO renamed_w",
         "ALTER SERVER s RENAME TO renamed_s",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10677,9 +10677,9 @@ fn foreign_object_usage_grants_follow_rename_and_require_the_owner() {
         kv.write_batch(&ops).expect("apply DDL ops");
     }
     assert!(
-        crabka_pgcatalog::foreign_privilege_is_granted(
+        krabka_pgcatalog::foreign_privilege_is_granted(
             &kv,
-            crabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper,
+            krabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper,
             "renamed_w",
             "reader",
             "USAGE",
@@ -10687,9 +10687,9 @@ fn foreign_object_usage_grants_follow_rename_and_require_the_owner() {
         .expect("fdw grant survives rename")
     );
     assert!(
-        crabka_pgcatalog::foreign_privilege_is_granted(
+        krabka_pgcatalog::foreign_privilege_is_granted(
             &kv,
-            crabka_pgcatalog::ForeignPrivilegeTarget::Server,
+            krabka_pgcatalog::ForeignPrivilegeTarget::Server,
             "renamed_s",
             "reader",
             "USAGE",
@@ -10698,7 +10698,7 @@ fn foreign_object_usage_grants_follow_rename_and_require_the_owner() {
     );
 
     let stmt =
-        crabka_pgparser::parser::parse("REVOKE USAGE ON FOREIGN SERVER renamed_s FROM reader")
+        krabka_pgparser::parser::parse("REVOKE USAGE ON FOREIGN SERVER renamed_s FROM reader")
             .expect("parse revoke")
             .into_iter()
             .next()
@@ -10714,7 +10714,7 @@ fn foreign_object_usage_grants_follow_rename_and_require_the_owner() {
         "ALTER SERVER renamed_s OPTIONS (ADD x '1')",
         "DROP SERVER renamed_s",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10727,7 +10727,7 @@ fn foreign_object_usage_grants_follow_rename_and_require_the_owner() {
     assert!(matches!(error, super::ExecError::Remote(ref error) if error.code == "42501"));
 
     let stmt =
-        crabka_pgparser::parser::parse("REVOKE USAGE ON FOREIGN SERVER renamed_s FROM reader")
+        krabka_pgparser::parser::parse("REVOKE USAGE ON FOREIGN SERVER renamed_s FROM reader")
             .expect("parse owner revoke")
             .into_iter()
             .next()
@@ -10735,9 +10735,9 @@ fn foreign_object_usage_grants_follow_rename_and_require_the_owner() {
     let (_result, ops) = super::execute_ddl(&kv, &stmt, owner, true).expect("owner revoke");
     kv.write_batch(&ops).expect("apply owner revoke");
     assert!(
-        !crabka_pgcatalog::foreign_privilege_is_granted(
+        !krabka_pgcatalog::foreign_privilege_is_granted(
             &kv,
-            crabka_pgcatalog::ForeignPrivilegeTarget::Server,
+            krabka_pgcatalog::ForeignPrivilegeTarget::Server,
             "renamed_s",
             "reader",
             "USAGE",
@@ -10750,7 +10750,7 @@ fn foreign_object_usage_grants_follow_rename_and_require_the_owner() {
         "DROP SERVER renamed_s",
         "DROP FOREIGN DATA WRAPPER renamed_w",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10759,9 +10759,9 @@ fn foreign_object_usage_grants_follow_rename_and_require_the_owner() {
         kv.write_batch(&ops).expect("apply DDL ops");
     }
     assert!(
-        !crabka_pgcatalog::foreign_privilege_is_granted(
+        !krabka_pgcatalog::foreign_privilege_is_granted(
             &kv,
-            crabka_pgcatalog::ForeignPrivilegeTarget::Server,
+            krabka_pgcatalog::ForeignPrivilegeTarget::Server,
             "renamed_s",
             "reader",
             "USAGE",
@@ -10769,9 +10769,9 @@ fn foreign_object_usage_grants_follow_rename_and_require_the_owner() {
         .expect("server ACL is removed")
     );
     assert!(
-        !crabka_pgcatalog::foreign_privilege_is_granted(
+        !krabka_pgcatalog::foreign_privilege_is_granted(
             &kv,
-            crabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper,
+            krabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper,
             "renamed_w",
             "reader",
             "USAGE",
@@ -10782,7 +10782,7 @@ fn foreign_object_usage_grants_follow_rename_and_require_the_owner() {
 
 #[test]
 fn alter_foreign_options_update_catalog_records() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
     for sql in [
@@ -10795,7 +10795,7 @@ fn alter_foreign_options_update_catalog_records() {
         "CREATE USER MAPPING FOR PUBLIC SERVER s OPTIONS (username 'old')",
         "ALTER USER MAPPING FOR PUBLIC SERVER s OPTIONS (SET username 'new', ADD password 'secret')",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10805,8 +10805,8 @@ fn alter_foreign_options_update_catalog_records() {
         kv.write_batch(&ops).expect("apply DDL ops");
     }
     assert_eq!(
-        crabka_pgcatalog::get_fdw(&kv, "w").expect("fdw"),
-        crabka_pgcatalog::ForeignDataWrapper {
+        krabka_pgcatalog::get_fdw(&kv, "w").expect("fdw"),
+        krabka_pgcatalog::ForeignDataWrapper {
             oid: 330_000,
             name: "w".into(),
             owner: "postgres".into(),
@@ -10819,8 +10819,8 @@ fn alter_foreign_options_update_catalog_records() {
         }
     );
     assert_eq!(
-        crabka_pgcatalog::get_server(&kv, "s").expect("server"),
-        crabka_pgcatalog::ForeignServer {
+        krabka_pgcatalog::get_server(&kv, "s").expect("server"),
+        krabka_pgcatalog::ForeignServer {
             oid: 330_001,
             name: "s".into(),
             owner: "postgres".into(),
@@ -10834,7 +10834,7 @@ fn alter_foreign_options_update_catalog_records() {
         }
     );
     assert_eq!(
-        crabka_pgcatalog::get_user_mapping(&kv, "public", "s")
+        krabka_pgcatalog::get_user_mapping(&kv, "public", "s")
             .expect("mapping")
             .options,
         vec![
@@ -10846,7 +10846,7 @@ fn alter_foreign_options_update_catalog_records() {
 
 #[test]
 fn fdw_support_routines_must_have_postgresql_signatures() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
     for sql in [
@@ -10854,7 +10854,7 @@ fn fdw_support_routines_must_have_postgresql_signatures() {
         "CREATE FUNCTION bad_handler() RETURNS int LANGUAGE sql RETURN 1",
         "CREATE FUNCTION bad_validator(text[], oid) RETURNS int LANGUAGE sql RETURN 1",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10872,7 +10872,7 @@ fn fdw_support_routines_must_have_postgresql_signatures() {
             "function bad_validator must return type void",
         ),
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10887,7 +10887,7 @@ fn fdw_support_routines_must_have_postgresql_signatures() {
         "CREATE FOREIGN DATA WRAPPER good HANDLER good_handler VALIDATOR postgresql_fdw_validator",
         "ALTER FOREIGN DATA WRAPPER good HANDLER good_handler VALIDATOR postgresql_fdw_validator",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10899,7 +10899,7 @@ fn fdw_support_routines_must_have_postgresql_signatures() {
 
 #[test]
 fn fdw_support_routines_block_drops_and_cascade_with_their_servers() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
     for sql in [
@@ -10907,12 +10907,12 @@ fn fdw_support_routines_block_drops_and_cascade_with_their_servers() {
         "CREATE FOREIGN DATA WRAPPER w HANDLER handler",
         "CREATE SERVER s FOREIGN DATA WRAPPER w",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql).expect(sql).remove(0);
+        let stmt = krabka_pgparser::parser::parse(sql).expect(sql).remove(0);
         let (_, ops) = super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true).expect(sql);
         kv.write_batch(&ops).expect("apply DDL ops");
     }
 
-    let drop_handler = crabka_pgparser::parser::parse("DROP FUNCTION handler()")
+    let drop_handler = krabka_pgparser::parser::parse("DROP FUNCTION handler()")
         .expect("parse drop")
         .remove(0);
     let error = super::execute_ddl(&kv, &drop_handler, super::ForeignCtx::none(), true)
@@ -10925,19 +10925,19 @@ fn fdw_support_routines_block_drops_and_cascade_with_their_servers() {
             && error.diagnostics.as_ref().and_then(|diagnostics| diagnostics.hint.as_deref())
                 == Some("Use DROP ... CASCADE to drop the dependent objects too.")));
 
-    let cascade = crabka_pgparser::parser::parse("DROP FUNCTION handler() CASCADE")
+    let cascade = krabka_pgparser::parser::parse("DROP FUNCTION handler() CASCADE")
         .expect("parse cascade")
         .remove(0);
     let (_, ops) =
         super::execute_ddl(&kv, &cascade, super::ForeignCtx::none(), true).expect("cascade drop");
     kv.write_batch(&ops).expect("apply cascade drop");
-    assert!(crabka_pgcatalog::get_fdw(&kv, "w").is_err());
-    assert!(crabka_pgcatalog::get_server(&kv, "s").is_err());
+    assert!(krabka_pgcatalog::get_fdw(&kv, "w").is_err());
+    assert!(krabka_pgcatalog::get_server(&kv, "s").is_err());
 }
 
 #[test]
 fn postgresql_fdw_validator_rejects_invalid_options() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
     for sql in [
@@ -10945,7 +10945,7 @@ fn postgresql_fdw_validator_rejects_invalid_options() {
         "CREATE SERVER good FOREIGN DATA WRAPPER postgresql OPTIONS (host 'localhost', dbname 'db')",
         "CREATE USER MAPPING FOR PUBLIC SERVER good OPTIONS (user 'reader')",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql).expect(sql).remove(0);
+        let stmt = krabka_pgparser::parser::parse(sql).expect(sql).remove(0);
         let (_, ops) = super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true).expect(sql);
         kv.write_batch(&ops).expect("apply DDL ops");
     }
@@ -10954,7 +10954,7 @@ fn postgresql_fdw_validator_rejects_invalid_options() {
         "CREATE SERVER bad FOREIGN DATA WRAPPER postgresql OPTIONS (bad 'x')",
         "ALTER SERVER good OPTIONS (bad 'x')",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql).expect(sql).remove(0);
+        let stmt = krabka_pgparser::parser::parse(sql).expect(sql).remove(0);
         let error = super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true)
             .expect_err("invalid option");
         assert!(
@@ -10965,7 +10965,7 @@ fn postgresql_fdw_validator_rejects_invalid_options() {
         "CREATE USER MAPPING FOR current_user SERVER good OPTIONS (username 'reader')",
         "ALTER USER MAPPING FOR PUBLIC SERVER good OPTIONS (SET username 'reader')",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql).expect(sql).remove(0);
+        let stmt = krabka_pgparser::parser::parse(sql).expect(sql).remove(0);
         let error = super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true)
             .expect_err("invalid user mapping option");
         assert!(matches!(error, super::ExecError::Remote(ref error)
@@ -10978,8 +10978,8 @@ fn postgresql_fdw_validator_rejects_invalid_options() {
 
 #[test]
 fn alter_fdw_rename_updates_servers_and_comments() {
-    use crabka_pgcatalog::CommentObject;
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgcatalog::CommentObject;
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
     for sql in [
@@ -10988,7 +10988,7 @@ fn alter_fdw_rename_updates_servers_and_comments() {
         "COMMENT ON FOREIGN DATA WRAPPER w IS 'a wrapper'",
         "ALTER FOREIGN DATA WRAPPER w RENAME TO renamed",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -10997,16 +10997,16 @@ fn alter_fdw_rename_updates_servers_and_comments() {
             super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true).expect(sql);
         kv.write_batch(&ops).expect("apply DDL ops");
     }
-    assert!(crabka_pgcatalog::get_fdw(&kv, "w").is_err());
-    assert!(crabka_pgcatalog::get_fdw(&kv, "renamed").is_ok());
+    assert!(krabka_pgcatalog::get_fdw(&kv, "w").is_err());
+    assert!(krabka_pgcatalog::get_fdw(&kv, "renamed").is_ok());
     assert_eq!(
-        crabka_pgcatalog::get_server(&kv, "s")
+        krabka_pgcatalog::get_server(&kv, "s")
             .expect("server")
             .wrapper,
         "renamed"
     );
     assert_eq!(
-        crabka_pgcatalog::get_comment(&kv, "foreign data wrapper", CommentObject::Named("renamed"))
+        krabka_pgcatalog::get_comment(&kv, "foreign data wrapper", CommentObject::Named("renamed"))
             .expect("comment"),
         Some("a wrapper".into())
     );
@@ -11014,8 +11014,8 @@ fn alter_fdw_rename_updates_servers_and_comments() {
 
 #[test]
 fn alter_server_rename_updates_mappings_tables_and_comments() {
-    use crabka_pgcatalog::CommentObject;
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgcatalog::CommentObject;
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
     for sql in [
@@ -11026,7 +11026,7 @@ fn alter_server_rename_updates_mappings_tables_and_comments() {
         "COMMENT ON SERVER s IS 'a server'",
         "ALTER SERVER s RENAME TO renamed",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -11035,12 +11035,12 @@ fn alter_server_rename_updates_mappings_tables_and_comments() {
             super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true).expect(sql);
         kv.write_batch(&ops).expect("apply DDL ops");
     }
-    assert!(crabka_pgcatalog::get_server(&kv, "s").is_err());
-    assert!(crabka_pgcatalog::get_server(&kv, "renamed").is_ok());
-    assert!(crabka_pgcatalog::get_user_mapping(&kv, "public", "s").is_err());
-    assert!(crabka_pgcatalog::get_user_mapping(&kv, "public", "renamed").is_ok());
+    assert!(krabka_pgcatalog::get_server(&kv, "s").is_err());
+    assert!(krabka_pgcatalog::get_server(&kv, "renamed").is_ok());
+    assert!(krabka_pgcatalog::get_user_mapping(&kv, "public", "s").is_err());
+    assert!(krabka_pgcatalog::get_user_mapping(&kv, "public", "renamed").is_ok());
     assert_eq!(
-        crabka_pgcatalog::get_table(&kv, &crabka_pgcatalog::RelationName::public("t"))
+        krabka_pgcatalog::get_table(&kv, &krabka_pgcatalog::RelationName::public("t"))
             .expect("foreign table")
             .foreign
             .expect("foreign metadata")
@@ -11048,7 +11048,7 @@ fn alter_server_rename_updates_mappings_tables_and_comments() {
         "renamed"
     );
     assert_eq!(
-        crabka_pgcatalog::get_comment(&kv, "server", CommentObject::Named("renamed"))
+        krabka_pgcatalog::get_comment(&kv, "server", CommentObject::Named("renamed"))
             .expect("comment"),
         Some("a server".into())
     );
@@ -11056,7 +11056,7 @@ fn alter_server_rename_updates_mappings_tables_and_comments() {
 
 #[test]
 fn drop_foreign_objects_restrict_or_cascade_dependents() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
     for sql in [
@@ -11065,7 +11065,7 @@ fn drop_foreign_objects_restrict_or_cascade_dependents() {
         "CREATE USER MAPPING FOR PUBLIC SERVER s",
         "CREATE FOREIGN TABLE t (id int4) SERVER s",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -11074,7 +11074,7 @@ fn drop_foreign_objects_restrict_or_cascade_dependents() {
             super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true).expect(sql);
         kv.write_batch(&ops).expect("apply DDL ops");
     }
-    let stmt = crabka_pgparser::parser::parse("DROP SERVER s")
+    let stmt = krabka_pgparser::parser::parse("DROP SERVER s")
         .expect("parse")
         .into_iter()
         .next()
@@ -11103,7 +11103,7 @@ fn drop_foreign_objects_restrict_or_cascade_dependents() {
             == Some("Use DROP ... CASCADE to drop the dependent objects too.")
     );
 
-    let stmt = crabka_pgparser::parser::parse("DROP FOREIGN DATA WRAPPER w CASCADE")
+    let stmt = krabka_pgparser::parser::parse("DROP FOREIGN DATA WRAPPER w CASCADE")
         .expect("parse")
         .into_iter()
         .next()
@@ -11111,17 +11111,17 @@ fn drop_foreign_objects_restrict_or_cascade_dependents() {
     let (_result, ops) =
         super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true).expect("cascade");
     kv.write_batch(&ops).expect("apply cascade ops");
-    assert!(crabka_pgcatalog::get_fdw(&kv, "w").is_err());
-    assert!(crabka_pgcatalog::get_server(&kv, "s").is_err());
-    assert!(crabka_pgcatalog::get_user_mapping(&kv, "public", "s").is_err());
+    assert!(krabka_pgcatalog::get_fdw(&kv, "w").is_err());
+    assert!(krabka_pgcatalog::get_server(&kv, "s").is_err());
+    assert!(krabka_pgcatalog::get_user_mapping(&kv, "public", "s").is_err());
     assert!(
-        crabka_pgcatalog::get_table(&kv, &crabka_pgcatalog::RelationName::public("t")).is_err()
+        krabka_pgcatalog::get_table(&kv, &krabka_pgcatalog::RelationName::public("t")).is_err()
     );
 }
 
 #[test]
 fn foreign_table_columns_keep_normal_qualifiers() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
     for sql in [
@@ -11129,7 +11129,7 @@ fn foreign_table_columns_keep_normal_qualifiers() {
         "CREATE SERVER s FOREIGN DATA WRAPPER w",
         "CREATE FOREIGN TABLE t (id int4 OPTIONS (remote_name 'remote_id') NOT NULL, value int4, CONSTRAINT valid_value CHECK (value > 0)) SERVER s",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -11138,7 +11138,7 @@ fn foreign_table_columns_keep_normal_qualifiers() {
             super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true).expect(sql);
         kv.write_batch(&ops).expect("apply DDL ops");
     }
-    let stmt = crabka_pgparser::parser::parse(
+    let stmt = krabka_pgparser::parser::parse(
         "ALTER FOREIGN TABLE t ALTER COLUMN id OPTIONS (SET remote_name 'id', ADD remote_type 'integer')",
     )
     .expect("alter foreign table")
@@ -11148,7 +11148,7 @@ fn foreign_table_columns_keep_normal_qualifiers() {
     let (_result, ops) = super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true)
         .expect("alter foreign table");
     kv.write_batch(&ops).expect("apply alter ops");
-    let stmt = crabka_pgparser::parser::parse(
+    let stmt = krabka_pgparser::parser::parse(
         "ALTER FOREIGN TABLE t ADD COLUMN remote int4 OPTIONS (remote_name 'remote_id')",
     )
     .expect("add foreign column options")
@@ -11158,7 +11158,7 @@ fn foreign_table_columns_keep_normal_qualifiers() {
     let (_result, ops) = super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true)
         .expect("add foreign column options");
     kv.write_batch(&ops).expect("apply added column");
-    let stmt = crabka_pgparser::parser::parse(
+    let stmt = krabka_pgparser::parser::parse(
         "ALTER FOREIGN TABLE t OPTIONS (ADD remote_topic 'orders', ADD format 'json')",
     )
     .expect("alter foreign table options")
@@ -11168,7 +11168,7 @@ fn foreign_table_columns_keep_normal_qualifiers() {
     let (_result, ops) = super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true)
         .expect("alter foreign table options");
     kv.write_batch(&ops).expect("apply foreign table options");
-    let stmt = crabka_pgparser::parser::parse(
+    let stmt = krabka_pgparser::parser::parse(
         "ALTER FOREIGN TABLE t ALTER COLUMN id SET STATISTICS 10000",
     )
     .expect("set statistics")
@@ -11178,7 +11178,7 @@ fn foreign_table_columns_keep_normal_qualifiers() {
     let (_result, ops) =
         super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true).expect("set statistics");
     kv.write_batch(&ops).expect("apply statistics target");
-    let stmt = crabka_pgparser::parser::parse(
+    let stmt = krabka_pgparser::parser::parse(
         "ALTER FOREIGN TABLE t ALTER COLUMN value SET STORAGE PLAIN",
     )
     .expect("set storage")
@@ -11188,7 +11188,7 @@ fn foreign_table_columns_keep_normal_qualifiers() {
     let (_result, ops) =
         super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true).expect("set storage");
     kv.write_batch(&ops).expect("apply storage setting");
-    let stmt = crabka_pgparser::parser::parse(
+    let stmt = krabka_pgparser::parser::parse(
         "ALTER FOREIGN TABLE t ALTER COLUMN id SET (n_distinct = 100)",
     )
     .expect("set attribute options")
@@ -11198,7 +11198,7 @@ fn foreign_table_columns_keep_normal_qualifiers() {
     let (_result, ops) = super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true)
         .expect("set attribute options");
     kv.write_batch(&ops).expect("apply attribute options");
-    let table = crabka_pgcatalog::get_table(&kv, &crabka_pgcatalog::RelationName::public("t"))
+    let table = krabka_pgcatalog::get_table(&kv, &krabka_pgcatalog::RelationName::public("t"))
         .expect("foreign table");
     assert!(
         table
@@ -11261,7 +11261,7 @@ fn foreign_table_columns_keep_normal_qualifiers() {
             ("format".into(), "json".into()),
         ]
     );
-    let stmt = crabka_pgparser::parser::parse(
+    let stmt = krabka_pgparser::parser::parse(
         "ALTER FOREIGN TABLE t ALTER COLUMN id OPTIONS (DROP remote_type, DROP remote_name), ALTER COLUMN remote OPTIONS (DROP remote_name)",
     )
     .expect("drop foreign options")
@@ -11272,7 +11272,7 @@ fn foreign_table_columns_keep_normal_qualifiers() {
         .expect("drop foreign options");
     kv.write_batch(&ops).expect("apply option drops");
     assert!(
-        crabka_pgcatalog::get_table(&kv, &crabka_pgcatalog::RelationName::public("t"))
+        krabka_pgcatalog::get_table(&kv, &krabka_pgcatalog::RelationName::public("t"))
             .expect("foreign table")
             .foreign
             .expect("foreign metadata")
@@ -11283,14 +11283,14 @@ fn foreign_table_columns_keep_normal_qualifiers() {
 
 #[test]
 fn foreign_tables_reject_index_backed_constraints() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
     for sql in [
         "CREATE FOREIGN DATA WRAPPER w",
         "CREATE SERVER s FOREIGN DATA WRAPPER w",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql).expect(sql).remove(0);
+        let stmt = krabka_pgparser::parser::parse(sql).expect(sql).remove(0);
         let (_, ops) = super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true).expect(sql);
         kv.write_batch(&ops).expect("apply DDL ops");
     }
@@ -11308,14 +11308,14 @@ fn foreign_tables_reject_index_backed_constraints() {
             "foreign key",
         ),
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql).expect(sql).remove(0);
+        let stmt = krabka_pgparser::parser::parse(sql).expect(sql).remove(0);
         assert!(
             matches!(super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true),
                 Err(super::ExecError::Unsupported(message))
                     if message == format!("{kind} constraints are not supported on foreign tables"))
         );
     }
-    let stmt = crabka_pgparser::parser::parse("CREATE FOREIGN TABLE altered (id int4) SERVER s")
+    let stmt = krabka_pgparser::parser::parse("CREATE FOREIGN TABLE altered (id int4) SERVER s")
         .expect("parse")
         .remove(0);
     let (_, ops) = super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true)
@@ -11332,7 +11332,7 @@ fn foreign_tables_reject_index_backed_constraints() {
             "foreign key",
         ),
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql).expect(sql).remove(0);
+        let stmt = krabka_pgparser::parser::parse(sql).expect(sql).remove(0);
         assert!(
             matches!(super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true),
                 Err(super::ExecError::Unsupported(message))
@@ -11343,7 +11343,7 @@ fn foreign_tables_reject_index_backed_constraints() {
 
 #[test]
 fn create_index_on_a_foreign_table_is_rejected() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
     for sql in [
@@ -11351,11 +11351,11 @@ fn create_index_on_a_foreign_table_is_rejected() {
         "CREATE SERVER s FOREIGN DATA WRAPPER w",
         "CREATE FOREIGN TABLE t (id int4) SERVER s",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql).expect(sql).remove(0);
+        let stmt = krabka_pgparser::parser::parse(sql).expect(sql).remove(0);
         let (_, ops) = super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true).expect(sql);
         kv.write_batch(&ops).expect("apply setup DDL");
     }
-    let stmt = crabka_pgparser::parser::parse("CREATE INDEX t_id_idx ON t (id)")
+    let stmt = krabka_pgparser::parser::parse("CREATE INDEX t_id_idx ON t (id)")
         .expect("parse")
         .remove(0);
     let error = super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true)
@@ -11369,7 +11369,7 @@ fn create_index_on_a_foreign_table_is_rejected() {
 
 #[test]
 fn foreign_table_type_change_with_using_is_rejected() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
     for sql in [
@@ -11377,11 +11377,11 @@ fn foreign_table_type_change_with_using_is_rejected() {
         "CREATE SERVER s FOREIGN DATA WRAPPER w",
         "CREATE FOREIGN TABLE t (id int4) SERVER s",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql).expect(sql).remove(0);
+        let stmt = krabka_pgparser::parser::parse(sql).expect(sql).remove(0);
         let (_, ops) = super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true).expect(sql);
         kv.write_batch(&ops).expect("apply setup DDL");
     }
-    let stmt = crabka_pgparser::parser::parse(
+    let stmt = krabka_pgparser::parser::parse(
         "ALTER FOREIGN TABLE t ALTER COLUMN id TYPE text USING 'id'",
     )
     .expect("parse")
@@ -11503,8 +11503,8 @@ async fn foreign_partition_creation_and_attachment_reject_parent_unique_indexes(
 
 #[test]
 fn comments_on_foreign_objects_are_persisted() {
-    use crabka_pgcatalog::CommentObject;
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgcatalog::CommentObject;
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
     for sql in [
@@ -11513,7 +11513,7 @@ fn comments_on_foreign_objects_are_persisted() {
         "COMMENT ON FOREIGN DATA WRAPPER w IS 'a wrapper'",
         "COMMENT ON SERVER s IS 'a server'",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -11523,17 +11523,17 @@ fn comments_on_foreign_objects_are_persisted() {
         kv.write_batch(&ops).expect("apply DDL ops");
     }
     assert_eq!(
-        crabka_pgcatalog::get_comment(&kv, "foreign data wrapper", CommentObject::Named("w"))
+        krabka_pgcatalog::get_comment(&kv, "foreign data wrapper", CommentObject::Named("w"))
             .expect("fdw comment"),
         Some("a wrapper".into())
     );
     assert_eq!(
-        crabka_pgcatalog::get_comment(&kv, "server", CommentObject::Named("s"))
+        krabka_pgcatalog::get_comment(&kv, "server", CommentObject::Named("s"))
             .expect("server comment"),
         Some("a server".into())
     );
     for sql in ["DROP SERVER s", "DROP FOREIGN DATA WRAPPER w"] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -11543,12 +11543,12 @@ fn comments_on_foreign_objects_are_persisted() {
         kv.write_batch(&ops).expect("apply DDL ops");
     }
     assert_eq!(
-        crabka_pgcatalog::get_comment(&kv, "foreign data wrapper", CommentObject::Named("w"))
+        krabka_pgcatalog::get_comment(&kv, "foreign data wrapper", CommentObject::Named("w"))
             .expect("fdw comment"),
         None
     );
     assert_eq!(
-        crabka_pgcatalog::get_comment(&kv, "server", CommentObject::Named("s"))
+        krabka_pgcatalog::get_comment(&kv, "server", CommentObject::Named("s"))
             .expect("server comment"),
         None
     );
@@ -11556,7 +11556,7 @@ fn comments_on_foreign_objects_are_persisted() {
 
 #[test]
 fn alter_foreign_table_uses_the_alter_table_path() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
     for sql in [
@@ -11565,7 +11565,7 @@ fn alter_foreign_table_uses_the_alter_table_path() {
         "CREATE FOREIGN TABLE t (id int4) SERVER s",
         "ALTER FOREIGN TABLE t RENAME TO u",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -11574,12 +11574,12 @@ fn alter_foreign_table_uses_the_alter_table_path() {
             super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true).expect(sql);
         kv.write_batch(&ops).expect("apply DDL ops");
     }
-    assert!(crabka_pgcatalog::get_table(&kv, &crabka_pgcatalog::RelationName::public("u")).is_ok());
+    assert!(krabka_pgcatalog::get_table(&kv, &krabka_pgcatalog::RelationName::public("u")).is_ok());
 }
 
 #[test]
 fn renaming_a_foreign_column_keeps_its_options() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
     for sql in [
@@ -11588,7 +11588,7 @@ fn renaming_a_foreign_column_keeps_its_options() {
         "CREATE FOREIGN TABLE t (id int4 OPTIONS (remote_name 'remote_id')) SERVER s",
         "ALTER FOREIGN TABLE t RENAME COLUMN id TO local_id",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -11598,7 +11598,7 @@ fn renaming_a_foreign_column_keeps_its_options() {
         kv.write_batch(&ops).expect("apply DDL ops");
     }
     assert_eq!(
-        crabka_pgcatalog::get_table(&kv, &crabka_pgcatalog::RelationName::public("t"))
+        krabka_pgcatalog::get_table(&kv, &krabka_pgcatalog::RelationName::public("t"))
             .expect("foreign table")
             .foreign
             .expect("foreign metadata")
@@ -11612,7 +11612,7 @@ fn renaming_a_foreign_column_keeps_its_options() {
 
 #[test]
 fn drop_foreign_table_accepts_a_comma_list() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
     for sql in [
@@ -11623,7 +11623,7 @@ fn drop_foreign_table_accepts_a_comma_list() {
         "CREATE FOREIGN TABLE t2 PARTITION OF p FOR VALUES FROM (10) TO (20) SERVER s",
         "DROP FOREIGN TABLE t1, t2",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -11634,12 +11634,12 @@ fn drop_foreign_table_accepts_a_comma_list() {
     }
     for table in ["t1", "t2"] {
         assert!(
-            crabka_pgcatalog::get_table(&kv, &crabka_pgcatalog::RelationName::public(table))
+            krabka_pgcatalog::get_table(&kv, &krabka_pgcatalog::RelationName::public(table))
                 .is_err()
         );
     }
     assert!(
-        crate::partition::partitions_of(&kv, &crabka_pgcatalog::RelationName::public("p"))
+        crate::partition::partitions_of(&kv, &krabka_pgcatalog::RelationName::public("p"))
             .expect("partitions")
             .is_empty()
     );
@@ -11850,7 +11850,7 @@ async fn dropping_foreign_objects_with_cascade_reports_dependents() {
 
 #[test]
 fn dropping_a_foreign_table_cascades_to_inheritance_children() {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     let kv = MemKv::new();
     for sql in [
@@ -11860,7 +11860,7 @@ fn dropping_a_foreign_table_cascades_to_inheritance_children() {
         "CREATE TABLE table_child () INHERITS (parent)",
         "CREATE FOREIGN TABLE foreign_child () INHERITS (parent) SERVER s",
     ] {
-        let stmt = crabka_pgparser::parser::parse(sql)
+        let stmt = krabka_pgparser::parser::parse(sql)
             .expect(sql)
             .into_iter()
             .next()
@@ -11869,14 +11869,14 @@ fn dropping_a_foreign_table_cascades_to_inheritance_children() {
             super::execute_ddl(&kv, &stmt, super::ForeignCtx::none(), true).expect(sql);
         kv.write_batch(&ops).expect("apply DDL ops");
     }
-    let drop = crabka_pgparser::parser::parse("DROP FOREIGN TABLE parent")
+    let drop = krabka_pgparser::parser::parse("DROP FOREIGN TABLE parent")
         .expect("parse")
         .into_iter()
         .next()
         .expect("one statement");
     assert!(super::execute_ddl(&kv, &drop, super::ForeignCtx::none(), true).is_err());
 
-    let cascade = crabka_pgparser::parser::parse("DROP FOREIGN TABLE parent CASCADE")
+    let cascade = krabka_pgparser::parser::parse("DROP FOREIGN TABLE parent CASCADE")
         .expect("parse")
         .into_iter()
         .next()
@@ -11886,7 +11886,7 @@ fn dropping_a_foreign_table_cascades_to_inheritance_children() {
     kv.write_batch(&ops).expect("apply cascade ops");
     for table in ["parent", "table_child", "foreign_child"] {
         assert!(
-            crabka_pgcatalog::get_table(&kv, &crabka_pgcatalog::RelationName::public(table))
+            krabka_pgcatalog::get_table(&kv, &krabka_pgcatalog::RelationName::public(table))
                 .is_err()
         );
     }
@@ -11901,8 +11901,8 @@ fn command_tag(r: &QueryResult) -> &str {
 
 /// Parse `sql` (a DELETE statement) and return its WHERE clause, exercising
 /// the same filter shapes the write path receives.
-fn delete_filter(sql: &str) -> Option<crabka_pgparser::ast::Expr> {
-    let stmt = crabka_pgparser::parser::parse(sql)
+fn delete_filter(sql: &str) -> Option<krabka_pgparser::ast::Expr> {
+    let stmt = krabka_pgparser::parser::parse(sql)
         .expect("parse")
         .into_iter()
         .next()
@@ -11919,25 +11919,25 @@ async fn choose_write_index_probe_matches_single_column_equality_conjuncts() {
 
     let engine = SqlEngine::new();
     run(&engine, "CREATE TABLE t (id int4 PRIMARY KEY, flag text)").await;
-    let table = crabka_pgcatalog::get_table(engine.catalog_kv.as_ref(), &RelationName::public("t"))
+    let table = krabka_pgcatalog::get_table(engine.catalog_kv.as_ref(), &RelationName::public("t"))
         .expect("table");
 
-    let cases: &[(&str, Option<crabka_pgtypes::Datum>)] = &[
+    let cases: &[(&str, Option<krabka_pgtypes::Datum>)] = &[
         (
             "DELETE FROM t WHERE id = 5",
-            Some(crabka_pgtypes::Datum::Int4(5)),
+            Some(krabka_pgtypes::Datum::Int4(5)),
         ),
         (
             "DELETE FROM t WHERE id = 5 AND flag = 'x'",
-            Some(crabka_pgtypes::Datum::Int4(5)),
+            Some(krabka_pgtypes::Datum::Int4(5)),
         ),
         (
             "DELETE FROM t WHERE flag = 'x' AND id = 5",
-            Some(crabka_pgtypes::Datum::Int4(5)),
+            Some(krabka_pgtypes::Datum::Int4(5)),
         ),
         (
             "DELETE FROM t WHERE 5 = id",
-            Some(crabka_pgtypes::Datum::Int4(5)),
+            Some(krabka_pgtypes::Datum::Int4(5)),
         ),
         // Non-indexed column, disjunction, computed column, wrong-type
         // literal, range comparison, and no filter all fall back.
@@ -12189,7 +12189,7 @@ async fn update_and_delete_fall_back_to_full_scan_for_non_indexed_predicates() {
 #[test]
 fn column_type_from_oid_maps_supported_scalars_and_every_array_oid() {
     use assert2::assert;
-    use crabka_pgtypes::{ColumnType, ElemType, oids};
+    use krabka_pgtypes::{ColumnType, ElemType, oids};
 
     for (oid, expected) in [
         // `json` and `jsonb` are separate types: json keeps its input text,
@@ -12231,7 +12231,7 @@ fn column_type_from_oid_maps_supported_scalars_and_every_array_oid() {
 #[test]
 fn pg_type_exposes_the_scalar_array_link_for_every_row() {
     use assert2::assert;
-    use crabka_pgtypes::ElemType;
+    use krabka_pgtypes::ElemType;
 
     let rows = super::builtin_type_rows();
     for scalar in rows.iter().filter(|row| row.array != 0) {
@@ -12258,7 +12258,7 @@ fn pg_type_exposes_the_scalar_array_link_for_every_row() {
 #[test]
 fn pg_type_rows_match_the_declared_column_list() {
     use assert2::assert;
-    use crabka_pgtypes::Datum;
+    use krabka_pgtypes::Datum;
 
     let columns = super::virtual_catalog_columns("pg_type");
     let names: Vec<&str> = columns.iter().map(|c| c.name.as_str()).collect();
@@ -12299,7 +12299,7 @@ fn pg_type_rows_match_the_declared_column_list() {
                 "typacl",
             ]
     );
-    let rows = super::pg_type_rows(&crabka_pgkv::MemKv::default()).expect("pg_type rows");
+    let rows = super::pg_type_rows(&krabka_pgkv::MemKv::default()).expect("pg_type rows");
     for row in &rows {
         assert!(row.len() == columns.len());
     }
@@ -12341,7 +12341,7 @@ fn pg_statistic_exposes_unbound_anyarray_slots() {
 #[test]
 fn coerce_assigns_literals_and_arrays_to_jsonb_and_array_columns() {
     use assert2::assert;
-    use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
+    use krabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
 
     let ctx = crate::clock::EvalCtx::test_default();
     let jsonb = super::coerce(
@@ -12353,7 +12353,7 @@ fn coerce_assigns_literals_and_arrays_to_jsonb_and_array_columns() {
     assert!(
         jsonb
             == Datum::Jsonb(
-                crabka_pgtypes::jsonb::parse("{\"a\":1,\"b\":2}").expect("canonical parse")
+                krabka_pgtypes::jsonb::parse("{\"a\":1,\"b\":2}").expect("canonical parse")
             )
     );
     let array = super::coerce(
@@ -12384,7 +12384,7 @@ fn coerce_assigns_literals_and_arrays_to_jsonb_and_array_columns() {
 #[test]
 fn assignment_temporal_input_uses_the_transaction_timestamp() {
     use assert2::assert;
-    use crabka_pgtypes::{ColumnType, Datum};
+    use krabka_pgtypes::{ColumnType, Datum};
 
     let now = "2024-03-10T05:06:07Z".parse().expect("timestamp");
     let mut ctx = crate::clock::EvalCtx::test_default();
@@ -12392,7 +12392,7 @@ fn assignment_temporal_input_uses_the_transaction_timestamp() {
     for (target, expected) in [
         (
             ColumnType::Time,
-            Datum::Time(crabka_pgtypes::datetime::parse_time("05:06:07").expect("time")),
+            Datum::Time(krabka_pgtypes::datetime::parse_time("05:06:07").expect("time")),
         ),
         (ColumnType::Timestamptz, Datum::Timestamptz(now)),
     ] {
@@ -12403,7 +12403,7 @@ fn assignment_temporal_input_uses_the_transaction_timestamp() {
 #[test]
 fn name_assignments_truncate_at_the_postgresql_byte_limit() {
     use assert2::assert;
-    use crabka_pgtypes::{ColumnType, Datum};
+    use krabka_pgtypes::{ColumnType, Datum};
 
     let ctx = crate::clock::EvalCtx::test_default();
     for (value, expected) in [
@@ -12426,11 +12426,11 @@ fn name_assignments_truncate_at_the_postgresql_byte_limit() {
 #[test]
 fn only_hashable_column_types_are_accepted_as_a_hash_shard_key() {
     use assert2::assert;
-    use crabka_pgcatalog::Column;
-    use crabka_pgtypes::{ColumnType, ElemType};
+    use krabka_pgcatalog::Column;
+    use krabka_pgtypes::{ColumnType, ElemType};
 
     let sharding = |column: &str| {
-        crabka_pgcatalog::ShardingStrategy::Hash(crabka_pgcatalog::HashSharding {
+        krabka_pgcatalog::ShardingStrategy::Hash(krabka_pgcatalog::HashSharding {
             columns: vec![column.to_string()],
             buckets: 4,
             co_location_group: None,
@@ -12482,19 +12482,19 @@ fn only_hashable_column_types_are_accepted_as_a_hash_shard_key() {
 #[test]
 fn hashing_a_row_refuses_an_unhashable_shard_key() {
     use assert2::assert;
-    use crabka_pgcatalog::Column;
-    use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
+    use krabka_pgcatalog::Column;
+    use krabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
 
-    let table = crabka_pgcatalog::Table {
+    let table = krabka_pgcatalog::Table {
         id: 1,
-        owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+        owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
         name: RelationName::public("t"),
         columns: vec![Column::new("k", ColumnType::Jsonb)],
         sharded: true,
         row_security: false,
         force_row_security: false,
-        sharding: Some(crabka_pgcatalog::ShardingStrategy::Hash(
-            crabka_pgcatalog::HashSharding {
+        sharding: Some(krabka_pgcatalog::ShardingStrategy::Hash(
+            krabka_pgcatalog::HashSharding {
                 columns: vec!["k".into()],
                 buckets: 4,
                 co_location_group: None,
@@ -12505,7 +12505,7 @@ fn hashing_a_row_refuses_an_unhashable_shard_key() {
         checks: Vec::new(),
     };
     for value in [
-        Datum::Jsonb(crabka_pgtypes::jsonb::parse("{\"a\":1}").expect("jsonb")),
+        Datum::Jsonb(krabka_pgtypes::jsonb::parse("{\"a\":1}").expect("jsonb")),
         Datum::Array(ArrayValue::new(ElemType::Int4, vec![Datum::Int4(1)])),
     ] {
         let error = super::hash_bucket_for_row(&table, &[value])
@@ -12530,7 +12530,7 @@ fn hashing_a_row_refuses_an_unhashable_shard_key() {
 #[test]
 fn the_ddl_path_builds_a_hash_sharding_only_from_one_column() {
     use assert2::assert;
-    use crabka_pgparser::ast::{HashShardingSpec, ShardingSpec};
+    use krabka_pgparser::ast::{HashShardingSpec, ShardingSpec};
 
     let spec = |columns: &[&str], buckets: u32| {
         ShardingSpec::Hash(HashShardingSpec {
@@ -12558,7 +12558,7 @@ fn the_ddl_path_builds_a_hash_sharding_only_from_one_column() {
             }
             None => assert!(
                 converted.expect("accepted")
-                    == crabka_pgcatalog::ShardingStrategy::Hash(crabka_pgcatalog::HashSharding {
+                    == krabka_pgcatalog::ShardingStrategy::Hash(krabka_pgcatalog::HashSharding {
                         columns: vec!["a".into()],
                         buckets,
                         co_location_group: None,
@@ -12576,12 +12576,12 @@ fn the_ddl_path_builds_a_hash_sharding_only_from_one_column() {
 #[test]
 fn hashing_a_row_refuses_a_multi_column_hash_shard_key() {
     use assert2::assert;
-    use crabka_pgcatalog::Column;
-    use crabka_pgtypes::{ColumnType, Datum};
+    use krabka_pgcatalog::Column;
+    use krabka_pgtypes::{ColumnType, Datum};
 
-    let table = crabka_pgcatalog::Table {
+    let table = krabka_pgcatalog::Table {
         id: 1,
-        owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+        owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
         name: RelationName::public("t"),
         columns: vec![
             Column::new("a", ColumnType::Int4),
@@ -12590,8 +12590,8 @@ fn hashing_a_row_refuses_a_multi_column_hash_shard_key() {
         sharded: true,
         row_security: false,
         force_row_security: false,
-        sharding: Some(crabka_pgcatalog::ShardingStrategy::Hash(
-            crabka_pgcatalog::HashSharding {
+        sharding: Some(krabka_pgcatalog::ShardingStrategy::Hash(
+            krabka_pgcatalog::HashSharding {
                 columns: vec!["a".into(), "b".into()],
                 buckets: 4,
                 co_location_group: None,
@@ -12611,9 +12611,9 @@ fn hashing_a_row_refuses_a_multi_column_hash_shard_key() {
 #[test]
 fn jsonb_and_array_defaults_render_as_quoted_literals() {
     use assert2::assert;
-    use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
+    use krabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
 
-    let doc = Datum::Jsonb(crabka_pgtypes::jsonb::parse("{\"a\":1}").expect("parse"));
+    let doc = Datum::Jsonb(krabka_pgtypes::jsonb::parse("{\"a\":1}").expect("parse"));
     assert!(super::format_default_value(&doc, ColumnType::Jsonb) == "'{\"a\": 1}'::jsonb");
     let array = Datum::Array(ArrayValue::new(
         ElemType::Int4,
@@ -12628,11 +12628,11 @@ fn jsonb_and_array_defaults_render_as_quoted_literals() {
 #[test]
 fn a_from_item_function_must_be_a_known_set_returning_function() {
     use assert2::assert;
-    use crabka_pgparser::ast::Expr;
-    use crabka_pgtypes::{ColumnType, Datum, ElemType};
+    use krabka_pgparser::ast::Expr;
+    use krabka_pgtypes::{ColumnType, Datum, ElemType};
 
     let call = |name: &str, arg: Expr| {
-        vec![crabka_pgparser::ast::TableFuncCall {
+        vec![krabka_pgparser::ast::TableFuncCall {
             name: name.into(),
             args: vec![arg],
             named_args: Vec::new(),
@@ -12685,7 +12685,7 @@ async fn unnest_in_from_expands_an_array_argument() {
     let mut s = engine.connect();
     let r = &run_s(&mut s, "SELECT * FROM unnest('{3,1,2}'::int[])").await[0];
     assert!(fields_of(r)[0].name == "unnest");
-    assert!(fields_of(r)[0].type_oid == crabka_pgtypes::oids::INT4);
+    assert!(fields_of(r)[0].type_oid == krabka_pgtypes::oids::INT4);
     let values: Vec<Option<String>> = rows_of(r).iter().map(|row| text(&row[0])).collect();
     assert!(values == vec![Some("3".into()), Some("1".into()), Some("2".into())]);
 
@@ -12740,8 +12740,8 @@ async fn jsonb_and_array_columns_round_trip_through_ddl() {
     )
     .await;
     let r = &run_s(&mut s, "SELECT j, a FROM t ORDER BY id").await[0];
-    assert!(fields_of(r)[0].type_oid == crabka_pgtypes::oids::JSONB);
-    assert!(fields_of(r)[1].type_oid == crabka_pgtypes::oids::INT4ARRAY);
+    assert!(fields_of(r)[0].type_oid == krabka_pgtypes::oids::JSONB);
+    assert!(fields_of(r)[1].type_oid == krabka_pgtypes::oids::INT4ARRAY);
     let values: Vec<Vec<Option<String>>> = rows_of(r)
         .iter()
         .map(|row| row.iter().map(text).collect())
@@ -12839,14 +12839,14 @@ async fn pg_index_marks_the_primary_key_index() {
 fn arbiter_fixture(
     columns: &[&str],
     indexes: &[(&str, &[&str], bool, bool)],
-) -> (crabka_pgcatalog::Table, Vec<crabka_pgcatalog::Index>) {
-    let table = crabka_pgcatalog::Table {
+) -> (krabka_pgcatalog::Table, Vec<krabka_pgcatalog::Index>) {
+    let table = krabka_pgcatalog::Table {
         id: 1,
-        owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+        owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
         name: RelationName::public("t"),
         columns: columns
             .iter()
-            .map(|name| crabka_pgcatalog::Column::new(*name, crabka_pgtypes::ColumnType::Int4))
+            .map(|name| krabka_pgcatalog::Column::new(*name, krabka_pgtypes::ColumnType::Int4))
             .collect(),
         sharded: false,
         row_security: false,
@@ -12860,23 +12860,23 @@ fn arbiter_fixture(
         .iter()
         .enumerate()
         .map(
-            |(i, (name, cols, unique, constraint))| crabka_pgcatalog::Index {
+            |(i, (name, cols, unique, constraint))| krabka_pgcatalog::Index {
                 id: i as u32 + 1,
                 name: (*name).to_string(),
                 table: RelationName::public("t"),
                 table_id: 1,
                 columns: cols.iter().map(|c| (*c).to_string()).collect(),
-                key_options: crabka_pgcatalog::default_index_key_options(cols.len()),
+                key_options: krabka_pgcatalog::default_index_key_options(cols.len()),
                 include: Vec::new(),
                 predicate: None,
                 nulls_not_distinct: false,
                 unique: *unique,
-                placement: crabka_pgcatalog::IndexPlacement::Local,
-                method: crabka_pgcatalog::IndexMethod::Btree,
-                constraint: constraint.then_some(crabka_pgcatalog::IndexConstraint::Unique),
+                placement: krabka_pgcatalog::IndexPlacement::Local,
+                method: krabka_pgcatalog::IndexMethod::Btree,
+                constraint: constraint.then_some(krabka_pgcatalog::IndexConstraint::Unique),
                 without_overlaps: false,
                 clustered: false,
-                deferral: crabka_pgcatalog::ConstraintDeferral::Immediate,
+                deferral: krabka_pgcatalog::ConstraintDeferral::Immediate,
             },
         )
         .collect();
@@ -12886,7 +12886,7 @@ fn arbiter_fixture(
 #[test]
 fn arbiter_resolution_matches_column_sets_and_constraint_names() {
     use assert2::assert;
-    use crabka_pgparser::ast::OnConflictTarget;
+    use krabka_pgparser::ast::OnConflictTarget;
 
     let (table, indexes) = arbiter_fixture(
         &["a", "b", "c"],
@@ -12905,7 +12905,7 @@ fn arbiter_resolution_matches_column_sets_and_constraint_names() {
         columns: cols.iter().map(|c| (*c).to_string()).collect(),
         inference_columns: cols
             .iter()
-            .map(|name| crabka_pgparser::ast::OnConflictInferenceColumn {
+            .map(|name| krabka_pgparser::ast::OnConflictInferenceColumn {
                 name: (*name).into(),
                 collation: None,
                 opclass: None,
@@ -12951,12 +12951,12 @@ fn arbiter_resolution_matches_column_sets_and_constraint_names() {
     // irrelevant when no partial indexes exist.
     let predicated = OnConflictTarget::Columns {
         columns: vec!["a".into()],
-        inference_columns: vec![crabka_pgparser::ast::OnConflictInferenceColumn {
+        inference_columns: vec![krabka_pgparser::ast::OnConflictInferenceColumn {
             name: "a".into(),
             collation: None,
             opclass: None,
         }],
-        index_predicate: Some(crabka_pgparser::ast::Expr::BoolLiteral(true)),
+        index_predicate: Some(krabka_pgparser::ast::Expr::BoolLiteral(true)),
     };
     assert!(names(&predicated) == Ok(vec!["t_pkey".into()]));
 }
@@ -12964,7 +12964,7 @@ fn arbiter_resolution_matches_column_sets_and_constraint_names() {
 #[test]
 fn arbiter_resolution_without_unique_indexes_is_empty_not_an_error() {
     use assert2::assert;
-    use crabka_pgparser::ast::OnConflictTarget;
+    use krabka_pgparser::ast::OnConflictTarget;
 
     // `DO NOTHING` with no target on a table with no unique index: legal,
     // and every row simply inserts.
@@ -14135,17 +14135,17 @@ async fn pg_inherits_names_an_inheritance_parent_by_its_relation_oid() {
 #[test]
 fn an_unresolvable_parent_costs_one_row_its_oid_not_the_projection() {
     use assert2::assert;
-    use crabka_pgkv::Kv as _;
-    use crabka_pgtypes::{ColumnType, Datum};
+    use krabka_pgkv::Kv as _;
+    use krabka_pgtypes::{ColumnType, Datum};
 
-    let kv = crabka_pgkv::MemKv::new();
-    let column = || vec![crabka_pgcatalog::Column::new("i", ColumnType::Int4)];
+    let kv = krabka_pgkv::MemKv::new();
+    let column = || vec![krabka_pgcatalog::Column::new("i", ColumnType::Int4)];
     let healthy = RelationName::public("amp_parent");
     let child = RelationName::public("amp_child");
     let gone = RelationName::public("amp_departed");
     let healthy_id =
-        crabka_pgcatalog::create_table(&kv, &healthy, column()).expect("create the parent");
-    let child_id = crabka_pgcatalog::create_table(&kv, &child, column()).expect("create the child");
+        krabka_pgcatalog::create_table(&kv, &healthy, column()).expect("create the parent");
+    let child_id = krabka_pgcatalog::create_table(&kv, &child, column()).expect("create the child");
     // `amp_departed` is never created: the child's list names a relation
     // the catalog does not hold, which is the state under test.
     kv.write_batch(&crate::inheritance::attach_ops(
@@ -14228,7 +14228,7 @@ async fn a_generated_column_carries_its_expression_in_pg_attrdef() {
 /// name to its own definition — a `CREATE DOMAIN posint` here resolving to
 /// a neighbouring test's composite `pair`, and failing with `malformed
 /// record literal`. That is a defect in the registry, and is documented on
-/// `crabka_pgtypes::usertype::CatalogTypes` itself; until it is keyed by
+/// `krabka_pgtypes::usertype::CatalogTypes` itself; until it is keyed by
 /// catalog, a test that depends on a user type has to stay off the oids its
 /// neighbours use.
 async fn create_private_user_types(session: &mut SqlSession) {

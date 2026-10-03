@@ -6,9 +6,10 @@
 
 ## Context — where this sits, and the two decisions
 
-PG-4 turns PG-3's reconstruction *plans* into **pages**: a redo engine applies per-page WAL records over a base image; `get_page@LSN` serves the result; image-layer creation and GC (re-homed here from PG-3, because both require redo) keep read amplification and storage bounded; and a page service exposes it all to future compute (PG-5).
+PG-4 turns PG-3's reconstruction _plans_ into **pages**: a redo engine applies per-page WAL records over a base image; `get_page@LSN` serves the result; image-layer creation and GC (re-homed here from PG-3, because both require redo) keep read amplification and storage bounded; and a page service exposes it all to future compute (PG-5).
 
-**Decision 1 — redo is full native Rust.** No sandboxed Postgres walredo sidecar, no hybrid: the rmgr redo logic is reimplemented in Rust. This buys a pure-Rust runtime (no C process, no patched-Postgres dependency for the *pageserver*) at the price of owning the most correctness-critical surface in the chapter — a redo bug is silent page corruption. The design therefore treats two mitigations as **load-bearing, not optional**:
+**Decision 1 — redo is full native Rust.** No sandboxed Postgres walredo sidecar, no hybrid: the rmgr redo logic is reimplemented in Rust. This buys a pure-Rust runtime (no C process, no patched-Postgres dependency for the _pageserver_) at the price of owning the most correctness-critical surface in the chapter — a redo bug is silent page corruption. The design therefore treats two mitigations as **load-bearing, not optional**:
+
 - **Bounded rmgr scope with loud faults.** v1 implements exactly the set a pgbench-class workload needs — `XLOG` (FPI, `FPI_FOR_HINT`), `HEAP`, `HEAP2`, `BTREE`, `SEQ` — and returns `RedoError::UnsupportedRmgr { rmid, lsn }` for anything else (GIN/GiST/SP-GiST/BRIN/hash → a PG-4b slice; a relation using them is unservable and says so). The correctness surface grows one differentially-proven rmgr at a time.
 - **The standby differential oracle.** Redo output is compared byte-for-byte against a **WAL-replayed stock-Postgres standby** — whose pages are themselves pure redo output, so both sides diverge from the primary identically (hint bits, unlogged mutations). Redo-vs-redo makes byte-exactness achievable; masked primary comparison (tuple hint bits, checksum field) is the fallback where a standby capture is impractical.
 
@@ -18,7 +19,7 @@ PG-4 turns PG-3's reconstruction *plans* into **pages**: a redo engine applies p
 
 - **Pure, sans-IO redo:** `apply(base: Option<PageImage>, records: &[(Lsn, Bytes)]) → Result<PageImage, RedoError>` — per-rmgr dispatch over PG-2's decoded envelope, panic-free (fuzzed), PG 17 pinned (per-major tables like PG-2).
 - **`get_page@LSN`:** PG-3's `get_reconstruct_data` ⊕ redo = the page; `will_init`/zeroed-base semantics correct.
-- **Materializing compaction + GC** (re-homed): image layers created via redo when delta stacks cross a threshold; horizon GC drops layers fully covered by a later image — both behind a `Redo` trait seam so `crabka-page-store` never depends on the redo crate.
+- **Materializing compaction + GC** (re-homed): image layers created via redo when delta stacks cross a threshold; horizon GC drops layers fully covered by a later image — both behind a `Redo` trait seam so `krabka-page-store` never depends on the redo crate.
 - **The page service:** unary Connect RPCs — `GetPage(rel, fork, blkno, lsn)`, `GetRelSize(rel, fork, lsn)` — served in-process against a store + redo, following the gateway's connectrpc-axum idiom.
 - **The differential gate:** every covered page in the fixture corpus, materialized at the capture LSN, is byte-identical to the standby's file.
 
@@ -32,7 +33,7 @@ PG-4 turns PG-3's reconstruction *plans* into **pages**: a redo engine applies p
 ## Architecture Overview
 
 ```
-crates/postgres-redo   (crabka-postgres-redo — pure, sans-IO, fuzzed)
+crates/postgres-redo   (krabka-postgres-redo — pure, sans-IO, fuzzed)
 │   dispatch by (rmid, info) over PG-2's DecodedRecord envelope
 │   v1 rmgrs: XLOG(FPI, FPI_FOR_HINT) · HEAP · HEAP2 · BTREE · SEQ
 │   apply(base, records) -> PageImage | RedoError::{UnsupportedRmgr, BadRecord, BaseMissing}
@@ -43,7 +44,7 @@ crates/page-store      (PG-3, extended)
 │   materializing compaction: delta-stack threshold → image layers (via Redo)
 │   horizon GC: drop layers below gc_horizon fully covered by a later image
 │
-crates/pageserver      (crabka-pageserver — the service)
+crates/pageserver      (krabka-pageserver — the service)
 │   proto/crabka/pageserver/v1/pageserver.proto:
 │     service PageService { rpc GetPage(...); rpc GetRelSize(...); }
 │   connectrpc-axum (gateway idiom: build.rs codegen, .build_connect(), h2c-capable)
@@ -57,7 +58,7 @@ oracle: stock PG 17 primary (fixture WAL) ──► pg_basebackup standby replay
 
 ### Per-`(rmid, info)` dispatch with loud refusal
 
-The redo entry point dispatches on the decoded envelope's `(rmid, info)`; every unimplemented arm is `RedoError::UnsupportedRmgr` — never a silent skip (a skipped record is a corrupt page). This is also the growth seam: PG-4b adds arms, each landing only with its own differential coverage. FPI application is the degenerate arm (the base *is* the image) and `will_init` records apply against a zeroed page — both semantics fixed by PG-3's `ReconstructData` contract.
+The redo entry point dispatches on the decoded envelope's `(rmid, info)`; every unimplemented arm is `RedoError::UnsupportedRmgr` — never a silent skip (a skipped record is a corrupt page). This is also the growth seam: PG-4b adds arms, each landing only with its own differential coverage. FPI application is the degenerate arm (the base _is_ the image) and `will_init` records apply against a zeroed page — both semantics fixed by PG-3's `ReconstructData` contract.
 
 ### The standby oracle (redo-vs-redo)
 
@@ -65,7 +66,7 @@ The fixture generator (extending PG-2's) additionally: takes a `pg_basebackup` o
 
 ### Materialization behind a `Redo` trait
 
-`crabka-page-store` gains `trait Redo` and the compaction/GC drivers generic over it; `crabka-postgres-redo` implements the trait; `crabka-pageserver` wires them. Dependency arrows stay clean (`page-store` ⟂ `postgres-redo`), and PG-3's structural tests keep running with a no-op redo. Image-layer creation policy v1: when a key range's delta stack above the newest image exceeds a threshold, materialize an image layer at the stack's top LSN; GC v1: delete layers whose `lsn_range` ends below `gc_horizon` **and** whose key range is fully covered by a later image layer.
+`krabka-page-store` gains `trait Redo` and the compaction/GC drivers generic over it; `krabka-postgres-redo` implements the trait; `krabka-pageserver` wires them. Dependency arrows stay clean (`page-store` ⟂ `postgres-redo`), and PG-3's structural tests keep running with a no-op redo. Image-layer creation policy v1: when a key range's delta stack above the newest image exceeds a threshold, materialize an image layer at the stack's top LSN; GC v1: delete layers whose `lsn_range` ends below `gc_horizon` **and** whose key range is fully covered by a later image layer.
 
 ### The Connect page service follows the gateway idiom
 
@@ -77,9 +78,9 @@ Redo runs server-side on untrusted-shaped input (any bytes a WAL could contain).
 
 ## Integration
 
-- **`crates/postgres-redo`** (new, `crabka-postgres-redo`) — **`publish = false` + private release-plz entry**; deps: `crabka-postgres-wal` (envelope types), `bytes`, `thiserror`. No tokio.
+- **`crates/postgres-redo`** (new, `krabka-postgres-redo`) — **`publish = false` + private release-plz entry**; deps: `krabka-postgres-wal` (envelope types), `bytes`, `thiserror`. No tokio.
 - **`crates/page-store`** — `trait Redo`, `get_page`, materializing compaction, GC (extends PG-3).
-- **`crates/pageserver`** (new, `crabka-pageserver`) — proto + Connect service + wiring; **`publish = false`** likewise.
+- **`crates/pageserver`** (new, `krabka-pageserver`) — proto + Connect service + wiring; **`publish = false`** likewise.
 - **Fixtures** — the PG-2 generator grows the standby capture; corpus shared from `crates/postgres-wal/tests/fixtures`.
 - **Roadmap consequence:** PG-5 gains the bespoke smgr↔Connect client work (and PG-4b gains SLRU) — the roadmap doc is updated alongside this spec.
 
@@ -111,4 +112,4 @@ Not a Kafka surface. The byte-exactness bar transfers whole: **a materialized pa
 - **Oracle:** WAL-replayed standby, byte-exact; masked-primary fallback.
 - **Protocol:** Crabka-native Connect RPC (user decision); unary `GetPage`/`GetRelSize`; gateway build idiom; PG-5 owns the bespoke client consequence.
 - **Seams:** `trait Redo` in `page-store`; materializing compaction + GC live there, driven by the trait.
-- **Crates:** `crabka-postgres-redo` (pure) + `crabka-pageserver` (service), both `publish = false`.
+- **Crates:** `krabka-postgres-redo` (pure) + `krabka-pageserver` (service), both `publish = false`.

@@ -1,4 +1,4 @@
-# Crabka Geo-Replication (`crabka-replicator`) — Design
+# Crabka Geo-Replication (`krabka-replicator`) — Design
 
 **Date:** 2026-06-17
 **Status:** Design approved; Slice 1 ready for implementation planning
@@ -8,7 +8,7 @@
 
 ## 1. Summary
 
-`crabka-replicator` is a new standalone service that replicates data between
+`krabka-replicator` is a new standalone service that replicates data between
 geographically dispersed Crabka clusters. It delivers global event streaming,
 cross-region availability, selective topic replication, consumer-group offset
 translation, and automatic recovery from network/cluster failures — the
@@ -16,8 +16,8 @@ MirrorMaker-2 (MM2) feature set — and adds a **data-sovereignty policy layer**
 residency routing, field-level transforms (redact/mask/tokenize), and per-record
 routing.
 
-The service is built on the existing `crabka-connect` `ConnectorRuntime` and the
-native `crabka-client-*` clients. It sits *above* the broker (like MM2 sits
+The service is built on the existing `krabka-connect` `ConnectorRuntime` and the
+native `krabka-client-*` clients. It sits _above_ the broker (like MM2 sits
 outside Kafka) and touches no broker or wire-protocol code.
 
 ## 2. Goals / Non-goals
@@ -27,7 +27,7 @@ outside Kafka) and touches no broker or wire-protocol code.
 - **All four topologies** from one composable primitive — a directional flow
   `(source → target)`:
   - Active/passive (DR), active/active (live multi-region), aggregation (N→1),
-    fan-out (1→N). Topology is *emergent* from the set of declared flows; there
+    fan-out (1→N). Topology is _emergent_ from the set of declared flows; there
     is no separate "topology mode."
 - **Selective replication** — per-flow topic and consumer-group selectors
   (include/exclude; exact / prefix / regex).
@@ -49,8 +49,8 @@ outside Kafka) and touches no broker or wire-protocol code.
 ### Non-goals (v1)
 
 - **No Kafka Connect worker/REST protocol or plugin-config model.** We adopt
-  MM2's *conventions and byte formats*, not its Connect runtime. This is
-  consistent with `crabka-connect`'s deliberate "no worker protocol,
+  MM2's _conventions and byte formats_, not its Connect runtime. This is
+  consistent with `krabka-connect`'s deliberate "no worker protocol,
   single-binary" design.
 - **No audit-trail / right-to-erasure propagation and no region-scoped
   encryption / key residency** (the sovereignty capabilities deferred during
@@ -91,7 +91,7 @@ outside Kafka) and touches no broker or wire-protocol code.
                                 │ control
                                 ▼
  ┌────────────┐   consume   ┌───────────────────────────┐   produce   ┌────────────┐
- │  Source    │────────────▶│   crabka-replicator        │────────────▶│  Target    │
+ │  Source    │────────────▶│   krabka-replicator        │────────────▶│  Target    │
  │  cluster   │             │                            │             │  cluster   │
  │  (region A)│             │  flow supervisor (control) │             │ (region B) │
  │            │             │  ├─ flow-worker A→B (data) │             │  internal: │
@@ -110,7 +110,7 @@ outside Kafka) and touches no broker or wire-protocol code.
 - **Control plane — the flow supervisor.** Loads replication config + sovereignty
   policy; resolves it against live cluster metadata (topic matches, region/zone
   allow/deny); spawns and supervises one flow-worker per directional flow;
-  exposes health + Prometheus metrics (via `crabka-telemetry`); under the
+  exposes health + Prometheus metrics (via `krabka-telemetry`); under the
   operator, writes CRD status.
 - **Data plane — flow-workers.** One worker per `(source → target)` flow. Each
   owns a single consumer + producer pair and runs the staged data path. Active/
@@ -152,14 +152,14 @@ takes a lane decided by its policy:
    bytes exactly (no recompression of compressed batches).
 3. **Schema lane (engaged only when a topic has a transform/route policy):**
    `decode (Schema Registry) → redact/mask/tokenize fields → route predicate
-   (keep/drop record) → encode`. The only path that materializes records.
+(keep/drop record) → encode`. The only path that materializes records.
 4. **Produce.** Plain idempotent producer (at-least-once) or wrapped in the
    `connect` runtime's transactional gate (EOS) — per-flow choice.
 5. **Offset-sync.** Records the source→target offset mapping at produce time;
    feeds checkpoint translation.
 
 **Consequence:** record-routing (#3) drops records, so source/target offsets
-diverge — which is exactly why offset *translation* (not copying) is mandatory,
+diverge — which is exactly why offset _translation_ (not copying) is mandatory,
 and why translation stays "at-or-before."
 
 The policy **is** the lane selector: a topic with no matching transform/route
@@ -169,7 +169,7 @@ policy is automatically on the fast lane.
 
 Config is Crabka-native (not a Connect plugin config) with three parts —
 **clusters**, **flows**, **policies**. Regions/compliance-zones are first-class;
-policies reference *zones*, not raw cluster names, so they are portable.
+policies reference _zones_, not raw cluster names, so they are portable.
 
 ```yaml
 clusters:
@@ -178,28 +178,32 @@ clusters:
 
 flows:
   - from: us-east
-    to:   eu-west
-    topics:  { include: ["orders", "payments", "telemetry.*"], exclude: ["*.internal"] }
-    groups:  { include: ["analytics-*"] }      # which consumer groups to checkpoint
-    naming:  default                           # eu-west sees "us-east.orders" (or: identity)
-    delivery: at-least-once                    # or: exactly-once
+    to: eu-west
+    topics:
+      {
+        include: ["orders", "payments", "telemetry.*"],
+        exclude: ["*.internal"],
+      }
+    groups: { include: ["analytics-*"] } # which consumer groups to checkpoint
+    naming: default # eu-west sees "us-east.orders" (or: identity)
+    delivery: at-least-once # or: exactly-once
 
 policies:
-  - name: keep-pii-in-eu                       # (1) RESIDENCY — hard gate, fast path
+  - name: keep-pii-in-eu # (1) RESIDENCY — hard gate, fast path
     topics: ["customers", "kyc.*"]
-    residency: { allow_zones: [gdpr] }         # block replication to any non-GDPR target
+    residency: { allow_zones: [gdpr] } # block replication to any non-GDPR target
 
-  - name: mask-on-export                       # (2) FIELD TRANSFORMS — schema lane
+  - name: mask-on-export # (2) FIELD TRANSFORMS — schema lane
     topics: ["orders"]
-    when:   { target_zone_not: [gdpr] }        # engage only when leaving the GDPR zone
+    when: { target_zone_not: [gdpr] } # engage only when leaving the GDPR zone
     transforms:
-      - { field: "$.customer.ssn",   action: drop }
+      - { field: "$.customer.ssn", action: drop }
       - { field: "$.customer.email", action: mask }
-      - { field: "$.customer.id",    action: tokenize }
+      - { field: "$.customer.id", action: tokenize }
 
-  - name: eu-residents-stay                     # (3) RECORD ROUTING — schema lane
+  - name: eu-residents-stay # (3) RECORD ROUTING — schema lane
     topics: ["events"]
-    route:  { replicate_if: "$.user.region == flow.target.region" }
+    route: { replicate_if: "$.user.region == flow.target.region" }
 ```
 
 ### Resolution rules
@@ -249,7 +253,7 @@ requirement:
    crashed/restarted replicator resumes exactly where it left off.
 2. **Connectivity loss** — transient source/target unavailability triggers
    bounded exponential backoff + retry on the worker's clients (reusing
-   `crabka-client-core` reconnection), not a crash. The flow self-heals when the
+   `krabka-client-core` reconnection), not a crash. The flow self-heals when the
    link returns; the heartbeat gap makes the outage observable.
 3. **Supervision** — the control plane restarts a dead worker with backoff; a
    persistently-failing worker is surfaced via health/metrics and (under the
@@ -266,7 +270,7 @@ A new `GeoReplication` CRD in `crates/operator/src/crd/`, following the existing
 `KafkaRebalance` / `SchemaRegistry` CRD patterns. Its spec mirrors the config
 model. The operator:
 
-- Reconciles it into a Deployment of `crabka-replicator` pods + Service.
+- Reconciles it into a Deployment of `krabka-replicator` pods + Service.
 - Wires cluster credentials and Schema Registry auth from Secrets; reuses the
   existing CA/mTLS plumbing for cluster connections.
 - Writes **status**: per-flow state (running / degraded / residency-blocked),
@@ -306,9 +310,9 @@ each its own spec → plan cycle.
 - **Slice 1 — core replication engine (first plan).** `crates/replicator` crate +
   binary; flow supervisor; flow-worker; fast-lane passthrough; selective topics;
   remote naming + loop prevention; **residency routing (#1)**; offset translation
-  + heartbeats (MM2 byte formats); at-least-once delivery; auto-recovery. Delivers
-  all four topologies + residency + offset failover. (The `delivery` config field
-  exists but accepts only `at-least-once` until Slice 3 lands EOS.)
+  - heartbeats (MM2 byte formats); at-least-once delivery; auto-recovery. Delivers
+    all four topologies + residency + offset failover. (The `delivery` config field
+    exists but accepts only `at-least-once` until Slice 3 lands EOS.)
 - **Slice 2 — schema lane.** Field transforms (#2) + record routing (#3) + Schema
   Registry integration + fail-closed decode.
 - **Slice 3 — EOS** delivery mode (per-flow transactional produce + atomic offset

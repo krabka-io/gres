@@ -1,22 +1,22 @@
 //! Metadata Raft quorum for Crabka.
 //!
-//! `crabka-raft` runs a hand-rolled KIP-595 `KRaft` consensus engine, the
-//! [`kraft::KraftController`], over Crabka's storage ([`crabka_log`]) and
-//! transport ([`crabka_client_core`]). The public entry point is
+//! `krabka-raft` runs a hand-rolled KIP-595 `KRaft` consensus engine, the
+//! [`kraft::KraftController`], over Crabka's storage ([`krabka_log`]) and
+//! transport ([`krabka_client_core`]). The public entry point is
 //! [`Controller::start`]. It spawns the engine and opens a TCP listener. That
 //! listener serves the real KIP-595 RPCs (Fetch=1, Vote=52,
 //! BeginQuorumEpoch=53, EndQuorumEpoch=54) and the Crabka-private observer and
 //! forward RPCs. [`Controller::start`] returns a [`ControllerHandle`], which
 //! submits metadata changes and reads the current
-//! [`crabka_metadata::MetadataImage`].
+//! [`krabka_metadata::MetadataImage`].
 //!
 //! ## Quick start
 //!
 //! ```no_run
 //! use std::time::Duration;
 //!
-//! use crabka_metadata::{MetadataRecord, TopicRecord};
-//! use crabka_raft::{Controller, ControllerConfig, NodeId};
+//! use krabka_metadata::{MetadataRecord, TopicRecord};
+//! use krabka_raft::{Controller, ControllerConfig, NodeId};
 //! use uuid::Uuid;
 //!
 //! # async fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -52,7 +52,7 @@
 //! [`RaftError::Unsupported`]. Mixed JVM and Crabka controller quorums are
 //! outside this crate's compatibility target.
 
-#![doc(html_root_url = "https://docs.rs/crabka-raft/0.4.1")]
+#![doc(html_root_url = "https://docs.rs/krabka-raft/0.4.2")]
 
 mod config;
 mod controller;
@@ -62,11 +62,11 @@ pub mod kraft;
 mod network;
 pub mod reconfig;
 /// The deterministic `KRaft` failure-scenario simulator with trace recording,
-/// re-exported from the leaf [`crabka_kraft_core::sim`] module. `crabka-docgen`
+/// re-exported from the leaf [`krabka_kraft_core::sim`] module. `krabka-docgen`
 /// runs [`scenarios::scenarios`] in-process to render the failure-scenario
 /// slideshow.
 #[cfg(feature = "scenarios")]
-pub use crabka_kraft_core::sim as scenarios;
+pub use krabka_kraft_core::sim as scenarios;
 mod server;
 mod snapshot;
 mod types;
@@ -92,7 +92,7 @@ pub use types::{AppData, AppDataResponse, Node, NodeId, OffsetReservation, Submi
 /// # Errors
 /// Returns an error if a metadata or control record cannot be encoded.
 pub fn serialize_metadata_snapshot(
-    image: &crabka_metadata::MetadataImage,
+    image: &krabka_metadata::MetadataImage,
     last_contained_log_timestamp: i64,
 ) -> Result<bytes::Bytes, RaftError> {
     snapshot::SnapshotWriter::serialize(image, last_contained_log_timestamp)

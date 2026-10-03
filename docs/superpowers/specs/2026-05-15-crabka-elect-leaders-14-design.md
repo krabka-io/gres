@@ -67,6 +67,7 @@ pub(crate) fn select_new_leader_for_partition(
 ```
 
 PREFERRED:
+
 1. Look up the partition. Missing → `UnknownTopicOrPartition`.
 2. `preferred = partition.replicas.first()`. Missing → `UnknownTopicOrPartition`.
 3. `partition.leader == preferred` → `PreferredAlreadyLeader`.
@@ -75,13 +76,14 @@ PREFERRED:
 6. Build `PartitionRecord { leader: preferred, leader_epoch: pr.leader_epoch + 1, ..pr.clone() }`.
 
 UNCLEAN:
+
 1. Look up the partition. Missing → `UnknownTopicOrPartition`.
 2. Any ISR member alive → `PreferredAlreadyLeader` (Kafka calls this
    `ELECTION_NOT_NEEDED` on the wire; the algorithm uses one variant for
    both "not needed" cases).
 3. Find first alive replica from `partition.replicas`. None → `NoEligibleReplica`.
 4. Build `PartitionRecord { leader: new_leader, isr: vec![new_leader],
-   leader_epoch: pr.leader_epoch + 1, ..pr.clone() }`. ISR shrinks to
+leader_epoch: pr.leader_epoch + 1, ..pr.clone() }`. ISR shrinks to
    just the new leader — old ISR members rejoin via the existing
    replicator catch-up flow once they're back online.
 
@@ -105,7 +107,7 @@ slice 13's ACL handlers:
    code from the mapping table below.
 5. Submit queued records via `controller.submit_change(records)`.
    Submit failure → mark every queued row with `COORDINATOR_NOT_
-   AVAILABLE (15)`.
+AVAILABLE (15)`.
 6. Build per-partition response rows.
 
 Inline-intercept dispatch (same slice-13 pattern — the handler needs
@@ -127,6 +129,7 @@ pub(crate) async fn run(
 ```
 
 Per tick:
+
 1. If not controller leader → skip silently.
 2. `image = controller.current_image()`.
 3. For every `(topic, partition)`, call
@@ -138,29 +141,30 @@ Per tick:
 
 ### Wire error-code map
 
-| Algorithm result | Wire code |
-|---|---|
-| `Ok(new_pr)` (submitted, committed) | `0` |
-| `Err(UnknownTopicOrPartition)` | `UNKNOWN_TOPIC_OR_PARTITION (3)` |
-| `Err(PreferredAlreadyLeader)` | `ELECTION_NOT_NEEDED (84)` |
-| `Err(PreferredNotInIsr)` | `PREFERRED_LEADER_NOT_AVAILABLE (80)` |
-| `Err(PreferredNotAlive)` | `PREFERRED_LEADER_NOT_AVAILABLE (80)` |
-| `Err(NoEligibleReplica)` | `ELIGIBLE_LEADERS_NOT_AVAILABLE (81)` |
-| `Err(NotControllerLeader)` | `COORDINATOR_NOT_AVAILABLE (15)` |
-| Authorization denied | `CLUSTER_AUTHORIZATION_FAILED (31)` |
-| Unknown election_type discriminant | `INVALID_REQUEST (42)` |
+| Algorithm result                    | Wire code                             |
+| ----------------------------------- | ------------------------------------- |
+| `Ok(new_pr)` (submitted, committed) | `0`                                   |
+| `Err(UnknownTopicOrPartition)`      | `UNKNOWN_TOPIC_OR_PARTITION (3)`      |
+| `Err(PreferredAlreadyLeader)`       | `ELECTION_NOT_NEEDED (84)`            |
+| `Err(PreferredNotInIsr)`            | `PREFERRED_LEADER_NOT_AVAILABLE (80)` |
+| `Err(PreferredNotAlive)`            | `PREFERRED_LEADER_NOT_AVAILABLE (80)` |
+| `Err(NoEligibleReplica)`            | `ELIGIBLE_LEADERS_NOT_AVAILABLE (81)` |
+| `Err(NotControllerLeader)`          | `COORDINATOR_NOT_AVAILABLE (15)`      |
+| Authorization denied                | `CLUSTER_AUTHORIZATION_FAILED (31)`   |
+| Unknown election_type discriminant  | `INVALID_REQUEST (42)`                |
 
 ## Components
 
-### `crabka-broker/src/handlers/elect_leaders.rs` (new, ~150 lines)
+### `krabka-broker/src/handlers/elect_leaders.rs` (new, ~150 lines)
 
 Decode `ElectLeadersRequest`, authorize Cluster Alter, drive
 `select_new_leader_for_partition` per target, submit, build response.
 Mirrors the shape of slice 13's `create_acls`/`delete_acls` handlers.
 
-### `crabka-broker/src/leader_election.rs` (extended)
+### `krabka-broker/src/leader_election.rs` (extended)
 
 Slice 10b's `on_broker_dead` stays. Add:
+
 - `pub(crate) enum ElectionType { Preferred, Unclean }`
 - `pub(crate) enum ElectError { … }`
 - `pub(crate) fn select_new_leader_for_partition(…) -> Result<PartitionRecord, ElectError>`
@@ -168,14 +172,14 @@ Slice 10b's `on_broker_dead` stays. Add:
 8 unit tests covering the algorithm (matrix on PREFERRED + UNCLEAN
 paths, ISR + liveness + unknown-topic cases).
 
-### `crabka-broker/src/leader_rebalance.rs` (new, ~120 lines)
+### `krabka-broker/src/leader_rebalance.rs` (new, ~120 lines)
 
 `run` (the spawned task) + `rebalance_tick` (the pure-ish per-tick
 logic, takes a `&dyn ControllerLike` trait object so tests can mock).
 2 unit tests on `rebalance_tick`: below-threshold no-op, above-
 threshold submits exact set.
 
-### `crabka-broker/src/config.rs` (extended)
+### `krabka-broker/src/config.rs` (extended)
 
 Three new fields on `BrokerConfig`:
 
@@ -191,19 +195,20 @@ don't see surprise re-elections triggered by the background ticker.
 Production `Default` keeps `true`.
 
 `validate()`:
+
 - `leader_imbalance_check_interval_secs == 0` →
   `BrokerError::InvalidLeaderRebalanceInterval { value: 0 }`.
 - `leader_imbalance_per_broker_percentage > 100` →
   `BrokerError::InvalidLeaderRebalanceThreshold { value }`.
 
-### `crabka-broker/src/broker.rs` (extended)
+### `krabka-broker/src/broker.rs` (extended)
 
 `Broker::start` spawns the rebalance task when
 `config.auto_leader_rebalance_enable` AND the broker is configured to
 participate in the controller quorum. Cancellation via the existing
 `shutdown` token.
 
-### `crabka-broker/src/codes.rs` (extended)
+### `krabka-broker/src/codes.rs` (extended)
 
 ```rust
 pub const PREFERRED_LEADER_NOT_AVAILABLE: i16 = 80;
@@ -215,7 +220,7 @@ pub const ELECTION_NOT_NEEDED: i16 = 84;
 `CLUSTER_AUTHORIZATION_FAILED (31)`, `INVALID_REQUEST (42)` are
 already defined.
 
-### `crabka-broker/src/error.rs` (extended)
+### `krabka-broker/src/error.rs` (extended)
 
 Two new `BrokerError` variants for config validation. If a sibling
 `from_broker_error` does exhaustive matching, add map arms.
@@ -244,7 +249,7 @@ Already in `crates/protocol/generated/ElectLeaders{Request,Response}.owned.rs`.
 5. `select_new_leader_for_partition` for `("foo", 0)`:
    - `partition.leader = 2`, `replicas = [1, 2, 3]`, `isr = [1, 2, 3]`.
    - Preferred = 1, ≠ leader, in ISR, alive → build new `PartitionRecord
-     { leader: 1, leader_epoch += 1, … }`.
+{ leader: 1, leader_epoch += 1, … }`.
 6. Handler submits the new record via `controller.submit_change`.
 7. Response: `error_code = 0` for the partition row.
 8. Existing slice-10b replicator + leader-epoch flow takes care of the
@@ -300,11 +305,11 @@ via a small match.
 
 ### Whole-request errors
 
-| Scenario | Wire response |
-|---|---|
-| Caller not authorized | `CLUSTER_AUTHORIZATION_FAILED (31)` on every per-partition row |
+| Scenario                           | Wire response                                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Caller not authorized              | `CLUSTER_AUTHORIZATION_FAILED (31)` on every per-partition row                                   |
 | Unknown election_type discriminant | `INVALID_REQUEST (42)` per-row (or whole-response if the wire schema has a top-level error_code) |
-| Raft submit failure | `COORDINATOR_NOT_AVAILABLE (15)` on rows queued but not committed |
+| Raft submit failure                | `COORDINATOR_NOT_AVAILABLE (15)` on rows queued but not committed                                |
 
 ### Algorithm errors
 
@@ -314,13 +319,13 @@ not arise in practice; the handler is defensive).
 
 ### Auto-rebalance failure handling
 
-| Scenario | Behavior |
-|---|---|
-| Not controller leader at tick | Skip tick silently |
-| Transient `submit_change` error | `warn!` log; next tick reassesses |
-| Stale liveness (broker dies mid-tick) | New `PartitionRecord` may name a now-dead leader; slice-10b's `on_broker_dead` re-elects. Self-healing |
-| `auto_leader_rebalance_enable = false` | Task never spawns |
-| Zero check interval | Rejected at startup |
+| Scenario                               | Behavior                                                                                               |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Not controller leader at tick          | Skip tick silently                                                                                     |
+| Transient `submit_change` error        | `warn!` log; next tick reassesses                                                                      |
+| Stale liveness (broker dies mid-tick)  | New `PartitionRecord` may name a now-dead leader; slice-10b's `on_broker_dead` re-elects. Self-healing |
+| `auto_leader_rebalance_enable = false` | Task never spawns                                                                                      |
+| Zero check interval                    | Rejected at startup                                                                                    |
 
 ### Config validation (startup, fatal)
 
@@ -343,21 +348,21 @@ via the existing slice-10b flow. No special locking.
 
 ### Logging
 
-| Event | Level |
-|---|---|
-| Successful election | `info!(topic, partition, new_leader, "elected leader")` |
-| `ELECTION_NOT_NEEDED` | `debug!` (operator polling routinely) |
-| `PREFERRED_LEADER_NOT_AVAILABLE` / `ELIGIBLE_LEADERS_NOT_AVAILABLE` | `info!` |
-| UNCLEAN election succeeded | `warn!(topic, partition, new_leader, isr_dropped, "UNCLEAN election — potential data loss")` |
-| Auto-rebalance tick committed N records | `info!(count, "auto-rebalance")` |
-| Auto-rebalance tick below threshold | `debug!` |
+| Event                                                               | Level                                                                                        |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Successful election                                                 | `info!(topic, partition, new_leader, "elected leader")`                                      |
+| `ELECTION_NOT_NEEDED`                                               | `debug!` (operator polling routinely)                                                        |
+| `PREFERRED_LEADER_NOT_AVAILABLE` / `ELIGIBLE_LEADERS_NOT_AVAILABLE` | `info!`                                                                                      |
+| UNCLEAN election succeeded                                          | `warn!(topic, partition, new_leader, isr_dropped, "UNCLEAN election — potential data loss")` |
+| Auto-rebalance tick committed N records                             | `info!(count, "auto-rebalance")`                                                             |
+| Auto-rebalance tick below threshold                                 | `debug!`                                                                                     |
 
 UNCLEAN-success at `warn` is deliberate — operators need visibility
 into data-loss-bearing decisions.
 
 ## Testing
 
-### Unit tests — `crabka-broker::leader_election`
+### Unit tests — `krabka-broker::leader_election`
 
 8 tests on `select_new_leader_for_partition`:
 
@@ -370,7 +375,7 @@ into data-loss-bearing decisions.
 - `unclean_isr_member_alive_returns_election_not_needed`
 - `unknown_topic_returns_error`
 
-### Unit tests — `crabka-broker::leader_rebalance`
+### Unit tests — `krabka-broker::leader_rebalance`
 
 2 tests on `rebalance_tick` via a small `ControllerLike` trait mock
 that captures submitted records in a `Mutex<Vec<MetadataRecord>>`:
@@ -378,7 +383,7 @@ that captures submitted records in a `Mutex<Vec<MetadataRecord>>`:
 - `below_threshold_skips_submit` (100 partitions, 5 imbalanced, threshold 10% → no submit)
 - `above_threshold_submits_imbalanced_set` (100 partitions, 20 imbalanced, threshold 10% → exactly 20 records)
 
-### Unit tests — `crabka-broker::config`
+### Unit tests — `krabka-broker::config`
 
 - `auto_leader_rebalance_defaults_to_true_in_default`
 - `auto_leader_rebalance_defaults_to_false_in_for_tests`
@@ -430,9 +435,9 @@ the wire path adequately.
 
 ## Wire-protocol additions
 
-| api_key | Name | Versions |
-|---------|------|----------|
-| 43 | ElectLeaders | v0–v2 (verify against generated constants) |
+| api_key | Name         | Versions                                   |
+| ------- | ------------ | ------------------------------------------ |
+| 43      | ElectLeaders | v0–v2 (verify against generated constants) |
 
 `ElectLeadersRequest`/`Response` schemas already generated in
 `crates/protocol/generated/`. Flexible-body table + `supported_apis`

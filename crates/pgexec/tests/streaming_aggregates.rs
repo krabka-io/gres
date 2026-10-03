@@ -8,8 +8,8 @@
 //! unbounded group keys.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
 async fn exec(session: &mut SqlSession, sql: &str) -> Vec<QueryResult> {
     session

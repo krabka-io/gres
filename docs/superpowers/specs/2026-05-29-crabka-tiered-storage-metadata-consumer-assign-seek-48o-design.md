@@ -31,9 +31,9 @@ Consumer::builder()
 ```
 
 The group `Consumer` is subscription-based; manual partition assignment
-and offset-seek live at the `crabka-client-core` layer
-(`crates/client-consumer/src/lib.rs:39`: *"assign() (manual partition
-consumption) — use crabka-client-core"*). 48p needs to resume from a
+and offset-seek live at the `krabka-client-core` layer
+(`crates/client-consumer/src/lib.rs:39`: _"assign() (manual partition
+consumption) — use krabka-client-core"_). 48p needs to resume from a
 committed offset; 48q needs to consume only assigned partitions. Both
 require dropping below the group consumer.
 
@@ -81,7 +81,7 @@ are unaffected — only how the stream is constructed changes.
 
 ### `KafkaMetadataEventLog` on client-core
 
-Rework the consumer off the group `Consumer` onto `crabka-client-core`
+Rework the consumer off the group `Consumer` onto `krabka-client-core`
 manual `Fetch` loops. Internally maintain one task per assigned partition
 (or one multiplexed task driven by an assignment map): for each
 `(partition, next_offset)`, issue `Fetch` to the partition leader, decode
@@ -143,6 +143,6 @@ touches `kafka_log.rs`); sequence 48r after 48o.
 
 - `cargo fmt --all --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test -p crabka-remote-storage-topic -p crabka-broker`
+- `cargo test -p krabka-remote-storage-topic -p krabka-broker`
 - `cargo test --workspace` (no regressions)
 - No CRD drift.

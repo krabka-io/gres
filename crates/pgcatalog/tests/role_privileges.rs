@@ -3,11 +3,11 @@
 //! with the former, so the cases where they disagree are the point of the test.
 
 use assert2::assert;
-use crabka_pgcatalog::{
+use krabka_pgcatalog::{
     RoleAttribute, RoleAttributes, create_role_with_memberships_ops, grant_role_memberships_ops,
     revoke_role_memberships_ops, role_can_set, role_has_privs_of,
 };
-use crabka_pgkv::{Kv, MemKv};
+use krabka_pgkv::{Kv, MemKv};
 
 /// A role's login flag, inheritance, and the roles it is granted membership of.
 struct RoleSpec {

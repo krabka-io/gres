@@ -1,5 +1,5 @@
-use crabka_pgexec::SqlEngine;
-use crabka_pgwire::engine::{Engine, QueryResult, Session};
+use krabka_pgexec::SqlEngine;
+use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
 async fn exec(engine: &SqlEngine, sql: &str) -> QueryResult {
     engine
@@ -17,7 +17,7 @@ async fn scalar(engine: &SqlEngine, sql: &str) -> String {
     String::from_utf8(rows[0][0].as_ref().unwrap().text.to_vec()).unwrap()
 }
 
-async fn exec_session(session: &mut crabka_pgexec::SqlSession, sql: &str) -> QueryResult {
+async fn exec_session(session: &mut krabka_pgexec::SqlSession, sql: &str) -> QueryResult {
     session
         .simple_query(sql)
         .await
@@ -25,7 +25,7 @@ async fn exec_session(session: &mut crabka_pgexec::SqlSession, sql: &str) -> Que
         .remove(0)
 }
 
-async fn scalar_session(session: &mut crabka_pgexec::SqlSession, sql: &str) -> String {
+async fn scalar_session(session: &mut krabka_pgexec::SqlSession, sql: &str) -> String {
     let QueryResult::Rows { rows, .. } = exec_session(session, sql).await else {
         panic!("expected rows");
     };

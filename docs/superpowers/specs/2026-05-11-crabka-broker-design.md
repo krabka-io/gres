@@ -1,38 +1,38 @@
-# `crabka-broker` (slice 4) design
+# `krabka-broker` (slice 4) design
 
 **Status:** draft (this is the spec for slice 4 of the Crabka meta-spec).
-**Depends on:** `crabka-protocol` (slice 1) and `crabka-log` (slice 3), both shipped to `main`.
+**Depends on:** `krabka-protocol` (slice 1) and `krabka-log` (slice 3), both shipped to `main`.
 **Tracks the meta-spec at:** [`docs/superpowers/specs/2026-05-10-crabka-rust-rewrite-design.md`](2026-05-10-crabka-rust-rewrite-design.md).
 
 ## Goal
 
-Ship a single-node `crabka-broker` binary that an unmodified JVM Kafka client can produce records to and consume from. End artifact: a `broker-jvm-acceptance` CI job in which `kafka-console-producer` pipes records into the broker and `kafka-console-consumer --partition 0 --from-beginning` reads them back, both running from the official Apache Kafka image via testcontainers, both connecting to a Rust `crabka-broker` process.
+Ship a single-node `krabka-broker` binary that an unmodified JVM Kafka client can produce records to and consume from. End artifact: a `broker-jvm-acceptance` CI job in which `kafka-console-producer` pipes records into the broker and `kafka-console-consumer --partition 0 --from-beginning` reads them back, both running from the official Apache Kafka image via testcontainers, both connecting to a Rust `krabka-broker` process.
 
 ## In scope
 
-A library crate (`crabka-broker`) plus a thin `crabka-broker` binary. The library exposes `Broker::start(config) -> BrokerHandle` so future integration tests and the conformance harness (slice 11 prep) can drive an in-process broker without spawning a child.
+A library crate (`krabka-broker`) plus a thin `krabka-broker` binary. The library exposes `Broker::start(config) -> BrokerHandle` so future integration tests and the conformance harness (slice 11 prep) can drive an in-process broker without spawning a child.
 
 ### Wire surface
 
 Handler implementations for exactly these API keys; everything else replies with `UNSUPPORTED_VERSION` (35):
 
-| API key | Name              | Why we need it                                                                   |
-|--------:|-------------------|----------------------------------------------------------------------------------|
-| 18      | ApiVersions       | First call from every Kafka client; without it nothing else negotiates.          |
-| 3       | Metadata          | Drives topic + partition + leader discovery for both producer and consumer.      |
-| 19      | CreateTopics      | `kafka-topics --create`.                                                         |
-| 20      | DeleteTopics      | `kafka-topics --delete`, plus cleanup between test runs.                         |
-| 0       | Produce           | `kafka-console-producer`.                                                        |
-| 1       | Fetch             | `kafka-console-consumer`.                                                        |
-| 2       | ListOffsets       | Consumer queries beginning / latest / by-timestamp before its first Fetch.       |
-| 32      | DescribeConfigs   | `kafka-topics --describe` probes this.                                           |
-| 10      | FindCoordinator   | Consumer always sends this; we stub-fail with `COORDINATOR_NOT_AVAILABLE` (15).  |
+| API key | Name            | Why we need it                                                                  |
+| ------: | --------------- | ------------------------------------------------------------------------------- |
+|      18 | ApiVersions     | First call from every Kafka client; without it nothing else negotiates.         |
+|       3 | Metadata        | Drives topic + partition + leader discovery for both producer and consumer.     |
+|      19 | CreateTopics    | `kafka-topics --create`.                                                        |
+|      20 | DeleteTopics    | `kafka-topics --delete`, plus cleanup between test runs.                        |
+|       0 | Produce         | `kafka-console-producer`.                                                       |
+|       1 | Fetch           | `kafka-console-consumer`.                                                       |
+|       2 | ListOffsets     | Consumer queries beginning / latest / by-timestamp before its first Fetch.      |
+|      32 | DescribeConfigs | `kafka-topics --describe` probes this.                                          |
+|      10 | FindCoordinator | Consumer always sends this; we stub-fail with `COORDINATOR_NOT_AVAILABLE` (15). |
 
 Topic provisioning is RPC-only — no auto-topic-creation on Produce, no static config file. Metadata mutation goes exclusively through CreateTopics / DeleteTopics.
 
 ### Concurrency model
 
-`tokio::spawn` per accepted TCP connection. Within a connection, requests are decoded and dispatched sequentially (Kafka guarantees in-order responses per connection). Writes go through an mpsc channel to a single-writer-per-partition actor task that owns the `crabka_log::Log`. Reads use `Arc<Log>` directly via `&self` — concurrent reads are safe per slice 3's design.
+`tokio::spawn` per accepted TCP connection. Within a connection, requests are decoded and dispatched sequentially (Kafka guarantees in-order responses per connection). Writes go through an mpsc channel to a single-writer-per-partition actor task that owns the `krabka_log::Log`. Reads use `Arc<Log>` directly via `&self` — concurrent reads are safe per slice 3's design.
 
 Critical: connection tasks never block on log I/O. Produce sends a `ProduceJob` on the mpsc channel and `await`s a oneshot; Fetch calls `log.read` against an `Arc<Log>` shared with the writer.
 
@@ -45,7 +45,7 @@ crates/broker/
 ├── Cargo.toml
 ├── src/
 │   ├── lib.rs                 # public API: Broker, BrokerConfig, BrokerHandle, BrokerError
-│   ├── bin/broker.rs          # the crabka-broker binary (clap CLI)
+│   ├── bin/broker.rs          # the krabka-broker binary (clap CLI)
 │   ├── config.rs              # BrokerConfig (listen_addr, log_dir, broker_id, advertised_listener)
 │   ├── error.rs               # BrokerError
 │   ├── metadata.rs            # in-memory metadata image
@@ -69,7 +69,7 @@ crates/broker/
 │       └── find_coordinator.rs
 └── tests/
     ├── unit.rs                # per-handler tests with synthetic metadata
-    ├── integration.rs         # spawn broker in-process; drive with crabka-client-core
+    ├── integration.rs         # spawn broker in-process; drive with krabka-client-core
     └── jvm_acceptance.rs      # testcontainers JVM clients → broker
 ```
 
@@ -77,14 +77,14 @@ crates/broker/
 
 - **`Broker`** (library entry point) — owns the network listener task, `Arc<RwLock<MetadataImage>>`, and a `DashMap<(String, i32), Arc<Partition>>` partition registry. Constructed via `Broker::start(config) -> BrokerHandle`. `BrokerHandle: Send + 'static`, exposes `.shutdown()`, `.listen_addr() -> SocketAddr`. Drops cleanly: listener stops accepting, in-flight requests drain, partition writers receive shutdown, log files fsync.
 - **`MetadataImage`** — `topics: HashMap<String, TopicMeta>`. `TopicMeta { topic_id: Uuid, partitions: Vec<PartitionMeta> }`. `PartitionMeta { partition_id: i32, leader_broker_id: i32, replicas: Vec<i32>, isr: Vec<i32> }`. All leader / replica / ISR entries are this broker's id. No persistence across restarts — `log_dir` scan on startup rebuilds entries from the directory layout (`<topic>-<partition>` naming).
-- **`Partition`** — `{ topic: String, partition_id: i32, log: Arc<crabka_log::Log>, writer_tx: mpsc::Sender<ProduceJob>, writer_handle: JoinHandle<()> }`. Lifecycle: created on CreateTopics → spawned writer → registered in the DashMap. Dropped on DeleteTopics → registry removal → writer mpsc closes → writer task drains and exits → log dir is rm'd.
+- **`Partition`** — `{ topic: String, partition_id: i32, log: Arc<krabka_log::Log>, writer_tx: mpsc::Sender<ProduceJob>, writer_handle: JoinHandle<()> }`. Lifecycle: created on CreateTopics → spawned writer → registered in the DashMap. Dropped on DeleteTopics → registry removal → writer mpsc closes → writer task drains and exits → log dir is rm'd.
 - **`partition_writer`** — single task per partition. Loop: `recv` a `ProduceJob`, call `log.append(&mut batch)`, send the assigned base offset back on the oneshot. Sole owner of `&mut Log`. On `log.append` error, propagates the error back via oneshot — never panics out of the supervisor's reach.
-- **`network::*`** — `TcpListener::bind(config.listen_addr)`, accept loop spawns one task per connection. The task wraps the stream in `LengthDelimitedCodec` (same big-endian i32 framing as `crabka-client-core`), parses each request via `RequestHeader::decode`, dispatches to the right handler, encodes the response via `Response::encode`. Connection-level errors (frame decode failure, peer disconnect) close the stream; broker stays up.
+- **`network::*`** — `TcpListener::bind(config.listen_addr)`, accept loop spawns one task per connection. The task wraps the stream in `LengthDelimitedCodec` (same big-endian i32 framing as `krabka-client-core`), parses each request via `RequestHeader::decode`, dispatches to the right handler, encodes the response via `Response::encode`. Connection-level errors (frame decode failure, peer disconnect) close the stream; broker stays up.
 - **`handlers/*`** — one module per supported API key. Each implements:
-    ```rust
-    async fn handle(broker: &Broker, version: i16, req: Req) -> Result<Resp, BrokerError>
-    ```
-    Routing built at startup as a `HashMap<i16, fn pointer>`. Anything not in the table responds with `UNSUPPORTED_VERSION`.
+  ```rust
+  async fn handle(broker: &Broker, version: i16, req: Req) -> Result<Resp, BrokerError>
+  ```
+  Routing built at startup as a `HashMap<i16, fn pointer>`. Anything not in the table responds with `UNSUPPORTED_VERSION`.
 - **`log_dir`** — path helpers (`<log_dir>/<topic>-<partition>/`) and the startup-scan routine that walks the directory and registers existing partitions.
 
 ## Data flow
@@ -160,18 +160,18 @@ Two layers, distinct audiences.
 
 Per-(topic, partition) `error_code: i16` fields are populated with the canonical Apache Kafka codes; JVM clients react to specific codes and will misbehave if we substitute. Codes the MVP must emit correctly:
 
-| Code | Name                          | When |
-|-----:|-------------------------------|------|
-| 0    | NONE                          | Success. |
-| 1    | UNKNOWN_SERVER_ERROR          | Internal `BrokerError` we didn't map. Includes `tracing::error!` on the broker side. |
-| 3    | UNKNOWN_TOPIC_OR_PARTITION    | Topic / partition not in registry. |
-| 6    | NOT_LEADER_OR_FOLLOWER        | Partition was alive at metadata-lookup time but its writer mpsc is now closed. |
-| 7    | REQUEST_TIMED_OUT             | `timeout_ms` exceeded waiting for partition writer ack. |
-| 15   | COORDINATOR_NOT_AVAILABLE     | FindCoordinator stub response. |
-| 35   | UNSUPPORTED_VERSION           | API key + version combination not in our handler routing table. |
-| 36   | TOPIC_ALREADY_EXISTS          | CreateTopics on an existing name. |
-| 37   | INVALID_PARTITIONS            | CreateTopics with `partition_count <= 0`. |
-| 41   | NOT_CONTROLLER                | (Reserved — admin clients sometimes route topic ops through "the controller". We're it.) |
+| Code | Name                       | When                                                                                     |
+| ---: | -------------------------- | ---------------------------------------------------------------------------------------- |
+|    0 | NONE                       | Success.                                                                                 |
+|    1 | UNKNOWN_SERVER_ERROR       | Internal `BrokerError` we didn't map. Includes `tracing::error!` on the broker side.     |
+|    3 | UNKNOWN_TOPIC_OR_PARTITION | Topic / partition not in registry.                                                       |
+|    6 | NOT_LEADER_OR_FOLLOWER     | Partition was alive at metadata-lookup time but its writer mpsc is now closed.           |
+|    7 | REQUEST_TIMED_OUT          | `timeout_ms` exceeded waiting for partition writer ack.                                  |
+|   15 | COORDINATOR_NOT_AVAILABLE  | FindCoordinator stub response.                                                           |
+|   35 | UNSUPPORTED_VERSION        | API key + version combination not in our handler routing table.                          |
+|   36 | TOPIC_ALREADY_EXISTS       | CreateTopics on an existing name.                                                        |
+|   37 | INVALID_PARTITIONS         | CreateTopics with `partition_count <= 0`.                                                |
+|   41 | NOT_CONTROLLER             | (Reserved — admin clients sometimes route topic ops through "the controller". We're it.) |
 
 ### Internal `BrokerError`
 
@@ -180,8 +180,8 @@ Per-(topic, partition) `error_code: i16` fields are populated with the canonical
 #[non_exhaustive]
 pub enum BrokerError {
     #[error("I/O: {0}")] Io(#[from] std::io::Error),
-    #[error("log: {0}")] Log(#[from] crabka_log::LogError),
-    #[error("protocol: {0}")] Protocol(#[from] crabka_protocol::ProtocolError),
+    #[error("log: {0}")] Log(#[from] krabka_log::LogError),
+    #[error("protocol: {0}")] Protocol(#[from] krabka_protocol::ProtocolError),
     #[error("unsupported api_key={api_key} version={version}")]
     UnsupportedApi { api_key: i16, version: i16 },
     #[error("partition writer for {topic}-{partition} died")]
@@ -205,8 +205,8 @@ pub struct BrokerConfig {
     pub broker_id: i32,                  // default: 1
     pub listen_addr: SocketAddr,         // default: 127.0.0.1:9092
     pub advertised_listener: String,     // e.g. "localhost:9092" — what Metadata returns
-    pub log_dir: PathBuf,                // default: ./crabka-data
-    pub log_config: crabka_log::LogConfig,
+    pub log_dir: PathBuf,                // default: ./krabka-data
+    pub log_config: krabka_log::LogConfig,
     pub num_io_threads: usize,           // default: 0 = use tokio's default
 }
 ```
@@ -223,7 +223,7 @@ Per-handler tests with an in-process `Broker` + synthetic metadata. Verify succe
 
 ### Integration tests (`tests/integration.rs`)
 
-Spawn the `Broker` in-process; drive it with `crabka-client-core` (slice 2). One end-to-end scenario per request type:
+Spawn the `Broker` in-process; drive it with `krabka-client-core` (slice 2). One end-to-end scenario per request type:
 
 - `connect_and_negotiate_versions`
 - `create_then_describe_topic`
@@ -267,10 +267,10 @@ The slice is done when, in CI:
 
 1. `cargo fmt --all -- --check` clean.
 2. `cargo clippy --workspace --all-targets -- -D warnings` clean.
-3. `cargo test -p crabka-broker` passes (unit + integration).
+3. `cargo test -p krabka-broker` passes (unit + integration).
 4. `cargo test --workspace --include-ignored` is no worse than before (no regressions in other slices).
 5. `broker-jvm-acceptance` job is green: both scenarios pass.
-6. `cargo doc -p crabka-broker --no-deps` builds without warnings; every public type carries rustdoc.
+6. `cargo doc -p krabka-broker --no-deps` builds without warnings; every public type carries rustdoc.
 7. Public API matches the spec: `Broker`, `BrokerHandle`, `BrokerConfig`, `BrokerError`.
 
 ## Reference

@@ -181,7 +181,7 @@ mod tests {
                 wal_replication: Some(3),
                 scram_iterations: Some(12_288),
                 checkpoint_frames: None,
-                checkpoint_size: Some(crabka_units::bytes(134_217_728)),
+                checkpoint_size: Some(krabka_units::bytes(134_217_728)),
                 suspend_max_checkpoint_size: None,
                 idle_seconds: None,
             }),

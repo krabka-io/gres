@@ -17,13 +17,13 @@
 
 use std::{borrow::Cow, fmt::Write as _};
 
-use crabka_pgtypes::{
+use krabka_pgtypes::{
     ArrayDim, ArrayValue, ColumnType, Datum, ElemType, RecordValue,
     json::{self, Kind},
     jsonb::{self, JsonbValue},
     usertype,
 };
-use crabka_pgwire::error::PgError;
+use krabka_pgwire::error::PgError;
 
 use crate::{clock::EvalCtx, error::ExecError};
 
@@ -83,7 +83,7 @@ impl<'a> Node<'a> {
                 flavour.document().name(),
                 other
                     .column_type()
-                    .map_or("unknown", crabka_pgtypes::ColumnType::name)
+                    .map_or("unknown", krabka_pgtypes::ColumnType::name)
             ))),
         }
     }

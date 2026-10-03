@@ -1,25 +1,25 @@
-# Dimensioned Values: `crabka-units` Adoption
+# Dimensioned Values: `krabka-units` Adoption
 
-`crabka-units` wraps [`uom`](https://docs.rs/uom) so a size, a rate, or a timeout
+`krabka-units` wraps [`uom`](https://docs.rs/uom) so a size, a rate, or a timeout
 carries its dimension in the type. This is the sibling of
 [`docs/newtype-safety-rollout.md`](newtype-safety-rollout.md): newtypes give
-*identifiers* distinct types, quantities give *magnitudes* distinct dimensions.
+_identifiers_ distinct types, quantities give _magnitudes_ distinct dimensions.
 
 ## The vocabulary
 
-| Alias | `uom` quantity | Base unit | Use for |
-| --- | --- | --- | --- |
-| `ByteSize` | `Information` | byte | message/segment/buffer sizes, quota balances |
-| `ByteRate` | `InformationRate` | byte/s | producer and replication quotas, measured throughput |
-| `Time` | `Time` | second | timeouts, intervals, retention windows, latencies |
-| `Frequency` | `Frequency` | hertz | records/s, requests/s |
-| `Ratio` | `Ratio` | — | fill factors, sampling probabilities, percentages |
+| Alias       | `uom` quantity    | Base unit | Use for                                              |
+| ----------- | ----------------- | --------- | ---------------------------------------------------- |
+| `ByteSize`  | `Information`     | byte      | message/segment/buffer sizes, quota balances         |
+| `ByteRate`  | `InformationRate` | byte/s    | producer and replication quotas, measured throughput |
+| `Time`      | `Time`            | second    | timeouts, intervals, retention windows, latencies    |
+| `Frequency` | `Frequency`       | hertz     | records/s, requests/s                                |
+| `Ratio`     | `Ratio`           | —         | fill factors, sampling probabilities, percentages    |
 
 All five store `f64` in base units, which is what lets `uom` combine them:
 `ByteSize / Time` is a `ByteRate`, checked by the compiler.
 
 ```rust
-use crabka_units::prelude::*;
+use krabka_units::prelude::*;
 
 let quota: ByteRate = mebibytes_per_sec(10);
 let backlog: ByteSize = mebibytes(50);
@@ -37,22 +37,22 @@ let drain: Time = quota.time_to_transfer(backlog); // 5s
 - **The generated Kafka codec** (`crates/protocol/generated`). It must stay
   byte-exact; convert at the hand-written boundary instead.
 - **Instants.** An offset, a leader epoch, or an epoch-milliseconds timestamp is a
-  coordinate, not a magnitude — those stay `crabka-ids` newtypes. `Time` is an
-  *extent*: a difference between instants, never an instant.
+  coordinate, not a magnitude — those stay `krabka-ids` newtypes. `Time` is an
+  _extent_: a difference between instants, never an instant.
 - **Counts of things.** A partition count, a replica count, a retry budget, a
   record count. Dimensionless integers are already unambiguous.
 - **Atomics and verified kernels.** `AtomicU64` cannot hold a quantity, and the
-  Creusot-verified arithmetic in `crabka-throttle` translates only over integers.
+  Creusot-verified arithmetic in `krabka-throttle` translates only over integers.
   Keep the raw representation and convert in the accessors.
 
 ## The seams
 
-Every conversion goes through `crabka_units::convert`, so the rounding and
+Every conversion goes through `krabka_units::convert`, so the rounding and
 saturation rules live in one place. Conversions in are exact; conversions out
 round to nearest and saturate.
 
 ```rust
-use crabka_units::prelude::*;
+use krabka_units::prelude::*;
 
 // Wire in / wire out.
 let timeout = Time::from_millis(i64::from(request.session_timeout_ms));
@@ -73,9 +73,9 @@ A config struct holds quantities and reads the form an operator writes:
 ```rust
 #[derive(Serialize, Deserialize)]
 struct TopicConfig {
-    #[serde(with = "crabka_units::serde_units::human::byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::byte_size")]
     segment_size: ByteSize,            // "512MiB"
-    #[serde(with = "crabka_units::serde_units::numeric::millis_i64")]
+    #[serde(with = "krabka_units::serde_units::numeric::millis_i64")]
     retention: Time,                   // 604800000
 }
 ```

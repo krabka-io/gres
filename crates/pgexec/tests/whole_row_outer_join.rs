@@ -9,14 +9,14 @@
 //! because on a composite it is field-wise; and `ja LEFT JOIN jb ON true` puts a
 //! stored all-NULL row and an invented one in the same result, so the query
 //! shape cannot separate them either. Only where the row came from can, which is
-//! why the join marks the side it invents and [`crabka_pgexec`] carries that
+//! why the join marks the side it invents and [`krabka_pgexec`] carries that
 //! marker out to the projection.
 //!
 //! Every expectation here was read off `PostgreSQL` 18.4.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 /// Every row, each as its cells joined by `|`, with a NULL cell as `<NULL>` —
 /// which is what tells a NULL whole row from the `(,)` an all-NULL composite
@@ -594,9 +594,9 @@ async fn budget_floor(sql: &str) -> u32 {
 /// Does `sql` complete under a `budget`-byte blocking-query budget, over a
 /// hundred-row outer relation joined to one wide row?
 async fn fits(budget: u32, sql: &str) -> bool {
-    let engine = crabka_pgexec::SqlEngine::new_with_policy(crabka_pgexec::RuntimePolicy {
-        blocking_query_memory: crabka_units::bytes(budget),
-        ..crabka_pgexec::RuntimePolicy::default()
+    let engine = krabka_pgexec::SqlEngine::new_with_policy(krabka_pgexec::RuntimePolicy {
+        blocking_query_memory: krabka_units::bytes(budget),
+        ..krabka_pgexec::RuntimePolicy::default()
     })
     .expect("runtime policy");
     let mut s = engine.connect();

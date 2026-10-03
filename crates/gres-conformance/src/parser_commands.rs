@@ -1,10 +1,10 @@
 //! Parser-command probes for the `PostgreSQL` compatibility matrix.
 
-use crabka_pgparser::{ParseError, ast::Statement, parse};
+use krabka_pgparser::{ParseError, ast::Statement, parse};
 use serde::Serialize;
 use thiserror::Error;
 
-/// Version of the JSON report emitted by `crabka-gres-parser-commands`.
+/// Version of the JSON report emitted by `krabka-gres-parser-commands`.
 pub const PARSER_COMMAND_REPORT_FORMAT_VERSION: u32 = 2;
 
 /// Stable machine-readable inventory of SQL commands accepted by the parser.
@@ -72,7 +72,7 @@ struct CommandProbe {
     expected_statement: &'static str,
     /// The `(sqlstate, message fragment)` a command refuses with when the
     /// refusal is the executor's rather than a parser-level
-    /// [`crabka_pgparser::ast::RefusalCommand`].
+    /// [`krabka_pgparser::ast::RefusalCommand`].
     refusal: Option<(&'static str, &'static str)>,
 }
 
@@ -1012,7 +1012,7 @@ const COMMAND_PROBES: &[CommandProbe] = &[
 /// Build the compatibility matrix's parser-command inventory.
 ///
 /// Every command has a representative SQL probe and is parsed through
-/// [`crabka_pgparser::parse`]. The AST shape check makes changes to parser
+/// [`krabka_pgparser::parse`]. The AST shape check makes changes to parser
 /// dispatch explicit while an exhaustive [`Statement`] match forces this module
 /// to account for new statement variants.
 ///
@@ -1021,17 +1021,17 @@ const COMMAND_PROBES: &[CommandProbe] = &[
 /// Returns an error when a probe is rejected, produces multiple statements, or
 /// maps to an unexpected AST shape.
 pub fn parser_command_report() -> Result<ParserCommandReport, ParserCommandError> {
-    let commands = crabka_pgparser::command::CommandIdentity::ALL
+    let commands = krabka_pgparser::command::CommandIdentity::ALL
         .iter()
         .map(|identity| identity.name().to_string())
         .collect();
     let mut probes =
-        Vec::with_capacity(COMMAND_PROBES.len() + crabka_pgparser::ast::NON_GOAL_REFUSALS.len());
+        Vec::with_capacity(COMMAND_PROBES.len() + krabka_pgparser::ast::NON_GOAL_REFUSALS.len());
     for probe in COMMAND_PROBES {
         validate_probe(probe)?;
         probes.push(behavior_probe(probe)?);
     }
-    for spec in crabka_pgparser::ast::NON_GOAL_REFUSALS {
+    for spec in krabka_pgparser::ast::NON_GOAL_REFUSALS {
         let probe = CommandProbe {
             command: spec.command.command_name(),
             sql: spec.representative_sql,
@@ -1083,7 +1083,7 @@ fn behavior_probe(probe: &CommandProbe) -> Result<BehaviorProbe, ParserCommandEr
 
 fn validate_probe(probe: &CommandProbe) -> Result<(), ParserCommandError> {
     let classified =
-        crabka_pgparser::parse_with_command_identities(probe.sql).map_err(|source| {
+        krabka_pgparser::parse_with_command_identities(probe.sql).map_err(|source| {
             ParserCommandError::Rejected {
                 command: probe.command,
                 sql: probe.sql,
@@ -1144,7 +1144,7 @@ fn statement_shape(statement: &Statement) -> &'static str {
         Statement::AlterRoutine { .. } => "AlterRoutine",
         Statement::Call { .. } => "Call",
         Statement::DoBlock { .. } => "DoBlock",
-        Statement::CreateIndex { table, .. } if table.name == "__crabka_sequence__" => {
+        Statement::CreateIndex { table, .. } if table.name == "__krabka_sequence__" => {
             "CreateSequence"
         }
         Statement::CreateIndex { .. } => "CreateIndex",
@@ -1154,7 +1154,7 @@ fn statement_shape(statement: &Statement) -> &'static str {
         Statement::DropTable { names, .. }
             if names
                 .first()
-                .is_some_and(|name| name.name.starts_with("__crabka_sequence__:")) =>
+                .is_some_and(|name| name.name.starts_with("__krabka_sequence__:")) =>
         {
             "DropSequence"
         }
@@ -1206,55 +1206,55 @@ fn statement_shape(statement: &Statement) -> &'static str {
         Statement::Cluster(_) => "Cluster",
         Statement::Explain { .. } => "Explain",
         Statement::Utility(utility) => match utility {
-            crabka_pgparser::ast::UtilityStatement::Analyze(_) => "Analyze",
-            crabka_pgparser::ast::UtilityStatement::Reindex(_) => "Reindex",
-            crabka_pgparser::ast::UtilityStatement::Checkpoint => "Checkpoint",
-            crabka_pgparser::ast::UtilityStatement::Load { .. } => "Load",
-            crabka_pgparser::ast::UtilityStatement::SecurityLabel { .. } => "SecurityLabel",
-            crabka_pgparser::ast::UtilityStatement::CreateTablespace { .. } => "CreateTablespace",
-            crabka_pgparser::ast::UtilityStatement::DropTablespace { .. } => "DropTablespace",
-            crabka_pgparser::ast::UtilityStatement::AlterTablespace { .. } => "AlterTablespace",
-            crabka_pgparser::ast::UtilityStatement::CreateOperatorClass { .. } => {
+            krabka_pgparser::ast::UtilityStatement::Analyze(_) => "Analyze",
+            krabka_pgparser::ast::UtilityStatement::Reindex(_) => "Reindex",
+            krabka_pgparser::ast::UtilityStatement::Checkpoint => "Checkpoint",
+            krabka_pgparser::ast::UtilityStatement::Load { .. } => "Load",
+            krabka_pgparser::ast::UtilityStatement::SecurityLabel { .. } => "SecurityLabel",
+            krabka_pgparser::ast::UtilityStatement::CreateTablespace { .. } => "CreateTablespace",
+            krabka_pgparser::ast::UtilityStatement::DropTablespace { .. } => "DropTablespace",
+            krabka_pgparser::ast::UtilityStatement::AlterTablespace { .. } => "AlterTablespace",
+            krabka_pgparser::ast::UtilityStatement::CreateOperatorClass { .. } => {
                 "CreateOperatorClass"
             }
-            crabka_pgparser::ast::UtilityStatement::CreateOperatorFamily { .. } => {
+            krabka_pgparser::ast::UtilityStatement::CreateOperatorFamily { .. } => {
                 "CreateOperatorFamily"
             }
-            crabka_pgparser::ast::UtilityStatement::AlterOperatorObject { .. } => {
+            krabka_pgparser::ast::UtilityStatement::AlterOperatorObject { .. } => {
                 "AlterOperatorObject"
             }
-            crabka_pgparser::ast::UtilityStatement::DropOperatorObject { .. } => {
+            krabka_pgparser::ast::UtilityStatement::DropOperatorObject { .. } => {
                 "DropOperatorObject"
             }
-            crabka_pgparser::ast::UtilityStatement::CreateOperator(_) => "CreateOperator",
-            crabka_pgparser::ast::UtilityStatement::DropOperator { .. } => "DropOperator",
-            crabka_pgparser::ast::UtilityStatement::AlterSystem { .. } => "AlterSystem",
-            crabka_pgparser::ast::UtilityStatement::SetConstraints { .. } => "SetConstraints",
-            crabka_pgparser::ast::UtilityStatement::SetSessionAuthorization { .. } => {
+            krabka_pgparser::ast::UtilityStatement::CreateOperator(_) => "CreateOperator",
+            krabka_pgparser::ast::UtilityStatement::DropOperator { .. } => "DropOperator",
+            krabka_pgparser::ast::UtilityStatement::AlterSystem { .. } => "AlterSystem",
+            krabka_pgparser::ast::UtilityStatement::SetConstraints { .. } => "SetConstraints",
+            krabka_pgparser::ast::UtilityStatement::SetSessionAuthorization { .. } => {
                 "SetSessionAuthorization"
             }
-            crabka_pgparser::ast::UtilityStatement::TextSearch(ddl) => match ddl {
-                crabka_pgparser::ast::TextSearchDdl::Create { kind, .. } => match kind {
-                    crabka_pgparser::ast::TextSearchObjectKind::Configuration => {
+            krabka_pgparser::ast::UtilityStatement::TextSearch(ddl) => match ddl {
+                krabka_pgparser::ast::TextSearchDdl::Create { kind, .. } => match kind {
+                    krabka_pgparser::ast::TextSearchObjectKind::Configuration => {
                         "CreateTextSearchConfiguration"
                     }
-                    crabka_pgparser::ast::TextSearchObjectKind::Dictionary => {
+                    krabka_pgparser::ast::TextSearchObjectKind::Dictionary => {
                         "CreateTextSearchDictionary"
                     }
                 },
-                crabka_pgparser::ast::TextSearchDdl::Alter { kind, .. } => match kind {
-                    crabka_pgparser::ast::TextSearchObjectKind::Configuration => {
+                krabka_pgparser::ast::TextSearchDdl::Alter { kind, .. } => match kind {
+                    krabka_pgparser::ast::TextSearchObjectKind::Configuration => {
                         "AlterTextSearchConfiguration"
                     }
-                    crabka_pgparser::ast::TextSearchObjectKind::Dictionary => {
+                    krabka_pgparser::ast::TextSearchObjectKind::Dictionary => {
                         "AlterTextSearchDictionary"
                     }
                 },
-                crabka_pgparser::ast::TextSearchDdl::Drop { kind, .. } => match kind {
-                    crabka_pgparser::ast::TextSearchObjectKind::Configuration => {
+                krabka_pgparser::ast::TextSearchDdl::Drop { kind, .. } => match kind {
+                    krabka_pgparser::ast::TextSearchObjectKind::Configuration => {
                         "DropTextSearchConfiguration"
                     }
-                    crabka_pgparser::ast::TextSearchObjectKind::Dictionary => {
+                    krabka_pgparser::ast::TextSearchObjectKind::Dictionary => {
                         "DropTextSearchDictionary"
                     }
                 },
@@ -1263,7 +1263,7 @@ fn statement_shape(statement: &Statement) -> &'static str {
         Statement::Set {
             local: false,
             name,
-            value: crabka_pgparser::ast::SetValue::Value(value),
+            value: krabka_pgparser::ast::SetValue::Value(value),
         } if name == "__set_transaction" && value.as_slice() == ["read committed"] => {
             "SetTransaction"
         }
@@ -1304,8 +1304,8 @@ fn statement_shape(statement: &Statement) -> &'static str {
 /// / `STDOUT`, needing the copy subprotocol) or a server-side file. The
 /// parenthesized-query source is called out separately because only `COPY … TO`
 /// can spell it.
-fn copy_shape(copy: &crabka_pgparser::ast::CopyStmt) -> &'static str {
-    use crabka_pgparser::ast::{CopyDestination, CopyDirection, CopySource, CopyTarget};
+fn copy_shape(copy: &krabka_pgparser::ast::CopyStmt) -> &'static str {
+    use krabka_pgparser::ast::{CopyDestination, CopyDirection, CopySource, CopyTarget};
 
     match (&copy.direction, &copy.target) {
         (CopyDirection::From(CopySource::Stdin), _) => "CopyFromStdin",
@@ -1333,7 +1333,7 @@ mod tests {
             "all resolved command rows need probes"
         );
         assert!(report.commands.windows(2).all(|pair| pair[0] < pair[1]));
-        for spec in crabka_pgparser::ast::NON_GOAL_REFUSALS {
+        for spec in krabka_pgparser::ast::NON_GOAL_REFUSALS {
             assert!(
                 report
                     .commands
@@ -1345,7 +1345,7 @@ mod tests {
 
     #[test]
     fn parser_registry_distinguishes_aliases_that_share_ast_shapes() {
-        use crabka_pgparser::{command::CommandIdentity, parse_with_command_identities};
+        use krabka_pgparser::{command::CommandIdentity, parse_with_command_identities};
 
         for (sql, identity) in [
             ("BEGIN", CommandIdentity::Begin),

@@ -10,7 +10,7 @@ use super::*;
 /// resolved by the time rows reach them.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CopyIntoTarget<'a> {
-    pub(crate) name: &'a crabka_pgparser::ast::RelationRef,
+    pub(crate) name: &'a krabka_pgparser::ast::RelationRef,
     pub(crate) columns: &'a Option<Vec<String>>,
 }
 
@@ -18,7 +18,7 @@ pub(crate) async fn execute_copy_write(
     write_ctx: &WriteContext<'_>,
     target: CopyIntoTarget<'_>,
     rows: &[crate::copyfmt::CopyRow<'_>],
-) -> Result<(QueryResult, Vec<crabka_pgkv::WriteOp>), ExecError> {
+) -> Result<(QueryResult, Vec<krabka_pgkv::WriteOp>), ExecError> {
     let catalog_kv = write_ctx.catalog_kv;
     let kv = write_ctx.kv;
     let seq = write_ctx.seq;
@@ -26,7 +26,7 @@ pub(crate) async fn execute_copy_write(
     let ctx = write_ctx.eval_ctx;
     let resolution = ctx.resolution();
     let mut ops = Vec::new();
-    let table = crabka_pgcatalog::get_table(
+    let table = krabka_pgcatalog::get_table(
         catalog_kv,
         &resolve_relation(
             catalog_kv,
@@ -54,7 +54,7 @@ pub(crate) async fn execute_copy_write(
     let copied_columns = WriteContext::modified_columns(&table, &target_idx);
     let copy_check = write_ctx.row_check(
         &table,
-        crabka_pgcatalog::policy::PolicyCommand::Insert,
+        krabka_pgcatalog::policy::PolicyCommand::Insert,
         &copied_columns,
     )?;
     let n_rows = rows.len() as u64;
@@ -62,7 +62,7 @@ pub(crate) async fn execute_copy_write(
         catalog_kv,
         &table,
         crate::trigger::DmlEvent::Insert,
-        crabka_pgcatalog::trigger::TriggerTiming::Before,
+        krabka_pgcatalog::trigger::TriggerTiming::Before,
         &[],
         ctx,
     )?;
@@ -71,7 +71,7 @@ pub(crate) async fn execute_copy_write(
             catalog_kv,
             &table,
             crate::trigger::DmlEvent::Insert,
-            crabka_pgcatalog::trigger::TriggerTiming::After,
+            krabka_pgcatalog::trigger::TriggerTiming::After,
             &[],
             ctx,
         )?;
@@ -162,12 +162,12 @@ pub(crate) async fn execute_copy_write(
         if !fk_ctx.is_empty() {
             writes.fk_checks.after_insert(fk_ctx, rowid, &full)?;
         }
-        ops.push(crabka_pgkv::WriteOp::Put {
-            key: crabka_pgmvcc::version::version_key_xid(table.id, rowid, snapshot_xid),
+        ops.push(krabka_pgkv::WriteOp::Put {
+            key: krabka_pgmvcc::version::version_key_xid(table.id, rowid, snapshot_xid),
             value: encode_table_tuple(
                 &table,
                 snapshot_xid,
-                crabka_pgmvcc::xid::INVALID_XID,
+                krabka_pgmvcc::xid::INVALID_XID,
                 write_ctx.command_id,
                 0,
                 &full,
@@ -194,7 +194,7 @@ pub(crate) async fn execute_copy_write(
         catalog_kv,
         &table,
         crate::trigger::DmlEvent::Insert,
-        crabka_pgcatalog::trigger::TriggerTiming::After,
+        krabka_pgcatalog::trigger::TriggerTiming::After,
         &[],
         ctx,
     )?;
@@ -210,7 +210,7 @@ pub(crate) fn execute_timestamp_copy_write(
     ctx: &crate::clock::EvalCtx,
 ) -> Result<TimestampWritePlan, ExecError> {
     let resolution = ctx.resolution();
-    let table = crabka_pgcatalog::get_table(
+    let table = krabka_pgcatalog::get_table(
         catalog_kv,
         &resolve_relation(
             catalog_kv,
@@ -224,10 +224,10 @@ pub(crate) fn execute_timestamp_copy_write(
             "timestamp COPY requires a sharded table".into(),
         ));
     }
-    let indexes = crabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)?;
+    let indexes = krabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)?;
     if indexes.iter().any(|index| {
-        index.placement == crabka_pgcatalog::IndexPlacement::Local
-            || (index.placement == crabka_pgcatalog::IndexPlacement::Global && index.unique)
+        index.placement == krabka_pgcatalog::IndexPlacement::Local
+            || (index.placement == krabka_pgcatalog::IndexPlacement::Global && index.unique)
     }) {
         return Err(ExecError::Unsupported(
             "COPY index maintenance for sharded tables is not supported".into(),
@@ -235,7 +235,7 @@ pub(crate) fn execute_timestamp_copy_write(
     }
     let global_indexes = indexes
         .iter()
-        .filter(|index| index.placement == crabka_pgcatalog::IndexPlacement::Global)
+        .filter(|index| index.placement == krabka_pgcatalog::IndexPlacement::Global)
         .collect::<Vec<_>>();
     let target_idx = resolve_targets(&table, target.columns)?;
     let n_rows = rows.len() as u64;

@@ -33,7 +33,7 @@ Connect requires **HTTP/2 for streaming** RPCs (`connectrpc-axum` `handler.rs:54
 - **`SendStream`** (bidi batch produce) — unary `Send` covers v1 publish; the full-duplex batch path is deferred with manual ack.
 - **`EnsureTopic`/Admin gateway RPC** — topic auto-provision (only Kafka-wire `AdminClient::create_topics` exists; the gateway proto has no Admin RPC).
 - **Share-group Subscribe mode on the gateway** — the KIP-932 queue wedge lives only in the native `client-consumer/src/share/`; `Subscribe` uses classic `ConsumeSession`. Surfacing it is net-new gateway proto+handler work.
-- **SDK-side CloudEvents *consume*** — blocked on MSG-1 (`Inbound.headers` is a hardcoded empty map, `streaming.rs:153`); `publishEvent` (send) works today (transparent), receiving `ce_*` does not.
+- **SDK-side CloudEvents _consume_** — blocked on MSG-1 (`Inbound.headers` is a hardcoded empty map, `streaming.rs:153`); `publishEvent` (send) works today (transparent), receiving `ce_*` does not.
 - **Full SQL filter** — `FieldPredicate` is JSONPath **EQUALS-only** and matches only decoded structured records (`streaming.rs:89-103`); the SDK filter builder must not imply SQL.
 
 ## Architecture Overview
@@ -48,12 +48,12 @@ sdks/go  (thin ergonomic wrapper)
   config: endpoint URL + optional bearer token / mTLS cert   (anonymous fallback for dev)
         │
         ▼  Connect protocol — unary Send over HTTP/1.1; Subscribe over HTTP/2 (h2c)
-  crabka-gateway  (plaintext listener: axum::serve → hyper_util auto::Builder for h1+h2)  ──(Kafka wire)──►  broker
+  krabka-gateway  (plaintext listener: axum::serve → hyper_util auto::Builder for h1+h2)  ──(Kafka wire)──►  broker
         ▲
   buf generate (buf.yaml + buf.gen.yaml, rooted at crates/grpc-gateway/proto)
         → sdks/go/gen/…  (connect-go + protoc-gen-go stubs; drift-checked in CI)
 
-  test harness (new): packaging/apko/crabka-gateway.yaml (OCI image) + docker-compose
+  test harness (new): packaging/apko/krabka-gateway.yaml (OCI image) + docker-compose
         → Go CI job: docker run gateway+broker, `go test ./sdks/go/...` round-trip
 ```
 
@@ -65,7 +65,7 @@ The wire is the Connect protocol; SDKs generate stubs with **buf** (`buf.gen.yam
 
 ### Go first
 
-Over the conventional TS-first instinct, for three grounded reasons: (1) CI already installs Go (`actions/setup-go@v6` in 5 workflows) so a Go SDK job needs no new toolchain, whereas there is **no** `setup-node`/`setup-python` anywhere; (2) connect-go is the reference Connect implementation and the gateway's own compatibility target (`lib.rs:56-59`); (3) a Go h1 client handles unary `Send` + server-streaming `Subscribe` cleanly — exactly the h1-safe surface. TS (Connect-ES) is the highest-DX follow-up but browser Connect can't do server-streaming over h1 without care and there is no gRPC-Web proxy — a browser SDK may need a separate path. Python is third. **Rust is not a target** — the native crates already *are* the Rust client (and speak Kafka-wire, not Connect). One `gateway.proto` is the single source of truth; do not fork per language.
+Over the conventional TS-first instinct, for three grounded reasons: (1) CI already installs Go (`actions/setup-go@v6` in 5 workflows) so a Go SDK job needs no new toolchain, whereas there is **no** `setup-node`/`setup-python` anywhere; (2) connect-go is the reference Connect implementation and the gateway's own compatibility target (`lib.rs:56-59`); (3) a Go h1 client handles unary `Send` + server-streaming `Subscribe` cleanly — exactly the h1-safe surface. TS (Connect-ES) is the highest-DX follow-up but browser Connect can't do server-streaming over h1 without care and there is no gRPC-Web proxy — a browser SDK may need a separate path. Python is third. **Rust is not a target** — the native crates already _are_ the Rust client (and speak Kafka-wire, not Connect). One `gateway.proto` is the single source of truth; do not fork per language.
 
 ### The ergonomic surface maps 4 verbs onto the h1-safe RPCs
 
@@ -76,7 +76,7 @@ Over the conventional TS-first instinct, for three grounded reasons: (1) CI alre
 
 ### The test harness is net-new and leads the plan
 
-There is **no** gateway OCI image (the `publish-images` matrix is broker/operator/schema-registry/bench-driver) and current gateway tests are **in-process Rust** (no network endpoint an external Go process can reach). So MSG-5 builds: (1) `packaging/apko/crabka-gateway.yaml` + a `publish-images` matrix entry (entrypoint `/usr/bin/gateway`); (2) a docker-compose/testcontainers harness launching gateway+broker; (3) a Go CI job (reusing `setup-go`) that runs a real `publish → subscribe(auto_commit) → assert` round-trip against `localhost`. Tests exercise behavior against the live gateway — never read SDK source text (CLAUDE.md).
+There is **no** gateway OCI image (the `publish-images` matrix is broker/operator/schema-registry/bench-driver) and current gateway tests are **in-process Rust** (no network endpoint an external Go process can reach). So MSG-5 builds: (1) `packaging/apko/krabka-gateway.yaml` + a `publish-images` matrix entry (entrypoint `/usr/bin/gateway`); (2) a docker-compose/testcontainers harness launching gateway+broker; (3) a Go CI job (reusing `setup-go`) that runs a real `publish → subscribe(auto_commit) → assert` round-trip against `localhost`. Tests exercise behavior against the live gateway — never read SDK source text (CLAUDE.md).
 
 ### Auth config
 
@@ -88,7 +88,7 @@ SDK config takes an endpoint URL + optional **bearer token** (`Authorization: Be
 - **`crates/grpc-gateway/src/serve.rs:81-86`** — swap the plaintext `axum::serve` (h1) for `hyper_util … auto::Builder` (h1+h2c) so connect-go can open the bidi `Subscribe` stream. The one gateway code change in MSG-5.
 - **`sdks/`** (new top-level, sibling to `crates/`) — out of the Cargo workspace + release-plz; `sdks/go` first.
 - **`buf.yaml` + `buf.gen.yaml`** (repo root, new) — Connect codegen.
-- **`packaging/apko/crabka-gateway.yaml`** (new) + `publish-images.yml` — the gateway OCI image.
+- **`packaging/apko/krabka-gateway.yaml`** (new) + `publish-images.yml` — the gateway OCI image.
 - **`.github/workflows/`** — a Go SDK job (reuses `setup-go`); a buf drift check.
 
 ## Kafka / wire compliance

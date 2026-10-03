@@ -47,6 +47,7 @@
 ## Task 1: The `try_diskless_read` cold path + dispatch
 
 **Files:**
+
 - Modify: `crates/broker/src/remote_reader.rs`, `crates/broker/src/broker.rs`, `crates/broker/src/handlers/fetch.rs`
 - Create: `crates/broker/src/diskless/read.rs`
 
@@ -92,7 +93,7 @@ mod tests {
 
 - [ ] **Step 4: Run to verify it fails**
 
-Run: `cargo test -p crabka-broker cold_read`
+Run: `cargo test -p krabka-broker cold_read`
 Expected: FAIL — `DisklessReadHandle`/`try_diskless_read` undefined.
 
 - [ ] **Step 5: Implement `DisklessReadHandle` + `try_diskless_read`**
@@ -153,7 +154,7 @@ pub(crate) async fn try_diskless_read(
         .ok()?;
 
     let batch = crate::remote_reader::first_batch_at_or_after(&run, p.fetch_offset)?;
-    let bytes_est = <crabka_protocol::records::RecordBatch as crabka_protocol::Encode>::encoded_len(&batch, 0);
+    let bytes_est = <krabka_protocol::records::RecordBatch as krabka_protocol::Encode>::encoded_len(&batch, 0);
     p.out.error_code = crate::codes::NONE;
     // Diskless is non-transactional this slice: an empty abort list is correct
     // in read_committed (there are no aborts). LSO/HW/log_start stay local.
@@ -183,7 +184,7 @@ In `crates/broker/src/handlers/fetch.rs`, replace the dispatch at `:514-518` wit
 
 - [ ] **Step 7: Run to verify it passes**
 
-Run: `cargo test -p crabka-broker cold_read`
+Run: `cargo test -p krabka-broker cold_read`
 Expected: PASS — byte-exact cold read; miss leaves `OFFSET_OUT_OF_RANGE`.
 
 - [ ] **Step 8: Commit**
@@ -198,6 +199,7 @@ git commit -m "feat(broker): diskless cold fetch-from-object (try_diskless_read)
 ## Task 2: `ListOffsets EARLIEST` diskless min-branch
 
 **Files:**
+
 - Modify: `crates/broker/src/diskless/wal_index.rs`, `crates/broker/src/handlers/list_offsets.rs`
 
 - [ ] **Step 1: Add `WalIndexCache::earliest_covered` (failing test)**
@@ -217,7 +219,7 @@ In `crates/broker/src/diskless/wal_index.rs` tests:
 
 - [ ] **Step 2: Run to verify it fails; implement**
 
-Run: `cargo test -p crabka-broker earliest_covered` → FAIL. Then add to `impl WalIndexCache`:
+Run: `cargo test -p krabka-broker earliest_covered` → FAIL. Then add to `impl WalIndexCache`:
 
 ```rust
     /// The smallest first_offset covered for a partition (the earliest
@@ -230,7 +232,7 @@ Run: `cargo test -p crabka-broker earliest_covered` → FAIL. Then add to `impl 
     }
 ```
 
-Run: `cargo test -p crabka-broker earliest_covered` → PASS.
+Run: `cargo test -p krabka-broker earliest_covered` → PASS.
 
 - [ ] **Step 3: Wire the ListOffsets branch (failing test)**
 
@@ -254,7 +256,7 @@ Add a test: after a trim advances `local_log_start` past 0, `EARLIEST (-2)` stil
 
 - [ ] **Step 4: Run to verify + commit**
 
-Run: `cargo test -p crabka-broker list_offsets` → PASS.
+Run: `cargo test -p krabka-broker list_offsets` → PASS.
 
 ```bash
 git add crates/broker/src/diskless/wal_index.rs crates/broker/src/handlers/list_offsets.rs
@@ -266,6 +268,7 @@ git commit -m "feat(broker): ListOffsets EARLIEST anchors at diskless object-cov
 ## Task 3: Reject transactional produce for diskless topics
 
 **Files:**
+
 - Modify: `crates/broker/src/handlers/produce.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -283,7 +286,7 @@ Run → FAIL. In `crates/broker/src/handlers/produce.rs`, near the `is_transacti
 
 - [ ] **Step 3: Run to verify + commit**
 
-Run: `cargo test -p crabka-broker transactional_produce_to_diskless` → PASS.
+Run: `cargo test -p krabka-broker transactional_produce_to_diskless` → PASS.
 
 ```bash
 git add crates/broker/src/handlers/produce.rs
@@ -295,6 +298,7 @@ git commit -m "feat(broker): reject transactional produce to diskless topics (Sl
 ## Task 4: Enable trim (flip the gate, tighten to index-projected offsets)
 
 **Files:**
+
 - Modify: `crates/broker/src/diskless/flusher.rs`
 
 - [ ] **Step 1: Write the failing trimmed-then-fetched test**
@@ -304,11 +308,12 @@ An end-to-end test: produce offsets 0..20 to a diskless partition; run flushes; 
 - [ ] **Step 2: Run to verify it fails; implement**
 
 Run → FAIL (trim disabled or coverage hole). Implement in `crates/broker/src/diskless/flusher.rs`:
+
 - Change the default `FlushConfig.trim_safety_lag` to `Some(DEFAULT_TRIM_SAFETY_LAG)` (a real value, e.g. keeping a live local tail), OR make it broker-config-driven defaulting to enabled — but **tighten the gate**: `trim_target = min(index_projected_frontier, hw − lag)`, where `index_projected_frontier` is `WalIndexCache.flushed_frontier(tp)` (only offsets whose index entry is already projected — index durability, not merely object PUT). Never trim past that. Keep the existing `WriterMessage::TrimToOffset` send (`partition.rs:329`).
 
 - [ ] **Step 3: Run to verify + commit**
 
-Run: `cargo test -p crabka-broker trimmed_then_fetched` → PASS.
+Run: `cargo test -p krabka-broker trimmed_then_fetched` → PASS.
 
 ```bash
 git add crates/broker/src/diskless/flusher.rs
@@ -320,6 +325,7 @@ git commit -m "feat(broker): enable diskless local-WAL trim (gated on index-proj
 ## Task 5: Cross-cutting proof tests
 
 **Files:**
+
 - Modify: `crates/broker/src/diskless/` (a `tests`/read test module)
 
 - [ ] **Step 1: Union coverage — no gap, no overlap**
@@ -340,7 +346,7 @@ A genuinely-uncovered offset (below `earliest_covered`, or a cache miss) returns
 
 - [ ] **Step 5: Run + commit**
 
-Run: `cargo test -p crabka-broker diskless` → PASS across all diskless tests.
+Run: `cargo test -p krabka-broker diskless` → PASS across all diskless tests.
 
 ```bash
 git add crates/broker/src/diskless/
@@ -353,7 +359,7 @@ git commit -m "test(broker): diskless cold-read coverage, boundary, and untouche
 
 - [ ] **Step 1:** `cargo +nightly fmt` then `--check` — no diff.
 - [ ] **Step 2:** `cargo clippy --workspace --all-targets -- -D warnings` — no warnings.
-- [ ] **Step 3:** `cargo nextest run -p crabka-broker` (or `cargo test`) — PASS.
+- [ ] **Step 3:** `cargo nextest run -p krabka-broker` (or `cargo test`) — PASS.
 - [ ] **Step 4:** Commit any formatting.
 
 ---

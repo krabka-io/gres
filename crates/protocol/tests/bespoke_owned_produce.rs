@@ -2,7 +2,7 @@
 // Relocated from hand-written wrappers.
 
 use bytes::BytesMut;
-use crabka_protocol::{
+use krabka_protocol::{
     Decode, Encode, UnknownTaggedFields,
     owned::{
         produce_request::{MAX_VERSION, MIN_VERSION, ProduceRequest},

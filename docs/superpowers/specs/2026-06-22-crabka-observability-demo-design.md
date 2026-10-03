@@ -19,14 +19,14 @@ in Grafana:
    services emit their own metrics, traces, logs, and profiles, which are
    ingested by Crabka's own backends and viewed in Grafana.
 2. **A real workload on Crabka.** A purpose-built Rust orders-analytics pipeline,
-   written against `crabka-client-streams`, runs its Kafka traffic on
-   `crabka-broker` and is fully instrumented for all four signals.
+   written against `krabka-client-streams`, runs its Kafka traffic on
+   `krabka-broker` and is fully instrumented for all four signals.
 3. **One collector.** Grafana Alloy collects every signal from both sources and
    writes to the four Crabka backends.
 4. **One Grafana.** Four provisioned datasources (Prometheus, Tempo, Loki,
    Pyroscope) plus starter dashboards, all pointed at Crabka.
 
-The punchline is that **one `crabka-broker` is triple-duty**: the demo app's
+The punchline is that **one `krabka-broker` is triple-duty**: the demo app's
 business event bus, the write-ahead-log substrate for all four telemetry
 backends, and a self-observed subject.
 
@@ -44,10 +44,10 @@ backends, and a self-observed subject.
 - **Crabka self-profiles are CPU + heap only.** No off-CPU/lock/async profiling
   for Crabka's own processes in v1.
 - **No new query-language or backend features**, with one small exception: to
-  make the object store **uniform** across all four backends (§4.3), `crabka-profiles`
+  make the object store **uniform** across all four backends (§4.3), `krabka-profiles`
   and the metrics binaries gain `--object-store-url` S3 support via
   `object_store::parse_url_opts(&url, std::env::vars())` — the exact pattern
-  `crabka-observability` already uses. This is a localized object-store wiring
+  `krabka-observability` already uses. This is a localized object-store wiring
   change, not query/format work.
 
 ## 3. Architecture
@@ -58,54 +58,54 @@ that persist through Crabka's own broker (WAL) and a shared MinIO object store
 
 ```
 SOURCE A: crabka components                 SOURCE B: orders-analytics demo app
-  crabka-broker                               Rust pipeline on crabka-client-streams
+  krabka-broker                               Rust pipeline on krabka-client-streams
   + metrics/traces/logs/profiles services     (StreamsBuilder: windowed orders agg
   (every process self-instrumented:            + KTable enrichment), produces &
-   /metrics, OTLP traces, JSON logs,           consumes on crabka-broker:9092
+   /metrics, OTLP traces, JSON logs,           consumes on krabka-broker:9092
    /debug/pprof/{profile,heap})               (self-instrumented, same pattern)
          │                                            │
          └───────────────────────┬────────────────────┘
                                  ▼
                           Grafana Alloy
-        prometheus.scrape  /metrics            → prometheus.remote_write → crabka-metrics
-        otelcol.receiver.otlp (traces)         → otelcol.exporter.otlp   → crabka-traces
-        loki.source (container/stdout logs)    → loki.write              → crabka-logs
-        pyroscope.scrape /debug/pprof/*        → pyroscope.write         → crabka-profiles
+        prometheus.scrape  /metrics            → prometheus.remote_write → krabka-metrics
+        otelcol.receiver.otlp (traces)         → otelcol.exporter.otlp   → krabka-traces
+        loki.source (container/stdout logs)    → loki.write              → krabka-logs
+        pyroscope.scrape /debug/pprof/*        → pyroscope.write         → krabka-profiles
                                  │
    ┌────────────────┬───────────┼────────────┬─────────────────┐
- crabka-metrics   crabka-traces  crabka-logs   crabka-profiles
+ krabka-metrics   krabka-traces  krabka-logs   krabka-profiles
  (Prom/Mimir)     (Tempo)        (Loki)        (Pyroscope)
    each backend:  distributor ──[WAL]──▶ block-builder/compactor ──[blocks]──▶ querier
                        │                                                          │
-                       └────────────── WAL = crabka-broker (Kafka topics) ───────┘
+                       └────────────── WAL = krabka-broker (Kafka topics) ───────┘
                                           blocks = MinIO (shared S3 bucket, per-signal prefix)
                                  ▲
                               Grafana
               4 datasources (Prometheus/Tempo/Loki/Pyroscope) → the four queriers
-              + provisioned dashboards (crabka-self + demo-app) + Explore
+              + provisioned dashboards (krabka-self + demo-app) + Explore
 ```
 
 **Why Alloy collects Crabka too.** Three of Crabka's four self-signals are
 pull/collector-shaped: metrics need a scraper to remote-write, logs are stdout
 JSON that needs tailing, profiles need `pyroscope.scrape`. Only traces push
 directly (broker OTLP). Routing everything through one Alloy keeps a single
-mental model — *everything → Alloy → Crabka backends → Grafana* — and lets Alloy
+mental model — _everything → Alloy → Crabka backends → Grafana_ — and lets Alloy
 attach uniform resource attributes.
 
 ## 4. Components
 
-### 4.1 crabka-broker (triple duty)
+### 4.1 krabka-broker (triple duty)
 
 - One container, combined `controller,broker` roles, Kafka on `:9092`.
 - Already self-instruments three signals (no change needed beyond config):
   - **Metrics:** Prometheus `/metrics` on `:9404`
     (`crates/broker/src/bin/broker.rs:96`).
-  - **Traces:** OTLP span export via `crabka-telemetry`, enabled by setting
-    `CRABKA_OTLP_ENDPOINT` / `OTEL_EXPORTER_OTLP_ENDPOINT`
+  - **Traces:** OTLP span export via `krabka-telemetry`, enabled by setting
+    `KRABKA_OTLP_ENDPOINT` / `OTEL_EXPORTER_OTLP_ENDPOINT`
     (`crates/telemetry/src/lib.rs`, wired at `broker.rs:140-147`).
   - **Logs:** structured-JSON to stdout via the telemetry `fmt` layer.
 - **New:** gains the in-process profiler admin routes (§5).
-- Hosts both the demo app's business topics and the four `__crabka_*_wal`
+- Hosts both the demo app's business topics and the four `__krabka_*_wal`
   telemetry WAL topics.
 
 ### 4.2 The four backends
@@ -113,45 +113,45 @@ attach uniform resource attributes.
 Each backend runs its faithful role graph from a single shared Crabka image,
 selecting the role via `command:`. WAL = broker Kafka topics; blocks = MinIO.
 
-| Signal | Binary | Roles run | Ingest API | Query API (Grafana datasource) |
-|---|---|---|---|---|
-| Metrics | `crabka-metrics` (+ `crabka-metrics-service` for read path) | distributor, compactor, querier | Prometheus remote-write `POST /api/v1/push`; OTLP `/otlp/v1/metrics` | Prometheus HTTP API `/api/v1/query*` → **Prometheus** DS |
-| Traces | `crabka-traces` | distributor, block-builder, querier | OTLP `/v1/traces` (gRPC 4317 / HTTP 4318) | Tempo HTTP `/api/v2/traces/{id}`, `/api/search` → **Tempo** DS |
-| Logs | `crabka-logs` (**new binary**, §5.1) over `crabka-observability` | distributor, compactor, querier | Loki push `POST /loki/api/v1/push`; OTLP `/v1/logs` | Loki HTTP `/loki/api/v1/query_range`, `/labels` → **Loki** DS |
-| Profiles | `crabka-profiles` | distributor, block-builder, querier | Pyroscope `push.v1.PusherService/Push`, legacy `/ingest` | Pyroscope `querier.v1.QuerierService` + `/pyroscope/render` → **Pyroscope** DS |
+| Signal   | Binary                                                           | Roles run                           | Ingest API                                                           | Query API (Grafana datasource)                                                 |
+| -------- | ---------------------------------------------------------------- | ----------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Metrics  | `krabka-metrics` (+ `krabka-metrics-service` for read path)      | distributor, compactor, querier     | Prometheus remote-write `POST /api/v1/push`; OTLP `/otlp/v1/metrics` | Prometheus HTTP API `/api/v1/query*` → **Prometheus** DS                       |
+| Traces   | `krabka-traces`                                                  | distributor, block-builder, querier | OTLP `/v1/traces` (gRPC 4317 / HTTP 4318)                            | Tempo HTTP `/api/v2/traces/{id}`, `/api/search` → **Tempo** DS                 |
+| Logs     | `krabka-logs` (**new binary**, §5.1) over `krabka-observability` | distributor, compactor, querier     | Loki push `POST /loki/api/v1/push`; OTLP `/v1/logs`                  | Loki HTTP `/loki/api/v1/query_range`, `/labels` → **Loki** DS                  |
+| Profiles | `krabka-profiles`                                                | distributor, block-builder, querier | Pyroscope `push.v1.PusherService/Push`, legacy `/ingest`             | Pyroscope `querier.v1.QuerierService` + `/pyroscope/render` → **Pyroscope** DS |
 
 Role enums confirmed in code: metrics `Target::{Distributor,Compactor,Querier,
-QueryFrontend,Ruler}` (`crates/metrics/src/bin/crabka-metrics.rs`); traces
+QueryFrontend,Ruler}` (`crates/metrics/src/bin/krabka-metrics.rs`); traces
 `Target::{Distributor,BlockBuilder,LiveStore,Querier,…}`
-(`crates/traces/src/bin/crabka-traces.rs`); profiles
+(`crates/traces/src/bin/krabka-traces.rs`); profiles
 `Target::{Distributor,BlockBuilder,Querier,QueryFrontend,Compactor,Symbolizer}`
-(`crates/profiles/src/bin/crabka-profiles.rs`, default `--listen 127.0.0.1:4040`,
+(`crates/profiles/src/bin/krabka-profiles.rs`, default `--listen 127.0.0.1:4040`,
 `--bootstrap 127.0.0.1:9092`); logs `Role::{Distributor,Compactor,Querier}`
 (`crates/observability/src/lib.rs:101`).
 
 > **Implementation note — metrics binary split.** Ingest/compaction live in
-> `crabka-metrics`; the read path (`Querier`/`QueryFrontend`/`Ruler`) is served by
-> `crabka-metrics-service` (`crates/metrics-service/src/main.rs`). The plan must
+> `krabka-metrics`; the read path (`Querier`/`QueryFrontend`/`Ruler`) is served by
+> `krabka-metrics-service` (`crates/metrics-service/src/main.rs`). The plan must
 > pick the correct binary+target per role and confirm each role's `--listen`
 > default and required WAL/object-store flags. Both binaries ship in the shared
 > image, so this is a `command:` decision, not a packaging one.
 
 ### 4.3 MinIO (shared object store) — uniform across all four backends
 
-- One MinIO container; one bucket (`crabka-blocks`) with a per-signal prefix
-  (`s3://crabka-blocks/metrics`, `/traces`, `/logs`, `/profiles`). A small
+- One MinIO container; one bucket (`krabka-blocks`) with a per-signal prefix
+  (`s3://krabka-blocks/metrics`, `/traces`, `/logs`, `/profiles`). A small
   bootstrap step creates the bucket on startup.
-- Each backend points `--object-store-url s3://crabka-blocks/<signal>` at MinIO.
+- Each backend points `--object-store-url s3://krabka-blocks/<signal>` at MinIO.
   S3 endpoint + credentials come from env consumed by the `object_store` crate:
   `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL`,
   `AWS_ALLOW_HTTP=true`, `AWS_REGION` (placeholder `us-east-1` for MinIO).
 - **Uniformity is a deliberate choice and required a small code change.** Today
-  only `crabka-traces` and `crabka-observability` (logs) accept an object-store
-  URL; `crabka-profiles` and `crabka-metrics`/`crabka-metrics-service` are
+  only `krabka-traces` and `krabka-observability` (logs) accept an object-store
+  URL; `krabka-profiles` and `krabka-metrics`/`krabka-metrics-service` are
   local-FS-only (`LocalFileSystem::new_with_prefix`). The plan adds
   `--object-store-url` + `object_store::parse_url_opts(&url, std::env::vars())`
   to profiles and the metrics binaries (mirroring observability), and switches
-  `crabka-traces` to `parse_url_opts` so the MinIO endpoint/credential env is
+  `krabka-traces` to `parse_url_opts` so the MinIO endpoint/credential env is
   applied consistently. This avoids cross-container filesystem-sharing fragility
   and is the real S3 path a production deployment would use.
 
@@ -161,16 +161,16 @@ One Alloy container with four collection pipelines, each fed by both sources:
 
 - **Metrics:** `prometheus.scrape` of every Crabka process `/metrics` (broker
   `:9404` + each service's admin port) **and** the demo app `/metrics` →
-  `prometheus.remote_write` to `crabka-metrics` distributor `/api/v1/push`.
+  `prometheus.remote_write` to `krabka-metrics` distributor `/api/v1/push`.
 - **Traces:** `otelcol.receiver.otlp` (gRPC/HTTP) receiving spans pushed by
   every Crabka process and the demo app → `otelcol.exporter.otlp` to
-  `crabka-traces` distributor `:4317`.
+  `krabka-traces` distributor `:4317`.
 - **Logs:** `loki.source` reading container stdout (Docker log files / the
-  `loki.source.docker` discovery) → `loki.write` to `crabka-logs` distributor
+  `loki.source.docker` discovery) → `loki.write` to `krabka-logs` distributor
   `/loki/api/v1/push`. Crabka's JSON log lines carry fields natively.
 - **Profiles:** `pyroscope.scrape` of every Crabka process and the demo app at
   `/debug/pprof/profile` (CPU) and `/debug/pprof/heap` (heap) →
-  `pyroscope.write` to `crabka-profiles` distributor.
+  `pyroscope.write` to `krabka-profiles` distributor.
 
 Config lives at `demo/observability/alloy/config.alloy`.
 
@@ -199,9 +199,9 @@ protobuf example uses, so the demo dogfoods Crabka's schema-registry too.
 - **Producer task** generates a synthetic stream of proto `Order` events
   (varied category/amount, occasional anomalous records to produce error spans and
   warn logs), framed in the Confluent wire format via the schema registry, keyed
-  by category → input topic on `crabka-broker`.
+  by category → input topic on `krabka-broker`.
 - **Tuning — order volume.** The producer's target emit rate is configurable via
-  `CRABKA_DEMO_ORDERS_PER_SEC` (env var, default `50`), settable in
+  `KRABKA_DEMO_ORDERS_PER_SEC` (env var, default `50`), settable in
   `docker-compose.yml` without a rebuild. This is the demo's primary load lever:
   it scales how hard the pipeline runs and therefore how much telemetry (span,
   log, metric, and profile volume) every stage emits — dial it down for
@@ -220,7 +220,7 @@ protobuf example uses, so the demo dogfoods Crabka's schema-registry too.
 - **Consumer task** reads the aggregated output (drives end-to-end traces and
   consumer-lag metrics).
 - **Instrumentation reuses Crabka's own libraries** (the same pattern as the
-  backends — see §5): `crabka-telemetry` for OTLP traces + JSON logs, a
+  backends — see §5): `krabka-telemetry` for OTLP traces + JSON logs, a
   `/metrics` Prometheus endpoint, and the in-process profiler routes.
 - May run as 1–3 containers (producer / streams-processor / consumer) or a single
   multi-task process; the plan picks based on how cleanly the three roles
@@ -228,15 +228,15 @@ protobuf example uses, so the demo dogfoods Crabka's schema-registry too.
 
 ### 4.7 Schema registry
 
-- One `crabka-schema-registry` container (Confluent-compatible HTTP API on
+- One `krabka-schema-registry` container (Confluent-compatible HTTP API on
   `:8081`, run with `--bootstrap-servers broker:9092 --schemas-topic-rf 1` for the
-  single-node cluster), backed by `crabka-broker` — another Crabka component in
+  single-node cluster), backed by `krabka-broker` — another Crabka component in
   the loop.
 - The demo app's producer and Streams consumer both resolve proto schemas
   against it (`StreamsApp::builder().schema_registry("http://schema-registry:8081")`).
 - Self-instrumentation reality (verified): the binary already emits **structured
-  JSON logs** via `crabka-logfmt` to stdout (so Alloy ships its logs for free) but
-  does **not** depend on `crabka-telemetry` and exposes no `/metrics`. The plan
+  JSON logs** via `krabka-logfmt` to stdout (so Alloy ships its logs for free) but
+  does **not** depend on `krabka-telemetry` and exposes no `/metrics`. The plan
   adds the profiler admin server (§5.2) for its profiles signal; wiring its
   traces/metrics is optional and out of the critical path (logs alone are enough
   to show it in Grafana).
@@ -247,21 +247,21 @@ The broker, the four backend services, and the demo app are instrumented
 **identically**, using Crabka's own libraries. This is the design's unifying
 idea and keeps Alloy's config uniform.
 
-| Signal | Mechanism | Surface |
-|---|---|---|
-| Traces | `crabka-telemetry` OTLP exporter, enabled by `CRABKA_OTLP_ENDPOINT` | OTLP push → Alloy `:4317` |
-| Logs | `crabka-telemetry` structured-JSON `fmt` layer | stdout → Alloy `loki.source` |
-| Metrics | `prometheus-client` (broker's existing pattern) | `GET /metrics` on an admin port |
-| Profiles | in-process profiler (new, §5.2) | `GET /debug/pprof/profile` (CPU), `GET /debug/pprof/heap` (heap) |
+| Signal   | Mechanism                                                           | Surface                                                          |
+| -------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Traces   | `krabka-telemetry` OTLP exporter, enabled by `KRABKA_OTLP_ENDPOINT` | OTLP push → Alloy `:4317`                                        |
+| Logs     | `krabka-telemetry` structured-JSON `fmt` layer                      | stdout → Alloy `loki.source`                                     |
+| Metrics  | `prometheus-client` (broker's existing pattern)                     | `GET /metrics` on an admin port                                  |
+| Profiles | in-process profiler (new, §5.2)                                     | `GET /debug/pprof/profile` (CPU), `GET /debug/pprof/heap` (heap) |
 
-### 5.1 New `crabka-logs` binary
+### 5.1 New `krabka-logs` binary
 
-The logs backend is complete but **library-only** — `crabka-observability`
+The logs backend is complete but **library-only** — `krabka-observability`
 exports `build_service_router`, `loki_router`, `distributor_router`, the `Role`
 enum, and `ServiceConfig`/`ServiceDependencies` (`crates/observability/src/lib.rs`),
 and the differential tests drive them directly, but there is no entrypoint.
 
-Add a thin `crabka-logs` binary (a `[[bin]]` in `crabka-observability`, or a
+Add a thin `krabka-logs` binary (a `[[bin]]` in `krabka-observability`, or a
 small wrapper crate) that mirrors `crates/metrics-service/src/main.rs`: parse a
 `--target {distributor,compactor,querier}` (the `Role` enum), build a
 `ServiceConfig` (listen addr, WAL bootstrap = broker, object-store URL = MinIO,
@@ -270,7 +270,7 @@ Loki default port `3100`.
 
 ### 5.2 In-process profiler module
 
-A shared helper (e.g. `crabka-telemetry::profiling` or a small new module reused
+A shared helper (e.g. `krabka-telemetry::profiling` or a small new module reused
 by all binaries) that exposes an **admin HTTP server** carrying both
 `/metrics` and the pprof routes, so Alloy scrapes one port per process:
 
@@ -280,7 +280,7 @@ by all binaries) that exposes an **admin HTTP server** carrying both
   with `MALLOC_CONF=prof:true,prof_active:true`, dumped as pprof protobuf at
   `GET /debug/pprof/heap` via the `jemalloc_pprof` crate.
 
-Profiles are symbolized in-process, so they arrive at `crabka-profiles`
+Profiles are symbolized in-process, so they arrive at `krabka-profiles`
 pre-symbolized (the backend's `Symbolizer` role / debuginfod is not needed for
 the demo). **The demo image must retain debug symbols** for the profiled
 binaries so flamegraphs are readable (no `strip`).
@@ -303,8 +303,8 @@ selection. CPU profiling has no allocator dependency and is always available.
 
 One multi-stage `demo/observability/Dockerfile` that `cargo build --release
 --features heap-profiling` produces every binary needed —
-`crabka-broker`, `crabka-metrics`, `crabka-metrics-service`, `crabka-traces`,
-`crabka-logs`, `crabka-profiles`, and the demo app — into a single runtime image.
+`krabka-broker`, `krabka-metrics`, `krabka-metrics-service`, `krabka-traces`,
+`krabka-logs`, `krabka-profiles`, and the demo app — into a single runtime image.
 Compose selects role/binary per service via `command:`. Build retains debug
 symbols for readable profiles.
 
@@ -316,22 +316,22 @@ explicit. Dependency direction was checked so no publishable product crate
 (broker, cli, operator, rebalancer, grpc-gateway, schema-registry, audit) breaks.
 
 - **New crate** `crates/observability-demo-app` → `publish = false`.
-- **New `crabka-logs` binary** lives in `crabka-observability` (already
+- **New `krabka-logs` binary** lives in `krabka-observability` (already
   `publish = false`); if instead a separate wrapper crate, that wrapper is
   `publish = false`.
 - **Flip to `publish = false`** (currently publishable; every dependent is itself
   an observability crate — verified no product crate depends on them):
-  `crabka-metrics`, `crabka-metrics-service`, `crabka-promql`, and
-  `crabka-logql`.
-- **Already `publish = false`** (no change): `crabka-observability`,
-  `crabka-traces`, `crabka-traceql`, `crabka-profiles`, `crabka-pprof`,
-  `crabka-blockstore`.
+  `krabka-metrics`, `krabka-metrics-service`, `krabka-promql`, and
+  `krabka-logql`.
+- **Already `publish = false`** (no change): `krabka-observability`,
+  `krabka-traces`, `krabka-traceql`, `krabka-profiles`, `krabka-pprof`,
+  `krabka-blockstore`.
 - **Deliberately kept publishable** — shared instrumentation/util/core libs that
-  publishable product binaries depend on, *not* observability backends:
-  - `crabka-telemetry` — `crabka-broker` + `crabka-grpc-gateway` depend on it.
-  - `crabka-logfmt` — "structured-JSON tracing log formatter shared across Crabka
+  publishable product binaries depend on, _not_ observability backends:
+  - `krabka-telemetry` — `krabka-broker` + `krabka-grpc-gateway` depend on it.
+  - `krabka-logfmt` — "structured-JSON tracing log formatter shared across Crabka
     services"; `operator`/`replicator`/`schema-registry`/`telemetry` depend on it.
-  - `crabka-log` — core partition-log storage; `broker`/`raft`/`audit` depend on
+  - `krabka-log` — core partition-log storage; `broker`/`raft`/`audit` depend on
     it (named log-* but unrelated to logs observability).
 
 Net effect: the LGTM+P backends and the demo are non-publishable, while the
@@ -339,12 +339,12 @@ shared libs product binaries rely on stay intact.
 
 ## 6. Signal routing (end to end)
 
-| Signal | Source emits | Alloy stage | Backend ingest | Backend query | Grafana DS |
-|---|---|---|---|---|---|
-| Metrics | `/metrics` (Prom) | `prometheus.scrape` → `remote_write` | `crabka-metrics` `/api/v1/push` | `/api/v1/query*` | Prometheus |
-| Traces | OTLP push | `otelcol.receiver.otlp` → `exporter.otlp` | `crabka-traces` `:4317` `/v1/traces` | `/api/v2/traces`, `/api/search` | Tempo |
-| Logs | JSON stdout | `loki.source.docker` → `loki.write` | `crabka-logs` `/loki/api/v1/push` | `/loki/api/v1/query_range` | Loki |
-| Profiles | `/debug/pprof/*` | `pyroscope.scrape` → `pyroscope.write` | `crabka-profiles` Push/`/ingest` | `querier.v1` / `/pyroscope/render` | Pyroscope |
+| Signal   | Source emits      | Alloy stage                               | Backend ingest                       | Backend query                      | Grafana DS |
+| -------- | ----------------- | ----------------------------------------- | ------------------------------------ | ---------------------------------- | ---------- |
+| Metrics  | `/metrics` (Prom) | `prometheus.scrape` → `remote_write`      | `krabka-metrics` `/api/v1/push`      | `/api/v1/query*`                   | Prometheus |
+| Traces   | OTLP push         | `otelcol.receiver.otlp` → `exporter.otlp` | `krabka-traces` `:4317` `/v1/traces` | `/api/v2/traces`, `/api/search`    | Tempo      |
+| Logs     | JSON stdout       | `loki.source.docker` → `loki.write`       | `krabka-logs` `/loki/api/v1/push`    | `/loki/api/v1/query_range`         | Loki       |
+| Profiles | `/debug/pprof/*`  | `pyroscope.scrape` → `pyroscope.write`    | `krabka-profiles` Push/`/ingest`     | `querier.v1` / `/pyroscope/render` | Pyroscope  |
 
 ## 7. Repository layout
 
@@ -360,10 +360,10 @@ demo/observability/
       datasources/crabka.yaml # Prometheus/Tempo/Loki/Pyroscope → crabka queriers
       dashboards/
         dashboards.yaml        # provider
-        crabka-self.json       # "Crabka observes Crabka"
+        krabka-self.json       # "Crabka observes Crabka"
         demo-app.json          # orders-analytics
   minio/
-    bootstrap.sh              # create the crabka-blocks bucket
+    bootstrap.sh              # create the krabka-blocks bucket
 crates/observability-demo-app/
   Cargo.toml
   build.rs                    # prost/protox proto codegen (Order)
@@ -371,13 +371,13 @@ crates/observability-demo-app/
   src/...                     # producer + StreamsApp pipeline + consumer, instrumented
 ```
 
-(The stack also runs a `crabka-schema-registry` container, §4.7 — no new repo
+(The stack also runs a `krabka-schema-registry` container, §4.7 — no new repo
 files; it ships in the same image.)
 
 ## 8. How it runs (manual)
 
 1. `cd demo/observability && docker compose up --build`
-   (optionally set `CRABKA_DEMO_ORDERS_PER_SEC` in `docker-compose.yml` first to
+   (optionally set `KRABKA_DEMO_ORDERS_PER_SEC` in `docker-compose.yml` first to
    scale the demo's order volume / telemetry load up or down).
 2. Wait for healthchecks (broker → backends → Alloy → demo app → Grafana).
 3. Open Grafana at `http://localhost:3000`.
@@ -398,12 +398,12 @@ files; it ships in the same image.)
   accepts the pprof endpoints (godeltaprof vs raw pprof format).
 - **Resource footprint** — ~18–19 containers (incl. schema-registry); document a minimum Docker memory
   (likely ≥ 6–8 GB) in the README; offer a trimmed profile if needed. Note that
-  `CRABKA_DEMO_ORDERS_PER_SEC` (§4.6) is the first knob to turn down on a
+  `KRABKA_DEMO_ORDERS_PER_SEC` (§4.6) is the first knob to turn down on a
   constrained host.
 - **Alloy config drift** — Alloy river/`.alloy` syntax changes across versions;
   pin the Alloy image tag.
 - **Broker OTLP self-export loop** — the broker exports its own spans to Alloy →
-  `crabka-traces`; ensure trace/log volume from the telemetry path itself does
+  `krabka-traces`; ensure trace/log volume from the telemetry path itself does
   not create a runaway feedback loop (sampling / exclude self-ingest spans if
   needed).
 

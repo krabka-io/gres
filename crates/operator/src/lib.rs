@@ -7,7 +7,7 @@
 //! ## Runtime config scope
 //!
 //! ```rust
-//! use crabka_operator::config::OperatorConfig;
+//! use krabka_operator::config::OperatorConfig;
 //!
 //! # fn example(mut config: OperatorConfig) {
 //! config.watch_namespaces = vec!["kafka-a".into(), "kafka-b".into()];

@@ -64,21 +64,21 @@ pub struct EvalCtx {
     pub time_zone: TimeZone,
     /// The `DateStyle` field order, which decides how an otherwise-ambiguous
     /// all-numeric date literal such as `01/02/03` is read.
-    pub date_order: crabka_pgtypes::datetime::DateOrder,
+    pub date_order: krabka_pgtypes::datetime::DateOrder,
     /// The `DateStyle` output format, which decides how a `date`, `timestamp`
     /// or `timestamptz` is spelled on the wire.
-    pub date_style: crabka_pgtypes::datetime::DateStyle,
+    pub date_style: krabka_pgtypes::datetime::DateStyle,
     /// The `IntervalStyle` GUC, which decides how an `interval` is spelled.
-    pub interval_style: crabka_pgtypes::datetime::IntervalStyle,
+    pub interval_style: krabka_pgtypes::datetime::IntervalStyle,
     /// `extra_float_digits`, which decides how many significant digits a float
     /// renders with. PostgreSQL's default since v12 is 1 (shortest round trip).
     pub extra_float_digits: i32,
     /// `bytea_output`, which decides whether a `bytea` renders as `\x`-prefixed
     /// hex or in the older backslash-octal escape spelling.
-    pub bytea_output: crabka_pgtypes::encoding::ByteaOutput,
+    pub bytea_output: krabka_pgtypes::encoding::ByteaOutput,
     /// The session's `xmloption`, which selects the grammar used by
     /// `xml_is_well_formed`.
-    pub xml_option: crabka_pgtypes::xml::XmlOption,
+    pub xml_option: krabka_pgtypes::xml::XmlOption,
     /// The session's `xmlbinary` setting for `bytea` XML content.
     pub xml_binary: XmlBinary,
     pub current_user: String,
@@ -114,7 +114,7 @@ pub struct EvalCtx {
     /// `'name'::regclass` default names, while `nextval()` stays the 0A000 it
     /// is outside a session. A session leaves this field `None` and reads
     /// through `sequence`, which carries the same handle.
-    pub(crate) catalog: Option<Arc<dyn crabka_pgkv::Kv>>,
+    pub(crate) catalog: Option<Arc<dyn krabka_pgkv::Kv>>,
     /// The session's name-resolution scope: its `search_path`, the user
     /// `"$user"` expands to, and its backend id.
     ///
@@ -136,9 +136,9 @@ pub struct EvalCtx {
     ///
     /// The session installs this only when `client_min_messages` permits
     /// warnings, so expression evaluators do not need to know about GUCs.
-    pub(crate) warning_tx: Option<tokio::sync::mpsc::Sender<crabka_pgwire::error::PgError>>,
+    pub(crate) warning_tx: Option<tokio::sync::mpsc::Sender<krabka_pgwire::error::PgError>>,
     /// Like [`Self::warning_tx`], but for PostgreSQL `NOTICE` diagnostics.
-    pub(crate) notice_tx: Option<tokio::sync::mpsc::Sender<crabka_pgwire::error::PgError>>,
+    pub(crate) notice_tx: Option<tokio::sync::mpsc::Sender<krabka_pgwire::error::PgError>>,
     pub(crate) transition_relations: Option<Arc<Mutex<HashMap<String, TransitionRelation>>>>,
     pub(crate) event_trigger: Option<Arc<EventTriggerContext>>,
     /// The session's transaction identity, for the functions that export it.
@@ -165,7 +165,7 @@ pub(crate) struct TxnRuntime {
     /// A fresh one is then read from `procarray` on demand rather than eagerly,
     /// so building a context costs no lock on the registry every session
     /// shares.
-    pub(crate) snapshot: Option<crabka_pgmvcc::visibility::Snapshot>,
+    pub(crate) snapshot: Option<krabka_pgmvcc::visibility::Snapshot>,
     /// The transaction's own xid, if the transaction has already written and
     /// so already has one. `None` is exactly what
     /// `pg_current_xact_id_if_assigned()` reports as NULL.
@@ -189,8 +189,8 @@ pub(crate) struct TxnRuntime {
 
 #[derive(Debug, Clone)]
 pub(crate) struct TransitionRelation {
-    pub columns: Vec<(String, crabka_pgtypes::ColumnType)>,
-    pub rows: Vec<Vec<crabka_pgtypes::Datum>>,
+    pub columns: Vec<(String, krabka_pgtypes::ColumnType)>,
+    pub rows: Vec<Vec<krabka_pgtypes::Datum>>,
 }
 
 #[derive(Debug, Clone)]
@@ -206,9 +206,9 @@ pub(crate) struct EventTriggerObject {
     /// `pg_event_trigger_dropped_objects` reports as `is_temporary`.
     ///
     /// This is carried rather than derived. `schema_name` holds the *display*
-    /// spelling, and [`crabka_pgcatalog::displayed_schema`] renders every
+    /// spelling, and [`krabka_pgcatalog::displayed_schema`] renders every
     /// temporary namespace as the bare alias `pg_temp`, which
-    /// [`crabka_pgcatalog::is_temp_schema`] deliberately answers `false` for.
+    /// [`krabka_pgcatalog::is_temp_schema`] deliberately answers `false` for.
     /// The stored `pg_temp_<backend id>` is the only spelling the predicate
     /// recognises, and it is gone by the time a reader sees this struct — so
     /// the producer records the fact while it still holds the stored name.
@@ -217,7 +217,7 @@ pub(crate) struct EventTriggerObject {
 
 #[derive(Debug, Clone)]
 pub(crate) struct EventTriggerContext {
-    pub event: crabka_pgcatalog::trigger::EventTriggerEvent,
+    pub event: krabka_pgcatalog::trigger::EventTriggerEvent,
     pub tag: String,
     pub commands: Vec<EventTriggerObject>,
     pub dropped: Vec<EventTriggerObject>,
@@ -230,10 +230,10 @@ pub(crate) struct SequenceRuntime {
     /// `nextval` reads sequence records through it. It is the same handle the
     /// catalog-introspection functions read relations, views and comments
     /// through. A session has exactly one.
-    pub(crate) kv: Arc<dyn crabka_pgkv::Kv>,
+    pub(crate) kv: Arc<dyn krabka_pgkv::Kv>,
     /// The session's row/index KV. This can differ from `kv` when catalog and
     /// data storage are split.
-    pub(crate) data: Arc<dyn crabka_pgkv::Kv>,
+    pub(crate) data: Arc<dyn krabka_pgkv::Kv>,
     pub(crate) manager: Arc<crate::seq::SequenceManager>,
     pub(crate) currvals: Arc<Mutex<HashMap<String, i64>>>,
     /// The session's sequence advances that are not durable yet.
@@ -249,7 +249,7 @@ pub(crate) struct SequenceRuntime {
 /// The session state scalar `lo_*` functions need.
 pub(crate) struct LargeObjectRuntime {
     /// The catalog KV that holds large-object metadata and pages.
-    pub(crate) kv: Arc<dyn crabka_pgkv::Kv>,
+    pub(crate) kv: Arc<dyn krabka_pgkv::Kv>,
     /// Compatibility switch that gives newly created objects public access.
     pub(crate) compat_privileges: bool,
     /// Whether `lo_import` must refuse a database mutation.
@@ -263,8 +263,8 @@ pub(crate) struct LargeObjectRuntime {
 impl EvalCtx {
     /// The session's text-output settings, in the shape the value layer's text
     /// encoder takes.
-    pub fn output_style(&self) -> crabka_pgtypes::encoding::OutputStyle<'_> {
-        crabka_pgtypes::encoding::OutputStyle {
+    pub fn output_style(&self) -> krabka_pgtypes::encoding::OutputStyle<'_> {
+        krabka_pgtypes::encoding::OutputStyle {
             time_zone: &self.time_zone,
             date_style: self.date_style,
             date_order: self.date_order,
@@ -281,14 +281,14 @@ impl EvalCtx {
     /// The value is `None` outside a SQL session, for example in a planning
     /// context or a unit test. Those functions then report 0A000 and do not
     /// invent an answer.
-    pub(crate) fn catalog(&self) -> Option<&dyn crabka_pgkv::Kv> {
+    pub(crate) fn catalog(&self) -> Option<&dyn krabka_pgkv::Kv> {
         self.catalog
             .as_deref()
             .or_else(|| self.sequence.as_ref().map(|runtime| runtime.kv.as_ref()))
     }
 
     /// The data KV backing physical row and index entries.
-    pub(crate) fn data(&self) -> Option<&dyn crabka_pgkv::Kv> {
+    pub(crate) fn data(&self) -> Option<&dyn krabka_pgkv::Kv> {
         self.sequence.as_ref().map(|runtime| runtime.data.as_ref())
     }
 
@@ -328,7 +328,7 @@ impl EvalCtx {
         let Some(tx) = &self.warning_tx else {
             return Ok(());
         };
-        tx.try_send(crabka_pgwire::error::PgError::warning(message))
+        tx.try_send(krabka_pgwire::error::PgError::warning(message))
             .map_err(|error| {
                 crate::error::ExecError::ObjectNotInPrerequisiteState(format!(
                     "could not queue expression warning: {error}"
@@ -340,7 +340,7 @@ impl EvalCtx {
         let Some(tx) = &self.notice_tx else {
             return Ok(());
         };
-        tx.try_send(crabka_pgwire::error::PgError::notice(message))
+        tx.try_send(krabka_pgwire::error::PgError::notice(message))
             .map_err(|error| {
                 crate::error::ExecError::ObjectNotInPrerequisiteState(format!(
                     "could not queue expression notice: {error}"
@@ -362,7 +362,7 @@ impl EvalCtx {
     /// planning context. The catalog-reading functions then keep their 0A000.
     pub(crate) fn for_ddl(
         scope: &crate::relname::ResolutionScope,
-        catalog: Option<&Arc<dyn crabka_pgkv::Kv>>,
+        catalog: Option<&Arc<dyn krabka_pgkv::Kv>>,
     ) -> Self {
         Self {
             resolution: Some(Arc::new(scope.clone())),
@@ -379,12 +379,12 @@ impl EvalCtx {
             now: epoch,
             stmt_now: epoch,
             time_zone: TimeZone::UTC,
-            date_order: crabka_pgtypes::datetime::DateOrder::default(),
-            date_style: crabka_pgtypes::datetime::DateStyle::default(),
-            interval_style: crabka_pgtypes::datetime::IntervalStyle::default(),
+            date_order: krabka_pgtypes::datetime::DateOrder::default(),
+            date_style: krabka_pgtypes::datetime::DateStyle::default(),
+            interval_style: krabka_pgtypes::datetime::IntervalStyle::default(),
             extra_float_digits: 1,
-            bytea_output: crabka_pgtypes::encoding::ByteaOutput::default(),
-            xml_option: crabka_pgtypes::xml::XmlOption::Content,
+            bytea_output: krabka_pgtypes::encoding::ByteaOutput::default(),
+            xml_option: krabka_pgtypes::xml::XmlOption::Content,
             xml_binary: XmlBinary::default(),
             current_user: "public".into(),
             session_user: "public".into(),

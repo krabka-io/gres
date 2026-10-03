@@ -5,7 +5,7 @@ use std::{
 };
 
 use bytes::{BufMut, Bytes, BytesMut};
-use crabka_pgwire::{
+use krabka_pgwire::{
     engine::{
         BoundParam, CloseTarget, CopyOutResponse, CopyOutStream, Engine, ExecuteOutcome,
         FieldDescription, Notification, PortalDescription, PreparedDescription, QueryResult,
@@ -224,7 +224,7 @@ fn copy_out_stream() -> CopyOutStream {
 async fn spawn(engine: RecordingEngine) -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
-    tokio::spawn(crabka_pgwire::server::serve(
+    tokio::spawn(krabka_pgwire::server::serve(
         listener,
         Arc::new(engine),
         Arc::new(SessionConfig::trust()),

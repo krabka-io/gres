@@ -6,15 +6,15 @@
 
 ## Context — why this exists next to the native crates
 
-Crabka already ships Rust clients — the native Kafka-wire crates (`client-producer`/`client-consumer`/…). The umbrella pinned the decision this spec executes: the app SDK **rides the gateway** like every other language, because the native path *bypasses gateway-enforced subscription filters* and diverges from the contract's semantics (CE handling, error taxonomy, stub behavior). The two surfaces coexist deliberately: **`crabka-app-sdk` = the BaaS contract surface; the native crates = the infrastructure-grade Kafka client.** The rustdoc states this split on the front page.
+Crabka already ships Rust clients — the native Kafka-wire crates (`client-producer`/`client-consumer`/…). The umbrella pinned the decision this spec executes: the app SDK **rides the gateway** like every other language, because the native path _bypasses gateway-enforced subscription filters_ and diverges from the contract's semantics (CE handling, error taxonomy, stub behavior). The two surfaces coexist deliberately: **`krabka-app-sdk` = the BaaS contract surface; the native crates = the infrastructure-grade Kafka client.** The rustdoc states this split on the front page.
 
-The net-new piece is the transport: **no Connect *client* exists for Rust** (we ship the connectrpc-axum *server*). This cycle hand-rolls a minimal Connect client — unary + bidi streaming over hyper h2c — sized to exactly what the SDK needs, with the protocol knowledge already in-house.
+The net-new piece is the transport: **no Connect _client_ exists for Rust** (we ship the connectrpc-axum _server_). This cycle hand-rolls a minimal Connect client — unary + bidi streaming over hyper h2c — sized to exactly what the SDK needs, with the protocol knowledge already in-house.
 
 ## Design Goals
 
 - **A minimal in-house Connect client** (`connect_client` module): unary = HTTP POST with `content-type: application/proto`, prost bodies; streaming = the Connect enveloped-message framing (1-byte flags + u32 length prefix; the end-of-stream trailer frame carrying the JSON error/trailers) over a hyper h2c connection. Only what `Send`/`Subscribe` need — not a general-purpose Connect implementation.
 - **The umbrella contract verbatim:** six modules on a `CrabkaClient`; `CrabkaError` with `Unimplemented { module, gated_on }` carrying the pinned slugs; CE mapping vector-identical; subscribe as a `futures::Stream<Item = Result<Inbound, CrabkaError>>`.
-- **Workspace placement with rationale:** the crate lives at **`crates/app-sdk`** (`crabka-app-sdk`, `publish = false` + the private release-plz entry) — inside the workspace for lints/deps/CI-for-free. The umbrella's "SDKs live under `sdks/`" rule targeted foreign-ecosystem packaging (npm/Gradle/CMake); a Rust crate's ecosystem *is* the workspace. The umbrella doc gains one clarifying line.
+- **Workspace placement with rationale:** the crate lives at **`crates/app-sdk`** (`krabka-app-sdk`, `publish = false` + the private release-plz entry) — inside the workspace for lints/deps/CI-for-free. The umbrella's "SDKs live under `sdks/`" rule targeted foreign-ecosystem packaging (npm/Gradle/CMake); a Rust crate's ecosystem _is_ the workspace. The umbrella doc gains one clarifying line.
 - **Proto types shared, not duplicated:** a `build.rs` compiling the gateway proto with prost (the `connectrpc-axum-build`-adjacent pattern already used server-side), messages only — the service stubs are the hand-rolled client's job.
 
 ## Non-goals
@@ -24,7 +24,7 @@ A general-purpose `connect-rust` library (extract later if a second consumer app
 ## Architecture
 
 ```
-crates/app-sdk  (crabka-app-sdk — publish = false; tokio + hyper + prost)
+crates/app-sdk  (krabka-app-sdk — publish = false; tokio + hyper + prost)
 ├── build.rs                    prost codegen of the gateway proto (messages only)
 ├── src/connect_client.rs       unary POST + enveloped-stream framing over hyper h2c
 │                               (flags|len prefix; EndStream trailer → ConnectError{code,msg})
@@ -51,7 +51,7 @@ Unit tests for the framing codec (envelope round-trip, trailer-frame error decod
 
 ## Risks
 
-- **The hand-rolled framing is the risk concentration** — mitigated by testing against *our own server's actual bytes* (captured from connectrpc-axum in-process — an oracle we fully control) and by the suite.
+- **The hand-rolled framing is the risk concentration** — mitigated by testing against _our own server's actual bytes_ (captured from connectrpc-axum in-process — an oracle we fully control) and by the suite.
 - **Two-Rust-surfaces confusion** — mitigated by the front-page rustdoc split statement and the crate name (`app-sdk` vs the `client-*` crates).
 - **h2c client config** (hyper prior-knowledge) — smoke-first, as in every language cycle.
 

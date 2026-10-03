@@ -9,10 +9,6 @@
 
 use std::{collections::BTreeMap, fmt::Debug, future::Future, pin::Pin, sync::Arc};
 
-use crabka_units::{
-    Time,
-    convert::{StdDurationExt as _, TimeExt as _},
-};
 use k8s_openapi::{
     ByteString,
     api::{
@@ -20,6 +16,10 @@ use k8s_openapi::{
         core::v1::{ConfigMap, Secret, Service},
     },
     apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference},
+};
+use krabka_units::{
+    Time,
+    convert::{StdDurationExt as _, TimeExt as _},
 };
 use kube::{
     Resource,
@@ -36,7 +36,7 @@ use crate::{
     crd::{Kafka, KafkaCondition},
 };
 
-pub(crate) const FIELD_MANAGER: &str = "crabka-operator";
+pub(crate) const FIELD_MANAGER: &str = "krabka-operator";
 
 pub(crate) const BROKER_PORT: i32 = 9092;
 /// `KRaft` controller listener port. Every broker binds its controller
@@ -47,12 +47,12 @@ pub(crate) const CONTROLLER_PORT: i32 = 9093;
 pub(crate) type AddressesPerNode =
     BTreeMap<i32, BTreeMap<String, crate::controller::listeners::AdvertisedAddress>>;
 pub(crate) type RolesPerNode = BTreeMap<i32, Vec<crate::crd::NodeRole>>;
-pub(crate) const APP_LABEL: &str = "crabka-broker";
+pub(crate) const APP_LABEL: &str = "krabka-broker";
 pub(crate) const QUORUM_BOOTSTRAP_NODE_ID_KEY: &str = "quorumBootstrapNodeId";
 pub(crate) const QUORUM_BOOTSTRAP_POOL_KEY: &str = "quorumBootstrapPool";
 pub(crate) const QUORUM_BOOTSTRAP_INITIALIZED_KEY: &str = "quorumBootstrapInitialized";
 pub(crate) const DEFAULT_BROKER_IMAGE: &str = concat!(
-    "ghcr.io/robot-head/crabka-broker:",
+    "ghcr.io/robot-head/krabka-broker:",
     env!("CARGO_PKG_VERSION")
 );
 
@@ -67,7 +67,7 @@ pub(crate) fn requeue(delay: Time) -> Action {
 }
 
 /// A millisecond count held as `u64` — a `refined_type` newtype such as
-/// `crabka_gres_control`'s `PositiveMillis` — as a time extent.
+/// `krabka_gres_control`'s `PositiveMillis` — as a time extent.
 /// [`TimeExt::from_millis`] takes an `i64`, so a value past `i64::MAX`
 /// milliseconds saturates rather than wrapping negative.
 pub(crate) fn time_from_millis_u64(millis: u64) -> Time {
@@ -105,7 +105,7 @@ pub enum ReconcileError {
     #[error("malformed input: {0}")]
     Malformed(String),
     #[error("CA: {0}")]
-    Ca(#[from] crabka_security::ca::CaError),
+    Ca(#[from] krabka_security::ca::CaError),
     #[error("cert parse: {0}")]
     CertParse(String),
     #[error(
@@ -177,13 +177,13 @@ pub enum ReconcileError {
     #[error("gateway tuning: {0}")]
     GatewayConfigInvalid(String),
     #[error("gres control: {0}")]
-    GresControl(#[from] crabka_gres_control::ControlError),
+    GresControl(#[from] krabka_gres_control::ControlError),
     #[error("producer error: {0}")]
-    Producer(#[from] crabka_client_producer::ProducerError),
+    Producer(#[from] krabka_client_producer::ProducerError),
     #[error("gres control write: {0}")]
     GresControlWrite(#[from] crate::context::GresControlWriteError),
     #[error("admin error: {0}")]
-    Admin(#[from] crabka_client_admin::AdminError),
+    Admin(#[from] krabka_client_admin::AdminError),
     #[error("pgdog admin error: {0}")]
     PgdogAdmin(#[from] crate::context::PgdogAdminError),
 }
@@ -260,7 +260,7 @@ where
     result
 }
 
-/// Server-side apply a typed object. Field manager is `crabka-operator`,
+/// Server-side apply a typed object. Field manager is `krabka-operator`,
 /// force-takeover is on so we wrest fields back from any previous manager
 /// if any happen to linger. Object shape is stable across reconciles
 /// because renderers are pure functions of the owner.
@@ -349,7 +349,7 @@ pub(crate) fn common_labels(
     m.insert("app.kubernetes.io/version".into(), kafka_version.into());
     m.insert(
         "app.kubernetes.io/managed-by".into(),
-        "crabka-operator".into(),
+        "krabka-operator".into(),
     );
     if let Some(p) = pool {
         m.insert("crabka.io/pool".into(), p.into());
@@ -1330,7 +1330,7 @@ mod config_hash_tests {
         assert!(empty == absent, "empty tuning must preserve hash collapse");
 
         spec.broker_tuning = Some(BrokerTuning {
-            auto_join_voter_request_timeout: Some(crabka_units::secs(7)),
+            auto_join_voter_request_timeout: Some(krabka_units::secs(7)),
             ..BrokerTuning::default()
         });
         let nonempty = combined_config_hash(&spec, None, None, None);

@@ -2,20 +2,20 @@
 //! kraft.version range).
 //!
 //! This is a pure value-type leaf crate, with no IO, no async, and no crypto,
-//! so it compiles for `wasm32-unknown-unknown`. `crabka-metadata` re-exports it
+//! so it compiles for `wasm32-unknown-unknown`. `krabka-metadata` re-exports it
 //! as its `voters` module. The deterministic consensus core,
-//! `crabka-kraft-core`, embeds a [`VoterSet`] in its quorum state.
+//! `krabka-kraft-core`, embeds a [`VoterSet`] in its quorum state.
 
-#![doc(html_root_url = "https://docs.rs/crabka-voters/0.4.1")]
+#![doc(html_root_url = "https://docs.rs/krabka-voters/0.4.2")]
 
 use std::collections::BTreeMap;
 
-/// A broker or controller node id: the canonical [`crabka_ids::NodeId`]
+/// A broker or controller node id: the canonical [`krabka_ids::NodeId`]
 /// newtype, which is a `u64` internally and Kafka's `int32` on the wire.
 ///
 /// This crate re-exports the type, so the consensus stack keeps the name
-/// `crabka_voters::NodeId`.
-pub use crabka_ids::NodeId;
+/// `krabka_voters::NodeId`.
+pub use krabka_ids::NodeId;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
