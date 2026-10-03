@@ -2,7 +2,7 @@
 
 Status: Draft
 Date: 2026-05-24
-Umbrella: `docs/superpowers/specs/2026-05-23-krabka-oauth-parity-roadmap-design.md`
+Umbrella: `docs/superpowers/specs/2026-05-23-crabka-oauth-parity-roadmap-design.md`
 Builds on: slice 49b (JWKS validator + refresher), slices 49g/49h (sibling long-tail clusters)
 Follows: nothing — this is the LAST OAUTHBEARER umbrella slice.
 

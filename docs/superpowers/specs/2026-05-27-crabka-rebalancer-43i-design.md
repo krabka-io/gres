@@ -3,7 +3,7 @@
 **Date:** 2026-05-27
 **Status:** Slice design. Follows slice 43h (scrape-target discovery via
 Metadata). Part of the rebalancer roadmap
-(`docs/superpowers/specs/2026-05-17-krabka-rebalancer-roadmap-design.md`).
+(`docs/superpowers/specs/2026-05-17-crabka-rebalancer-roadmap-design.md`).
 
 ## Why this exists
 

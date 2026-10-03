@@ -4,7 +4,7 @@
 **Date:** 2026-05-11
 **Author:** Matthew Stone (with Claude)
 **Predecessor:** project meta-spec
-(`2026-05-10-krabka-rust-rewrite-design.md`). Slice 1 (`krabka-protocol`
+(`2026-05-10-crabka-rust-rewrite-design.md`). Slice 1 (`krabka-protocol`
 and friends) fully shipped via 1a–1e.
 
 ## Summary

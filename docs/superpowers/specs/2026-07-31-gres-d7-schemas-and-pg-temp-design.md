@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-31
 **Status:** Proposed
-**Type:** SQL-parity wave. Implements wave D7 of the [SQL-Parity Program](2026-07-09-krabka-gres-sql-parity-program-design.md): real SQL schemas, a real `search_path`, and a real per-session `pg_temp`, replacing the single flat namespace the engine has today. The foreign-key/temp boundary is the seam shared with [D6](2026-07-31-gres-d6-foreign-keys-local-design.md).
+**Type:** SQL-parity wave. Implements wave D7 of the [SQL-Parity Program](2026-07-09-crabka-gres-sql-parity-program-design.md): real SQL schemas, a real `search_path`, and a real per-session `pg_temp`, replacing the single flat namespace the engine has today. The foreign-key/temp boundary is the seam shared with [D6](2026-07-31-gres-d6-foreign-keys-local-design.md).
 
 ## Design Goals
 

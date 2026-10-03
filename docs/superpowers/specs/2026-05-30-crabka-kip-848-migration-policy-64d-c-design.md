@@ -2,7 +2,7 @@
 
 **Status:** design
 **Date:** 2026-05-30
-**Roadmap:** `2026-05-29-krabka-classic-nextgen-migration-roadmap-design.md`, Slice C.
+**Roadmap:** `2026-05-29-crabka-classic-nextgen-migration-roadmap-design.md`, Slice C.
 Builds on Slice B (unified `GroupCoordinator`, PR #351). Slices D/E (live
 upgrade/downgrade) consume the policy + convertibility predicate this slice adds.
 

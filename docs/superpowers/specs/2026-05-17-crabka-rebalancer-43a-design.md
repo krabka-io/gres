@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-17
 **Status:** Design approved, ready for implementation plan
-**Reference roadmap:** [`2026-05-17-krabka-rebalancer-roadmap-design.md`](2026-05-17-krabka-rebalancer-roadmap-design.md)
+**Reference roadmap:** [`2026-05-17-crabka-rebalancer-roadmap-design.md`](2026-05-17-crabka-rebalancer-roadmap-design.md)
 
 ## Goal
 

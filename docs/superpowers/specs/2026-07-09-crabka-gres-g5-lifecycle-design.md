@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-09
 **Status:** Approved
-**Type:** Slice design. The fifth slice of [Chapter Gres](2026-07-09-krabka-gres-chapter-design.md): serverless behavior — idle tenants scale to zero and wake on the first connection, with a measured cold-start SLO as the gate.
+**Type:** Slice design. The fifth slice of [Chapter Gres](2026-07-09-crabka-gres-chapter-design.md): serverless behavior — idle tenants scale to zero and wake on the first connection, with a measured cold-start SLO as the gate.
 
 ## Context — the one constraint that shapes everything
 

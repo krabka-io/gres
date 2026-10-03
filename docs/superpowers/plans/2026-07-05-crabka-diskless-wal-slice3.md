@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `object_store` 0.13 (via `build_object_store`), `serde`/`serde_wincode`, `tokio`, `bytes`, `uuid`, `assert2`, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
-**Spec:** [`docs/superpowers/specs/2026-07-05-krabka-diskless-wal-slice3-design.md`](../specs/2026-07-05-krabka-diskless-wal-slice3-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-05-crabka-diskless-wal-slice3-design.md`](../specs/2026-07-05-crabka-diskless-wal-slice3-design.md).
 
 **PREREQUISITES (unlanded):** Slices 1 (`WalStore`/`LocalFsyncWal`/fsync-gated HW/`diskless` flag) and 2 (KRaft offsets). Also depends on `krabka-object-store` (`build_object_store`, landed/executing) and `krabka-remote-storage-topic` (`KafkaMetadataEventLog`). Land Slices 1–2 first; this plan reuses their `high_watermark()`-from-WAL-durable and the `diskless` per-topic flag.
 

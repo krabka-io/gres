@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `prost` + a blocking HTTP client (no tokio in the cdylib), `cbindgen`, `tar`, `tokio` (pageserver), C + libpq-less extension against patched PG-17 headers, `testcontainers` (+ `postgres` module), `assert2`/`nextest`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-pg5-compute-design.md`](../specs/2026-07-06-krabka-pg5-compute-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-pg5-compute-design.md`](../specs/2026-07-06-crabka-pg5-compute-design.md).
 
 **PREREQUISITES (unlanded):** PG-2, PG-3, PG-4 crates (5a builds on them); PG-1 (the WAL loop for the gate); **PG-4b blocks Task 7's boot gate only** (SLRUs in basebackup). A local/containerized PG 17 for fixtures.
 

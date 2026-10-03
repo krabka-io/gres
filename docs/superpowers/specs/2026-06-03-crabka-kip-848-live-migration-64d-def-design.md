@@ -2,9 +2,9 @@
 
 **Status:** design
 **Date:** 2026-06-03
-**Roadmap:** `2026-05-29-krabka-classic-nextgen-migration-roadmap-design.md`
+**Roadmap:** `2026-05-29-crabka-classic-nextgen-migration-roadmap-design.md`
 (slices D = upgrade, E = downgrade, F = JVM acceptance).
-**Supersedes:** `2026-05-30-krabka-kip-848-upgrade-64d-d-design.md` (the
+**Supersedes:** `2026-05-30-crabka-kip-848-upgrade-64d-d-design.md` (the
 slice-D-only design). This spec covers D, E, and F as one cycle and reconciles
 two points with the earlier D-only doc — see *Reconciliation* below.
 
@@ -270,7 +270,7 @@ test gate the slice (no silent cap on coverage).
 
 ## Reconciliation with the earlier D-only doc
 
-`2026-05-30-krabka-kip-848-upgrade-64d-d-design.md` proposed (a) a
+`2026-05-30-crabka-kip-848-upgrade-64d-d-design.md` proposed (a) a
 `protocols_accepted` set on the actor handle plus a `MaybeUpgrade` message routed
 from the handler, and (b) "no schema change." This spec replaces both: (a) a
 single `get_or_create_group` + in-actor conversion in the heartbeat arm (simpler,

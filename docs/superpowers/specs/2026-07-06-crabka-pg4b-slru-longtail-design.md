@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Subsystem design. The follow-on slice of [PG-4](2026-07-06-krabka-pg4-redo-pageservice-design.md) in the [Chapter C roadmap](2026-07-06-krabka-postgres-chapter-roadmap-design.md) — **the sole blocker on PG-5's boot gate**. Three concerns: (a) SLRU/CLOG materialization, (b) relation-lifecycle interpretation + exact `GetRelSize`, (c) the index-rmgr redo long tail.
+**Type:** Subsystem design. The follow-on slice of [PG-4](2026-07-06-crabka-pg4-redo-pageservice-design.md) in the [Chapter C roadmap](2026-07-06-crabka-postgres-chapter-roadmap-design.md) — **the sole blocker on PG-5's boot gate**. Three concerns: (a) SLRU/CLOG materialization, (b) relation-lifecycle interpretation + exact `GetRelSize`, (c) the index-rmgr redo long tail.
 
 ## Context — what "a booting Postgres" actually needs
 

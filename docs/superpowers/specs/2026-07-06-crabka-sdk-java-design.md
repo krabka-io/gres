@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Language cycle under the [application-SDK umbrella](2026-07-06-krabka-app-sdk-umbrella-design.md). Implements contract v1 on the JVM; definition of done = the conformance suite green through the JVM adapter.
+**Type:** Language cycle under the [application-SDK umbrella](2026-07-06-crabka-app-sdk-umbrella-design.md). Implements contract v1 on the JVM; definition of done = the conformance suite green through the JVM adapter.
 
 ## Context
 

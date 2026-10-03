@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Subsystem design. The **lighter** ack path of the [serverless messaging cycle](2026-07-06-krabka-gateway-header-carrythrough-design.md) — makes `SubscribeAck`'s advisory `(topic, partition, offset)` load-bearing so a gateway client commits the specific offset it acked, gap-safely.
+**Type:** Subsystem design. The **lighter** ack path of the [serverless messaging cycle](2026-07-06-crabka-gateway-header-carrythrough-design.md) — makes `SubscribeAck`'s advisory `(topic, partition, offset)` load-bearing so a gateway client commits the specific offset it acked, gap-safely.
 
 ## Context — the lighter ack variant (positioned honestly)
 

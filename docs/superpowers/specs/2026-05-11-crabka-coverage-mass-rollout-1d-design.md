@@ -4,7 +4,7 @@
 **Date:** 2026-05-11
 **Author:** Matthew Stone (with Claude)
 **Predecessors:** coverage meta-spec
-(`2026-05-11-krabka-protocol-coverage-design.md`); 1a (codegen
+(`2026-05-11-crabka-protocol-coverage-design.md`); 1a (codegen
 generalization, merged); 1b (compression, merged); 1c (typed
 RecordBatch, merged).
 

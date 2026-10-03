@@ -3,7 +3,7 @@
 - **Date:** 2026-06-05
 - **Status:** Approved (brainstorm); ready for an implementation plan
 - **Builds on:** slice 1 (PR #392) — standalone `krabka-schema-registry` crate, `_schemas` storage, REST surface, `format` module (parse + canonical form), `/config` stored-but-not-enforced, golden-fixture-from-`cp-schema-registry` validation pattern.
-- **Parent roadmap:** `docs/superpowers/specs/2026-06-04-krabka-schema-registry-design.md` (slice 2).
+- **Parent roadmap:** `docs/superpowers/specs/2026-06-04-crabka-schema-registry-design.md` (slice 2).
 
 ## Motivation
 

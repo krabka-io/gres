@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-09
 **Status:** Approved
-**Type:** Slice design. Revives the donor's multi-range router / cross-range 2PC / GTM layers over substrate-backed ranges, giving one tenant database **table-granular write scale-out**: aggregate write throughput grows linearly with ranges, each range being exactly the single-writer WAL-topic compute G-2/G-3 built. Structured **G-7a** (in-process multi-range) → **G-7b** (distributed range computes). Reverses the chapter's cluster-not-vendored decision for the non-raft ~two-thirds of the crate; the chapter doc is amended accordingly. Single-**table** sharding is deliberately out — that is [G-8](2026-07-09-krabka-gres-g8-sharded-tables-design.md).
+**Type:** Slice design. Revives the donor's multi-range router / cross-range 2PC / GTM layers over substrate-backed ranges, giving one tenant database **table-granular write scale-out**: aggregate write throughput grows linearly with ranges, each range being exactly the single-writer WAL-topic compute G-2/G-3 built. Structured **G-7a** (in-process multi-range) → **G-7b** (distributed range computes). Reverses the chapter's cluster-not-vendored decision for the non-raft ~two-thirds of the crate; the chapter doc is amended accordingly. Single-**table** sharding is deliberately out — that is [G-8](2026-07-09-crabka-gres-g8-sharded-tables-design.md).
 
 ## Context — what the donor actually holds (all claims source-verified)
 

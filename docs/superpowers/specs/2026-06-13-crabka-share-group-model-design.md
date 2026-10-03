@@ -4,8 +4,8 @@
 **Status:** Approved (design); plan + implementation to follow
 **Workstream:** A (stateright correctness models) — next slice after the merged raft consensus model
 **Predecessor specs:**
-- `2026-06-13-krabka-stateright-consensus-deflake-design.md` (raft model + shared infra; merged #511)
-- `2026-06-13-krabka-share-group-deflake-design.md` (share/group sleep-test de-flake; #513)
+- `2026-06-13-crabka-stateright-consensus-deflake-design.md` (raft model + shared infra; merged #511)
+- `2026-06-13-crabka-share-group-deflake-design.md` (share/group sleep-test de-flake; #513)
 
 ## Goal
 

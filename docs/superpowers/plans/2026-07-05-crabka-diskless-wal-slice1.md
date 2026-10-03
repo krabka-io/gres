@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `tokio`, `async-trait`, `stateright` (dev, model checking), `assert2`, `mockall` where a seam needs mocking, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
-**Spec:** [`docs/superpowers/specs/2026-07-05-krabka-diskless-wal-slice1-design.md`](../specs/2026-07-05-krabka-diskless-wal-slice1-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-05-crabka-diskless-wal-slice1-design.md`](../specs/2026-07-05-crabka-diskless-wal-slice1-design.md).
 
 ---
 

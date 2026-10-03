@@ -6,7 +6,7 @@
 **Closes:** `KNOWN_ISSUES.md` → "Captured-traffic corpus deviation from coverage
 acceptance criterion #9"
 **Predecessor:**
-[`2026-05-11-krabka-protocol-coverage-design.md`](2026-05-11-krabka-protocol-coverage-design.md)
+[`2026-05-11-crabka-protocol-coverage-design.md`](2026-05-11-crabka-protocol-coverage-design.md)
 (coverage meta-spec; acceptance criterion #9 and the 1d row).
 
 ## Summary

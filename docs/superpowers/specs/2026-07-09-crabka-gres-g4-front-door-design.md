@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-09
 **Status:** Approved
-**Type:** Slice design. The fourth slice of [Chapter Gres](2026-07-09-krabka-gres-chapter-design.md): tenants become a product surface — provisioned, routed, and authenticated — with PgDog as the co-deployed pgwire front door and Crabka owning the control plane.
+**Type:** Slice design. The fourth slice of [Chapter Gres](2026-07-09-crabka-gres-chapter-design.md): tenants become a product surface — provisioned, routed, and authenticated — with PgDog as the co-deployed pgwire front door and Crabka owning the control plane.
 
 ## Context — what the tree and PgDog actually hold
 

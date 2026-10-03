@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Subsystem design. The keystone slice of the [Chapter C roadmap](2026-07-06-krabka-postgres-chapter-roadmap-design.md): a real Postgres boots and runs against the disaggregated stack. Structured as **PG-5a** (pageserver readiness, pure Rust) + **PG-5b** (the compute image). **The compute client decision — a Rust cdylib behind a C ABI — was resolved by the user in this cycle**, establishing the workspace's one sanctioned `unsafe` boundary.
+**Type:** Subsystem design. The keystone slice of the [Chapter C roadmap](2026-07-06-crabka-postgres-chapter-roadmap-design.md): a real Postgres boots and runs against the disaggregated stack. Structured as **PG-5a** (pageserver readiness, pure Rust) + **PG-5b** (the compute image). **The compute client decision — a Rust cdylib behind a C ABI — was resolved by the user in this cycle**, establishing the workspace's one sanctioned `unsafe` boundary.
 
 ## Context — what compute actually forces
 

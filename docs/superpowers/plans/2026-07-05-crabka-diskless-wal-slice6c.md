@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), Creusot (`cargo creusot`, CI replay), `tokio`, `assert2`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-05-krabka-diskless-wal-slice6c-design.md`](../specs/2026-07-05-krabka-diskless-wal-slice6c-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-05-crabka-diskless-wal-slice6c-design.md`](../specs/2026-07-05-crabka-diskless-wal-slice6c-design.md).
 
 **PREREQUISITES (unlanded):** Slices 1–5 + 6a. Generalizes Slice-2's `OffsetSequencer`/`ControllerSequencer`; appends to 6a's `QuorumWalStore`. (6b for leaderless serving of the writes this enables.)
 

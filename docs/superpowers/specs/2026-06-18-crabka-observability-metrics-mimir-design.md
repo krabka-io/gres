@@ -13,7 +13,7 @@ is its own sub-project; the ruler dispatches to any Alertmanager-API endpoint.
 This is the second signal in the LGTM+P replacement. It reuses the shared
 substrate designed for logs (`krabka-blockstore`) and follows the same
 "emulate the wire contract, don't fork the product" pattern. See the logs spec:
-[2026-06-18-krabka-observability-logs-design.md](2026-06-18-krabka-observability-logs-design.md).
+[2026-06-18-crabka-observability-logs-design.md](2026-06-18-crabka-observability-logs-design.md).
 
 ## 1. Goal & thesis
 

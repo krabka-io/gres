@@ -12,7 +12,7 @@ deferred as 20a (multi-replica) and 20b (role separation), together with the
 broker-side observer-fetch subsystem that makes broker-only nodes possible.
 
 This document supersedes the deferral rows for slices 20a/20b in
-`2026-05-17-krabka-operator-kafkanodepool-20-design.md`.
+`2026-05-17-crabka-operator-kafkanodepool-20-design.md`.
 
 The shipped operator derives every node id and directory id from the pool ordinal.
 Exactly one deterministic controller is formatted as the initial voter; later
@@ -115,7 +115,7 @@ inversion; the operator's `crd::kafka_node_pool::NodeRole` maps to it at render 
 ### 3.2 Raft boot path (controllers)
 
 Reuse the existing `Bootstrap`/`Join`/`Rejoin` enum
-(`2026-05-14-krabka-bootstrap-then-join-design.md`). Controllers initialize/join as
+(`2026-05-14-crabka-bootstrap-then-join-design.md`). Controllers initialize/join as
 **voters** exactly as today's multi-node quorum design intends. Broker-only nodes do
 **not** call `Raft::new` for `__cluster_metadata` as a member at all — they run the
 observer fetcher instead (§4).
@@ -400,8 +400,8 @@ controller; JVM client metadata round-trip through a broker-only node.
 
 ## 11. References
 
-- `2026-05-17-krabka-operator-kafkanodepool-20-design.md` — slice 20 (this is its
+- `2026-05-17-crabka-operator-kafkanodepool-20-design.md` — slice 20 (this is its
   deferred 20a + 20b).
-- `2026-05-14-krabka-bootstrap-then-join-design.md` — `Bootstrap`/`Join`/`Rejoin`.
-- `2026-05-14-krabka-raft-membership-design.md` — voter membership mechanics.
-- `2026-05-12-krabka-metadata-quorum-design.md` — openraft-backed `__cluster_metadata`.
+- `2026-05-14-crabka-bootstrap-then-join-design.md` — `Bootstrap`/`Join`/`Rejoin`.
+- `2026-05-14-crabka-raft-membership-design.md` — voter membership mechanics.
+- `2026-05-12-crabka-metadata-quorum-design.md` — openraft-backed `__cluster_metadata`.

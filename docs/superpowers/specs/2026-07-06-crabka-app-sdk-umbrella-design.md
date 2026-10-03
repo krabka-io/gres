@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Umbrella design (Chapter F's SDK face). Defines the **language-agnostic module contract** every SDK implements, the **conformance suite** that enforces it, and the **Go reference** cycle — with TS, Java, Rust, and C++ following in their own cycles against the frozen contract. Extends [MSG-5](2026-07-06-krabka-polyglot-messaging-sdk-design.md) (the messaging-SDK foundation: `sdks/` layout, buf codegen, the Connect-transport ground truth, the gateway h2c prerequisite) into the full application-SDK surface.
+**Type:** Umbrella design (Chapter F's SDK face). Defines the **language-agnostic module contract** every SDK implements, the **conformance suite** that enforces it, and the **Go reference** cycle — with TS, Java, Rust, and C++ following in their own cycles against the frozen contract. Extends [MSG-5](2026-07-06-crabka-polyglot-messaging-sdk-design.md) (the messaging-SDK foundation: `sdks/` layout, buf codegen, the Connect-transport ground truth, the gateway h2c prerequisite) into the full application-SDK surface.
 
 ## Context — the decisions that shape this
 

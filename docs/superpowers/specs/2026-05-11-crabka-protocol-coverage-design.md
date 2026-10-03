@@ -3,7 +3,7 @@
 **Status:** Draft for review
 **Date:** 2026-05-11
 **Author:** Matthew Stone (with Claude)
-**Predecessor:** [`2026-05-10-krabka-rust-rewrite-design.md`](2026-05-10-krabka-rust-rewrite-design.md) (project meta-spec) and [`2026-05-10-krabka-protocol-foundation.md`](../plans/2026-05-10-krabka-protocol-foundation.md) (foundation plan, now shipped).
+**Predecessor:** [`2026-05-10-crabka-rust-rewrite-design.md`](2026-05-10-crabka-rust-rewrite-design.md) (project meta-spec) and [`2026-05-10-krabka-protocol-foundation.md`](../plans/2026-05-10-krabka-protocol-foundation.md) (foundation plan, now shipped).
 
 ## Summary
 

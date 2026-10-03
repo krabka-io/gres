@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0, harness: `serde_json`, `tokio::process`, the in-process `Broker::start` + gateway router), Go 1.2x + connect-go (per MSG-5), `assert2`/`nextest`, `cargo +nightly fmt`, `clippy::pedantic`, `gofmt`/`go vet`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-app-sdk-umbrella-design.md`](../specs/2026-07-06-krabka-app-sdk-umbrella-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-app-sdk-umbrella-design.md`](../specs/2026-07-06-crabka-app-sdk-umbrella-design.md).
 
 **PREREQUISITES (unlanded):** **MSG-5 executed** (the Go messaging core: buf stubs, `publish`/`publishEvent`/`subscribe`, and the gateway h2c listener — this plan's Go tasks build on those). The harness tasks (1–3) have no unbuilt prerequisites.
 

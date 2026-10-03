@@ -4,7 +4,7 @@ Status: Draft
 Date: 2026-05-23
 Slice: 50b
 Pairs with broker slice(s): 49c (already shipped)
-Umbrella: [OAUTHBEARER full-parity roadmap](2026-05-23-krabka-oauth-parity-roadmap-design.md)
+Umbrella: [OAUTHBEARER full-parity roadmap](2026-05-23-crabka-oauth-parity-roadmap-design.md)
 
 ## Goal
 

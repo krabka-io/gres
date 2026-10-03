@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `std::collections::{BTreeSet,HashMap}`, `tokio`, Connect-RPC, the in-process `Broker::start` harness, `assert2`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-peroffset-subscribe-ack-design.md`](../specs/2026-07-06-krabka-peroffset-subscribe-ack-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-peroffset-subscribe-ack-design.md`](../specs/2026-07-06-crabka-peroffset-subscribe-ack-design.md).
 
 **PREREQUISITE:** none unlanded — the broker already accepts explicit `OffsetCommit` (`offset_commit.rs:327`). Independent of MSG-1/2/4.
 

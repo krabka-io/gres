@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Chapter decomposition. Orders the [serverless-backend vision](2026-07-06-krabka-serverless-backend-vision-design.md)'s Chapter C (the keystone) into buildable design-cycle slices, grounded against the actual tree.
+**Type:** Chapter decomposition. Orders the [serverless-backend vision](2026-07-06-crabka-serverless-backend-vision-design.md)'s Chapter C (the keystone) into buildable design-cycle slices, grounded against the actual tree.
 
 ## Grounding — what the tree actually holds
 

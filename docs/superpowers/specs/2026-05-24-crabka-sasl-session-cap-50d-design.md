@@ -2,8 +2,8 @@
 
 Status: Draft
 Date: 2026-05-24
-Umbrella: `docs/superpowers/specs/2026-05-23-krabka-oauth-parity-roadmap-design.md`
-Builds on: slice 49e (broker KIP-368 SASL re-auth) — `docs/superpowers/specs/2026-05-24-krabka-broker-sasl-reauth-49e-design.md`
+Umbrella: `docs/superpowers/specs/2026-05-23-crabka-oauth-parity-roadmap-design.md`
+Builds on: slice 49e (broker KIP-368 SASL re-auth) — `docs/superpowers/specs/2026-05-24-crabka-broker-sasl-reauth-49e-design.md`
 
 ## Goal
 

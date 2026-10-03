@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Subsystem design. The **packaging capstone** of the [serverless messaging cycle](2026-07-06-krabka-gateway-header-carrythrough-design.md) — an idiomatic client library over the gateway's Connect-RPC surface. Ships **Go first**; establishes the polyglot foundation the other languages reuse.
+**Type:** Subsystem design. The **packaging capstone** of the [serverless messaging cycle](2026-07-06-crabka-gateway-header-carrythrough-design.md) — an idiomatic client library over the gateway's Connect-RPC surface. Ships **Go first**; establishes the polyglot foundation the other languages reuse.
 
 ## Context — the thinnest face, positioned honestly
 

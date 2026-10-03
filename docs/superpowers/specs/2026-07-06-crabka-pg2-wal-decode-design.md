@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Subsystem design. First buildable slice of the [Chapter C roadmap](2026-07-06-krabka-postgres-chapter-roadmap-design.md) — the ingest half of the pageserver track, with **no unbuilt prerequisites**.
+**Type:** Subsystem design. First buildable slice of the [Chapter C roadmap](2026-07-06-crabka-postgres-chapter-roadmap-design.md) — the ingest half of the pageserver track, with **no unbuilt prerequisites**.
 
 ## Context — where this sits
 

@@ -6,7 +6,7 @@
 
 ## Context — where this sits
 
-Final sub-slice of Slice 6 (see the [6a spec](2026-07-05-krabka-diskless-wal-slice6a-design.md) for the decomposition). 6a gave a quorum-durable WAL, 6b leaderless serving, 6c the concurrent/leaderless write path. 6d **composes all three** and mechanically proves the whole diskless data path never loses an acknowledged record — turning Slice-5's out-of-scope `NodeLoss` **in-scope** (a surviving quorum retains the un-flushed acked tail) across **concurrent appenders + WAL-node loss within quorum + sequencer-authority handoff on leader change** — plus a **Jepsen-style black-box** harness against a real running cluster under real faults. This is the roadmap's gate: *"no acknowledged record lost across broker death, WAL-node loss within quorum, or PUT failure."*
+Final sub-slice of Slice 6 (see the [6a spec](2026-07-05-crabka-diskless-wal-slice6a-design.md) for the decomposition). 6a gave a quorum-durable WAL, 6b leaderless serving, 6c the concurrent/leaderless write path. 6d **composes all three** and mechanically proves the whole diskless data path never loses an acknowledged record — turning Slice-5's out-of-scope `NodeLoss` **in-scope** (a surviving quorum retains the un-flushed acked tail) across **concurrent appenders + WAL-node loss within quorum + sequencer-authority handoff on leader change** — plus a **Jepsen-style black-box** harness against a real running cluster under real faults. This is the roadmap's gate: *"no acknowledged record lost across broker death, WAL-node loss within quorum, or PUT failure."*
 
 6d builds **no new data-path machinery** — it composes and adversarially verifies what 6a–6c built. Its deliverables are proofs and a fault-injection harness.
 

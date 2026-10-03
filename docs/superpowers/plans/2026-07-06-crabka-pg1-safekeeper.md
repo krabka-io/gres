@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `tokio`, `tokio-postgres 0.7`/`postgres-protocol`, `krabka-client-{producer,consumer,admin}`, `bytes`, `thiserror`, `testcontainers` + `testcontainers-modules` (`postgres` feature) for integration, `assert2`/`nextest`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-pg1-safekeeper-design.md`](../specs/2026-07-06-krabka-pg1-safekeeper-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-pg1-safekeeper-design.md`](../specs/2026-07-06-crabka-pg1-safekeeper-design.md).
 
 **PREREQUISITES (unlanded):** **PG-2** (`krabka-postgres-wal`) as a **dev-dependency** for the decode gate only. The runtime path needs nothing unbuilt (durability tier inherited from the topic; upgrades with diskless slices 1/6a, no code change here).
 

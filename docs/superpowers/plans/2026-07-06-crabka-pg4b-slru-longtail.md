@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), the PG-2/3/4 crates, `proptest` (fan-out properties), `assert2`/`nextest`, a local/containerized PG 17 for fixture regeneration, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-pg4b-slru-longtail-design.md`](../specs/2026-07-06-krabka-pg4b-slru-longtail-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-pg4b-slru-longtail-design.md`](../specs/2026-07-06-crabka-pg4b-slru-longtail-design.md).
 
 **PREREQUISITES (unlanded):** PG-2, PG-3, PG-4 executed (this plan modifies their crates). If PG-3 execution has not started, implement the `Key` enum there from the start (Task 1 becomes a no-op fold-in).
 

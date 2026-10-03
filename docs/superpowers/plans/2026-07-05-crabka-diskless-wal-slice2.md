@@ -8,9 +8,9 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `serde`/`serde_wincode` (metadata record carrier), `tokio`, `async-trait`, `stateright` (dev), `assert2`, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
-**Spec:** [`docs/superpowers/specs/2026-07-05-krabka-diskless-wal-slice2-design.md`](../specs/2026-07-05-krabka-diskless-wal-slice2-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-05-crabka-diskless-wal-slice2-design.md`](../specs/2026-07-05-crabka-diskless-wal-slice2-design.md).
 
-**PREREQUISITE:** Slice 1 (`2026-07-05-krabka-diskless-wal-slice1.md`) is implemented and merged. This plan modifies the Slice-1 diskless writer branch and reuses its `WalStore`/`recompute_hw_for_wal_durable`/`diskless` flag. If Slice 1 is not yet landed, execute it first.
+**PREREQUISITE:** Slice 1 (`2026-07-05-crabka-diskless-wal-slice1.md`) is implemented and merged. This plan modifies the Slice-1 diskless writer branch and reuses its `WalStore`/`recompute_hw_for_wal_durable`/`diskless` flag. If Slice 1 is not yet landed, execute it first.
 
 ---
 

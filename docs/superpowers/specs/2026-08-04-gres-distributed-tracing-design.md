@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-04
 **Status:** Implemented
-**Phase:** 6 (Observability). Builds on slice 42 (`krabka-broker` OTLP pipeline, [design](2026-05-23-krabka-broker-otlp-tracing-42-design.md)) and reuses its `krabka_telemetry` pipeline wholesale.
+**Phase:** 6 (Observability). Builds on slice 42 (`krabka-broker` OTLP pipeline, [design](2026-05-23-crabka-broker-otlp-tracing-42-design.md)) and reuses its `krabka_telemetry` pipeline wholesale.
 
 ## Goal
 

@@ -4,9 +4,9 @@
 **Status:** Approved (design); plan + implementation to follow
 **Workstream:** A (stateright correctness models) — leader-change safety, the capstone of the consensus + ISR replication-safety trilogy
 **Predecessor specs:**
-- `2026-06-13-krabka-stateright-consensus-deflake-design.md` (raft consensus; merged #511)
-- `2026-06-13-krabka-share-group-model-design.md` (share-partition acquisition; #514)
-- `2026-06-13-krabka-isr-replica-state-model-design.md` (ISR/HWM replication; #515)
+- `2026-06-13-crabka-stateright-consensus-deflake-design.md` (raft consensus; merged #511)
+- `2026-06-13-crabka-share-group-model-design.md` (share-partition acquisition; #514)
+- `2026-06-13-crabka-isr-replica-state-model-design.md` (ISR/HWM replication; #515)
 
 ## Goal
 

@@ -4,7 +4,7 @@
 
 **Goal:** A one-command `docker compose up` demo where Grafana queries Crabka's four observability backends (metrics, traces, logs, profiles), Crabka exports all four of its own signals into those backends, and a purpose-built `krabka-client-streams` orders pipeline runs its Kafka traffic on Crabka and is fully instrumented.
 
-**Architecture:** One `krabka-broker` is triple-duty (demo app event bus + WAL for all four backends + self-observed subject). One Grafana Alloy collects every signal from both sources (Crabka components + the demo app) and writes to the four backends, which persist through the broker (WAL) and a shared MinIO bucket (blocks). Spec: [docs/superpowers/specs/2026-06-22-krabka-observability-demo-design.md](docs/superpowers/specs/2026-06-22-krabka-observability-demo-design.md).
+**Architecture:** One `krabka-broker` is triple-duty (demo app event bus + WAL for all four backends + self-observed subject). One Grafana Alloy collects every signal from both sources (Crabka components + the demo app) and writes to the four backends, which persist through the broker (WAL) and a shared MinIO bucket (blocks). Spec: [docs/superpowers/specs/2026-06-22-crabka-observability-demo-design.md](docs/superpowers/specs/2026-06-22-crabka-observability-demo-design.md).
 
 **Tech Stack:** Rust (workspace, edition 2024), axum 0.8, `krabka-telemetry` (OTLP), `pprof` (CPU profiling), `tikv-jemallocator` + `jemalloc_pprof` (heap profiling), `krabka-client-streams` + `krabka-schema-serde` (proto/Streams), `object_store` (S3/MinIO), Docker Compose, Grafana + Grafana Alloy + MinIO.
 

@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-29
 **Status:** In progress
-**Type:** Program execution cycle. Drives the [SQL-Parity Program](2026-07-09-krabka-gres-sql-parity-program-design.md) to its M5 gate — no row in [`docs/PG_COMPAT_MATRIX.md`](../../PG_COMPAT_MATRIX.md) left in a `Wave-assigned` disposition — against a pinned PostgreSQL 18.4 oracle.
+**Type:** Program execution cycle. Drives the [SQL-Parity Program](2026-07-09-crabka-gres-sql-parity-program-design.md) to its M5 gate — no row in [`docs/PG_COMPAT_MATRIX.md`](../../PG_COMPAT_MATRIX.md) left in a `Wave-assigned` disposition — against a pinned PostgreSQL 18.4 oracle.
 
 ## Design Goals
 

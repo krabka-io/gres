@@ -4,8 +4,8 @@
 **Status:** Approved (design); plan + implementation to follow
 **Workstream:** A (stateright correctness models) — KIP-455 partition reassignment, the last strong model candidate after the consensus / share-group / ISR / failover trilogy-plus.
 **Predecessor specs:**
-- `2026-06-13-krabka-isr-replica-state-model-design.md` (ISR/HWM; #515)
-- `2026-06-13-krabka-failover-recovery-model-design.md` (failover/unclean-recovery; #516)
+- `2026-06-13-crabka-isr-replica-state-model-design.md` (ISR/HWM; #515)
+- `2026-06-13-crabka-failover-recovery-model-design.md` (failover/unclean-recovery; #516)
 
 ## Goal
 

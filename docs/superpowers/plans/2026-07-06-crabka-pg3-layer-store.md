@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `tokio`, `bytes`, `thiserror`, `krabka-postgres-wal` (PG-2 types), `krabka-object-store` (`ObjectOps`, `InMemory` for tests), `assert2`/`nextest`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-pg3-layer-store-design.md`](../specs/2026-07-06-krabka-pg3-layer-store-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-pg3-layer-store-design.md`](../specs/2026-07-06-crabka-pg3-layer-store-design.md).
 
 **PREREQUISITES (unlanded):** **PG-2** (`krabka-postgres-wal` — its `Lsn`/`PageKey`/`RelTag`/`Sharded`/decoder types and its committed fixture corpus). Nothing else; the object-store crate is landed.
 

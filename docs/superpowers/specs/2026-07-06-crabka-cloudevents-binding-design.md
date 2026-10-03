@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Subsystem design. The interop centerpiece of the [serverless messaging cycle](2026-07-06-krabka-gateway-header-carrythrough-design.md) — makes a Crabka topic a first-class CloudEvents stream. Only the **gRPC-Subscribe** CE path depends on MSG-1; ingress and webhook egress are independent.
+**Type:** Subsystem design. The interop centerpiece of the [serverless messaging cycle](2026-07-06-crabka-gateway-header-carrythrough-design.md) — makes a Crabka topic a first-class CloudEvents stream. Only the **gRPC-Subscribe** CE path depends on MSG-1; ingress and webhook egress are independent.
 
 ## Context — the interop wedge, honestly
 

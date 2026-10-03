@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `tokio`, `hyper`/`hyper-util` (h2c client), `prost` (+ build codegen), `bytes`, `futures`, `serde_json` (adapter), `assert2`/`nextest`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-sdk-rust-design.md`](../specs/2026-07-06-krabka-sdk-rust-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-sdk-rust-design.md`](../specs/2026-07-06-crabka-sdk-rust-design.md).
 
 **PREREQUISITES (unlanded):** the umbrella executed (harness + Go-hardened vectors) and MSG-5's gateway h2c listener.
 
@@ -35,7 +35,7 @@
 - [ ] **Step 2:** A trivial type-visibility test (`pb::SendRequest::default()` constructs) compiles green; `./tools/check-publish-allowlist.sh` → 0; commit.
 
 ```bash
-git add crates/app-sdk release-plz.toml docs/superpowers/specs/2026-07-06-krabka-app-sdk-umbrella-design.md
+git add crates/app-sdk release-plz.toml docs/superpowers/specs/2026-07-06-crabka-app-sdk-umbrella-design.md
 git commit -m "feat(app-sdk): crate scaffold with prost codegen off the gateway proto"
 ```
 

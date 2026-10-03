@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - **Prerequisites:** G-1 and G-2 plans landed. Verify every signature against the landed tree; the fjall snapshot/ingestion APIs (`Database::snapshot() -> Snapshot`, `Snapshot::iter(&Keyspace)`, `Keyspace::start_ingestion() -> Ingestion` with `write`/`write_tombstone`/`finish`, strictly-ascending keys) were verified against fjall 3.1.6 and are present throughout fjall 3.1.x — the workspace pin is whatever G-1 imported (the donor's `fjall = "3.1.5"`); these APIs exist there too, so no version bump is required (confirm at execution time).
-- **Spec:** [2026-07-09-krabka-gres-g3-checkpoints-design.md](../specs/2026-07-09-krabka-gres-g3-checkpoints-design.md).
+- **Spec:** [2026-07-09-crabka-gres-g3-checkpoints-design.md](../specs/2026-07-09-crabka-gres-g3-checkpoints-design.md).
 - **Broker facts (verified):** `DeleteRecords` trims leader-locally, advances log start (`low_watermark` in the response), physically deletes sealed segments; `offset == -1` means HW; `target > LEO` → `OFFSET_OUT_OF_RANGE`; fetch below log start surfaces as `ClientError::Server { error_code: 1 }` through `fetch_partition_with_isolation`.
 - **Ordering invariants (the spec's; the model pins them):** snapshot between commit-groups stamped `(covered_offset, journal_seq, epoch)`; parts before manifest; manifest before DeleteRecords; DeleteRecords before prune; recovery refuses on log-start-beyond-newest-manifest, checksum mismatch, or `journal_seq` gap.
 - Lints/format/commit/test conventions as in the G-2 plan (pedantic `-D warnings`, `cargo +nightly fmt`, `assert2`, condition-driven waits, conventional commits with the Claude trailer).

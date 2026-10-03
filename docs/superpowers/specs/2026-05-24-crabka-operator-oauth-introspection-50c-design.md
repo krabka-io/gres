@@ -4,7 +4,7 @@ Status: Draft
 Date: 2026-05-24
 Slice: 50c
 Pairs with broker slice(s): 49d (already shipped — broker introspection validator + `[oauthbearer]` TOML keys)
-Umbrella: [OAUTHBEARER full-parity roadmap](2026-05-23-krabka-oauth-parity-roadmap-design.md)
+Umbrella: [OAUTHBEARER full-parity roadmap](2026-05-23-crabka-oauth-parity-roadmap-design.md)
 
 ## Goal
 

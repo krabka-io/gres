@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - **Prerequisites:** G-1/G-2 landed (G-3 recommended but only the registry's checkpoint-threshold fields depend on it). **Verify all quoted signatures against the landed tree** — the operator scaffolds, `krabka-security` SCRAM functions (`hash_scram_password`, `derive_keys_from_salted`, `ScramCredential`), and schema-registry's kafkastore reader/writer idioms were verified against today's tree; the gres crates against the G-1/G-2 plans.
-- **Spec:** [2026-07-09-krabka-gres-g4-front-door-design.md](../specs/2026-07-09-krabka-gres-g4-front-door-design.md).
+- **Spec:** [2026-07-09-crabka-gres-g4-front-door-design.md](../specs/2026-07-09-crabka-gres-g4-front-door-design.md).
 - **PgDog pin:** one image tag (latest stable at execution time, e.g. `ghcr.io/pgdogdev/pgdog:v0.1.x`) recorded in operator defaults and CI; bumping it is a deliberate commit gated by the e2e leg. PgDog is never vendored or patched.
 - **Registry invariants:** `__gres_tenants` compacted, 1 partition; records are whole-tenant JSON snapshots keyed by tenant name with a monotonically bumped `record_version`; tombstone = deletion; verifiers only, never passwords.
 - Lints/format/commit/test conventions as in the G-2 plan.

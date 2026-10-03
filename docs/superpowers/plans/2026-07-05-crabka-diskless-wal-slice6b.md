@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `tokio`, `bytes`, `assert2`, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
-**Spec:** [`docs/superpowers/specs/2026-07-05-krabka-diskless-wal-slice6b-design.md`](../specs/2026-07-05-krabka-diskless-wal-slice6b-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-05-crabka-diskless-wal-slice6b-design.md`](../specs/2026-07-05-crabka-diskless-wal-slice6b-design.md).
 
 **PREREQUISITES (unlanded):** Slices 1–5 + 6a. Consumes 6a's per-member WAL-replica log + `WalShardEngine::on_watermark_advance` and Slice-1's `recompute_hw_for_wal_durable`. Read-side only — depends on 6a, **not** 6c.
 

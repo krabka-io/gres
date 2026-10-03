@@ -4,7 +4,7 @@
 
 **Goal:** Remove the last per-table ceilings and operate the result: timestamp transactions (commit rate ~linear in ranges), pushdown execution, hash sharding, distributed indexes, and a goal-based auto-rebalancer.
 
-**Architecture:** Per the [G-9 design](../specs/2026-07-09-krabka-gres-g9-distributed-maturity-design.md): range 0 becomes a batched monotone timestamp oracle (stride-ahead durable); sharded tables move wholesale to ts-visibility with durable intents and primary-range commit records (superseding their g-timeline path); a light planner seam adds equivalence-preserving pushdown and join strategies; hash sharding is a bucket key-prefix over the existing interval machinery; local then global indexes; a gres-balancer drives split/move/merge through the G-8b orchestrator.
+**Architecture:** Per the [G-9 design](../specs/2026-07-09-crabka-gres-g9-distributed-maturity-design.md): range 0 becomes a batched monotone timestamp oracle (stride-ahead durable); sharded tables move wholesale to ts-visibility with durable intents and primary-range commit records (superseding their g-timeline path); a light planner seam adds equivalence-preserving pushdown and join strategies; hash sharding is a bucket key-prefix over the existing interval machinery; local then global indexes; a gres-balancer drives split/move/merge through the G-8b orchestrator.
 
 **Tech Stack:** everything G-7/G-8 built, `krabka-rebalancer` as the goal-framework precedent, stateright, the scaling-demo pipeline.
 

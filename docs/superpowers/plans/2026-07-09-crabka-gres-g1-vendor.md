@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - **Donor pin:** all sources come from `https://github.com/robot-head/crabgresql` at commit `93f3d17168d056a28b4abe60af3b489d4bf62f1d`. The clone is read-only; never edit it.
-- **Spec:** [docs/superpowers/specs/2026-07-09-krabka-gres-chapter-design.md](../specs/2026-07-09-krabka-gres-chapter-design.md). G-1 gate: donor parity baseline reproduced in Crabka CI; `krabka-gres` serves a single tenant on local fjall.
+- **Spec:** [docs/superpowers/specs/2026-07-09-crabka-gres-chapter-design.md](../specs/2026-07-09-crabka-gres-chapter-design.md). G-1 gate: donor parity baseline reproduced in Crabka CI; `krabka-gres` serves a single tenant on local fjall.
 - **No behavior changes.** Vendoring must not change observable engine behavior; the conformance baseline (exact statement count, match count ≥ donor's) is the arbiter. Lint fixes must be behavior-preserving.
 - **Naming:** package `krabka-<name>`, directory `crates/<name>`, imports `krabka_<name>::`. Sibling path deps are declared `krabka-x = { version = "0.3.9", path = "../x" }` (broker style), never renamed.
 - **Publish set:** `krabka-pgtypes`, `krabka-pgparser`, `krabka-pgwire`, `krabka-pgkv`, `krabka-pgmvcc`, `krabka-pgcatalog`, `krabka-pgexec` are published (allowlist + release-plz `publish = true`); `krabka-gres`, `krabka-gres-fdw`, `krabka-gres-conformance` are `publish = false`.
@@ -76,7 +76,7 @@ Published crates (badges included); internal crates drop the badge lines. Substi
 Part of [Crabka](https://github.com/robot-head/crabka)'s Chapter Gres — a pure-Rust
 Postgres-compatible engine vendored from
 [crabgresql](https://github.com/robot-head/crabgresql) at `93f3d17`; see the
-[chapter design](../../docs/superpowers/specs/2026-07-09-krabka-gres-chapter-design.md).
+[chapter design](../../docs/superpowers/specs/2026-07-09-crabka-gres-chapter-design.md).
 
 ## Overview
 

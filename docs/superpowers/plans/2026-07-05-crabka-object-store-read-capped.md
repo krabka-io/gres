@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `object_store` 0.13 (workspace-pinned), `bytes`, `thiserror`, `tokio`, `assert2`, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
-**Spec:** [`docs/superpowers/specs/2026-07-05-krabka-north-star-roadmap-design.md`](../specs/2026-07-05-krabka-north-star-roadmap-design.md) — Chapter 0 (the `read_capped` follow-up deferred from the ObjectOps plan). **Prerequisite:** plans `2026-07-05-krabka-object-store-substrate-crate.md` and `2026-07-05-krabka-object-store-objectops.md` are merged (`krabka-object-store` exists with `error`/`config`/`build`/`ops`; it depends on `bytes`; `blockstore` depends on `krabka-object-store`).
+**Spec:** [`docs/superpowers/specs/2026-07-05-crabka-north-star-roadmap-design.md`](../specs/2026-07-05-crabka-north-star-roadmap-design.md) — Chapter 0 (the `read_capped` follow-up deferred from the ObjectOps plan). **Prerequisite:** plans `2026-07-05-crabka-object-store-substrate-crate.md` and `2026-07-05-crabka-object-store-objectops.md` are merged (`krabka-object-store` exists with `error`/`config`/`build`/`ops`; it depends on `bytes`; `blockstore` depends on `krabka-object-store`).
 
 ---
 

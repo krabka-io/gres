@@ -9,7 +9,7 @@ Superseded by: nothing
 
 Slices 49 and 49b shipped the foundation of SASL/OAUTHBEARER on the broker:
 RFC 7628 handshake, unsecured JWS validator, and JWKS / signed-JWT
-validation. The operator-side roadmap (`docs/superpowers/specs/2026-05-15-krabka-operator-roadmap-design.md`)
+validation. The operator-side roadmap (`docs/superpowers/specs/2026-05-15-crabka-operator-roadmap-design.md`)
 lists exactly one follow-up operator slice — **slice 50: `KafkaUser` OAuth +
 listener OAuth config** — paired with the existing core work.
 

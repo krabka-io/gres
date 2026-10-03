@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `prometheus-client 0.25`, `tokio`, the in-process `Broker::start` harness, the `InterBrokerClient`/`Connection` peer-RPC surface, `ListOffsets`, `assert2`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-sharegroup-backlog-autoscaling-design.md`](../specs/2026-07-06-krabka-sharegroup-backlog-autoscaling-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-sharegroup-backlog-autoscaling-design.md`](../specs/2026-07-06-crabka-sharegroup-backlog-autoscaling-design.md).
 
 **PREREQUISITES:** none unlanded — reuses the landed KIP-932 stack, metrics registry + `/metrics`, `ListOffsets`, and the `InterBrokerClient` peer-RPC surface. Independent of the diskless chapter and of MSG-1/2/3.
 

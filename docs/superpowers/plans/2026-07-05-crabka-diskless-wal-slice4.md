@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `object_store` 0.13, `tokio`, `bytes`, `uuid`, `assert2`, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
-**Spec:** [`docs/superpowers/specs/2026-07-05-krabka-diskless-wal-slice4-design.md`](../specs/2026-07-05-krabka-diskless-wal-slice4-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-05-crabka-diskless-wal-slice4-design.md`](../specs/2026-07-05-crabka-diskless-wal-slice4-design.md).
 
 **PREREQUISITES (unlanded):** Slices 1–3. This plan consumes: the Slice-1 `diskless` per-topic flag — **surfaced on `LogConfig` (mirroring `remote_storage_enable`)** so fetch/produce/list-offsets read it locally; Slice-3's `WalIndexCache` (+ its shared projection from `DisklessIndexLog`) and the flush object store (`build_object_store`); and Slice-3's `FlushConfig.trim_safety_lag` gate. Land Slices 1–3 first.
 

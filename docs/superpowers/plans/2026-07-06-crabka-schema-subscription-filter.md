@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), DataFusion (workspace git pin) + Arrow, `krabka-schema-serde`/`krabka-schema-registry`, `krabka-client-streams` (`RowBridge`/`RowCodec`), `prost`/Connect-RPC, `assert2`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-schema-subscription-filter-design.md`](../specs/2026-07-06-krabka-schema-subscription-filter-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-schema-subscription-filter-design.md`](../specs/2026-07-06-crabka-schema-subscription-filter-design.md).
 
 ---
 

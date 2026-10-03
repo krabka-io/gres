@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript (ESM, Node ≥ 20), `@connectrpc/connect` + `@connectrpc/connect-node`, `@bufbuild/protobuf`, vitest, buf.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-sdk-ts-design.md`](../specs/2026-07-06-krabka-sdk-ts-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-sdk-ts-design.md`](../specs/2026-07-06-crabka-sdk-ts-design.md).
 
 **PREREQUISITES (unlanded):** the umbrella executed (harness + vectors v1 + the Go reference having hardened them) and MSG-5's gateway h2c listener.
 

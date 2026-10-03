@@ -8,7 +8,7 @@
 
 **Tech Stack:** C++20, CMake, nghttp2, protobuf (`protoc-gen-cpp` via buf), Catch2 + nlohmann/json (FetchContent), ASan/TSan in CI.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-sdk-cpp-design.md`](../specs/2026-07-06-krabka-sdk-cpp-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-sdk-cpp-design.md`](../specs/2026-07-06-crabka-sdk-cpp-design.md).
 
 **PREREQUISITES (unlanded):** the umbrella executed (harness + vectors, Go-hardened); MSG-5's h2c listener; **the Rust cycle's framing byte-captures committed** (its oracle test writes them — a one-task add there if not yet done).
 

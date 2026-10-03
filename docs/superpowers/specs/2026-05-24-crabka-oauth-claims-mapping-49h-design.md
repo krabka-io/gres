@@ -2,7 +2,7 @@
 
 Status: Draft
 Date: 2026-05-24
-Umbrella: `docs/superpowers/specs/2026-05-23-krabka-oauth-parity-roadmap-design.md`
+Umbrella: `docs/superpowers/specs/2026-05-23-crabka-oauth-parity-roadmap-design.md`
 Builds on: slices 49b/49d (JWT/introspection validators), 49g (jsonpath-rust dep + customClaimCheck)
 Followups: slice 49i (JWKS refresher policies — last of the long-tail clusters)
 

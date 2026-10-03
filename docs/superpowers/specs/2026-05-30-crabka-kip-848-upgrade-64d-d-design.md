@@ -2,7 +2,7 @@
 
 **Status:** design
 **Date:** 2026-05-30
-**Roadmap:** `2026-05-29-krabka-classic-nextgen-migration-roadmap-design.md`, Slice D.
+**Roadmap:** `2026-05-29-crabka-classic-nextgen-migration-roadmap-design.md`, Slice D.
 Builds on B (unified `GroupCoordinator`) and C (`group.consumer.migration.policy`
 + convertibility predicate). E (downgrade) is the mirror; F is JVM acceptance.
 

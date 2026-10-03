@@ -4,7 +4,7 @@
 
 **Goal:** Full PostgreSQL 18 SQL-surface parity for the Gres engine, delivered as ~30 dependency-ordered wave cycles across six tracks, with every one of the 190 PG18 commands answered in a CI-guarded compatibility matrix and milestones defined by working software (drivers → pgbench → psql → ORMs → pg_regress).
 
-**Architecture:** Per the [program design](../specs/2026-07-09-krabka-gres-sql-parity-program-design.md). This plan has two kinds of content: **concrete program-infrastructure tasks** (the matrix, the pg_regress pipeline, the F-0/F-1 foundations — buildable now, planned here in full) and **the wave cadence** (each subsequent wave is its own design cycle producing its own spec + plan under the standing rules; this plan sequences them and fixes their gates, it does not pre-design them — the pg-chapter-roadmap idiom).
+**Architecture:** Per the [program design](../specs/2026-07-09-crabka-gres-sql-parity-program-design.md). This plan has two kinds of content: **concrete program-infrastructure tasks** (the matrix, the pg_regress pipeline, the F-0/F-1 foundations — buildable now, planned here in full) and **the wave cadence** (each subsequent wave is its own design cycle producing its own spec + plan under the standing rules; this plan sequences them and fixes their gates, it does not pre-design them — the pg-chapter-roadmap idiom).
 
 **Tech Stack:** the vendored engine crates, the conformance/oracle harness, `docs/PG_COMPAT_MATRIX.md` (KIP_MATRIX idiom), PostgreSQL's regression corpus (PostgreSQL License), stateright where waves carry protocols (SSI, savepoints).
 

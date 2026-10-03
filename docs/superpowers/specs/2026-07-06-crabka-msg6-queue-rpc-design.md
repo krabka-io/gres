@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Subsystem design. The messaging cycle's sixth slice — the net-new gateway work MSG-5 flagged and the [application-SDK umbrella](2026-07-06-krabka-app-sdk-umbrella-design.md) pinned as `gated_on: "gateway-sharegroup-rpc"`. Landing this flips the `queues` module from stub to live across **all five SDKs** via one contract minor bump.
+**Type:** Subsystem design. The messaging cycle's sixth slice — the net-new gateway work MSG-5 flagged and the [application-SDK umbrella](2026-07-06-crabka-app-sdk-umbrella-design.md) pinned as `gated_on: "gateway-sharegroup-rpc"`. Landing this flips the `queues` module from stub to live across **all five SDKs** via one contract minor bump.
 
 ## Context — the differentiator finally gets a door
 

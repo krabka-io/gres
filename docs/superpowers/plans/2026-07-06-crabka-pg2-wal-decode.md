@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `bytes`, `thiserror`, CRC-32C (reuse `krabka-protocol`'s if exported, else the `crc32c` crate), **no tokio**, `assert2`/`nextest`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-pg2-wal-decode-design.md`](../specs/2026-07-06-krabka-pg2-wal-decode-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-pg2-wal-decode-design.md`](../specs/2026-07-06-crabka-pg2-wal-decode-design.md).
 
 **PREREQUISITES:** none — no unbuilt Crabka code; fixture generation needs a local Postgres 17 once.
 

@@ -39,7 +39,7 @@
 
 ## Dependency & slice roadmap
 
-**Depends on:** `krabka-blockstore` *(as designed in `docs/superpowers/plans/2026-06-18-krabka-blockstore.md`)* — `BlockStore`, `BlockWriter`, `BlockMeta`, `Index` (becomes `SeriesIndex` here), `Labels`, `LabelMatcher`, `MatchOp`, `SeriesFingerprint`, `COL_FINGERPRINT`, `COL_TIMESTAMP`, `validate_block_schema`, `read_block`, `scan_context`. This slice **modifies** blockstore in place (extract trait, add `TraceIndex` + span schema). It adds **no** new crate; `krabka-traces` is *not* started here (no shared types module is needed — span-block column constants live in blockstore alongside the metrics signal's column constants, and the WAL `SpanRecord` belongs to slice 4).
+**Depends on:** `krabka-blockstore` *(as designed in `docs/superpowers/plans/2026-06-18-crabka-blockstore.md`)* — `BlockStore`, `BlockWriter`, `BlockMeta`, `Index` (becomes `SeriesIndex` here), `Labels`, `LabelMatcher`, `MatchOp`, `SeriesFingerprint`, `COL_FINGERPRINT`, `COL_TIMESTAMP`, `validate_block_schema`, `read_block`, `scan_context`. This slice **modifies** blockstore in place (extract trait, add `TraceIndex` + span schema). It adds **no** new crate; `krabka-traces` is *not* started here (no shared types module is needed — span-block column constants live in blockstore alongside the metrics signal's column constants, and the WAL `SpanRecord` belongs to slice 4).
 
 **The 8 traces slices** (this plan = Slice 1; each later slice gets its own plan; commands use the slice's crate — `krabka-blockstore` here, `krabka-traceql` for 2–3, `krabka-traces` for 4–8):
 

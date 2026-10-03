@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go 1.2x + connect-go, buf, `protoc-gen-connect-go`/`protoc-gen-go`, Rust `hyper_util` (h2c), apko (OCI image), docker-compose, `cargo +nightly fmt`, `clippy::pedantic`, `go test`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-polyglot-messaging-sdk-design.md`](../specs/2026-07-06-krabka-polyglot-messaging-sdk-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-polyglot-messaging-sdk-design.md`](../specs/2026-07-06-crabka-polyglot-messaging-sdk-design.md).
 
 **PREREQUISITES (for a *complete* CE round-trip, not for publish):** MSG-1 (SDK CE-*consume*), MSG-3 (manual per-offset ack). MSG-5 v1 ships without them (publish CE is transparent today; subscribe defaults to `auto_commit`).
 

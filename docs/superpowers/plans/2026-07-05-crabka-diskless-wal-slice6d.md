@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `stateright`, Creusot (replay), the in-process `Broker::start` harness, `krabka-client-producer`/`consumer`, `assert2`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-05-krabka-diskless-wal-slice6d-design.md`](../specs/2026-07-05-krabka-diskless-wal-slice6d-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-05-crabka-diskless-wal-slice6d-design.md`](../specs/2026-07-05-crabka-diskless-wal-slice6d-design.md).
 
 **PREREQUISITES (unlanded):** Slices 1–5 + 6a + 6b + 6c. The model extends the Slice-5 diskless crash model + the 6a quorum-frontier delta; the harness runs a 6a–6c cluster.
 

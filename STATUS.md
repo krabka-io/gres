@@ -776,9 +776,9 @@ Kafka client for ApiVersions.
   `Unavailable`). 1 binary-level Connect-protocol smoke test in
   `tests/connect_smoke.rs` (HTTP+JSON `GetState` round-trip).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-17-krabka-rebalancer-43a-design.md`].
+  [`docs/superpowers/specs/2026-05-17-crabka-rebalancer-43a-design.md`].
   Roadmap (slices 43a–43g + operator slice 44) in
-  [`docs/superpowers/specs/2026-05-17-krabka-rebalancer-roadmap-design.md`].
+  [`docs/superpowers/specs/2026-05-17-crabka-rebalancer-roadmap-design.md`].
 - Out of scope (deferred): execute path (slice 43b), persistence
   (slice 43b), metric scraping for usage goals (slice 43e),
   rack-aware / capacity / usage / CPU / anomaly goals (slices
@@ -831,7 +831,7 @@ Kafka client for ApiVersions.
   (`connect_smoke.rs` covers ExecuteProposal's FailedPrecondition
   path).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-17-krabka-rebalancer-43b-design.md`].
+  [`docs/superpowers/specs/2026-05-17-crabka-rebalancer-43b-design.md`].
 - Out of scope (deferred): multi-replica HA (later slice), metric
   scraping for usage goals (43e), rack-aware / capacity / usage /
   CPU / anomaly goals (43c–43g), operator `KafkaRebalance` CRD
@@ -866,7 +866,7 @@ Kafka client for ApiVersions.
 - No proto changes, no persistence changes, no executor changes.
   Slice 43c is goal-only.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-17-krabka-rebalancer-43c-design.md`].
+  [`docs/superpowers/specs/2026-05-17-crabka-rebalancer-43c-design.md`].
 - Out of scope (deferred): `RackAwareDistributionGoal` (soft,
   best-effort variant of RackAware); per-proposal goal config
   (requires proto change); capacity / usage / CPU / anomaly goals
@@ -911,7 +911,7 @@ Kafka client for ApiVersions.
 - 14 new unit tests (6 capacity + 4 ReplicaCapacity + 4 stub) + 1
   new integration test (`replica_capacity_evicts_over_capacity_broker`).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-17-krabka-rebalancer-43d-design.md`].
+  [`docs/superpowers/specs/2026-05-17-crabka-rebalancer-43d-design.md`].
 - Out of scope (deferred): per-partition usage data + the four
   metric-dependent capacity goals' real bodies (43e); `CpuUsage`
   soft goal (43f); per-topic resource hints in the capacity config;
@@ -986,7 +986,7 @@ Kafka client for ApiVersions.
   test + 1 rebalancer integration test
   (`disk_usage_evicts_hot_broker`) + 1 helm-unittest assertion.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-17-krabka-rebalancer-43e-design.md`].
+  [`docs/superpowers/specs/2026-05-17-crabka-rebalancer-43e-design.md`].
 - Out of scope (deferred): `CpuUsage` soft goal + real
   `CpuCapacity` body (slice 43f); discovery of scrape targets
   via `Metadata` (currently operator-supplied);
@@ -1240,7 +1240,7 @@ Kafka client for ApiVersions.
   `disk_pressure_anomaly_auto_triggers_proposal`), plus 2 new
   helm-unittest cases.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-17-krabka-rebalancer-roadmap-design.md`]
+  [`docs/superpowers/specs/2026-05-17-crabka-rebalancer-roadmap-design.md`]
   (slice 43g closes the 43-series). No separate design doc;
   the roadmap covers it.
 - Out of scope (deferred): auto-execute (the detector only
@@ -1348,7 +1348,7 @@ Kafka client for ApiVersions.
   picks up the `tls` discriminator + `validityDays` / `renewalDays`
   properties and `status.{tls,tlsCertNotAfter,tlsPrincipal}`.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-19-krabka-operator-kafkauser-37-design.md`].
+  [`docs/superpowers/specs/2026-05-19-crabka-operator-kafkauser-37-design.md`].
 
 ## Slice 30 — Operator: Cluster CA + clients CA generation (2026-05-21)
 
@@ -1504,7 +1504,7 @@ Kafka client for ApiVersions.
   (MetalLB + nginx ssl-passthrough) is a CI follow-up; operator-side
   wiring is covered by the integration tests.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-22-krabka-operator-listener-ingress-route-27-design.md`].
+  [`docs/superpowers/specs/2026-05-22-crabka-operator-listener-ingress-route-27-design.md`].
 
 ## Slice 44 — Operator: `KafkaRebalance` CRD (2026-05-22)
 
@@ -1557,7 +1557,7 @@ Kafka client for ApiVersions.
   delete-cancels-rebalance finalizer; auto-approval / scheduling; kind-e2e
   (CI follow-up — operator wiring covered by the in-process wire test).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-22-krabka-operator-kafkarebalance-44-design.md`].
+  [`docs/superpowers/specs/2026-05-22-crabka-operator-kafkarebalance-44-design.md`].
 
 ## Slice 28 — Operator: Version upgrades (2026-05-22)
 
@@ -1619,7 +1619,7 @@ Kafka client for ApiVersions.
   `ControlledShutdown` before its roll (the gate orders + waits for Ready
   but does not pre-drain); multi-replica pools.
 - Reference docs:
-  [`docs/superpowers/specs/2026-05-22-krabka-operator-version-upgrades-28-design.md`],
+  [`docs/superpowers/specs/2026-05-22-crabka-operator-version-upgrades-28-design.md`],
   [`docs/superpowers/plans/2026-05-22-krabka-operator-version-upgrades-28.md`].
 
 ## Slice 41 — Operator: Configurable logging (`Kafka.spec.logging`) (2026-05-23)
@@ -1678,7 +1678,7 @@ Kafka client for ApiVersions.
   startup — a future core control surface); log4j-name → tracing-target
   translation; OTLP / structured-logging knobs (slice 42 territory).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-23-krabka-operator-logging-41-design.md`].
+  [`docs/superpowers/specs/2026-05-23-crabka-operator-logging-41-design.md`].
 
 ## Slice 42 — Crabka core: OTLP distributed tracing (2026-05-23)
 
@@ -1749,7 +1749,7 @@ Kafka client for ApiVersions.
   slice-39 Prometheus endpoint); operator `Kafka.spec.tracing` surfacing;
   per-response error-code span attributes.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-23-krabka-broker-otlp-tracing-42-design.md`].
+  [`docs/superpowers/specs/2026-05-23-crabka-broker-otlp-tracing-42-design.md`].
 
 ## Slice 34 — Operator: CA rotation orchestration (2026-05-23)
 
@@ -1827,7 +1827,7 @@ Kafka client for ApiVersions.
   green; clippy `-D warnings` + fmt clean; CRD YAML regenerated (only the
   new status fields).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-23-krabka-operator-ca-rotation-34-design.md`].
+  [`docs/superpowers/specs/2026-05-23-crabka-operator-ca-rotation-34-design.md`].
 
 ## Slice 45 — Crabka core: JBOD / multi-log-dir + DescribeLogDirs (KIP-113) (2026-05-23)
 
@@ -1885,7 +1885,7 @@ Kafka client for ApiVersions.
   `kafka-reassign-partitions` per-replica `log_dirs`; offline-dir /
   `KAFKA_STORAGE_ERROR` handling. Operator JBOD surface is slice 46.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-23-krabka-jbod-multi-log-dir-45-design.md`].
+  [`docs/superpowers/specs/2026-05-23-crabka-jbod-multi-log-dir-45-design.md`].
 
 ## Slice 46 — Operator: JBOD in `KafkaNodePool.spec.storage` (2026-05-23)
 
@@ -1938,7 +1938,7 @@ Kafka client for ApiVersions.
   (needs `AlterReplicaLogDirs`, slice 45b); per-disk `deleteClaim`;
   ephemeral disks inside a JBOD set; `KafkaNodePool.status.storage` mirror.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-23-krabka-operator-jbod-storage-46-design.md`].
+  [`docs/superpowers/specs/2026-05-23-crabka-operator-jbod-storage-46-design.md`].
 
 ## Slice 49 — Crabka core: SASL/OAUTHBEARER (KIP-255 / RFC 7628) (2026-05-23)
 
@@ -2000,7 +2000,7 @@ Kafka client for ApiVersions.
   Outbound inter-broker/controller OAUTHBEARER subsequently shipped; see the
   wiring note above.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-23-krabka-sasl-oauthbearer-49-design.md`].
+  [`docs/superpowers/specs/2026-05-23-crabka-sasl-oauthbearer-49-design.md`].
 
 ## Slice 49b — Crabka core: SASL/OAUTHBEARER JWKS / signed-JWT validation (2026-05-23)
 
@@ -2065,7 +2065,7 @@ Kafka client for ApiVersions.
   unsecured JVM test still covers the wire handshake, and the signature path is
   covered by the Rust integration tests above.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-23-krabka-sasl-oauthbearer-jwks-49b-design.md`].
+  [`docs/superpowers/specs/2026-05-23-crabka-sasl-oauthbearer-jwks-49b-design.md`].
 
 ## Slice 50 — Operator: Listener OAuth + `KafkaUser` tls-external (2026-05-23)
 
@@ -2150,8 +2150,8 @@ Kafka client for ApiVersions.
   `customClaimCheck`, JWKS refresh policy knobs, `jwksIgnoreKeyUse`
   (49g + 50f).
 - Reference docs:
-  [`docs/superpowers/specs/2026-05-23-krabka-operator-listener-user-oauth-50-design.md`],
-  [`docs/superpowers/specs/2026-05-23-krabka-oauth-parity-roadmap-design.md`],
+  [`docs/superpowers/specs/2026-05-23-crabka-operator-listener-user-oauth-50-design.md`],
+  [`docs/superpowers/specs/2026-05-23-crabka-oauth-parity-roadmap-design.md`],
   [`docs/superpowers/plans/2026-05-23-krabka-operator-listener-user-oauth-50.md`].
 
 ## Slice 49c — Broker: Custom TLS trust to IdP for JWKS (2026-05-23)
@@ -2194,7 +2194,7 @@ Kafka client for ApiVersions.
   PEM paths in one key (the operator concatenates before mounting, mirroring
   Strimzi); cert pinning; mTLS to the IdP.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-23-krabka-broker-jwks-tls-trust-49c-design.md`].
+  [`docs/superpowers/specs/2026-05-23-crabka-broker-jwks-tls-trust-49c-design.md`].
 
 ## Slice 50b — Operator: Listener OAuth `tlsTrustedCertificates` (2026-05-23)
 
@@ -2267,7 +2267,7 @@ Kafka client for ApiVersions.
   managed-Secret cleanup when `tlsTrustedCertificates` is emptied
   mid-life (cascades on Kafka CR delete via owner-ref).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-23-krabka-operator-oauth-tls-trust-50b-design.md`].
+  [`docs/superpowers/specs/2026-05-23-crabka-operator-oauth-tls-trust-50b-design.md`].
 
 ## Slice 49d — Broker: OAUTHBEARER opaque-token introspection (2026-05-24)
 
@@ -2347,7 +2347,7 @@ Kafka client for ApiVersions.
   the shared trust bundle only); per-listener `[oauthbearer]` config
   (still rejected at config-load — future slice 49h).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-24-krabka-broker-oauth-introspection-49d-design.md`].
+  [`docs/superpowers/specs/2026-05-24-crabka-broker-oauth-introspection-49d-design.md`].
 
 ## Slice 50c — Operator: Listener OAuth introspection surface (2026-05-24)
 
@@ -2450,7 +2450,7 @@ Kafka client for ApiVersions.
   (ops bootstrap the IdP's `kafka-broker` client out-of-band — see the
   kind e2e for the manual `kcadm` flow).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-24-krabka-operator-oauth-introspection-50c-design.md`].
+  [`docs/superpowers/specs/2026-05-24-crabka-operator-oauth-introspection-50c-design.md`].
 
 ## Slice 49e — Broker: SASL re-authentication (KIP-368) (2026-05-24)
 
@@ -2520,7 +2520,7 @@ Kafka client for ApiVersions.
   - Client-side re-auth scheduler in Crabka's Kafka client crate
     (broker-only this slice).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-24-krabka-broker-sasl-reauth-49e-design.md`].
+  [`docs/superpowers/specs/2026-05-24-crabka-broker-sasl-reauth-49e-design.md`].
 
 ## Slice 50d — Operator + Broker: SASL session-lifetime cap (KIP-368 ceiling) (2026-05-24)
 
@@ -2573,7 +2573,7 @@ OAUTHBEARER sessions tighter than the token's natural `exp`.
   `#[serde(default)]` shim.
 - **E2E:** existing `kind-oauth` job's Kafka CR YAML extended with
   `maxSecondsWithoutReauthentication: 300`. No new job.
-- **Reference doc:** `[docs/superpowers/specs/2026-05-24-krabka-sasl-session-cap-50d-design.md]`.
+- **Reference doc:** `[docs/superpowers/specs/2026-05-24-crabka-sasl-session-cap-50d-design.md]`.
 - **Out of scope:** mechanism-agnostic `connections.max.reauth.ms`
   (would force re-auth on PLAIN/SCRAM); per-listener divergent caps
   (still rejected as `ConflictingOAuthListenerConfig`); client-side
@@ -2640,7 +2640,7 @@ introspection skips with a render-time rejection).
   (`oauth_listener_custom_claim_check_empty_scope_rejected`). T2 doc-
   markdown clippy nits cleaned up in the T3 commit. Workspace fmt +
   clippy `-D warnings` + tests + CRD drift gate all green.
-- **Reference doc:** `[docs/superpowers/specs/2026-05-24-krabka-oauth-validation-policies-49g-design.md]`.
+- **Reference doc:** `[docs/superpowers/specs/2026-05-24-crabka-oauth-validation-policies-49g-design.md]`.
 - **Semantic divergence from Strimzi (acknowledged):** Crabka uses
   `jsonpath-rust` 1.0, which implements **RFC 9535** — NOT the
   Jayway dialect Strimzi inherits from its Java JsonPath dependency.
@@ -2720,7 +2720,7 @@ OAuth CRD + broker validators.
   round-trip (T2) + 4 reconciler unit (T3) + extended cross-listener
   divergence walk (T3) + 2 operator integration (T4). Workspace fmt +
   clippy `-D warnings` + tests + CRD drift gate all green.
-- **Reference doc:** `[docs/superpowers/specs/2026-05-24-krabka-oauth-claims-mapping-49h-design.md]`
+- **Reference doc:** `[docs/superpowers/specs/2026-05-24-crabka-oauth-claims-mapping-49h-design.md]`
 - **Semantic divergence from Strimzi:** `groupsClaim` is RFC 9535
   JsonPath (inherited from 49g's jsonpath-rust choice), not Strimzi's
   Jayway flavor. Operators porting Strimzi configs rewrite filter
@@ -2797,7 +2797,7 @@ OAuth CRD + broker JWKS refresher:
   divergence walk. Workspace fmt + clippy `-D warnings` + tests + CRD
   drift gate all green.
 - **Reference doc**:
-  `[docs/superpowers/specs/2026-05-24-krabka-oauth-jwks-refresher-policies-49i-design.md]`
+  `[docs/superpowers/specs/2026-05-24-crabka-oauth-jwks-refresher-policies-49i-design.md]`
 - **Architecture choice**: Approach A (fire-and-forget mpsc signal).
   Validator stays sync; refresher consumes signals in its
   `tokio::select!` loop. Rejected Approach B (async-await on
@@ -2990,7 +2990,7 @@ introspection metadata).
   manager round-trip + unknown-partition + out-of-order delete (6 in
   `inmemory.rs`); copy→fetch (full + partial + per-index-type)→delete
   round-trips, missing-optional-index, isolation-by-id (8 in `local.rs`).
-- **Design:** `[docs/superpowers/specs/2026-05-25-krabka-tiered-storage-roadmap-design.md]`
+- **Design:** `[docs/superpowers/specs/2026-05-25-crabka-tiered-storage-roadmap-design.md]`
   (umbrella roadmap with the 48a–48g sub-slice breakdown).
 - **Out of scope (deferred to 48b+):** broker `RemoteLogManager` copy
   task; remote read path on `Fetch`; local-vs-remote retention split +
@@ -3134,7 +3134,7 @@ introspection metadata).
   `duration_suboptimal_units` × 5, `doc_lazy_continuation`,
   `doc_markdown` × 4, unnecessary raw-string hashes).
 - Reference docs:
-  [`docs/superpowers/specs/2026-05-25-krabka-kafkauser-delegation-tokens-51b-design.md`],
+  [`docs/superpowers/specs/2026-05-25-crabka-kafkauser-delegation-tokens-51b-design.md`],
   [`docs/superpowers/plans/2026-05-25-krabka-kafkauser-delegation-tokens-51b.md`].
 
 ## Slice 51c — Broker: super-user bypass on Renew/Expire delegation token (2026-05-25)
@@ -3232,7 +3232,7 @@ introspection metadata).
   all sealed segments copied + recorded Finished + fetchable; idempotent
   re-run copies nothing; empty exports no-op; leader-epoch fallback).
   Workspace lib counts: log 70, remote-storage 33, broker 426.
-- **Design:** `[docs/superpowers/specs/2026-05-25-krabka-tiered-storage-copy-path-48b-design.md]`.
+- **Design:** `[docs/superpowers/specs/2026-05-25-crabka-tiered-storage-copy-path-48b-design.md]`.
 - **Out of scope (48c+):** local-retention deletion +
   `local-log-start-offset`; remote read path on `Fetch` / `ListOffsets`;
   remote-retention + partition delete on `DeleteTopics`; topic-backed
@@ -3416,7 +3416,7 @@ introspection metadata).
   described above so the slice-13 shim removal lands cleanly in
   the pre-existing broker integration tests.
 - Reference docs:
-  [`docs/superpowers/specs/2026-05-26-krabka-opa-authorizer-53-design.md`],
+  [`docs/superpowers/specs/2026-05-26-crabka-opa-authorizer-53-design.md`],
   [`docs/superpowers/plans/2026-05-26-krabka-opa-authorizer-53.md`].
 ## Slice 48c — Crabka core: Tiered storage local-retention split (2026-05-26)
 
@@ -3495,7 +3495,7 @@ introspection metadata).
   `InmemoryRemoteLogMetadataManager`, then drives the retention helper
   and asserts `local_log_start_offset()` advanced + sealed files are
   physically gone). Workspace lib counts: log 78, broker 451.
-- **Design:** `[docs/superpowers/specs/2026-05-26-krabka-tiered-storage-local-retention-48c-design.md]`.
+- **Design:** `[docs/superpowers/specs/2026-05-26-crabka-tiered-storage-local-retention-48c-design.md]`.
 - **Out of scope (48d+):** Remote read path on `Fetch` / `ListOffsets`
   — until 48d ships, fetching below `local_log_start_offset()` returns
   `OFFSET_OUT_OF_RANGE` just as if the data had been deleted by total
@@ -3584,7 +3584,7 @@ introspection metadata).
   exercising `fetch_batch` happy path / unknown segment / unfinished
   segment, `earliest_offset` populated + empty, `offset_for_timestamp`
   match + past-last). Workspace lib counts: broker 490 (+14).
-- **Design:** `[docs/superpowers/specs/2026-05-26-krabka-tiered-storage-remote-read-48d-design.md]`.
+- **Design:** `[docs/superpowers/specs/2026-05-26-crabka-tiered-storage-remote-read-48d-design.md]`.
 - **Out of scope (48e+):** Read-committed aborted-transaction filtering
   on remote batches (sketched above; mechanical follow-up). Local
   timestamp index lookup on `ListOffsets` (the `-1` stub on the local
@@ -3653,7 +3653,7 @@ introspection metadata).
   retention happy path, retention no-op, and config with no retention
   settings being an early return; 2 cascade tests for full-partition
   delete and empty-partition no-op).
-- **Design:** `[docs/superpowers/specs/2026-05-26-krabka-tiered-storage-remote-retention-48e-design.md]`.
+- **Design:** `[docs/superpowers/specs/2026-05-26-crabka-tiered-storage-remote-retention-48e-design.md]`.
 - **Out of scope (48f+):** `TopicBasedRemoteLogMetadataManager`
   (production RLMM backed by an internal topic). Object-store RSM
   (S3/etc.). Operator CRD surface. Read-committed
@@ -3711,7 +3711,7 @@ introspection metadata).
   mount present when set, both absent when unset). Operator lib
   tests 507 passing.
 - **Design:**
-  `[docs/superpowers/specs/2026-05-26-krabka-tiered-storage-operator-surface-48g-design.md]`.
+  `[docs/superpowers/specs/2026-05-26-crabka-tiered-storage-operator-surface-48g-design.md]`.
 - **CRDs regenerated:** `deploy/crds/crabka.io_kafkas.yaml` gains
   `tieredStorage` schema; other CRDs unchanged.
 - **Workspace fmt + clippy `-D warnings` + operator lib tests** all
@@ -4922,7 +4922,7 @@ introspection metadata).
   jvm_acceptance sweep should be re-run in CI** to fully re-baseline the
   raised MAX; it was not run in its entirety locally.
 - Reference docs:
-  [`docs/superpowers/specs/2026-05-29-krabka-metadata-version-enforcement-design.md`],
+  [`docs/superpowers/specs/2026-05-29-crabka-metadata-version-enforcement-design.md`],
   [`docs/superpowers/plans/2026-05-29-krabka-metadata-version-enforcement.md`].
 
 ## Slice 64e — KIP-848 JVM-client engagement (2026-05-29)
@@ -4995,7 +4995,7 @@ introspection metadata).
   `three_node_*`, `*_raft_replication`) reproduce identically on `main` and are
   unrelated to this slice.
 - Reference docs:
-  [`docs/superpowers/specs/2026-05-30-krabka-kip-848-unified-coordinator-64d-b-design.md`],
+  [`docs/superpowers/specs/2026-05-30-crabka-kip-848-unified-coordinator-64d-b-design.md`],
   [`docs/superpowers/plans/2026-05-30-krabka-kip-848-unified-coordinator-64d-b.md`].
 ## Slice — Generalized feature-versioning framework + group.version (KIP-584/848/1022) (2026-05-30)
 
@@ -5233,7 +5233,7 @@ introspection metadata).
   controller failover logic is covered by in-process unit tests. `PartitionRecord` apiVersion
   moved v0→v1 (JVM-faithful; KIP-858 emits v1).
 - Design + plan docs:
-  `docs/superpowers/specs/2026-06-03-krabka-kip-112-jbod-disk-failure-design.md`,
+  `docs/superpowers/specs/2026-06-03-crabka-kip-112-jbod-disk-failure-design.md`,
   `docs/superpowers/plans/2026-06-03-krabka-kip-112-jbod-disk-failure.md`.
 
 ## Slice — KIP-320 log-truncation detection (complete) (2026-06-02)

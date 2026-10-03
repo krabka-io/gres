@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `prost`/Connect-RPC, `bytes`, `serde_json`, `assert2`, the in-process `Broker::start` + `ConsumeSession`/`ProduceCore` harness, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-gateway-header-carrythrough-design.md`](../specs/2026-07-06-krabka-gateway-header-carrythrough-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-gateway-header-carrythrough-design.md`](../specs/2026-07-06-crabka-gateway-header-carrythrough-design.md).
 
 ---
 

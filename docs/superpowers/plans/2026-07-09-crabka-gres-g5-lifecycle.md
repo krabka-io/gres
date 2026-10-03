@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - **Prerequisites:** G-2/G-3/G-4 landed. Verify signatures against the landed tree.
-- **Spec:** [2026-07-09-krabka-gres-g5-lifecycle-design.md](../specs/2026-07-09-krabka-gres-g5-lifecycle-design.md).
+- **Spec:** [2026-07-09-crabka-gres-g5-lifecycle-design.md](../specs/2026-07-09-crabka-gres-g5-lifecycle-design.md).
 - **State machine (registry `TenantState`):** `Active ↔ Suspended`, plus `ResumeRequested` (written only by activators against `Suspended`; the controller treats it as "scale up now"; the compute's readiness write moves it to `Active`). Every transition is a whole-record upsert with `record_version` bumped; folds stay order-safe.
 - **Suspend precondition:** zero open sessions AND idle window elapsed. An in-flight commit can never race suspension (sessions > 0 blocks it).
 - **The activator never speaks the protocol past the prelude** — it reads SSLRequest/StartupMessage only, then pipes opaque bytes; auth and everything else terminate at the compute (the G-4 single-credential-store property).

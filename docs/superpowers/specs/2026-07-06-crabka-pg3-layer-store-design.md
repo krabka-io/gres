@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Subsystem design. Second slice of the [Chapter C roadmap](2026-07-06-krabka-postgres-chapter-roadmap-design.md) — the storage half of the pageserver track, sitting between PG-2's decoded stream and PG-4's redo.
+**Type:** Subsystem design. Second slice of the [Chapter C roadmap](2026-07-06-crabka-postgres-chapter-roadmap-design.md) — the storage half of the pageserver track, sitting between PG-2's decoded stream and PG-4's redo.
 
 ## Context — where this sits
 

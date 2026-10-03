@@ -772,9 +772,9 @@ Both are documented and acceptable.
 
 ## Reference
 
-- Spec: this file (`docs/superpowers/specs/2026-05-13-krabka-bulletproof-eos-10b-design.md`)
-- Slice 10a spec: `docs/superpowers/specs/2026-05-12-krabka-bulletproof-eos-10a-design.md`
-- Meta-spec: `docs/superpowers/specs/2026-05-10-krabka-rust-rewrite-design.md`
+- Spec: this file (`docs/superpowers/specs/2026-05-13-crabka-bulletproof-eos-10b-design.md`)
+- Slice 10a spec: `docs/superpowers/specs/2026-05-12-crabka-bulletproof-eos-10a-design.md`
+- Meta-spec: `docs/superpowers/specs/2026-05-10-crabka-rust-rewrite-design.md`
   (item #8 in the decomposition table; slices 10a and 10b together
   close all slice-8 deferrals)
 - KIP-101: `https://cwiki.apache.org/confluence/display/KAFKA/KIP-101`

@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - **Prerequisites:** G-1 landed (G-2 only for the default-server item's substrate wiring — that one step gates on it). Verify signatures against the landed tree.
-- **Spec:** [2026-07-09-krabka-gres-g6-fdw-sql-breadth-design.md](../specs/2026-07-09-krabka-gres-g6-fdw-sql-breadth-design.md).
+- **Spec:** [2026-07-09-crabka-gres-g6-fdw-sql-breadth-design.md](../specs/2026-07-09-crabka-gres-g6-fdw-sql-breadth-design.md).
 - **Header decoding must match the wire exactly** — the v2 record format's header array (varint count; per header: varint key length, UTF-8 key, varint value length or -1 for null, value bytes). Differential-verify against batches produced by `krabka-client-producer` AND, if a JVM fixture is cheap via the existing oracle tooling, one JVM-produced batch.
 - **`krabka-client-core` is a published crate:** the API addition gets rustdoc, a changelog-worthy conventional commit (`feat(client-core): …`), and whole-struct test comparisons per house style.
 - Lints/format/commit/test conventions as in the G-2 plan.

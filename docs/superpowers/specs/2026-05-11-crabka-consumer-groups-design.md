@@ -2,7 +2,7 @@
 
 **Status:** draft — slice 5 of the Crabka meta-spec.
 **Depends on:** slice 4 (`krabka-broker` single-node MVP), slice 2 (`krabka-client-core`), slice 3 (`krabka-log`). All shipped to `main`.
-**Tracks the meta-spec at:** [`2026-05-10-krabka-rust-rewrite-design.md`](2026-05-10-krabka-rust-rewrite-design.md).
+**Tracks the meta-spec at:** [`2026-05-10-crabka-rust-rewrite-design.md`](2026-05-10-crabka-rust-rewrite-design.md).
 
 ## Goal
 
@@ -292,7 +292,7 @@ The slice is done when, in CI:
 
 ## Reference
 
-Meta-spec: [`2026-05-10-krabka-rust-rewrite-design.md`](2026-05-10-krabka-rust-rewrite-design.md).
-Slice 4 spec: [`2026-05-11-krabka-broker-design.md`](2026-05-11-krabka-broker-design.md).
-Slice 2 spec: [`2026-05-11-krabka-client-core-design.md`](2026-05-11-krabka-client-core-design.md).
-Slice 3 spec: [`2026-05-11-krabka-log-design.md`](2026-05-11-krabka-log-design.md).
+Meta-spec: [`2026-05-10-crabka-rust-rewrite-design.md`](2026-05-10-crabka-rust-rewrite-design.md).
+Slice 4 spec: [`2026-05-11-crabka-broker-design.md`](2026-05-11-crabka-broker-design.md).
+Slice 2 spec: [`2026-05-11-crabka-client-core-design.md`](2026-05-11-crabka-client-core-design.md).
+Slice 3 spec: [`2026-05-11-crabka-log-design.md`](2026-05-11-crabka-log-design.md).

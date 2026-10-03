@@ -2,7 +2,7 @@
 
 **Status:** draft (this is the spec for slice 4 of the Crabka meta-spec).
 **Depends on:** `krabka-protocol` (slice 1) and `krabka-log` (slice 3), both shipped to `main`.
-**Tracks the meta-spec at:** [`docs/superpowers/specs/2026-05-10-krabka-rust-rewrite-design.md`](2026-05-10-krabka-rust-rewrite-design.md).
+**Tracks the meta-spec at:** [`docs/superpowers/specs/2026-05-10-crabka-rust-rewrite-design.md`](2026-05-10-crabka-rust-rewrite-design.md).
 
 ## Goal
 
@@ -275,6 +275,6 @@ The slice is done when, in CI:
 
 ## Reference
 
-Meta-spec: [`2026-05-10-krabka-rust-rewrite-design.md`](2026-05-10-krabka-rust-rewrite-design.md) (slice 1 detail is the "Slice 1 detailed design" section there).
-Slice 2 spec: [`2026-05-11-krabka-client-core-design.md`](2026-05-11-krabka-client-core-design.md).
-Slice 3 spec: [`2026-05-11-krabka-log-design.md`](2026-05-11-krabka-log-design.md).
+Meta-spec: [`2026-05-10-crabka-rust-rewrite-design.md`](2026-05-10-crabka-rust-rewrite-design.md) (slice 1 detail is the "Slice 1 detailed design" section there).
+Slice 2 spec: [`2026-05-11-crabka-client-core-design.md`](2026-05-11-crabka-client-core-design.md).
+Slice 3 spec: [`2026-05-11-crabka-log-design.md`](2026-05-11-crabka-log-design.md).

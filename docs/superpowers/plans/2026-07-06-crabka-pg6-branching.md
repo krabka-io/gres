@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), the PG-2/3/4/4b crates, `serde_json` (`timeline.meta`), `proptest` (GC pinning property), `assert2`/`nextest`, a local/containerized PG 17 once (the forked-fixture regeneration), `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-pg6-branching-design.md`](../specs/2026-07-06-krabka-pg6-branching-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-pg6-branching-design.md`](../specs/2026-07-06-crabka-pg6-branching-design.md).
 
 **PREREQUISITES (unlanded):** PG-2, PG-3, PG-4 executed (PG-4b's `Key` enum folded in, or Task 2's inheritance test drops the `RelMeta` case until it lands). Live branched-compute validation belongs to PG-5's harness, not this plan.
 

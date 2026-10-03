@@ -8,7 +8,7 @@
 
 **Tech Stack:** Kotlin JVM + okhttp (`H2_PRIOR_KNOWLEDGE`), connect-kotlin, Gradle (Kotlin DSL, `application` plugin), JUnit 5, buf.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-sdk-java-design.md`](../specs/2026-07-06-krabka-sdk-java-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-sdk-java-design.md`](../specs/2026-07-06-crabka-sdk-java-design.md).
 
 **PREREQUISITES (unlanded):** the umbrella executed (harness + Go-hardened vectors) and MSG-5's gateway h2c listener.
 

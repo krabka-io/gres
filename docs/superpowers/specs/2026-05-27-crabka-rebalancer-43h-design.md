@@ -4,7 +4,7 @@
 **Status:** Slice design. Follows slices 43a–43g (rebalancer foundation
 through anomaly detector) and slice 44 (operator `KafkaRebalance` CRD).
 Part of the rebalancer roadmap
-(`docs/superpowers/specs/2026-05-17-krabka-rebalancer-roadmap-design.md`).
+(`docs/superpowers/specs/2026-05-17-crabka-rebalancer-roadmap-design.md`).
 
 ## Why this exists
 

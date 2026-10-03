@@ -17,10 +17,10 @@ substrate designed for logs (`krabka-blockstore`), the pluggable `BlockIndex` se
 traces extracted, the label-postings machinery the metrics signal built, and the
 role-selectable service skeleton — and follows the same "emulate the wire/API contract,
 don't fork the product" pattern. See the sibling specs:
-[2026-06-18-krabka-observability-logs-design.md](2026-06-18-krabka-observability-logs-design.md),
-[2026-06-18-krabka-observability-metrics-mimir-design.md](2026-06-18-krabka-observability-metrics-mimir-design.md),
+[2026-06-18-crabka-observability-logs-design.md](2026-06-18-crabka-observability-logs-design.md),
+[2026-06-18-crabka-observability-metrics-mimir-design.md](2026-06-18-crabka-observability-metrics-mimir-design.md),
 and
-[2026-06-18-krabka-observability-traces-tempo-design.md](2026-06-18-krabka-observability-traces-tempo-design.md).
+[2026-06-18-crabka-observability-traces-tempo-design.md](2026-06-18-crabka-observability-traces-tempo-design.md).
 
 ## 1. Goal & thesis
 

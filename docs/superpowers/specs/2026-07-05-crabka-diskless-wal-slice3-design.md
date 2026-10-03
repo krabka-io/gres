@@ -6,7 +6,7 @@
 
 ## Context — where this sits
 
-Third slice of the diskless-broker WAL milestone (see [Slice 1](2026-07-05-krabka-diskless-wal-slice1-design.md) for the decomposition). Slice 1 made diskless topics durable by local `fsync` with the `acks=all` gate on the WAL durable watermark; Slice 2 moved offset assignment to KRaft. Slice 3 is where diskless data first reaches **object storage**: a per-broker background worker batches acked WAL records from many partitions into shared object-storage objects and records an offset→object index.
+Third slice of the diskless-broker WAL milestone (see [Slice 1](2026-07-05-crabka-diskless-wal-slice1-design.md) for the decomposition). Slice 1 made diskless topics durable by local `fsync` with the `acks=all` gate on the WAL durable watermark; Slice 2 moved offset assignment to KRaft. Slice 3 is where diskless data first reaches **object storage**: a per-broker background worker batches acked WAL records from many partitions into shared object-storage objects and records an offset→object index.
 
 **Framing (roadmap tension #3, AutoMQ-shaped):** the flush is **async / background, *after* the ack**. The produce/ack path is unchanged — it still gates on Slice-1 local `fsync` durability. The flush moves data local-WAL → object storage to enable later read-serving (Slice 4) and local-WAL trimming; flush latency never touches produce latency.
 

@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - **Prerequisites:** all of G-7 landed (G-8a); plus G-5's parking (G-8b splits park predecessor topics). This plan is the furthest from the tree — every task begins by re-verifying the seams it names; where this plan and the landed code disagree, the code wins and the plan step adapts, recording the divergence in the task's commit message.
-- **Spec:** [2026-07-09-krabka-gres-g8-sharded-tables-design.md](../specs/2026-07-09-krabka-gres-g8-sharded-tables-design.md). The two spec invariants every task defends: **sharded-table visibility is gsnap-only** (no code path may consult a foreign range's local clog), and **fence-first ordering** extends to splits (both successor fences precede any read of the predecessor's end).
+- **Spec:** [2026-07-09-crabka-gres-g8-sharded-tables-design.md](../specs/2026-07-09-crabka-gres-g8-sharded-tables-design.md). The two spec invariants every task defends: **sharded-table visibility is gsnap-only** (no code path may consult a foreign range's local clog), and **fence-first ordering** extends to splits (both successor fences precede any read of the predecessor's end).
 - **Correctness bar:** the corpus-through-sharding conformance gate (corpus tables `SHARDED` across 2 ranges must match the parity baseline) is the semantic backstop for everything; it runs from G-8a's first executable milestone onward.
 - Lints/format/commit/test conventions as in the G-2 plan; donor test names kept where suites are re-targeted.
 

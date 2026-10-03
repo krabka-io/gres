@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-09
 **Status:** Approved
-**Type:** Slice design. The third slice of [Chapter Gres](2026-07-09-krabka-gres-chapter-design.md): checkpoints bound both spin-up time and WAL growth, completing the disposable-compute story G-2 started. One G-2 amendment (the recovery barrier) was resolved in this cycle and applied back to the G-2 spec and plan.
+**Type:** Slice design. The third slice of [Chapter Gres](2026-07-09-crabka-gres-chapter-design.md): checkpoints bound both spin-up time and WAL growth, completing the disposable-compute story G-2 started. One G-2 amendment (the recovery barrier) was resolved in this cycle and applied back to the G-2 spec and plan.
 
 ## Context — what the tree and its dependencies actually hold
 

@@ -4,7 +4,7 @@
 **Date:** 2026-05-11
 **Author:** Matthew Stone (with Claude)
 **Predecessor:** project meta-spec
-(`2026-05-10-krabka-rust-rewrite-design.md`). The coverage slice (slice 1)
+(`2026-05-10-crabka-rust-rewrite-design.md`). The coverage slice (slice 1)
 is fully shipped via sub-plans 1a–1e.
 
 ## Summary

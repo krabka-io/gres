@@ -430,9 +430,9 @@ This is the gap slice 10b closes.
 ## Reference
 
 Spec lives at:
-`docs/superpowers/specs/2026-05-12-krabka-bulletproof-eos-10a-design.md`
+`docs/superpowers/specs/2026-05-12-crabka-bulletproof-eos-10a-design.md`
 
 Meta-spec:
-`docs/superpowers/specs/2026-05-10-krabka-rust-rewrite-design.md`
+`docs/superpowers/specs/2026-05-10-crabka-rust-rewrite-design.md`
 (slice 8 in the decomposition table; slice 10a here closes the first
 group of slice-8 deferrals).

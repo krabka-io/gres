@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `axum`/`http` `HeaderMap`, `bytes`, `serde_json`, `base64`, `reqwest`, `thiserror`, `assert2`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-cloudevents-binding-design.md`](../specs/2026-07-06-krabka-cloudevents-binding-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-cloudevents-binding-design.md`](../specs/2026-07-06-crabka-cloudevents-binding-design.md).
 
 **PREREQUISITE (narrow):** only the gRPC-Subscribe CE transparency test (Task 5b) is gated on **MSG-1**'s `Inbound.headers` restore. Ingress (Task 2) and webhook egress (Task 3) read `GatewayRecord.headers` / native `ConsumerRecord.headers` respectively and are buildable now.
 

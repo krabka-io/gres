@@ -3,7 +3,7 @@
 **Status:** Draft for review
 **Date:** 2026-05-11
 **Author:** Matthew Stone (with Claude)
-**Predecessors:** coverage meta-spec (`2026-05-11-krabka-protocol-coverage-design.md`); compression (`2026-05-11-krabka-compression-1b-design.md`).
+**Predecessors:** coverage meta-spec (`2026-05-11-crabka-protocol-coverage-design.md`); compression (`2026-05-11-crabka-compression-1b-design.md`).
 
 ## Summary
 

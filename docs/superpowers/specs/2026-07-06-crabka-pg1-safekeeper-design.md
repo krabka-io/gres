@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Subsystem design. The ingest slice of the [Chapter C roadmap](2026-07-06-krabka-postgres-chapter-roadmap-design.md) — a stock, unpatched Postgres primary streams its physical WAL into a Crabka topic, durably, with correct feedback.
+**Type:** Subsystem design. The ingest slice of the [Chapter C roadmap](2026-07-06-crabka-postgres-chapter-roadmap-design.md) — a stock, unpatched Postgres primary streams its physical WAL into a Crabka topic, durably, with correct feedback.
 
 ## Context — where this sits, and a roadmap correction
 

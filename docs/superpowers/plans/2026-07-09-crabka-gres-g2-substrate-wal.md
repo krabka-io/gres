@@ -10,8 +10,8 @@
 
 ## Global Constraints
 
-- **Prerequisite:** the G-1 vendoring plan ([2026-07-09-krabka-gres-g1-vendor.md](2026-07-09-krabka-gres-g1-vendor.md)) has landed — this plan edits crates G-1 creates. Verify signatures quoted here against the tree at execution time; they were verified against donor `crabgresql@93f3d17`, which G-1 vendors unchanged.
-- **Spec:** [docs/superpowers/specs/2026-07-09-krabka-gres-g2-substrate-wal-design.md](../specs/2026-07-09-krabka-gres-g2-substrate-wal-design.md).
+- **Prerequisite:** the G-1 vendoring plan ([2026-07-09-crabka-gres-g1-vendor.md](2026-07-09-crabka-gres-g1-vendor.md)) has landed — this plan edits crates G-1 creates. Verify signatures quoted here against the tree at execution time; they were verified against donor `crabgresql@93f3d17`, which G-1 vendors unchanged.
+- **Spec:** [docs/superpowers/specs/2026-07-09-crabka-gres-g2-substrate-wal-design.md](../specs/2026-07-09-crabka-gres-g2-substrate-wal-design.md).
 - **Load-bearing seam signatures (verified):**
   - `krabka_pgexec::Committer` — `async fn commit(&self, ops: Vec<WriteOp>) -> Result<(), ExecError>` (async-trait).
   - `krabka_pgexec::Linearizer` — `async fn ensure_readable(&self) -> Result<(), ExecError>`.

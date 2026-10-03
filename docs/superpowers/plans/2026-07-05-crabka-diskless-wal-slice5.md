@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `stateright` (dev), `tokio`, `assert2`, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
-**Spec:** [`docs/superpowers/specs/2026-07-05-krabka-diskless-wal-slice5-design.md`](../specs/2026-07-05-krabka-diskless-wal-slice5-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-05-crabka-diskless-wal-slice5-design.md`](../specs/2026-07-05-crabka-diskless-wal-slice5-design.md).
 
 **PREREQUISITES (unlanded):** Slices 1–4. Tasks 3–4 edit Slice-2's `append_verbatim_at` and Slice-4's trim gate (both spec-only) — written against their specced shapes. The model (Task 5) builds on the Slice-1 `wal_acked` ghost. Land Slices 1–4 first.
 

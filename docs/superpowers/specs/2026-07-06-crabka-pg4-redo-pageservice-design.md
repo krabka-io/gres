@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Subsystem design. Third slice of the [Chapter C roadmap](2026-07-06-krabka-postgres-chapter-roadmap-design.md) — the read/materialization half of the pageserver track, plus the compute-facing service. **Carries the chapter's two crux decisions, both resolved by the user in this cycle.**
+**Type:** Subsystem design. Third slice of the [Chapter C roadmap](2026-07-06-crabka-postgres-chapter-roadmap-design.md) — the read/materialization half of the pageserver track, plus the compute-facing service. **Carries the chapter's two crux decisions, both resolved by the user in this cycle.**
 
 ## Context — where this sits, and the two decisions
 

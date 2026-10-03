@@ -222,5 +222,5 @@ lowest broker id for determinism.
 ## References
 
 - [KIP-966: Eligible Leader Replicas](https://cwiki.apache.org/confluence/display/KAFKA/KIP-966:+Eligible+Leader+Replicas)
-- Prior crabka specs: `2026-05-15-krabka-elect-leaders-14-design.md`,
-  `2026-05-13-krabka-bulletproof-eos-10b-design.md`.
+- Prior crabka specs: `2026-05-15-crabka-elect-leaders-14-design.md`,
+  `2026-05-13-crabka-bulletproof-eos-10b-design.md`.

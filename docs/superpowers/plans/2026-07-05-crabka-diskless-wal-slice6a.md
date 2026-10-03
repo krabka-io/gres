@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `krabka-kraft-core` (sans-IO consensus), `krabka-voters`, `krabka-verified` (`recompute_high_watermark`), `tokio`, `stateright` (dev), `assert2`, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
-**Spec:** [`docs/superpowers/specs/2026-07-05-krabka-diskless-wal-slice6a-design.md`](../specs/2026-07-05-krabka-diskless-wal-slice6a-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-05-crabka-diskless-wal-slice6a-design.md`](../specs/2026-07-05-crabka-diskless-wal-slice6a-design.md).
 
 **PREREQUISITES (unlanded):** Slices 1–5. `QuorumWalStore` implements the Slice-1 `WalStore` trait and re-sources the Slice-1 WAL-durable HW. **This is the single largest build in the milestone** — the tasks below are components; land them in order.
 

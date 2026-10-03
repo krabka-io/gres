@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Subsystem design. **The differentiated slice** of the [serverless messaging cycle](2026-07-06-krabka-gateway-header-carrythrough-design.md) — exposes KIP-932 share-group backlog as a KEDA-consumable signal so serverless consumer replicas autoscale on queue depth, including scale-to-zero.
+**Type:** Subsystem design. **The differentiated slice** of the [serverless messaging cycle](2026-07-06-crabka-gateway-header-carrythrough-design.md) — exposes KIP-932 share-group backlog as a KEDA-consumable signal so serverless consumer replicas autoscale on queue depth, including scale-to-zero.
 
 ## Context — the one differentiated slice, honestly
 

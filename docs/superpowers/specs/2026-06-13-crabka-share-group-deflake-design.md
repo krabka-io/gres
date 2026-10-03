@@ -4,7 +4,7 @@
 - **Status:** Approved design — ready for implementation planning
 - **Scope:** Phase 2 of the deterministic-test program. Continues Workstream B
   (de-flaking sleep-based tests) from Phase 1
-  (`2026-06-13-krabka-stateright-consensus-deflake-design.md`), targeting the
+  (`2026-06-13-crabka-stateright-consensus-deflake-design.md`), targeting the
   broker's share-group (KIP-932) and consumer/streams group-coordination tests —
   the known-flaky-on-Windows subset.
 

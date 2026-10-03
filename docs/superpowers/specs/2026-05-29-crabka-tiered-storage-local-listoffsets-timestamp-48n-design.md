@@ -3,7 +3,7 @@
 **Date:** 2026-05-29
 **Status:** Slice design. Closes a 48d follow-up. Part of the KIP-405
 umbrella
-(`docs/superpowers/specs/2026-05-25-krabka-tiered-storage-roadmap-design.md`).
+(`docs/superpowers/specs/2026-05-25-crabka-tiered-storage-roadmap-design.md`).
 
 ## Goal
 

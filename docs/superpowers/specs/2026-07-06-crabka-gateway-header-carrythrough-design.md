@@ -6,7 +6,7 @@
 
 ## Context — the messaging cycle, and where this sits
 
-Grounding the [serverless-backend vision](2026-07-06-krabka-serverless-backend-vision-design.md)'s messaging chapter against the actual tree corrected a key assumption: **KIP-932 share groups are already fully built and JVM-validated** — `ShareFetch`/`ShareAcknowledge`, the per-partition `AcquisitionState` machine (Available→Acquired→Acknowledged→Archived), redelivery via `delivery_count`, poison-pill archiving at `max_delivery_attempts` (default 5), and `__share_group_state` persistence all exist (`crates/broker/src/handlers/share_fetch.rs`, `crates/broker/src/share_partition/state.rs`, tests in `crates/broker/tests/share_consume.rs`). The serverless "message → function, per-message ack + redelivery" primitive is therefore **not** the gap.
+Grounding the [serverless-backend vision](2026-07-06-crabka-serverless-backend-vision-design.md)'s messaging chapter against the actual tree corrected a key assumption: **KIP-932 share groups are already fully built and JVM-validated** — `ShareFetch`/`ShareAcknowledge`, the per-partition `AcquisitionState` machine (Available→Acquired→Acknowledged→Archived), redelivery via `delivery_count`, poison-pill archiving at `max_delivery_attempts` (default 5), and `__share_group_state` persistence all exist (`crates/broker/src/handlers/share_fetch.rs`, `crates/broker/src/share_partition/state.rs`, tests in `crates/broker/tests/share_consume.rs`). The serverless "message → function, per-message ack + redelivery" primitive is therefore **not** the gap.
 
 The real messaging-cycle work decomposes into five slices:
 

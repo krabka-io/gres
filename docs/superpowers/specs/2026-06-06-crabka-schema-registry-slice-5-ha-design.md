@@ -3,7 +3,7 @@
 - **Date:** 2026-06-06
 - **Status:** Approved (brainstorm); ready for an implementation plan
 - **Builds on:** slices 1+2+2b+2c+3+4 (registry + compat trilogy + deletes/modes/lookups + references). The `KafkaStore` facade (single-node always-primary, write-gate + group-less reader), the axum REST surface, and `RegistryConfig`/the binary all exist. Stacks on slice 4 (PR #410).
-- **Parent roadmap:** `docs/superpowers/specs/2026-06-04-krabka-schema-registry-design.md` (slice 5).
+- **Parent roadmap:** `docs/superpowers/specs/2026-06-04-crabka-schema-registry-design.md` (slice 5).
 
 ## Motivation
 

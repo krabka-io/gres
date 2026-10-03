@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `object_store` 0.13 (features `aws`, `gcp`, workspace-pinned), `thiserror`, `tokio`, `assert2` + `nextest` for tests, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
-**Spec:** [`docs/superpowers/specs/2026-07-05-krabka-north-star-roadmap-design.md`](../specs/2026-07-05-krabka-north-star-roadmap-design.md) — Chapter 0, Milestone 3 (first increment).
+**Spec:** [`docs/superpowers/specs/2026-07-05-crabka-north-star-roadmap-design.md`](../specs/2026-07-05-crabka-north-star-roadmap-design.md) — Chapter 0, Milestone 3 (first increment).
 
 ---
 

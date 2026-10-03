@@ -4,7 +4,7 @@
 **Status:** Slice design. Follows slice 48h
 (`Kafka.spec.tieredStorage.metadataManager`, #230). Part of the
 KIP-405 umbrella
-(`docs/superpowers/specs/2026-05-25-krabka-tiered-storage-roadmap-design.md`).
+(`docs/superpowers/specs/2026-05-25-crabka-tiered-storage-roadmap-design.md`).
 
 ## Why this exists
 

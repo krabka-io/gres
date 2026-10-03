@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `krabka-client-consumer` (share), connectrpc-axum (the gateway idiom), the in-process `Broker::start` harness + the `jvm_share_groups` differential harness, `assert2`/`nextest`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-msg6-queue-rpc-design.md`](../specs/2026-07-06-krabka-msg6-queue-rpc-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-msg6-queue-rpc-design.md`](../specs/2026-07-06-crabka-msg6-queue-rpc-design.md).
 
 **PREREQUISITES:** none unlanded — the broker KIP-932 stack and the native `ShareConsumer` are built. (MSG-1 is precedent, not prerequisite: the headers addition here is on the *share* path.) The v1.1 vector work (Task 6) touches the umbrella crate once it exists; Tasks 1–5 are independent of it.
 

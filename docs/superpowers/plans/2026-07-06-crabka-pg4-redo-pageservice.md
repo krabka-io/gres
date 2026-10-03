@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `bytes`/`thiserror` (redo: no tokio), `tokio` + `connectrpc-axum` + `prost` (service), `proptest` + `cargo-fuzz`-style harness, `assert2`/`nextest`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-pg4-redo-pageservice-design.md`](../specs/2026-07-06-krabka-pg4-redo-pageservice-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-pg4-redo-pageservice-design.md`](../specs/2026-07-06-crabka-pg4-redo-pageservice-design.md).
 
 **PREREQUISITES (unlanded):** **PG-2** (`krabka-postgres-wal` + corpus) and **PG-3** (`krabka-page-store`). A local Postgres 17 once, to extend the fixture corpus with the standby capture.
 

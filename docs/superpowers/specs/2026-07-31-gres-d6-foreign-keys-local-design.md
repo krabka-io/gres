@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-31
 **Status:** In progress
-**Type:** SQL-parity wave. Implements wave D6 of the [SQL-Parity Program](2026-07-09-krabka-gres-sql-parity-program-design.md) on the single-node MVCC write path: `FOREIGN KEY` and `REFERENCES` constraints, referential actions, `MATCH` semantics, and real constraint deferral. Cross-range enforcement on sharded tables is a companion cycle and is named here only at its seam.
+**Type:** SQL-parity wave. Implements wave D6 of the [SQL-Parity Program](2026-07-09-crabka-gres-sql-parity-program-design.md) on the single-node MVCC write path: `FOREIGN KEY` and `REFERENCES` constraints, referential actions, `MATCH` semantics, and real constraint deferral. Cross-range enforcement on sharded tables is a companion cycle and is named here only at its seam.
 
 ## Design Goals
 

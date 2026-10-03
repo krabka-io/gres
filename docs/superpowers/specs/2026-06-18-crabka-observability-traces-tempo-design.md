@@ -15,9 +15,9 @@ This is the third signal in the LGTM+P replacement. It reuses the shared
 substrate designed for logs (`krabka-blockstore`) and the role-selectable service
 skeleton, and follows the same "emulate the wire/HTTP contract, don't fork the
 product" pattern. See the sibling specs:
-[2026-06-18-krabka-observability-logs-design.md](2026-06-18-krabka-observability-logs-design.md)
+[2026-06-18-crabka-observability-logs-design.md](2026-06-18-crabka-observability-logs-design.md)
 and
-[2026-06-18-krabka-observability-metrics-mimir-design.md](2026-06-18-krabka-observability-metrics-mimir-design.md).
+[2026-06-18-crabka-observability-metrics-mimir-design.md](2026-06-18-crabka-observability-metrics-mimir-design.md).
 
 ## 1. Goal & thesis
 

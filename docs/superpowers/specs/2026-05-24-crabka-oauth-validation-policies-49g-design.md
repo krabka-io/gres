@@ -2,7 +2,7 @@
 
 Status: Draft
 Date: 2026-05-24
-Umbrella: `docs/superpowers/specs/2026-05-23-krabka-oauth-parity-roadmap-design.md`
+Umbrella: `docs/superpowers/specs/2026-05-23-crabka-oauth-parity-roadmap-design.md`
 Builds on: slices 49b (signed JWS validator), 49d (RFC 7662 introspection), 50 (initial CRD shape with `customClaimCheck` stub)
 Followups: slice 49h (claims mapping), slice 49i (JWKS refresher policies)
 
