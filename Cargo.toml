@@ -177,7 +177,7 @@ base64 = "0.23"
 rcgen = { version = "0.14", default-features = false, features = ["pem", "ring", "x509-parser"] }
 # SASL/GSSAPI (Kerberos). `network_client` lets the initiator reach the KDC;
 # `ring` keeps crypto provider choice aligned with rustls/rcgen in this workspace.
-sspi = { version = "=0.21.3", default-features = false, features = ["network_client", "ring"] }
+sspi = { version = "0.23.0", git = "https://github.com/robot-head/sspi-rs", rev = "df53e86c0ee635348ae61ee84ad930ae790d08f1", default-features = false, features = ["network_client", "ring"] }
 krabka-audit = { path = "crates/audit", version = "0.4.2" }
 krabka-security = { path = "crates/security", version = "0.4.2" }
 krabka-units = { path = "crates/units", version = "0.4.2" }
