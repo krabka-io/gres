@@ -8,7 +8,7 @@
 use std::path::Path;
 
 use bytes::BytesMut;
-use crabka_protocol::records::{RecordBatch, metadata::record::KraftMetadataRecord};
+use krabka_protocol::records::{RecordBatch, metadata::record::KraftMetadataRecord};
 
 /// Walk every batch in `log`.
 ///

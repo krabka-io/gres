@@ -16,13 +16,13 @@ Date: 2026-07-12
 The following commands passed:
 
 ```text
-cargo test -p crabka-gres-conformance --lib sharded_
-cargo test -p crabka-gres-conformance
+cargo test -p krabka-gres-conformance --lib sharded_
+cargo test -p krabka-gres-conformance
 python3 scripts/tests/gres_sharded_conformance_ci.py
 bash -n scripts/gres-sharded-conformance.sh
-CRABKA_GRES_SHARDED_CONFORMANCE_MODE=live \
-  CRABKA_GRES_SHARDED_ORACLE_URL='host=127.0.0.1 port=5432 user=gres_ci dbname=postgres password=gres_ci' \
-  CRABKA_GRES_SHARDED_CONFORMANCE_ARTIFACT_DIR=target/g8-live-artifacts \
+KRABKA_GRES_SHARDED_CONFORMANCE_MODE=live \
+  KRABKA_GRES_SHARDED_ORACLE_URL='host=127.0.0.1 port=5432 user=gres_ci dbname=postgres password=gres_ci' \
+  KRABKA_GRES_SHARDED_CONFORMANCE_ARTIFACT_DIR=target/g8-live-artifacts \
   scripts/gres-sharded-conformance.sh
 ```
 

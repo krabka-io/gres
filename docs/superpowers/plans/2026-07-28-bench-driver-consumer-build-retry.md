@@ -37,7 +37,7 @@ Kubernetes YAML.
 - Do not expose sampling, final-drain, request-timeout, or Prometheus policies
   in this slice.
 - Add no CRD; the benchmark launcher and Job template own this binary.
-- `crabka-bench-driver` already directly depends on `refined_type`; do not
+- `krabka-bench-driver` already directly depends on `refined_type`; do not
   change dependencies or `Cargo.lock`.
 - Run every Cargo command with
   `CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0`; use `--locked` for
@@ -190,7 +190,7 @@ them, supplies all three CLI flags, and proves the CLI values win:
 ```rust
 #[test]
 fn consumer_build_retry_reads_environment_and_prefers_cli() {
-    const CHILD: &str = "CRABKA_BENCH_CONSUMER_BUILD_RETRY_CHILD";
+    const CHILD: &str = "KRABKA_BENCH_CONSUMER_BUILD_RETRY_CHILD";
 
     if std::env::var_os(CHILD).is_none() {
         let status = std::process::Command::new(
@@ -239,7 +239,7 @@ fn consumer_build_retry_reads_environment_and_prefers_cli() {
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-bench-driver consumer_build_retry --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-bench-driver consumer_build_retry --locked
 ```
 
 Expected: compilation fails because the retry newtypes, policy, resolver, and
@@ -480,7 +480,7 @@ Do not change the loop body, warnings, errors, or any client builder input.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-bench-driver consumer_build_retry --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-bench-driver consumer_build_retry --locked
 ```
 
 Expected: all focused type, default, relational, parser, and precedence tests
@@ -519,12 +519,12 @@ focused search shows the complete flow.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-bench-driver --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-bench-driver --all-targets --locked -- -D warnings
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo run -p crabka-bench-driver --bin crabka-bench-driver --locked -- --help
-test "$(target/debug/crabka-bench-driver --help | rg -c -- '--consumer-build-attempts')" -eq 1
-test "$(target/debug/crabka-bench-driver --help | rg -c -- '--consumer-build-initial-backoff-ms')" -eq 1
-test "$(target/debug/crabka-bench-driver --help | rg -c -- '--consumer-build-max-backoff-ms')" -eq 1
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-bench-driver --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-bench-driver --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo run -p krabka-bench-driver --bin krabka-bench-driver --locked -- --help
+test "$(target/debug/krabka-bench-driver --help | rg -c -- '--consumer-build-attempts')" -eq 1
+test "$(target/debug/krabka-bench-driver --help | rg -c -- '--consumer-build-initial-backoff-ms')" -eq 1
+test "$(target/debug/krabka-bench-driver --help | rg -c -- '--consumer-build-max-backoff-ms')" -eq 1
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 git diff --check
 git diff -- Cargo.lock
@@ -689,13 +689,13 @@ Append `## Bench Driver Consumer Build Retry` to
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-bench-driver --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-bench-driver --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-bench-driver --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-bench-driver --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 bash -n bench/scripts/run-scenario.sh
-test "$(target/debug/crabka-bench-driver --help | rg -c -- '--consumer-build-attempts')" -eq 1
-test "$(target/debug/crabka-bench-driver --help | rg -c -- '--consumer-build-initial-backoff-ms')" -eq 1
-test "$(target/debug/crabka-bench-driver --help | rg -c -- '--consumer-build-max-backoff-ms')" -eq 1
+test "$(target/debug/krabka-bench-driver --help | rg -c -- '--consumer-build-attempts')" -eq 1
+test "$(target/debug/krabka-bench-driver --help | rg -c -- '--consumer-build-initial-backoff-ms')" -eq 1
+test "$(target/debug/krabka-bench-driver --help | rg -c -- '--consumer-build-max-backoff-ms')" -eq 1
 BENCH_CONSUMER_BUILD_ATTEMPTS=3 \
 BENCH_CONSUMER_BUILD_INITIAL_BACKOFF_MS=21 \
 BENCH_CONSUMER_BUILD_MAX_BACKOFF_MS=22 \

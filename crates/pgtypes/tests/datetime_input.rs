@@ -4,7 +4,7 @@
 //! `DateStyle = 'ISO, MDY'` and `TimeZone = 'Etc/UTC'`.
 
 use assert2::assert;
-use crabka_pgtypes::{
+use krabka_pgtypes::{
     TypeError,
     datetime::{
         DateOrder, ParsedDateTime, date_to_text, interval_to_text, parse_by_template, parse_date,
@@ -689,7 +689,7 @@ fn a_boundary_reading_resolves_to_the_later_instant() {
     // happened twice. PostgreSQL reads it at the offset in force AFTER the
     // transition, which is the later of the two instants; reading it at the
     // earlier one is an hour out.
-    let moscow = crabka_pgtypes::datetime::zone_by_name("Europe/Moscow").expect("zone");
+    let moscow = krabka_pgtypes::datetime::zone_by_name("Europe/Moscow").expect("zone");
     let cases: &[(&str, &str)] = &[
         ("2014-10-26 01:00:00", "2014-10-25 22:00:00+00"),
         ("2014-10-26 01:00:01", "2014-10-25 22:00:01+00"),

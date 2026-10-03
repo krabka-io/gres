@@ -16,7 +16,7 @@ values and the repository-wide hardcoded-value audit remain open.
 
 ## Current Problem
 
-`crabka-client-streams` creates several broker clients during startup:
+`krabka-client-streams` creates several broker clients during startup:
 
 - metadata and offset `Client`s;
 - an idempotent or transactional `Producer`;
@@ -34,7 +34,7 @@ The observability demo is the only in-repository binary that starts
 ## Configuration Surface
 
 The library reuses the existing refined, validated
-`crabka_client_core::ClientDnsTimeout`; it does not add another policy or
+`krabka_client_core::ClientDnsTimeout`; it does not add another policy or
 timeout newtype.
 
 The following builders gain an optional typed input named
@@ -50,7 +50,7 @@ compatible.
 The observability demo adds:
 
 - CLI: `--streams-broker-dns-timeout-ms`
-- Environment: `CRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS`
+- Environment: `KRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS`
 - Default: absent, resolved to `ClientDnsTimeout::default()` (10,000 ms)
 - Validation: positive `u64` milliseconds
 - Applicability: `--role stream` only
@@ -155,7 +155,7 @@ Focused tests cover:
 - demo environment input, CLI-over-environment precedence, and typed default;
 - the exact CLI help token appearing once.
 
-Final gates run all targets for `crabka-client-streams` and
+Final gates run all targets for `krabka-client-streams` and
 `observability-demo-app`, strict Clippy, formatting, and `git diff --check`.
 The repository runtime-value scanner and a focused DNS search are recorded in
 `docs/configuration-audit.md`.

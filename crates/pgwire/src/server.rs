@@ -47,12 +47,12 @@ static NEXT_PID: AtomicI32 = AtomicI32::new(0);
 /// from another's: `--range-listen` is a bind specification rather than a
 /// resolved address, so there is no stable node number to fold in and a random
 /// per-process draw is what distinguishes processes. A bounded
-/// `CRABKA_BACKEND_PROCESS_TOKEN` override exists for deterministic integration
+/// `KRABKA_BACKEND_PROCESS_TOKEN` override exists for deterministic integration
 /// tests; production deployments must leave it unset unless their orchestrator
 /// assigns a unique token to every live process.
 static PROCESS_TOKEN: LazyLock<i32> = LazyLock::new(|| {
     configured_process_token(
-        std::env::var("CRABKA_BACKEND_PROCESS_TOKEN")
+        std::env::var("KRABKA_BACKEND_PROCESS_TOKEN")
             .ok()
             .as_deref(),
     )

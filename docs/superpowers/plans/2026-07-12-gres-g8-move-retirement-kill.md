@@ -6,7 +6,7 @@
 
 **Architecture:** Extend the existing topology process fixture with retirement kill points and exact predicates over the operation journal, tenant sidecar, Kafka metadata, and durable retire receipts. A test-only `AdminClientLike` wrapper delegates to real Kafka, counts and constrains deletion, and injects a one-shot post-delete error so the production retirement helper exposes the ambiguous AfterDelete window without production fault hooks.
 
-**Tech Stack:** Rust, Tokio, `crabka_client_admin::AdminClientLike`, real Kafka process harness, JSON evidence, Bash/Python CI validation.
+**Tech Stack:** Rust, Tokio, `krabka_client_admin::AdminClientLike`, real Kafka process harness, JSON evidence, Bash/Python CI validation.
 
 ## Global Constraints
 
@@ -35,7 +35,7 @@ Add table-driven tests for the exact required state and near-misses: wrong phase
 - [ ] **Step 2: Run tests and verify RED**
 
 ```bash
-cargo test -p crabka-gres --test topology_process_nemesis retirement_kill_predicate -- --nocapture
+cargo test -p krabka-gres --test topology_process_nemesis retirement_kill_predicate -- --nocapture
 ```
 
 Expected: compile failure because the retirement variants and predicate input are absent.
@@ -71,7 +71,7 @@ Use a deterministic fake delegate to prove the exact topic is deleted once, unre
 - [ ] **Step 2: Run tests and verify RED**
 
 ```bash
-cargo test -p crabka-gres --test topology_process_nemesis counting_retirement_admin -- --nocapture
+cargo test -p krabka-gres --test topology_process_nemesis counting_retirement_admin -- --nocapture
 ```
 
 Expected: compile failure because the wrapper and ledger do not exist.
@@ -104,7 +104,7 @@ git commit -m "test(gres): add retirement delete ambiguity seam"
 - [ ] **Step 1: Add BeforeDelete with an impossible gap bound and observe RED**
 
 ```bash
-CRABKA_G8_PROCESS_NEMESIS=1 CRABKA_G8_RETIREMENT_KILL_POINT=retiring_before_delete CRABKA_G8_KILL_EVIDENCE="$PWD/target/g8-topology-process-nemesis/retirement-before-delete.json" timeout 180s cargo test --locked -p crabka-gres --test topology_process_nemesis -- --exact real_process_move_source_phase_sigkill_with_exact_ack_ledger --nocapture
+KRABKA_G8_PROCESS_NEMESIS=1 KRABKA_G8_RETIREMENT_KILL_POINT=retiring_before_delete KRABKA_G8_KILL_EVIDENCE="$PWD/target/g8-topology-process-nemesis/retirement-before-delete.json" timeout 180s cargo test --locked -p krabka-gres --test topology_process_nemesis -- --exact real_process_move_source_phase_sigkill_with_exact_ack_ledger --nocapture
 ```
 
 Expected: the case reaches and recovers from the window, then fails only at the intentionally impossible bound.

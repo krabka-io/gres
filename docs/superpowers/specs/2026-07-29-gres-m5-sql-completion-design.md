@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-29
 **Status:** In progress
-**Type:** Program execution cycle. Drives the [SQL-Parity Program](2026-07-09-crabka-gres-sql-parity-program-design.md) to its M5 gate — no row in [`docs/PG_COMPAT_MATRIX.md`](../../PG_COMPAT_MATRIX.md) left in a `Wave-assigned` disposition — against a pinned PostgreSQL 18.4 oracle.
+**Type:** Program execution cycle. Drives the [SQL-Parity Program](2026-07-09-krabka-gres-sql-parity-program-design.md) to its M5 gate — no row in [`docs/PG_COMPAT_MATRIX.md`](../../PG_COMPAT_MATRIX.md) left in a `Wave-assigned` disposition — against a pinned PostgreSQL 18.4 oracle.
 
 ## Design Goals
 
@@ -15,9 +15,9 @@
 
 Three surfaces move together in every wave:
 
-1. **Grammar** (`crabka-pgparser`) — lexer tokens, expression forms, statement forms. The parser is the program's narrowest resource: nearly every remaining wave needs a grammar change, so batches allocate parser regions (expression parsing, statement dispatch, `FROM`-item parsing) to at most one task each.
-2. **Evaluation** (`crabka-pgexec`) — the executor materializes relations (`Relation { scope, rows }`), which makes the query-shape waves (window functions, `GROUPING SETS`, `DISTINCT ON`, recursive CTEs) tractable as post-materialization passes rather than planner surgery.
-3. **Measurement** (`crabka-gres-conformance`) — the primary corpus grows with each wave; the adopted `pg_regress` corpus grows independently and ratchets per file.
+1. **Grammar** (`krabka-pgparser`) — lexer tokens, expression forms, statement forms. The parser is the program's narrowest resource: nearly every remaining wave needs a grammar change, so batches allocate parser regions (expression parsing, statement dispatch, `FROM`-item parsing) to at most one task each.
+2. **Evaluation** (`krabka-pgexec`) — the executor materializes relations (`Relation { scope, rows }`), which makes the query-shape waves (window functions, `GROUPING SETS`, `DISTINCT ON`, recursive CTEs) tractable as post-materialization passes rather than planner surgery.
+3. **Measurement** (`krabka-gres-conformance`) — the primary corpus grows with each wave; the adopted `pg_regress` corpus grows independently and ratchets per file.
 
 ## Key Design Decisions
 
@@ -60,7 +60,7 @@ The rule that follows: a wave is not done when its author says so. It is done wh
 
 ### Divergences are typed, not implicit
 
-Where PostgreSQL's behavior is reproducible only at disproportionate cost, the wave records the divergence in three places that CI checks against each other: the rustdoc on the implementing item, the matrix row's disposition and note, and the typed behavior manifest in `crabka-gres-conformance`. A behavior that is refused must refuse with PostgreSQL's SQLSTATE and a stable message fragment, asserted by the anti-rot check.
+Where PostgreSQL's behavior is reproducible only at disproportionate cost, the wave records the divergence in three places that CI checks against each other: the rustdoc on the implementing item, the matrix row's disposition and note, and the typed behavior manifest in `krabka-gres-conformance`. A behavior that is refused must refuse with PostgreSQL's SQLSTATE and a stable message fragment, asserted by the anti-rot check.
 
 ## Integration
 

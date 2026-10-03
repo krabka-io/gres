@@ -8,11 +8,11 @@
 //!
 //! `xml` has no operators at all in `PostgreSQL` — no `=`, no `<`, no btree
 //! opclass — so there is no operator half of this module. Every comparison
-//! reaches [`crabka_pgtypes::ops::compare`], which refuses it by name.
+//! reaches [`krabka_pgtypes::ops::compare`], which refuses it by name.
 
 use base64::Engine as _;
-use crabka_pgparser::ast::{Expr, FuncArgs, FuncCall};
-use crabka_pgtypes::{
+use krabka_pgparser::ast::{Expr, FuncArgs, FuncCall};
+use krabka_pgtypes::{
     ArrayValue, ColumnType, Datum, ElemType,
     xml::{self, XmlOption},
 };
@@ -656,32 +656,32 @@ pub(crate) fn xml_text_of(value: &Datum, ctx: &EvalCtx) -> Result<String, ExecEr
             }
         }),
         Datum::Timestamp(value) => {
-            if crabka_pgtypes::datetime::timestamp_is_infinite(*value) {
+            if krabka_pgtypes::datetime::timestamp_is_infinite(*value) {
                 return Err(ExecError::FunctionErrorWithMessageDetail {
                     sqlstate: "22008",
                     message: "timestamp out of range".into(),
                     detail: "XML does not support infinite timestamp values.".into(),
                 });
             }
-            Ok(crabka_pgtypes::datetime::timestamp_to_text_in(
+            Ok(krabka_pgtypes::datetime::timestamp_to_text_in(
                 *value,
-                crabka_pgtypes::datetime::DateStyle::Iso,
+                krabka_pgtypes::datetime::DateStyle::Iso,
                 ctx.date_order,
             )
             .replacen(' ', "T", 1))
         }
         Datum::Timestamptz(value) => {
-            if crabka_pgtypes::datetime::timestamptz_is_infinite(*value) {
+            if krabka_pgtypes::datetime::timestamptz_is_infinite(*value) {
                 return Err(ExecError::FunctionErrorWithMessageDetail {
                     sqlstate: "22008",
                     message: "timestamp out of range".into(),
                     detail: "XML does not support infinite timestamp values.".into(),
                 });
             }
-            let mut text = crabka_pgtypes::datetime::timestamptz_to_text_in(
+            let mut text = krabka_pgtypes::datetime::timestamptz_to_text_in(
                 *value,
                 &ctx.time_zone,
-                crabka_pgtypes::datetime::DateStyle::Iso,
+                krabka_pgtypes::datetime::DateStyle::Iso,
                 ctx.date_order,
             );
             let end = text.strip_suffix(" BC").map_or(text.len(), str::len);
@@ -693,14 +693,14 @@ pub(crate) fn xml_text_of(value: &Datum, ctx: &EvalCtx) -> Result<String, ExecEr
             Ok(text.replacen(' ', "T", 1))
         }
         Datum::Date(value) => {
-            if crabka_pgtypes::datetime::date_is_infinite(*value) {
+            if krabka_pgtypes::datetime::date_is_infinite(*value) {
                 return Err(ExecError::FunctionErrorWithMessageDetail {
                     sqlstate: "22008",
                     message: "date out of range".into(),
                     detail: "XML does not support infinite date values.".into(),
                 });
             }
-            Ok(crabka_pgtypes::datetime::date_to_text(*value))
+            Ok(krabka_pgtypes::datetime::date_to_text(*value))
         }
         value => Ok(text_of(value, ctx)),
     }
@@ -796,7 +796,7 @@ fn well_formed(values: &[Datum], option: XmlOption, fc: &FuncCall) -> Result<Dat
 pub(crate) fn text_of(value: &Datum, ctx: &EvalCtx) -> String {
     match value {
         Datum::Text(text) | Datum::Xml(text) => text.clone(),
-        other => String::from_utf8_lossy(&crabka_pgtypes::encoding::encode_text_in(
+        other => String::from_utf8_lossy(&krabka_pgtypes::encoding::encode_text_in(
             other,
             ctx.output_style(),
         ))
@@ -807,7 +807,7 @@ pub(crate) fn text_of(value: &Datum, ctx: &EvalCtx) -> String {
 /// A strict one-argument function over the value's text.
 fn strict(
     value: &Datum,
-    body: impl FnOnce(&str) -> Result<Datum, crabka_pgtypes::TypeError>,
+    body: impl FnOnce(&str) -> Result<Datum, krabka_pgtypes::TypeError>,
 ) -> Result<Datum, ExecError> {
     match value {
         Datum::Null => Ok(Datum::Null),

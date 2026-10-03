@@ -3,7 +3,7 @@
 **Date:** 2026-05-27
 **Status:** Slice design. Follows slice 43h (scrape-target discovery via
 Metadata). Part of the rebalancer roadmap
-(`docs/superpowers/specs/2026-05-17-crabka-rebalancer-roadmap-design.md`).
+(`docs/superpowers/specs/2026-05-17-krabka-rebalancer-roadmap-design.md`).
 
 ## Why this exists
 
@@ -15,7 +15,7 @@ deployment can't run safely while state lives on each pod's filesystem
 (two replicas would corrupt each other's view).
 
 Migrating to a compacted internal topic
-(`__crabka_rebalancer_state`) follows the standard Kafka pattern
+(`__krabka_rebalancer_state`) follows the standard Kafka pattern
 (`__consumer_offsets`, `__transaction_state`) and is what Cruise
 Control does with its sample-store and metric-data topics. State
 survives pod restarts; the next slice (HA via `Lease`) becomes
@@ -55,7 +55,7 @@ and Cruise Control's `LoadMonitor`).
 state_topic/
   mod.rs       — `StateTopic` handle: write / delete / loaded / is_loaded
   loader.rs    — `StateTopicLoader`: one-shot async consume-from-beginning
-  producer.rs  — wraps `crabka-client-producer` for the two write paths
+  producer.rs  — wraps `krabka-client-producer` for the two write paths
 ```
 
 **`StateTopic`** (`mod.rs`):
@@ -92,7 +92,7 @@ true`, further updates come only from the executor's own writes
 4. Exit the task.
 
 **`StateProducer`** (`producer.rs`): thin wrapper over the existing
-`crabka-client-producer::Producer` configured to send to a single
+`krabka-client-producer::Producer` configured to send to a single
 partition with `acks=all`.
 
 ### Topic config
@@ -140,7 +140,7 @@ coordinator-load semantics:
 binary main()
   │
   ├── parse args, build admin client, producer, ingester (existing)
-  ├── AdminClient::create_topic("__crabka_rebalancer_state", configs) (idempotent)
+  ├── AdminClient::create_topic("__krabka_rebalancer_state", configs) (idempotent)
   ├── StateTopic::new(producer)
   ├── spawn StateTopicLoader { state_topic.clone() }.run()
   ├── spawn ingester.run()
@@ -158,9 +158,9 @@ New CLI flags / env vars (mirror existing convention):
 
 | Flag | Env | Default | Purpose |
 |---|---|---|---|
-| `--state-topic-name` | `CRABKA_REBALANCER_STATE_TOPIC` | `__crabka_rebalancer_state` | Name override (rarely needed). |
-| `--state-topic-replication` | `CRABKA_REBALANCER_STATE_TOPIC_REPLICATION` | `3` | Replication factor at create time. |
-| `--state-load-timeout-secs` | `CRABKA_REBALANCER_STATE_LOAD_TIMEOUT_SECS` | `60` | Soft deadline: WARN if loading takes longer; `/readyz` stays `503` indefinitely until success. |
+| `--state-topic-name` | `KRABKA_REBALANCER_STATE_TOPIC` | `__krabka_rebalancer_state` | Name override (rarely needed). |
+| `--state-topic-replication` | `KRABKA_REBALANCER_STATE_TOPIC_REPLICATION` | `3` | Replication factor at create time. |
+| `--state-load-timeout-secs` | `KRABKA_REBALANCER_STATE_LOAD_TIMEOUT_SECS` | `60` | Soft deadline: WARN if loading takes longer; `/readyz` stays `503` indefinitely until success. |
 
 `--data-dir` stays — anomaly store still uses it. Doc comment
 clarifies it's anomaly-only post-43i.

@@ -27,7 +27,7 @@
 - Preserve one best-effort `LeaveGroup` per path; timeout, transport, and
   broker errors remain ignored.
 - Use `--consumer-leave-group-timeout-ms` and
-  `CRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS`.
+  `KRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS`.
 - Preserve CLI over environment over typed-default precedence.
 - Resolve demo configuration before telemetry initialization or external I/O.
 - Restrict the demo setting to the Consume role.
@@ -179,7 +179,7 @@ async fn startup_member_cleanup_bounds_stalled_leave_with_configured_timeout() {
 - [ ] **Step 4: Add failing coordinator-shutdown coverage**
 
 In `coordinator.rs`'s `retry_tests` module, import `MockBroker`,
-`crabka_protocol::Encode`, `api_versions_request`,
+`krabka_protocol::Encode`, `api_versions_request`,
 `api_versions_response::{ApiVersion, ApiVersionsResponse}`, and
 `leave_group_request`. Add this local response helper:
 
@@ -274,7 +274,7 @@ generic transport abstraction solely for the test.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer leave_group_timeout --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer leave_group_timeout --locked
 ```
 
 Expected: compilation fails because the type, constant, builder setter,
@@ -408,10 +408,10 @@ pub use consumer::{
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer leave_group_timeout --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer startup_member_cleanup --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-client-consumer --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer leave_group_timeout --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer startup_member_cleanup --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-client-consumer --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all -- --check
 git diff --check
 git diff -- Cargo.lock
@@ -447,7 +447,7 @@ git commit -m "feat(consumer): configure leave timeout"
 **Interfaces:**
 - Consumes: `ConsumerLeaveGroupTimeout`
 - Produces: `--consumer-leave-group-timeout-ms`
-- Produces: `CRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS`
+- Produces: `KRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS`
 - Produces: the validated duration passed to
   `Consumer::builder().leave_group_timeout(Duration)`
 
@@ -469,7 +469,7 @@ fn demo() -> Command {
 fn environment_is_used_and_cli_wins_before_external_io() {
     let environment = demo()
         .args(["--role", "produce"])
-        .env("CRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS", "37")
+        .env("KRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS", "37")
         .output()
         .expect("run demo");
     assert!(!environment.status.success());
@@ -484,7 +484,7 @@ fn environment_is_used_and_cli_wins_before_external_io() {
             "--consumer-leave-group-timeout-ms",
             "41",
         ])
-        .env("CRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS", "37")
+        .env("KRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS", "37")
         .output()
         .expect("run demo");
     assert!(!cli.status.success());
@@ -497,7 +497,7 @@ fn environment_is_used_and_cli_wins_before_external_io() {
 fn zero_fails_early_and_help_lists_the_flag_once() {
     let zero = demo()
         .args(["--role", "consume"])
-        .env("CRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS", "0")
+        .env("KRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS", "0")
         .output()
         .expect("run demo");
     assert!(!zero.status.success());
@@ -525,12 +525,12 @@ fn consumer_leave_timeout_is_configurable_only_on_the_consume_role() {
     let compose = docker_compose();
     let consume = compose_service_block(&compose, "demo-consume");
     assert2::assert!(consume.contains(
-        "CRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS: \"${CRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS:-5000}\""
+        "KRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS: \"${KRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS:-5000}\""
     ));
     for service in ["demo-produce", "demo-stream"] {
         assert2::assert!(
             !compose_service_block(&compose, service)
-                .contains("CRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS")
+                .contains("KRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS")
         );
     }
 }
@@ -554,7 +554,7 @@ Import `ConsumerLeaveGroupTimeout` and add to `Cli`:
 
 ```rust
 /// Classic Consumer best-effort leave-group timeout in milliseconds.
-#[arg(long, env = "CRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS")]
+#[arg(long, env = "KRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS")]
 consumer_leave_group_timeout_ms: Option<NonZeroU64>,
 ```
 
@@ -604,7 +604,7 @@ Do not pass it to Produce or Stream.
 Under `demo-consume.environment`, add:
 
 ```yaml
-CRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS: "${CRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS:-5000}"
+KRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS: "${KRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS:-5000}"
 ```
 
 - [ ] **Step 7: Run focused GREEN and demo gates**
@@ -692,8 +692,8 @@ leave-heartbeat deadline explicitly pending and separate.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer -p observability-demo-app --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-client-consumer -p observability-demo-app --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer -p observability-demo-app --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-client-consumer -p observability-demo-app --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all -- --check
 ./target/debug/observability-demo-app --help | grep -o -- '--consumer-leave-group-timeout-ms' | wc -l
 git diff --check

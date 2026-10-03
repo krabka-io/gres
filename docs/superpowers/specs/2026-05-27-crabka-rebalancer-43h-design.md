@@ -4,11 +4,11 @@
 **Status:** Slice design. Follows slices 43a–43g (rebalancer foundation
 through anomaly detector) and slice 44 (operator `KafkaRebalance` CRD).
 Part of the rebalancer roadmap
-(`docs/superpowers/specs/2026-05-17-crabka-rebalancer-roadmap-design.md`).
+(`docs/superpowers/specs/2026-05-17-krabka-rebalancer-roadmap-design.md`).
 
 ## Why this exists
 
-Today `crabka-rebalancer` takes `--metrics-scrape-targets
+Today `krabka-rebalancer` takes `--metrics-scrape-targets
 id:host:port,…` as a static CLI list. Scaling the broker pool or
 re-IPing a broker requires restarting the rebalancer. The roadmap
 explicitly flagged this as a deferred follow-up ("discover via
@@ -40,7 +40,7 @@ No restart needed.
   production deployment shape). Per-broker `id:port` overrides can
   be added later if a real need surfaces.
 - **Helm-chart wiring.** The chart at
-  `charts/crabka-rebalancer/` continues to expose
+  `charts/krabka-rebalancer/` continues to expose
   `--metrics-scrape-targets` for backward compatibility. A chart
   follow-up can switch the default to discovery (set the flag empty,
   expose `--metrics-port`) in a separate operator-roadmap slice.
@@ -112,8 +112,8 @@ GC's lazily: on each tick, prune entries whose `broker_id` isn't in
 /// Broker metrics-endpoint port for live discovery. Used when
 /// `--metrics-scrape-targets` is unset; targets are derived from the
 /// ingester's `Metadata` snapshot as `host:METRICS_PORT`. Defaults
-/// to crabka-broker's slice-39 default.
-#[arg(long, env = "CRABKA_REBALANCER_METRICS_PORT", default_value_t = 9404)]
+/// to krabka-broker's slice-39 default.
+#[arg(long, env = "KRABKA_REBALANCER_METRICS_PORT", default_value_t = 9404)]
 metrics_port: u16,
 ```
 

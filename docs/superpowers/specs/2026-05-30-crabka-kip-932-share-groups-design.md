@@ -86,7 +86,7 @@ own spec when reached.
 | **B** | Share coordinator (persister) | Durable per-share-partition state, independently testable. | `__share_group_state` topic, `ShareSnapshot`/`ShareUpdate` records, persister RPCs 83–87, snapshot/prune loop, `FindCoordinator SHARE(2)` |
 | **C** | Share-partition leader + ShareFetch/Acknowledge | End-to-end consume+ack on a single broker. | acquisition state machine (Available/Acquired/Acknowledged/Archived, locks, delivery counts, SPSO/SPEO), share sessions, `ShareFetch(78)`/`ShareAcknowledge(79)`, leader↔persister wiring |
 | **D** | Admin offsets surface | Operators inspect/reset queue head. | `DescribeShareGroupOffsets(90)`, `AlterShareGroupOffsets(91)`, `DeleteShareGroupOffsets(92)`, Initialize/Delete lifecycle |
-| **E** | Native share consumer client | `crabka-client-consumer` drives a share group. | client heartbeat loop, share-fetch+ack, poll API, implicit/explicit ack modes |
+| **E** | Native share consumer client | `krabka-client-consumer` drives a share group. | client heartbeat loop, share-fetch+ack, poll API, implicit/explicit ack modes |
 | **F** | GA parity extras | 4.3 fidelity. | `RENEW` ack type (KIP-1222), read_committed isolation, lag persistence/metrics, full config bounds |
 
 ---

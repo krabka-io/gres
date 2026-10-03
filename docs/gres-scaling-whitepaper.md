@@ -146,10 +146,10 @@ Every ceiling the architecture still has is named, measured in CI gates, and own
 
 The design documents behind this paper, for readers who want the decision-by-decision rationale and the alternatives considered:
 
-- [Chapter design: a pure-Rust Postgres compute engine on the Crabka substrate](superpowers/specs/2026-07-09-crabka-gres-chapter-design.md) — scaling model and ceilings, architecture overview.
-- [Substrate WAL design](superpowers/specs/2026-07-09-crabka-gres-g2-substrate-wal-design.md) — the committer seam, group commit, fencing.
-- [Checkpoints design](superpowers/specs/2026-07-09-crabka-gres-g3-checkpoints-design.md) — manifest-last snapshots, truncation, the recovery model.
-- [Multi-range tenants design](superpowers/specs/2026-07-09-crabka-gres-g7-multirange-design.md) — ranges, routing, the log-derived barrier.
-- [Sharded tables design](superpowers/specs/2026-07-09-crabka-gres-g8-sharded-tables-design.md) — rowid-interval sharding, scatter-gather, checkpoint-fork splits.
-- [Distributed maturity design](superpowers/specs/2026-07-09-crabka-gres-g9-distributed-maturity-design.md) — timestamp transactions, pushdown, hash sharding, indexes, the balancer, auto-sharding.
+- [Chapter design: a pure-Rust Postgres compute engine on the Crabka substrate](superpowers/specs/2026-07-09-krabka-gres-chapter-design.md) — scaling model and ceilings, architecture overview.
+- [Substrate WAL design](superpowers/specs/2026-07-09-krabka-gres-g2-substrate-wal-design.md) — the committer seam, group commit, fencing.
+- [Checkpoints design](superpowers/specs/2026-07-09-krabka-gres-g3-checkpoints-design.md) — manifest-last snapshots, truncation, the recovery model.
+- [Multi-range tenants design](superpowers/specs/2026-07-09-krabka-gres-g7-multirange-design.md) — ranges, routing, the log-derived barrier.
+- [Sharded tables design](superpowers/specs/2026-07-09-krabka-gres-g8-sharded-tables-design.md) — rowid-interval sharding, scatter-gather, checkpoint-fork splits.
+- [Distributed maturity design](superpowers/specs/2026-07-09-krabka-gres-g9-distributed-maturity-design.md) — timestamp transactions, pushdown, hash sharding, indexes, the balancer, auto-sharding.
 - [Early TSO activation design](superpowers/specs/2026-07-15-gres-early-tso-activation-design.md) — grant availability during host startup and failover.

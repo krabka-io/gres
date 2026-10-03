@@ -2,8 +2,8 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-use crabka_pgcatalog::RelationName;
-use crabka_pgkv::{Kv, WriteOp, key::push_key_part};
+use krabka_pgcatalog::RelationName;
+use krabka_pgkv::{Kv, WriteOp, key::push_key_part};
 
 use crate::error::ExecError;
 
@@ -375,14 +375,14 @@ fn take<'a>(cur: &mut &'a [u8], len: usize) -> Result<&'a [u8], ExecError> {
 }
 
 fn corrupt(message: &str) -> ExecError {
-    ExecError::Kv(crabka_pgkv::KvError::CorruptRow(message.into()))
+    ExecError::Kv(krabka_pgkv::KvError::CorruptRow(message.into()))
 }
 
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgcatalog::RelationName;
-    use crabka_pgkv::{Kv, MemKv, WriteOp, key::push_key_part};
+    use krabka_pgcatalog::RelationName;
+    use krabka_pgkv::{Kv, MemKv, WriteOp, key::push_key_part};
 
     use super::{
         CHILDREN_PREFIX, PARENTS_PREFIX, attach_ops, children_of, descendants, drop_metadata_ops,

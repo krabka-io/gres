@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use bytes::{Bytes, BytesMut};
-use crabka_protocol::{
+use krabka_protocol::{
     Decode, Encode,
     owned::{
         delete_share_group_state_request::DeleteShareGroupStateRequest,
@@ -83,7 +83,7 @@ async fn handle_request(
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_protocol::{
+    use krabka_protocol::{
         UnknownTaggedFields,
         owned::{
             delete_share_group_state_request::{DeleteStateData, PartitionData},

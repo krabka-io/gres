@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Subsystem design. The follow-on slice of [PG-4](2026-07-06-crabka-pg4-redo-pageservice-design.md) in the [Chapter C roadmap](2026-07-06-crabka-postgres-chapter-roadmap-design.md) — **the sole blocker on PG-5's boot gate**. Three concerns: (a) SLRU/CLOG materialization, (b) relation-lifecycle interpretation + exact `GetRelSize`, (c) the index-rmgr redo long tail.
+**Type:** Subsystem design. The follow-on slice of [PG-4](2026-07-06-krabka-pg4-redo-pageservice-design.md) in the [Chapter C roadmap](2026-07-06-krabka-postgres-chapter-roadmap-design.md) — **the sole blocker on PG-5's boot gate**. Three concerns: (a) SLRU/CLOG materialization, (b) relation-lifecycle interpretation + exact `GetRelSize`, (c) the index-rmgr redo long tail.
 
 ## Context — what "a booting Postgres" actually needs
 
@@ -37,7 +37,7 @@ KEY-SPACE EXTENSION (amends PG-3's contract — greenfield, no shims):
   — one total order; layer names/container entries encode the tagged key.
 
 INGEST (extends PG-5a's live ingest + PG-3's fixture ingest):
-  Sharded::Meta records now pass a LIGHT interpreter (in crabka-postgres-redo):
+  Sharded::Meta records now pass a LIGHT interpreter (in krabka-postgres-redo):
     XACT commit/abort  → touched clog page keys (xid + subxids may span pages)
                        + commit-carried rel drops → RelMeta lifecycle deltas
     CLOG zeropage/trunc, MULTIXACT zero/create → Slru keys

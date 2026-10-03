@@ -106,8 +106,8 @@ drove the HWM-clamp strengthening.
 
 ## Verification discipline
 
-- `stateright` wrap-real; watchdog-guarded. `cargo +nightly fmt -p crabka-broker`; `cargo clippy -p
-  crabka-broker --all-targets -- -D warnings` clean. Production change limited to `#[derive(Clone)]` (and any
+- `stateright` wrap-real; watchdog-guarded. `cargo +nightly fmt -p krabka-broker`; `cargo clippy -p
+  krabka-broker --all-targets -- -D warnings` clean. Production change limited to `#[derive(Clone)]` (and any
   small visibility widening) on the coordinator state structs; no logic change.
 
 ## Success criteria

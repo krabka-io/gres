@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Language cycle under the [application-SDK umbrella](2026-07-06-crabka-app-sdk-umbrella-design.md). Implements contract v1 in TypeScript; definition of done = the conformance suite green through the TS adapter.
+**Type:** Language cycle under the [application-SDK umbrella](2026-07-06-krabka-app-sdk-umbrella-design.md). Implements contract v1 in TypeScript; definition of done = the conformance suite green through the TS adapter.
 
 ## Context
 

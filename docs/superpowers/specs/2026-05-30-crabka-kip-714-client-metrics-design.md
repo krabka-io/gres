@@ -328,7 +328,7 @@ statically-registered `Family` model. Solution: a custom **`Collector`**
 existing `SharedRegistry`. It holds an `Arc<Mutex<Snapshot>>` of the most recent
 decoded data points (keyed by metric name + attribute set), with per-entry
 staleness expiry. The push handler updates the snapshot; the collector renders
-the live snapshot at scrape time as `crabka_client_*` series labeled with
+the live snapshot at scrape time as `krabka_client_*` series labeled with
 `client_instance_id` / `client_id` plus the OTLP datapoint attributes. OTLP
 Sum/Gauge → counter/gauge; Histogram → a summary-style rendering (buckets). This
 keeps `/metrics` a single endpoint.
@@ -338,7 +338,7 @@ keeps `/metrics` a single endpoint.
 `crates/broker/src/client_metrics/otlp_sink.rs`. Wrap the decoded
 `ResourceMetrics` into an `ExportMetricsServiceRequest`, inject
 `client_instance_id` and the connection principal as resource attributes, and
-send to the OTLP endpoint already used for traces (`CRABKA_OTLP_ENDPOINT`,
+send to the OTLP endpoint already used for traces (`KRABKA_OTLP_ENDPOINT`,
 reusing the configured gRPC vs HTTP/protobuf transport). Implemented as a
 bounded async queue + worker so a slow collector never blocks the request path;
 overflow is dropped + counted. No-op when OTLP is not configured.
@@ -382,7 +382,7 @@ receiver still validates/acks (matching "ingest succeeds, nothing re-exported").
 - Config round-trip: `IncrementalAlterConfigs` → `DescribeConfigs` (incl.
   defaults/synonyms + source byte 7) → `ListConfigResources` shows the name.
 - Full handshake: nil id → assigned id → matched subscription → push → scrape
-  `/metrics` shows `crabka_client_*` series.
+  `/metrics` shows `krabka_client_*` series.
 - Error paths over the wire: unknown sub id, too-large, throttle, bad codec.
 - Byte-exactness of both response shapes vs the schema, and a behavioral check
   against the latest cp-kafka image for `DescribeConfigs`/`ListConfigResources`

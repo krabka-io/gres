@@ -1,4 +1,4 @@
-//! `CodSpeed` microbenchmarks for `crabka-log`.
+//! `CodSpeed` microbenchmarks for `krabka-log`.
 //!
 //! These benchmarks cover the public `Log` surface: single and bulk appends,
 //! reads at various offsets, open and recover with many segments, truncate,
@@ -17,10 +17,10 @@ use std::{
 };
 
 use bytes::Bytes;
-use crabka_ids::{LeaderEpoch, Offset, ProducerId};
-use crabka_log::{Log, LogConfig, VerbatimBatch};
-use crabka_protocol::records::{Record, RecordBatch};
-use crabka_units::prelude::{ByteSize, gibibytes, kibibytes, mebibytes};
+use krabka_ids::{LeaderEpoch, Offset, ProducerId};
+use krabka_log::{Log, LogConfig, VerbatimBatch};
+use krabka_protocol::records::{Record, RecordBatch};
+use krabka_units::prelude::{ByteSize, gibibytes, kibibytes, mebibytes};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use tempfile::tempdir;
 

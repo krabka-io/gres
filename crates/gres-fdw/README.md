@@ -1,4 +1,4 @@
-# crabka-gres-fdw
+# krabka-gres-fdw
 
 Foreign-data wrapper that exposes Kafka topics as SQL foreign tables inside the
 Crabka Gres engine.

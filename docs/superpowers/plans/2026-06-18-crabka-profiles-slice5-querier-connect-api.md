@@ -1,23 +1,23 @@
-# crabka-profiles Slice 5 — Querier + Connect `querier.v1` API + legacy render + hot/cold merge
+# krabka-profiles Slice 5 — Querier + Connect `querier.v1` API + legacy render + hot/cold merge
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the **querier role** — a concrete `crabka-pprof::ProfileStore` impl (`CrabkaProfileStore`) that merges the *hot* WAL-tail (in-memory recent samples + their symbols, as a DataFusion `MemTable` + a `SymbolSource`) with the *cold* profile blocks (blockstore scan via `ProfileIndex` + the block `SymbolDb`), UNION-ed in `select()`; `label_names`/`label_values`/`profile_types`/`series` come from the `ProfileIndex` ∪ the hot tier. On top of that, the **Connect `querier.v1.QuerierService` API** (`connectrpc-axum` + `connectrpc-axum-build` codegen, reusing the grpc-gateway/rebalancer pattern; tenant via `X-Scope-OrgID`; `start`/`end` are **unix MILLIS**) that drives `FlameEngine`, **plus** the legacy HTTP `GET /pyroscope/render` + `/pyroscope/render-diff` flamebearer endpoints the Profiles Drilldown app uses. The `FlameGraph` proto encoding (groups-of-4) and the flamebearer JSON shape (`"single"`/`"double"`) are first-class fidelity tests — the byte-equality analog. Plus the `crabka-profiles --target querier` role binary.
+**Goal:** Build the **querier role** — a concrete `krabka-pprof::ProfileStore` impl (`CrabkaProfileStore`) that merges the *hot* WAL-tail (in-memory recent samples + their symbols, as a DataFusion `MemTable` + a `SymbolSource`) with the *cold* profile blocks (blockstore scan via `ProfileIndex` + the block `SymbolDb`), UNION-ed in `select()`; `label_names`/`label_values`/`profile_types`/`series` come from the `ProfileIndex` ∪ the hot tier. On top of that, the **Connect `querier.v1.QuerierService` API** (`connectrpc-axum` + `connectrpc-axum-build` codegen, reusing the grpc-gateway/rebalancer pattern; tenant via `X-Scope-OrgID`; `start`/`end` are **unix MILLIS**) that drives `FlameEngine`, **plus** the legacy HTTP `GET /pyroscope/render` + `/pyroscope/render-diff` flamebearer endpoints the Profiles Drilldown app uses. The `FlameGraph` proto encoding (groups-of-4) and the flamebearer JSON shape (`"single"`/`"double"`) are first-class fidelity tests — the byte-equality analog. Plus the `krabka-profiles --target querier` role binary.
 
 **Architecture:** Three layers, bottom-up.
 
 1. **`CrabkaProfileStore`** (`store.rs`): implements the `ProfileStore` trait. `select()` registers the cold profile-block samples (`BlockStore::scan_context`, restricted by the `ProfileIndex` label/profile-type prune + the time/block prefilter, **and `__profile_type__` = the requested type**) **and** the hot WAL-tail batches into one `SessionContext`, then builds a **UNION ALL view** split at the **block-builder frontier** (the committed block-builder offset surfaced as a per-tenant `min_ns` cut) so a sample sealed into a block is not also counted from the WAL-tail. The returned `ProfileScan.symbols` is a **`CompositeSymbolSource`** that routes `(partition, stacktrace_id)` to the correct block `SymbolDb` or the hot tier's `SymbolDb` by partition — raw ids never cross a block boundary (the load-bearing invariant). `label_names`/`label_values`/`profile_types`/`series` union the per-block `ProfileIndex` postings + profile-type index with the hot tier's live labels.
-2. **Connect + legacy HTTP API** (`http/`): a `connectrpc-axum` `QuerierService` builder + an axum `Router` for the legacy render endpoints, tenant via `X-Scope-OrgID`. The Connect methods (`ProfileTypes` — **also the datasource health probe, no separate `/ready`** — `LabelNames`, `LabelValues` whose response field is **`names`**, `Series`, `SelectMergeStacktraces`, `SelectSeries`, `SelectMergeSpanProfile`, `Diff`, `SelectMergeProfile`, `GetProfileStats`) project the `crabka-pprof` engine + `ProfileStore` results into the `querier.v1` proto. `/pyroscope/render` + `/pyroscope/render-diff` project the same engine results into the flamebearer `"single"`/`"double"` JSON. **The `FlameGraph` 4-ints-per-bar proto encoding and the flamebearer JSON shape are the byte-equality analog** and are tested with exact assertions.
-3. **Role binary** (`bin/crabka-profiles.rs`): `--target querier` wires the WAL-tail head (the hot tier) + blockstore + frontier into `CrabkaProfileStore`, builds the `FlameEngine`, and serves the Connect API + legacy render router on the configured listen address.
+2. **Connect + legacy HTTP API** (`http/`): a `connectrpc-axum` `QuerierService` builder + an axum `Router` for the legacy render endpoints, tenant via `X-Scope-OrgID`. The Connect methods (`ProfileTypes` — **also the datasource health probe, no separate `/ready`** — `LabelNames`, `LabelValues` whose response field is **`names`**, `Series`, `SelectMergeStacktraces`, `SelectSeries`, `SelectMergeSpanProfile`, `Diff`, `SelectMergeProfile`, `GetProfileStats`) project the `krabka-pprof` engine + `ProfileStore` results into the `querier.v1` proto. `/pyroscope/render` + `/pyroscope/render-diff` project the same engine results into the flamebearer `"single"`/`"double"` JSON. **The `FlameGraph` 4-ints-per-bar proto encoding and the flamebearer JSON shape are the byte-equality analog** and are tested with exact assertions.
+3. **Role binary** (`bin/krabka-profiles.rs`): `--target querier` wires the WAL-tail head (the hot tier) + blockstore + frontier into `CrabkaProfileStore`, builds the `FlameEngine`, and serves the Connect API + legacy render router on the configured listen address.
 
-**Tech Stack:** Rust 2024 · `datafusion` (git pin below) · `arrow` 59 · `tokio` · `axum` 0.8 (`http1`,`tokio`) · `connectrpc-axum` + `connectrpc-axum-build` (build.rs codegen) · `prost` 0.14 (the `querier.v1` proto) · `serde`/`serde_json` (flamebearer) · `async-trait` · `thiserror` · `tracing` · `crabka-pprof` (Slices 2–3) · `crabka-blockstore` · `crabka-profiles` Slice 4 (WAL-tail head handle + frontier). Tests: `assert2`, `tower::ServiceExt::oneshot` (in-process router), `object_store::memory::InMemory` (test blockstore), `crabka-broker` in-process test-support (`#[ignore]` e2e).
+**Tech Stack:** Rust 2024 · `datafusion` (git pin below) · `arrow` 59 · `tokio` · `axum` 0.8 (`http1`,`tokio`) · `connectrpc-axum` + `connectrpc-axum-build` (build.rs codegen) · `prost` 0.14 (the `querier.v1` proto) · `serde`/`serde_json` (flamebearer) · `async-trait` · `thiserror` · `tracing` · `krabka-pprof` (Slices 2–3) · `krabka-blockstore` · `krabka-profiles` Slice 4 (WAL-tail head handle + frontier). Tests: `assert2`, `tower::ServiceExt::oneshot` (in-process router), `object_store::memory::InMemory` (test blockstore), `krabka-broker` in-process test-support (`#[ignore]` e2e).
 
 ## Global Constraints
 
 - **No backwards compatibility.** Greenfield/undeployed. Change schemas/enums/wire formats/role flags freely; no shims, no migration code, no default-off gates. (Only Kafka wire compat matters — this slice consumes the WAL-tail handle and blockstore; it adds no new Kafka surface.) **Pyroscope Connect/legacy wire fidelity is the one external contract this slice owns.**
 - **`unsafe_code = "forbid"`** workspace-wide. No `unsafe`.
-- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean (`module_name_repetitions`/`missing_errors_doc`/`missing_panics_doc` allowed workspace-wide). Run `cargo clippy -p crabka-profiles --all-targets` before each commit.
-- **Formatting:** `cargo fmt -p crabka-profiles` before every commit (never `cargo +nightly fmt --all` — OS error 206 / path-too-long in deep worktrees on Windows; always `-p`).
+- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean (`module_name_repetitions`/`missing_errors_doc`/`missing_panics_doc` allowed workspace-wide). Run `cargo clippy -p krabka-profiles --all-targets` before each commit.
+- **Formatting:** `cargo fmt -p krabka-profiles` before every commit (never `cargo +nightly fmt --all` — OS error 206 / path-too-long in deep worktrees on Windows; always `-p`).
 - **Assertions:** `assert2::assert!` / `assert2::check!` in tests.
 - **Async tests:** `#[tokio::test]`. Dev-dep `tokio` features `["macros","rt-multi-thread"]`.
 - **Dependency pin (locked):** `datafusion = { git = "https://github.com/apache/datafusion", rev = "0838a4ddb902535b0e95a1c5a254be7e9c7fe9bf" }`, `arrow` 59. Same instance as blockstore/pprof — types cross the DataFusion boundary without conversion.
@@ -26,21 +26,21 @@
   - **`FlameGraph`** — `levels` is a list of `Level { values }`; each level's values are traversed in **groups of 4**: `[xOffsetDelta, total, self, nameIndex]` where `xOffsetDelta` is the delta from the *previous bar's end* (not absolute), `nameIndex` indexes `names[]`, and `names[0]` is the root (`"total"`). This 4-ints-per-bar encoding must match byte-for-byte. The diff form is **groups of 7**: `[xOffLeft, totalLeft, selfLeft, xOffRight, totalRight, selfRight, nameIndex]` + `left_ticks`/`right_ticks`.
   - **Flamebearer JSON** (legacy render) — `{ flamebearer: { names[], levels[][], numTicks, maxSelf }, metadata: { format: "single" (4/bar) | "double" (7/bar), spyName, sampleRate, units, name } }`.
   - **Errors** — `connectrpc-axum`'s `ConnectError` envelope for the Connect surface (`code`/`message`); a plain-text body + status code for the legacy render endpoints. The byte-exact assertions are the `FlameGraph` int sequence and the flamebearer JSON object.
-  - The `crabka-pprof` engine already owns the `FlameGraph`/`FlameGraphDiff` encoding (Slices 2–3). This slice's job is the **proto/JSON projection** of those structs — one `flamegraph_to_proto`/`flamegraph_to_flamebearer` helper each, behavior-pinned by tests.
+  - The `krabka-pprof` engine already owns the `FlameGraph`/`FlameGraphDiff` encoding (Slices 2–3). This slice's job is the **proto/JSON projection** of those structs — one `flamegraph_to_proto`/`flamegraph_to_flamebearer` helper each, behavior-pinned by tests.
 
 ---
 
 ## Dependency & slice roadmap
 
 **Depends on:**
-- **`crabka-pprof` (Slices 2–3)** — provides `ProfileStore` (trait), `ProfileScan`, `SymbolSource` (trait), `SymbolDb`, `ProfileType`, `FlameEngine<S>`, `EngineOpts`, `FlameGraph`/`Level`/`FlameGraphDiff`, `Tree`, `Series`/`SeriesAgg`, `Frame`, `PprofProfile`, `ProfileError`, and the Prometheus-matcher-string helper. This slice *consumes* that contract verbatim (see "Shared contract" below) and implements `ProfileStore` against it.
-- **`crabka-blockstore`** — the generalized `BlockStore` parameterized over `BlockIndex`; `ProfileIndex` (impl `BlockIndex`) with the label-series postings + profile-type index (`__profile_type__` → series) + per-block time-range + stacktrace-partition map; `BlockStore::scan_context`; `Labels`/`LabelMatcher`/`MatchOp`; the profile samples fact-table column constants (`COL_FINGERPRINT`, `COL_TIMESTAMP`, `PCOL_PROFILE_TYPE`, `PCOL_STACKTRACE_ID`, `PCOL_VALUE`, `PCOL_STACKTRACE_PARTITION`, `PCOL_TOTAL_VALUE`, `PCOL_SPAN_ID`, `PCOL_TRACE_ID`) + the samples schema accessor + the symbol-DB on-block artifact (Slice 1).
-- **`crabka-profiles` Slice 4 (ingest)** — `ProfileRecord` (the WAL record) + `PROFILES_WAL_TOPIC = "__crabka_profiles_wal"` + the **WAL-tail head handle** (the hot tier: recent samples exposed as DataFusion-ready Arrow batches matching the cold samples schema, plus a hot-tier `SymbolDb`, rebuildable from offsets) + the per-tenant **block-builder frontier** the block-builder commits (consumer-group committed offset / sealed-block `max_ns`).
+- **`krabka-pprof` (Slices 2–3)** — provides `ProfileStore` (trait), `ProfileScan`, `SymbolSource` (trait), `SymbolDb`, `ProfileType`, `FlameEngine<S>`, `EngineOpts`, `FlameGraph`/`Level`/`FlameGraphDiff`, `Tree`, `Series`/`SeriesAgg`, `Frame`, `PprofProfile`, `ProfileError`, and the Prometheus-matcher-string helper. This slice *consumes* that contract verbatim (see "Shared contract" below) and implements `ProfileStore` against it.
+- **`krabka-blockstore`** — the generalized `BlockStore` parameterized over `BlockIndex`; `ProfileIndex` (impl `BlockIndex`) with the label-series postings + profile-type index (`__profile_type__` → series) + per-block time-range + stacktrace-partition map; `BlockStore::scan_context`; `Labels`/`LabelMatcher`/`MatchOp`; the profile samples fact-table column constants (`COL_FINGERPRINT`, `COL_TIMESTAMP`, `PCOL_PROFILE_TYPE`, `PCOL_STACKTRACE_ID`, `PCOL_VALUE`, `PCOL_STACKTRACE_PARTITION`, `PCOL_TOTAL_VALUE`, `PCOL_SPAN_ID`, `PCOL_TRACE_ID`) + the samples schema accessor + the symbol-DB on-block artifact (Slice 1).
+- **`krabka-profiles` Slice 4 (ingest)** — `ProfileRecord` (the WAL record) + `PROFILES_WAL_TOPIC = "__krabka_profiles_wal"` + the **WAL-tail head handle** (the hot tier: recent samples exposed as DataFusion-ready Arrow batches matching the cold samples schema, plus a hot-tier `SymbolDb`, rebuildable from offsets) + the per-tenant **block-builder frontier** the block-builder commits (consumer-group committed offset / sealed-block `max_ns`).
 
 **The 8 profiles slices** (this plan = Slice 5; each gets its own plan):
 
 1. Blockstore `ProfileIndex` + profile samples schema + symbol-DB artifact.
-2. `crabka-pprof` core — pprof model + codec + `SymbolDb` + `ProfileType` + `ProfileStore` trait + engine result types + MERGE→flamegraph.
+2. `krabka-pprof` core — pprof model + codec + `SymbolDb` + `ProfileType` + `ProfileStore` trait + engine result types + MERGE→flamegraph.
 3. Engine completeness — `SelectSeries`, `Diff` (7-ints-per-bar), `max_nodes` truncation + synthetic `"other"`, `SelectMergeProfile` (→ pprof), `SelectMergeSpanProfile`, `SelectHeatmap`.
 4. Ingest service — distributor (`push.v1` + `/ingest` + OTLP) → `(tenant, series_fingerprint)`-partitioned WAL; block-builder → samples fact table + dedup symbol DB + `ProfileIndex`; WAL-tail head (hot tier).
 5. **Querier + Connect `querier.v1` API + legacy render + hot/cold merge** *(this plan)*.
@@ -52,7 +52,7 @@
 
 ## Shared contract (consume exactly — do not redefine)
 
-From `crabka-pprof` (Slices 2–3). This slice depends on these signatures unchanged:
+From `krabka-pprof` (Slices 2–3). This slice depends on these signatures unchanged:
 
 ```rust
 #[async_trait::async_trait]
@@ -108,10 +108,10 @@ pub struct Series { pub labels: Vec<(String, String)>, pub points: Vec<(i64, f64
 pub enum SeriesAgg { Sum, Average }
 pub enum ProfileError { Decode(String), Plan(String), Exec(String), Store(String),
     Unsupported(String), Symbolize(String) }
-// label_selector is a Prometheus matcher STRING parsed to Vec<LabelMatcher> by a crabka-pprof helper.
+// label_selector is a Prometheus matcher STRING parsed to Vec<LabelMatcher> by a krabka-pprof helper.
 ```
 
-> **Verify-before-use (do not fabricate):** the exact field names / enum discriminants of the result types and the `ProfileStore`/`FlameEngine`/`SymbolSource` method shapes are owned by Slices 2–3. Before Tasks 2–8, run `cargo doc -p crabka-pprof --no-deps` (or read `crates/pprof/src/lib.rs` re-exports) and reconcile. If a name differs (e.g. `start_ms` vs `start_time_ms`, the real `Frame`/`Level` internals, `FlameEngine::store()` presence, `SymbolSource::resolve` arg order), adapt the **mapping code and tests together** — keep the asserted *proto/flamebearer* exact (that is the contract this slice owns); the Rust field names bend to pprof. If `FlameEngine` does not expose `store()`, hold `Arc<CrabkaProfileStore>` in `AppState` alongside the engine and call `label_names`/`label_values`/`profile_types`/`series` directly (prefer this to a cross-crate edit).
+> **Verify-before-use (do not fabricate):** the exact field names / enum discriminants of the result types and the `ProfileStore`/`FlameEngine`/`SymbolSource` method shapes are owned by Slices 2–3. Before Tasks 2–8, run `cargo doc -p krabka-pprof --no-deps` (or read `crates/pprof/src/lib.rs` re-exports) and reconcile. If a name differs (e.g. `start_ms` vs `start_time_ms`, the real `Frame`/`Level` internals, `FlameEngine::store()` presence, `SymbolSource::resolve` arg order), adapt the **mapping code and tests together** — keep the asserted *proto/flamebearer* exact (that is the contract this slice owns); the Rust field names bend to pprof. If `FlameEngine` does not expose `store()`, hold `Arc<CrabkaProfileStore>` in `AppState` alongside the engine and call `label_names`/`label_values`/`profile_types`/`series` directly (prefer this to a cross-crate edit).
 
 **From Slice 4 (the WAL-tail head handle + frontier — verify against Slice 4 before Task 2/3):**
 
@@ -124,7 +124,7 @@ impl HeadHandle {
     pub async fn sample_batches(&self, tenant: &str, profile_type: &str,
         start_ms: i64, end_ms: i64) -> Result<Vec<arrow::record_batch::RecordBatch>, HeadError>;
     // The hot tier's symbol DB (one SymbolSource for all hot partitions).
-    pub fn symbols(&self, tenant: &str) -> std::sync::Arc<dyn crabka_pprof::SymbolSource>;
+    pub fn symbols(&self, tenant: &str) -> std::sync::Arc<dyn krabka_pprof::SymbolSource>;
     // Live labels/profile-types observed in the hot tier.
     pub async fn label_names(&self, tenant: &str) -> Vec<String>;
     pub async fn label_values(&self, tenant: &str, name: &str) -> Vec<String>;
@@ -156,7 +156,7 @@ impl HeadHandle {
 | `src/querier/connect/handlers.rs` | the Connect method handlers (`ProfileTypes`/`LabelNames`/`LabelValues`/`Series`/`SelectMergeStacktraces`/`SelectSeries`/`SelectMergeSpanProfile`/`Diff`/`SelectMergeProfile`/`GetProfileStats`) |
 | `src/querier/render/mod.rs` | legacy `GET /pyroscope/render` + `/pyroscope/render-diff` axum handlers |
 | `src/querier/render/flamebearer.rs` | `FlameGraph`→`"single"` + `FlameGraphDiff`→`"double"` flamebearer JSON |
-| `src/bin/crabka-profiles.rs` | role binary `--target querier` (extends the Slice-4 binary's `match target`) |
+| `src/bin/krabka-profiles.rs` | role binary `--target querier` (extends the Slice-4 binary's `match target`) |
 
 `store.rs` + `head.rs` are the only files touching DataFusion's query layer; `connect/encode.rs` + `render/flamebearer.rs` are the only files owning Pyroscope wire-shape serialization. This keeps the two churn-prone surfaces (DataFusion UNION + composite symbols, Pyroscope proto/JSON) each in one place.
 
@@ -172,15 +172,15 @@ impl HeadHandle {
 - Create: `crates/profiles/src/querier/mod.rs`
 
 **Interfaces:**
-- Produces: a compiling `crabka-profiles` with the `querier.v1` prost+Connect codegen, a `querier` module + `QuerierConfig`, and a smoke test.
+- Produces: a compiling `krabka-profiles` with the `querier.v1` prost+Connect codegen, a `querier` module + `QuerierConfig`, and a smoke test.
 
 - [ ] **Step 1: Add the Slice-5 dependencies to `crates/profiles/Cargo.toml`**
 
-Append to `[dependencies]` (Slice 4 already has `arrow`, `thiserror`, `serde`, `tokio`, `axum`, `crabka-blockstore`, `prost`, `connectrpc-axum`):
+Append to `[dependencies]` (Slice 4 already has `arrow`, `thiserror`, `serde`, `tokio`, `axum`, `krabka-blockstore`, `prost`, `connectrpc-axum`):
 
 ```toml
 datafusion = { workspace = true }
-crabka-pprof = { path = "../pprof" }
+krabka-pprof = { path = "../pprof" }
 connectrpc-axum = { workspace = true }
 serde_json = { workspace = true }
 async-trait = { workspace = true }
@@ -291,7 +291,7 @@ message GetProfileStatsResponse { bool data_ingested = 1; int64 oldest_profile_t
 ```
 
 > **Verify-notes (do before codegen):**
-> - **Field numbers + the `Profile` return type are the churn-prone surface.** Pin the Pyroscope `querier.proto` tag and copy the exact field numbers; `SelectMergeProfile` returns `google.v1.Profile` (the pprof proto from Slice 2) — if Slice 2 vendors that proto, `import` it here rather than the `Profile { bytes }` placeholder. The placeholder keeps codegen compiling; the by-the-wire shape is pinned in Task 6's handler test by decoding the bytes through `crabka_pprof::PprofProfile`.
+> - **Field numbers + the `Profile` return type are the churn-prone surface.** Pin the Pyroscope `querier.proto` tag and copy the exact field numbers; `SelectMergeProfile` returns `google.v1.Profile` (the pprof proto from Slice 2) — if Slice 2 vendors that proto, `import` it here rather than the `Profile { bytes }` placeholder. The placeholder keeps codegen compiling; the by-the-wire shape is pinned in Task 6's handler test by decoding the bytes through `krabka_pprof::PprofProfile`.
 > - `LabelValuesResponse.names` (NOT `values`) — this is a spec-called-out gotcha; keep it.
 > - `start`/`end` are **MILLIS** on every request — do not convert to ns at the proto edge; the engine takes ms.
 
@@ -410,14 +410,14 @@ mod tests {
 
 - [ ] **Step 6: Build + test**
 
-Run: `cargo test -p crabka-profiles --lib querier::tests`
+Run: `cargo test -p krabka-profiles --lib querier::tests`
 Expected: compiles (first build runs `protoc` + pulls pprof/blockstore/datafusion — slow, normal), both tests PASS.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/ Cargo.toml Cargo.lock
 git commit -m "feat(profiles): querier.v1 proto + codegen + querier module scaffold"
 ```
@@ -430,7 +430,7 @@ git commit -m "feat(profiles): querier.v1 proto + codegen + querier module scaff
 - Create: `crates/profiles/src/querier/head.rs`
 
 **Interfaces:**
-- Consumes: Slice 4's `HeadHandle` (`sample_batches`/`symbols`/`label_names`/`label_values`/`profile_types`/`series`/`stats`/`block_builder_frontier_ns`), blockstore profile samples schema accessor, `crabka-pprof::SymbolSource`.
+- Consumes: Slice 4's `HeadHandle` (`sample_batches`/`symbols`/`label_names`/`label_values`/`profile_types`/`series`/`stats`/`block_builder_frontier_ns`), blockstore profile samples schema accessor, `krabka-pprof::SymbolSource`.
 - Produces:
   - `struct HotTier { handle: HeadHandle }` with:
     - `new(handle: HeadHandle) -> Self`
@@ -489,7 +489,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --lib querier::head`
+Run: `cargo test -p krabka-profiles --lib querier::head`
 Expected: FAIL — `cannot find type HotTier` (then `unimplemented!` in the seed helper).
 
 - [ ] **Step 3: Implement `head.rs`**
@@ -502,7 +502,7 @@ Expected: FAIL — `cannot find type HotTier` (then `unimplemented!` in the seed
 use std::sync::Arc;
 
 use arrow::record_batch::RecordBatch;
-use crabka_pprof::SymbolSource;
+use krabka_pprof::SymbolSource;
 
 use crate::head::HeadHandle; // Slice 4 (verify path)
 
@@ -582,14 +582,14 @@ impl HotTier {
 
 - [ ] **Step 4: Make the test pass**
 
-Wire `seeded()` to Slice 4's head seed path (or the `HeadSource` fake). Run `cargo test -p crabka-profiles --lib querier::head`.
+Wire `seeded()` to Slice 4's head seed path (or the `HeadSource` fake). Run `cargo test -p krabka-profiles --lib querier::head`.
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): HotTier — read-side wrapper over the WAL-tail head handle"
 ```
@@ -602,7 +602,7 @@ git commit -m "feat(profiles): HotTier — read-side wrapper over the WAL-tail h
 - Create: `crates/profiles/src/querier/store.rs`
 
 **Interfaces:**
-- Consumes: `crabka-pprof::{ProfileStore, ProfileScan, SymbolSource, ProfileError}`, `crabka-blockstore::{BlockStore, ProfileIndex, LabelMatcher, MatchOp}` + the `PCOL_PROFILE_TYPE` constant + the samples schema accessor, `HotTier`.
+- Consumes: `krabka-pprof::{ProfileStore, ProfileScan, SymbolSource, ProfileError}`, `krabka-blockstore::{BlockStore, ProfileIndex, LabelMatcher, MatchOp}` + the `PCOL_PROFILE_TYPE` constant + the samples schema accessor, `HotTier`.
 - Produces:
   - `struct CrabkaProfileStore { blockstore: Arc<BlockStore>, hot: Arc<HotTier>, samples_schema: SchemaRef }`
   - `CrabkaProfileStore::new(blockstore, hot) -> Self`
@@ -621,8 +621,8 @@ mod tests {
     use std::sync::Arc;
 
     use assert2::assert;
-    use crabka_blockstore::LabelMatcher;
-    use crabka_pprof::ProfileStore;
+    use krabka_blockstore::LabelMatcher;
+    use krabka_pprof::ProfileStore;
 
     use super::*;
 
@@ -631,7 +631,7 @@ mod tests {
     // Seed one COLD sample (cpu @ ts=1000ms, service=api, value=10) into a
     // BlockStore over InMemory, indexed via ProfileIndex + a 1-node SymbolDb.
     // Mirror Slice-1 block-build + index calls.
-    async fn blockstore_with_one_cold_sample() -> Arc<crabka_blockstore::BlockStore> {
+    async fn blockstore_with_one_cold_sample() -> Arc<krabka_blockstore::BlockStore> {
         unimplemented!("seed one cold cpu sample @ts=1000ms, service=api, value=10")
     }
 
@@ -642,7 +642,7 @@ mod tests {
     }
 
     fn svc_api() -> Vec<LabelMatcher> {
-        vec![LabelMatcher::new("service_name", crabka_blockstore::MatchOp::Eq, "api")]
+        vec![LabelMatcher::new("service_name", krabka_blockstore::MatchOp::Eq, "api")]
     }
 
     #[tokio::test]
@@ -674,7 +674,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --lib querier::store`
+Run: `cargo test -p krabka-profiles --lib querier::store`
 Expected: FAIL — `cannot find type CrabkaProfileStore` (then `unimplemented!` in seeds).
 
 - [ ] **Step 3: Implement `store.rs` (select + helpers; other trait methods stubbed)**
@@ -691,13 +691,13 @@ use std::sync::Arc;
 
 use arrow::datatypes::SchemaRef;
 use async_trait::async_trait;
-use crabka_blockstore::{BlockStore, LabelMatcher, MatchOp};
-use crabka_pprof::{ProfileError, ProfileScan, ProfileStore, SymbolSource};
+use krabka_blockstore::{BlockStore, LabelMatcher, MatchOp};
+use krabka_pprof::{ProfileError, ProfileScan, ProfileStore, SymbolSource};
 use datafusion::catalog::MemTable;
 use datafusion::prelude::SessionContext;
 
 use crate::querier::head::HotTier;
-use crabka_blockstore::PCOL_PROFILE_TYPE; // Slice 1 constant (verify name/path)
+use krabka_blockstore::PCOL_PROFILE_TYPE; // Slice 1 constant (verify name/path)
 use crate::profile_samples_schema; // Slice 1 accessor (verify name/path)
 
 /// The querier's `ProfileStore`.
@@ -852,14 +852,14 @@ pub(crate) async fn register_union(
 
 - [ ] **Step 4: Make the test pass**
 
-Wire the two seed helpers (mirror Slice-1 block-build + `ProfileIndex` + `SymbolDb` calls for cold; Slice-4 head seed for hot). Run `cargo test -p crabka-profiles --lib querier::store::tests::select_unions_cold_and_hot_without_double_count`.
+Wire the two seed helpers (mirror Slice-1 block-build + `ProfileIndex` + `SymbolDb` calls for cold; Slice-4 head seed for hot). Run `cargo test -p krabka-profiles --lib querier::store::tests::select_unions_cold_and_hot_without_double_count`.
 Expected: PASS (`c == 2`, not 3).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): CrabkaProfileStore::select — cold+hot UNION with frontier split"
 ```
@@ -872,7 +872,7 @@ git commit -m "feat(profiles): CrabkaProfileStore::select — cold+hot UNION wit
 - Modify: `crates/profiles/src/querier/store.rs`
 
 **Interfaces:**
-- Consumes: `crabka-pprof::{SymbolSource, Frame}`, `crabka-blockstore::BlockStore` (per-block `SymbolDb` accessor), `HotTier::symbols`.
+- Consumes: `krabka-pprof::{SymbolSource, Frame}`, `krabka-blockstore::BlockStore` (per-block `SymbolDb` accessor), `HotTier::symbols`.
 - Produces:
   - `struct CompositeSymbolSource { sources: Vec<Arc<dyn SymbolSource>>, /* partition → source-index map */ }` implementing `SymbolSource`.
   - the upgraded `select()` body returning `Arc::new(CompositeSymbolSource::...)` as `ProfileScan.symbols`.
@@ -906,7 +906,7 @@ Add to `store.rs` tests:
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --lib querier::store::tests::composite`
+Run: `cargo test -p krabka-profiles --lib querier::store::tests::composite`
 Expected: FAIL — `select` returns the hot symbols only; partitions 1/2 resolve empty.
 
 - [ ] **Step 3: Implement `CompositeSymbolSource` + upgrade `select`**
@@ -1004,7 +1004,7 @@ impl CrabkaProfileStore {
 ```
 
 > **Verify-notes:**
-> - `BlockStore::candidate_blocks(tenant, &[LabelMatcher], start_ms, end_ms) -> Result<Vec<BlockKey>>`, `BlockStore::load_symbol_db(tenant, &BlockKey) -> Result<Arc<dyn SymbolSource>>`, `BlockStore::block_partitions(tenant, &BlockKey) -> Result<Vec<u64>>` are the **expected** Slice-1 surfaces (the symbol-DB artifact loader + the stacktrace-partition map). Confirm the names; if `scan_context` does not expose the surviving block list, add a `candidate_blocks` accessor to `crabka-blockstore` in this task (it is the same prune `scan_context` runs internally) — flag it as a small blockstore addition. The `SymbolDb` must impl `SymbolSource` (Slice 2 says it does) and `load_symbol_db` returns it behind the trait.
+> - `BlockStore::candidate_blocks(tenant, &[LabelMatcher], start_ms, end_ms) -> Result<Vec<BlockKey>>`, `BlockStore::load_symbol_db(tenant, &BlockKey) -> Result<Arc<dyn SymbolSource>>`, `BlockStore::block_partitions(tenant, &BlockKey) -> Result<Vec<u64>>` are the **expected** Slice-1 surfaces (the symbol-DB artifact loader + the stacktrace-partition map). Confirm the names; if `scan_context` does not expose the surviving block list, add a `candidate_blocks` accessor to `krabka-blockstore` in this task (it is the same prune `scan_context` runs internally) — flag it as a small blockstore addition. The `SymbolDb` must impl `SymbolSource` (Slice 2 says it does) and `load_symbol_db` returns it behind the trait.
 > - **Disjoint partition namespaces** — if Slice 4's hot partitions can collide with a block's partition ids, change `by_partition` to key on `(source_tag, partition)` and thread a `source_tag` through the samples table so the engine knows which source a row's partition belongs to. Confirm Slice 4's hot-partition allocation (the Task-2 verify-note). The headline test seeds disjoint partitions (1/2/100), so it pins routing either way.
 > - `hot_partitions` — surface the hot tier's owned partitions from `HotTier` (add a method) or derive from the distinct `PCOL_STACKTRACE_PARTITION` in the hot batches. Flag if Slice 4 must expose it.
 
@@ -1020,14 +1020,14 @@ In `select`, replace `let symbols: Arc<dyn SymbolSource> = self.hot.symbols(tena
 
 - [ ] **Step 5: Make the test pass**
 
-Wire `blockstore_two_blocks_distinct_partitions` + `hot_with_partition_100`. Run `cargo test -p crabka-profiles --lib querier::store::tests::composite`.
+Wire `blockstore_two_blocks_distinct_partitions` + `hot_with_partition_100`. Run `cargo test -p krabka-profiles --lib querier::store::tests::composite`.
 Expected: PASS (each partition resolves against its own DB; unknown → empty).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): CompositeSymbolSource — per-partition routing (raw ids never cross a block)"
 ```
@@ -1040,7 +1040,7 @@ git commit -m "feat(profiles): CompositeSymbolSource — per-partition routing (
 - Modify: `crates/profiles/src/querier/store.rs`
 
 **Interfaces:**
-- Consumes: `crabka-blockstore::ProfileIndex` (per-block label postings + profile-type index), `HotTier` discovery methods, `crabka-pprof::ProfileError`.
+- Consumes: `krabka-blockstore::ProfileIndex` (per-block label postings + profile-type index), `HotTier` discovery methods, `krabka-pprof::ProfileError`.
 - Produces: real `label_names`/`label_values`/`profile_types`/`series` bodies on `CrabkaProfileStore`.
 
 Each unions the per-block `ProfileIndex` (filtered by `matchers`/time where applicable) with the hot tier's live discovery, deduped + sorted. `profile_types` returns the distinct `__profile_type__` 5-part strings; `series` returns each matching series' label set restricted to `label_names`.
@@ -1088,7 +1088,7 @@ Add to `store.rs` tests:
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --lib querier::store::tests::profile_types`
+Run: `cargo test -p krabka-profiles --lib querier::store::tests::profile_types`
 Expected: FAIL — `unimplemented!("profile_types — Task 5")`.
 
 - [ ] **Step 3: Implement the four discovery methods**
@@ -1164,14 +1164,14 @@ Replace the Task-3 stubs:
 
 - [ ] **Step 4: Make the tests pass**
 
-Wire the discovery seed helpers. Run `cargo test -p crabka-profiles --lib querier::store`.
+Wire the discovery seed helpers. Run `cargo test -p krabka-profiles --lib querier::store`.
 Expected: PASS (select + composite + discovery tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): CrabkaProfileStore discovery — ProfileIndex ∪ hot labels/types/series"
 ```
@@ -1186,7 +1186,7 @@ git commit -m "feat(profiles): CrabkaProfileStore discovery — ProfileIndex ∪
 - Create: `crates/profiles/src/querier/connect/handlers.rs`
 
 **Interfaces:**
-- Consumes: `crabka-pprof::{FlameEngine, FlameGraph, Level, FlameGraphDiff, Series, SeriesAgg, ProfileType, ProfileError}`, the `pb_querier` codegen, `connectrpc-axum::message::{ConnectRequest, ConnectResponse, ConnectError}`.
+- Consumes: `krabka-pprof::{FlameEngine, FlameGraph, Level, FlameGraphDiff, Series, SeriesAgg, ProfileType, ProfileError}`, the `pb_querier` codegen, `connectrpc-axum::message::{ConnectRequest, ConnectResponse, ConnectError}`.
 - Produces:
   - `encode.rs`: `fn flamegraph_to_proto(&FlameGraph) -> pb_querier::FlameGraph` (groups-of-4 preserved), `fn flamegraph_diff_to_proto(&FlameGraphDiff) -> pb_querier::FlameGraphDiff` (groups-of-7), `fn series_to_proto(&[Series]) -> Vec<pb_querier::TimeSeries>`, `fn profile_type_to_proto(&str) -> pb_querier::ProfileType`, `fn err_to_connect(ProfileError) -> ConnectError`.
   - `connect/mod.rs`: `AppState { engine: Arc<FlameEngine<CrabkaProfileStore>>, store: Arc<CrabkaProfileStore>, cfg: QuerierConfig }`, `tenant_of(&HeaderMap) -> String`, `querier_service_router(state) -> Router`.
@@ -1200,7 +1200,7 @@ Create `crates/profiles/src/querier/connect/encode.rs` with tests first:
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pprof::{FlameGraph, FlameGraphDiff, Level};
+    use krabka_pprof::{FlameGraph, FlameGraphDiff, Level};
 
     use super::*;
 
@@ -1254,7 +1254,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --lib querier::connect::encode`
+Run: `cargo test -p krabka-profiles --lib querier::connect::encode`
 Expected: FAIL — `cannot find function flamegraph_to_proto`.
 
 - [ ] **Step 3: Implement `encode.rs`**
@@ -1266,11 +1266,11 @@ Expected: FAIL — `cannot find function flamegraph_to_proto`.
 //! correct int sequence (Slices 2–3); this is a faithful struct→proto copy.
 
 use connectrpc_axum::message::ConnectError;
-use crabka_pprof::{FlameGraph, FlameGraphDiff, ProfileError, ProfileType, Series};
+use krabka_pprof::{FlameGraph, FlameGraphDiff, ProfileError, ProfileType, Series};
 
 use crate::pb_querier;
 
-/// `crabka_pprof::FlameGraph` → `querier.v1.FlameGraph`. The level `values`
+/// `krabka_pprof::FlameGraph` → `querier.v1.FlameGraph`. The level `values`
 /// (groups of 4: `[xOffsetDelta, total, self, nameIndex]`) are carried VERBATIM.
 #[must_use]
 pub fn flamegraph_to_proto(fg: &FlameGraph) -> pb_querier::FlameGraph {
@@ -1286,7 +1286,7 @@ pub fn flamegraph_to_proto(fg: &FlameGraph) -> pb_querier::FlameGraph {
     }
 }
 
-/// `crabka_pprof::FlameGraphDiff` → `querier.v1.FlameGraphDiff` (groups of 7).
+/// `krabka_pprof::FlameGraphDiff` → `querier.v1.FlameGraphDiff` (groups of 7).
 #[must_use]
 pub fn flamegraph_diff_to_proto(d: &FlameGraphDiff) -> pb_querier::FlameGraphDiff {
     pb_querier::FlameGraphDiff {
@@ -1380,7 +1380,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::http::HeaderMap;
-use crabka_pprof::FlameEngine;
+use krabka_pprof::FlameEngine;
 
 use crate::querier::store::CrabkaProfileStore;
 use crate::querier::QuerierConfig;
@@ -1436,7 +1436,7 @@ pub fn querier_service_router(state: AppState) -> Router {
 use axum::Extension;
 use axum::http::HeaderMap;
 use connectrpc_axum::message::{ConnectError, ConnectRequest, ConnectResponse};
-use crabka_pprof::SeriesAgg;
+use krabka_pprof::SeriesAgg;
 
 use crate::pb_querier;
 use crate::querier::connect::encode::{
@@ -1560,7 +1560,7 @@ pub async fn get_profile_stats(
 
 // label_names / label_values / series / select_merge_span_profile follow the same
 // shape: tenant_of → parse matchers → store/engine call → proto. label_selector
-// strings are parsed by crabka-pprof's matcher helper inside the engine; the
+// strings are parsed by krabka-pprof's matcher helper inside the engine; the
 // discovery RPCs take `matchers: repeated string` (Prometheus matcher strings) —
 // parse each via the same helper before calling store.{label_names,label_values,series}.
 ```
@@ -1568,21 +1568,21 @@ pub async fn get_profile_stats(
 > **Verify-notes:**
 > - The generated request field names (`profile_typeID` → `profile_type_id`, `max_nodes` `optional` → `Option<i64>`) come from prost — confirm against `querier.v1.rs` and fix the `.field` accesses. The `ConnectRequest`/`ConnectResponse` tuple-struct `.0` access matches the gateway (`let msg = req.0;`).
 > - `select_merge_span_profile` reuses `select_merge_stacktraces`'s shape with the `span_selector` (the engine's `SelectMergeSpanProfile` path, Slice 3); wire it the same way.
-> - `LabelNames`/`LabelValues`/`Series` take `repeated string matchers` — parse each matcher string to a `LabelMatcher` via `crabka_pprof`'s Prometheus-matcher helper before calling `store.label_names`/`label_values`/`series`. `LabelValuesResponse.names` (not `values`).
+> - `LabelNames`/`LabelValues`/`Series` take `repeated string matchers` — parse each matcher string to a `LabelMatcher` via `krabka_pprof`'s Prometheus-matcher helper before calling `store.label_names`/`label_values`/`series`. `LabelValuesResponse.names` (not `values`).
 > - `CrabkaProfileStore::profile_stats(tenant) -> (bool, i64, i64)` — add a thin method delegating to `HotTier::stats` (+ cold block min/max ts if the `ProfileIndex` exposes a per-block time range); flag the cold half if Slice 1 lacks it.
 
 - [ ] **Step 6: Run to verify encode tests pass + add a handler proto-decode test**
 
-Run: `cargo test -p crabka-profiles --lib querier::connect::encode`
+Run: `cargo test -p krabka-profiles --lib querier::connect::encode`
 Expected: PASS (groups-of-4, groups-of-7, profile-type split).
 
-Add an in-process Connect handler test (in `connect/mod.rs` tests) that builds an `AppState` over a store seeded with one cpu series, POSTs `application/proto` to `/querier.v1.QuerierService/SelectMergeStacktraces`, and decodes the `FlameGraph` proto body — asserting `names[0] == "total"` and `levels[0].values.len() % 4 == 0`. Use `tower::ServiceExt::oneshot` + `prost::Message::encode/decode` (mirror the gateway's `serve` test). Run: `cargo test -p crabka-profiles --lib querier::connect`.
+Add an in-process Connect handler test (in `connect/mod.rs` tests) that builds an `AppState` over a store seeded with one cpu series, POSTs `application/proto` to `/querier.v1.QuerierService/SelectMergeStacktraces`, and decodes the `FlameGraph` proto body — asserting `names[0] == "total"` and `levels[0].values.len() % 4 == 0`. Use `tower::ServiceExt::oneshot` + `prost::Message::encode/decode` (mirror the gateway's `serve` test). Run: `cargo test -p krabka-profiles --lib querier::connect`.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): querier.v1 Connect handlers + FlameGraph proto projection (groups-of-4)"
 ```
@@ -1596,7 +1596,7 @@ git commit -m "feat(profiles): querier.v1 Connect handlers + FlameGraph proto pr
 - Create: `crates/profiles/src/querier/render/flamebearer.rs`
 
 **Interfaces:**
-- Consumes: `AppState`, `tenant_of`, `crabka-pprof::{FlameEngine, FlameGraph, FlameGraphDiff}`.
+- Consumes: `AppState`, `tenant_of`, `krabka-pprof::{FlameEngine, FlameGraph, FlameGraphDiff}`.
 - Produces:
   - `flamebearer.rs`: `fn flamegraph_to_flamebearer(&FlameGraph, meta: &RenderMeta) -> Value` (`"single"`, 4/bar), `fn flamegraph_diff_to_flamebearer(&FlameGraphDiff, meta: &RenderMeta) -> Value` (`"double"`, 7/bar), `struct RenderMeta { spy_name, sample_rate, units, name }`.
   - `render/mod.rs`: `render_router(state) -> Router` + the two axum handlers + `parse_render_query(&str) -> (profile_type, selector)`.
@@ -1609,7 +1609,7 @@ Create `crates/profiles/src/querier/render/flamebearer.rs` with tests first:
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pprof::{FlameGraph, FlameGraphDiff, Level};
+    use krabka_pprof::{FlameGraph, FlameGraphDiff, Level};
     use serde_json::json;
 
     use super::*;
@@ -1663,7 +1663,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --lib querier::render::flamebearer`
+Run: `cargo test -p krabka-profiles --lib querier::render::flamebearer`
 Expected: FAIL — `cannot find function flamegraph_to_flamebearer`.
 
 - [ ] **Step 3: Implement `flamebearer.rs`**
@@ -1675,7 +1675,7 @@ Expected: FAIL — `cannot find function flamegraph_to_flamebearer`.
 //! - single → `{ flamebearer:{names,levels[[4/bar]],numTicks,maxSelf}, metadata:{format:"single",…} }`
 //! - double → 7-ints-per-bar levels + `format:"double"`.
 
-use crabka_pprof::{FlameGraph, FlameGraphDiff};
+use krabka_pprof::{FlameGraph, FlameGraphDiff};
 use serde_json::{json, Value};
 
 /// Flamebearer `metadata` block (carried from the render query / sample-type config).
@@ -1857,25 +1857,25 @@ fn diff_side(params: &HashMap<String, String>, side: &str) -> Option<(String, St
 
 - [ ] **Step 5: Run + add an in-process render test**
 
-Run: `cargo test -p crabka-profiles --lib querier::render`
+Run: `cargo test -p krabka-profiles --lib querier::render`
 Expected: PASS (flamebearer shape tests). Add an in-process `oneshot` test (in `render/mod.rs` tests) seeding a store with one cpu series, GET `/pyroscope/render?query=process_cpu:...{}&from=0&until=10&format=json`, asserting `body["metadata"]["format"] == "single"` and `body["flamebearer"]["names"][0] == "total"`.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): legacy /pyroscope/render + render-diff flamebearer endpoints"
 ```
 
 ---
 
-### Task 8: Role binary `crabka-profiles --target querier` + merged router + end-to-end `#[ignore]` + whole-crate gate
+### Task 8: Role binary `krabka-profiles --target querier` + merged router + end-to-end `#[ignore]` + whole-crate gate
 
 **Files:**
 - Modify: `crates/profiles/src/querier/connect/mod.rs` (add `querier_router` merging Connect + render)
-- Modify: `crates/profiles/src/bin/crabka-profiles.rs`
+- Modify: `crates/profiles/src/bin/krabka-profiles.rs`
 - Create: `crates/profiles/tests/querier_e2e.rs`
 
 **Interfaces:**
@@ -1899,7 +1899,7 @@ pub fn querier_router(state: AppState) -> Router {
 
 - [ ] **Step 2: Add the `querier` arm to the role binary**
 
-Extend the Slice-4 `match target` in `crates/profiles/src/bin/crabka-profiles.rs`:
+Extend the Slice-4 `match target` in `crates/profiles/src/bin/krabka-profiles.rs`:
 
 ```rust
 // In the existing `match target.as_str()`:
@@ -1911,11 +1911,11 @@ Add the run fn:
 ```rust
 use std::sync::Arc;
 
-use crabka_pprof::{EngineOpts, FlameEngine};
-use crabka_profiles::querier::connect::{querier_router, AppState};
-use crabka_profiles::querier::head::HotTier;
-use crabka_profiles::querier::store::CrabkaProfileStore;
-use crabka_profiles::querier::QuerierConfig;
+use krabka_pprof::{EngineOpts, FlameEngine};
+use krabka_profiles::querier::connect::{querier_router, AppState};
+use krabka_profiles::querier::head::HotTier;
+use krabka_profiles::querier::store::CrabkaProfileStore;
+use krabka_profiles::querier::QuerierConfig;
 
 fn querier_config_from_env() -> QuerierConfig {
     QuerierConfig::default() // override listen_addr from env if set (flagged)
@@ -1923,7 +1923,7 @@ fn querier_config_from_env() -> QuerierConfig {
 
 async fn run_querier(config: QuerierConfig) -> Result<(), Box<dyn std::error::Error>> {
     // Cold blockstore — built from object-store config (env). VERIFY against
-    // crabka_blockstore::BlockStore::new(store, base_url) + ProfileIndex load.
+    // krabka_blockstore::BlockStore::new(store, base_url) + ProfileIndex load.
     let blockstore = Arc::new(build_blockstore_from_env().await?);
 
     // Hot tier — the WAL-tail head handle. In a split deployment the querier
@@ -1943,12 +1943,12 @@ async fn run_querier(config: QuerierConfig) -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
-async fn build_blockstore_from_env() -> Result<crabka_blockstore::BlockStore, Box<dyn std::error::Error>> {
+async fn build_blockstore_from_env() -> Result<krabka_blockstore::BlockStore, Box<dyn std::error::Error>> {
     todo!("construct BlockStore + load ProfileIndex from env-configured object store")
 }
 
 async fn acquire_head_handle()
--> Result<crabka_profiles::head::HeadHandle, Box<dyn std::error::Error>> {
+-> Result<krabka_profiles::head::HeadHandle, Box<dyn std::error::Error>> {
     todo!("connect to / share the Slice-4 WAL-tail head and return its query handle")
 }
 ```
@@ -1957,7 +1957,7 @@ async fn acquire_head_handle()
 
 - [ ] **Step 3: Write the `#[ignore]` end-to-end test**
 
-Create `crates/profiles/tests/querier_e2e.rs`. Boots an in-process broker (`crabka-broker` test-support), produces a handful of `ProfileRecord`s to the WAL topic, starts a Slice-4 head consumer, waits for it to catch up, then drives the router and asserts `SelectMergeStacktraces` returns a flamegraph for the produced series and `/pyroscope/render` returns a `"single"` flamebearer. Gated `#[ignore]` because it needs a broker.
+Create `crates/profiles/tests/querier_e2e.rs`. Boots an in-process broker (`krabka-broker` test-support), produces a handful of `ProfileRecord`s to the WAL topic, starts a Slice-4 head consumer, waits for it to catch up, then drives the router and asserts `SelectMergeStacktraces` returns a flamegraph for the produced series and `/pyroscope/render` returns a `"single"` flamebearer. Gated `#[ignore]` because it needs a broker.
 
 ```rust
 //! End-to-end: produce ProfileRecords → head fills → querier.v1 SelectMergeStacktraces
@@ -1973,8 +1973,8 @@ use assert2::assert;
 #[tokio::test]
 #[ignore = "requires an in-process broker + Slice 4 ProfileRecord produce + head"]
 async fn produce_then_merge_and_render_round_trip() {
-    // 1. start in-process broker (crabka-broker test-support::start()).
-    // 2. create __crabka_profiles_wal; produce ProfileRecords for a cpu series
+    // 1. start in-process broker (krabka-broker test-support::start()).
+    // 2. create __krabka_profiles_wal; produce ProfileRecords for a cpu series
     //    {service_name=api}, profile_type process_cpu:..., keyed by hash(tenant,fp).
     // 3. start the Slice-4 head consumer over the broker; wait until it has the
     //    series (bounded poll).
@@ -1993,17 +1993,17 @@ async fn produce_then_merge_and_render_round_trip() {
 
 - [ ] **Step 4: Build the binary + run non-ignored tests + whole-crate gate**
 
-Run: `cargo build -p crabka-profiles --bin crabka-profiles`
+Run: `cargo build -p krabka-profiles --bin krabka-profiles`
 Expected: compiles (the two `todo!()` wiring fns compile; `--target querier` would panic at runtime until Slice 4 wiring — acceptable for this slice).
-Run: `cargo test -p crabka-profiles && cargo clippy -p crabka-profiles --all-targets && cargo fmt -p crabka-profiles --check`
+Run: `cargo test -p krabka-profiles && cargo clippy -p krabka-profiles --all-targets && cargo fmt -p krabka-profiles --check`
 Expected: all non-`#[ignore]` tests PASS, no warnings, formatting clean.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
+cargo fmt -p krabka-profiles
 git add crates/profiles/
-git commit -m "feat(profiles): crabka-profiles --target querier binary + merged router + e2e skeleton"
+git commit -m "feat(profiles): krabka-profiles --target querier binary + merged router + e2e skeleton"
 ```
 
 ---
@@ -2022,7 +2022,7 @@ git commit -m "feat(profiles): crabka-profiles --target querier binary + merged 
 - **Real-broker produce → head → merge/render** via in-process broker, `#[ignore]`d → Task 8 e2e.
 
 **Placeholder scan / flagged deviations (honest):**
-- **`querier.v1` proto field numbers + the `Profile` (google.v1.Profile) return type** are flagged verify-against-pinned-Pyroscope-tag — the proto compiles with a `Profile { bytes }` placeholder, and the by-wire pprof shape is pinned by decoding through `crabka_pprof::PprofProfile` in the handler test; field numbers are NOT fabricated (copy from the pinned tag).
+- **`querier.v1` proto field numbers + the `Profile` (google.v1.Profile) return type** are flagged verify-against-pinned-Pyroscope-tag — the proto compiles with a `Profile { bytes }` placeholder, and the by-wire pprof shape is pinned by decoding through `krabka_pprof::PprofProfile` in the handler test; field numbers are NOT fabricated (copy from the pinned tag).
 - **`hot_partitions` / disjoint-partition-namespace** — the composite keys on `partition` assuming disjoint hot/cold namespaces; if Slice 4 reuses block-local ids, the flagged fallback keys on `(source, partition)`. The headline test seeds disjoint partitions so routing is pinned either way.
 - **`RenderMeta` defaults + relative-time (`now-1h`) parse** in the legacy render path are flagged placeholders (the real `spyName`/`sampleRate` come from the ingest sample-type config; relative-time is a follow-on) — the flamebearer *shape* is the in-scope byte-exact pin.
 - **Time-window filter on discovery** (`label_names`/etc. drop `_start_ms`/`_end_ms`) — the in-memory `ProfileIndex` isn't time-sharded at that granularity; flagged, tightened if Slice 1 exposes a per-block range.
@@ -2035,7 +2035,7 @@ git commit -m "feat(profiles): crabka-profiles --target querier binary + merged 
 - **`CompositeSymbolSource` routing** (Task 4) — pinned by the same-id-across-partitions test; `candidate_blocks`/`load_symbol_db`/`block_partitions` flagged as expected Slice-1 surfaces (possible small additions).
 - **`FlameGraph`→proto / →flamebearer** (Tasks 6/7) — isolated in `encode.rs`/`flamebearer.rs`, the int-sequence + JSON-object shape byte-pinned; the engine already owns the encoding (Slices 2–3), this is a faithful projection.
 - **Connect handler signature** (`Extension(AppState)` + `ConnectRequest<T>` → `Result<ConnectResponse<T>, ConnectError>`) — taken verbatim from `crates/grpc-gateway/src/handlers.rs::send`; `ConnectError::new`/`ConnectCode` flagged verify-against-`connectrpc-axum`.
-- **`crabka-pprof` contract** (`ProfileStore`/`ProfileScan`/`SymbolSource`/`FlameEngine`/result types/`ProfileError`) — consumed verbatim from the shared contract; every spot where a field name might differ (`Level`/`Frame` internals, `FlameEngine::store()`, `EngineOpts` fields, `ProfileType` fields, `SymbolSource::resolve` arg order) carries an explicit "adapt the Rust, keep the proto/JSON" verify-note.
+- **`krabka-pprof` contract** (`ProfileStore`/`ProfileScan`/`SymbolSource`/`FlameEngine`/result types/`ProfileError`) — consumed verbatim from the shared contract; every spot where a field name might differ (`Level`/`Frame` internals, `FlameEngine::store()`, `EngineOpts` fields, `ProfileType` fields, `SymbolSource::resolve` arg order) carries an explicit "adapt the Rust, keep the proto/JSON" verify-note.
 - **Slice-4 head handle** (Task 2 `HotTier`) — isolated behind one wrapper with a behavior-pin test; if Slice 4 lacks query accessors, the `HeadSource`-trait fallback is flagged.
 
 **Type consistency:** `HotTier`/`HotError` consistent across Tasks 2/3/4/5/8. `CrabkaProfileStore::new(blockstore, hot)` stable Tasks 3/4/5/6/8. `AppState { engine, store, cfg }`/`tenant_of`/`querier_service_router`/`querier_router` stable Tasks 6/7/8. `flamegraph_to_proto`/`flamegraph_diff_to_proto`/`series_to_proto`/`profile_type_to_proto`/`err_to_connect` defined once (Task 6), used by handlers and pinned by the encode tests. `flamegraph_to_flamebearer`/`flamegraph_diff_to_flamebearer`/`RenderMeta` defined once (Task 7). `profile_type_matcher`/`register_union`/`register_hot_memtable`/`CompositeSymbolSource` stable Tasks 3/4. `QuerierConfig` fields stable Tasks 1/6/8.

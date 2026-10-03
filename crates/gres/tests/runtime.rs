@@ -11,16 +11,16 @@ use std::{
 };
 
 use clap::{CommandFactory as _, FromArgMatches as _};
-use crabka_broker::{Broker, BrokerConfig};
-use crabka_client_core::Client;
-use crabka_client_producer::{Acks, Producer, ProducerRecord};
-use crabka_gres_ranges::{
+use krabka_broker::{Broker, BrokerConfig};
+use krabka_client_core::Client;
+use krabka_client_producer::{Acks, Producer, ProducerRecord};
+use krabka_gres_ranges::{
     MoveRangeCommand, RangeId, RangeKey, RangeSpec, SplitCommand, SuccessorDescriptor, TableId,
 };
-use crabka_pgkv::Kv as _;
-use crabka_pgwire::engine::{Engine as _, Session as _};
-use crabka_protocol::owned::create_topics_request::{CreatableTopic, CreateTopicsRequest};
-use crabka_units::convert::TimeExt as _;
+use krabka_pgkv::Kv as _;
+use krabka_pgwire::engine::{Engine as _, Session as _};
+use krabka_protocol::owned::create_topics_request::{CreatableTopic, CreateTopicsRequest};
+use krabka_units::convert::TimeExt as _;
 use tokio::net::TcpListener;
 
 async fn broker_test_permit() -> tokio::sync::OwnedSemaphorePermit {
@@ -44,8 +44,8 @@ fn wrong_fixture_password() -> String {
 
 struct RangeMtlsFixture {
     _dir: tempfile::TempDir,
-    server: crabka_gres_ranges::RangeTlsServerConfig,
-    client: crabka_gres_ranges::RangeTlsClientConfig,
+    server: krabka_gres_ranges::RangeTlsServerConfig,
+    client: krabka_gres_ranges::RangeTlsClientConfig,
 }
 
 fn range_mtls_fixture() -> RangeMtlsFixture {
@@ -58,14 +58,14 @@ fn range_mtls_fixture() -> RangeMtlsFixture {
     let client_key = write_range_fixture(&dir, "client-key.pem", "dev_client_key.pem");
     RangeMtlsFixture {
         _dir: dir,
-        server: crabka_gres_ranges::RangeTlsServerConfig {
+        server: krabka_gres_ranges::RangeTlsServerConfig {
             tenant: "runtime-test".to_string(),
-            tls: crabka_security::TlsConfig {
+            tls: krabka_security::TlsConfig {
                 cert_chain_path: server_cert.clone(),
                 private_key_path: server_key,
                 trust_roots_path: Some(server_cert.clone()),
                 client_ca_path: Some(client_ca),
-                client_auth: crabka_security::ClientAuthMode::Required,
+                client_auth: krabka_security::ClientAuthMode::Required,
             },
             range_rpc_principals: BTreeSet::from([
                 "CN=test-client,OU=integration,O=crabka".to_string()
@@ -74,15 +74,15 @@ fn range_mtls_fixture() -> RangeMtlsFixture {
                 "CN=test-client,OU=integration,O=crabka".to_string()
             ]),
         },
-        client: crabka_gres_ranges::RangeTlsClientConfig {
-            tls: crabka_security::TlsConfig {
+        client: krabka_gres_ranges::RangeTlsClientConfig {
+            tls: krabka_security::TlsConfig {
                 cert_chain_path: client_cert,
                 private_key_path: client_key,
                 trust_roots_path: Some(server_cert),
                 client_ca_path: None,
-                client_auth: crabka_security::ClientAuthMode::Disabled,
+                client_auth: krabka_security::ClientAuthMode::Disabled,
             },
-            server_name: "crabka-dev".to_string(),
+            server_name: "krabka-dev".to_string(),
         },
     }
 }
@@ -104,49 +104,49 @@ fn write_range_fixture(dir: &tempfile::TempDir, name: &str, fixture: &str) -> Pa
 }
 
 async fn spawn_range_tls(
-    service: Arc<dyn crabka_gres_ranges::RangeService>,
-    config: crabka_gres_ranges::RangeTlsServerConfig,
+    service: Arc<dyn krabka_gres_ranges::RangeService>,
+    config: krabka_gres_ranges::RangeTlsServerConfig,
 ) -> std::net::SocketAddr {
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
         .expect("bind TLS listener");
     let address = listener.local_addr().expect("TLS listener address");
     tokio::spawn(async move {
-        let _ = crabka_gres_ranges::serve_tls(listener, service, config).await;
+        let _ = krabka_gres_ranges::serve_tls(listener, service, config).await;
     });
     address
 }
 
 struct FakeTenantConfigLoader {
-    record: crabka_gres_control::TenantRecord,
+    record: krabka_gres_control::TenantRecord,
 }
 
 #[async_trait::async_trait]
-impl crabka_gres::TenantConfigLoader for FakeTenantConfigLoader {
+impl krabka_gres::TenantConfigLoader for FakeTenantConfigLoader {
     async fn load_tenant_config(
         &self,
         _bootstrap: &str,
-        _tenant: &crabka_gres_control::TenantName,
-        _security: Option<crabka_client_core::security::ClientSecurity>,
-        _policy: &crabka_gres_control::RegistryPolicy,
-    ) -> std::io::Result<Option<crabka_gres_control::TenantRecord>> {
+        _tenant: &krabka_gres_control::TenantName,
+        _security: Option<krabka_client_core::security::ClientSecurity>,
+        _policy: &krabka_gres_control::RegistryPolicy,
+    ) -> std::io::Result<Option<krabka_gres_control::TenantRecord>> {
         Ok(Some(self.record.clone()))
     }
 }
 
-fn tenant_record() -> crabka_gres_control::TenantRecord {
-    let verifier = crabka_security::scram::PgScramVerifier::generate_with_salt(
+fn tenant_record() -> krabka_gres_control::TenantRecord {
+    let verifier = krabka_security::scram::PgScramVerifier::generate_with_salt(
         &fixture_password(),
         8192,
         vec![3; 16],
     )
     .expect("verifier");
-    crabka_gres_control::TenantRecord::new(
+    krabka_gres_control::TenantRecord::new(
         1,
-        crabka_gres_control::TenantId::try_from("runtime-test").expect("tenant id"),
-        crabka_gres_control::TenantName::try_from("runtime-test").expect("tenant name"),
-        crabka_gres_control::TenantState::Active,
-        crabka_gres_control::SqlUser::try_from("alice").expect("sql user"),
+        krabka_gres_control::TenantId::try_from("runtime-test").expect("tenant id"),
+        krabka_gres_control::TenantName::try_from("runtime-test").expect("tenant name"),
+        krabka_gres_control::TenantState::Active,
+        krabka_gres_control::SqlUser::try_from("alice").expect("sql user"),
         verifier.to_string(),
         1,
     )
@@ -157,10 +157,10 @@ fn tenant_record() -> crabka_gres_control::TenantRecord {
 fn binary_help_exposes_only_single_node_serve_surface() {
     use assert2::assert;
 
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_crabka-gres"))
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_krabka-gres"))
         .arg("--help")
         .output()
-        .expect("run crabka-gres --help");
+        .expect("run krabka-gres --help");
 
     assert!(output.status.success());
     let help = String::from_utf8(output.stdout).expect("help is utf8");
@@ -201,8 +201,8 @@ fn binary_help_exposes_only_single_node_serve_surface() {
     assert!(!help.contains("--peer"));
 }
 
-fn test_args(listen: String, data_dir: Option<std::path::PathBuf>) -> crabka_gres::ServeArgs {
-    let mut command = crabka_gres::Cli::command();
+fn test_args(listen: String, data_dir: Option<std::path::PathBuf>) -> krabka_gres::ServeArgs {
+    let mut command = krabka_gres::Cli::command();
     for argument in [
         "wal_recovery_fetch_max_wait",
         "wal_recovery_fetch_partition_max",
@@ -218,17 +218,17 @@ fn test_args(listen: String, data_dir: Option<std::path::PathBuf>) -> crabka_gre
     ] {
         command = command.mut_arg(argument, |arg| arg.env(None::<&str>));
     }
-    let registry = crabka_gres::Cli::from_arg_matches(
+    let registry = krabka_gres::Cli::from_arg_matches(
         &command
-            .try_get_matches_from(["crabka-gres"])
+            .try_get_matches_from(["krabka-gres"])
             .expect("registry defaults"),
     )
     .expect("registry defaults")
     .serve
     .registry;
-    crabka_gres::ServeArgs {
+    krabka_gres::ServeArgs {
         registry,
-        local_vacuum: crabka_gres::LocalVacuumOptions::default(),
+        local_vacuum: krabka_gres::LocalVacuumOptions::default(),
         range_runtime: Box::default(),
         pgexec_runtime: Box::default(),
         listen,
@@ -236,8 +236,8 @@ fn test_args(listen: String, data_dir: Option<std::path::PathBuf>) -> crabka_gre
         tls_key: None,
         auth: Some("trust".to_string()),
         user_creds: Vec::new(),
-        pgwire_max_message_size: crabka_units::mebibytes(64),
-        pgwire_scram_iterations: crabka_pgwire::scram::DEFAULT_ITERATIONS,
+        pgwire_max_message_size: krabka_units::mebibytes(64),
+        pgwire_scram_iterations: krabka_pgwire::scram::DEFAULT_ITERATIONS,
         data_dir,
         substrate_bootstrap: None,
         tenant: None,
@@ -279,9 +279,9 @@ fn test_args(listen: String, data_dir: Option<std::path::PathBuf>) -> crabka_gre
         wal_producer_batch: None,
         wal_frame_max_size: None,
         host_ranges: None,
-        timestamp_source: crabka_gres::TimestampSourceKind::LogicalTso,
-        hlc_max_offset: crabka_units::millis(250),
-        hlc_wall_offset: crabka_units::millis(0),
+        timestamp_source: krabka_gres::TimestampSourceKind::LogicalTso,
+        hlc_max_offset: krabka_units::millis(250),
+        hlc_wall_offset: krabka_units::millis(0),
         range_listen: None,
         range_tls_cert: None,
         range_tls_key: None,
@@ -308,22 +308,22 @@ fn test_args(listen: String, data_dir: Option<std::path::PathBuf>) -> crabka_gre
         checkpoint_delete_records_timeout: None,
         checkpoint_poll_interval: None,
         idle_suspend_poll_interval: None,
-        gres_trace_ingress: crabka_gres::TraceIngressMode::default(),
+        gres_trace_ingress: krabka_gres::TraceIngressMode::default(),
         otlp_sample_ratio: None,
     }
 }
 
-fn substrate_test_args(listen: String) -> crabka_gres::ServeArgs {
-    crabka_gres::ServeArgs {
+fn substrate_test_args(listen: String) -> krabka_gres::ServeArgs {
+    krabka_gres::ServeArgs {
         substrate_bootstrap: Some("memory://".to_string()),
         tenant: Some("runtime-test".to_string()),
         ..test_args(listen, None)
     }
 }
 
-fn checkpoint_substrate_test_args(listen: String) -> crabka_gres::ServeArgs {
-    crabka_gres::ServeArgs {
-        checkpoint_store: Some(crabka_gres::CheckpointStoreKind::InMemory),
+fn checkpoint_substrate_test_args(listen: String) -> krabka_gres::ServeArgs {
+    krabka_gres::ServeArgs {
+        checkpoint_store: Some(krabka_gres::CheckpointStoreKind::InMemory),
         checkpoint_frames: Some(std::num::NonZeroU64::new(1).expect("nonzero")),
         ..substrate_test_args(listen)
     }
@@ -341,7 +341,7 @@ async fn connect(port: u16) -> tokio_postgres::Client {
         }
         assert!(
             tokio::time::Instant::now() < deadline,
-            "connect to crabka-gres did not succeed within 5s"
+            "connect to krabka-gres did not succeed within 5s"
         );
         tokio::time::sleep(std::time::Duration::from_millis(25)).await;
     }
@@ -363,7 +363,7 @@ async fn connect_with_password(port: u16, user: &str, password: &str) -> tokio_p
         }
         assert!(
             tokio::time::Instant::now() < deadline,
-            "connect to crabka-gres did not succeed within 5s"
+            "connect to krabka-gres did not succeed within 5s"
         );
         tokio::time::sleep(std::time::Duration::from_millis(25)).await;
     }
@@ -427,55 +427,55 @@ async fn live_multirange_substrate_default_fdw_server_reads_own_broker() {
     let bootstrap = broker.listen_addr().to_string();
     produce_raw_fixture(&bootstrap, "g6-runtime-events", b"substrate-fdw").await;
 
-    let mut runtime = crabka_gres::open_substrate_runtime(&crabka_gres::SubstrateRuntimeConfig {
+    let mut runtime = krabka_gres::open_substrate_runtime(&krabka_gres::SubstrateRuntimeConfig {
         client_dispatch_queue_capacity:
-            crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-        client_frame_max: crabka_client_core::ClientFrameMax::default(),
-        fdw_fetch_min: crabka_client_core::FetchMinBytes::default(),
-        wal_recovery_fetch_min: crabka_client_core::FetchMinBytes::default(),
+            krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+        client_frame_max: krabka_client_core::ClientFrameMax::default(),
+        fdw_fetch_min: krabka_client_core::FetchMinBytes::default(),
+        wal_recovery_fetch_min: krabka_client_core::FetchMinBytes::default(),
         bootstrap: bootstrap.clone(),
         tenant: "g6-runtime".to_string(),
         cache_dir: None,
-        pgkv_options: crabka_pgkv::FjallOptions::default(),
+        pgkv_options: krabka_pgkv::FjallOptions::default(),
         checkpoints: None,
         kafka_security: None,
         ranges: Some("0,5".to_string()),
-        range0_follower_poll_interval: crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL
+        range0_follower_poll_interval: krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL
             .to_std(),
         range0_follower_rebuild_backoff_floor:
-            crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR.to_std(),
+            krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR.to_std(),
         range0_follower_rebuild_backoff_ceiling:
-            crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
-        durable_inspection_timeout: crabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
+            krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
+        durable_inspection_timeout: krabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
             .to_std(),
-        durable_inspection_fold_limits: crabka_gres_substrate::FoldLimits::default(),
-        recovery_read_policy: crabka_gres_substrate::RecoveryReadPolicy::default(),
-        wal_admin_policy: crabka_gres_substrate::WalAdminPolicy::default(),
-        producer_dns_timeout: crabka_client_core::ClientDnsTimeout::default(),
-        producer_flush_timeout: crabka_client_producer::ProducerFlushTimeout::default(),
-        producer_retry_policy: crabka_client_producer::ProducerRetryPolicy::default(),
-        producer_throughput_policy: crabka_client_producer::ProducerThroughputPolicy::default(),
-        wal_frame_max_size: crabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
+        durable_inspection_fold_limits: krabka_gres_substrate::FoldLimits::default(),
+        recovery_read_policy: krabka_gres_substrate::RecoveryReadPolicy::default(),
+        wal_admin_policy: krabka_gres_substrate::WalAdminPolicy::default(),
+        producer_dns_timeout: krabka_client_core::ClientDnsTimeout::default(),
+        producer_flush_timeout: krabka_client_producer::ProducerFlushTimeout::default(),
+        producer_retry_policy: krabka_client_producer::ProducerRetryPolicy::default(),
+        producer_throughput_policy: krabka_client_producer::ProducerThroughputPolicy::default(),
+        wal_frame_max_size: krabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
         host_ranges: None,
         range_rpc: None,
         advertised_endpoint: None,
-        timestamp_source_mode: crabka_gres_ranges::TimestampSourceMode::LogicalTso,
+        timestamp_source_mode: krabka_gres_ranges::TimestampSourceMode::LogicalTso,
         hlc_wall_offset_ms: 0,
-        registry_policy: crabka_gres_control::RegistryPolicy::default(),
-        range_runtime_policy: crabka_gres_ranges::RangeRuntimePolicy::default(),
-        pgexec_runtime_policy: crabka_pgexec::RuntimePolicy::default(),
+        registry_policy: krabka_gres_control::RegistryPolicy::default(),
+        range_runtime_policy: krabka_gres_ranges::RangeRuntimePolicy::default(),
+        pgexec_runtime_policy: krabka_pgexec::RuntimePolicy::default(),
     })
     .await
     .expect("open live multi-range substrate runtime");
-    crabka_gres::register_kafka_scanner_with_default_bootstrap(
+    krabka_gres::register_kafka_scanner_with_default_bootstrap(
         &mut runtime.engine,
         Some(bootstrap),
-        crabka_client_core::ClientDnsTimeout::default(),
-        crabka_gres_fdw::SchemaFetchRetryPolicy::default(),
+        krabka_client_core::ClientDnsTimeout::default(),
+        krabka_gres_fdw::SchemaFetchRetryPolicy::default(),
     );
     let mut session = runtime.engine.connect();
     session
-        .simple_query("CREATE SERVER own_cluster FOREIGN DATA WRAPPER crabka_gres_fdw")
+        .simple_query("CREATE SERVER own_cluster FOREIGN DATA WRAPPER krabka_gres_fdw")
         .await
         .expect("create zero-config own-cluster server");
     session
@@ -488,7 +488,7 @@ async fn live_multirange_substrate_default_fdw_server_reads_own_broker() {
         .simple_query("SELECT value FROM g6_runtime_events ORDER BY _offset")
         .await
         .expect("select through substrate default server");
-    let [crabka_pgwire::engine::QueryResult::Rows { rows, .. }] = results.as_slice() else {
+    let [krabka_pgwire::engine::QueryResult::Rows { rows, .. }] = results.as_slice() else {
         panic!("expected one row result, got {results:?}");
     };
     assert_eq!(rows.len(), 1);
@@ -503,7 +503,7 @@ async fn live_multirange_substrate_default_fdw_server_reads_own_broker() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_multirange_substrate_hlc_mode_commits_and_mints_wall_anchored_stamps() {
     use assert2::assert;
-    use crabka_pgexec::WallClock as _;
+    use krabka_pgexec::WallClock as _;
 
     let _permit = broker_test_permit().await;
     let broker_dir = tempfile::tempdir().expect("broker tempdir");
@@ -512,44 +512,44 @@ async fn live_multirange_substrate_hlc_mode_commits_and_mints_wall_anchored_stam
         .expect("broker start");
     let bootstrap = broker.listen_addr().to_string();
 
-    let before_ms = crabka_pgexec::SystemWallClock.now_ms();
-    let runtime = crabka_gres::open_substrate_runtime(&crabka_gres::SubstrateRuntimeConfig {
+    let before_ms = krabka_pgexec::SystemWallClock.now_ms();
+    let runtime = krabka_gres::open_substrate_runtime(&krabka_gres::SubstrateRuntimeConfig {
         client_dispatch_queue_capacity:
-            crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-        client_frame_max: crabka_client_core::ClientFrameMax::default(),
-        fdw_fetch_min: crabka_client_core::FetchMinBytes::default(),
-        wal_recovery_fetch_min: crabka_client_core::FetchMinBytes::default(),
+            krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+        client_frame_max: krabka_client_core::ClientFrameMax::default(),
+        fdw_fetch_min: krabka_client_core::FetchMinBytes::default(),
+        wal_recovery_fetch_min: krabka_client_core::FetchMinBytes::default(),
         bootstrap,
         tenant: "g6-hlc-runtime".to_string(),
         cache_dir: None,
-        pgkv_options: crabka_pgkv::FjallOptions::default(),
+        pgkv_options: krabka_pgkv::FjallOptions::default(),
         checkpoints: None,
         kafka_security: None,
         ranges: Some("0,5".to_string()),
-        range0_follower_poll_interval: crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL
+        range0_follower_poll_interval: krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL
             .to_std(),
         range0_follower_rebuild_backoff_floor:
-            crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR.to_std(),
+            krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR.to_std(),
         range0_follower_rebuild_backoff_ceiling:
-            crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
-        durable_inspection_timeout: crabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
+            krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
+        durable_inspection_timeout: krabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
             .to_std(),
-        durable_inspection_fold_limits: crabka_gres_substrate::FoldLimits::default(),
-        recovery_read_policy: crabka_gres_substrate::RecoveryReadPolicy::default(),
-        wal_admin_policy: crabka_gres_substrate::WalAdminPolicy::default(),
-        producer_dns_timeout: crabka_client_core::ClientDnsTimeout::default(),
-        producer_flush_timeout: crabka_client_producer::ProducerFlushTimeout::default(),
-        producer_retry_policy: crabka_client_producer::ProducerRetryPolicy::default(),
-        producer_throughput_policy: crabka_client_producer::ProducerThroughputPolicy::default(),
-        wal_frame_max_size: crabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
+        durable_inspection_fold_limits: krabka_gres_substrate::FoldLimits::default(),
+        recovery_read_policy: krabka_gres_substrate::RecoveryReadPolicy::default(),
+        wal_admin_policy: krabka_gres_substrate::WalAdminPolicy::default(),
+        producer_dns_timeout: krabka_client_core::ClientDnsTimeout::default(),
+        producer_flush_timeout: krabka_client_producer::ProducerFlushTimeout::default(),
+        producer_retry_policy: krabka_client_producer::ProducerRetryPolicy::default(),
+        producer_throughput_policy: krabka_client_producer::ProducerThroughputPolicy::default(),
+        wal_frame_max_size: krabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
         host_ranges: None,
         range_rpc: None,
         advertised_endpoint: None,
-        timestamp_source_mode: crabka_gres_ranges::TimestampSourceMode::Hlc { max_offset_ms: 500 },
+        timestamp_source_mode: krabka_gres_ranges::TimestampSourceMode::Hlc { max_offset_ms: 500 },
         hlc_wall_offset_ms: 0,
-        registry_policy: crabka_gres_control::RegistryPolicy::default(),
-        range_runtime_policy: crabka_gres_ranges::RangeRuntimePolicy::default(),
-        pgexec_runtime_policy: crabka_pgexec::RuntimePolicy::default(),
+        registry_policy: krabka_gres_control::RegistryPolicy::default(),
+        range_runtime_policy: krabka_gres_ranges::RangeRuntimePolicy::default(),
+        pgexec_runtime_policy: krabka_pgexec::RuntimePolicy::default(),
     })
     .await
     .expect("open live multi-range substrate runtime in HLC mode");
@@ -568,7 +568,7 @@ async fn live_multirange_substrate_hlc_mode_commits_and_mints_wall_anchored_stam
         .simple_query("SELECT id FROM hlc_live")
         .await
         .expect("select under hlc mode");
-    let [crabka_pgwire::engine::QueryResult::Rows { rows, .. }] = results.as_slice() else {
+    let [krabka_pgwire::engine::QueryResult::Rows { rows, .. }] = results.as_slice() else {
         panic!("expected one row result, got {results:?}");
     };
     assert!(rows.len() == 1);
@@ -578,7 +578,7 @@ async fn live_multirange_substrate_hlc_mode_commits_and_mints_wall_anchored_stam
     // boot. A logical oracle's small dense integers would unpack with a
     // physical component of zero, so this can only pass when HLC genuinely
     // engaged on the live boot path.
-    let crabka_gres::RuntimeEngine::Multi(gateway) = &runtime.engine else {
+    let krabka_gres::RuntimeEngine::Multi(gateway) = &runtime.engine else {
         panic!("live multi-range runtime must expose the gateway");
     };
     let source = gateway.hosted_range_engines()[&RangeId::COORDINATOR].timestamp_oracle_handle();
@@ -587,7 +587,7 @@ async fn live_multirange_substrate_hlc_mode_commits_and_mints_wall_anchored_stam
         .await
         .expect("allocate through the live tenant timestamp source")
         .get();
-    assert!(crabka_pgexec::hlc::unpack(minted).physical_ms >= before_ms);
+    assert!(krabka_pgexec::hlc::unpack(minted).physical_ms >= before_ms);
 
     broker.shutdown().await;
 }
@@ -601,7 +601,7 @@ async fn runtime_constructs_substrate_mode_over_in_process_wal() {
         record: tenant_record(),
     };
     let server = tokio::spawn(async move {
-        crabka_gres::serve_listener_with_tenant_config_loader(
+        krabka_gres::serve_listener_with_tenant_config_loader(
             listener,
             substrate_test_args(format!("127.0.0.1:{port}")),
             &loader,
@@ -641,7 +641,7 @@ async fn runtime_constructs_checkpoint_enabled_substrate_mode() {
         record: tenant_record(),
     };
     let server = tokio::spawn(async move {
-        crabka_gres::serve_listener_with_tenant_config_loader(
+        krabka_gres::serve_listener_with_tenant_config_loader(
             listener,
             checkpoint_substrate_test_args(format!("127.0.0.1:{port}")),
             &loader,
@@ -685,71 +685,71 @@ async fn live_multirange_transfer_stages_populated_successor_without_publishing_
         .expect("broker start");
     let checkpoint_dir = tempfile::tempdir().expect("checkpoint tempdir");
     let tenant = "runtime-transfer";
-    let runtime = crabka_gres::open_substrate_runtime(&crabka_gres::SubstrateRuntimeConfig {
+    let runtime = krabka_gres::open_substrate_runtime(&krabka_gres::SubstrateRuntimeConfig {
         client_dispatch_queue_capacity:
-            crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-        client_frame_max: crabka_client_core::ClientFrameMax::default(),
-        fdw_fetch_min: crabka_client_core::FetchMinBytes::default(),
-        wal_recovery_fetch_min: crabka_client_core::FetchMinBytes::default(),
+            krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+        client_frame_max: krabka_client_core::ClientFrameMax::default(),
+        fdw_fetch_min: krabka_client_core::FetchMinBytes::default(),
+        wal_recovery_fetch_min: krabka_client_core::FetchMinBytes::default(),
         bootstrap: broker.listen_addr().to_string(),
         tenant: tenant.to_string(),
         cache_dir: None,
-        pgkv_options: crabka_pgkv::FjallOptions::default(),
-        checkpoints: Some(crabka_gres::CheckpointRuntimeConfig {
-            object_store: crabka_gres::CheckpointObjectStoreConfig::Local {
+        pgkv_options: krabka_pgkv::FjallOptions::default(),
+        checkpoints: Some(krabka_gres::CheckpointRuntimeConfig {
+            object_store: krabka_gres::CheckpointObjectStoreConfig::Local {
                 root: checkpoint_dir.path().to_path_buf(),
             },
             frames_threshold: 1,
-            bytes_threshold: crabka_units::bytes(1),
-            part_max_size: crabka_gres_substrate::DEFAULT_PART_MAX_SIZE,
+            bytes_threshold: krabka_units::bytes(1),
+            part_max_size: krabka_gres_substrate::DEFAULT_PART_MAX_SIZE,
             retain_newest: 2,
-            delete_records_timeout: crabka_units::secs(30),
+            delete_records_timeout: krabka_units::secs(30),
             poll_interval: std::time::Duration::from_secs(1),
         }),
         kafka_security: None,
         ranges: Some("0,5".to_string()),
-        range0_follower_poll_interval: crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL
+        range0_follower_poll_interval: krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL
             .to_std(),
         range0_follower_rebuild_backoff_floor:
-            crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR.to_std(),
+            krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR.to_std(),
         range0_follower_rebuild_backoff_ceiling:
-            crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
-        durable_inspection_timeout: crabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
+            krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
+        durable_inspection_timeout: krabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
             .to_std(),
-        durable_inspection_fold_limits: crabka_gres_substrate::FoldLimits::default(),
-        recovery_read_policy: crabka_gres_substrate::RecoveryReadPolicy::default(),
-        wal_admin_policy: crabka_gres_substrate::WalAdminPolicy::default(),
-        producer_dns_timeout: crabka_client_core::ClientDnsTimeout::default(),
-        producer_flush_timeout: crabka_client_producer::ProducerFlushTimeout::default(),
-        producer_retry_policy: crabka_client_producer::ProducerRetryPolicy::default(),
-        producer_throughput_policy: crabka_client_producer::ProducerThroughputPolicy::default(),
-        wal_frame_max_size: crabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
+        durable_inspection_fold_limits: krabka_gres_substrate::FoldLimits::default(),
+        recovery_read_policy: krabka_gres_substrate::RecoveryReadPolicy::default(),
+        wal_admin_policy: krabka_gres_substrate::WalAdminPolicy::default(),
+        producer_dns_timeout: krabka_client_core::ClientDnsTimeout::default(),
+        producer_flush_timeout: krabka_client_producer::ProducerFlushTimeout::default(),
+        producer_retry_policy: krabka_client_producer::ProducerRetryPolicy::default(),
+        producer_throughput_policy: krabka_client_producer::ProducerThroughputPolicy::default(),
+        wal_frame_max_size: krabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
         host_ranges: None,
         range_rpc: None,
         advertised_endpoint: Some("127.0.0.1:7443".into()),
-        timestamp_source_mode: crabka_gres_ranges::TimestampSourceMode::LogicalTso,
+        timestamp_source_mode: krabka_gres_ranges::TimestampSourceMode::LogicalTso,
         hlc_wall_offset_ms: 0,
-        registry_policy: crabka_gres_control::RegistryPolicy::default(),
-        range_runtime_policy: crabka_gres_ranges::RangeRuntimePolicy::default(),
-        pgexec_runtime_policy: crabka_pgexec::RuntimePolicy::default(),
+        registry_policy: krabka_gres_control::RegistryPolicy::default(),
+        range_runtime_policy: krabka_gres_ranges::RangeRuntimePolicy::default(),
+        pgexec_runtime_policy: krabka_pgexec::RuntimePolicy::default(),
     })
     .await
     .expect("open live multi-range runtime");
     let control_status =
-        crabka_gres_ranges::RangeRequest::Control(crabka_gres_ranges::transport::RangeControlReq {
+        krabka_gres_ranges::RangeRequest::Control(krabka_gres_ranges::transport::RangeControlReq {
             tenant: tenant.into(),
             range_id: RangeId::COORDINATOR,
             generation: 0,
             operation_id: "control-status-attachment".into(),
-            operation: crabka_gres_ranges::transport::RangeControlOperation::Status,
+            operation: krabka_gres_ranges::transport::RangeControlOperation::Status,
         });
     for _ in 0..2 {
         let response = runtime.handle_range_request(control_status.clone()).await;
         assert!(
             matches!(
                 response,
-                Some(crabka_gres_ranges::RangeResponse::Control(
-                    crabka_gres_ranges::transport::RangeControlResp::Rejected { ref code, .. }
+                Some(krabka_gres_ranges::RangeResponse::Control(
+                    krabka_gres_ranges::transport::RangeControlResp::Rejected { ref code, .. }
             )) if code == "intent_authority"
             ),
             "unexpected unjournaled status response: {response:?}"
@@ -759,13 +759,13 @@ async fn live_multirange_transfer_stages_populated_successor_without_publishing_
         .range_transfer_capability()
         .expect("live multi-range transfer capability");
     let before_tso = match runtime
-        .handle_range_request(crabka_gres_ranges::RangeRequest::Tso(
-            crabka_gres_ranges::TsoReq::Grant { count: 2 },
+        .handle_range_request(krabka_gres_ranges::RangeRequest::Tso(
+            krabka_gres_ranges::TsoReq::Grant { count: 2 },
         ))
         .await
         .expect("range service")
     {
-        crabka_gres_ranges::RangeResponse::Tso(crabka_gres_ranges::TsoResp::Granted {
+        krabka_gres_ranges::RangeResponse::Tso(krabka_gres_ranges::TsoResp::Granted {
             first_ts,
             count: 2,
         }) => first_ts,
@@ -787,15 +787,15 @@ async fn live_multirange_transfer_stages_populated_successor_without_publishing_
             .inspect_hosted_range_kv(range)
             .expect("inspect source catalog"),
     );
-    let table_id = crabka_pgcatalog::get_table(
+    let table_id = krabka_pgcatalog::get_table(
         &source_catalog,
-        &crabka_pgcatalog::RelationName::public("t1"),
+        &krabka_pgcatalog::RelationName::public("t1"),
     )
     .expect("source relation")
     .id;
-    let unrelated_table_id = crabka_pgcatalog::get_table(
+    let unrelated_table_id = krabka_pgcatalog::get_table(
         &source_catalog,
-        &crabka_pgcatalog::RelationName::public("transfer_unrelated"),
+        &krabka_pgcatalog::RelationName::public("transfer_unrelated"),
     )
     .expect("unrelated relation")
     .id;
@@ -896,10 +896,10 @@ async fn live_multirange_transfer_stages_populated_successor_without_publishing_
         .expect("write after resume");
     let original_map = runtime.published_range_map().expect("original serving map");
     for (index, fault) in [
-        crabka_gres::PrepareTopologyFault::LockAcquisition,
-        crabka_gres::PrepareTopologyFault::HorizonLoad,
-        crabka_gres::PrepareTopologyFault::TsoConstruction,
-        crabka_gres::PrepareTopologyFault::ServiceAssembly,
+        krabka_gres::PrepareTopologyFault::LockAcquisition,
+        krabka_gres::PrepareTopologyFault::HorizonLoad,
+        krabka_gres::PrepareTopologyFault::TsoConstruction,
+        krabka_gres::PrepareTopologyFault::ServiceAssembly,
     ]
     .into_iter()
     .enumerate()
@@ -917,11 +917,11 @@ async fn live_multirange_transfer_stages_populated_successor_without_publishing_
             .expect("predecessor writer resumes after preparation failure");
         assert!(matches!(
             runtime
-                .handle_range_request(crabka_gres_ranges::RangeRequest::Tso(
-                    crabka_gres_ranges::TsoReq::Grant { count: 1 },
+                .handle_range_request(krabka_gres_ranges::RangeRequest::Tso(
+                    krabka_gres_ranges::TsoReq::Grant { count: 1 },
                 ))
                 .await,
-            Some(crabka_gres_ranges::RangeResponse::Tso(_))
+            Some(krabka_gres_ranges::RangeResponse::Tso(_))
         ));
     }
     runtime
@@ -933,13 +933,13 @@ async fn live_multirange_transfer_stages_populated_successor_without_publishing_
         .await
         .expect_err("pre-split session remains fenced on the retired r0 writer");
     let after_tso = match runtime
-        .handle_range_request(crabka_gres_ranges::RangeRequest::Tso(
-            crabka_gres_ranges::TsoReq::Grant { count: 2 },
+        .handle_range_request(krabka_gres_ranges::RangeRequest::Tso(
+            krabka_gres_ranges::TsoReq::Grant { count: 2 },
         ))
         .await
         .expect("replacement range service")
     {
-        crabka_gres_ranges::RangeResponse::Tso(crabka_gres_ranges::TsoResp::Granted {
+        krabka_gres_ranges::RangeResponse::Tso(krabka_gres_ranges::TsoResp::Granted {
             first_ts,
             count: 2,
         }) => first_ts,
@@ -1057,8 +1057,8 @@ async fn live_multirange_transfer_stages_populated_successor_without_publishing_
         .expect("second successor serves its restored table");
 }
 
-fn kv_from_pairs(pairs: crabka_pgkv::KvScan) -> crabka_pgkv::MemKv {
-    let kv = crabka_pgkv::MemKv::default();
+fn kv_from_pairs(pairs: krabka_pgkv::KvScan) -> krabka_pgkv::MemKv {
+    let kv = krabka_pgkv::MemKv::default();
     for (key, value) in pairs {
         kv.put(key, value).expect("copy raw KV pair");
     }
@@ -1069,19 +1069,19 @@ fn activation_crash_config(
     bootstrap: String,
     tenant: String,
     checkpoint_root: PathBuf,
-) -> crabka_gres::SubstrateRuntimeConfig {
-    crabka_gres::SubstrateRuntimeConfig {
+) -> krabka_gres::SubstrateRuntimeConfig {
+    krabka_gres::SubstrateRuntimeConfig {
         client_dispatch_queue_capacity:
-            crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-        client_frame_max: crabka_client_core::ClientFrameMax::default(),
-        fdw_fetch_min: crabka_client_core::FetchMinBytes::default(),
-        wal_recovery_fetch_min: crabka_client_core::FetchMinBytes::default(),
+            krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+        client_frame_max: krabka_client_core::ClientFrameMax::default(),
+        fdw_fetch_min: krabka_client_core::FetchMinBytes::default(),
+        wal_recovery_fetch_min: krabka_client_core::FetchMinBytes::default(),
         bootstrap,
         tenant,
         cache_dir: None,
-        pgkv_options: crabka_pgkv::FjallOptions::default(),
-        checkpoints: Some(crabka_gres::CheckpointRuntimeConfig {
-            object_store: crabka_gres::CheckpointObjectStoreConfig::Local {
+        pgkv_options: krabka_pgkv::FjallOptions::default(),
+        checkpoints: Some(krabka_gres::CheckpointRuntimeConfig {
+            object_store: krabka_gres::CheckpointObjectStoreConfig::Local {
                 root: checkpoint_root,
             },
             // These tests force every checkpoint they need through the control
@@ -1090,51 +1090,51 @@ fn activation_crash_config(
             // the window between a forced checkpoint and the transfer pause,
             // which then fails the successor's bounded tail read.
             frames_threshold: 10_000,
-            bytes_threshold: crabka_units::mebibytes(64),
-            part_max_size: crabka_gres_substrate::DEFAULT_PART_MAX_SIZE,
+            bytes_threshold: krabka_units::mebibytes(64),
+            part_max_size: krabka_gres_substrate::DEFAULT_PART_MAX_SIZE,
             retain_newest: 16,
-            delete_records_timeout: crabka_units::secs(30),
+            delete_records_timeout: krabka_units::secs(30),
             poll_interval: std::time::Duration::from_secs(1),
         }),
         kafka_security: None,
         ranges: Some("0,5".to_owned()),
-        range0_follower_poll_interval: crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL
+        range0_follower_poll_interval: krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL
             .to_std(),
         range0_follower_rebuild_backoff_floor:
-            crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR.to_std(),
+            krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR.to_std(),
         range0_follower_rebuild_backoff_ceiling:
-            crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
-        durable_inspection_timeout: crabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
+            krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
+        durable_inspection_timeout: krabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
             .to_std(),
-        durable_inspection_fold_limits: crabka_gres_substrate::FoldLimits::default(),
-        recovery_read_policy: crabka_gres_substrate::RecoveryReadPolicy::default(),
-        wal_admin_policy: crabka_gres_substrate::WalAdminPolicy::default(),
-        producer_dns_timeout: crabka_client_core::ClientDnsTimeout::default(),
-        producer_flush_timeout: crabka_client_producer::ProducerFlushTimeout::default(),
-        producer_retry_policy: crabka_client_producer::ProducerRetryPolicy::default(),
-        producer_throughput_policy: crabka_client_producer::ProducerThroughputPolicy::default(),
-        wal_frame_max_size: crabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
+        durable_inspection_fold_limits: krabka_gres_substrate::FoldLimits::default(),
+        recovery_read_policy: krabka_gres_substrate::RecoveryReadPolicy::default(),
+        wal_admin_policy: krabka_gres_substrate::WalAdminPolicy::default(),
+        producer_dns_timeout: krabka_client_core::ClientDnsTimeout::default(),
+        producer_flush_timeout: krabka_client_producer::ProducerFlushTimeout::default(),
+        producer_retry_policy: krabka_client_producer::ProducerRetryPolicy::default(),
+        producer_throughput_policy: krabka_client_producer::ProducerThroughputPolicy::default(),
+        wal_frame_max_size: krabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
         host_ranges: None,
         range_rpc: None,
         advertised_endpoint: Some("127.0.0.1:7443".into()),
-        timestamp_source_mode: crabka_gres_ranges::TimestampSourceMode::LogicalTso,
+        timestamp_source_mode: krabka_gres_ranges::TimestampSourceMode::LogicalTso,
         hlc_wall_offset_ms: 0,
-        registry_policy: crabka_gres_control::RegistryPolicy::default(),
-        range_runtime_policy: crabka_gres_ranges::RangeRuntimePolicy::default(),
-        pgexec_runtime_policy: crabka_pgexec::RuntimePolicy::default(),
+        registry_policy: krabka_gres_control::RegistryPolicy::default(),
+        range_runtime_policy: krabka_gres_ranges::RangeRuntimePolicy::default(),
+        pgexec_runtime_policy: krabka_pgexec::RuntimePolicy::default(),
     }
 }
 
 async fn control_request(
-    runtime: &crabka_gres::GresRuntime,
+    runtime: &krabka_gres::GresRuntime,
     tenant: &str,
     operation_id: &str,
-    mutation: &crabka_gres_ranges::SplitState,
-    operation: crabka_gres_ranges::transport::RangeControlOperation,
-) -> crabka_gres_ranges::transport::RangeControlResp {
+    mutation: &krabka_gres_ranges::SplitState,
+    operation: krabka_gres_ranges::transport::RangeControlOperation,
+) -> krabka_gres_ranges::transport::RangeControlResp {
     match runtime
-        .handle_range_request(crabka_gres_ranges::RangeRequest::Control(
-            crabka_gres_ranges::transport::RangeControlReq {
+        .handle_range_request(krabka_gres_ranges::RangeRequest::Control(
+            krabka_gres_ranges::transport::RangeControlReq {
                 tenant: tenant.into(),
                 range_id: mutation.predecessor,
                 generation: mutation.predecessor_generation,
@@ -1144,25 +1144,25 @@ async fn control_request(
         ))
         .await
     {
-        Some(crabka_gres_ranges::RangeResponse::Control(response)) => response,
+        Some(krabka_gres_ranges::RangeResponse::Control(response)) => response,
         response => panic!("unexpected range-control response: {response:?}"),
     }
 }
 
-fn control_layout_entry(descriptor: &SuccessorDescriptor) -> crabka_gres_control::RangeLayoutEntry {
-    crabka_gres_control::RangeLayoutEntry {
+fn control_layout_entry(descriptor: &SuccessorDescriptor) -> krabka_gres_control::RangeLayoutEntry {
+    krabka_gres_control::RangeLayoutEntry {
         range_id: descriptor.range_id.as_u32(),
         end_key: descriptor
             .interval
             .end
-            .map(|end| crabka_gres_control::RangeBoundary {
+            .map(|end| krabka_gres_control::RangeBoundary {
                 table_id: end.table_id.as_u64(),
                 bucket: None,
                 rowid: end.rowid,
             }),
         endpoint: descriptor.endpoint.clone(),
         wal_generation: descriptor.wal_generation,
-        lifecycle: crabka_gres_control::RangeLifecycle::Serving,
+        lifecycle: krabka_gres_control::RangeLifecycle::Serving,
         retirement: None,
     }
 }
@@ -1170,20 +1170,20 @@ fn control_layout_entry(descriptor: &SuccessorDescriptor) -> crabka_gres_control
 async fn seed_control_operation(
     bootstrap: &str,
     tenant: &str,
-    split: &crabka_gres_ranges::SplitState,
+    split: &krabka_gres_ranges::SplitState,
 ) {
-    let verifier = crabka_security::scram::PgScramVerifier::generate_with_salt(
+    let verifier = krabka_security::scram::PgScramVerifier::generate_with_salt(
         &fixture_password(),
         8192,
         vec![7; 16],
     )
     .unwrap();
-    let mut record = crabka_gres_control::TenantRecord::new(
+    let mut record = krabka_gres_control::TenantRecord::new(
         1,
-        crabka_gres_control::TenantId::try_from(tenant).unwrap(),
-        crabka_gres_control::TenantName::try_from(tenant).unwrap(),
-        crabka_gres_control::TenantState::Active,
-        crabka_gres_control::SqlUser::try_from("operator").unwrap(),
+        krabka_gres_control::TenantId::try_from(tenant).unwrap(),
+        krabka_gres_control::TenantName::try_from(tenant).unwrap(),
+        krabka_gres_control::TenantState::Active,
+        krabka_gres_control::SqlUser::try_from("operator").unwrap(),
         verifier.to_string(),
         1,
     )
@@ -1194,16 +1194,16 @@ async fn seed_control_operation(
                 .current_map
                 .ranges()
                 .iter()
-                .map(|range| crabka_gres_control::RangeLayoutEntry {
+                .map(|range| krabka_gres_control::RangeLayoutEntry {
                     range_id: range.range_id.as_u32(),
-                    end_key: range.end.map(|end| crabka_gres_control::RangeBoundary {
+                    end_key: range.end.map(|end| krabka_gres_control::RangeBoundary {
                         table_id: end.table_id.as_u64(),
                         bucket: None,
                         rowid: end.rowid,
                     }),
                     endpoint: "127.0.0.1:7443".into(),
                     wal_generation: split.predecessor_generation,
-                    lifecycle: crabka_gres_control::RangeLifecycle::Serving,
+                    lifecycle: krabka_gres_control::RangeLifecycle::Serving,
                     retirement: None,
                 })
                 .collect(),
@@ -1216,7 +1216,7 @@ async fn seed_control_operation(
         .position(|range| range.range_id == split.predecessor.as_u32())
         .unwrap();
     let operation = if let Some(right) = &split.right {
-        let split_intent = crabka_gres_control::RangeLayoutSplit {
+        let split_intent = krabka_gres_control::RangeLayoutSplit {
             source_range_id: split.predecessor.as_u32(),
             predecessor_generation: split.predecessor_generation,
             left: control_layout_entry(&split.left),
@@ -1226,8 +1226,8 @@ async fn seed_control_operation(
             source_index..=source_index,
             [split_intent.left.clone(), split_intent.right.clone()],
         );
-        crabka_gres_control::SplitOperationRecord::new(
-            crabka_gres_control::TenantName::try_from(tenant).unwrap(),
+        krabka_gres_control::SplitOperationRecord::new(
+            krabka_gres_control::TenantName::try_from(tenant).unwrap(),
             &split.operation_id,
             split_intent,
         )
@@ -1235,8 +1235,8 @@ async fn seed_control_operation(
     } else {
         let replacement = control_layout_entry(&split.left);
         target_layout[source_index] = replacement.clone();
-        crabka_gres_control::SplitOperationRecord::new_move(
-            crabka_gres_control::TenantName::try_from(tenant).unwrap(),
+        krabka_gres_control::SplitOperationRecord::new_move(
+            krabka_gres_control::TenantName::try_from(tenant).unwrap(),
             &split.operation_id,
             split.predecessor.as_u32(),
             split.predecessor_generation,
@@ -1244,7 +1244,7 @@ async fn seed_control_operation(
         )
         .unwrap()
     }
-    .with_plan(crabka_gres_control::SplitOperationPlan {
+    .with_plan(krabka_gres_control::SplitOperationPlan {
         source_record_version: record.record_version,
         source_map_epoch: split.current_map.epoch().as_u64(),
         routing_table_id: 1,
@@ -1252,15 +1252,15 @@ async fn seed_control_operation(
         target_layout,
     })
     .unwrap();
-    let mut registry = crabka_gres_control::Registry::connect(bootstrap)
+    let mut registry = krabka_gres_control::Registry::connect(bootstrap)
         .await
         .unwrap();
     registry.ensure_topic().await.unwrap();
     registry.replace_if_version(&record, None).await.unwrap();
     let operation = registry.begin_split_operation(&operation).await.unwrap();
-    if operation.phase == crabka_gres_control::SplitOperationPhase::Initiated {
+    if operation.phase == krabka_gres_control::SplitOperationPhase::Initiated {
         let running = operation
-            .advance(crabka_gres_control::SplitOperationPhase::Running, 1, None)
+            .advance(krabka_gres_control::SplitOperationPhase::Running, 1, None)
             .unwrap();
         registry
             .compare_and_swap_split_operation(Some(operation.revision), &running)
@@ -1273,10 +1273,10 @@ async fn advance_control_operation(
     bootstrap: &str,
     tenant: &str,
     operation_id: &str,
-    phase: crabka_gres_control::SplitOperationPhase,
-    evidence: Option<crabka_gres_control::SplitOperationEvidence>,
+    phase: krabka_gres_control::SplitOperationPhase,
+    evidence: Option<krabka_gres_control::SplitOperationEvidence>,
 ) {
-    let mut registry = crabka_gres_control::Registry::connect(bootstrap)
+    let mut registry = krabka_gres_control::Registry::connect(bootstrap)
         .await
         .unwrap();
     registry.ensure_topic().await.unwrap();
@@ -1303,7 +1303,7 @@ async fn advance_control_operation(
 }
 
 async fn control_binding(bootstrap: &str, tenant: &str, operation_id: &str) -> (u64, String) {
-    let mut registry = crabka_gres_control::Registry::connect(bootstrap)
+    let mut registry = krabka_gres_control::Registry::connect(bootstrap)
         .await
         .unwrap();
     let record = registry
@@ -1312,7 +1312,7 @@ async fn control_binding(bootstrap: &str, tenant: &str, operation_id: &str) -> (
         .unwrap()
         .unwrap();
     let revision = record.revision;
-    let digest = crabka_gres_ranges::control::AuthorizedSplitIntent::from_record(record)
+    let digest = krabka_gres_ranges::control::AuthorizedSplitIntent::from_record(record)
         .unwrap()
         .digest()
         .to_string();
@@ -1321,7 +1321,7 @@ async fn control_binding(bootstrap: &str, tenant: &str, operation_id: &str) -> (
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_authority_allows_exact_target_status_at_activated_before_layout_cutover() {
-    use crabka_gres_ranges::{
+    use krabka_gres_ranges::{
         control::IntentAuthorizationContext,
         transport::{RangeControlOperation, RangeControlReq},
     };
@@ -1333,9 +1333,9 @@ async fn live_authority_allows_exact_target_status_at_activated_before_layout_cu
         .unwrap();
     let bootstrap = broker.listen_addr().to_string();
     let tenant = "authority-activated";
-    let map = crabka_gres_ranges::RangeMap::new(
-        crabka_gres_ranges::TenantName::parse(tenant).unwrap(),
-        crabka_gres_ranges::MapEpoch::new(0),
+    let map = krabka_gres_ranges::RangeMap::new(
+        krabka_gres_ranges::TenantName::parse(tenant).unwrap(),
+        krabka_gres_ranges::MapEpoch::new(0),
         vec![RangeSpec::for_interval(
             RangeId::COORDINATOR,
             RangeKey::MIN,
@@ -1344,7 +1344,7 @@ async fn live_authority_allows_exact_target_status_at_activated_before_layout_cu
     )
     .unwrap();
     let split_at = RangeKey::new(TableId::new(7), 50);
-    let split = crabka_gres_ranges::SplitState::for_split(
+    let split = krabka_gres_ranges::SplitState::for_split(
         "authority-op",
         SplitCommand {
             current_map: map,
@@ -1370,7 +1370,7 @@ async fn live_authority_allows_exact_target_status_at_activated_before_layout_cu
     )
     .unwrap();
     seed_control_operation(&bootstrap, tenant, &split).await;
-    let evidence = crabka_gres_control::SplitOperationEvidence {
+    let evidence = krabka_gres_control::SplitOperationEvidence {
         manifest_key: Some("manifest".into()),
         covered_offset: Some(8),
         barrier_offset: Some(10),
@@ -1378,10 +1378,10 @@ async fn live_authority_allows_exact_target_status_at_activated_before_layout_cu
         marker_digest: Some("markers".into()),
     };
     for phase in [
-        crabka_gres_control::SplitOperationPhase::Checkpointed,
-        crabka_gres_control::SplitOperationPhase::Paused,
-        crabka_gres_control::SplitOperationPhase::Restored,
-        crabka_gres_control::SplitOperationPhase::Activated,
+        krabka_gres_control::SplitOperationPhase::Checkpointed,
+        krabka_gres_control::SplitOperationPhase::Paused,
+        krabka_gres_control::SplitOperationPhase::Restored,
+        krabka_gres_control::SplitOperationPhase::Activated,
     ] {
         advance_control_operation(
             &bootstrap,
@@ -1392,17 +1392,17 @@ async fn live_authority_allows_exact_target_status_at_activated_before_layout_cu
         )
         .await;
     }
-    let registry_policy = crabka_gres_control::RegistryPolicy::new(
+    let registry_policy = krabka_gres_control::RegistryPolicy::new(
         2,
-        crabka_units::millis(15_001),
-        crabka_units::millis(251),
-        crabka_units::millis(1),
-        crabka_units::bytes(2_000_000),
+        krabka_units::millis(15_001),
+        krabka_units::millis(251),
+        krabka_units::millis(1),
+        krabka_units::bytes(2_000_000),
     )
     .unwrap();
-    let authority = crabka_gres::live_split_intent_authority(
+    let authority = krabka_gres::live_split_intent_authority(
         bootstrap,
-        crabka_gres_control::TenantName::try_from(tenant).unwrap(),
+        krabka_gres_control::TenantName::try_from(tenant).unwrap(),
         registry_policy,
     );
     let exact = RangeControlReq {
@@ -1429,7 +1429,7 @@ async fn live_authority_allows_exact_target_status_at_activated_before_layout_cu
             .is_none()
     );
 
-    let mut registry = crabka_gres_control::Registry::connect(&broker.listen_addr().to_string())
+    let mut registry = krabka_gres_control::Registry::connect(&broker.listen_addr().to_string())
         .await
         .unwrap();
     registry.ensure_topic().await.unwrap();
@@ -1448,7 +1448,7 @@ async fn live_authority_allows_exact_target_status_at_activated_before_layout_cu
         .unwrap();
     let published = operation
         .advance(
-            crabka_gres_control::SplitOperationPhase::LayoutPublished,
+            krabka_gres_control::SplitOperationPhase::LayoutPublished,
             operation.attempts,
             None,
         )
@@ -1484,7 +1484,7 @@ async fn live_authority_allows_exact_target_status_at_activated_before_layout_cu
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct ControlSplitDriverState {
-    split: crabka_gres_ranges::SplitState,
+    split: krabka_gres_ranges::SplitState,
     manifest_key: String,
     covered_offset: i64,
     barrier_offset: i64,
@@ -1505,7 +1505,7 @@ fn persist_control_split_driver_state(
 
 fn persist_post_stage_binding(
     state_path: &std::path::Path,
-    split: &crabka_gres_ranges::SplitState,
+    split: &krabka_gres_ranges::SplitState,
     manifest_key: &str,
     covered_offset: i64,
     barrier_offset: i64,
@@ -1526,14 +1526,14 @@ fn persist_post_stage_binding(
 }
 
 async fn load_or_prepare_control_split(
-    runtime: &crabka_gres::GresRuntime,
+    runtime: &krabka_gres::GresRuntime,
     bootstrap: &str,
     tenant: &str,
     operation_id: &str,
     state_path: &std::path::Path,
-    initial_mutation: Option<crabka_gres_ranges::SplitState>,
+    initial_mutation: Option<krabka_gres_ranges::SplitState>,
 ) -> ControlSplitDriverState {
-    use crabka_gres_ranges::transport::{RangeControlOperation as Operation, RangeControlResp};
+    use krabka_gres_ranges::transport::{RangeControlOperation as Operation, RangeControlResp};
     if state_path.exists() {
         return serde_json::from_slice(&std::fs::read(state_path).expect("read driver state"))
             .expect("decode driver state");
@@ -1547,7 +1547,7 @@ async fn load_or_prepare_control_split(
         .expect("source predecessor");
     let split_at = RangeKey::table_start(TableId::new(1));
     let split = initial_mutation.unwrap_or_else(|| {
-        crabka_gres_ranges::SplitState::for_split(
+        krabka_gres_ranges::SplitState::for_split(
             operation_id,
             SplitCommand {
                 current_map,
@@ -1601,8 +1601,8 @@ async fn load_or_prepare_control_split(
         bootstrap,
         tenant,
         operation_id,
-        crabka_gres_control::SplitOperationPhase::Checkpointed,
-        Some(crabka_gres_control::SplitOperationEvidence {
+        krabka_gres_control::SplitOperationPhase::Checkpointed,
+        Some(krabka_gres_control::SplitOperationEvidence {
             manifest_key: Some(manifest_key.clone()),
             covered_offset: Some(covered_offset),
             ..Default::default()
@@ -1612,7 +1612,7 @@ async fn load_or_prepare_control_split(
     transfer
         .record_topology_activation_checkpoint(
             operation_id,
-            &crabka_gres_ranges::CheckpointManifest {
+            &krabka_gres_ranges::CheckpointManifest {
                 range_id: split.predecessor,
                 covered_offset,
                 manifest_key: manifest_key.clone(),
@@ -1638,8 +1638,8 @@ async fn load_or_prepare_control_split(
         bootstrap,
         tenant,
         operation_id,
-        crabka_gres_control::SplitOperationPhase::Paused,
-        Some(crabka_gres_control::SplitOperationEvidence {
+        krabka_gres_control::SplitOperationPhase::Paused,
+        Some(krabka_gres_control::SplitOperationEvidence {
             manifest_key: Some(manifest_key.clone()),
             covered_offset: Some(covered_offset),
             barrier_offset: Some(barrier_offset),
@@ -1660,15 +1660,15 @@ async fn load_or_prepare_control_split(
 }
 
 async fn drive_live_control_split(
-    runtime: &crabka_gres::GresRuntime,
+    runtime: &krabka_gres::GresRuntime,
     bootstrap: &str,
     tenant: &str,
     operation_id: &str,
     state_path: &std::path::Path,
-    initial_mutation: Option<crabka_gres_ranges::SplitState>,
+    initial_mutation: Option<krabka_gres_ranges::SplitState>,
     fail_pin_cleanup_once: bool,
 ) {
-    use crabka_gres_ranges::transport::{RangeControlOperation as Operation, RangeControlResp};
+    use krabka_gres_ranges::transport::{RangeControlOperation as Operation, RangeControlResp};
     let ControlSplitDriverState {
         split,
         manifest_key,
@@ -1711,7 +1711,7 @@ async fn drive_live_control_split(
             bootstrap,
             tenant,
             operation_id,
-            crabka_gres_control::SplitOperationPhase::Activated,
+            krabka_gres_control::SplitOperationPhase::Activated,
             None,
         )
         .await;
@@ -1734,7 +1734,7 @@ async fn drive_live_control_split(
             bootstrap,
             tenant,
             operation_id,
-            crabka_gres_control::SplitOperationPhase::Completed,
+            krabka_gres_control::SplitOperationPhase::Completed,
             None,
         )
         .await;
@@ -1781,7 +1781,7 @@ async fn drive_live_control_split(
         bootstrap,
         tenant,
         operation_id,
-        crabka_gres_control::SplitOperationPhase::Restored,
+        krabka_gres_control::SplitOperationPhase::Restored,
         None,
     )
     .await;
@@ -1837,7 +1837,7 @@ async fn drive_live_control_split(
         bootstrap,
         tenant,
         operation_id,
-        crabka_gres_control::SplitOperationPhase::Activated,
+        krabka_gres_control::SplitOperationPhase::Activated,
         None,
     )
     .await;
@@ -1854,21 +1854,21 @@ async fn drive_live_control_split(
         bootstrap,
         tenant,
         operation_id,
-        crabka_gres_control::SplitOperationPhase::Completed,
+        krabka_gres_control::SplitOperationPhase::Completed,
         None,
     )
     .await;
 }
 
 async fn complete_live_control_retirement(
-    runtime: &crabka_gres::GresRuntime,
+    runtime: &krabka_gres::GresRuntime,
     tenant: &str,
     operation_id: &str,
-    split: &crabka_gres_ranges::SplitState,
+    split: &krabka_gres_ranges::SplitState,
     state_path: &std::path::Path,
     fail_pin_cleanup_once: bool,
 ) {
-    use crabka_gres_ranges::transport::{RangeControlOperation as Operation, RangeControlResp};
+    use krabka_gres_ranges::transport::{RangeControlOperation as Operation, RangeControlResp};
 
     let pin_dir = state_path.parent().expect("checkpoint root").join(format!(
         "gres/{tenant}/r{}/pins",
@@ -1941,7 +1941,7 @@ async fn live_control_move_stages_claims_and_publishes_one_distinct_endpoint_suc
     let checkpoint_root = tempfile::tempdir().expect("checkpoint root");
     let tenant = "runtime-control-move";
     let bootstrap = broker.listen_addr().to_string();
-    let runtime = crabka_gres::open_substrate_runtime(&activation_crash_config(
+    let runtime = krabka_gres::open_substrate_runtime(&activation_crash_config(
         bootstrap.clone(),
         tenant.into(),
         checkpoint_root.path().to_path_buf(),
@@ -1964,7 +1964,7 @@ async fn live_control_move_stages_claims_and_publishes_one_distinct_endpoint_suc
         .find(|range| range.range_id == RangeId::new(1))
         .cloned()
         .expect("ordinary source range");
-    let mutation = crabka_gres_ranges::SplitState::for_move(
+    let mutation = krabka_gres_ranges::SplitState::for_move(
         "live-control-move",
         MoveRangeCommand {
             current_map,
@@ -2008,15 +2008,15 @@ async fn live_control_move_stages_claims_and_publishes_one_distinct_endpoint_suc
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn control_executor_crash_child() {
     let _permit = broker_test_permit().await;
-    if std::env::var_os("CRABKA_GRES_CONTROL_CRASH_CHILD").is_none() {
+    if std::env::var_os("KRABKA_GRES_CONTROL_CRASH_CHILD").is_none() {
         return;
     }
-    let bootstrap = std::env::var("CRABKA_GRES_ACTIVATION_BOOTSTRAP").expect("bootstrap env");
-    let tenant = std::env::var("CRABKA_GRES_ACTIVATION_TENANT").expect("tenant env");
+    let bootstrap = std::env::var("KRABKA_GRES_ACTIVATION_BOOTSTRAP").expect("bootstrap env");
+    let tenant = std::env::var("KRABKA_GRES_ACTIVATION_TENANT").expect("tenant env");
     let checkpoint_root = PathBuf::from(
-        std::env::var("CRABKA_GRES_ACTIVATION_CHECKPOINT_ROOT").expect("checkpoint env"),
+        std::env::var("KRABKA_GRES_ACTIVATION_CHECKPOINT_ROOT").expect("checkpoint env"),
     );
-    let runtime = crabka_gres::open_substrate_runtime(&activation_crash_config(
+    let runtime = krabka_gres::open_substrate_runtime(&activation_crash_config(
         bootstrap.clone(),
         tenant.clone(),
         checkpoint_root.clone(),
@@ -2065,11 +2065,11 @@ async fn control_executor_hard_crash_matrix_reconciles_and_replays() {
                     .args(["--exact", "control_executor_crash_child", "--nocapture"])
                     .stdout(std::process::Stdio::null())
                     .stderr(std::process::Stdio::null())
-                    .env("CRABKA_GRES_CONTROL_CRASH_CHILD", "1")
-                    .env("CRABKA_GRES_CONTROL_CRASH_AFTER_EFFECT", step)
-                    .env("CRABKA_GRES_ACTIVATION_BOOTSTRAP", bootstrap)
-                    .env("CRABKA_GRES_ACTIVATION_TENANT", tenant)
-                    .env("CRABKA_GRES_ACTIVATION_CHECKPOINT_ROOT", checkpoint_root)
+                    .env("KRABKA_GRES_CONTROL_CRASH_CHILD", "1")
+                    .env("KRABKA_GRES_CONTROL_CRASH_AFTER_EFFECT", step)
+                    .env("KRABKA_GRES_ACTIVATION_BOOTSTRAP", bootstrap)
+                    .env("KRABKA_GRES_ACTIVATION_TENANT", tenant)
+                    .env("KRABKA_GRES_ACTIVATION_CHECKPOINT_ROOT", checkpoint_root)
                     .status()
                     .expect("run control crash child")
             }
@@ -2083,7 +2083,7 @@ async fn control_executor_hard_crash_matrix_reconciles_and_replays() {
         );
 
         let started = std::time::Instant::now();
-        let runtime = crabka_gres::open_substrate_runtime(&activation_crash_config(
+        let runtime = krabka_gres::open_substrate_runtime(&activation_crash_config(
             bootstrap.clone(),
             tenant.clone(),
             checkpoint_root.clone(),
@@ -2122,9 +2122,9 @@ async fn control_executor_hard_crash_matrix_reconciles_and_replays() {
             .hosted_range_kv_scan(RangeId::new(2))
             .expect("scan successor durable fold")
             .into_iter()
-            .filter_map(|(key, _)| match crabka_pgkv::key::classify_key(&key) {
-                crabka_pgkv::key::KeyClass::PrimaryRow { table_id: 1, rowid }
-                | crabka_pgkv::key::KeyClass::PrimaryVersion {
+            .filter_map(|(key, _)| match krabka_pgkv::key::classify_key(&key) {
+                krabka_pgkv::key::KeyClass::PrimaryRow { table_id: 1, rowid }
+                | krabka_pgkv::key::KeyClass::PrimaryVersion {
                     table_id: 1, rowid, ..
                 } => Some(rowid),
                 _ => None,
@@ -2138,21 +2138,21 @@ async fn control_executor_hard_crash_matrix_reconciles_and_replays() {
     }
 }
 
-fn activation_fault_from_env(value: &str) -> crabka_gres::TopologyActivationFault {
+fn activation_fault_from_env(value: &str) -> krabka_gres::TopologyActivationFault {
     match value {
-        "before_must_activate" => crabka_gres::TopologyActivationFault::BeforeMustActivate,
-        "after_must_activate" => crabka_gres::TopologyActivationFault::AfterMustActivate,
-        "before_producer_init" => crabka_gres::TopologyActivationFault::BeforeProducerInit,
-        "after_producer_init" => crabka_gres::TopologyActivationFault::AfterProducerInit,
-        "before_deferred_bind" => crabka_gres::TopologyActivationFault::BeforeDeferredBind,
-        "after_deferred_bind" => crabka_gres::TopologyActivationFault::AfterDeferredBind,
-        "first_writer" => crabka_gres::TopologyActivationFault::FirstWriterActivated,
-        "second_writer" => crabka_gres::TopologyActivationFault::SecondWriterActivated,
-        "first_checkpoint" => crabka_gres::TopologyActivationFault::FirstCheckpointDurable,
-        "second_checkpoint" => crabka_gres::TopologyActivationFault::SecondCheckpointDurable,
-        "checkpoint_phase" => crabka_gres::TopologyActivationFault::CheckpointDurable,
-        "topology_swap" => crabka_gres::TopologyActivationFault::TopologySwap,
-        "topology_committed" => crabka_gres::TopologyActivationFault::TopologyCommitted,
+        "before_must_activate" => krabka_gres::TopologyActivationFault::BeforeMustActivate,
+        "after_must_activate" => krabka_gres::TopologyActivationFault::AfterMustActivate,
+        "before_producer_init" => krabka_gres::TopologyActivationFault::BeforeProducerInit,
+        "after_producer_init" => krabka_gres::TopologyActivationFault::AfterProducerInit,
+        "before_deferred_bind" => krabka_gres::TopologyActivationFault::BeforeDeferredBind,
+        "after_deferred_bind" => krabka_gres::TopologyActivationFault::AfterDeferredBind,
+        "first_writer" => krabka_gres::TopologyActivationFault::FirstWriterActivated,
+        "second_writer" => krabka_gres::TopologyActivationFault::SecondWriterActivated,
+        "first_checkpoint" => krabka_gres::TopologyActivationFault::FirstCheckpointDurable,
+        "second_checkpoint" => krabka_gres::TopologyActivationFault::SecondCheckpointDurable,
+        "checkpoint_phase" => krabka_gres::TopologyActivationFault::CheckpointDurable,
+        "topology_swap" => krabka_gres::TopologyActivationFault::TopologySwap,
+        "topology_committed" => krabka_gres::TopologyActivationFault::TopologyCommitted,
         other => panic!("unknown activation fault {other}"),
     }
 }
@@ -2160,15 +2160,15 @@ fn activation_fault_from_env(value: &str) -> crabka_gres::TopologyActivationFaul
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn activation_crash_child() {
     let _permit = broker_test_permit().await;
-    let Ok(fault_name) = std::env::var("CRABKA_GRES_ACTIVATION_CRASH_CHILD") else {
+    let Ok(fault_name) = std::env::var("KRABKA_GRES_ACTIVATION_CRASH_CHILD") else {
         return;
     };
-    let bootstrap = std::env::var("CRABKA_GRES_ACTIVATION_BOOTSTRAP").expect("bootstrap env");
-    let tenant = std::env::var("CRABKA_GRES_ACTIVATION_TENANT").expect("tenant env");
+    let bootstrap = std::env::var("KRABKA_GRES_ACTIVATION_BOOTSTRAP").expect("bootstrap env");
+    let tenant = std::env::var("KRABKA_GRES_ACTIVATION_TENANT").expect("tenant env");
     let checkpoint_root = PathBuf::from(
-        std::env::var("CRABKA_GRES_ACTIVATION_CHECKPOINT_ROOT").expect("checkpoint env"),
+        std::env::var("KRABKA_GRES_ACTIVATION_CHECKPOINT_ROOT").expect("checkpoint env"),
     );
-    let runtime = crabka_gres::open_substrate_runtime(&activation_crash_config(
+    let runtime = krabka_gres::open_substrate_runtime(&activation_crash_config(
         bootstrap,
         tenant,
         checkpoint_root,
@@ -2227,15 +2227,15 @@ async fn activation_crash_child() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn activation_generation_chain_child() {
     let _permit = broker_test_permit().await;
-    if std::env::var_os("CRABKA_GRES_ACTIVATION_CHAIN_CHILD").is_none() {
+    if std::env::var_os("KRABKA_GRES_ACTIVATION_CHAIN_CHILD").is_none() {
         return;
     }
-    let bootstrap = std::env::var("CRABKA_GRES_ACTIVATION_BOOTSTRAP").expect("bootstrap env");
-    let tenant = std::env::var("CRABKA_GRES_ACTIVATION_TENANT").expect("tenant env");
+    let bootstrap = std::env::var("KRABKA_GRES_ACTIVATION_BOOTSTRAP").expect("bootstrap env");
+    let tenant = std::env::var("KRABKA_GRES_ACTIVATION_TENANT").expect("tenant env");
     let checkpoint_root = PathBuf::from(
-        std::env::var("CRABKA_GRES_ACTIVATION_CHECKPOINT_ROOT").expect("checkpoint env"),
+        std::env::var("KRABKA_GRES_ACTIVATION_CHECKPOINT_ROOT").expect("checkpoint env"),
     );
-    let runtime = crabka_gres::open_substrate_runtime(&activation_crash_config(
+    let runtime = krabka_gres::open_substrate_runtime(&activation_crash_config(
         bootstrap,
         tenant,
         checkpoint_root,
@@ -2301,7 +2301,7 @@ async fn activation_generation_chain_child() {
         .clone();
     let split_at_t1 = RangeKey::table_start(TableId::new(1));
     runtime
-        .inject_topology_activation_fault(crabka_gres::TopologyActivationFault::AfterMustActivate);
+        .inject_topology_activation_fault(krabka_gres::TopologyActivationFault::AfterMustActivate);
     let result = runtime
         .split_successors(
             "activation-chain-g2",
@@ -2358,11 +2358,11 @@ async fn activation_discovery_follows_g0_g1_g2_with_distinct_operation_ids() {
                     "activation_generation_chain_child",
                     "--nocapture",
                 ])
-                .env("CRABKA_GRES_ACTIVATION_CHAIN_CHILD", "1")
-                .env("CRABKA_GRES_ACTIVATION_HARD_CRASH", "1")
-                .env("CRABKA_GRES_ACTIVATION_BOOTSTRAP", bootstrap)
-                .env("CRABKA_GRES_ACTIVATION_TENANT", tenant)
-                .env("CRABKA_GRES_ACTIVATION_CHECKPOINT_ROOT", checkpoint_root)
+                .env("KRABKA_GRES_ACTIVATION_CHAIN_CHILD", "1")
+                .env("KRABKA_GRES_ACTIVATION_HARD_CRASH", "1")
+                .env("KRABKA_GRES_ACTIVATION_BOOTSTRAP", bootstrap)
+                .env("KRABKA_GRES_ACTIVATION_TENANT", tenant)
+                .env("KRABKA_GRES_ACTIVATION_CHECKPOINT_ROOT", checkpoint_root)
                 .status()
                 .expect("run chain child")
         }
@@ -2371,7 +2371,7 @@ async fn activation_discovery_follows_g0_g1_g2_with_distinct_operation_ids() {
     .expect("join chain child");
     assert!(!status.success(), "g2 crash must kill the child");
 
-    let runtime = crabka_gres::open_substrate_runtime(&activation_crash_config(
+    let runtime = krabka_gres::open_substrate_runtime(&activation_crash_config(
         bootstrap,
         tenant,
         checkpoint_root,
@@ -2437,11 +2437,11 @@ async fn activation_crash_matrix_reopens_before_readiness() {
             move || {
                 std::process::Command::new(executable)
                     .args(["--exact", "activation_crash_child", "--nocapture"])
-                    .env("CRABKA_GRES_ACTIVATION_CRASH_CHILD", fault)
-                    .env("CRABKA_GRES_ACTIVATION_BOOTSTRAP", bootstrap)
-                    .env("CRABKA_GRES_ACTIVATION_TENANT", tenant)
-                    .env("CRABKA_GRES_ACTIVATION_CHECKPOINT_ROOT", checkpoint_root)
-                    .env("CRABKA_GRES_ACTIVATION_HARD_CRASH", "1")
+                    .env("KRABKA_GRES_ACTIVATION_CRASH_CHILD", fault)
+                    .env("KRABKA_GRES_ACTIVATION_BOOTSTRAP", bootstrap)
+                    .env("KRABKA_GRES_ACTIVATION_TENANT", tenant)
+                    .env("KRABKA_GRES_ACTIVATION_CHECKPOINT_ROOT", checkpoint_root)
+                    .env("KRABKA_GRES_ACTIVATION_HARD_CRASH", "1")
                     .status()
                     .expect("run crash child")
             }
@@ -2454,7 +2454,7 @@ async fn activation_crash_matrix_reopens_before_readiness() {
         );
 
         let config = activation_crash_config(bootstrap, tenant, checkpoint_root);
-        let runtime = crabka_gres::open_substrate_runtime(&config)
+        let runtime = krabka_gres::open_substrate_runtime(&config)
             .await
             .unwrap_or_else(|error| panic!("reopen after {fault}: {error}"));
         let post_activation = index >= 1;
@@ -2476,7 +2476,7 @@ async fn activation_crash_matrix_reopens_before_readiness() {
         let mut values = rows
             .iter()
             .flat_map(|result| match result {
-                crabka_pgwire::engine::QueryResult::Rows { rows, .. } => rows.as_slice(),
+                krabka_pgwire::engine::QueryResult::Rows { rows, .. } => rows.as_slice(),
                 _ => &[],
             })
             .filter_map(|row| {
@@ -2489,7 +2489,7 @@ async fn activation_crash_matrix_reopens_before_readiness() {
         assert_eq!(values, ["7", "8", "9"], "fault {fault} exact ledger");
 
         if post_activation {
-            let repeated = crabka_gres::open_substrate_runtime(&config)
+            let repeated = krabka_gres::open_substrate_runtime(&config)
                 .await
                 .unwrap_or_else(|error| panic!("repeat reopen after {fault}: {error}"));
             recovered
@@ -2513,7 +2513,7 @@ async fn activation_crash_matrix_reopens_before_readiness() {
             let mut repeated_values = repeated_rows
                 .iter()
                 .flat_map(|result| match result {
-                    crabka_pgwire::engine::QueryResult::Rows { rows, .. } => rows.as_slice(),
+                    krabka_pgwire::engine::QueryResult::Rows { rows, .. } => rows.as_slice(),
                     _ => &[],
                 })
                 .filter_map(|row| {
@@ -2534,14 +2534,14 @@ async fn activation_crash_matrix_reopens_before_readiness() {
 
 #[allow(dead_code)]
 fn assert_selected_table_transfer(
-    checkpoint_source: &crabka_pgkv::KvScan,
-    source_with_tail: &crabka_pgkv::KvScan,
-    staged: &crabka_pgkv::KvScan,
+    checkpoint_source: &krabka_pgkv::KvScan,
+    source_with_tail: &krabka_pgkv::KvScan,
+    staged: &krabka_pgkv::KvScan,
     table_id: u32,
     unrelated_table_id: u32,
 ) {
-    use crabka_pgkv::key::{self, KeyClass};
-    use crabka_pgmvcc::{FROZEN_XID, INVALID_XID, version};
+    use krabka_pgkv::key::{self, KeyClass};
+    use krabka_pgmvcc::{FROZEN_XID, INVALID_XID, version};
 
     let source_versions = primary_versions(source_with_tail, table_id);
     let staged_versions = primary_versions(staged, table_id);
@@ -2617,14 +2617,14 @@ fn assert_selected_table_transfer(
     );
 }
 
-fn primary_versions(pairs: &crabka_pgkv::KvScan, table_id: u32) -> BTreeMap<Vec<u8>, Vec<u8>> {
+fn primary_versions(pairs: &krabka_pgkv::KvScan, table_id: u32) -> BTreeMap<Vec<u8>, Vec<u8>> {
     pairs
         .iter()
         .filter(|(key, _)| {
             matches!(
-                crabka_pgkv::key::classify_key(key),
-                crabka_pgkv::key::KeyClass::PrimaryVersion { table_id: found, .. }
-                | crabka_pgkv::key::KeyClass::HashPrimaryVersion { table_id: found, .. }
+                krabka_pgkv::key::classify_key(key),
+                krabka_pgkv::key::KeyClass::PrimaryVersion { table_id: found, .. }
+                | krabka_pgkv::key::KeyClass::HashPrimaryVersion { table_id: found, .. }
                     if found == table_id
             )
         })
@@ -2640,53 +2640,53 @@ async fn live_populated_hash_split_partitions_physical_rows_and_sequence() {
         .await
         .expect("broker start");
     let checkpoint_dir = tempfile::tempdir().expect("checkpoint tempdir");
-    let runtime = crabka_gres::open_substrate_runtime(&crabka_gres::SubstrateRuntimeConfig {
+    let runtime = krabka_gres::open_substrate_runtime(&krabka_gres::SubstrateRuntimeConfig {
         client_dispatch_queue_capacity:
-            crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-        client_frame_max: crabka_client_core::ClientFrameMax::default(),
-        fdw_fetch_min: crabka_client_core::FetchMinBytes::default(),
-        wal_recovery_fetch_min: crabka_client_core::FetchMinBytes::default(),
+            krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+        client_frame_max: krabka_client_core::ClientFrameMax::default(),
+        fdw_fetch_min: krabka_client_core::FetchMinBytes::default(),
+        wal_recovery_fetch_min: krabka_client_core::FetchMinBytes::default(),
         bootstrap: broker.listen_addr().to_string(),
         tenant: "runtime-physical-t10".to_string(),
         cache_dir: None,
-        pgkv_options: crabka_pgkv::FjallOptions::default(),
-        checkpoints: Some(crabka_gres::CheckpointRuntimeConfig {
-            object_store: crabka_gres::CheckpointObjectStoreConfig::Local {
+        pgkv_options: krabka_pgkv::FjallOptions::default(),
+        checkpoints: Some(krabka_gres::CheckpointRuntimeConfig {
+            object_store: krabka_gres::CheckpointObjectStoreConfig::Local {
                 root: checkpoint_dir.path().to_path_buf(),
             },
             frames_threshold: 1,
-            bytes_threshold: crabka_units::bytes(1),
-            part_max_size: crabka_gres_substrate::DEFAULT_PART_MAX_SIZE,
+            bytes_threshold: krabka_units::bytes(1),
+            part_max_size: krabka_gres_substrate::DEFAULT_PART_MAX_SIZE,
             retain_newest: 2,
-            delete_records_timeout: crabka_units::secs(30),
+            delete_records_timeout: krabka_units::secs(30),
             poll_interval: std::time::Duration::from_secs(1),
         }),
         kafka_security: None,
         ranges: Some("0,5".to_string()),
-        range0_follower_poll_interval: crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL
+        range0_follower_poll_interval: krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL
             .to_std(),
         range0_follower_rebuild_backoff_floor:
-            crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR.to_std(),
+            krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR.to_std(),
         range0_follower_rebuild_backoff_ceiling:
-            crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
-        durable_inspection_timeout: crabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
+            krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
+        durable_inspection_timeout: krabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
             .to_std(),
-        durable_inspection_fold_limits: crabka_gres_substrate::FoldLimits::default(),
-        recovery_read_policy: crabka_gres_substrate::RecoveryReadPolicy::default(),
-        wal_admin_policy: crabka_gres_substrate::WalAdminPolicy::default(),
-        producer_dns_timeout: crabka_client_core::ClientDnsTimeout::default(),
-        producer_flush_timeout: crabka_client_producer::ProducerFlushTimeout::default(),
-        producer_retry_policy: crabka_client_producer::ProducerRetryPolicy::default(),
-        producer_throughput_policy: crabka_client_producer::ProducerThroughputPolicy::default(),
-        wal_frame_max_size: crabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
+        durable_inspection_fold_limits: krabka_gres_substrate::FoldLimits::default(),
+        recovery_read_policy: krabka_gres_substrate::RecoveryReadPolicy::default(),
+        wal_admin_policy: krabka_gres_substrate::WalAdminPolicy::default(),
+        producer_dns_timeout: krabka_client_core::ClientDnsTimeout::default(),
+        producer_flush_timeout: krabka_client_producer::ProducerFlushTimeout::default(),
+        producer_retry_policy: krabka_client_producer::ProducerRetryPolicy::default(),
+        producer_throughput_policy: krabka_client_producer::ProducerThroughputPolicy::default(),
+        wal_frame_max_size: krabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
         host_ranges: None,
         range_rpc: None,
         advertised_endpoint: Some("127.0.0.1:7443".into()),
-        timestamp_source_mode: crabka_gres_ranges::TimestampSourceMode::LogicalTso,
+        timestamp_source_mode: krabka_gres_ranges::TimestampSourceMode::LogicalTso,
         hlc_wall_offset_ms: 0,
-        registry_policy: crabka_gres_control::RegistryPolicy::default(),
-        range_runtime_policy: crabka_gres_ranges::RangeRuntimePolicy::default(),
-        pgexec_runtime_policy: crabka_pgexec::RuntimePolicy::default(),
+        registry_policy: krabka_gres_control::RegistryPolicy::default(),
+        range_runtime_policy: krabka_gres_ranges::RangeRuntimePolicy::default(),
+        pgexec_runtime_policy: krabka_pgexec::RuntimePolicy::default(),
     })
     .await
     .expect("open live multi-range runtime");
@@ -2707,9 +2707,9 @@ async fn live_populated_hash_split_partitions_physical_rows_and_sequence() {
             .inspect_hosted_range_kv(RangeId::COORDINATOR)
             .expect("inspect source catalog"),
     );
-    let physical_table_id = crabka_pgcatalog::get_table(
+    let physical_table_id = krabka_pgcatalog::get_table(
         &source_catalog,
-        &crabka_pgcatalog::RelationName::public("t10"),
+        &krabka_pgcatalog::RelationName::public("t10"),
     )
     .expect("t10 relation")
     .id;
@@ -2762,11 +2762,11 @@ async fn live_populated_hash_split_partitions_physical_rows_and_sequence() {
         8,
         "the right successor contains exactly buckets 8 through 15"
     );
-    let successor_buckets = |pairs: &crabka_pgkv::KvScan| {
+    let successor_buckets = |pairs: &krabka_pgkv::KvScan| {
         pairs
             .iter()
-            .filter_map(|(key, _)| match crabka_pgkv::key::classify_key(key) {
-                crabka_pgkv::key::KeyClass::HashPrimaryVersion {
+            .filter_map(|(key, _)| match krabka_pgkv::key::classify_key(key) {
+                krabka_pgkv::key::KeyClass::HashPrimaryVersion {
                     table_id, bucket, ..
                 } if table_id == physical_table_id => Some(bucket),
                 _ => None,
@@ -2789,8 +2789,8 @@ async fn live_populated_hash_split_partitions_physical_rows_and_sequence() {
             .chain(successor.iter())
             .any(|(key, _)| {
                 matches!(
-                    crabka_pgkv::key::classify_key(key),
-                    crabka_pgkv::key::KeyClass::PrimaryVersion { table_id, .. }
+                    krabka_pgkv::key::classify_key(key),
+                    krabka_pgkv::key::KeyClass::PrimaryVersion { table_id, .. }
                         if table_id == physical_table_id
                 )
             }),
@@ -2809,7 +2809,7 @@ async fn live_populated_hash_split_partitions_physical_rows_and_sequence() {
         .simple_query("SELECT id FROM t10 ORDER BY id")
         .await
         .expect("scan t10 after bucket midpoint split");
-    let [crabka_pgwire::engine::QueryResult::Rows { rows, .. }] = rows.as_slice() else {
+    let [krabka_pgwire::engine::QueryResult::Rows { rows, .. }] = rows.as_slice() else {
         panic!("expected one row result, got {rows:?}");
     };
     let ids = rows
@@ -2832,53 +2832,53 @@ async fn live_multirange_transfer_rejects_concurrent_pause_without_waiting() {
         .await
         .expect("broker start");
     let checkpoint_dir = tempfile::tempdir().expect("checkpoint tempdir");
-    let runtime = crabka_gres::open_substrate_runtime(&crabka_gres::SubstrateRuntimeConfig {
+    let runtime = krabka_gres::open_substrate_runtime(&krabka_gres::SubstrateRuntimeConfig {
         client_dispatch_queue_capacity:
-            crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-        client_frame_max: crabka_client_core::ClientFrameMax::default(),
-        fdw_fetch_min: crabka_client_core::FetchMinBytes::default(),
-        wal_recovery_fetch_min: crabka_client_core::FetchMinBytes::default(),
+            krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+        client_frame_max: krabka_client_core::ClientFrameMax::default(),
+        fdw_fetch_min: krabka_client_core::FetchMinBytes::default(),
+        wal_recovery_fetch_min: krabka_client_core::FetchMinBytes::default(),
         bootstrap: broker.listen_addr().to_string(),
         tenant: "runtime-transfer-pause".to_string(),
         cache_dir: None,
-        pgkv_options: crabka_pgkv::FjallOptions::default(),
-        checkpoints: Some(crabka_gres::CheckpointRuntimeConfig {
-            object_store: crabka_gres::CheckpointObjectStoreConfig::Local {
+        pgkv_options: krabka_pgkv::FjallOptions::default(),
+        checkpoints: Some(krabka_gres::CheckpointRuntimeConfig {
+            object_store: krabka_gres::CheckpointObjectStoreConfig::Local {
                 root: checkpoint_dir.path().to_path_buf(),
             },
             frames_threshold: 1,
-            bytes_threshold: crabka_units::bytes(1),
-            part_max_size: crabka_gres_substrate::DEFAULT_PART_MAX_SIZE,
+            bytes_threshold: krabka_units::bytes(1),
+            part_max_size: krabka_gres_substrate::DEFAULT_PART_MAX_SIZE,
             retain_newest: 2,
-            delete_records_timeout: crabka_units::secs(30),
+            delete_records_timeout: krabka_units::secs(30),
             poll_interval: std::time::Duration::from_secs(1),
         }),
         kafka_security: None,
         ranges: Some("0,200".to_string()),
-        range0_follower_poll_interval: crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL
+        range0_follower_poll_interval: krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL
             .to_std(),
         range0_follower_rebuild_backoff_floor:
-            crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR.to_std(),
+            krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR.to_std(),
         range0_follower_rebuild_backoff_ceiling:
-            crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
-        durable_inspection_timeout: crabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
+            krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
+        durable_inspection_timeout: krabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
             .to_std(),
-        durable_inspection_fold_limits: crabka_gres_substrate::FoldLimits::default(),
-        recovery_read_policy: crabka_gres_substrate::RecoveryReadPolicy::default(),
-        wal_admin_policy: crabka_gres_substrate::WalAdminPolicy::default(),
-        producer_dns_timeout: crabka_client_core::ClientDnsTimeout::default(),
-        producer_flush_timeout: crabka_client_producer::ProducerFlushTimeout::default(),
-        producer_retry_policy: crabka_client_producer::ProducerRetryPolicy::default(),
-        producer_throughput_policy: crabka_client_producer::ProducerThroughputPolicy::default(),
-        wal_frame_max_size: crabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
+        durable_inspection_fold_limits: krabka_gres_substrate::FoldLimits::default(),
+        recovery_read_policy: krabka_gres_substrate::RecoveryReadPolicy::default(),
+        wal_admin_policy: krabka_gres_substrate::WalAdminPolicy::default(),
+        producer_dns_timeout: krabka_client_core::ClientDnsTimeout::default(),
+        producer_flush_timeout: krabka_client_producer::ProducerFlushTimeout::default(),
+        producer_retry_policy: krabka_client_producer::ProducerRetryPolicy::default(),
+        producer_throughput_policy: krabka_client_producer::ProducerThroughputPolicy::default(),
+        wal_frame_max_size: krabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
         host_ranges: None,
         range_rpc: None,
         advertised_endpoint: None,
-        timestamp_source_mode: crabka_gres_ranges::TimestampSourceMode::LogicalTso,
+        timestamp_source_mode: krabka_gres_ranges::TimestampSourceMode::LogicalTso,
         hlc_wall_offset_ms: 0,
-        registry_policy: crabka_gres_control::RegistryPolicy::default(),
-        range_runtime_policy: crabka_gres_ranges::RangeRuntimePolicy::default(),
-        pgexec_runtime_policy: crabka_pgexec::RuntimePolicy::default(),
+        registry_policy: krabka_gres_control::RegistryPolicy::default(),
+        range_runtime_policy: krabka_gres_ranges::RangeRuntimePolicy::default(),
+        pgexec_runtime_policy: krabka_pgexec::RuntimePolicy::default(),
     })
     .await
     .expect("open live multi-range runtime");
@@ -2914,7 +2914,7 @@ async fn live_multirange_transfer_rejects_concurrent_pause_without_waiting() {
     };
     assert!(matches!(
         rejected,
-        crabka_gres_ranges::RangeTransferError::AlreadyPaused { range_id } if range_id == range
+        krabka_gres_ranges::RangeTransferError::AlreadyPaused { range_id } if range_id == range
     ));
 
     transfer
@@ -2930,85 +2930,85 @@ async fn live_multirange_transfer_rejects_concurrent_pause_without_waiting() {
 #[tokio::test]
 async fn non_live_runtimes_do_not_expose_range_transfer_capability() {
     let _permit = broker_test_permit().await;
-    let single = crabka_gres::open_substrate_runtime(&crabka_gres::SubstrateRuntimeConfig {
+    let single = krabka_gres::open_substrate_runtime(&krabka_gres::SubstrateRuntimeConfig {
         client_dispatch_queue_capacity:
-            crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-        client_frame_max: crabka_client_core::ClientFrameMax::default(),
-        fdw_fetch_min: crabka_client_core::FetchMinBytes::default(),
-        wal_recovery_fetch_min: crabka_client_core::FetchMinBytes::default(),
+            krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+        client_frame_max: krabka_client_core::ClientFrameMax::default(),
+        fdw_fetch_min: krabka_client_core::FetchMinBytes::default(),
+        wal_recovery_fetch_min: krabka_client_core::FetchMinBytes::default(),
         bootstrap: "memory://".to_string(),
         tenant: "runtime-transfer".to_string(),
         cache_dir: None,
-        pgkv_options: crabka_pgkv::FjallOptions::default(),
+        pgkv_options: krabka_pgkv::FjallOptions::default(),
         checkpoints: None,
         kafka_security: None,
         ranges: None,
-        range0_follower_poll_interval: crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL
+        range0_follower_poll_interval: krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL
             .to_std(),
         range0_follower_rebuild_backoff_floor:
-            crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR.to_std(),
+            krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR.to_std(),
         range0_follower_rebuild_backoff_ceiling:
-            crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
-        durable_inspection_timeout: crabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
+            krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
+        durable_inspection_timeout: krabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
             .to_std(),
-        durable_inspection_fold_limits: crabka_gres_substrate::FoldLimits::default(),
-        recovery_read_policy: crabka_gres_substrate::RecoveryReadPolicy::default(),
-        wal_admin_policy: crabka_gres_substrate::WalAdminPolicy::default(),
-        producer_dns_timeout: crabka_client_core::ClientDnsTimeout::default(),
-        producer_flush_timeout: crabka_client_producer::ProducerFlushTimeout::default(),
-        producer_retry_policy: crabka_client_producer::ProducerRetryPolicy::default(),
-        producer_throughput_policy: crabka_client_producer::ProducerThroughputPolicy::default(),
-        wal_frame_max_size: crabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
+        durable_inspection_fold_limits: krabka_gres_substrate::FoldLimits::default(),
+        recovery_read_policy: krabka_gres_substrate::RecoveryReadPolicy::default(),
+        wal_admin_policy: krabka_gres_substrate::WalAdminPolicy::default(),
+        producer_dns_timeout: krabka_client_core::ClientDnsTimeout::default(),
+        producer_flush_timeout: krabka_client_producer::ProducerFlushTimeout::default(),
+        producer_retry_policy: krabka_client_producer::ProducerRetryPolicy::default(),
+        producer_throughput_policy: krabka_client_producer::ProducerThroughputPolicy::default(),
+        wal_frame_max_size: krabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
         host_ranges: None,
         range_rpc: None,
         advertised_endpoint: None,
-        timestamp_source_mode: crabka_gres_ranges::TimestampSourceMode::LogicalTso,
+        timestamp_source_mode: krabka_gres_ranges::TimestampSourceMode::LogicalTso,
         hlc_wall_offset_ms: 0,
-        registry_policy: crabka_gres_control::RegistryPolicy::default(),
-        range_runtime_policy: crabka_gres_ranges::RangeRuntimePolicy::default(),
-        pgexec_runtime_policy: crabka_pgexec::RuntimePolicy::default(),
+        registry_policy: krabka_gres_control::RegistryPolicy::default(),
+        range_runtime_policy: krabka_gres_ranges::RangeRuntimePolicy::default(),
+        pgexec_runtime_policy: krabka_pgexec::RuntimePolicy::default(),
     })
     .await
     .expect("open in-memory single-range runtime");
-    let multi = crabka_gres::open_substrate_runtime(&crabka_gres::SubstrateRuntimeConfig {
+    let multi = krabka_gres::open_substrate_runtime(&krabka_gres::SubstrateRuntimeConfig {
         ranges: Some("0,100".to_string()),
-        ..crabka_gres::SubstrateRuntimeConfig {
+        ..krabka_gres::SubstrateRuntimeConfig {
             client_dispatch_queue_capacity:
-                crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-            client_frame_max: crabka_client_core::ClientFrameMax::default(),
-            fdw_fetch_min: crabka_client_core::FetchMinBytes::default(),
-            wal_recovery_fetch_min: crabka_client_core::FetchMinBytes::default(),
+                krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+            client_frame_max: krabka_client_core::ClientFrameMax::default(),
+            fdw_fetch_min: krabka_client_core::FetchMinBytes::default(),
+            wal_recovery_fetch_min: krabka_client_core::FetchMinBytes::default(),
             bootstrap: "memory://".to_string(),
             tenant: "runtime-transfer".to_string(),
             cache_dir: None,
-            pgkv_options: crabka_pgkv::FjallOptions::default(),
+            pgkv_options: krabka_pgkv::FjallOptions::default(),
             checkpoints: None,
             kafka_security: None,
             ranges: None,
             range0_follower_poll_interval:
-                crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL.to_std(),
+                krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL.to_std(),
             range0_follower_rebuild_backoff_floor:
-                crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR.to_std(),
+                krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR.to_std(),
             range0_follower_rebuild_backoff_ceiling:
-                crabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
-            durable_inspection_timeout: crabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
+                krabka_gres_control::DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING.to_std(),
+            durable_inspection_timeout: krabka_gres_substrate::DEFAULT_DURABLE_INSPECTION_TIMEOUT
                 .to_std(),
-            durable_inspection_fold_limits: crabka_gres_substrate::FoldLimits::default(),
-            recovery_read_policy: crabka_gres_substrate::RecoveryReadPolicy::default(),
-            wal_admin_policy: crabka_gres_substrate::WalAdminPolicy::default(),
-            producer_dns_timeout: crabka_client_core::ClientDnsTimeout::default(),
-            producer_flush_timeout: crabka_client_producer::ProducerFlushTimeout::default(),
-            producer_retry_policy: crabka_client_producer::ProducerRetryPolicy::default(),
-            producer_throughput_policy: crabka_client_producer::ProducerThroughputPolicy::default(),
-            wal_frame_max_size: crabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
+            durable_inspection_fold_limits: krabka_gres_substrate::FoldLimits::default(),
+            recovery_read_policy: krabka_gres_substrate::RecoveryReadPolicy::default(),
+            wal_admin_policy: krabka_gres_substrate::WalAdminPolicy::default(),
+            producer_dns_timeout: krabka_client_core::ClientDnsTimeout::default(),
+            producer_flush_timeout: krabka_client_producer::ProducerFlushTimeout::default(),
+            producer_retry_policy: krabka_client_producer::ProducerRetryPolicy::default(),
+            producer_throughput_policy: krabka_client_producer::ProducerThroughputPolicy::default(),
+            wal_frame_max_size: krabka_gres_substrate::DEFAULT_MAX_FRAME_SIZE,
             host_ranges: None,
             range_rpc: None,
             advertised_endpoint: None,
-            timestamp_source_mode: crabka_gres_ranges::TimestampSourceMode::LogicalTso,
+            timestamp_source_mode: krabka_gres_ranges::TimestampSourceMode::LogicalTso,
             hlc_wall_offset_ms: 0,
-            registry_policy: crabka_gres_control::RegistryPolicy::default(),
-            range_runtime_policy: crabka_gres_ranges::RangeRuntimePolicy::default(),
-            pgexec_runtime_policy: crabka_pgexec::RuntimePolicy::default(),
+            registry_policy: krabka_gres_control::RegistryPolicy::default(),
+            range_runtime_policy: krabka_gres_ranges::RangeRuntimePolicy::default(),
+            pgexec_runtime_policy: krabka_pgexec::RuntimePolicy::default(),
         }
     })
     .await
@@ -3029,7 +3029,7 @@ async fn runtime_uses_tenant_scram_by_default_and_rejects_wrong_password() {
     let mut args = substrate_test_args(format!("127.0.0.1:{port}"));
     args.auth = None;
     let server = tokio::spawn(async move {
-        crabka_gres::serve_listener_with_tenant_config_loader(listener, args, &loader).await
+        krabka_gres::serve_listener_with_tenant_config_loader(listener, args, &loader).await
     });
 
     let client = connect_with_password(port, "alice", &fixture_password()).await;
@@ -3065,7 +3065,7 @@ async fn runtime_tenant_scram_accepts_libpq_psql() {
     let mut args = substrate_test_args(format!("127.0.0.1:{port}"));
     args.auth = None;
     let server = tokio::spawn(async move {
-        crabka_gres::serve_listener_with_tenant_config_loader(listener, args, &loader).await
+        krabka_gres::serve_listener_with_tenant_config_loader(listener, args, &loader).await
     });
 
     let output = tokio::task::spawn_blocking(move || {
@@ -3095,7 +3095,7 @@ async fn runtime_serves_sql_over_pgwire() {
     let _permit = broker_test_permit().await;
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("local addr").port();
-    let server = tokio::spawn(crabka_gres::serve_listener(
+    let server = tokio::spawn(krabka_gres::serve_listener(
         listener,
         test_args(format!("127.0.0.1:{port}"), None),
     ));
@@ -3137,10 +3137,10 @@ async fn runtime_live_loader_serves_sql_over_memory_substrate() {
     let mut args = substrate_test_args(format!("127.0.0.1:{port}"));
     args.cache_dir = Some(cache_dir.path().to_path_buf());
     let server = tokio::spawn(async move {
-        crabka_gres::serve_listener_with_tenant_config_loader(
+        krabka_gres::serve_listener_with_tenant_config_loader(
             listener,
             args,
-            &crabka_gres::LiveTenantConfigLoader,
+            &krabka_gres::LiveTenantConfigLoader,
         )
         .await
     });
@@ -3219,7 +3219,7 @@ async fn runtime_serves_copy_from_stdin_over_pgwire() {
     let _permit = broker_test_permit().await;
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("local addr").port();
-    let server = tokio::spawn(crabka_gres::serve_listener(
+    let server = tokio::spawn(krabka_gres::serve_listener(
         listener,
         test_args(format!("127.0.0.1:{port}"), None),
     ));
@@ -3316,7 +3316,7 @@ async fn runtime_serves_copy_from_stdin_over_extended_protocol() {
     let _permit = broker_test_permit().await;
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("local addr").port();
-    let server = tokio::spawn(crabka_gres::serve_listener(
+    let server = tokio::spawn(krabka_gres::serve_listener(
         listener,
         test_args(format!("127.0.0.1:{port}"), None),
     ));
@@ -3399,7 +3399,7 @@ async fn runtime_reopens_durable_local_storage() {
     {
         let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
         let port = listener.local_addr().expect("local addr").port();
-        let server = tokio::spawn(crabka_gres::serve_listener(
+        let server = tokio::spawn(krabka_gres::serve_listener(
             listener,
             test_args(format!("127.0.0.1:{port}"), Some(data_dir.clone())),
         ));
@@ -3418,7 +3418,7 @@ async fn runtime_reopens_durable_local_storage() {
 
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("local addr").port();
-    let server = tokio::spawn(crabka_gres::serve_listener(
+    let server = tokio::spawn(krabka_gres::serve_listener(
         listener,
         test_args(format!("127.0.0.1:{port}"), Some(data_dir)),
     ));
@@ -3440,22 +3440,22 @@ async fn runtime_reopens_durable_local_storage() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn hosted_range_compute_forwards_dml_and_grants_timestamps_over_real_tcp() {
     let _permit = broker_test_permit().await;
-    let engine = crabka_pgexec::SqlEngine::new();
-    let horizon = crabka_gres_ranges::MemoryTsoHorizon::new(engine.kv_handle(), 1);
+    let engine = krabka_pgexec::SqlEngine::new();
+    let horizon = krabka_gres_ranges::MemoryTsoHorizon::new(engine.kv_handle(), 1);
     let persisted_max_ts = horizon.load_max_ts().expect("load TSO horizon");
     let tso =
-        crabka_gres_ranges::tso_rpc_from_horizon(horizon.clone(), horizon, 1, persisted_max_ts)
+        krabka_gres_ranges::tso_rpc_from_horizon(horizon.clone(), horizon, 1, persisted_max_ts)
             .expect("build durable TSO rpc");
     let service =
-        crabka_gres_ranges::HostedRangeService::new(std::collections::BTreeMap::from([(
-            crabka_gres_ranges::RangeId::COORDINATOR,
+        krabka_gres_ranges::HostedRangeService::new(std::collections::BTreeMap::from([(
+            krabka_gres_ranges::RangeId::COORDINATOR,
             engine.clone_handle(),
         )]))
         .with_tso(tso);
     let fixture = range_mtls_fixture();
     let address = spawn_range_tls(Arc::new(service), fixture.server).await;
     let client =
-        crabka_gres_ranges::FramedTcpClient::with_tls(fixture.client).expect("mTLS range client");
+        krabka_gres_ranges::FramedTcpClient::with_tls(fixture.client).expect("mTLS range client");
 
     for sql in [
         "CREATE TABLE forwarded (id int4)",
@@ -3464,8 +3464,8 @@ async fn hosted_range_compute_forwards_dml_and_grants_timestamps_over_real_tcp()
         let response = client
             .call(
                 &address.to_string(),
-                &crabka_gres_ranges::RangeRequest::Sql {
-                    range_id: crabka_gres_ranges::RangeId::COORDINATOR,
+                &krabka_gres_ranges::RangeRequest::Sql {
+                    range_id: krabka_gres_ranges::RangeId::COORDINATOR,
                     sql: sql.to_string(),
                 },
             )
@@ -3473,20 +3473,20 @@ async fn hosted_range_compute_forwards_dml_and_grants_timestamps_over_real_tcp()
             .expect("range RPC response");
         assert!(matches!(
             response,
-            crabka_gres_ranges::RangeResponse::SqlResults { .. }
+            krabka_gres_ranges::RangeResponse::SqlResults { .. }
         ));
     }
 
     let response = client
         .call(
             &address.to_string(),
-            &crabka_gres_ranges::RangeRequest::Tso(crabka_gres_ranges::TsoReq::Grant { count: 2 }),
+            &krabka_gres_ranges::RangeRequest::Tso(krabka_gres_ranges::TsoReq::Grant { count: 2 }),
         )
         .await
         .expect("TSO RPC response");
     assert_eq!(
         response,
-        crabka_gres_ranges::RangeResponse::Tso(crabka_gres_ranges::TsoResp::Granted {
+        krabka_gres_ranges::RangeResponse::Tso(krabka_gres_ranges::TsoResp::Granted {
             first_ts: 1,
             count: 2,
         })
@@ -3499,7 +3499,7 @@ async fn hosted_range_compute_forwards_dml_and_grants_timestamps_over_real_tcp()
         .expect("query locally after forwarded DML");
     assert!(matches!(
         rows.as_slice(),
-        [crabka_pgwire::engine::QueryResult::Rows { .. }]
+        [krabka_pgwire::engine::QueryResult::Rows { .. }]
     ));
 }
 
@@ -3541,7 +3541,7 @@ async fn connect_with_notifications(
         }
         assert!(
             tokio::time::Instant::now() < deadline,
-            "connect to crabka-gres did not succeed within 5s"
+            "connect to krabka-gres did not succeed within 5s"
         );
         tokio::time::sleep(std::time::Duration::from_millis(25)).await;
     }
@@ -3642,7 +3642,7 @@ async fn runtime_delivers_notifications_between_pgwire_connections() {
     let _permit = broker_test_permit().await;
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("local addr").port();
-    let server = tokio::spawn(crabka_gres::serve_listener(
+    let server = tokio::spawn(krabka_gres::serve_listener(
         listener,
         test_args(format!("127.0.0.1:{port}"), None),
     ));
@@ -3703,7 +3703,7 @@ async fn runtime_delivers_a_self_notification_to_the_notifying_connection() {
     let _permit = broker_test_permit().await;
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("local addr").port();
-    let server = tokio::spawn(crabka_gres::serve_listener(
+    let server = tokio::spawn(krabka_gres::serve_listener(
         listener,
         test_args(format!("127.0.0.1:{port}"), None),
     ));

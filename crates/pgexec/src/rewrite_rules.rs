@@ -1,9 +1,9 @@
 //! DDL support for durable rewrite rules.
 
-use crabka_pgcatalog::{RelationName, rule};
-use crabka_pgkv::{Kv, WriteOp};
-use crabka_pgparser::ast as parsed;
-use crabka_pgwire::engine::QueryResult;
+use krabka_pgcatalog::{RelationName, rule};
+use krabka_pgkv::{Kv, WriteOp};
+use krabka_pgparser::ast as parsed;
+use krabka_pgwire::engine::QueryResult;
 
 use crate::error::ExecError;
 
@@ -20,11 +20,11 @@ fn event(event: parsed::RuleEvent) -> rule::RuleEvent {
     }
 }
 
-fn relation_id(kv: &dyn Kv, name: &RelationName) -> Result<crabka_pgcatalog::TableId, ExecError> {
-    if let Ok(table) = crabka_pgcatalog::get_table(kv, name) {
+fn relation_id(kv: &dyn Kv, name: &RelationName) -> Result<krabka_pgcatalog::TableId, ExecError> {
+    if let Ok(table) = krabka_pgcatalog::get_table(kv, name) {
         return Ok(table.id);
     }
-    crabka_pgcatalog::get_view(kv, name)?;
+    krabka_pgcatalog::get_view(kv, name)?;
     crate::catalog_rel::view_oids(kv)?
         .get(name)
         .copied()
@@ -72,7 +72,7 @@ fn reject_rule_images_in_locking_clause(action: &parsed::RuleAction) -> Result<(
             .iter()
             .find(|name| matches!(name.to_ascii_lowercase().as_str(), "old" | "new"))
         {
-            return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+            return Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
                 "42P01",
                 format!("relation \"{image}\" in FOR UPDATE clause not found in FROM clause"),
             )));
@@ -108,7 +108,7 @@ fn reject_unqualified_columns_in_rule_values(
             });
             if let Some(column) = column {
                 return Err(ExecError::Remote(
-                    crabka_pgwire::error::PgError::error(
+                    krabka_pgwire::error::PgError::error(
                         "42703",
                         format!("column \"{column}\" does not exist"),
                     )
@@ -332,20 +332,20 @@ pub(crate) fn create(
     reject_rule_images_in_locking_clause(&stmt.action)?;
     reject_unqualified_columns_in_rule_values(&stmt.action, &table_name)?;
     if stmt.event == parsed::RuleEvent::Select {
-        if crabka_pgcatalog::get_view(kv, &table_name).is_ok() {
+        if krabka_pgcatalog::get_view(kv, &table_name).is_ok() {
             return Err(ExecError::ObjectNotInPrerequisiteState(format!(
                 "\"{}\" is already a view",
                 table_name.name
             )));
         }
-        if crabka_pgcatalog::get_table(kv, &table_name).is_ok() {
+        if krabka_pgcatalog::get_table(kv, &table_name).is_ok() {
             let kind = if crate::partition::is_partitioned(kv, &table_name)? {
                 "partitioned tables"
             } else {
                 "tables"
             };
             return Err(ExecError::Remote(
-                crabka_pgwire::error::PgError::error(
+                krabka_pgwire::error::PgError::error(
                     "42809",
                     format!(
                         "relation \"{}\" cannot have ON SELECT rules",
@@ -377,7 +377,7 @@ pub(crate) fn create(
         instead: stmt.instead,
         enabled: existing
             .as_ref()
-            .map_or(crabka_pgcatalog::trigger::TriggerEnabled::Origin, |rule| {
+            .map_or(krabka_pgcatalog::trigger::TriggerEnabled::Origin, |rule| {
                 rule.enabled
             }),
         action: stmt.action_source.clone(),
@@ -398,10 +398,10 @@ pub(crate) fn set_enabled(
         ))
     })?;
     stored.enabled = match mode {
-        parsed::TriggerEnableMode::Origin => crabka_pgcatalog::trigger::TriggerEnabled::Origin,
-        parsed::TriggerEnableMode::Replica => crabka_pgcatalog::trigger::TriggerEnabled::Replica,
-        parsed::TriggerEnableMode::Always => crabka_pgcatalog::trigger::TriggerEnabled::Always,
-        parsed::TriggerEnableMode::Disabled => crabka_pgcatalog::trigger::TriggerEnabled::Disabled,
+        parsed::TriggerEnableMode::Origin => krabka_pgcatalog::trigger::TriggerEnabled::Origin,
+        parsed::TriggerEnableMode::Replica => krabka_pgcatalog::trigger::TriggerEnabled::Replica,
+        parsed::TriggerEnableMode::Always => krabka_pgcatalog::trigger::TriggerEnabled::Always,
+        parsed::TriggerEnableMode::Disabled => krabka_pgcatalog::trigger::TriggerEnabled::Disabled,
     };
     Ok(rule::put_rule_ops(kv, &stored)?)
 }
@@ -412,7 +412,7 @@ pub(crate) fn alter(
     table_name: RelationName,
     action: &parsed::AlterRuleAction,
 ) -> Result<(QueryResult, Vec<WriteOp>), ExecError> {
-    if name == "_RETURN" && crabka_pgcatalog::get_view(kv, &table_name).is_ok() {
+    if name == "_RETURN" && krabka_pgcatalog::get_view(kv, &table_name).is_ok() {
         return Err(ExecError::InvalidObjectDefinition(
             "renaming an ON SELECT rule is not allowed".into(),
         ));
@@ -426,7 +426,7 @@ pub(crate) fn alter(
     match action {
         parsed::AlterRuleAction::RenameTo(new_name) => {
             let return_rule = new_name.eq_ignore_ascii_case("_RETURN")
-                && crabka_pgcatalog::get_view(kv, &table_name).is_ok();
+                && krabka_pgcatalog::get_view(kv, &table_name).is_ok();
             if return_rule || rule::get_rule(kv, table_id, new_name)?.is_some() {
                 let new_name = return_rule.then_some("_RETURN").unwrap_or(new_name);
                 return Err(ExecError::DuplicateObject(format!(
@@ -447,9 +447,9 @@ pub(crate) fn drop(
     table_name: RelationName,
     if_exists: bool,
 ) -> Result<(QueryResult, Vec<WriteOp>), ExecError> {
-    if name == "_RETURN" && crabka_pgcatalog::get_view(kv, &table_name).is_ok() {
+    if name == "_RETURN" && krabka_pgcatalog::get_view(kv, &table_name).is_ok() {
         return Err(ExecError::Remote(
-            crabka_pgwire::error::PgError::error(
+            krabka_pgwire::error::PgError::error(
                 "2BP01",
                 format!(
                     "cannot drop rule _RETURN on view {} because view {} requires it",
@@ -471,9 +471,9 @@ pub(crate) fn drop(
     }
     let oid = existing.expect("checked above").oid.to_string();
     let mut ops = rule::drop_rule_ops(table_id, name);
-    ops.push(crabka_pgcatalog::set_comment_op(
+    ops.push(krabka_pgcatalog::set_comment_op(
         "rule",
-        crabka_pgcatalog::CommentObject::Named(&oid),
+        krabka_pgcatalog::CommentObject::Named(&oid),
         None,
     ));
     Ok((command("DROP RULE"), ops))

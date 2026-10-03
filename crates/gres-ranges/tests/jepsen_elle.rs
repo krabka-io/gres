@@ -2,9 +2,9 @@ mod harness;
 
 use std::{collections::BTreeMap, num::NonZeroU64, sync::Arc};
 
-use crabka_gres_ranges::{MemoryTsoHorizon, RangeId, TsoError, TsoOracle};
-use crabka_pgkv::MemKv;
-use crabka_pgwire::engine::Engine;
+use krabka_gres_ranges::{MemoryTsoHorizon, RangeId, TsoError, TsoOracle};
+use krabka_pgkv::MemKv;
+use krabka_pgwire::engine::Engine;
 use harness::{SystemHarness, process::ProcessHarness, row_count, run};
 use stateright::semantics::{ConsistencyTester, LinearizabilityTester, SequentialSpec};
 use tokio::sync::Mutex;
@@ -303,7 +303,7 @@ fn deterministic_serializability_checker_limited_to_completed_histories_rejects_
 }
 
 async fn observe_then_append(
-    gateway: &crabka_gres_ranges::MultiRangeTenant,
+    gateway: &krabka_gres_ranges::MultiRangeTenant,
     client: u8,
     key: Key,
     value: i64,

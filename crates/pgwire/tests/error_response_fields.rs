@@ -8,7 +8,7 @@
 
 use assert2::assert;
 use bytes::BytesMut;
-use crabka_pgwire::{
+use krabka_pgwire::{
     error::{PgError, sqlstate},
     messages::backend,
 };

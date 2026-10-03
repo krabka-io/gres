@@ -5,7 +5,7 @@
 //! outcome. It is in-progress while the transaction runs, and
 //! aborted-equivalent after a crash, because it is then in no live snapshot.
 
-use crabka_pgkv::{Kv, KvError, WriteOp};
+use krabka_pgkv::{Kv, KvError, WriteOp};
 
 /// A transaction's recorded outcome.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,7 +30,7 @@ const S_PREPARED: u8 = 3;
 /// corrupt.
 pub fn get(kv: &dyn Kv, xid: u64) -> Result<XidStatus, KvError> {
     decode(
-        &kv.get(&crabka_pgkv::key::clog_key(xid))?
+        &kv.get(&krabka_pgkv::key::clog_key(xid))?
             .unwrap_or_default(),
     )
 }
@@ -81,7 +81,7 @@ pub fn put_op(xid: u64, status: XidStatus) -> WriteOp {
         }
     };
     WriteOp::Put {
-        key: crabka_pgkv::key::clog_key(xid),
+        key: krabka_pgkv::key::clog_key(xid),
         value,
     }
 }
@@ -96,7 +96,7 @@ pub fn is_terminal(value: &[u8]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgkv::MemKv;
+    use krabka_pgkv::MemKv;
 
     use super::*;
 
@@ -120,8 +120,8 @@ mod tests {
     #[test]
     fn corrupt_status_byte_errors() {
         let kv = MemKv::new();
-        kv.write_batch(&[crabka_pgkv::WriteOp::Put {
-            key: crabka_pgkv::key::clog_key(9),
+        kv.write_batch(&[krabka_pgkv::WriteOp::Put {
+            key: krabka_pgkv::key::clog_key(9),
             value: vec![99],
         }])
         .expect("put");
@@ -145,8 +145,8 @@ mod tests {
     #[test]
     fn truncated_prepared_value_errors_not_panics() {
         let kv = MemKv::new();
-        kv.write_batch(&[crabka_pgkv::WriteOp::Put {
-            key: crabka_pgkv::key::clog_key(9),
+        kv.write_batch(&[krabka_pgkv::WriteOp::Put {
+            key: krabka_pgkv::key::clog_key(9),
             value: vec![3],
         }])
         .expect("put");
@@ -158,9 +158,9 @@ mod tests {
         // Derive each status's on-disk bytes from put_op so this tracks the real
         // encoding rather than hardcoding the status bytes.
         let bytes = |status| match put_op(1, status) {
-            crabka_pgkv::WriteOp::Put { value, .. }
-            | crabka_pgkv::WriteOp::ConditionalPut { value, .. } => value,
-            crabka_pgkv::WriteOp::Delete { .. } => {
+            krabka_pgkv::WriteOp::Put { value, .. }
+            | krabka_pgkv::WriteOp::ConditionalPut { value, .. } => value,
+            krabka_pgkv::WriteOp::Delete { .. } => {
                 unreachable!("put_op must record a clog status")
             }
         };

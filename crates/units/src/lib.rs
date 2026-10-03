@@ -15,7 +15,7 @@
 //! checks arithmetic across dimensions:
 //!
 //! ```
-//! use crabka_units::prelude::*;
+//! use krabka_units::prelude::*;
 //!
 //! let batch = mebibytes(8);
 //! let window = secs(2);
@@ -28,7 +28,7 @@
 //! These types model *extents*: how many bytes, how long, how fast. They do not
 //! model *points*. A log offset, a leader epoch, or an epoch-milliseconds
 //! timestamp is an identifier or a coordinate and not a dimensioned magnitude, so
-//! it stays a newtype in `crabka-ids`. An absolute nanosecond timestamp also
+//! it stays a newtype in `krabka-ids`. An absolute nanosecond timestamp also
 //! cannot round-trip through `f64` seconds, which is a second reason why instants
 //! do not belong here. The next section gives the detail.
 //!
@@ -48,12 +48,12 @@
 //!
 //! # Wire boundary
 //!
-//! The generated Kafka codec (`crabka-protocol`'s `generated` module) stays raw
+//! The generated Kafka codec (`krabka-protocol`'s `generated` module) stays raw
 //! integers, because it must be byte-exact. Convert a value when it enters or
 //! leaves the hand-written domain layer. Use the extension traits in [`convert`]:
 //!
 //! ```
-//! use crabka_units::prelude::*;
+//! use krabka_units::prelude::*;
 //!
 //! // Decoding a request: raw `int32` milliseconds in, `Time` out.
 //! let timeout = Time::from_millis(30_000);
@@ -121,7 +121,7 @@ pub type Ratio = uom::si::f64::Ratio;
 /// Everything needed to name, build, and unwrap a quantity.
 ///
 /// Glob-import this in modules that work with quantities:
-/// `use crabka_units::prelude::*;`.
+/// `use krabka_units::prelude::*;`.
 pub mod prelude {
     pub use crate::{
         ByteRate, ByteSize, Frequency, Ratio, Time, byte_rate, bytes, bytes_per_sec,

@@ -19,13 +19,13 @@ pub enum BrokerError {
     #[error("I/O: {0}")]
     Io(#[from] std::io::Error),
 
-    /// Storage-layer error that comes up from [`crabka_log`].
+    /// Storage-layer error that comes up from [`krabka_log`].
     #[error("log: {0}")]
-    Log(#[from] crabka_log::LogError),
+    Log(#[from] krabka_log::LogError),
 
     /// Wire-protocol decoding or encoding error.
     #[error("protocol: {0}")]
-    Protocol(#[from] crabka_protocol::ProtocolError),
+    Protocol(#[from] krabka_protocol::ProtocolError),
 
     /// The peer sent an `(api_key, version)` pair that the handler table
     /// cannot serve.
@@ -137,7 +137,7 @@ pub enum BrokerError {
 
     /// A non-controller node lists itself in `controller_quorum_voters`.
     #[error("node {node_id} is not a controller but appears in its own controller_quorum_voters")]
-    NonControllerIsVoter { node_id: crabka_raft::NodeId },
+    NonControllerIsVoter { node_id: krabka_raft::NodeId },
 
     /// A SASL listener is declared but `enabled_sasl_mechanisms` is empty.
     #[error("SASL listener {name} declared but enabled_sasl_mechanisms is empty")]

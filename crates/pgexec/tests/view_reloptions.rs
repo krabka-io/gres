@@ -12,10 +12,10 @@
 use std::sync::Arc;
 
 use assert2::assert;
-use crabka_pgcatalog::{RelationName, ViewOptions};
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgkv::{Kv, MemKv};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgcatalog::{RelationName, ViewOptions};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgkv::{Kv, MemKv};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 async fn run(session: &mut SqlSession, sql: &str) -> Vec<QueryResult> {
     session
@@ -104,7 +104,7 @@ async fn create_view_records_its_reloptions() {
         let (engine, kv) = fixture();
         let mut session = engine.connect();
         run(&mut session, sql).await;
-        let view = crabka_pgcatalog::get_view(kv.as_ref(), &RelationName::public("v"))
+        let view = krabka_pgcatalog::get_view(kv.as_ref(), &RelationName::public("v"))
             .unwrap_or_else(|error| panic!("{sql}: stored view: {error:?}"));
         assert!(
             view.options
@@ -137,7 +137,7 @@ async fn or_replace_rewrites_the_reloptions() {
         "CREATE OR REPLACE VIEW v WITH (security_invoker) AS SELECT 2 AS n",
     )
     .await;
-    let view = crabka_pgcatalog::get_view(kv.as_ref(), &RelationName::public("v")).expect("view");
+    let view = krabka_pgcatalog::get_view(kv.as_ref(), &RelationName::public("v")).expect("view");
     assert!(
         view.options
             == ViewOptions {

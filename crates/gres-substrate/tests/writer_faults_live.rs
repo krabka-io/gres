@@ -9,17 +9,17 @@ use std::{
 };
 
 use assert2::assert;
-use crabka_broker::{Broker, BrokerConfig, BrokerHandle};
-use crabka_client_admin::AdminClient;
-use crabka_client_core::Client;
-use crabka_client_producer::ProducerError;
-use crabka_gres_substrate::{
+use krabka_broker::{Broker, BrokerConfig, BrokerHandle};
+use krabka_client_admin::AdminClient;
+use krabka_client_core::Client;
+use krabka_client_producer::ProducerError;
+use krabka_gres_substrate::{
     GroupCommitRequest, ProducerWalWriter, SubstrateCommitter, TransactionalWalWriter, WalFrame,
     WalWriterFaultInjector, WalWriterFaultStage, WriterGeneration, recover_live,
 };
-use crabka_pgexec::Committer;
-use crabka_pgkv::{Kv, MemKv, WriteOp};
-use crabka_protocol::{
+use krabka_pgexec::Committer;
+use krabka_pgkv::{Kv, MemKv, WriteOp};
+use krabka_protocol::{
     owned::fetch_request::{FetchPartition, FetchRequest, FetchTopic},
     primitives::uuid::Uuid as WireUuid,
 };

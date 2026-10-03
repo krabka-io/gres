@@ -13,8 +13,8 @@
 
 use std::collections::HashMap;
 
-use crabka_pgparser::ast::{BinaryOp, Expr, JoinConstraint, JoinKind};
-use crabka_pgtypes::{ColumnType, Datum};
+use krabka_pgparser::ast::{BinaryOp, Expr, JoinConstraint, JoinKind};
+use krabka_pgtypes::{ColumnType, Datum};
 
 use crate::{
     bind::BoundExpr,
@@ -38,7 +38,7 @@ pub(crate) struct Relation {
 #[derive(Clone)]
 pub(crate) struct JoinPolicy<'a> {
     /// Memory one blocking operator may retain before it reports 53200.
-    pub(crate) memory: crabka_units::ByteSize,
+    pub(crate) memory: krabka_units::ByteSize,
     /// The statement-wide budget shared with other materializing operators.
     pub(crate) statement_memory: crate::scanner::StatementMemory,
     /// The statement's whole-row references, which decide the hidden liveness
@@ -94,7 +94,7 @@ pub(crate) fn prepare_join_index(
     right: &Relation,
     constraint: &JoinConstraint,
     ctx: &crate::clock::EvalCtx,
-    blocking_query_memory: crabka_units::ByteSize,
+    blocking_query_memory: krabka_units::ByteSize,
 ) -> Result<PreparedJoinIndex, ExecError> {
     let index = JoinIndex::build(left, right, constraint, ctx, blocking_query_memory)?;
     let estimated_bytes = index.as_ref().map_or(0, JoinIndex::estimated_bytes);
@@ -147,7 +147,7 @@ pub(crate) fn count_join_rows(
     kind: JoinKind,
     constraint: &JoinConstraint,
     ctx: &crate::clock::EvalCtx,
-    blocking_query_memory: crabka_units::ByteSize,
+    blocking_query_memory: krabka_units::ByteSize,
 ) -> Result<i64, ExecError> {
     let condition = JoinCondition::new(left, right, constraint)?;
     let track_right = matches!(kind, JoinKind::Right | JoinKind::Full);
@@ -207,7 +207,7 @@ pub(crate) fn count_join_rows(
 fn increment_join_count(count: &mut i64) -> Result<(), ExecError> {
     *count = count
         .checked_add(1)
-        .ok_or(ExecError::Type(crabka_pgtypes::TypeError::Overflow))?;
+        .ok_or(ExecError::Type(krabka_pgtypes::TypeError::Overflow))?;
     Ok(())
 }
 
@@ -278,7 +278,7 @@ impl JoinCondition {
 
         if !self.pairs.is_empty() {
             for (left_index, right_index) in &self.pairs {
-                if crabka_pgtypes::ops::compare(&left[*left_index], &right[*right_index])?
+                if krabka_pgtypes::ops::compare(&left[*left_index], &right[*right_index])?
                     != Some(Ordering::Equal)
                 {
                     return Ok(false);
@@ -556,7 +556,7 @@ impl JoinIndex {
         right: &Relation,
         constraint: &JoinConstraint,
         ctx: &crate::clock::EvalCtx,
-        blocking_query_memory: crabka_units::ByteSize,
+        blocking_query_memory: krabka_units::ByteSize,
     ) -> Result<Option<Self>, ExecError> {
         let mut combined = left.scope.clone();
         combined.extend(&right.scope);
@@ -1338,8 +1338,8 @@ fn coalesce_join_columns(
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgtypes::{ArrayValue, ColumnType, ElemType};
-    use crabka_units::prelude::ByteSizeExt as _;
+    use krabka_pgtypes::{ArrayValue, ColumnType, ElemType};
+    use krabka_units::prelude::ByteSizeExt as _;
 
     use super::*;
 
@@ -1383,7 +1383,7 @@ mod tests {
 
     fn on_eq(lq: &str, lc: &str, rq: &str, rc: &str) -> JoinConstraint {
         JoinConstraint::On(Expr::Binary {
-            op: crabka_pgparser::ast::BinaryOp::Eq,
+            op: krabka_pgparser::ast::BinaryOp::Eq,
             left: Box::new(Expr::Column {
                 table: Some(lq.into()),
                 name: lc.into(),
@@ -1566,7 +1566,7 @@ mod tests {
             equi_key_columns(&eq(column("b"), add("b")), &combined, left.scope.width()).is_empty()
         );
         let subquery =
-            crabka_pgparser::parser::parse_expression("(SELECT 1)").expect("parse scalar subquery");
+            krabka_pgparser::parser::parse_expression("(SELECT 1)").expect("parse scalar subquery");
         assert2::assert!(!reads_only_right(&subquery, &combined, left.scope.width()));
     }
 
@@ -2163,7 +2163,7 @@ mod tests {
             rows: rows(),
         };
         let constraint = on_eq("a", "k", "b", "k");
-        let budget = crabka_units::ByteSize::from_bytes(16 * 1_024);
+        let budget = krabka_units::ByteSize::from_bytes(16 * 1_024);
 
         let count = count_join_rows(&left, &right, JoinKind::Left, &constraint, &tctx(), budget)
             .expect("count without joined-row materialization");
@@ -2402,7 +2402,7 @@ mod tests {
                 &right,
                 &bounded,
                 &tctx(),
-                crabka_units::ByteSize::from_bytes(1),
+                krabka_units::ByteSize::from_bytes(1),
             )
             .expect("valid join constraint")
             .is_none()
@@ -2421,7 +2421,7 @@ mod tests {
             .estimated_bytes();
         assert2::assert!(actual_bytes > planned_bytes);
 
-        let budget = crabka_units::ByteSize::from_bytes(
+        let budget = krabka_units::ByteSize::from_bytes(
             u64::try_from(actual_bytes - 1).expect("test allocation fits u64"),
         );
         let prepared =
@@ -2541,7 +2541,7 @@ mod tests {
     #[test]
     fn a_tid_key_is_hash_indexed() {
         let tids: Vec<Datum> = (1..=64u16)
-            .map(|offset| Datum::Tid(crabka_pgtypes::Tid { block: 0, offset }))
+            .map(|offset| Datum::Tid(krabka_pgtypes::Tid { block: 0, offset }))
             .collect();
         let side = |qualifier: &str| Relation {
             scope: Scope {

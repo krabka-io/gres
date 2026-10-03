@@ -1,4 +1,4 @@
-use crabka_gres_ranges::{
+use krabka_gres_ranges::{
     HashShardSpec, MultiRangeTenant, MultiRangeTenantConfig, RangeId, StatementKind, TableId,
     TenantName,
 };
@@ -34,10 +34,10 @@ async fn idle_sharded_autocommit_uses_owning_range_as_timestamp_primary() {
     assert_eq!(primaries.len(), 1);
     assert!(matches!(
         primaries[0].decision,
-        crabka_pgexec::PrimaryTxnDecision::Committed(_)
+        krabka_pgexec::PrimaryTxnDecision::Committed(_)
     ));
 }
-use crabka_pgwire::engine::{
+use krabka_pgwire::engine::{
     BoundParam, CloseTarget, Engine, ExecuteOutcome, QueryResult, Session,
 };
 
@@ -571,11 +571,11 @@ async fn extended_timestamp_dml_accepts_non_shard_parameter_types() {
         .extended_query_v2(
             "INSERT INTO t150 VALUES (20, $1, $2, $3), (120, false, '\\x00', 0.0)",
             &[
-                text_typed_param("true", crabka_pgtypes::oids::BOOL),
-                binary_typed_param(&[0xde, 0xad], crabka_pgtypes::oids::BYTEA),
+                text_typed_param("true", krabka_pgtypes::oids::BOOL),
+                binary_typed_param(&[0xde, 0xad], krabka_pgtypes::oids::BYTEA),
                 binary_typed_param(
                     &42.5f64.to_bits().to_be_bytes(),
-                    crabka_pgtypes::oids::FLOAT8,
+                    krabka_pgtypes::oids::FLOAT8,
                 ),
             ],
         )
@@ -600,7 +600,7 @@ async fn extended_timestamp_dml_accepts_binary_uuid_non_shard_parameter() {
     session
         .extended_query_v2(
             "INSERT INTO t150 VALUES (20, $1), (120, '550e8400-e29b-41d4-a716-446655440001')",
-            &[binary_typed_param(&uuid, crabka_pgtypes::oids::UUID)],
+            &[binary_typed_param(&uuid, krabka_pgtypes::oids::UUID)],
         )
         .await
         .expect("binary UUID write");
@@ -618,7 +618,7 @@ async fn extended_timestamp_dml_accepts_binary_uuid_non_shard_parameter() {
     let error = session
         .extended_query_v2(
             "INSERT INTO t150 VALUES (30, $1), (130, '550e8400-e29b-41d4-a716-446655440002')",
-            &[binary_typed_param(&uuid[..15], crabka_pgtypes::oids::UUID)],
+            &[binary_typed_param(&uuid[..15], krabka_pgtypes::oids::UUID)],
         )
         .await
         .expect_err("wrong binary UUID length");
@@ -912,7 +912,7 @@ async fn deferred_bind_accepts_null_logical_id_and_allows_reparse() {
         .await
         .expect("hidden row identity does not require a logical id");
     session
-        .close(crabka_pgwire::engine::CloseTarget::Statement("deferred"))
+        .close(krabka_pgwire::engine::CloseTarget::Statement("deferred"))
         .await
         .expect("close deferred statement");
     session
@@ -946,7 +946,7 @@ async fn sharded_scan_fails_when_required_range_is_not_hosted() {
 }
 
 fn same_hash_range_ids(
-    range_map: &crabka_gres_ranges::RangeMap,
+    range_map: &krabka_gres_ranges::RangeMap,
     spec: &HashShardSpec,
 ) -> (i32, i32, RangeId) {
     for first_id in 0_i32..100 {
@@ -961,7 +961,7 @@ fn same_hash_range_ids(
 }
 
 fn cross_hash_range_ids(
-    range_map: &crabka_gres_ranges::RangeMap,
+    range_map: &krabka_gres_ranges::RangeMap,
     spec: &HashShardSpec,
 ) -> (i32, i32) {
     let first_id = 0_i32;
@@ -974,7 +974,7 @@ fn cross_hash_range_ids(
     panic!("expected ids in different hash ranges")
 }
 
-fn hash_range(range_map: &crabka_gres_ranges::RangeMap, spec: &HashShardSpec, id: i32) -> RangeId {
+fn hash_range(range_map: &krabka_gres_ranges::RangeMap, spec: &HashShardSpec, id: i32) -> RangeId {
     range_map
         .route_hash_equality(spec, id.to_be_bytes())
         .expect("route")
@@ -1014,7 +1014,7 @@ fn binary_i32_param(value: i32) -> BoundParam {
 }
 
 async fn select_values(
-    session: &mut crabka_gres_ranges::tenant::GatewaySession,
+    session: &mut krabka_gres_ranges::tenant::GatewaySession,
     sql: &str,
 ) -> Vec<i32> {
     let results = session.simple_query(sql).await.expect(sql);
@@ -1033,7 +1033,7 @@ async fn select_values(
 }
 
 async fn select_scalar(
-    session: &mut crabka_gres_ranges::tenant::GatewaySession,
+    session: &mut krabka_gres_ranges::tenant::GatewaySession,
     sql: &str,
 ) -> String {
     let results = session.simple_query(sql).await.expect(sql);

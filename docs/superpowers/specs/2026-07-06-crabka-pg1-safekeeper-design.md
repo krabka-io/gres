@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Subsystem design. The ingest slice of the [Chapter C roadmap](2026-07-06-crabka-postgres-chapter-roadmap-design.md) — a stock, unpatched Postgres primary streams its physical WAL into a Crabka topic, durably, with correct feedback.
+**Type:** Subsystem design. The ingest slice of the [Chapter C roadmap](2026-07-06-krabka-postgres-chapter-roadmap-design.md) — a stock, unpatched Postgres primary streams its physical WAL into a Crabka topic, durably, with correct feedback.
 
 ## Context — where this sits, and a roadmap correction
 
@@ -10,7 +10,7 @@ PG-1 plays Neon's safekeeper role: speak `START_REPLICATION … PHYSICAL` to a *
 
 **The safekeeper is a standalone component that *produces* framed WAL records to an internal topic with `acks=all` over the ordinary Kafka wire.** The produce path *is* the `WalStore::append_durable` path once diskless slice 1 lands (produce → partition writer → `append_durable`) — entered over the wire instead of by linking the broker. Consequences:
 
-- **Zero broker changes; buildable today** against the landed broker + `crabka-client-producer`.
+- **Zero broker changes; buildable today** against the landed broker + `krabka-client-producer`.
 - **The durability tier is inherited and upgrades transparently:** classic topic today (`acks=all` = replicated, page-cache durability), fsync-durable when slice 1 lands, fsync-quorum at 6a — with **no safekeeper code change**. `flushed_lsn` feedback is therefore *tier-qualified*: production use of the feedback (letting the primary discard WAL) is gated on slice 1+, and the docs say so.
 - **Flush-to-bucket, indexing, and Fetch-consumption come free** — the WAL group is just a topic; PG-3's future live-ingest is a consumer.
 
@@ -22,7 +22,7 @@ The roadmap doc is updated alongside this spec.
 - **Contiguous, self-describing framing:** each produced record's value is `[magic "PGW1" | start_lsn u64 LE | wal bytes]`; chunking aligned to `XLogData` boundaries (≤ 512 KiB targets); **contiguity enforced** — the next record's `start_lsn` must equal the previous `end_lsn`, at produce time and at restart.
 - **Correct feedback:** `write_lsn` = highest enqueued, `flushed_lsn` = highest **acked** end-LSN, sent on keepalive-reply-requested and on a timer; a physical slot pins WAL on the primary until confirmed.
 - **Crash-safe resume:** on restart, read the topic tail for the last frame's `end_lsn` and resume `START_REPLICATION` there — the slot guarantees availability.
-- **PG-2 as the validity oracle:** the stored stream, consumed back and fed through `crabka-postgres-wal`'s decoder, must decode cleanly (framing continuity, record CRCs) across every chunk boundary — the slice gate.
+- **PG-2 as the validity oracle:** the stored stream, consumed back and fed through `krabka-postgres-wal`'s decoder, must decode cleanly (framing continuity, record CRCs) across every chunk boundary — the slice gate.
 
 ## Non-goals
 
@@ -35,7 +35,7 @@ The roadmap doc is updated alongside this spec.
 
 ```
 stock Postgres 17 primary
-  └─ replication conn (replication=true): IDENTIFY_SYSTEM → slot crabka_sk_<cluster> (physical,
+  └─ replication conn (replication=true): IDENTIFY_SYSTEM → slot krabka_sk_<cluster> (physical,
      create-if-missing) → START_REPLICATION … PHYSICAL <resume_lsn> TIMELINE <tli>
        CopyBoth stream:
          XLogData('w': wal_start, wal_end, bytes) ──► chunker (XLogData-aligned, ≤512 KiB, contiguity guard)
@@ -43,11 +43,11 @@ stock Postgres 17 primary
          ◄── standby status('r': write, flush, apply=flush, reply?)   flush = highest ACKED end_lsn
                                     │
                                     ▼
-  crabka-client-producer, acks=all ──► internal topic  __pg_wal.<cluster>  (1 partition)
+  krabka-client-producer, acks=all ──► internal topic  __pg_wal.<cluster>  (1 partition)
        record value = PGW1 | start_lsn | wal bytes      (v2 batch framing = free flush/index/Fetch reuse)
                                     │ acks (offsets) ──► flushed_lsn advance
   restart: client-consumer reads the tail → last end_lsn → resume_lsn
-  gate:   consume all → crabka-postgres-wal decoder → clean decode across chunk boundaries
+  gate:   consume all → krabka-postgres-wal decoder → clean decode across chunk boundaries
 ```
 
 ## Key Design Decisions
@@ -70,11 +70,11 @@ The frame carries its own `start_lsn`; `end_lsn = start + len`. Chunk boundaries
 
 ### The PG-2 decode gate
 
-The end-to-end proof: run real traffic on a containerized PG 17, let the safekeeper ingest it, then consume `__pg_wal.<cluster>` and feed the reassembled byte stream through `crabka-postgres-wal::WalStreamDecoder`. Every record must decode with valid CRCs and contiguous LSNs across every chunk boundary — the two crates verify each other (the decoder was designed for LSN-addressed runs; the safekeeper produces them).
+The end-to-end proof: run real traffic on a containerized PG 17, let the safekeeper ingest it, then consume `__pg_wal.<cluster>` and feed the reassembled byte stream through `krabka-postgres-wal::WalStreamDecoder`. Every record must decode with valid CRCs and contiguous LSNs across every chunk boundary — the two crates verify each other (the decoder was designed for LSN-addressed runs; the safekeeper produces them).
 
 ## Integration
 
-- **`crates/safekeeper`** (new, `crabka-safekeeper`) — **`publish = false` + private release-plz entry**. Deps: `crabka-client-producer` (acks=all produce), `crabka-client-consumer` (tail resume + the gate), `crabka-client-admin` (ensure-topic), `tokio-postgres`/`postgres-protocol`, `bytes`, `thiserror`, `tokio`. Dev-dep: `crabka-postgres-wal` (the decode gate).
+- **`crates/safekeeper`** (new, `krabka-safekeeper`) — **`publish = false` + private release-plz entry**. Deps: `krabka-client-producer` (acks=all produce), `krabka-client-consumer` (tail resume + the gate), `krabka-client-admin` (ensure-topic), `tokio-postgres`/`postgres-protocol`, `bytes`, `thiserror`, `tokio`. Dev-dep: `krabka-postgres-wal` (the decode gate).
 - **Topic convention:** `__pg_wal.<cluster_id>`, 1 partition, created if missing (`CreateTopicSpec`); retention effectively infinite until the trim slice.
 - **Upgrades free:** slice 1 / 6a change the topic's durability tier, not this crate.
 
@@ -103,7 +103,7 @@ The end-to-end proof: run real traffic on a containerized PG 17, let the safekee
 
 - **Ingest path:** standalone producer over the Kafka wire (`acks=all`, `__pg_wal.<cluster>`); zero broker changes; durability tier inherited — the WAL-slice gate dissolved (roadmap updated).
 - **Framing:** `PGW1 | start_lsn | bytes`, XLogData-aligned ≤ 512 KiB chunks, contiguity enforced; no LSN index in this slice.
-- **Feedback:** flush = acked end-LSN, tier-qualified; physical slot `crabka_sk_<cluster>`; single timeline, halt on switch.
+- **Feedback:** flush = acked end-LSN, tier-qualified; physical slot `krabka_sk_<cluster>`; single timeline, halt on switch.
 - **Resume:** tail-read on restart.
 - **Gate:** the stored stream decodes cleanly through PG-2's decoder.
 - **Crate:** `crates/safekeeper`, `publish = false`.

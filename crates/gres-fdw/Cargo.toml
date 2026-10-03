@@ -1,5 +1,5 @@
 [package]
-name = "crabka-gres-fdw"
+name = "krabka-gres-fdw"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -9,7 +9,7 @@ rust-version.workspace = true
 description = "Foreign-data wrapper exposing Kafka topics as SQL tables inside Crabka Gres tenant databases"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-gres-fdw"
+documentation = "https://docs.rs/krabka-gres-fdw"
 readme = "README.md"
 keywords = ["kafka", "postgres", "fdw", "crabka", "gres"]
 categories = ["database", "asynchronous"]
@@ -22,18 +22,18 @@ default = []
 roundtrip = []
 
 [dependencies]
-crabka-pgcatalog = { version = "0.4.2", path = "../pgcatalog" }
-crabka-pgtypes = { version = "0.4.2", path = "../pgtypes" }
-crabka-pgexec = { version = "0.4.2", path = "../pgexec" }
-crabka-pgkv = { version = "0.4.2", path = "../pgkv" }
+krabka-pgcatalog = { version = "0.4.2", path = "../pgcatalog" }
+krabka-pgtypes = { version = "0.4.2", path = "../pgtypes" }
+krabka-pgexec = { version = "0.4.2", path = "../pgexec" }
+krabka-pgkv = { version = "0.4.2", path = "../pgkv" }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync", "test-util"] }
 thiserror = { workspace = true }
-crabka-client-core = { version = "0.4.2", path = "../client-core" }
-crabka-client-admin = { version = "0.4.2", path = "../client-admin" }
-crabka-protocol = { version = "0.4.2", path = "../protocol" }
-crabka-schema-serde = { version = "0.4.2", path = "../schema-serde", features = ["avro", "json", "protobuf"] }
-crabka-security = { workspace = true }
-crabka-units = { workspace = true }
+krabka-client-core = { version = "0.4.2", path = "../client-core" }
+krabka-client-admin = { version = "0.4.2", path = "../client-admin" }
+krabka-protocol = { version = "0.4.2", path = "../protocol" }
+krabka-schema-serde = { version = "0.4.2", path = "../schema-serde", features = ["avro", "json", "protobuf"] }
+krabka-security = { workspace = true }
+krabka-units = { workspace = true }
 apache-avro = { workspace = true }
 serde_json = { workspace = true }
 rustls = { workspace = true }
@@ -45,10 +45,10 @@ protox = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
-crabka-broker = { version = "0.4.2", path = "../broker" }
-crabka-schema-registry = { version = "0.4.2", path = "../schema-registry" }
-crabka-client-producer = { version = "0.4.2", path = "../client-producer" }
-crabka-pgwire = { version = "0.4.2", path = "../pgwire" }
+krabka-broker = { version = "0.4.2", path = "../broker" }
+krabka-schema-registry = { version = "0.4.2", path = "../schema-registry" }
+krabka-client-producer = { version = "0.4.2", path = "../client-producer" }
+krabka-pgwire = { version = "0.4.2", path = "../pgwire" }
 tokio-postgres = { workspace = true }
 tokio-util = { workspace = true }
 tempfile = { workspace = true }

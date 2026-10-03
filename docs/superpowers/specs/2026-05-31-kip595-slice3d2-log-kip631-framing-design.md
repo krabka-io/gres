@@ -81,7 +81,7 @@ broker-handler churn.
 
 ### Engine + snapshot wiring (`crates/raft/src/kraft/controller.rs`, `snapshot.rs`)
 
-- `on_submit_change`: replace `crabka_metadata::to_kafka_record` (wincode) with
+- `on_submit_change`: replace `krabka_metadata::to_kafka_record` (wincode) with
   `to_kraft(rec, &image)` → `KraftMetadataRecord::encode_value(version)` → the
   log `RecordBatch`.
 - `advance_and_apply`: decode the record value via

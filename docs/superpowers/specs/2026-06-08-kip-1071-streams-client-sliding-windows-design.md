@@ -9,7 +9,7 @@ broker or wire-protocol changes.
 ## 1. Context
 
 The KIP-1071 streams **client** runtime (`crates/client-streams`, crate
-`crabka-client-streams`) is feature-rich: the original 7-sub-project program
+`krabka-client-streams`) is feature-rich: the original 7-sub-project program
 plus FK-join, global table, suppress, punctuation, EOS, standby/warmup, and
 schema-serde have all merged. Time windows (tumbling/hopping) and session
 windows are implemented; **sliding windows (KIP-450) are the remaining
@@ -169,7 +169,7 @@ what sliding needs).
 - Unit tests on the processor mirror `window_aggregate.rs`'s in-process
   `Dispatch`/`ProcessorContext` harness, with explicit out-of-order sequences.
 - `SlidingWindows` constructor + bound-assert unit tests.
-- Full `cargo test -p crabka-client-streams` is the erasure-safety gate (DSL
+- Full `cargo test -p krabka-client-streams` is the erasure-safety gate (DSL
   type mismatches are runtime downcast failures, not compile errors).
 - `cargo fmt --check` and `cargo clippy --workspace --all-targets -D warnings`
   before push.

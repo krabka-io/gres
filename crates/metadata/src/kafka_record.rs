@@ -4,13 +4,13 @@
 //! record batches (Component B). Each [`MetadataRecord`] maps to exactly
 //! one [`Record`]: `key = None`, `value = wincode(MetadataRecord)`. The
 //! enum variant itself is the record type + version, so no separate type
-//! tag is carried. This wire surface is crabka-private (clients never
+//! tag is carried. This wire surface is krabka-private (clients never
 //! fetch `__cluster_metadata`), so it only needs to be stable and
 //! round-trippable, and not byte-identical to Apache Kafka's `ApiMessage`
 //! framing.
 
 use bytes::Bytes;
-use crabka_protocol::records::Record;
+use krabka_protocol::records::Record;
 use serde_wincode::SerdeCompat;
 use wincode::{Deserialize as _, Serialize as _};
 

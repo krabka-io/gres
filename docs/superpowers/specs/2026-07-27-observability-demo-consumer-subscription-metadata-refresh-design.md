@@ -22,7 +22,7 @@ The demo adds one optional whole-millisecond input:
 
 - CLI: `--consumer-subscription-metadata-refresh-interval-ms`
 - environment:
-  `CRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS`
+  `KRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS`
 
 `Cli` stores the input as `Option<NonZeroU64>`. Precedence remains Clap's
 existing CLI-over-environment behavior. An omitted value resolves through
@@ -72,8 +72,8 @@ Only the `demo-consume` service in
 `demo/observability/docker-compose.yml` receives:
 
 ```text
-CRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS:
-  "${CRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS:-5000}"
+KRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS:
+  "${KRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS:-5000}"
 ```
 
 `demo-produce` and `demo-stream` must not contain this environment variable.

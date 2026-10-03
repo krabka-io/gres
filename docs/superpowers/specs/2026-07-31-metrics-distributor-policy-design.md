@@ -18,13 +18,13 @@ defaults.
 
 ## Configuration Surface
 
-The `crabka-metrics` binary adds:
+The `krabka-metrics` binary adds:
 
 | CLI | Environment | Default |
 |---|---|---:|
-| `--ha-failover-timeout` | `CRABKA_METRICS_HA_FAILOVER_TIMEOUT` | `30s` |
-| `--ingest-rate-bucket-cap` | `CRABKA_METRICS_INGEST_RATE_BUCKET_CAP` | `100000` |
-| `--distributor-max-decompressed` | `CRABKA_METRICS_DISTRIBUTOR_MAX_DECOMPRESSED` | `32MiB` |
+| `--ha-failover-timeout` | `KRABKA_METRICS_HA_FAILOVER_TIMEOUT` | `30s` |
+| `--ingest-rate-bucket-cap` | `KRABKA_METRICS_INGEST_RATE_BUCKET_CAP` | `100000` |
+| `--distributor-max-decompressed` | `KRABKA_METRICS_DISTRIBUTOR_MAX_DECOMPRESSED` | `32MiB` |
 
 All three options are accepted for every target, matching the binary's
 existing flat CLI. Only the distributor consumes them.
@@ -50,7 +50,7 @@ boundary. Invalid values fail during CLI parsing.
 
 ```text
 CLI / environment
-  -> crabka-metrics distributor startup
+  -> krabka-metrics distributor startup
   -> DistributorState
        -> HaTracker election timeout
        -> IngestEnforcer tenant bucket cap

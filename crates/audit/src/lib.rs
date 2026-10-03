@@ -1,6 +1,6 @@
 //! Crabka audit subsystem: event model, OCSF serialization, and write pipeline.
 //!
-//! See `docs/superpowers/specs/2026-06-18-crabka-fedramp-mla-audit-design.md`.
+//! See `docs/superpowers/specs/2026-06-18-krabka-fedramp-mla-audit-design.md`.
 
 pub mod chain;
 pub mod checkpoint;
@@ -16,7 +16,7 @@ pub mod verify;
 
 pub use chain::{ChainState, GENESIS_HEAD, chain_hash};
 pub use checkpoint::{Checkpoint, EVENT_CLASS_CHECKPOINT};
-pub use crabka_ids::NodeId;
+pub use krabka_ids::NodeId;
 pub use event::{
     AuditEndpoint, AuditEvent, AuditEventClass, AuditOutcome, AuditPrincipal, AuditResource,
     LifecycleKind,

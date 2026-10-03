@@ -6,8 +6,8 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use crabka_ids::Offset;
-use crabka_units::prelude::{ByteSize, ByteSizeExt as _, TimeExt as _};
+use krabka_ids::Offset;
+use krabka_units::prelude::{ByteSize, ByteSizeExt as _, TimeExt as _};
 use tracing::instrument;
 
 use crate::{config::LogConfig, error::LogError, name, segment::Segment};

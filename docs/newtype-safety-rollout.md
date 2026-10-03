@@ -16,7 +16,7 @@ byte-compatibility gate need a new scoped design before they become work.
 
 The shared-type foundation is landed:
 
-- **`crabka-ids`** now defines the canonical `Offset(i64)` and `PartitionIndex(i32)` — a zero-IO, WASM-buildable leaf crate depending only on `derive_more` + `serde`, so even the observability stack (which does not depend on `crabka-protocol`) can name a Kafka offset without a raw integer.
+- **`krabka-ids`** now defines the canonical `Offset(i64)` and `PartitionIndex(i32)` — a zero-IO, WASM-buildable leaf crate depending only on `derive_more` + `serde`, so even the observability stack (which does not depend on `krabka-protocol`) can name a Kafka offset without a raw integer.
 - The four scattered crate-local copies (grpc-gateway, metrics-service, promql, replicator) were **unified** onto it, removing the `.0.into()` bridge.
 - Adopted directly in the Kafka-WAL offset consumers whose formats are verified by their own `cargo test` (observability, metrics).
 - Adopted in `records-legacy` (`ParsedRecord.offset`), the first **wire-format** crate: the v0/v1 `MessageSet` bytes are held byte-identical (unwrap `.0` at every `put_i64`), verified by the crate's round-trip tests and broker's legacy-produce tests.
@@ -25,13 +25,13 @@ The full protocol **differential suite passes against the JVM oracle** (675 test
 
 **Wire-facing core — in progress**, dependency-ordered, each crate verified in isolation before the next:
 
-- **`log`** ✅ — fully converted (~300 sites). On-disk index/segment/txn-index/leader-epoch-checkpoint bytes and the v2 wire format held byte-identical (raw `i64` at every disk/`RecordBatch` boundary); proven by 149 unit + proptest round-trips. Re-exports `crabka_log::Offset` for consumers.
-- **`raft`** ✅ — fully converted at the `KraftLog` facade + controller (~150 sites). The pure consensus core `crabka-kraft-core` stays `i64` (model-checked, WASM-buildable); raft wraps at that boundary and at the KIP-595 wire/snapshot boundaries. Proven by 153 unit + 28 integration/**stateright model-check** tests.
+- **`log`** ✅ — fully converted (~300 sites). On-disk index/segment/txn-index/leader-epoch-checkpoint bytes and the v2 wire format held byte-identical (raw `i64` at every disk/`RecordBatch` boundary); proven by 149 unit + proptest round-trips. Re-exports `krabka_log::Offset` for consumers.
+- **`raft`** ✅ — fully converted at the `KraftLog` facade + controller (~150 sites). The pure consensus core `krabka-kraft-core` stays `i64` (model-checked, WASM-buildable); raft wraps at that boundary and at the KIP-595 wire/snapshot boundaries. Proven by 153 unit + 28 integration/**stateright model-check** tests.
 - **`broker`** ✅ — fully converted for **both** `Offset` (~45 seam + ~250 internal sites) and `PartitionIndex` (~400 sites): the `(partition, offset)` coordinate is now type-safe through partition state, the data-path handlers, replication, txn, share, and the coordinators. Wire/metadata fields, the `<topic>-<partition>` dir-name format, the hash partitioners, and the public/test-facing `BrokerHandle` API stay `i32`/`i64` (so byte shape and the 13 reverse-deps are untouched). Proven by 1277 unit + 24 end-to-end (produce/fetch/compaction/describe-topic-partitions) tests.
 
 **The `(partition, offset)` coordinate and all six shared core identifiers are
 complete through their declared wire-facing boundaries.**
-`crabka-kraft-core` and `crabka-protocol`'s `RecordBatch` intentionally stay raw
+`krabka-kraft-core` and `krabka-protocol`'s `RecordBatch` intentionally stay raw
 at the model-check and generated-wire boundaries. Byte-exactness is checked by
 each crate's on-disk/consensus tests plus the **JVM differential oracle**
 (`tools/oracle`, JDK 17, `JAVA_HOME`) and Docker/testcontainers — noting a
@@ -73,7 +73,7 @@ here alone does not constitute unfinished work.
 
 High-value but wire-crossing. Each is a staged rollout: **define the canonical newtype in an owner crate → add `From`/`Into` at the generated-codec boundary → convert consumers crate-by-crate, leaf crates last.** One type at a time; do not interleave.
 
-All six live in **`crabka-ids`** (the canonical home), owned there rather than in `protocol`/`metadata` so the observability stack (which doesn't depend on `protocol`) can name them.
+All six live in **`krabka-ids`** (the canonical home), owned there rather than in `protocol`/`metadata` so the observability stack (which doesn't depend on `protocol`) can name them.
 
 | Rank | Newtype | Status | Blast radius |
 | :--- | :--- | :--- | :--- |
@@ -82,9 +82,9 @@ All six live in **`crabka-ids`** (the canonical home), owned there rather than i
 | 3 | `NodeId(u64)` | ✅ **done** — unified the 3 colliding `type NodeId = u64` aliases into one newtype across 11 crates | Large (rename+merge) |
 | 5 | `ProducerId(i64)` | ✅ **done** — log + broker (idempotent/txn paths) | Medium |
 | 4 | `LeaderEpoch(i32)` | ✅ **done** — log/metadata/raft/broker/client-consumer/remote-storage(+topic); `kraft-core`'s consensus epoch renamed to `Epoch(u32)`, converted at the raft boundary. Wire/on-disk byte-exact (JVM golden + stateright) | Medium-large |
-| 6 | `ApiKey(i16)` / `ApiVersion(i16)` | ✅ **done** — the two adjacent `int16`s of a request header threaded through kafka-tap / client-core (internal + SASL header helpers) / raft (KIP-595 RPC header) / client-admin; deliberately distinct from the typed `crabka_protocol::ApiKey` enum. client-core's public API stays `i16` so its 16 reverse-deps don't ripple. Wire header bytes unchanged | Small |
+| 6 | `ApiKey(i16)` / `ApiVersion(i16)` | ✅ **done** — the two adjacent `int16`s of a request header threaded through kafka-tap / client-core (internal + SASL header helpers) / raft (KIP-595 RPC header) / client-admin; deliberately distinct from the typed `krabka_protocol::ApiKey` enum. client-core's public API stays `i16` so its 16 reverse-deps don't ripple. Wire header bytes unchanged | Small |
 
-**All six cross-crate core identifiers are now landed** — the `(partition, offset)` coordinate plus `NodeId`, `ProducerId`, `LeaderEpoch`, and the `ApiKey`/`ApiVersion` header pair all resolve to a single shared type in `crabka-ids`, verified byte-exact against the JVM differential oracle (675 tests) and each crate's on-disk / consensus tests.
+**All six cross-crate core identifiers are now landed** — the `(partition, offset)` coordinate plus `NodeId`, `ProducerId`, `LeaderEpoch`, and the `ApiKey`/`ApiVersion` header pair all resolve to a single shared type in `krabka-ids`, verified byte-exact against the JVM differential oracle (675 tests) and each crate's on-disk / consensus tests.
 
 Order taken: `Offset` → `PartitionIndex` → `NodeId`/`BrokerId` collision cleanup → `ProducerId` → `LeaderEpoch`/`OffsetEpoch` → `ApiKey`/`ApiVersion`. The generated codec stays raw throughout; conversions live in the hand-written `owned.rs`/`borrowed.rs` and per-request domain types.
 

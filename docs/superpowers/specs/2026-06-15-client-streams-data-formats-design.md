@@ -2,11 +2,11 @@
 
 **Date:** 2026-06-15
 **Status:** Approved (design)
-**Crate(s):** `crabka-client-streams`, `crabka-docgen`; website `guide/`; CI.
+**Crate(s):** `krabka-client-streams`, `krabka-docgen`; website `guide/`; CI.
 
 ## Problem
 
-`crabka-client-streams` supports a broad set of data formats — primitive serdes,
+`krabka-client-streams` supports a broad set of data formats — primitive serdes,
 registry-backed schema serdes (JSON Schema / Protobuf / Avro), and columnar
 serdes/codecs (Polars, Arrow, `columnar`) — but the documentation does not
 explain them, there is no getting-started guide for the streams stack, and there
@@ -17,7 +17,7 @@ hand-maintained with zero verification).
 
 ## Goals
 
-1. A getting-started + data-formats guide for `crabka-client-streams`.
+1. A getting-started + data-formats guide for `krabka-client-streams`.
 2. A single worked pipeline that moves order data through every format tier:
    **JSON → Protobuf → Arrow → columnar Polars → summary Protobuf.**
 3. An automated harness that builds and runs every documented example, asserts it
@@ -32,7 +32,7 @@ hand-maintained with zero verification).
 
 ## Current state (verified)
 
-Serdes/codecs available in `crabka-client-streams`:
+Serdes/codecs available in `krabka-client-streams`:
 
 | Serde / codec | Handles | Crate | Feature gate | Source |
 |---|---|---|---|---|
@@ -56,7 +56,7 @@ Key facts the design relies on:
   `.stream::<K,V>([..]).map_values(..).to(..)` → `app.run(topology).await`.
 - In-process broker test pattern: `Broker::start(BrokerConfig::for_tests(dir))`
   then `broker.listen_addr()`. Enabled for non-broker crates via the
-  `crabka-broker/test-helpers` dev-dependency facade.
+  `krabka-broker/test-helpers` dev-dependency facade.
 - In-process Schema Registry over a real HTTP port:
   `KafkaStore::start(&RegistryConfig{ bootstrap, schemas_topic, schemas_topic_rf,
   client_id, advertised_url, group_id, leader_eligibility, security }, cancel)`
@@ -65,7 +65,7 @@ Key facts the design relies on:
 - Cargo examples have access to `[dev-dependencies]`, so a self-contained example
   can boot its own broker + registry.
 - `crates/docgen` already generates markdown reference pages and is run by
-  `.github/workflows/docs.yml` (`cargo run -p crabka-docgen -- all --out
+  `.github/workflows/docs.yml` (`cargo run -p krabka-docgen -- all --out
   website/content/reference`) before the Zola site build. CI has an existing
   `drift` job pattern for generated-artifact checks.
 
@@ -174,11 +174,11 @@ Snippet mechanism — extend `crates/docgen`:
 
 `tools/test-doc-examples.sh` (bash, `set -euo pipefail`):
 
-1. `cargo build -p crabka-client-streams --examples --features polars,arrow`
+1. `cargo build -p krabka-client-streams --examples --features polars,arrow`
 2. Run each self-asserting example:
-   `cargo run -p crabka-client-streams --example format_pipeline --features polars,arrow`
+   `cargo run -p krabka-client-streams --example format_pipeline --features polars,arrow`
    (plus the per-format examples with their required features).
-3. Drift guard: `cargo run -p crabka-docgen -- snippets` then
+3. Drift guard: `cargo run -p krabka-docgen -- snippets` then
    `git diff --exit-code -- website/content` (fails if docs are stale).
 
 New CI job `doc-examples` in `.github/workflows/ci.yml`:

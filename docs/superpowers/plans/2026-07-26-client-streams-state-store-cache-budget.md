@@ -27,7 +27,7 @@
 - Keep cache accounting, eviction, flushing, per-task allocation, materialized
   store eligibility, and the downstream raw `i64` data flow unchanged.
 - Use `--streams-state-store-cache-max-bytes` and
-  `CRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES`.
+  `KRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES`.
 - Preserve CLI over environment over typed-default precedence.
 - Resolve and validate demo configuration before telemetry or external I/O.
 - Expose the deployment variable only on `demo-stream`, defaulting to
@@ -198,7 +198,7 @@ fn state_store_cache_budget_preserves_raw_builder_default_and_override() {
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams state_store_cache --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams state_store_cache --locked
 ```
 
 Expected: compilation fails because the new semantic type and constants do not
@@ -314,10 +314,10 @@ Re-export `DEFAULT_STREAMS_STATE_STORE_CACHE_MAX_BYTES`,
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams state_store_cache --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams low_level_runtime_validation_names_the_invalid_field --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-client-streams --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams state_store_cache --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams low_level_runtime_validation_names_the_invalid_field --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-client-streams --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all -- --check
 git diff --check
 git diff -- Cargo.lock
@@ -353,7 +353,7 @@ git commit -m "feat(streams): validate cache byte budget"
 **Interfaces:**
 - Consumes: `StreamsStateStoreCacheMaxBytes`
 - Produces: `--streams-state-store-cache-max-bytes`
-- Produces: `CRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES`
+- Produces: `KRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES`
 - Produces: validated raw bytes passed to the existing
   `StreamsApp::cache_max_bytes(i64)` setter
 
@@ -375,7 +375,7 @@ fn demo() -> Command {
 fn environment_is_used_and_cli_wins_before_external_io() {
     let environment = demo()
         .args(["--role", "produce"])
-        .env("CRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES", "37")
+        .env("KRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES", "37")
         .output()
         .expect("run demo");
     assert!(!environment.status.success());
@@ -390,7 +390,7 @@ fn environment_is_used_and_cli_wins_before_external_io() {
             "--streams-state-store-cache-max-bytes",
             "41",
         ])
-        .env("CRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES", "37")
+        .env("KRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES", "37")
         .output()
         .expect("run demo");
     assert!(!cli.status.success());
@@ -403,7 +403,7 @@ fn environment_is_used_and_cli_wins_before_external_io() {
 fn negative_fails_early_zero_is_parseable_and_help_lists_the_flag_once() {
     let negative = demo()
         .args(["--role", "stream"])
-        .env("CRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES", "-1")
+        .env("KRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES", "-1")
         .output()
         .expect("run demo");
     assert!(!negative.status.success());
@@ -414,7 +414,7 @@ fn negative_fails_early_zero_is_parseable_and_help_lists_the_flag_once() {
 
     let zero = demo()
         .args(["--role", "produce"])
-        .env("CRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES", "0")
+        .env("KRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES", "0")
         .output()
         .expect("run demo");
     assert!(!zero.status.success());
@@ -442,7 +442,7 @@ In
 
 ```rust
 assert2::assert!(stream.contains(
-    "CRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES: \"${CRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES:-10485760}\""
+    "KRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES: \"${KRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES:-10485760}\""
 ));
 ```
 
@@ -450,7 +450,7 @@ Add this assertion inside the existing Produce/Consume loop:
 
 ```rust
 assert2::assert!(
-    !service.contains("CRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES")
+    !service.contains("KRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES")
 );
 ```
 
@@ -473,7 +473,7 @@ In `crates/observability-demo-app/src/main.rs`, import
 
 ```rust
 /// Client Streams state-store record-cache budget in bytes; zero disables it.
-#[arg(long, env = "CRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES")]
+#[arg(long, env = "KRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES")]
 streams_state_store_cache_max_bytes: Option<i64>,
 ```
 
@@ -524,7 +524,7 @@ In `demo/observability/docker-compose.yml`, add to the `demo-stream`
 environment:
 
 ```yaml
-CRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES: "${CRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES:-10485760}"
+KRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES: "${KRABKA_DEMO_STREAMS_STATE_STORE_CACHE_MAX_BYTES:-10485760}"
 ```
 
 Do not add it to `demo-produce`, `demo-consume`, or a shared anchor.
@@ -615,8 +615,8 @@ Do not claim repository-wide completion.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams -p observability-demo-app --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-client-streams -p observability-demo-app --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams -p observability-demo-app --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-client-streams -p observability-demo-app --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all -- --check
 ./target/debug/observability-demo-app --help | grep -o -- '--streams-state-store-cache-max-bytes' | wc -l
 git diff --check

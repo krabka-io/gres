@@ -3,7 +3,7 @@
 //! themselves with words that remain ordinary identifiers everywhere else.
 
 use assert2::assert;
-use crabka_pgparser::{
+use krabka_pgparser::{
     ast::{AlterTableAction, Statement, TableConstraintKind},
     parse,
 };

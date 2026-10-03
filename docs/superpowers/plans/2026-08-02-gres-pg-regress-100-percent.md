@@ -75,7 +75,7 @@ declared output at 64 MiB and returns `54000` above that bound.
 implementation and artifact evidence. Only the current-state paragraphs above
 and their certified artifact describe current conformance.
 
-**Architecture:** Use PostgreSQL's own `pg_regress`, `psql`, schedule, SQL, data, expected output, and `resultmap` as the authority. Keep `crabka-gres-conformance` as the fast statement-level diagnostic tool while mismatches remain; do not grow it into a second implementation of `pg_regress`.
+**Architecture:** Use PostgreSQL's own `pg_regress`, `psql`, schedule, SQL, data, expected output, and `resultmap` as the authority. Keep `krabka-gres-conformance` as the fast statement-level diagnostic tool while mismatches remain; do not grow it into a second implementation of `pg_regress`.
 
 **Completion contract:** A pass uses the pinned `REL_18_4` corpus without edited SQL, Gres-specific expected files, ignored tests, or result normalizers beyond PostgreSQL's own `resultmap`. The final result is 231 / 231 in serial and parallel modes, with no crash, timeout, or connection loss.
 
@@ -657,13 +657,13 @@ and their certified artifact describe current conformance.
       string and a non-printable byte as `\nnn` (`'\377'` round-trips as the
       4-character text `\377`); `int4` converts both ways (`65` ↔ `A`);
       `pg_typeof` prints it quoted.
-      **Blocker:** `crabka_pgparser::lexer` strips the quotes from a quoted
+      **Blocker:** `krabka_pgparser::lexer` strips the quotes from a quoted
       identifier and emits the same `Token::Ident` an unquoted one produces, so
       `"char"` and `char` are indistinguishable and cannot resolve to different
       types. This needs quoted-identifier provenance on the token (and on type
       names in the AST) before the type itself is worth adding — a
       cross-cutting parser change, not a type-registration change.
-- [ ] Give `oid` its own type identity. `crabka_pgtypes::datum` resolves `oid`
+- [ ] Give `oid` its own type identity. `krabka_pgtypes::datum` resolves `oid`
       to `ColumnType::Int4`, so every `oid` input failure reports `invalid input
       syntax for type integer`; the upstream `oid` file expects `... for type
       oid`, which is roughly half that file's residual. Its source positions are

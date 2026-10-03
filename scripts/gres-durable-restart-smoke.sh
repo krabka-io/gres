@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 
 if ! command -v psql >/dev/null; then
     echo "SKIP: psql not installed"
-    cargo test -p crabka-gres runtime_reopens_durable_local_storage
+    cargo test -p krabka-gres runtime_reopens_durable_local_storage
     exit 0
 fi
 
@@ -35,7 +35,7 @@ trap cleanup EXIT
 CONNINFO="host=127.0.0.1 port=${PORT} user=crab dbname=crab sslmode=prefer"
 
 start_server() {
-    ./target/debug/crabka-gres --listen "127.0.0.1:${PORT}" --data-dir "$DATA_DIR" \
+    ./target/debug/krabka-gres --listen "127.0.0.1:${PORT}" --data-dir "$DATA_DIR" \
         >"${DATA_DIR}/server.log" 2>&1 &
     PID=$!
 }
@@ -56,7 +56,7 @@ stop_server() {
     PID=""
 }
 
-cargo build -p crabka-gres
+cargo build -p krabka-gres
 
 start_server
 if ! wait_until_ready; then

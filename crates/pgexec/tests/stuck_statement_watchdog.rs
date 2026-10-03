@@ -11,11 +11,11 @@ use std::{
 };
 
 use assert2::assert;
-use crabka_pgexec::{
+use krabka_pgexec::{
     SqlEngine,
     watchdog::{StuckStatement, TransactionActivity},
 };
-use crabka_pgwire::engine::{Engine, Session};
+use krabka_pgwire::engine::{Engine, Session};
 
 /// Well under anything a real statement takes, so an in-flight statement is
 /// always past it.
@@ -35,7 +35,7 @@ const BLOCKED_PID: i32 = 4242;
 /// direction.
 async fn until(
     engine: &SqlEngine,
-    predicate: impl Fn(&[crabka_pgexec::watchdog::InFlightStatement]) -> bool,
+    predicate: impl Fn(&[krabka_pgexec::watchdog::InFlightStatement]) -> bool,
 ) {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {

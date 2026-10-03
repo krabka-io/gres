@@ -1,4 +1,4 @@
-use crabka_units::ByteSize;
+use krabka_units::ByteSize;
 
 use super::{
     AcceptStep, GssAcceptor, GssError,
@@ -205,7 +205,7 @@ impl GssapiServerExchange {
 #[cfg(test)]
 mod tests {
 
-    use crabka_units::kibibytes;
+    use krabka_units::kibibytes;
 
     use super::*;
     use crate::gssapi::{AcceptStep, GssAcceptor, GssError};

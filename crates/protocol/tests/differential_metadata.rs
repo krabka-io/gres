@@ -1,6 +1,6 @@
 mod support;
 use bytes::BytesMut;
-use crabka_protocol::{
+use krabka_protocol::{
     Decode, Encode,
     owned::{metadata_request::MetadataRequest, metadata_response::MetadataResponse},
 };

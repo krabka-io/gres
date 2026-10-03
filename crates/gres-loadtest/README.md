@@ -1,12 +1,12 @@
-# crabka-gres-loadtest
+# krabka-gres-loadtest
 
-Scenario-driven scalability and fault-injection harness for `crabka-gres`, Crabka's PostgreSQL-compatible SQL engine.
+Scenario-driven scalability and fault-injection harness for `krabka-gres`, Crabka's PostgreSQL-compatible SQL engine.
 
 Part of [Crabka](https://github.com/robot-head/crabka), a Rust implementation of Apache Kafka.
 
 ## Overview
 
-The harness boots a real multi-process cluster: one `crabka-broker` plus N `crabka-gres` compute nodes. A chaos proxy fronts every inter-node and client-facing TCP endpoint. A YAML scenario describes the topology, the timestamp-source mode, the SQL workload mix, and a timeline of network faults. The timestamp-source mode is Percolator-style `logical-tso` or hybrid logical clock `hlc`.
+The harness boots a real multi-process cluster: one `krabka-broker` plus N `krabka-gres` compute nodes. A chaos proxy fronts every inter-node and client-facing TCP endpoint. A YAML scenario describes the topology, the timestamp-source mode, the SQL workload mix, and a timeline of network faults. The timestamp-source mode is Percolator-style `logical-tso` or hybrid logical clock `hlc`.
 
 A run produces a JSON report and a Markdown summary. `compare` runs the same scenario under both timestamp modes and renders them side by side, so you can measure the cost of the global-timestamp path per workload shape and per fault. An external mode (`run --external`) drives the identical workload against any pgwire-speaking SQL system and launches no crabka processes. See [External systems](#external-systems).
 
@@ -15,29 +15,29 @@ A run produces a JSON report and a Markdown summary. `compare` runs the same sce
 Build the binaries the harness launches:
 
 ```bash
-cargo build -p crabka-gres -p crabka-broker -p crabka-cli
+cargo build -p krabka-gres -p krabka-broker -p krabka-cli
 ```
 
-The harness resolves the binaries from `target/debug/` under the workspace root. To use other builds, point `CRABKA_GRES_LOADTEST_GRES_BIN`, `CRABKA_GRES_LOADTEST_BROKER_BIN`, or `CRABKA_GRES_LOADTEST_CLI_BIN` at them.
+The harness resolves the binaries from `target/debug/` under the workspace root. To use other builds, point `KRABKA_GRES_LOADTEST_GRES_BIN`, `KRABKA_GRES_LOADTEST_BROKER_BIN`, or `KRABKA_GRES_LOADTEST_CLI_BIN` at them.
 
 ## Quick Start
 
 ```bash
 # Parse and validate a scenario without running it
-cargo run -p crabka-gres-loadtest -- validate \
+cargo run -p krabka-gres-loadtest -- validate \
   --scenario crates/gres-loadtest/scenarios/tso-partition.yaml
 
 # Run one scenario (reports land in loadtest-out/)
-cargo run -p crabka-gres-loadtest -- run \
+cargo run -p krabka-gres-loadtest -- run \
   --scenario crates/gres-loadtest/scenarios/tso-partition.yaml
 
 # Force a timestamp mode regardless of the scenario's own
-cargo run -p crabka-gres-loadtest -- run \
+cargo run -p krabka-gres-loadtest -- run \
   --scenario crates/gres-loadtest/scenarios/baseline-single-shard.yaml \
   --mode hlc --hlc-max-offset 250ms
 
 # Run under logical-tso then hlc and render a side-by-side comparison
-cargo run -p crabka-gres-loadtest -- compare \
+cargo run -p krabka-gres-loadtest -- compare \
   --scenario crates/gres-loadtest/scenarios/baseline-single-shard.yaml
 ```
 
@@ -64,7 +64,7 @@ A scenario is one YAML document. **Every dimensioned value carries its unit**, f
 name: my-scenario          # used in report file names
 description: One line for the report header.
 topology:
-  nodes: 3                 # crabka-gres processes
+  nodes: 3                 # krabka-gres processes
   ranges: 4                # ranges r0..r3, round-robin over nodes (r0 on node 0)
   clock_skew: { 0: 400ms }   # per-node HLC wall-clock offset (hlc mode only)
   cpus_per_node: 3           # optional: pin each node to 3 dedicated CPUs
@@ -132,7 +132,7 @@ Dimensioned JSON fields come in two encodings. Values that a person reads carry 
 `run --external` points the identical workload, measurement, and reporting pipeline at any pgwire-speaking SQL system, such as CockroachDB, YugabyteDB, PostgreSQL, or a remote crabka cluster. It launches no crabka processes:
 
 ```bash
-cargo run -p crabka-gres-loadtest -- run \
+cargo run -p krabka-gres-loadtest -- run \
   --scenario crates/gres-loadtest/scenarios/mixed-oltp.yaml \
   --external "127.0.0.1:26257,127.0.0.1:26258,127.0.0.1:26259" \
   --external-user roach --external-database bench
@@ -173,7 +173,7 @@ docker exec loadtest-pg pg_isready -t 30
 docker exec loadtest-pg psql -U postgres -c 'CREATE DATABASE bench'
 
 # Drive the mixed OLTP scenario against it.
-cargo run --release -p crabka-gres-loadtest -- run \
+cargo run --release -p krabka-gres-loadtest -- run \
   --scenario crates/gres-loadtest/scenarios/mixed-oltp.yaml \
   --external "127.0.0.1:5432" \
   --external-user postgres --external-password secret --external-database bench

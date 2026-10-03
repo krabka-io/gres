@@ -77,7 +77,7 @@ pub controller_election_timeout: Duration,
 pub controller_heartbeat_interval: Duration,
 ```
 
-Update `Broker::start` to pass these through to `crabka_raft::ControllerConfig`
+Update `Broker::start` to pass these through to `krabka_raft::ControllerConfig`
 instead of hardcoding 5s/500ms.
 
 Defaults: `Duration::from_secs(5)` and `Duration::from_millis(500)`

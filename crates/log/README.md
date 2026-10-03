@@ -1,7 +1,7 @@
-# crabka-log
+# krabka-log
 
-[![Crates.io](https://img.shields.io/crates/v/crabka-log.svg)](https://crates.io/crates/crabka-log)
-[![Docs.rs](https://docs.rs/crabka-log/badge.svg)](https://docs.rs/crabka-log)
+[![Crates.io](https://img.shields.io/crates/v/krabka-log.svg)](https://crates.io/crates/krabka-log)
+[![Docs.rs](https://docs.rs/krabka-log/badge.svg)](https://docs.rs/krabka-log)
 [![CI](https://github.com/robot-head/crabka/actions/workflows/ci.yml/badge.svg)](https://github.com/robot-head/crabka/actions/workflows/ci.yml)
 
 Byte-compatible reader and writer for Apache Kafka's on-disk log format.
@@ -11,7 +11,7 @@ of Apache Kafka-compatible infrastructure and clients.
 
 ## Overview
 
-`crabka-log` is the storage layer that the Crabka broker uses. It opens,
+`krabka-log` is the storage layer that the Crabka broker uses. It opens,
 recovers, appends, reads, truncates, compacts, and exports Kafka-format log
 directories. It keeps Kafka's segment naming and index formats.
 
@@ -43,9 +43,9 @@ verbatim bytes for network or tiered-storage transfer.
 ## Install
 
 ```sh
-cargo add crabka-log
-cargo add crabka-protocol
-cargo add crabka-units
+cargo add krabka-log
+cargo add krabka-protocol
+cargo add krabka-units
 ```
 
 For workspace development, use the path dependency from this repository.
@@ -55,9 +55,9 @@ For workspace development, use the path dependency from this repository.
 Open a Kafka-compatible log directory, append a batch, and read it back:
 
 ```rust,no_run
-use crabka_log::{Log, LogConfig, Offset};
-use crabka_protocol::records::RecordBatch;
-use crabka_units::prelude::mebibytes;
+use krabka_log::{Log, LogConfig, Offset};
+use krabka_protocol::records::RecordBatch;
+use krabka_units::prelude::mebibytes;
 
 # fn run() -> Result<(), Box<dyn std::error::Error>> {
 let mut log = Log::open("./target/orders-0", LogConfig::default())?;
@@ -77,7 +77,7 @@ println!("wrote at {base_offset:?}; read {} batches", output.batches.len());
 
 ## Documentation
 
-- [API documentation](https://docs.rs/crabka-log)
+- [API documentation](https://docs.rs/krabka-log)
 - [Crabka repository](https://github.com/robot-head/crabka)
 - [Kafka compatibility matrix](https://github.com/robot-head/crabka/blob/main/docs/KIP_MATRIX.md)
 

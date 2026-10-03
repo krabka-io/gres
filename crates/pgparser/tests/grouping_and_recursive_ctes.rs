@@ -2,7 +2,7 @@
 //! clauses.
 
 use assert2::assert;
-use crabka_pgparser::{
+use krabka_pgparser::{
     ast::{
         Cte, CteCycle, CteSearch, Expr, GroupItem, GroupingClause, QueryBody, SelectStmt, SetExpr,
         Statement,

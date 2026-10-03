@@ -5,7 +5,7 @@ timeouts, retry policy, sampling, chaos-proxy behavior, and report selection
 while preserving existing behavior.
 
 **Architecture:** Resolve one validated `LoadtestRuntimePolicy` from flattened
-CLI arguments backed by `CRABKA_GRES_LOADTEST_*` environment variables. Carry
+CLI arguments backed by `KRABKA_GRES_LOADTEST_*` environment variables. Carry
 it through internal and external runs to each runtime owner. Use UOM for every
 dimensioned value and `refined_type`-validated newtypes for positive counts.
 

@@ -1,8 +1,8 @@
-# `crabka-consumer-groups` (slice 5) design
+# `krabka-consumer-groups` (slice 5) design
 
 **Status:** draft — slice 5 of the Crabka meta-spec.
-**Depends on:** slice 4 (`crabka-broker` single-node MVP), slice 2 (`crabka-client-core`), slice 3 (`crabka-log`). All shipped to `main`.
-**Tracks the meta-spec at:** [`2026-05-10-crabka-rust-rewrite-design.md`](2026-05-10-crabka-rust-rewrite-design.md).
+**Depends on:** slice 4 (`krabka-broker` single-node MVP), slice 2 (`krabka-client-core`), slice 3 (`krabka-log`). All shipped to `main`.
+**Tracks the meta-spec at:** [`2026-05-10-krabka-rust-rewrite-design.md`](2026-05-10-krabka-rust-rewrite-design.md).
 
 ## Goal
 
@@ -12,8 +12,8 @@ Ship the classic Kafka group-coordinator protocol end-to-end. Acceptance: an unm
 
 Two crates change:
 
-- **`crabka-broker`** grows a `coordinator` subsystem and six new request handlers (`JoinGroup` / `SyncGroup` / `Heartbeat` / `LeaveGroup` / `OffsetCommit` / `OffsetFetch`). The existing `FindCoordinator` stub is replaced with a real impl.
-- **`crabka-client-consumer`** is a new crate: a high-level subscribe-only `Consumer` built on top of slice 2's `crabka-client-core`.
+- **`krabka-broker`** grows a `coordinator` subsystem and six new request handlers (`JoinGroup` / `SyncGroup` / `Heartbeat` / `LeaveGroup` / `OffsetCommit` / `OffsetFetch`). The existing `FindCoordinator` stub is replaced with a real impl.
+- **`krabka-client-consumer`** is a new crate: a high-level subscribe-only `Consumer` built on top of slice 2's `krabka-client-core`.
 
 ### Wire surface (added handlers)
 
@@ -31,7 +31,7 @@ Two crates change:
 
 ### Consumer API
 
-`crabka-client-consumer` exposes a single `Consumer` with the standard builder/poll/commit shape:
+`krabka-client-consumer` exposes a single `Consumer` with the standard builder/poll/commit shape:
 
 ```rust
 let mut consumer = Consumer::builder("localhost:9092")
@@ -54,11 +54,11 @@ loop {
 consumer.close().await;
 ```
 
-No `assign()` — manual partition consumption uses `crabka-client-core` directly. No admin RPCs (`DescribeGroups` / `ListGroups`) — those land in slice 10.
+No `assign()` — manual partition consumption uses `krabka-client-core` directly. No admin RPCs (`DescribeGroups` / `ListGroups`) — those land in slice 10.
 
 ### Partition assignor
 
-Only `range` is implemented. The broker is assignor-agnostic (it just plumbs the negotiated `protocol_name` and `assignment_bytes` through the JoinGroup/SyncGroup flow); the consumer-side leader computes the assignment via a pure function in `crabka-client-consumer::assignor::range`. Members proposing only non-`range` assignors get `INCONSISTENT_GROUP_PROTOCOL`.
+Only `range` is implemented. The broker is assignor-agnostic (it just plumbs the negotiated `protocol_name` and `assignment_bytes` through the JoinGroup/SyncGroup flow); the consumer-side leader computes the assignment via a pure function in `krabka-client-consumer::assignor::range`. Members proposing only non-`range` assignors get `INCONSISTENT_GROUP_PROTOCOL`.
 
 ### `__consumer_offsets` persistence
 
@@ -126,7 +126,7 @@ crates/client-consumer/                         # NEW crate
 
 #### Consumer client
 
-- **`Consumer`** — owns: a `crabka_client_core::Client`, the negotiated `(generation_id, member_id)`, the current `HashMap<(topic, partition), i64>` next-offsets, a per-partition `bytes_remaining` cursor, an mpsc receiver of `RebalanceNotice`s from the heartbeat task, and a `JoinHandle` for the heartbeat task.
+- **`Consumer`** — owns: a `krabka_client_core::Client`, the negotiated `(generation_id, member_id)`, the current `HashMap<(topic, partition), i64>` next-offsets, a per-partition `bytes_remaining` cursor, an mpsc receiver of `RebalanceNotice`s from the heartbeat task, and a `JoinHandle` for the heartbeat task.
 
 - **`ConsumerBuilder`** — collects config; `.build()` runs the FindCoordinator → JoinGroup → SyncGroup handshake, derives the initial assignment, spawns the heartbeat task, and returns `Consumer`.
 
@@ -203,8 +203,8 @@ Add variants `GroupInvalidState { group_id, state }`, `UnknownMember { group_id,
 
 ### `ConsumerError`
 
-`crabka-client-consumer::ConsumerError` carries:
-- `Client(crabka_client_core::ClientError)` for transport errors
+`krabka-client-consumer::ConsumerError` carries:
+- `Client(krabka_client_core::ClientError)` for transport errors
 - `RebalanceFailed(String)`
 - `NotSubscribed`
 - `CommitInvalid` (rebalance happened mid-poll)
@@ -224,7 +224,7 @@ Carries over from slice 4. Every spawned task (per-group expiration timer, consu
 
 **Broker** (`crates/broker/tests/unit.rs` additions):
 
-- Per-handler tests for all six new handlers + the real FindCoordinator (drives an in-process broker via `crabka-client-core::Client`, just like slice 4).
+- Per-handler tests for all six new handlers + the real FindCoordinator (drives an in-process broker via `krabka-client-core::Client`, just like slice 4).
 - `Group` state-machine table-driven tests: every valid transition, every invalid request → expected error code.
 - `range` assignor: parameterized (1m/Np, 2m/Np, 3m/2t/different-Np) — same fixture pattern slice 2 used for codec tests.
 - Startup replay: pre-seed `__consumer_offsets-0` log dir with synthetic records (using the persistence codec directly), `Broker::start`, assert in-memory `Group` state matches.
@@ -241,7 +241,7 @@ Carries over from slice 4. Every spawned task (per-group expiration timer, consu
 `crates/broker/tests/integration.rs` (additions) and `crates/client-consumer/tests/integration.rs` (new):
 
 - End-to-end Rust → Rust:
-  - Producer (`crabka-client-core`) writes records → Consumer (`crabka-client-consumer`) subscribes with `group_id="g"`, polls, gets the records, commits.
+  - Producer (`krabka-client-core`) writes records → Consumer (`krabka-client-consumer`) subscribes with `group_id="g"`, polls, gets the records, commits.
   - Two consumers join the same group on a 2-partition topic → each owns one partition.
   - Consumer commits offset 42 → broker restarts → new consumer in same group reads from offset 42.
   - Consumer dies (heartbeat task killed) → broker drops member after session_timeout → remaining consumers rebalance.
@@ -284,15 +284,15 @@ The slice is done when, in CI:
 
 1. `cargo fmt --all -- --check` clean.
 2. `cargo clippy --workspace --all-targets -- -D warnings` clean.
-3. `cargo test -p crabka-broker` and `cargo test -p crabka-client-consumer` both pass.
+3. `cargo test -p krabka-broker` and `cargo test -p krabka-client-consumer` both pass.
 4. `cargo test --workspace --include-ignored` is no worse than before (no regressions in slices 1-4).
 5. `broker-jvm-acceptance` job stays green AND includes `console_consumer_with_group_round_trip`.
-6. `cargo doc -p crabka-broker --no-deps` and `cargo doc -p crabka-client-consumer --no-deps` build without warnings; every public type carries rustdoc.
-7. Public API of `crabka-client-consumer`: `Consumer`, `ConsumerBuilder`, `ConsumerRecord`, `ConsumerError`. No assign(), no admin RPCs.
+6. `cargo doc -p krabka-broker --no-deps` and `cargo doc -p krabka-client-consumer --no-deps` build without warnings; every public type carries rustdoc.
+7. Public API of `krabka-client-consumer`: `Consumer`, `ConsumerBuilder`, `ConsumerRecord`, `ConsumerError`. No assign(), no admin RPCs.
 
 ## Reference
 
-Meta-spec: [`2026-05-10-crabka-rust-rewrite-design.md`](2026-05-10-crabka-rust-rewrite-design.md).
-Slice 4 spec: [`2026-05-11-crabka-broker-design.md`](2026-05-11-crabka-broker-design.md).
-Slice 2 spec: [`2026-05-11-crabka-client-core-design.md`](2026-05-11-crabka-client-core-design.md).
-Slice 3 spec: [`2026-05-11-crabka-log-design.md`](2026-05-11-crabka-log-design.md).
+Meta-spec: [`2026-05-10-krabka-rust-rewrite-design.md`](2026-05-10-krabka-rust-rewrite-design.md).
+Slice 4 spec: [`2026-05-11-krabka-broker-design.md`](2026-05-11-krabka-broker-design.md).
+Slice 2 spec: [`2026-05-11-krabka-client-core-design.md`](2026-05-11-krabka-client-core-design.md).
+Slice 3 spec: [`2026-05-11-krabka-log-design.md`](2026-05-11-krabka-log-design.md).

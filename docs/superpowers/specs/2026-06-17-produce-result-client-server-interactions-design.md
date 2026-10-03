@@ -133,11 +133,11 @@ whole-diff check.
 Expected commands:
 
 ```bash
-TMPDIR=/home/matt/.codex/worktrees/bdee/crabka/target/tmp CARGO_BUILD_JOBS=1 cargo test --locked -p crabka-broker --lib client_server_failover_preserves_acked_batch -- --nocapture
-TMPDIR=/home/matt/.codex/worktrees/bdee/crabka/target/tmp CARGO_BUILD_JOBS=1 cargo test --locked -p crabka-client-producer --lib client_failover_recovers_or_fails_boundedly -- --nocapture
-TMPDIR=/home/matt/.codex/worktrees/bdee/crabka/target/tmp CARGO_BUILD_JOBS=1 cargo test --locked -p crabka-client-producer --lib dead_leader_failover_refreshes_and_reroutes_before_timeout_churn -- --nocapture
+TMPDIR=/home/matt/.codex/worktrees/bdee/crabka/target/tmp CARGO_BUILD_JOBS=1 cargo test --locked -p krabka-broker --lib client_server_failover_preserves_acked_batch -- --nocapture
+TMPDIR=/home/matt/.codex/worktrees/bdee/crabka/target/tmp CARGO_BUILD_JOBS=1 cargo test --locked -p krabka-client-producer --lib client_failover_recovers_or_fails_boundedly -- --nocapture
+TMPDIR=/home/matt/.codex/worktrees/bdee/crabka/target/tmp CARGO_BUILD_JOBS=1 cargo test --locked -p krabka-client-producer --lib dead_leader_failover_refreshes_and_reroutes_before_timeout_churn -- --nocapture
 cargo fmt --check
-TMPDIR=/home/matt/.codex/worktrees/bdee/crabka/target/tmp CARGO_BUILD_JOBS=1 cargo clippy --locked -p crabka-client-producer -p crabka-broker --all-targets -- -D warnings
+TMPDIR=/home/matt/.codex/worktrees/bdee/crabka/target/tmp CARGO_BUILD_JOBS=1 cargo clippy --locked -p krabka-client-producer -p krabka-broker --all-targets -- -D warnings
 git diff --check
 ```
 

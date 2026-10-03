@@ -44,13 +44,13 @@
 //!   can produce; the whole-signature check `PostgreSQL` makes is therefore not
 //!   reproduced.
 
-use crabka_pgcatalog::UserOperator;
-use crabka_pgkv::{Kv, WriteOp};
-use crabka_pgparser::ast::{
+use krabka_pgcatalog::UserOperator;
+use krabka_pgkv::{Kv, WriteOp};
+use krabka_pgparser::ast::{
     CreateOperatorStmt, OperatorName, OperatorSignature, RelationRef, RoutineType,
 };
-use crabka_pgtypes::Datum;
-use crabka_pgwire::engine::QueryResult;
+use krabka_pgtypes::Datum;
+use krabka_pgwire::engine::QueryResult;
 
 use crate::{error::ExecError, relname::ResolutionScope};
 
@@ -190,7 +190,7 @@ fn find_operator(
             }
             continue;
         }
-        let stored = crabka_pgcatalog::get_user_operator(kv, &schema, &name.symbol, left, right)?;
+        let stored = krabka_pgcatalog::get_user_operator(kv, &schema, &name.symbol, left, right)?;
         if let Some(stored) = stored {
             return Ok(Some(Resolved {
                 oid: stored.oid,
@@ -243,7 +243,7 @@ fn symbol_of_oid(kv: &dyn Kv, oid: u32) -> Option<String> {
     {
         return Some(row.1.to_string());
     }
-    crabka_pgcatalog::list_user_operators(kv)
+    krabka_pgcatalog::list_user_operators(kv)
         .ok()?
         .into_iter()
         .find(|operator| operator.oid == oid)
@@ -370,7 +370,7 @@ pub(crate) fn create(
     let schema = creation_schema(kv, scope, stmt.name.schema.as_deref())?;
     let left_type_oid = operand_oid(left.as_ref());
     let right_type_oid = operand_oid(right.as_ref());
-    if crabka_pgcatalog::get_user_operator(
+    if krabka_pgcatalog::get_user_operator(
         kv,
         &schema,
         &stmt.name.symbol,
@@ -385,7 +385,7 @@ pub(crate) fn create(
         });
     }
 
-    let (oid, cursor) = crabka_pgcatalog::allocate_user_operator_oid(kv)?;
+    let (oid, cursor) = krabka_pgcatalog::allocate_user_operator_oid(kv)?;
     let mine = Identity {
         oid,
         schema: &schema,
@@ -417,7 +417,7 @@ pub(crate) fn create(
         can_hash: stmt.hashes,
     };
     let mut ops = vec![cursor];
-    ops.extend(crabka_pgcatalog::put_user_operator_ops(&operator));
+    ops.extend(krabka_pgcatalog::put_user_operator_ops(&operator));
     ops.extend(back_links(
         kv,
         oid,
@@ -440,10 +440,10 @@ fn creation_schema(
 ) -> Result<String, ExecError> {
     match written {
         Some(schema) => {
-            if crabka_pgcatalog::schema_exists(kv, schema)? {
+            if krabka_pgcatalog::schema_exists(kv, schema)? {
                 Ok(schema.to_string())
             } else {
-                Err(crabka_pgcatalog::CatalogError::UndefinedSchema(schema.to_string()).into())
+                Err(krabka_pgcatalog::CatalogError::UndefinedSchema(schema.to_string()).into())
             }
         }
         None => scope
@@ -588,7 +588,7 @@ fn back_links(
     }
     Ok(edited
         .iter()
-        .flat_map(crabka_pgcatalog::put_user_operator_ops)
+        .flat_map(krabka_pgcatalog::put_user_operator_ops)
         .collect())
 }
 
@@ -724,14 +724,14 @@ pub(crate) fn drop_operators(
     // operators that link to each other in one statement clears both links. A
     // per-signature re-read would see the catalog as it was before the
     // statement started, and would put the stale row back.
-    let mut surviving = crabka_pgcatalog::list_user_operators(kv)?;
+    let mut surviving = krabka_pgcatalog::list_user_operators(kv)?;
     let mut outcome = DropOutcome::default();
     let mut dropped: Vec<u32> = Vec::new();
     for signature in operators {
         let left = resolve_operand(kv, signature.left_type.as_ref())?;
         let right = resolve_operand(kv, signature.right_type.as_ref())?;
         if right.is_none() {
-            return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+            return Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
                 "42601",
                 "postfix operators are not supported",
             )));
@@ -764,7 +764,7 @@ pub(crate) fn drop_operators(
         };
         outcome
             .ops
-            .extend(crabka_pgcatalog::drop_user_operator_ops(&stored));
+            .extend(krabka_pgcatalog::drop_user_operator_ops(&stored));
         surviving.retain(|operator| operator.oid != stored.oid);
         dropped.push(stored.oid);
     }
@@ -784,7 +784,7 @@ pub(crate) fn drop_operators(
         }
         outcome
             .ops
-            .extend(crabka_pgcatalog::put_user_operator_ops(operator));
+            .extend(krabka_pgcatalog::put_user_operator_ops(operator));
     }
     Ok((
         QueryResult::Command {
@@ -803,7 +803,7 @@ pub(crate) fn drop_operators(
 /// Propagates catalog read errors.
 pub(crate) fn pg_operator_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
     let owners = crate::catalog_rel::role_oids(kv)?;
-    Ok(crabka_pgcatalog::list_user_operators(kv)?
+    Ok(krabka_pgcatalog::list_user_operators(kv)?
         .into_iter()
         .map(|operator| {
             let oid = |value: u32| Datum::Int4(i32::try_from(value).unwrap_or_default());

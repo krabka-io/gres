@@ -265,9 +265,9 @@ fn error_operation(operation: &BalanceOperation, error: &ExecutionError) -> Oper
 
 /// Map a registry control error into an executor error with fail-clear unsupported status.
 #[must_use]
-pub fn registry_execution_error(error: &crabka_gres_control::ControlError) -> ExecutionError {
+pub fn registry_execution_error(error: &krabka_gres_control::ControlError) -> ExecutionError {
     match error {
-        crabka_gres_control::ControlError::UnsupportedRegistryMutation { .. } => {
+        krabka_gres_control::ControlError::UnsupportedRegistryMutation { .. } => {
             ExecutionError::UnsupportedMutation {
                 message: error.to_string(),
             }

@@ -2,11 +2,11 @@
 
 **Date:** 2026-05-17
 **Status:** Design approved, ready for implementation plan
-**Reference roadmap:** [`2026-05-17-crabka-rebalancer-roadmap-design.md`](2026-05-17-crabka-rebalancer-roadmap-design.md)
+**Reference roadmap:** [`2026-05-17-krabka-rebalancer-roadmap-design.md`](2026-05-17-krabka-rebalancer-roadmap-design.md)
 
 ## Goal
 
-Land a standalone `crabka-rebalancer` binary that connects to a Crabka cluster as an admin client, periodically snapshots cluster state, and exposes a Connect-RPC service for "what would balance this cluster?" proposals. **No execute path** in 43a — the executor and persistence land in slice 43b.
+Land a standalone `krabka-rebalancer` binary that connects to a Crabka cluster as an admin client, periodically snapshots cluster state, and exposes a Connect-RPC service for "what would balance this cluster?" proposals. **No execute path** in 43a — the executor and persistence land in slice 43b.
 
 The slice ships the first three goals: replica-count balance (soft), leader-count balance (soft), and preferred-leader idempotency (hard).
 
@@ -32,13 +32,13 @@ crates/rebalancer/
 ├── src/
 │   ├── lib.rs                                # public surface for tests
 │   ├── bin/
-│   │   └── rebalancer.rs                     # crabka-rebalancer binary (clap CLI)
+│   │   └── rebalancer.rs                     # krabka-rebalancer binary (clap CLI)
 │   ├── api/
 │   │   ├── mod.rs                            # service impl + axum mount helpers
 │   │   └── handlers.rs                       # one fn per RPC method
 │   ├── ingest/
 │   │   ├── mod.rs                            # Ingester + snapshot loop
-│   │   └── admin_client.rs                   # thin wrapper over crabka_client_core::Client
+│   │   └── admin_client.rs                   # thin wrapper over krabka_client_core::Client
 │   ├── model/
 │   │   ├── mod.rs                            # ClusterState, BrokerView, PartitionView
 │   │   ├── proposal.rs                       # Proposal, Movement, ProposalSummary, ProposalStatus
@@ -64,32 +64,32 @@ Workspace-level (`Cargo.toml`):
 - `prost = "0.13"` (matches `connectrpc`'s expected version when this lands)
 
 `crates/rebalancer/Cargo.toml`:
-- `crabka-client-core` (admin client)
-- `crabka-protocol` (typed requests for Metadata / DescribeCluster / ListPartitionReassignments)
-- `crabka-metadata` (`NodeId`)
+- `krabka-client-core` (admin client)
+- `krabka-protocol` (typed requests for Metadata / DescribeCluster / ListPartitionReassignments)
+- `krabka-metadata` (`NodeId`)
 - `axum` (operational endpoints) — already in workspace
 - `prometheus-client` — already in workspace
 - `arc-swap` — already in workspace
 - `serde_json`, `tokio`, `tracing`, `clap`, `anyhow`, `uuid`, `thiserror` — already in workspace
-- Dev: `tempfile`, `crabka-broker` with `test-helpers`, `tower`
+- Dev: `tempfile`, `krabka-broker` with `test-helpers`, `tower`
 
 ### Process shape & CLI
 
-One binary, `crabka-rebalancer`. Single-replica only in 43a. CLI flags (mirroring the operator binary, env-overridable):
+One binary, `krabka-rebalancer`. Single-replica only in 43a. CLI flags (mirroring the operator binary, env-overridable):
 
 ```
---bootstrap-servers <host:port,host:port>   [env CRABKA_BOOTSTRAP_SERVERS]
---listen-addr 0.0.0.0:9300                  [env CRABKA_REBALANCER_LISTEN_ADDR]
---scrape-interval-secs 10                   [env CRABKA_SCRAPE_INTERVAL_SECS]
---imbalance-threshold-pct 10                [env CRABKA_IMBALANCE_THRESHOLD_PCT]
---max-movements-per-proposal 256            [env CRABKA_MAX_MOVEMENTS_PER_PROPOSAL]
---proposal-ring-buffer-size 20              [env CRABKA_PROPOSAL_RING_BUFFER_SIZE]
+--bootstrap-servers <host:port,host:port>   [env KRABKA_BOOTSTRAP_SERVERS]
+--listen-addr 0.0.0.0:9300                  [env KRABKA_REBALANCER_LISTEN_ADDR]
+--scrape-interval-secs 10                   [env KRABKA_SCRAPE_INTERVAL_SECS]
+--imbalance-threshold-pct 10                [env KRABKA_IMBALANCE_THRESHOLD_PCT]
+--max-movements-per-proposal 256            [env KRABKA_MAX_MOVEMENTS_PER_PROPOSAL]
+--proposal-ring-buffer-size 20              [env KRABKA_PROPOSAL_RING_BUFFER_SIZE]
 ```
 
 Operational endpoints (plain axum routes, not Connect):
 - `GET /healthz` — 200 always
 - `GET /readyz` — 200 after first successful state snapshot; 503 before
-- `GET /metrics` — OpenMetrics text (own `prometheus-client` registry; metrics surface starts small: `crabka_rebalancer_snapshot_at_ms`, `crabka_rebalancer_snapshots_total`, `crabka_rebalancer_proposals_created_total`)
+- `GET /metrics` — OpenMetrics text (own `prometheus-client` registry; metrics surface starts small: `krabka_rebalancer_snapshot_at_ms`, `krabka_rebalancer_snapshots_total`, `krabka_rebalancer_proposals_created_total`)
 
 Connect endpoints mount under `/crabka.rebalancer.v1.Rebalancer/<MethodName>` (Connect's default path convention).
 
@@ -236,7 +236,7 @@ The three slice-43a goals:
 
 ```rust
 pub struct Ingester {
-    client: crabka_client_core::Client,
+    client: krabka_client_core::Client,
     interval: Duration,
     snapshot: Arc<ArcSwap<Option<ClusterState>>>,  // None until first success
     shutdown: CancellationToken,
@@ -292,7 +292,7 @@ Partitions are flat, not grouped by topic — most goal logic iterates the full 
 
 ### Integration test (`crates/rebalancer/tests/end_to_end.rs`)
 
-1. Spin up a single-broker Crabka via `crabka_broker::Broker::start(BrokerConfig::for_tests(...))`.
+1. Spin up a single-broker Crabka via `krabka_broker::Broker::start(BrokerConfig::for_tests(...))`.
 2. Create 3 topics, 4 partitions each, RF=1.
 3. Start an `Ingester` against the broker. Wait for `GetState` to return a non-None snapshot.
 4. Call `CreateProposal` via the in-process service handler (not over HTTP — invoke the generated trait directly).
@@ -319,8 +319,8 @@ Boot the binary in a separate test (`std::process::Command`), hit the live Conne
 
 ## Acceptance criteria
 
-1. `cargo build -p crabka-rebalancer` produces a binary.
-2. `crabka-rebalancer --bootstrap-servers <addr> --listen-addr 127.0.0.1:9300 &` starts and binds the port.
+1. `cargo build -p krabka-rebalancer` produces a binary.
+2. `krabka-rebalancer --bootstrap-servers <addr> --listen-addr 127.0.0.1:9300 &` starts and binds the port.
 3. `curl -X POST -H 'Content-Type: application/json' http://127.0.0.1:9300/crabka.rebalancer.v1.Rebalancer/GetState -d '{}'` returns either `503 Code::Unavailable` (pre-first-snapshot) or a JSON `GetStateResponse`.
 4. All unit + integration tests pass; `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo fmt --check` clean.
 5. `README.md`'s `Replication & durability` table gains a row "Cruise-Control-equivalent rebalancer (advisor)" → ✅. The execute / topology / capacity / usage / anomaly variants stay as ❌ rows until the corresponding 43b–43g slices land.

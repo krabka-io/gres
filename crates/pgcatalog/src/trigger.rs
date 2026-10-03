@@ -2,7 +2,7 @@
 
 #![allow(clippy::missing_errors_doc)]
 
-use crabka_pgkv::{Kv, KvError, WriteOp};
+use krabka_pgkv::{Kv, KvError, WriteOp};
 use zerocopy::{FromBytes, IntoBytes, byteorder::big_endian::U32};
 
 use crate::{
@@ -558,7 +558,7 @@ pub fn deserialize_event_trigger(bytes: &[u8]) -> Result<EventTrigger, KvError> 
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     use super::*;
 

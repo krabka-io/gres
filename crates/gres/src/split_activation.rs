@@ -2,25 +2,25 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use crabka_gres_ranges::{
+use krabka_gres_ranges::{
     RangeId, RangeKey, RangeMap, TableId,
     control::{
         RangeZeroTopologyActivationStore, TopologyActivationPhase, TopologyActivationReceipt,
         TopologyActivationReceiptStore,
     },
 };
-use crabka_pgexec::SqlEngine;
+use krabka_pgexec::SqlEngine;
 
-fn registry_boundary(key: RangeKey) -> crabka_gres_control::RangeBoundary {
+fn registry_boundary(key: RangeKey) -> krabka_gres_control::RangeBoundary {
     if key.bucket == 0 {
-        crabka_gres_control::RangeBoundary::new(key.table_id.as_u64(), key.rowid)
+        krabka_gres_control::RangeBoundary::new(key.table_id.as_u64(), key.rowid)
     } else {
-        crabka_gres_control::RangeBoundary::hash(key.table_id.as_u64(), key.bucket, key.rowid)
+        krabka_gres_control::RangeBoundary::hash(key.table_id.as_u64(), key.bucket, key.rowid)
     }
 }
 
 fn registry_boundary_matches(
-    boundary: Option<crabka_gres_control::RangeBoundary>,
+    boundary: Option<krabka_gres_control::RangeBoundary>,
     key: Option<RangeKey>,
 ) -> bool {
     match (boundary, key) {
@@ -101,9 +101,9 @@ impl ActivationDiscovery {
 
     pub(super) fn provisional_tenant_record(
         &self,
-        current: &crabka_gres_control::TenantRecord,
+        current: &krabka_gres_control::TenantRecord,
         source_record_version: u64,
-    ) -> std::io::Result<crabka_gres_control::TenantRecord> {
+    ) -> std::io::Result<krabka_gres_control::TenantRecord> {
         let target_record_version = source_record_version
             .checked_add(1)
             .ok_or_else(|| std::io::Error::other("activation tenant version overflow"))?;
@@ -191,7 +191,7 @@ impl ActivationDiscovery {
 #[derive(Clone)]
 pub(super) struct PendingLiveTopology {
     pub(super) operation_id: String,
-    pub(super) source_checkpoint: crabka_gres_ranges::CheckpointManifest,
+    pub(super) source_checkpoint: krabka_gres_ranges::CheckpointManifest,
     pub(super) barrier_offset: i64,
     pub(super) tail_sha256: String,
     pub(super) predecessor: RangeId,
@@ -217,14 +217,14 @@ pub(super) struct PreparedLiveTopology {
     pub(super) predecessor: RangeId,
     pub(super) ranges: BTreeMap<RangeId, LiveRangeResources>,
     pub(super) engines: BTreeMap<RangeId, SqlEngine>,
-    pub(super) service: crabka_gres_ranges::HostedRangeService,
-    pub(super) tso_rpc: Option<Arc<dyn crabka_gres_ranges::TsoRpc>>,
+    pub(super) service: krabka_gres_ranges::HostedRangeService,
+    pub(super) tso_rpc: Option<Arc<dyn krabka_gres_ranges::TsoRpc>>,
 }
 
 /// Runtime-owned successor kept outside the serving snapshot until publication.
 pub(super) struct StagedLiveRangeSuccessor {
     pub(super) operation_id: String,
-    pub(super) source_checkpoint: crabka_gres_ranges::CheckpointManifest,
+    pub(super) source_checkpoint: krabka_gres_ranges::CheckpointManifest,
     pub(super) barrier_offset: i64,
     pub(super) tail_sha256: String,
     pub(super) replay_journal_seq: u64,
@@ -237,7 +237,7 @@ impl LiveMultiRangeTransfer {
         &self,
         fault: TopologyActivationFault,
         range_id: RangeId,
-    ) -> Result<(), crabka_gres_ranges::RangeTransferError> {
+    ) -> Result<(), krabka_gres_ranges::RangeTransferError> {
         if self
             .activation_fault
             .compare_exchange(
@@ -250,10 +250,10 @@ impl LiveMultiRangeTransfer {
         {
             return Ok(());
         }
-        if std::env::var_os("CRABKA_GRES_ACTIVATION_HARD_CRASH").is_some() {
+        if std::env::var_os("KRABKA_GRES_ACTIVATION_HARD_CRASH").is_some() {
             std::process::abort();
         }
-        Err(crabka_gres_ranges::RangeTransferError::Runtime {
+        Err(krabka_gres_ranges::RangeTransferError::Runtime {
             range_id,
             reason: format!("injected topology activation crash: {fault:?}"),
         })
@@ -274,14 +274,14 @@ impl LiveMultiRangeTransfer {
         &self,
         fault: PrepareTopologyFault,
         range_id: RangeId,
-    ) -> Result<(), crabka_gres_ranges::RangeTransferError> {
+    ) -> Result<(), krabka_gres_ranges::RangeTransferError> {
         if !self.take_prepare_fault(fault) {
             return Ok(());
         }
         if let Some(pending) = self.pending.lock().expect("pending topology lock").take() {
             pending.abort_staged_checkpoint_workers();
         }
-        Err(crabka_gres_ranges::RangeTransferError::Runtime {
+        Err(krabka_gres_ranges::RangeTransferError::Runtime {
             range_id,
             reason: format!("injected topology preparation fault: {fault:?}"),
         })
@@ -290,14 +290,14 @@ impl LiveMultiRangeTransfer {
     pub(super) fn publish_topology(
         &self,
         serving_engines: &BTreeMap<RangeId, SqlEngine>,
-    ) -> Result<(), crabka_gres_ranges::RangeTransferError> {
+    ) -> Result<(), krabka_gres_ranges::RangeTransferError> {
         self.injected_prepare_failure(PrepareTopologyFault::LockAcquisition, RangeId::COORDINATOR)?;
         let pending = self
             .pending
             .lock()
             .map_err(|_| range_pause_lock_error(RangeId::COORDINATOR))?
             .clone()
-            .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Runtime {
+            .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Runtime {
                 range_id: RangeId::COORDINATOR,
                 reason: "claimed successor topology is missing".into(),
             })?;
@@ -324,7 +324,7 @@ impl LiveMultiRangeTransfer {
         if let Some(horizon) = coordinator_resources.and_then(|resources| resources.tso_horizon) {
             self.injected_prepare_failure(PrepareTopologyFault::HorizonLoad, pending.predecessor)?;
             let persisted_max_ts = horizon.load_max_ts().map_err(|error| {
-                crabka_gres_ranges::RangeTransferError::Runtime {
+                krabka_gres_ranges::RangeTransferError::Runtime {
                     range_id: RangeId::COORDINATOR,
                     reason: format!("load replacement TSO horizon: {error}"),
                 }
@@ -342,7 +342,7 @@ impl LiveMultiRangeTransfer {
                     &self.config.range_runtime_policy,
                 )
                 .map_err(|error| {
-                    crabka_gres_ranges::RangeTransferError::Runtime {
+                    krabka_gres_ranges::RangeTransferError::Runtime {
                         range_id: RangeId::COORDINATOR,
                         reason: format!("open replacement TSO RPC: {error}"),
                     }
@@ -350,7 +350,7 @@ impl LiveMultiRangeTransfer {
             );
         }
         self.injected_prepare_failure(PrepareTopologyFault::ServiceAssembly, pending.predecessor)?;
-        let mut service = crabka_gres_ranges::HostedRangeService::new(
+        let mut service = krabka_gres_ranges::HostedRangeService::new(
             engines
                 .iter()
                 .map(|(id, engine)| (*id, engine.clone_handle()))
@@ -426,13 +426,13 @@ impl LiveMultiRangeTransfer {
 /// producer construction.
 pub(super) async fn persist_must_activate(
     transfer: &LiveMultiRangeTransfer,
-) -> Result<(), crabka_gres_ranges::RangeTransferError> {
+) -> Result<(), krabka_gres_ranges::RangeTransferError> {
     let pending = transfer
         .pending
         .lock()
         .map_err(|_| range_pause_lock_error(RangeId::COORDINATOR))?
         .clone()
-        .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Runtime {
+        .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Runtime {
             range_id: RangeId::COORDINATOR,
             reason: "mark activation without pending topology".into(),
         })?;
@@ -442,7 +442,7 @@ pub(super) async fn persist_must_activate(
         .map_err(|_| range_pause_lock_error(RangeId::COORDINATOR))?
         .get(&RangeId::COORDINATOR)
         .map(SqlEngine::clone_handle)
-        .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Unavailable {
+        .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Unavailable {
             range_id: RangeId::COORDINATOR,
             reason: "predecessor range zero unavailable for must-activate receipt".into(),
         })?;
@@ -452,7 +452,7 @@ pub(super) async fn persist_must_activate(
         .map_err(|_| range_pause_lock_error(RangeId::COORDINATOR))?
         .get(&RangeId::COORDINATOR)
         .cloned()
-        .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Unavailable {
+        .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Unavailable {
             range_id: RangeId::COORDINATOR,
             reason: "predecessor range zero resources unavailable for must-activate receipt".into(),
         })?;
@@ -461,11 +461,11 @@ pub(super) async fn persist_must_activate(
     let mut receipt = store
         .load(&pending.operation_id)
         .await
-        .map_err(|reason| crabka_gres_ranges::RangeTransferError::Runtime {
+        .map_err(|reason| krabka_gres_ranges::RangeTransferError::Runtime {
             range_id: RangeId::COORDINATOR,
             reason: format!("load must-activate receipt: {reason}"),
         })?
-        .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Runtime {
+        .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Runtime {
             range_id: RangeId::COORDINATOR,
             reason: "activation receipt missing before must-activate".into(),
         })?;
@@ -474,14 +474,14 @@ pub(super) async fn persist_must_activate(
         return Ok(());
     }
     if receipt.phase != TopologyActivationPhase::SourceCheckpoint {
-        return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+        return Err(krabka_gres_ranges::RangeTransferError::Boundary {
             range_id: pending.predecessor,
             reason: "must-activate requires the durable source-checkpoint phase".into(),
         });
     }
     let expected_receipt = receipt.clone();
     receipt.revision = receipt.revision.checked_add(1).ok_or_else(|| {
-        crabka_gres_ranges::RangeTransferError::Runtime {
+        krabka_gres_ranges::RangeTransferError::Runtime {
             range_id: pending.predecessor,
             reason: "activation receipt revision overflow".into(),
         }
@@ -503,7 +503,7 @@ pub(super) async fn persist_must_activate(
             .replay_journal_seq = Some(*replay_journal_seq);
     }
     validate_receipt_shape(&receipt).map_err(|error| {
-        crabka_gres_ranges::RangeTransferError::Boundary {
+        krabka_gres_ranges::RangeTransferError::Boundary {
             range_id: pending.predecessor,
             reason: error.to_string(),
         }
@@ -513,13 +513,13 @@ pub(super) async fn persist_must_activate(
         pending.predecessor,
     )?;
     let expected = serde_json::to_vec(&expected_receipt).map_err(|reason| {
-        crabka_gres_ranges::RangeTransferError::Runtime {
+        krabka_gres_ranges::RangeTransferError::Runtime {
             range_id: pending.predecessor,
             reason: format!("encode prior must-activate receipt: {reason}"),
         }
     })?;
     let value = serde_json::to_vec(&receipt).map_err(|reason| {
-        crabka_gres_ranges::RangeTransferError::Runtime {
+        krabka_gres_ranges::RangeTransferError::Runtime {
             range_id: pending.predecessor,
             reason: format!("encode must-activate receipt: {reason}"),
         }
@@ -531,13 +531,13 @@ pub(super) async fn persist_must_activate(
                 .lock()
                 .map_err(|_| range_pause_lock_error(pending.predecessor))?;
             let super::RangePauseState::Paused(paused) = &*pause else {
-                return Err(crabka_gres_ranges::RangeTransferError::Runtime {
+                return Err(krabka_gres_ranges::RangeTransferError::Runtime {
                     range_id: pending.predecessor,
                     reason: "must-activate append requires the held predecessor pause".into(),
                 });
             };
             if paused.barrier_offset != pending.barrier_offset {
-                return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+                return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                     range_id: pending.predecessor,
                     reason: "must-activate pause barrier differs from staged evidence".into(),
                 });
@@ -555,7 +555,7 @@ pub(super) async fn persist_must_activate(
                 value,
             )
             .await
-            .map_err(|reason| crabka_gres_ranges::RangeTransferError::Runtime {
+            .map_err(|reason| krabka_gres_ranges::RangeTransferError::Runtime {
                 range_id: pending.predecessor,
                 reason: format!("persist must-activate receipt: {reason}"),
             })?
@@ -567,13 +567,13 @@ pub(super) async fn persist_must_activate(
                 receipt,
             )
             .await
-            .map_err(|reason| crabka_gres_ranges::RangeTransferError::Runtime {
+            .map_err(|reason| krabka_gres_ranges::RangeTransferError::Runtime {
                 range_id: pending.predecessor,
                 reason: format!("persist must-activate receipt through range zero: {reason}"),
             })?
     };
     if !committed {
-        return Err(crabka_gres_ranges::RangeTransferError::Runtime {
+        return Err(krabka_gres_ranges::RangeTransferError::Runtime {
             range_id: pending.predecessor,
             reason: "must-activate receipt CAS raced".into(),
         });
@@ -589,8 +589,8 @@ pub(super) async fn persist_must_activate(
 pub(super) async fn copy_must_activate_before_bind(
     transfer: &LiveMultiRangeTransfer,
     pending: &PendingLiveTopology,
-    canonical: Arc<crabka_gres_substrate::ProducerWalWriter>,
-) -> Result<(), crabka_gres_ranges::RangeTransferError> {
+    canonical: Arc<krabka_gres_substrate::ProducerWalWriter>,
+) -> Result<(), krabka_gres_ranges::RangeTransferError> {
     let receipt_engine = transfer
         .prepared
         .lock()
@@ -598,7 +598,7 @@ pub(super) async fn copy_must_activate_before_bind(
         .as_ref()
         .and_then(|prepared| prepared.engines.get(&RangeId::COORDINATOR))
         .map(SqlEngine::clone_handle)
-        .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Runtime {
+        .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Runtime {
             range_id: RangeId::COORDINATOR,
             reason: "prepared range zero missing before canonical bind".into(),
         })?;
@@ -607,11 +607,11 @@ pub(super) async fn copy_must_activate_before_bind(
     let mut receipt = store
         .load(&pending.operation_id)
         .await
-        .map_err(|reason| crabka_gres_ranges::RangeTransferError::Runtime {
+        .map_err(|reason| krabka_gres_ranges::RangeTransferError::Runtime {
             range_id: RangeId::COORDINATOR,
             reason: format!("load replacement activation anchor: {reason}"),
         })?
-        .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Runtime {
+        .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Runtime {
             range_id: RangeId::COORDINATOR,
             reason: "replacement activation anchor is missing".into(),
         })?;
@@ -620,7 +620,7 @@ pub(super) async fn copy_must_activate_before_bind(
     }
     let expected_receipt = receipt.clone();
     receipt.revision = receipt.revision.checked_add(1).ok_or_else(|| {
-        crabka_gres_ranges::RangeTransferError::Runtime {
+        krabka_gres_ranges::RangeTransferError::Runtime {
             range_id: RangeId::COORDINATOR,
             reason: "replacement activation revision overflow".into(),
         }
@@ -642,13 +642,13 @@ pub(super) async fn copy_must_activate_before_bind(
             .replay_journal_seq = Some(*replay_journal_seq);
     }
     let expected = serde_json::to_vec(&expected_receipt).map_err(|error| {
-        crabka_gres_ranges::RangeTransferError::Runtime {
+        krabka_gres_ranges::RangeTransferError::Runtime {
             range_id: RangeId::COORDINATOR,
             reason: format!("encode prior activation anchor: {error}"),
         }
     })?;
     let value = serde_json::to_vec(&receipt).map_err(|error| {
-        crabka_gres_ranges::RangeTransferError::Runtime {
+        krabka_gres_ranges::RangeTransferError::Runtime {
             range_id: RangeId::COORDINATOR,
             reason: format!("encode activation anchor: {error}"),
         }
@@ -664,12 +664,12 @@ pub(super) async fn copy_must_activate_before_bind(
             value,
         )
         .await
-        .map_err(|error| crabka_gres_ranges::RangeTransferError::Runtime {
+        .map_err(|error| krabka_gres_ranges::RangeTransferError::Runtime {
             range_id: RangeId::COORDINATOR,
             reason: format!("commit replacement activation anchor: {error}"),
         })?
     {
-        return Err(crabka_gres_ranges::RangeTransferError::Runtime {
+        return Err(krabka_gres_ranges::RangeTransferError::Runtime {
             range_id: RangeId::COORDINATOR,
             reason: "replacement activation anchor CAS raced".into(),
         });
@@ -682,13 +682,13 @@ pub(super) async fn copy_must_activate_before_bind(
 /// have one implementation home.
 pub(super) async fn activate_serving_topology(
     transfer: &LiveMultiRangeTransfer,
-) -> Result<(), crabka_gres_ranges::RangeTransferError> {
+) -> Result<(), krabka_gres_ranges::RangeTransferError> {
     let pending = transfer
         .pending
         .lock()
         .map_err(|_| range_pause_lock_error(RangeId::COORDINATOR))?
         .clone()
-        .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Runtime {
+        .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Runtime {
             range_id: RangeId::COORDINATOR,
             reason: "activate without pending topology".into(),
         })?;
@@ -699,17 +699,17 @@ pub(super) async fn activate_serving_topology(
     for (index, (range_id, resources)) in targets.into_iter().enumerate() {
         if !resources.writer.is_activated() {
             transfer.activation_fault(TopologyActivationFault::BeforeProducerInit, range_id)?;
-            let recovered = crabka_gres_substrate::recover_live_for_range_with_restore(
+            let recovered = krabka_gres_substrate::recover_live_for_range_with_restore(
                 resources.recovery_config.clone(),
                 resources.store.as_ref(),
             )
             .await
-            .map_err(|error| crabka_gres_ranges::RangeTransferError::Runtime {
+            .map_err(|error| krabka_gres_ranges::RangeTransferError::Runtime {
                 range_id,
                 reason: format!("activate canonical successor writer: {error}"),
             })?;
             if recovered.generation != resources.generation {
-                return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+                return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                     range_id,
                     reason: format!(
                         "activated generation {} differs from staged generation {}",
@@ -718,7 +718,7 @@ pub(super) async fn activate_serving_topology(
                 });
             }
             transfer.activation_fault(TopologyActivationFault::AfterProducerInit, range_id)?;
-            let canonical = Arc::new(crabka_gres_substrate::ProducerWalWriter::new(
+            let canonical = Arc::new(krabka_gres_substrate::ProducerWalWriter::new(
                 recovered.producer,
                 resources.recovery_config.wal_topic(),
             ));
@@ -727,7 +727,7 @@ pub(super) async fn activate_serving_topology(
             }
             transfer.activation_fault(TopologyActivationFault::BeforeDeferredBind, range_id)?;
             resources.writer.activate(canonical).map_err(|error| {
-                crabka_gres_ranges::RangeTransferError::Runtime {
+                krabka_gres_ranges::RangeTransferError::Runtime {
                     range_id,
                     reason: format!("bind canonical successor writer: {error}"),
                 }
@@ -740,7 +740,7 @@ pub(super) async fn activate_serving_topology(
         if receipt.barrier_offset != Some(pending.barrier_offset)
             || receipt.tail_sha256.as_deref() != Some(pending.tail_sha256.as_str())
         {
-            return Err(crabka_gres_ranges::RangeTransferError::Boundary {
+            return Err(krabka_gres_ranges::RangeTransferError::Boundary {
                 range_id,
                 reason: "staged activation boundary differs from durable receipt".into(),
             });
@@ -748,7 +748,7 @@ pub(super) async fn activate_serving_topology(
         if !receipt.targets[&range_id].writer_activated {
             let expected = receipt.revision;
             receipt.revision = receipt.revision.checked_add(1).ok_or_else(|| {
-                crabka_gres_ranges::RangeTransferError::Runtime {
+                krabka_gres_ranges::RangeTransferError::Runtime {
                     range_id,
                     reason: "activation receipt revision overflow".into(),
                 }
@@ -781,7 +781,7 @@ pub(super) async fn activate_serving_topology(
         let mut receipt = load_transfer_receipt(&store, &pending.operation_id, range_id).await?;
         if receipt.targets[&range_id].bootstrap_checkpoint.is_none() {
             let checkpoint = resources.checkpoint.as_ref().ok_or_else(|| {
-                crabka_gres_ranges::RangeTransferError::Unavailable {
+                krabka_gres_ranges::RangeTransferError::Unavailable {
                     range_id,
                     reason: "activated successor checkpoint runtime missing".into(),
                 }
@@ -790,16 +790,16 @@ pub(super) async fn activate_serving_topology(
                 .handle
                 .checkpoint_from_source(
                     Arc::clone(&resources.snapshot_source),
-                    crabka_gres_substrate::CheckpointTrigger::Manual,
+                    krabka_gres_substrate::CheckpointTrigger::Manual,
                 )
                 .await
-                .map_err(|error| crabka_gres_ranges::RangeTransferError::Runtime {
+                .map_err(|error| krabka_gres_ranges::RangeTransferError::Runtime {
                     range_id,
                     reason: format!("write activated successor checkpoint: {error}"),
                 })?;
             let expected = receipt.revision;
             receipt.revision = receipt.revision.checked_add(1).ok_or_else(|| {
-                crabka_gres_ranges::RangeTransferError::Runtime {
+                krabka_gres_ranges::RangeTransferError::Runtime {
                     range_id,
                     reason: "activation receipt revision overflow".into(),
                 }
@@ -808,7 +808,7 @@ pub(super) async fn activate_serving_topology(
                 .targets
                 .get_mut(&range_id)
                 .expect("target")
-                .bootstrap_checkpoint = Some(crabka_gres_ranges::CheckpointManifest {
+                .bootstrap_checkpoint = Some(krabka_gres_ranges::CheckpointManifest {
                 range_id,
                 covered_offset: run.metadata.covered_offset,
                 manifest_key: run.metadata.manifest_key,
@@ -842,14 +842,14 @@ pub(super) async fn activate_serving_topology(
             .values()
             .all(|target| target.writer_activated && target.bootstrap_checkpoint.is_some())
         {
-            return Err(crabka_gres_ranges::RangeTransferError::Runtime {
+            return Err(krabka_gres_ranges::RangeTransferError::Runtime {
                 range_id: pending.predecessor,
                 reason: "successor checkpoint phase advanced before every target".into(),
             });
         }
         let expected = receipt.revision;
         receipt.revision = receipt.revision.checked_add(1).ok_or_else(|| {
-            crabka_gres_ranges::RangeTransferError::Runtime {
+            krabka_gres_ranges::RangeTransferError::Runtime {
                 range_id: pending.predecessor,
                 reason: "activation receipt revision overflow".into(),
             }
@@ -876,7 +876,7 @@ fn prepared_receipt_store(
     transfer: &LiveMultiRangeTransfer,
     pending: &PendingLiveTopology,
     range_id: RangeId,
-) -> Result<RangeZeroTopologyActivationStore, crabka_gres_ranges::RangeTransferError> {
+) -> Result<RangeZeroTopologyActivationStore, krabka_gres_ranges::RangeTransferError> {
     let engine = transfer
         .prepared
         .lock()
@@ -884,7 +884,7 @@ fn prepared_receipt_store(
         .as_ref()
         .and_then(|prepared| prepared.engines.get(&RangeId::COORDINATOR))
         .map(SqlEngine::clone_handle)
-        .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Runtime {
+        .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Runtime {
             range_id,
             reason: "prepared range-zero engine missing during activation".into(),
         })?;
@@ -898,15 +898,15 @@ async fn load_transfer_receipt(
     store: &RangeZeroTopologyActivationStore,
     operation_id: &str,
     range_id: RangeId,
-) -> Result<TopologyActivationReceipt, crabka_gres_ranges::RangeTransferError> {
+) -> Result<TopologyActivationReceipt, krabka_gres_ranges::RangeTransferError> {
     store
         .load(operation_id)
         .await
-        .map_err(|reason| crabka_gres_ranges::RangeTransferError::Runtime {
+        .map_err(|reason| krabka_gres_ranges::RangeTransferError::Runtime {
             range_id,
             reason: format!("load activation receipt: {reason}"),
         })?
-        .ok_or_else(|| crabka_gres_ranges::RangeTransferError::Runtime {
+        .ok_or_else(|| krabka_gres_ranges::RangeTransferError::Runtime {
             range_id,
             reason: "activation receipt is missing".into(),
         })
@@ -919,16 +919,16 @@ async fn cas_transfer_receipt(
     receipt: TopologyActivationReceipt,
     range_id: RangeId,
     transition: &str,
-) -> Result<(), crabka_gres_ranges::RangeTransferError> {
+) -> Result<(), krabka_gres_ranges::RangeTransferError> {
     if !store
         .compare_and_swap(operation_id, Some(expected), receipt)
         .await
-        .map_err(|reason| crabka_gres_ranges::RangeTransferError::Runtime {
+        .map_err(|reason| krabka_gres_ranges::RangeTransferError::Runtime {
             range_id,
             reason: format!("persist {transition}: {reason}"),
         })?
     {
-        return Err(crabka_gres_ranges::RangeTransferError::Runtime {
+        return Err(krabka_gres_ranges::RangeTransferError::Runtime {
             range_id,
             reason: format!("{transition} receipt CAS raced"),
         });
@@ -941,16 +941,16 @@ async fn cas_transfer_receipt(
 /// predecessor.
 pub(super) async fn discover_activation_receipt(
     config: &SubstrateRuntimeConfig,
-    checkpoint_store: Option<&dyn crabka_gres_substrate::checkpoint::CheckpointStore>,
+    checkpoint_store: Option<&dyn krabka_gres_substrate::checkpoint::CheckpointStore>,
 ) -> std::io::Result<Option<ActivationDiscovery>> {
-    let tenant = crabka_gres_ranges::TenantName::parse(config.tenant.clone()).map_err(|error| {
+    let tenant = krabka_gres_ranges::TenantName::parse(config.tenant.clone()).map_err(|error| {
         std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("tenant: {error}"))
     })?;
     let recovery = config.live_recovery_config(tenant, RangeId::COORDINATOR);
-    crabka_gres_substrate::ensure_live_wal_topic(&recovery)
+    krabka_gres_substrate::ensure_live_wal_topic(&recovery)
         .await
         .map_err(|error| std::io::Error::other(format!("activation discovery topic: {error}")))?;
-    if crabka_gres_substrate::live_committed_end(&recovery)
+    if krabka_gres_substrate::live_committed_end(&recovery)
         .await
         .map_err(|error| std::io::Error::other(format!("activation discovery end: {error}")))?
         < 0
@@ -1002,7 +1002,7 @@ pub(super) async fn discover_activation_receipt(
             ));
         }
         let candidate_recovery = recovery.clone().with_wal_generation(next_generation);
-        let candidate_end = crabka_gres_substrate::live_committed_end(&candidate_recovery)
+        let candidate_end = krabka_gres_substrate::live_committed_end(&candidate_recovery)
             .await
             .map_err(|error| {
                 std::io::Error::other(format!(
@@ -1127,14 +1127,14 @@ pub(super) async fn discover_activation_receipt(
 }
 
 async fn read_checkpoint_receipts(
-    recovery: &crabka_gres_substrate::LiveRecoveryConfig,
-    checkpoint_store: Option<&dyn crabka_gres_substrate::checkpoint::CheckpointStore>,
+    recovery: &krabka_gres_substrate::LiveRecoveryConfig,
+    checkpoint_store: Option<&dyn krabka_gres_substrate::checkpoint::CheckpointStore>,
 ) -> std::io::Result<BTreeMap<String, TopologyActivationReceipt>> {
     let Some(checkpoint_store) = checkpoint_store else {
         return Ok(BTreeMap::new());
     };
-    let kv = Arc::new(crabka_pgkv::MemKv::default());
-    let restored = crabka_gres_substrate::checkpoint::restore_latest(
+    let kv = Arc::new(krabka_pgkv::MemKv::default());
+    let restored = krabka_gres_substrate::checkpoint::restore_latest(
         checkpoint_store,
         &format!("{}/r{}", recovery.tenant, RangeId::COORDINATOR.as_u32()),
         kv.as_ref(),
@@ -1146,7 +1146,7 @@ async fn read_checkpoint_receipts(
     if restored.is_none() {
         return Ok(BTreeMap::new());
     }
-    let engine = SqlEngine::with_kv(kv as Arc<dyn crabka_pgkv::Kv>).map_err(|error| {
+    let engine = SqlEngine::with_kv(kv as Arc<dyn krabka_pgkv::Kv>).map_err(|error| {
         std::io::Error::other(format!("activation checkpoint engine: {error:?}"))
     })?;
     let mut receipts = BTreeMap::new();
@@ -1169,25 +1169,25 @@ async fn read_checkpoint_receipts(
 }
 
 async fn receipt_values_from_wal(
-    recovery: &crabka_gres_substrate::LiveRecoveryConfig,
+    recovery: &krabka_gres_substrate::LiveRecoveryConfig,
     end: i64,
 ) -> std::io::Result<Vec<TopologyActivationReceipt>> {
-    let prefix = crabka_pgkv::key::topology_activation_receipt_prefix(&recovery.tenant.to_string());
-    let items = crabka_gres_substrate::read_live_retained_committed(recovery, end)
+    let prefix = krabka_pgkv::key::topology_activation_receipt_prefix(&recovery.tenant.to_string());
+    let items = krabka_gres_substrate::read_live_retained_committed(recovery, end)
         .await
         .map_err(|error| std::io::Error::other(format!("read replacement receipt WAL: {error}")))?;
     let mut receipts = Vec::new();
     for item in items {
-        let frame = crabka_gres_substrate::WalFrame::decode(&item.bytes).map_err(|error| {
+        let frame = krabka_gres_substrate::WalFrame::decode(&item.bytes).map_err(|error| {
             std::io::Error::other(format!("decode replacement receipt WAL: {error}"))
         })?;
         for operation in frame.ops {
             let keyed_value = match operation {
-                crabka_pgkv::WriteOp::Put {
+                krabka_pgkv::WriteOp::Put {
                     key: candidate,
                     value,
                 }
-                | crabka_pgkv::WriteOp::ConditionalPut {
+                | krabka_pgkv::WriteOp::ConditionalPut {
                     key: candidate,
                     value,
                     ..
@@ -1215,7 +1215,7 @@ fn validate_receipt_wal_identity(
     receipt: &TopologyActivationReceipt,
 ) -> std::io::Result<()> {
     let expected_key =
-        crabka_pgkv::key::topology_activation_receipt_key(recovery_tenant, &receipt.operation_id);
+        krabka_pgkv::key::topology_activation_receipt_key(recovery_tenant, &receipt.operation_id);
     if key == expected_key && receipt.tenant == recovery_tenant {
         Ok(())
     } else {
@@ -1561,18 +1561,18 @@ fn validate_receipt_history(receipts: &[TopologyActivationReceipt]) -> std::io::
 }
 
 async fn read_only_receipts(
-    recovery: &crabka_gres_substrate::LiveRecoveryConfig,
-    checkpoint_store: Option<&dyn crabka_gres_substrate::checkpoint::CheckpointStore>,
+    recovery: &krabka_gres_substrate::LiveRecoveryConfig,
+    checkpoint_store: Option<&dyn krabka_gres_substrate::checkpoint::CheckpointStore>,
 ) -> std::io::Result<Vec<TopologyActivationReceipt>> {
-    let follower_kv = Arc::new(crabka_pgkv::MemKv::default());
-    crabka_gres_substrate::bootstrap_live_range0_follower(
+    let follower_kv = Arc::new(krabka_pgkv::MemKv::default());
+    krabka_gres_substrate::bootstrap_live_range0_follower(
         recovery,
         follower_kv.clone(),
         checkpoint_store,
     )
     .await
     .map_err(|error| std::io::Error::other(format!("activation discovery: {error}")))?;
-    let engine = SqlEngine::with_kv(follower_kv as Arc<dyn crabka_pgkv::Kv>).map_err(|error| {
+    let engine = SqlEngine::with_kv(follower_kv as Arc<dyn krabka_pgkv::Kv>).map_err(|error| {
         std::io::Error::other(format!("activation discovery engine: {error:?}"))
     })?;
     RangeZeroTopologyActivationStore::new(recovery.tenant.to_string(), engine)
@@ -1591,7 +1591,7 @@ async fn read_only_receipts(
 pub(super) async fn reconcile_before_readiness(
     config: &SubstrateRuntimeConfig,
     engines: &mut LiveMultirangeEngines,
-    checkpoint_store: Option<Arc<dyn crabka_gres_substrate::checkpoint::CheckpointStore>>,
+    checkpoint_store: Option<Arc<dyn krabka_gres_substrate::checkpoint::CheckpointStore>>,
     discovered: Option<ActivationDiscovery>,
 ) -> std::io::Result<(Option<RangeMap>, bool)> {
     if discovered.is_none() && !engines.engines.contains_key(&RangeId::COORDINATOR) {
@@ -1624,7 +1624,7 @@ pub(super) async fn reconcile_before_readiness(
         .map_err(|error| std::io::Error::other(format!("list range-control receipts: {error:?}")))?
         .into_iter()
         .map(|bytes| {
-            serde_json::from_slice::<crabka_gres_ranges::control::RangeControlReceipt>(&bytes)
+            serde_json::from_slice::<krabka_gres_ranges::control::RangeControlReceipt>(&bytes)
                 .map(|receipt| receipt.request.operation_id)
                 .map_err(|error| {
                     std::io::Error::other(format!("decode range-control receipt: {error}"))
@@ -1727,7 +1727,7 @@ async fn abort_pre_activation(
 async fn complete_post_activation(
     config: &SubstrateRuntimeConfig,
     engines: &mut LiveMultirangeEngines,
-    checkpoint_store: Option<Arc<dyn crabka_gres_substrate::checkpoint::CheckpointStore>>,
+    checkpoint_store: Option<Arc<dyn krabka_gres_substrate::checkpoint::CheckpointStore>>,
     receipt: TopologyActivationReceipt,
 ) -> std::io::Result<RangeMap> {
     let checkpoint = receipt.source_checkpoint.clone().ok_or_else(|| {
@@ -1754,7 +1754,7 @@ async fn complete_post_activation(
         predecessor.resources.checkpoint.as_ref().ok_or_else(|| {
             std::io::Error::other("activation predecessor has no checkpoint store")
         })?;
-    let tail = crabka_gres_substrate::read_live_committed_tail(
+    let tail = krabka_gres_substrate::read_live_committed_tail(
         &predecessor.resources.recovery_config,
         checkpoint.covered_offset,
         barrier_offset,
@@ -1762,7 +1762,7 @@ async fn complete_post_activation(
     .await
     .map_err(|error| std::io::Error::other(format!("read activation tail: {error}")))?
     .into_iter()
-    .map(|record| crabka_gres_ranges::CommittedTailRecord {
+    .map(|record| krabka_gres_ranges::CommittedTailRecord {
         offset: record.offset,
         bytes: record.bytes,
     })
@@ -1799,7 +1799,7 @@ async fn complete_post_activation(
         let recovery_checkpoints = if target.bootstrap_checkpoint.is_some() {
             checkpoint_store.clone()
         } else {
-            let filter = crabka_gres_substrate::CheckpointFilter::new(
+            let filter = krabka_gres_substrate::CheckpointFilter::new(
                 target.interval.start,
                 target.interval.end,
             )
@@ -1807,18 +1807,18 @@ async fn complete_post_activation(
             .with_physical_to_logical(physical_to_logical.clone())
             .with_structural_ownership(target.range_id == receipt.split.left.range_id)
             .with_target_range(target.range_id);
-            let restored = crabka_gres_substrate::restore_filtered_from_manifest_and_replay_tail(
+            let restored = krabka_gres_substrate::restore_filtered_from_manifest_and_replay_tail(
                 source_checkpoint_runtime.store.as_ref(),
                 &checkpoint.manifest_key,
                 &source_checkpoint_runtime.tenant,
                 checkpoint.covered_offset,
                 target_store.as_ref(),
-                crabka_gres_substrate::RestoreTail {
+                krabka_gres_substrate::RestoreTail {
                     current_generation: receipt.split.predecessor_generation,
                     log_start: None,
                     committed_frames: tail
                         .iter()
-                        .map(|record| crabka_gres_substrate::ReplayItem {
+                        .map(|record| krabka_gres_substrate::ReplayItem {
                             offset: record.offset,
                             bytes: record.bytes.clone(),
                         })
@@ -1959,7 +1959,7 @@ async fn complete_target_receipts(
                 .handle
                 .checkpoint_from_source(
                     Arc::clone(&successor.resources.snapshot_source),
-                    crabka_gres_substrate::CheckpointTrigger::Manual,
+                    krabka_gres_substrate::CheckpointTrigger::Manual,
                 )
                 .await
                 .map_err(|error| {
@@ -1971,7 +1971,7 @@ async fn complete_target_receipts(
                 .targets
                 .get_mut(range_id)
                 .expect("target existence checked")
-                .bootstrap_checkpoint = Some(crabka_gres_ranges::CheckpointManifest {
+                .bootstrap_checkpoint = Some(krabka_gres_ranges::CheckpointManifest {
                 range_id: *range_id,
                 covered_offset: run.metadata.covered_offset,
                 manifest_key: run.metadata.manifest_key,
@@ -2071,10 +2071,10 @@ fn physical_to_logical(
     let coordinator = engines.engines.get(&RangeId::COORDINATOR).ok_or_else(|| {
         std::io::Error::other("range zero missing while reconstructing activation mapping")
     })?;
-    crabka_gres_ranges::transfer::predecessor_table_mapping(
+    krabka_gres_ranges::transfer::predecessor_table_mapping(
         &receipt.split.current_map,
         receipt.split.predecessor,
-        crabka_pgcatalog::list_tables(coordinator.engine.catalog_kv())
+        krabka_pgcatalog::list_tables(coordinator.engine.catalog_kv())
             .map_err(|error| std::io::Error::other(format!("list activation tables: {error:?}")))?
             .into_iter()
             .map(|table| {
@@ -2115,7 +2115,7 @@ fn routing_table_id(table: &str) -> TableId {
 mod tests {
     use std::collections::BTreeMap;
 
-    use crabka_gres_ranges::{
+    use krabka_gres_ranges::{
         MapEpoch, MoveRangeCommand, RangeId, RangeKey, RangeMap, RangeSpec, SplitCommand,
         SplitState, SuccessorDescriptor, TableId, TenantName,
         control::{ActivationTargetProgress, TopologyActivationPhase, TopologyActivationReceipt},
@@ -2138,14 +2138,14 @@ mod tests {
     fn activation_registry_boundary_preserves_hash_bucket() {
         assert_eq!(
             registry_boundary(RangeKey::hash(TableId::new(50), 8, 0)),
-            crabka_gres_control::RangeBoundary::hash(50, 8, 0)
+            krabka_gres_control::RangeBoundary::hash(50, 8, 0)
         );
         assert_eq!(
             registry_boundary(RangeKey::new(TableId::new(51), 16)),
-            crabka_gres_control::RangeBoundary::new(51, 16)
+            krabka_gres_control::RangeBoundary::new(51, 16)
         );
         assert!(registry_boundary_matches(
-            Some(crabka_gres_control::RangeBoundary::hash(50, 0, 0)),
+            Some(krabka_gres_control::RangeBoundary::hash(50, 0, 0)),
             Some(RangeKey::hash(TableId::new(50), 0, 0))
         ));
     }
@@ -2174,7 +2174,7 @@ mod tests {
     fn forged_activation_receipt_extensions_fail_closed() {
         let mut prefix = receipt();
         prefix.phase = TopologyActivationPhase::SourceCheckpoint;
-        prefix.source_checkpoint = Some(crabka_gres_ranges::CheckpointManifest {
+        prefix.source_checkpoint = Some(krabka_gres_ranges::CheckpointManifest {
             range_id: prefix.split.predecessor,
             covered_offset: 3,
             manifest_key: "checkpoint".into(),
@@ -2229,7 +2229,7 @@ mod tests {
         let mut source = prepared.clone();
         source.revision += 1;
         source.phase = TopologyActivationPhase::SourceCheckpoint;
-        source.source_checkpoint = Some(crabka_gres_ranges::CheckpointManifest {
+        source.source_checkpoint = Some(krabka_gres_ranges::CheckpointManifest {
             range_id: source.split.predecessor,
             covered_offset: 3,
             manifest_key: "checkpoint".into(),
@@ -2282,7 +2282,7 @@ mod tests {
 
         let mut checkpoint_before_writer = receipt();
         checkpoint_before_writer.phase = TopologyActivationPhase::WriterActivated;
-        checkpoint_before_writer.source_checkpoint = Some(crabka_gres_ranges::CheckpointManifest {
+        checkpoint_before_writer.source_checkpoint = Some(krabka_gres_ranges::CheckpointManifest {
             range_id: checkpoint_before_writer.split.predecessor,
             covered_offset: 3,
             manifest_key: "source".into(),
@@ -2301,7 +2301,7 @@ mod tests {
             .targets
             .get_mut(&RangeId::new(2))
             .unwrap()
-            .bootstrap_checkpoint = Some(crabka_gres_ranges::CheckpointManifest {
+            .bootstrap_checkpoint = Some(krabka_gres_ranges::CheckpointManifest {
             range_id: RangeId::new(2),
             covered_offset: 1,
             manifest_key: "impossible".into(),
@@ -2325,7 +2325,7 @@ mod tests {
     fn replacement_generation_selection_supports_distinct_operation_chain_and_rejects_forks() {
         let mut first = receipt();
         first.phase = TopologyActivationPhase::MustActivate;
-        first.source_checkpoint = Some(crabka_gres_ranges::CheckpointManifest {
+        first.source_checkpoint = Some(krabka_gres_ranges::CheckpointManifest {
             range_id: first.split.predecessor,
             covered_offset: 3,
             manifest_key: "g0".into(),
@@ -2555,7 +2555,7 @@ mod tests {
         let mut source = prepared.clone();
         source.revision += 1;
         source.phase = TopologyActivationPhase::SourceCheckpoint;
-        source.source_checkpoint = Some(crabka_gres_ranges::CheckpointManifest {
+        source.source_checkpoint = Some(krabka_gres_ranges::CheckpointManifest {
             range_id: source.split.predecessor,
             covered_offset: 3,
             manifest_key: "checkpoint".into(),
@@ -2588,13 +2588,13 @@ mod tests {
     #[test]
     fn wal_receipt_key_must_match_payload_operation_and_tenant() {
         let receipt = receipt();
-        let exact = crabka_pgkv::key::topology_activation_receipt_key(
+        let exact = krabka_pgkv::key::topology_activation_receipt_key(
             &receipt.tenant,
             &receipt.operation_id,
         );
         validate_receipt_wal_identity(&receipt.tenant, &exact, &receipt).expect("exact identity");
         let wrong_operation =
-            crabka_pgkv::key::topology_activation_receipt_key(&receipt.tenant, "other-op");
+            krabka_pgkv::key::topology_activation_receipt_key(&receipt.tenant, "other-op");
         assert!(
             validate_receipt_wal_identity(&receipt.tenant, &wrong_operation, &receipt).is_err()
         );
@@ -2712,7 +2712,7 @@ mod tests {
             operation_id: "activation-move-op".into(),
             revision: 3,
             phase: TopologyActivationPhase::MustActivate,
-            source_checkpoint: Some(crabka_gres_ranges::CheckpointManifest {
+            source_checkpoint: Some(krabka_gres_ranges::CheckpointManifest {
                 range_id: RangeId::new(1),
                 covered_offset: 3,
                 manifest_key: "move-g0".into(),
@@ -2782,7 +2782,7 @@ mod tests {
             operation_id: "activation-split-op".into(),
             revision: 3,
             phase: TopologyActivationPhase::MustActivate,
-            source_checkpoint: Some(crabka_gres_ranges::CheckpointManifest {
+            source_checkpoint: Some(krabka_gres_ranges::CheckpointManifest {
                 range_id: RangeId::new(1),
                 covered_offset: 3,
                 manifest_key: "split-g0".into(),
@@ -2796,29 +2796,29 @@ mod tests {
 
     fn tenant_record_for_receipt(
         receipt: &TopologyActivationReceipt,
-    ) -> crabka_gres_control::TenantRecord {
+    ) -> krabka_gres_control::TenantRecord {
         let ranges = receipt
             .split
             .current_map
             .ranges()
             .iter()
-            .map(|spec| crabka_gres_control::RangeLayoutEntry {
+            .map(|spec| krabka_gres_control::RangeLayoutEntry {
                 range_id: spec.range_id.as_u32(),
                 end_key: spec.end.map(|end| {
-                    crabka_gres_control::RangeBoundary::new(end.table_id.as_u64(), end.rowid)
+                    krabka_gres_control::RangeBoundary::new(end.table_id.as_u64(), end.rowid)
                 }),
                 endpoint: format!("source-r{}", spec.range_id.as_u32()),
                 wal_generation: 0,
-                lifecycle: crabka_gres_control::RangeLifecycle::default(),
+                lifecycle: krabka_gres_control::RangeLifecycle::default(),
                 retirement: None,
             })
             .collect();
-        crabka_gres_control::TenantRecord::new(
+        krabka_gres_control::TenantRecord::new(
             u64::from(receipt.split.current_map.epoch()).max(1),
-            crabka_gres_control::TenantId::try_from(receipt.tenant.as_str()).expect("id"),
-            crabka_gres_control::TenantName::try_from(receipt.tenant.as_str()).expect("name"),
-            crabka_gres_control::TenantState::Active,
-            crabka_gres_control::SqlUser::try_from("alice").expect("user"),
+            krabka_gres_control::TenantId::try_from(receipt.tenant.as_str()).expect("id"),
+            krabka_gres_control::TenantName::try_from(receipt.tenant.as_str()).expect("name"),
+            krabka_gres_control::TenantState::Active,
+            krabka_gres_control::SqlUser::try_from("alice").expect("user"),
             "SCRAM-SHA-256$4096:salt$stored:server".into(),
             3,
         )

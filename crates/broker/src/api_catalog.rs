@@ -2,17 +2,17 @@
 //!
 //! This is the single source of truth for both the live `ApiVersions`
 //! (`api_key` 18) response and the generated protocol-API reference page. The
-//! handler in `handlers::api_versions` calls [`supported_apis`]. `crabka-docgen`
+//! handler in `handlers::api_versions` calls [`supported_apis`]. `krabka-docgen`
 //! reads the same list and does not spawn the broker binary.
 
-use crabka_protocol::owned::api_versions_response::ApiVersion;
+use krabka_protocol::owned::api_versions_response::ApiVersion;
 
 macro_rules! v {
     ($mod:ident) => {
         ApiVersion {
-            api_key: crabka_protocol::owned::$mod::API_KEY,
-            min_version: crabka_protocol::owned::$mod::MIN_VERSION,
-            max_version: crabka_protocol::owned::$mod::MAX_VERSION,
+            api_key: krabka_protocol::owned::$mod::API_KEY,
+            min_version: krabka_protocol::owned::$mod::MIN_VERSION,
+            max_version: krabka_protocol::owned::$mod::MAX_VERSION,
             ..Default::default()
         }
     };
@@ -28,18 +28,18 @@ pub fn supported_apis() -> Vec<ApiVersion> {
 }
 
 fn client_facing_apis() -> Vec<ApiVersion> {
-    use crabka_protocol::owned;
+    use krabka_protocol::owned;
     vec![
         v!(api_versions_request),
         ApiVersion {
             api_key: owned::produce_request::API_KEY,
-            min_version: crabka_protocol::kafka_3_6_2::owned::produce_request::MIN_VERSION,
+            min_version: krabka_protocol::kafka_3_6_2::owned::produce_request::MIN_VERSION,
             max_version: owned::produce_request::MAX_VERSION,
             ..Default::default()
         },
         ApiVersion {
             api_key: owned::fetch_request::API_KEY,
-            min_version: crabka_protocol::kafka_3_6_2::owned::fetch_request::MIN_VERSION,
+            min_version: krabka_protocol::kafka_3_6_2::owned::fetch_request::MIN_VERSION,
             max_version: owned::fetch_request::MAX_VERSION,
             ..Default::default()
         },

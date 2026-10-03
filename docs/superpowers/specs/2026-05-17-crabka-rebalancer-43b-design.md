@@ -6,7 +6,7 @@
 
 ## Goal
 
-Land slice 43b: the rebalancer transitions from advisor (43a) to executor. Operators can call `ExecuteProposal` and watch a proposal drive real partition reassignments through `AlterPartitionReassignments` under a `IncrementalAlterConfigs`-managed KIP-73 throttle, then resume cleanly if the rebalancer restarts mid-execution. Slice 43b also ships the production Helm chart at `charts/crabka-rebalancer/`, displacing 43a's placeholder.
+Land slice 43b: the rebalancer transitions from advisor (43a) to executor. Operators can call `ExecuteProposal` and watch a proposal drive real partition reassignments through `AlterPartitionReassignments` under a `IncrementalAlterConfigs`-managed KIP-73 throttle, then resume cleanly if the rebalancer restarts mid-execution. Slice 43b also ships the production Helm chart at `charts/krabka-rebalancer/`, displacing 43a's placeholder.
 
 ## Out of scope (deferred to later slices)
 
@@ -37,7 +37,7 @@ Land slice 43b: the rebalancer transitions from advisor (43a) to executor. Opera
 - `throttle.rs` — pure-logic `compute_throttle_targets(movements: &[Movement]) -> ThrottleTargets`. No I/O.
 - `state.rs` — `Execution`'s persistent shape (`InFlightFile`), serde definitions, atomic-rename write helper.
 
-The `executor` module consumes raw `crabka_protocol` request/response types via `Client::send`, mirroring the ingester pattern from 43a. No new typed wrappers in `crabka-client-core`.
+The `executor` module consumes raw `krabka_protocol` request/response types via `Client::send`, mirroring the ingester pattern from 43a. No new typed wrappers in `krabka-client-core`.
 
 ### Execution state machine
 
@@ -103,7 +103,7 @@ pub struct ExecutionHandle {
 
 ## Persistence
 
-Two JSON files under `--data-dir` (default `/var/lib/crabka-rebalancer`, mkdir on startup).
+Two JSON files under `--data-dir` (default `/var/lib/krabka-rebalancer`, mkdir on startup).
 
 ### `proposals.json` — full ProposalStore ring buffer
 
@@ -232,13 +232,13 @@ Cancel signals the execution's `CancellationToken`; the task transitions through
 
 ### CLI flags
 
-New on `crabka-rebalancer`:
+New on `krabka-rebalancer`:
 
-- `--data-dir` (env `CRABKA_DATA_DIR`, default `/var/lib/crabka-rebalancer`) — already named in 43a's design but not wired; now wired.
-- `--default-throttle-bytes-per-sec` (env `CRABKA_DEFAULT_THROTTLE_BYTES_PER_SEC`, default 50_000_000)
-- `--execute-deadline-secs` (env `CRABKA_EXECUTE_DEADLINE_SECS`, default 1800 = 30 minutes)
-- `--reassignment-poll-interval-secs` (env `CRABKA_REASSIGNMENT_POLL_INTERVAL_SECS`, default 5)
-- `--reassignment-batch-size` (env `CRABKA_REASSIGNMENT_BATCH_SIZE`, default 200) — movements per `AlterPartitionReassignments` request
+- `--data-dir` (env `KRABKA_DATA_DIR`, default `/var/lib/krabka-rebalancer`) — already named in 43a's design but not wired; now wired.
+- `--default-throttle-bytes-per-sec` (env `KRABKA_DEFAULT_THROTTLE_BYTES_PER_SEC`, default 50_000_000)
+- `--execute-deadline-secs` (env `KRABKA_EXECUTE_DEADLINE_SECS`, default 1800 = 30 minutes)
+- `--reassignment-poll-interval-secs` (env `KRABKA_REASSIGNMENT_POLL_INTERVAL_SECS`, default 5)
+- `--reassignment-batch-size` (env `KRABKA_REASSIGNMENT_BATCH_SIZE`, default 200) — movements per `AlterPartitionReassignments` request
 
 ## Throttle strategy (KIP-73)
 
@@ -272,7 +272,7 @@ Covered in [Persistence](#persistence). One additional note: the recovery path r
 
 ## Helm chart
 
-`charts/crabka-rebalancer/` ships:
+`charts/krabka-rebalancer/` ships:
 
 - `Chart.yaml` — `appVersion` tracks the crate version
 - `values.yaml` — `image.{repository,tag,pullPolicy}`, `bootstrapServers` (required, no default), `listenAddr` (default `0.0.0.0:9300`), `scrapeIntervalSecs`, `imbalanceThresholdPct`, `maxMovementsPerProposal`, `proposalRingBufferSize`, `throttle.defaultBytesPerSec`, `executeDeadlineSecs`, `reassignmentPollIntervalSecs`, `reassignmentBatchSize`, `persistence.size` (default `1Gi`), `persistence.storageClass`, `resources`, `nodeSelector`, `tolerations`, `affinity`
@@ -280,11 +280,11 @@ Covered in [Persistence](#persistence). One additional note: the recovery path r
 - `templates/deployment.yaml` — `Deployment` with `replicas: 1`, `strategy: Recreate` (releases the RWO PVC before the next pod starts). Single container with env-var-bound CLI flags. Liveness probe on `/healthz`, readiness on `/readyz`.
 - `templates/service.yaml` — ClusterIP exposing 9300
 - `templates/serviceaccount.yaml` — empty ServiceAccount; no ClusterRole/RoleBinding. Rebalancer talks to Crabka over the wire protocol, not k8s API.
-- `templates/persistentvolumeclaim.yaml` — RWO PVC mounted at `/var/lib/crabka-rebalancer`. `accessModes: [ReadWriteOnce]`.
+- `templates/persistentvolumeclaim.yaml` — RWO PVC mounted at `/var/lib/krabka-rebalancer`. `accessModes: [ReadWriteOnce]`.
 
-**Chart tests** under `charts/crabka-rebalancer/tests/`:
+**Chart tests** under `charts/krabka-rebalancer/tests/`:
 
-- `deployment_test.yaml` — `replicas: 1`, `strategy.type: Recreate`, container env vars match values, probes wired to /healthz + /readyz, PVC mounted at `/var/lib/crabka-rebalancer`
+- `deployment_test.yaml` — `replicas: 1`, `strategy.type: Recreate`, container env vars match values, probes wired to /healthz + /readyz, PVC mounted at `/var/lib/krabka-rebalancer`
 - `required_values_test.yaml` — rendering fails if `bootstrapServers` unset
 - `service_test.yaml` — `type: ClusterIP`, port `9300` → `9300`
 - `pvc_test.yaml` — `accessModes: [ReadWriteOnce]`, size from values
@@ -292,10 +292,10 @@ Covered in [Persistence](#persistence). One additional note: the recovery path r
 
 CI: extend the existing `helm-lint` job to:
 
-1. `helm lint charts/crabka-rebalancer`
-2. `helm template demo charts/crabka-rebalancer --set bootstrapServers=test:9092 > /tmp/rendered.yaml`
+1. `helm lint charts/krabka-rebalancer`
+2. `helm template demo charts/krabka-rebalancer --set bootstrapServers=test:9092 > /tmp/rendered.yaml`
 3. Grep assertions for required `kind:` resources (mirroring the operator chart's existing pattern).
-4. Install the `helm-unittest` plugin (`helm plugin install https://github.com/helm-unittest/helm-unittest`) and run `helm unittest charts/crabka-rebalancer`.
+4. Install the `helm-unittest` plugin (`helm plugin install https://github.com/helm-unittest/helm-unittest`) and run `helm unittest charts/krabka-rebalancer`.
 
 The operator chart can adopt helm-unittest in a follow-up (out of scope for 43b).
 
@@ -320,7 +320,7 @@ The operator chart can adopt helm-unittest in a follow-up (out of scope for 43b)
 
 ### Helm unittest
 
-Five test files under `charts/crabka-rebalancer/tests/` listed above. Run by `helm unittest charts/crabka-rebalancer` in CI.
+Five test files under `charts/krabka-rebalancer/tests/` listed above. Run by `helm unittest charts/krabka-rebalancer` in CI.
 
 ## Risks
 
@@ -330,10 +330,10 @@ Five test files under `charts/crabka-rebalancer/tests/` listed above. Run by `he
 
 ## Acceptance criteria
 
-1. `cargo test -p crabka-rebalancer` passes — existing 43a tests + the new executor/persistence/api tests + the three new e2e tests + the extended Connect smoke test.
+1. `cargo test -p krabka-rebalancer` passes — existing 43a tests + the new executor/persistence/api tests + the three new e2e tests + the extended Connect smoke test.
 2. `cargo fmt --check` and `cargo clippy --workspace --all-targets -- -D warnings` clean.
-3. `helm lint charts/crabka-rebalancer` clean.
-4. `helm unittest charts/crabka-rebalancer` clean (5 test files pass).
+3. `helm lint charts/krabka-rebalancer` clean.
+4. `helm unittest charts/krabka-rebalancer` clean (5 test files pass).
 5. CI's `helm-lint` job is updated to lint + render-check + helm-unittest the new chart.
 6. `STATUS.md` gains a slice-43b entry; README's "Cruise-Control-equivalent rebalancer (executor)" row flips from ❌ to ✅.
 7. Manual smoke (called out in the plan, not a CI job): operator runs the binary against a real Crabka, invokes ExecuteProposal, observes successful settle. Documented as a one-liner in STATUS.
@@ -363,7 +363,7 @@ crates/rebalancer/
 └── tests/
     ├── end_to_end.rs                                     # MODIFIED — three new integration tests
     └── connect_smoke.rs                                  # MODIFIED — ExecuteProposal round-trip
-charts/crabka-rebalancer/                                 # NEW (entire directory)
+charts/krabka-rebalancer/                                 # NEW (entire directory)
 ├── Chart.yaml
 ├── values.yaml
 ├── templates/

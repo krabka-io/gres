@@ -14,7 +14,7 @@ behavior.
 ## Scope
 
 This slice changes only the session TTL owned by the standalone
-`crabka-admin-ui` binary.
+`krabka-admin-ui` binary.
 
 It does not change `SessionStore`'s public `Duration` API, alter cookie
 behavior, migrate unrelated admin UI settings, add an operator deployment, or
@@ -28,7 +28,7 @@ The compiled default remains exactly 28,800 seconds.
 The binary accepts:
 
 - `--session-ttl-seconds`
-- `CRABKA_ADMIN_UI_SESSION_TTL_SECONDS`
+- `KRABKA_ADMIN_UI_SESSION_TTL_SECONDS`
 
 The command-line value wins when both sources are present. When neither is
 present, the compiled default is used.
@@ -92,7 +92,7 @@ Test-first coverage will prove:
 
 The crate's all-target tests, strict Clippy, nightly formatting, single-help-
 entry check, and diff hygiene remain required completion gates. `Cargo.lock`
-must remain unchanged because `crabka-admin-ui` already directly depends on
+must remain unchanged because `krabka-admin-ui` already directly depends on
 the workspace-pinned `refined_type`.
 
 ## Audit Closure

@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
-use crabka_pgkv::{Kv, KvError, KvScan, WriteOp};
+use krabka_pgkv::{Kv, KvError, KvScan, WriteOp};
 
 /// A `Kv` that forwards every call to the store that is currently installed.
 ///
@@ -89,7 +89,7 @@ impl Kv for SwappableKv {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgkv::MemKv;
+    use krabka_pgkv::MemKv;
 
     use super::*;
 

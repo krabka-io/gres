@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `tokio`, `async-trait`, `stateright` (dev, model checking), `assert2`, `mockall` where a seam needs mocking, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
-**Spec:** [`docs/superpowers/specs/2026-07-05-crabka-diskless-wal-slice1-design.md`](../specs/2026-07-05-crabka-diskless-wal-slice1-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-05-krabka-diskless-wal-slice1-design.md`](../specs/2026-07-05-krabka-diskless-wal-slice1-design.md).
 
 ---
 
@@ -73,7 +73,7 @@ In `crates/log/src/log.rs`'s `#[cfg(test)] mod tests`, add:
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-log sync_persists_appended_records`
+Run: `cargo test -p krabka-log sync_persists_appended_records`
 Expected: FAIL — no method `sync` on `Log`.
 
 - [ ] **Step 3: Implement `Log::sync()`**
@@ -96,7 +96,7 @@ where `active_segment_flush()` is the existing internal call the `flush_on_appen
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-log sync_persists_appended_records`
+Run: `cargo test -p krabka-log sync_persists_appended_records`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -133,7 +133,7 @@ mod tests {
     use std::sync::Arc;
 
     use assert2::assert;
-    use crabka_log::{Log, LogConfig};
+    use krabka_log::{Log, LogConfig};
     use tokio::sync::Mutex;
 
     use super::*;
@@ -150,7 +150,7 @@ mod tests {
         let w = wal(dir.path());
         let (results, leo) = w.append(vec![sample_owned(2), sample_owned(3)]).await.unwrap();
         assert!(results.iter().all(Result::is_ok));
-        assert!(leo == crabka_ids::Offset(5)); // 2 + 3 records
+        assert!(leo == krabka_ids::Offset(5)); // 2 + 3 records
         // Durable watermark only advances after sync_durable.
         let durable = w.sync_durable(leo).await.unwrap();
         assert!(durable == leo);
@@ -168,7 +168,7 @@ mod tests {
 
 - [ ] **Step 3: Run to verify it fails**
 
-Run: `cargo test -p crabka-broker wal::local_fsync`
+Run: `cargo test -p krabka-broker wal::local_fsync`
 Expected: FAIL — `LocalFsyncWal`/`WalStore` undefined.
 
 - [ ] **Step 4: Define the `WalStore` trait**
@@ -187,7 +187,7 @@ mod local_fsync;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use crabka_ids::Offset;
+use krabka_ids::Offset;
 
 pub use local_fsync::LocalFsyncWal;
 
@@ -231,8 +231,8 @@ Insert at the TOP of `crates/broker/src/wal/local_fsync.rs`:
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use crabka_ids::Offset;
-use crabka_log::Log;
+use krabka_ids::Offset;
+use krabka_log::Log;
 use tokio::sync::Mutex;
 
 use super::WalStore;
@@ -291,7 +291,7 @@ Notes for the implementer:
 
 - [ ] **Step 6: Run to verify it passes**
 
-Run: `cargo test -p crabka-broker wal::local_fsync`
+Run: `cargo test -p krabka-broker wal::local_fsync`
 Expected: PASS.
 
 - [ ] **Step 7: Commit**
@@ -328,7 +328,7 @@ In `crates/broker/src/replica_state.rs`'s `#[cfg(test)] mod tests`, add:
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-broker wal_durable_advances_hw`
+Run: `cargo test -p krabka-broker wal_durable_advances_hw`
 Expected: FAIL — no method `recompute_hw_for_wal_durable`.
 
 - [ ] **Step 3: Implement it**
@@ -349,7 +349,7 @@ In `impl ReplicaState`, next to `recompute_hw_for_leader_append` (`replica_state
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-broker wal_durable_advances_hw`
+Run: `cargo test -p krabka-broker wal_durable_advances_hw`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -405,7 +405,7 @@ If `Partition` re-spawns its writer anywhere (grep for other `partition_writer::
 
 - [ ] **Step 4: Verify the workspace compiles and is green**
 
-Run: `cargo test -p crabka-broker`
+Run: `cargo test -p krabka-broker`
 Expected: PASS — pure plumbing; no behavior changed.
 
 - [ ] **Step 5: Commit**
@@ -452,7 +452,7 @@ In `crates/broker/src/partition_writer.rs` tests (near `writer_appends_and_acks`
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-broker diskless_writer_acks_all_gates_on_durable_hw`
+Run: `cargo test -p krabka-broker diskless_writer_acks_all_gates_on_durable_hw`
 Expected: FAIL — diskless topics currently take the classic (non-fsync) path; the test's durability assertion or wiring differs. (It may compile-fail first if `run` doesn't branch yet — that's the failing state.)
 
 - [ ] **Step 3: Branch the Produce arm**
@@ -497,12 +497,12 @@ Remove the temporary `let _ = &wal;` from Task 4. Note the ack fan-out (`:238-24
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-broker diskless_writer_acks_all_gates_on_durable_hw`
+Run: `cargo test -p krabka-broker diskless_writer_acks_all_gates_on_durable_hw`
 Expected: PASS.
 
 - [ ] **Step 5: Run the full writer suite (classic path unregressed)**
 
-Run: `cargo test -p crabka-broker partition_writer`
+Run: `cargo test -p krabka-broker partition_writer`
 Expected: PASS — `writer_appends_and_acks`, the grouping test, and the multi-thread test all stay green (classic `wal: None` path unchanged).
 
 - [ ] **Step 6: Commit**
@@ -547,7 +547,7 @@ This exercises behavior (durability across reopen), not source text. It is the S
 
 - [ ] **Step 2: Run to verify it passes**
 
-Run: `cargo test -p crabka-broker diskless_acked_record_survives_reopen`
+Run: `cargo test -p krabka-broker diskless_acked_record_survives_reopen`
 Expected: PASS — the `sync_durable` fsync in Task 5 made the record durable before the acks=all release.
 
 - [ ] **Step 3: Commit**
@@ -649,7 +649,7 @@ Set the existing (`diskless: false`) `DpModel` constructions in `data_clean`/`da
 
 - [ ] **Step 6: Run the model checker**
 
-Run: `cargo test -p crabka-broker data_diskless_wal_acked_never_lost -- --nocapture`
+Run: `cargo test -p krabka-broker data_diskless_wal_acked_never_lost -- --nocapture`
 Expected: PASS — the checker explores the diskless state space and `wal_acked_durable` holds on every reachable state. If it finds a counterexample, that is the model doing its job: it means the durability ordering (append → fsync → record `wal_acked`) admits a loss interleaving — reconcile the `WalSync`/`next_state` ordering with the real writer (Task 5) until the property holds and is meaningful. Do NOT weaken the property to force a pass.
 
 - [ ] **Step 7: Commit**
@@ -681,7 +681,7 @@ Expected: no warnings.
 
 - [ ] **Step 4: Full test + model sweep**
 
-Run: `cargo nextest run -p crabka-log -p crabka-broker` (or `cargo test` for those crates)
+Run: `cargo nextest run -p krabka-log -p krabka-broker` (or `cargo test` for those crates)
 Expected: PASS — including the diskless writer, reopen-durability, and `data_diskless_wal_acked_never_lost` model check.
 
 - [ ] **Step 5: Commit (only if formatting changed anything)**

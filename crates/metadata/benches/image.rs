@@ -1,4 +1,4 @@
-//! `CodSpeed` microbenchmarks for `crabka-metadata`.
+//! `CodSpeed` microbenchmarks for `krabka-metadata`.
 //!
 //! Covers the hot paths for the Raft state machine and for request handlers:
 //!
@@ -8,12 +8,12 @@
 //! - `MetadataImage::matching_acls`, called once per `authorize()`.
 //! - `MetadataRecord` serialize and deserialize with wincode.
 
-use crabka_metadata::{
+use krabka_metadata::{
     AclEntry, AclOperation, BrokerEndpoint, BrokerRegistrationRecord, LeaderEpoch, MetadataImage,
     MetadataRecord, NodeId, PartitionRecord, PatternType, PermissionType, ResourceType,
     TopicRecord,
 };
-use crabka_security::ListenerProtocol;
+use krabka_security::ListenerProtocol;
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use serde_wincode::SerdeCompat;
 use uuid::Uuid;

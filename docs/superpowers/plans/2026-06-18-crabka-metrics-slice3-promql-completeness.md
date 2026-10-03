@@ -1,21 +1,21 @@
-# crabka-metrics Slice 3 — PromQL query completeness (`histogram_quantile` + full function catalog + subqueries + `@`/`offset` + the full `.test` corpus)
+# krabka-metrics Slice 3 — PromQL query completeness (`histogram_quantile` + full function catalog + subqueries + `@`/`offset` + the full `.test` corpus)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Take the `crabka-promql` engine built in Slice 2 (parser + DataFusion operator pattern + `RangeArray` + selectors + rate-family + the core aggregations + binary ops + the `.test` harness scaffold) from "the hard plumbing works" to "PromQL is complete" — `histogram_quantile` on both the classic `le`-bucket path and the native-histogram path (plus the native accessor functions), the entire remaining function catalog, the remaining aggregations, set operations + vector matching, subqueries, order-independent `@`/`offset`, and then prove it by turning on **all 21 Prometheus `.test` conformance files** through the Slice-2 harness.
+**Goal:** Take the `krabka-promql` engine built in Slice 2 (parser + DataFusion operator pattern + `RangeArray` + selectors + rate-family + the core aggregations + binary ops + the `.test` harness scaffold) from "the hard plumbing works" to "PromQL is complete" — `histogram_quantile` on both the classic `le`-bucket path and the native-histogram path (plus the native accessor functions), the entire remaining function catalog, the remaining aggregations, set operations + vector matching, subqueries, order-independent `@`/`offset`, and then prove it by turning on **all 21 Prometheus `.test` conformance files** through the Slice-2 harness.
 
-**Architecture:** This slice is pure `crabka-promql` extension — no new crate, no networking. It adds: (1) a `HistogramFold` logical+execution operator (classic-bucket path, the GreptimeDB `HistogramFold` node is the reference) and a set of native-histogram `ScalarUDF`s that read the `NativeHistogram` Arrow columns directly; (2) one `ScalarUDF` (or UDAF, where the semantics are aggregating) per remaining catalog function, slotted into the Slice-2 function registry; (3) the remaining aggregation `AggregateUDF`s + a `topk`/`bottomk`/`quantile`/`count_values` selecting-aggregation path; (4) set-op (`and`/`or`/`unless`) and many-to-one/one-to-many matching planning on top of the Slice-2 `SeriesDivide`/binary-op infrastructure; (5) subquery planning (`expr[range:resolution]`) that re-uses `RangeManipulate` over an inner range-query plan, plus order-independent `@`/`offset` folding in `SeriesNormalize`; (6) the `.test` corpus wired in, feature-gating the experimental-function files.
+**Architecture:** This slice is pure `krabka-promql` extension — no new crate, no networking. It adds: (1) a `HistogramFold` logical+execution operator (classic-bucket path, the GreptimeDB `HistogramFold` node is the reference) and a set of native-histogram `ScalarUDF`s that read the `NativeHistogram` Arrow columns directly; (2) one `ScalarUDF` (or UDAF, where the semantics are aggregating) per remaining catalog function, slotted into the Slice-2 function registry; (3) the remaining aggregation `AggregateUDF`s + a `topk`/`bottomk`/`quantile`/`count_values` selecting-aggregation path; (4) set-op (`and`/`or`/`unless`) and many-to-one/one-to-many matching planning on top of the Slice-2 `SeriesDivide`/binary-op infrastructure; (5) subquery planning (`expr[range:resolution]`) that re-uses `RangeManipulate` over an inner range-query plan, plus order-independent `@`/`offset` folding in `SeriesNormalize`; (6) the `.test` corpus wired in, feature-gating the experimental-function files.
 
 The load-bearing realization: **everything in this slice is "more functions and more planning rules" on top of Slice 2's operators.** No new custom Arrow array and no new custom `ExecutionPlan` are required *except* `HistogramFold` (classic `histogram_quantile`) — every other function is a `ScalarUDF`/`AggregateUDF` over the `RangeArray`-paired or `NativeHistogram` columns Slice 2 already produces. Subqueries are a planner transform, not a new operator. So the slice is dominated by per-function bite-sized TDD, each pinned by a hand-written unit test encoding the exact Prometheus rule, then the whole thing is locked down by the upstream `.test` corpus.
 
-**Tech Stack:** Rust 2024 · `datafusion { git = "https://github.com/apache/datafusion", rev = "0838a4ddb902535b0e95a1c5a254be7e9c7fe9bf" }` · `arrow` 59 · `promql-parser` 0.10 · `thiserror`. Consumes `crabka-metrics` (`NativeHistogram`, `native_histogram_schema`, `decode_native_histograms`) and `crabka-blockstore` (`Labels`, `LabelMatcher`). Tests: `assert2`, `proptest`. `.test` corpus vendored under `crates/promql/testdata/promqltest/` (Apache-2.0, attribution preserved).
+**Tech Stack:** Rust 2024 · `datafusion { git = "https://github.com/apache/datafusion", rev = "0838a4ddb902535b0e95a1c5a254be7e9c7fe9bf" }` · `arrow` 59 · `promql-parser` 0.10 · `thiserror`. Consumes `krabka-metrics` (`NativeHistogram`, `native_histogram_schema`, `decode_native_histograms`) and `krabka-blockstore` (`Labels`, `LabelMatcher`). Tests: `assert2`, `proptest`. `.test` corpus vendored under `crates/promql/testdata/promqltest/` (Apache-2.0, attribution preserved).
 
 ## Global Constraints
 
 - **No backwards compatibility.** Greenfield/undeployed. Change signatures/enums/registry shapes freely; no shims, no migration code, no feature flags that gate new behavior default-off (the *experimental-function* flag below is the one exception — it mirrors Prometheus's own `--enable-feature` tier, not a back-compat gate).
 - **`unsafe_code = "forbid"`** workspace-wide. No `unsafe`.
-- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p crabka-promql --all-targets` before each commit.
-- **Formatting:** `cargo fmt -p crabka-promql` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
+- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p krabka-promql --all-targets` before each commit.
+- **Formatting:** `cargo fmt -p krabka-promql` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
 - **Assertions:** `assert2::assert!` in tests; `prop_assert*` inside `proptest!`.
 - **DataFusion-internal API churn:** the `rev` is pinned. Where a `UserDefinedLogicalNodeCore`, `ScalarUDFImpl`, `AggregateUDFImpl`, `ExecutionPlan`, or `ColumnarValue` method signature is needed, give the **structure + behavior** and a behavior-pinning test, with a `// verify against rev 0838a4d` note rather than fabricating an exact upstream signature. The test (Prometheus rule → expected output) is the contract; the trait wiring is whatever compiles against the pin.
 - **Prometheus-rule fidelity:** every function whose semantics are subtle (extrapolation, forced-monotonic bucket fold, `without` dropping `__name__`, NaN/Inf handling, `@`/`offset` order-independence, subquery alignment) gets its exact rule **encoded in a unit test** that cites the behavior, *before* the upstream `.test` corpus is turned on. The corpus is the backstop, not the spec.
@@ -25,7 +25,7 @@ The load-bearing realization: **everything in this slice is "more functions and 
 
 ## Dependency & slice roadmap
 
-**Depends on:** **Slice 2 (`crabka-promql` core)** — this slice consumes its public + crate-internal surface verbatim:
+**Depends on:** **Slice 2 (`krabka-promql` core)** — this slice consumes its public + crate-internal surface verbatim:
 
 - `PromqlEngine<S: MetricStore>` with `query_instant(tenant, query, time_ms)` and `query_range(tenant, query, start_ms, end_ms, step_ms) -> Result<QueryResult, PromqlError>`.
 - `QueryResult { Scalar, InstantVector(Vec<InstantSample>), RangeMatrix(Vec<RangeSeries>), Str }`.
@@ -35,14 +35,14 @@ The load-bearing realization: **everything in this slice is "more functions and 
 - The `.test` harness scaffold (load / eval-instant / eval-range, expanding-point syntax, native-histogram literals, the `expect` assertion form) — Slice 2 wired *one or two* corpus files through it; this slice wires the remaining nineteen.
 - `promql_parser::parser::parse(query) -> Expr`.
 
-Also consumes `crabka-metrics` (`NativeHistogram`, `BucketSpan`, `ResetHint`, `native_histogram_schema`, `decode_native_histograms`, `COL_NH_*`) and `crabka-blockstore` (`Labels`, `LabelMatcher`).
+Also consumes `krabka-metrics` (`NativeHistogram`, `BucketSpan`, `ResetHint`, `native_histogram_schema`, `decode_native_histograms`, `COL_NH_*`) and `krabka-blockstore` (`Labels`, `LabelMatcher`).
 
 > **If a Slice-2 name differs at implementation time:** the *contract above is authoritative for planning*; if Slice 2 landed a renamed symbol (e.g. `InstantSample` → `InstantPoint`), adapt the call sites in this slice's tasks to the real name — the *behavior* each task pins is what matters, not the spelling. Flag any rename in the task's commit message.
 
 **The 8 metrics slices** (this plan = Slice 3):
 
 1. Data layer — block schemas + native-histogram codec + symbol table. *(done — Slice 1)*
-2. `crabka-promql` core — parser + operator pattern + `RangeArray` + selectors + rate-family + core aggregations + binary ops + `.test` harness. *(done — Slice 2)*
+2. `krabka-promql` core — parser + operator pattern + `RangeArray` + selectors + rate-family + core aggregations + binary ops + `.test` harness. *(done — Slice 2)*
 3. **Query completeness** *(this plan)* — `histogram_quantile` (classic + native), full function catalog, remaining aggregations, set ops + vector matching, subqueries, `@`/`offset`, full `.test` corpus.
 4. Ingest service — remote_write v1/v2 + OTLP + Kafka produce + distributor + HA dedup + compactor.
 5. Querier + Prometheus HTTP API + hot/cold merge.
@@ -72,7 +72,7 @@ Also consumes `crabka-metrics` (`NativeHistogram`, `BucketSpan`, `ResetHint`, `n
 | `src/feature.rs` | `experimental` cargo feature gate for the experimental function tier | **new** |
 | `src/test_support.rs` | test-only store builders (`eval_instant`/`store_with_*`/`nh`) + `QueryResult`/`InstantSample` accessor helpers (`.single()`/`.value_f64()`/…) built on the real Slice-2 API | **new** |
 | `testdata/promqltest/*.test` | vendored Prometheus `.test` corpus (21 files; 6 out-of-scope files `#[ignore]`d) | **new** |
-| `tests/promqltest_corpus.rs` | sync `#[test]` driver that `block_on`s Slice 2's async `crabka_promql::testkit::run_test_path(path: &str)` per in-scope corpus file | extended |
+| `tests/promqltest_corpus.rs` | sync `#[test]` driver that `block_on`s Slice 2's async `krabka_promql::testkit::run_test_path(path: &str)` per in-scope corpus file | extended |
 
 ---
 
@@ -87,7 +87,7 @@ Also consumes `crabka-metrics` (`NativeHistogram`, `BucketSpan`, `ResetHint`, `n
 **Why this task exists:** every Phase A–D test in this plan calls helpers (`eval_instant`, `eval_instant_nh`, `eval_instant_err`, `store_with_series`, `store_with_series_multi`, `store_with_labeled_series`, `store_with_classic_histogram`, `empty_store`, `nh`) and result accessors (`.single()`, `.value_f64()`, `.as_scalar()`, `.values_f64()`, `.is_empty()`, `.iter()`, `.len()`). **None of these exist in the Slice 2 contract** — Slice 2 ships `InMemoryMetricStore` + `PromqlEngine::query_instant -> QueryResult { Scalar, InstantVector(Vec<InstantSample>), RangeMatrix, Str }` with `InstantSample { labels, ts_ms, value: SampleValue }`. This task builds the missing test glue on top of that real API so the rest of the plan compiles.
 
 **Interfaces:**
-- Consumes: the real Slice-2 `InMemoryMetricStore`, `PromqlEngine::query_instant`, `QueryResult`, `InstantSample`, `SampleValue`, plus `crabka-metrics` `NativeHistogram`.
+- Consumes: the real Slice-2 `InMemoryMetricStore`, `PromqlEngine::query_instant`, `QueryResult`, `InstantSample`, `SampleValue`, plus `krabka-metrics` `NativeHistogram`.
 - Produces (all `#[cfg(test)]` / test-only):
   - store builders: `store_with_series(name, &[(ts_ms, f64)])`, `store_with_series_multi(&[(selector, f64)])`, `store_with_labeled_series(name, &[(k, v)], f64)`, `store_with_classic_histogram()` (the `_bucket{le=...}` fixture), `empty_store()`, and `nh(count, sum, schema, &[(idx, count)]) -> NativeHistogram`.
   - eval shims: `eval_instant(&store, query, ts_ms) -> QueryResult`, `eval_instant_nh(name, &NativeHistogram) -> Store`, `eval_instant_err(&store, query, ts_ms) -> Result<QueryResult, PromqlError>` (the `_err` variant returns the `Result` instead of unwrapping).
@@ -98,8 +98,8 @@ Also consumes `crabka-metrics` (`NativeHistogram`, `BucketSpan`, `ResetHint`, `n
 - [ ] **Step 2: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "test(promql): test_support helpers + QueryResult accessors for slice 3 tests"
 ```
@@ -185,7 +185,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib operators::histogram_fold`
+Run: `cargo test -p krabka-promql --lib operators::histogram_fold`
 Expected: FAIL — `cannot find function fold_buckets`.
 
 - [ ] **Step 3: Implement the pure kernel** (this is the byte-exact part)
@@ -293,14 +293,14 @@ A focused exec-level test (build a 2-group, 2-timestamp `RecordBatch` of `le`-bu
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --lib operators::histogram_fold`
+Run: `cargo test -p krabka-promql --lib operators::histogram_fold`
 Expected: PASS (kernel tests + exec test).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): HistogramFold operator — classic histogram_quantile le-bucket fold"
 ```
@@ -344,7 +344,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib functions::histogram`
+Run: `cargo test -p krabka-promql --lib functions::histogram`
 Expected: FAIL — `histogram_quantile` unhandled / panics in planner.
 
 - [ ] **Step 3: Implement the classic dispatch**
@@ -364,14 +364,14 @@ In `functions/histogram.rs`, add the planner hook: parse the call `histogram_qua
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --lib functions::histogram`
+Run: `cargo test -p krabka-promql --lib functions::histogram`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): wire classic histogram_quantile through HistogramFold"
 ```
@@ -436,7 +436,7 @@ Append to the `functions::histogram` test module:
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib functions::histogram`
+Run: `cargo test -p krabka-promql --lib functions::histogram`
 Expected: FAIL — native accessors not registered.
 
 - [ ] **Step 3: Implement native bucket math + the UDFs**
@@ -460,14 +460,14 @@ Each is a `ScalarUDF` reading the `NativeHistogram` columns via `decode_native_h
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --lib functions::histogram`
+Run: `cargo test -p krabka-promql --lib functions::histogram`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): native histogram_quantile + histogram_count/sum/avg/fraction/stddev/stdvar"
 ```
@@ -532,7 +532,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib functions::over_time`
+Run: `cargo test -p krabka-promql --lib functions::over_time`
 Expected: FAIL — functions unregistered.
 
 - [ ] **Step 3: Implement the family**
@@ -541,14 +541,14 @@ Each is a `ScalarUDF` whose `invoke` reads the `RangeArray` cell (a `&[f64]` win
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --lib functions::over_time`
+Run: `cargo test -p krabka-promql --lib functions::over_time`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): the _over_time function family"
 ```
@@ -613,7 +613,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib functions::instant`
+Run: `cargo test -p krabka-promql --lib functions::instant`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement**
@@ -634,15 +634,15 @@ pub fn experimental_enabled() -> bool {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --lib functions::instant`
-Then with the flag: `cargo test -p crabka-promql --features experimental --lib functions::instant`
+Run: `cargo test -p krabka-promql --lib functions::instant`
+Then with the flag: `cargo test -p krabka-promql --features experimental --lib functions::instant`
 Expected: both PASS (the latter additionally exercises `double_exponential_smoothing` if a gated test is added).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): irate/idelta/resets/changes/deriv/predict_linear + experimental gate"
 ```
@@ -692,7 +692,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib functions::math`
+Run: `cargo test -p krabka-promql --lib functions::math`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement**
@@ -701,14 +701,14 @@ Element-wise UDFs delegating to `f64` methods. `round`: `(v / to + 0.5).floor() 
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --lib functions::math`
+Run: `cargo test -p krabka-promql --lib functions::math`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): math/clamp/trig/sgn element-wise functions"
 ```
@@ -763,7 +763,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib functions::labels`
+Run: `cargo test -p krabka-promql --lib functions::labels`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement**
@@ -772,14 +772,14 @@ Expected: FAIL.
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --lib functions::labels`
+Run: `cargo test -p krabka-promql --lib functions::labels`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): label_replace/label_join/sort/sort_desc"
 ```
@@ -845,7 +845,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib functions::datetime functions::absent`
+Run: `cargo test -p krabka-promql --lib functions::datetime functions::absent`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement**
@@ -854,14 +854,14 @@ Date/time: convert ms→UTC civil fields without a heavy dep — use a small day
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --lib functions::datetime functions::absent`
+Run: `cargo test -p krabka-promql --lib functions::datetime functions::absent`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): date/time (UTC) + vector/scalar/pi + absent/absent_over_time"
 ```
@@ -928,7 +928,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib aggregations`
+Run: `cargo test -p krabka-promql --lib aggregations`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement**
@@ -937,14 +937,14 @@ Expected: FAIL.
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --lib aggregations`
+Run: `cargo test -p krabka-promql --lib aggregations`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): topk/bottomk/quantile/count_values/stddev/stdvar/group aggregations"
 ```
@@ -1007,7 +1007,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib planner::binary`
+Run: `cargo test -p krabka-promql --lib planner::binary`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement**
@@ -1016,14 +1016,14 @@ Compute each side's match-key (the label set selected by `on(...)` or everything
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --lib planner::binary`
+Run: `cargo test -p krabka-promql --lib planner::binary`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): set operations and/or/unless with on/ignoring"
 ```
@@ -1076,7 +1076,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib planner::binary`
+Run: `cargo test -p krabka-promql --lib planner::binary`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement**
@@ -1085,14 +1085,14 @@ Build the "one" side's `key → series` map. For each "many"-side series, look u
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --lib planner::binary`
+Run: `cargo test -p krabka-promql --lib planner::binary`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): group_left/group_right many-to-one vector matching"
 ```
@@ -1149,7 +1149,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib planner::at_offset`
+Run: `cargo test -p krabka-promql --lib planner::at_offset`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement**
@@ -1202,14 +1202,14 @@ Wire `resolve_selection_ms` into the `SeriesNormalize` build so the selection ti
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --lib planner::at_offset`
+Run: `cargo test -p krabka-promql --lib planner::at_offset`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): order-independent @/offset with start()/end()"
 ```
@@ -1267,7 +1267,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib planner::subquery`
+Run: `cargo test -p krabka-promql --lib planner::subquery`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement**
@@ -1278,14 +1278,14 @@ For `expr[range:resolution]` at outer instant `t`: build an *inner range plan* o
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --lib planner::subquery`
+Run: `cargo test -p krabka-promql --lib planner::subquery`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): subqueries expr[range:resolution] (nesting, default resolution)"
 ```
@@ -1349,8 +1349,8 @@ git commit -m "test(promql): vendor Prometheus .test conformance corpus (Apache-
 - [ ] **Step 3: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): annotation/warning collector + dual-form .test assertions"
 ```
@@ -1363,17 +1363,17 @@ git commit -m "feat(promql): annotation/warning collector + dual-form .test asse
 - Modify: `crates/promql/tests/promqltest_corpus.rs` (the Slice-2 harness driver)
 
 **Interfaces:**
-- Consumes: Slice 2's frozen public harness API `crabka_promql::testkit::run_test_path(path: &str) -> Result<(), PromqlError>` (async) as extended in Task 15a (load / eval-instant / eval-range / BOTH legacy and `expect` assertion forms / annotation assertions / native-histogram literals).
+- Consumes: Slice 2's frozen public harness API `krabka_promql::testkit::run_test_path(path: &str) -> Result<(), PromqlError>` (async) as extended in Task 15a (load / eval-instant / eval-range / BOTH legacy and `expect` assertion forms / annotation assertions / native-histogram literals).
 - Produces: a `#[test]` per in-scope corpus file (15 driven green + 6 `#[ignore]`d for out-of-scope features), each running the full file through the harness.
 
-> **API reconciliation (consume Slice 2 verbatim).** Slice 2 freezes the public harness API as **`crabka_promql::testkit::{run_test_file(file: &TestFile), run_test_path(path: &str)}` — both `async fn` returning `Result<(), PromqlError>`** (re-exported at the crate root). The path-based form `run_test_path` already does exactly what the corpus driver needs: read the file → `parse_test_file` → `run_test_file(&TestFile)`. Do **not** add a shadowing sync `testkit::run_test_file(path: &str)`. Instead the sync `#[test]` macro below calls the canonical async `run_test_path` under a `block_on` and `unwrap()`s (panicking on failure so `#[test]` reports it).
+> **API reconciliation (consume Slice 2 verbatim).** Slice 2 freezes the public harness API as **`krabka_promql::testkit::{run_test_file(file: &TestFile), run_test_path(path: &str)}` — both `async fn` returning `Result<(), PromqlError>`** (re-exported at the crate root). The path-based form `run_test_path` already does exactly what the corpus driver needs: read the file → `parse_test_file` → `run_test_file(&TestFile)`. Do **not** add a shadowing sync `testkit::run_test_file(path: &str)`. Instead the sync `#[test]` macro below calls the canonical async `run_test_path` under a `block_on` and `unwrap()`s (panicking on failure so `#[test]` reports it).
 
 - [ ] **Step 1: Write the failing per-file tests**
 
 In `tests/promqltest_corpus.rs`, add one `#[test]` per non-experimental file (drive via the harness). Example:
 
 ```rust
-use crabka_promql::testkit::run_test_path;
+use krabka_promql::testkit::run_test_path;
 
 /// Run one corpus file through Slice 2's canonical async `run_test_path`,
 /// `block_on`ned for a sync `#[test]` and `unwrap()`ed so failures surface.
@@ -1431,7 +1431,7 @@ corpus!(#[ignore = "TODO: sample start-timestamp semantics — out of scope for 
 
 - [ ] **Step 2: Run to verify it fails (then iterate)**
 
-Run: `cargo test -p crabka-promql --test promqltest_corpus`
+Run: `cargo test -p krabka-promql --test promqltest_corpus`
 Expected: initially FAILS on specific cases — each failure is a precise Prometheus-rule discrepancy in a function this slice (or Slice 2) implemented.
 
 - [ ] **Step 3: Fix discrepancies at their source**
@@ -1440,14 +1440,14 @@ For each failing case, fix the **implementation** (the relevant `functions::*`/`
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --test promqltest_corpus`
+Run: `cargo test -p krabka-promql --test promqltest_corpus`
 Expected: PASS for all non-experimental files.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "test(promql): conform to the non-experimental Prometheus .test corpus"
 ```
@@ -1482,15 +1482,15 @@ corpus!(native_histograms, "native_histograms.test"); // native histograms are s
 
 - [ ] **Step 2: Run both ways**
 
-Run: `cargo test -p crabka-promql --test promqltest_corpus`
-Run: `cargo test -p crabka-promql --features experimental --test promqltest_corpus`
+Run: `cargo test -p krabka-promql --test promqltest_corpus`
+Run: `cargo test -p krabka-promql --features experimental --test promqltest_corpus`
 Expected: both PASS (the second additionally exercises experimental stanzas).
 
 - [ ] **Step 3: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "test(promql): feature-gate + run experimental + native-histogram .test corpus"
 ```
@@ -1505,8 +1505,8 @@ git commit -m "test(promql): feature-gate + run experimental + native-histogram 
 
 Run:
 ```bash
-cargo test -p crabka-promql
-cargo test -p crabka-promql --features experimental
+cargo test -p krabka-promql
+cargo test -p krabka-promql --features experimental
 ```
 Expected: all PASS.
 
@@ -1514,9 +1514,9 @@ Expected: all PASS.
 
 Run:
 ```bash
-cargo clippy -p crabka-promql --all-targets
-cargo clippy -p crabka-promql --all-targets --features experimental
-cargo fmt -p crabka-promql --check
+cargo clippy -p krabka-promql --all-targets
+cargo clippy -p krabka-promql --all-targets --features experimental
+cargo fmt -p krabka-promql --check
 ```
 Expected: no warnings, formatting clean.
 

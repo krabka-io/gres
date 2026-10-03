@@ -26,7 +26,7 @@
 //! [`holds`] lists every bypass and nothing else does, in `PostgreSQL`'s order:
 //! the superuser, the relation's owner, a grant to the role, a grant to
 //! `PUBLIC`, and a grant to a role whose privileges the role holds. That last
-//! one is matched with [`crabka_pgcatalog::role_has_privs_of`] — *not*
+//! one is matched with [`krabka_pgcatalog::role_has_privs_of`] — *not*
 //! `role_can_set`, which counts memberships granted `WITH INHERIT FALSE` and so
 //! would hand a role privileges it must `SET ROLE` to use. It is the same
 //! predicate a row-security policy's `TO` list is matched with, for the same
@@ -72,7 +72,7 @@
 //! `PostgreSQL` 16 moved role administration off `CREATEROLE` alone and onto
 //! `CREATEROLE` **plus the `ADMIN` option on the target role**, and 18 keeps
 //! that. This catalog stores a membership as a bare key with no payload — see
-//! [`crabka_pgparser::ast::Statement::GrantRoles`] — so there is nowhere to
+//! [`krabka_pgparser::ast::Statement::GrantRoles`] — so there is nowhere to
 //! record an admin right and nothing to read one back from. The rule is
 //! implemented as far as it is representable and no further:
 //!
@@ -90,8 +90,8 @@
 //! The `DETAIL` lines still state `PostgreSQL`'s rule, which is the rule a
 //! client reading one is reading about.
 
-use crabka_pgcatalog::{RelationName, Table};
-use crabka_pgkv::Kv;
+use krabka_pgcatalog::{RelationName, Table};
+use krabka_pgkv::Kv;
 
 use crate::error::ExecError;
 
@@ -112,8 +112,8 @@ impl Privilege {
     /// Only `INSERT` and `UPDATE` compose a row to write; the other policy
     /// commands never reach a write-side check, and mapping them onto `SELECT`
     /// is the fail-closed answer for a caller that finds a way to.
-    pub(crate) const fn for_written_row(command: crabka_pgcatalog::policy::PolicyCommand) -> Self {
-        use crabka_pgcatalog::policy::PolicyCommand;
+    pub(crate) const fn for_written_row(command: krabka_pgcatalog::policy::PolicyCommand) -> Self {
+        use krabka_pgcatalog::policy::PolicyCommand;
         match command {
             PolicyCommand::Insert => Self::Insert,
             PolicyCommand::Update => Self::Update,
@@ -157,7 +157,7 @@ impl RelationKind {
 ///
 /// Deliberately the same shape as [`crate::rls::RlsCtx`] minus the GUC: the
 /// catalog handle and the role being judged. A unit test can build one over a
-/// bare [`crabka_pgkv::MemKv`].
+/// bare [`krabka_pgkv::MemKv`].
 #[derive(Clone, Copy)]
 pub(crate) struct PrivilegeCtx<'a> {
     catalog_kv: &'a dyn Kv,
@@ -218,15 +218,15 @@ pub(crate) fn holds_named(
     // no self-grant row, and `GRANT`ing to yourself is a no-op in PostgreSQL.
     // Membership, not string equality: a member of an owning group owns the
     // relation for this purpose.
-    if crabka_pgcatalog::role_has_privs_of(ctx.catalog_kv, ctx.role, owner)?
-        && !crabka_pgcatalog::owner_table_privilege_is_revoked(ctx.catalog_kv, relation, privilege)?
+    if krabka_pgcatalog::role_has_privs_of(ctx.catalog_kv, ctx.role, owner)?
+        && !krabka_pgcatalog::owner_table_privilege_is_revoked(ctx.catalog_kv, relation, privilege)?
     {
         return Ok(true);
     }
     // A grant naming the role itself, and a grant to PUBLIC, are both point
     // lookups on an exact key.
-    for grantee in [ctx.role, crabka_pgcatalog::PUBLIC_ROLE] {
-        if crabka_pgcatalog::has_stored_table_privilege(
+    for grantee in [ctx.role, krabka_pgcatalog::PUBLIC_ROLE] {
+        if krabka_pgcatalog::has_stored_table_privilege(
             ctx.catalog_kv,
             relation,
             grantee,
@@ -239,9 +239,9 @@ pub(crate) fn holds_named(
     // the relation's own grants and testing each grantee costs the relation's
     // grant count; enumerating every role in the cluster and probing each would
     // cost the cluster's role count, and this runs per statement per relation.
-    for granted in crabka_pgcatalog::table_privileges_of(ctx.catalog_kv, relation)? {
+    for granted in krabka_pgcatalog::table_privileges_of(ctx.catalog_kv, relation)? {
         if granted.privilege == privilege
-            && crabka_pgcatalog::role_has_privs_of(ctx.catalog_kv, ctx.role, &granted.grantee)?
+            && krabka_pgcatalog::role_has_privs_of(ctx.catalog_kv, ctx.role, &granted.grantee)?
         {
             return Ok(true);
         }
@@ -290,12 +290,12 @@ pub(crate) fn require_ownership(
     kind: RelationKind,
     role: &str,
 ) -> Result<(), ExecError> {
-    if crabka_pgcatalog::role_has_privs_of(kv, role, owner)?
+    if krabka_pgcatalog::role_has_privs_of(kv, role, owner)?
         || crate::rls::role_is_superuser(kv, role)?
     {
         return Ok(());
     }
-    Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+    Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
         "42501",
         format!("must be owner of {} {}", kind.noun(), relation.name),
     )))
@@ -315,12 +315,12 @@ pub(crate) fn require_ownership(
 pub(crate) fn require_role_create(
     kv: &dyn Kv,
     actor: &str,
-    options: crabka_pgparser::ast::RoleOptions,
+    options: krabka_pgparser::ast::RoleOptions,
 ) -> Result<(), ExecError> {
     if crate::rls::role_is_superuser(kv, actor)? {
         return Ok(());
     }
-    if !role_holds(kv, actor, crabka_pgcatalog::RoleAttribute::CreateRole)? {
+    if !role_holds(kv, actor, krabka_pgcatalog::RoleAttribute::CreateRole)? {
         return Err(role_denial(
             "create role",
             "Only roles with the CREATEROLE attribute may create roles.".into(),
@@ -370,7 +370,7 @@ pub(crate) fn require_role_alter(
     kv: &dyn Kv,
     actor: &str,
     target: &str,
-    options: crabka_pgparser::ast::RoleOptions,
+    options: krabka_pgparser::ast::RoleOptions,
 ) -> Result<(), ExecError> {
     if crate::rls::role_is_superuser(kv, actor)? {
         return Ok(());
@@ -450,7 +450,7 @@ pub(crate) fn require_role_grant(
     }
     let verb = direction.verb();
     Err(ExecError::Remote(
-        crabka_pgwire::error::PgError::error(
+        krabka_pgwire::error::PgError::error(
             "42501",
             format!("permission denied to {verb} role \"{granted}\""),
         )
@@ -463,9 +463,9 @@ pub(crate) fn require_role_grant(
 /// The attributes `PostgreSQL` gates on the acting role holding the same one,
 /// in the order it reports them.
 fn gated_attributes(
-    options: crabka_pgparser::ast::RoleOptions,
-) -> [(Option<bool>, crabka_pgcatalog::RoleAttribute, &'static str); 4] {
-    use crabka_pgcatalog::RoleAttribute;
+    options: krabka_pgparser::ast::RoleOptions,
+) -> [(Option<bool>, krabka_pgcatalog::RoleAttribute, &'static str); 4] {
+    use krabka_pgcatalog::RoleAttribute;
     [
         (options.superuser, RoleAttribute::Superuser, "SUPERUSER"),
         (options.createdb, RoleAttribute::CreateDb, "CREATEDB"),
@@ -479,8 +479,8 @@ fn gated_attributes(
 }
 
 /// Whether the option list changes any stored attribute or the login flag.
-fn writes_any_attribute(options: crabka_pgparser::ast::RoleOptions) -> bool {
-    let crabka_pgparser::ast::RoleOptions {
+fn writes_any_attribute(options: krabka_pgparser::ast::RoleOptions) -> bool {
+    let krabka_pgparser::ast::RoleOptions {
         superuser,
         inherit,
         createrole,
@@ -511,14 +511,14 @@ fn writes_any_attribute(options: crabka_pgparser::ast::RoleOptions) -> bool {
 fn role_holds(
     kv: &dyn Kv,
     role: &str,
-    attribute: crabka_pgcatalog::RoleAttribute,
+    attribute: krabka_pgcatalog::RoleAttribute,
 ) -> Result<bool, ExecError> {
-    if role == crabka_pgcatalog::BOOTSTRAP_ROLE {
+    if role == krabka_pgcatalog::BOOTSTRAP_ROLE {
         return Ok(true);
     }
-    match crabka_pgcatalog::get_role(kv, role) {
+    match krabka_pgcatalog::get_role(kv, role) {
         Ok(role) => Ok(role.attributes.has(attribute)),
-        Err(crabka_pgcatalog::CatalogError::UndefinedObject(_)) => Ok(false),
+        Err(krabka_pgcatalog::CatalogError::UndefinedObject(_)) => Ok(false),
         Err(error) => Err(error.into()),
     }
 }
@@ -527,7 +527,7 @@ fn role_holds(
 /// rule.
 fn role_denial(verb: &str, detail: String) -> ExecError {
     ExecError::Remote(
-        crabka_pgwire::error::PgError::error("42501", format!("permission denied to {verb}"))
+        krabka_pgwire::error::PgError::error("42501", format!("permission denied to {verb}"))
             .with_detail(detail),
     )
 }
@@ -629,7 +629,7 @@ impl ReadPermit {
 
 /// What a row-changing statement is doing to its target.
 ///
-/// This replaced a bare [`crabka_pgcatalog::policy::PolicyCommand`] parameter on
+/// This replaced a bare [`krabka_pgcatalog::policy::PolicyCommand`] parameter on
 /// `exec::write_candidate_rows` rather than sitting beside it. Two facts vary
 /// together — which policies row security applies, and which privilege the
 /// session must hold — and a caller given two parameters can pair them wrongly.
@@ -678,8 +678,8 @@ impl MergeClauses {
     ///
     /// `DO NOTHING` contributes nothing, which is why a `MERGE` written only
     /// with `DO NOTHING` clauses needs no write privilege at all.
-    pub(crate) fn of(clauses: &[crabka_pgparser::ast::MergeWhen]) -> Self {
-        use crabka_pgparser::ast::MergeAction;
+    pub(crate) fn of(clauses: &[krabka_pgparser::ast::MergeWhen]) -> Self {
+        use krabka_pgparser::ast::MergeAction;
         let mut found = Self::default();
         for clause in clauses {
             match clause.action {
@@ -704,8 +704,8 @@ impl WriteAction {
     /// still apply, per row and per action, but they are not a filter: see
     /// [`crate::rls::CheckSubject::TargetRow`] for why failing one raises
     /// rather than skips.
-    pub(crate) const fn policy_command(self) -> crabka_pgcatalog::policy::PolicyCommand {
-        use crabka_pgcatalog::policy::PolicyCommand;
+    pub(crate) const fn policy_command(self) -> krabka_pgcatalog::policy::PolicyCommand {
+        use krabka_pgcatalog::policy::PolicyCommand;
         match self {
             Self::Update => PolicyCommand::Update,
             Self::Delete | Self::Truncate => PolicyCommand::Delete,
@@ -797,11 +797,11 @@ pub(crate) fn require_write(
 pub(crate) fn dml_reads_target(
     table: &Table,
     qualifier: &str,
-    filter: Option<&crabka_pgparser::ast::Expr>,
-    returning: Option<&crabka_pgparser::ast::Returning>,
-    assignments: &[crabka_pgparser::ast::Assignment],
+    filter: Option<&krabka_pgparser::ast::Expr>,
+    returning: Option<&krabka_pgparser::ast::Returning>,
+    assignments: &[krabka_pgparser::ast::Assignment],
 ) -> bool {
-    use crabka_pgparser::ast::{AssignmentValue, SelectItem};
+    use krabka_pgparser::ast::{AssignmentValue, SelectItem};
     let reads = |expr| expr_reads_relation(table, qualifier, expr);
     if filter.is_some_and(reads) {
         return true;
@@ -865,8 +865,8 @@ pub(crate) fn dml_reads_target(
 /// holding `DELETE` and not `SELECT` could write `DELETE FROM t WHERE ctid =
 /// '(0,1)'` and read the row count back as an oracle over rows it may not see —
 /// which is reachable only since a `ctid` started resolving on this path.
-fn expr_reads_relation(table: &Table, qualifier: &str, expr: &crabka_pgparser::ast::Expr) -> bool {
-    use crabka_pgparser::ast::Expr;
+fn expr_reads_relation(table: &Table, qualifier: &str, expr: &krabka_pgparser::ast::Expr) -> bool {
+    use krabka_pgparser::ast::Expr;
     match expr {
         Expr::Column {
             table: Some(named), ..
@@ -883,9 +883,9 @@ fn expr_reads_relation(table: &Table, qualifier: &str, expr: &crabka_pgparser::a
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgcatalog::{Column, RelationName, RoleAttribute, RoleAttributes, Table};
-    use crabka_pgkv::{Kv, MemKv};
-    use crabka_pgtypes::ColumnType;
+    use krabka_pgcatalog::{Column, RelationName, RoleAttribute, RoleAttributes, Table};
+    use krabka_pgkv::{Kv, MemKv};
+    use krabka_pgtypes::ColumnType;
 
     use super::{
         ExecError, MergeClauses, Privilege, PrivilegeCtx, ReadPermit, RelationKind, RoleGrant,
@@ -919,15 +919,15 @@ mod tests {
     fn store(roles: &[(&str, RoleAttributes, &[&str])]) -> MemKv {
         let kv = MemKv::new();
         let table = table();
-        let (_, ops) = crabka_pgcatalog::create_table_with_options_ops(
+        let (_, ops) = krabka_pgcatalog::create_table_with_options_ops(
             &kv,
             &table.name,
             table.columns.clone(),
-            crabka_pgcatalog::TableOptions::default(),
+            krabka_pgcatalog::TableOptions::default(),
             Vec::new(),
-            crabka_pgcatalog::TableCreation {
+            krabka_pgcatalog::TableCreation {
                 owner: OWNER,
-                id: crabka_pgcatalog::TableIdSource::Counter,
+                id: krabka_pgcatalog::TableIdSource::Counter,
                 materialized: None,
             },
         )
@@ -937,7 +937,7 @@ mod tests {
             std::iter::once(&(OWNER, RoleAttributes::default(), &[] as &[&str])).chain(roles)
         {
             let member_of: Vec<String> = member_of.iter().map(|role| (*role).to_string()).collect();
-            let ops = crabka_pgcatalog::create_role_with_memberships_ops(
+            let ops = krabka_pgcatalog::create_role_with_memberships_ops(
                 &kv,
                 name,
                 true,
@@ -952,7 +952,7 @@ mod tests {
 
     fn grant(kv: &MemKv, grantee: &str, privileges: &[&str]) {
         let privileges: Vec<String> = privileges.iter().map(|p| (*p).to_string()).collect();
-        let ops = crabka_pgcatalog::grant_table_privileges_ops(
+        let ops = krabka_pgcatalog::grant_table_privileges_ops(
             kv,
             &table().name,
             &[grantee.to_string()],
@@ -979,8 +979,8 @@ mod tests {
     /// checks is the one a real statement produces.
     fn merge_clauses(clauses: &str) -> MergeClauses {
         let sql = format!("MERGE INTO document USING source ON document.id = source.id {clauses}");
-        let parsed = crabka_pgparser::parse(&sql).expect("parse");
-        let [crabka_pgparser::ast::Statement::Merge { clauses, .. }] = parsed.as_slice() else {
+        let parsed = krabka_pgparser::parse(&sql).expect("parse");
+        let [krabka_pgparser::ast::Statement::Merge { clauses, .. }] = parsed.as_slice() else {
             panic!("not a MERGE: {sql}")
         };
         MergeClauses::of(clauses)
@@ -1139,7 +1139,7 @@ mod tests {
     fn a_column_grant_does_not_admit_a_relation_read() {
         let kv = store(&[("reader", RoleAttributes::default(), &[])]);
         let ctx = PrivilegeCtx::new(&kv, "reader");
-        let ops = crabka_pgcatalog::grant_column_privileges_ops(
+        let ops = krabka_pgcatalog::grant_column_privileges_ops(
             &kv,
             &table().name,
             &["body".to_string()],
@@ -1151,7 +1151,7 @@ mod tests {
 
         // Stored: the catalog answers for the granted column and only it.
         assert!(
-            crabka_pgcatalog::has_stored_column_privilege(
+            krabka_pgcatalog::has_stored_column_privilege(
                 &kv,
                 &table().name,
                 "body",
@@ -1161,7 +1161,7 @@ mod tests {
             .expect("read")
         );
         assert!(
-            !crabka_pgcatalog::has_stored_column_privilege(
+            !krabka_pgcatalog::has_stored_column_privilege(
                 &kv,
                 &table().name,
                 "id",
@@ -1302,7 +1302,7 @@ mod tests {
     /// and per action instead, which is not a filter and so not this question.
     #[test]
     fn write_actions_map_to_policy_commands() {
-        use crabka_pgcatalog::policy::PolicyCommand;
+        use krabka_pgcatalog::policy::PolicyCommand;
         for (action, command) in [
             (WriteAction::Update, PolicyCommand::Update),
             (WriteAction::Delete, PolicyCommand::Delete),
@@ -1375,7 +1375,7 @@ mod tests {
     /// columns, so it must not demand `SELECT` on the target.
     #[test]
     fn target_column_reads() {
-        use crabka_pgparser::ast::Statement;
+        use krabka_pgparser::ast::Statement;
         struct Case {
             name: &'static str,
             sql: &'static str,
@@ -1439,7 +1439,7 @@ mod tests {
             },
         ];
         for case in cases {
-            let parsed = crabka_pgparser::parse(case.sql).expect("parse");
+            let parsed = krabka_pgparser::parse(case.sql).expect("parse");
             let (filter, returning, assignments) = match parsed.as_slice() {
                 [
                     Statement::Update {
@@ -1506,7 +1506,7 @@ mod tests {
     /// each success is a statement `PostgreSQL` also admits.
     #[test]
     fn role_administration_gates() {
-        use crabka_pgparser::ast::RoleOptions;
+        use krabka_pgparser::ast::RoleOptions;
 
         let plain = RoleOptions::default();
         let wants_superuser = RoleOptions {

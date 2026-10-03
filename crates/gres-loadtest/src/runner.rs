@@ -27,8 +27,8 @@ use std::{
 };
 
 use anyhow::Context as _;
-use crabka_gres_control::RegistryPolicy;
-use crabka_units::prelude::*;
+use krabka_gres_control::RegistryPolicy;
+use krabka_units::prelude::*;
 use tokio::time::Instant;
 
 use crate::{
@@ -643,10 +643,10 @@ mod tests {
     fn run_config_builds_cluster_options_with_the_same_registry_policy() {
         let policy = RegistryPolicy::new(
             3,
-            crabka_units::millis(15_002),
-            crabka_units::millis(252),
-            crabka_units::millis(502),
-            crabka_units::bytes(1_048_578),
+            krabka_units::millis(15_002),
+            krabka_units::millis(252),
+            krabka_units::millis(502),
+            krabka_units::bytes(1_048_578),
         )
         .expect("policy");
         let config = RunConfig {
@@ -657,7 +657,7 @@ mod tests {
             binaries: Binaries {
                 gres: PathBuf::from("/bin/gres"),
                 broker: PathBuf::from("/bin/broker"),
-                crabka_cli: PathBuf::from("/bin/crabka"),
+                krabka_cli: PathBuf::from("/bin/crabka"),
             },
             keep_work_dir: false,
             registry_policy: policy.clone(),

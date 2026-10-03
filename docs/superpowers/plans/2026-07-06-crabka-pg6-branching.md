@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), the PG-2/3/4/4b crates, `serde_json` (`timeline.meta`), `proptest` (GC pinning property), `assert2`/`nextest`, a local/containerized PG 17 once (the forked-fixture regeneration), `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-pg6-branching-design.md`](../specs/2026-07-06-crabka-pg6-branching-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-pg6-branching-design.md`](../specs/2026-07-06-krabka-pg6-branching-design.md).
 
 **PREREQUISITES (unlanded):** PG-2, PG-3, PG-4 executed (PG-4b's `Key` enum folded in, or Task 2's inheritance test drops the `RelMeta` case until it lands). Live branched-compute validation belongs to PG-5's harness, not this plan.
 
@@ -182,7 +182,7 @@ git commit -m "feat(pageserver): branch RPCs + timeline-scoped page service"
 - [ ] **Step 2: Write the gate test** — ingest the parent stream into timeline P; `CreateBranch(P, fork_lsn)` → C; ingest the child stream into C. Assert: (a) for every covered key, C's reads at `lsn ≤ fork_lsn` are **byte-identical** to P's at the same LSN; (b) above the fork, each side matches **its own** standby capture (the PG-4 comparator, per side); (c) a `RelMeta` size query below the fork inherits (PG-4b landed) and diverges correctly above it; (d) rebuild-from-bucket (drop all state, reload graph + maps) leaves the full two-timeline probe grid identical; (e) `Basebackup(C, fork_lsn + δ)` validates under `pg_controldata` with C's SLRU segments matching C's capture.
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-pageserver --test branch_gate` → PASS.
+Run: `cargo test -p krabka-pageserver --test branch_gate` → PASS.
 
 ```bash
 git add tools/gen-pg-wal-fixtures.sh crates/postgres-wal/tests/fixtures crates/pageserver/tests
@@ -193,7 +193,7 @@ git commit -m "test(pageserver): forked-WAL divergence gate (per-side standby or
 
 ## Task 6: Final gate
 
-- [ ] **Step 1:** `cargo +nightly fmt --check`; `cargo clippy -p crabka-page-store -p crabka-pageserver --all-targets -- -D warnings`; `cargo nextest run -p crabka-page-store -p crabka-pageserver` — all green (ancestry, GC property, RPCs, the divergence gate).
+- [ ] **Step 1:** `cargo +nightly fmt --check`; `cargo clippy -p krabka-page-store -p krabka-pageserver --all-targets -- -D warnings`; `cargo nextest run -p krabka-page-store -p krabka-pageserver` — all green (ancestry, GC property, RPCs, the divergence gate).
 - [ ] **Step 2:** `./tools/check-publish-allowlist.sh` — exit 0 (no new crates; confirm nothing drifted). Commit any formatting.
 
 ---

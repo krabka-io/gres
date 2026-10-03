@@ -28,8 +28,8 @@
 
 use assert2::assert;
 use bytes::Bytes;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{BoundParam, Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{BoundParam, Engine, QueryResult, Session};
 
 fn text_format(value: &str) -> BoundParam {
     BoundParam {
@@ -116,7 +116,7 @@ async fn the_column_types_input_function_parses_the_value() {
 /// coerced into a `point` through either spelling.
 #[tokio::test]
 async fn a_parameter_declared_text_is_refused() {
-    let text = crabka_pgtypes::oids::TEXT;
+    let text = krabka_pgtypes::oids::TEXT;
     assert!(
         insert_one(&[text], "INSERT INTO pt VALUES (1, $1)", "(1,2)").await
             == Err("42804".to_string())

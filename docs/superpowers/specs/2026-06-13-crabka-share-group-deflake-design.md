@@ -4,7 +4,7 @@
 - **Status:** Approved design — ready for implementation planning
 - **Scope:** Phase 2 of the deterministic-test program. Continues Workstream B
   (de-flaking sleep-based tests) from Phase 1
-  (`2026-06-13-crabka-stateright-consensus-deflake-design.md`), targeting the
+  (`2026-06-13-krabka-stateright-consensus-deflake-design.md`), targeting the
   broker's share-group (KIP-932) and consumer/streams group-coordination tests —
   the known-flaky-on-Windows subset.
 
@@ -151,16 +151,16 @@ All existing assertions are preserved; only the waiting changes.
 
 ## Verification plan
 
-- `cargo build -p crabka-broker --test <name>` per converted file (single test
+- `cargo build -p krabka-broker --test <name>` per converted file (single test
   binary — the Windows OS-1455 paging-file linker limit can fail an all-tests
   build; build/run binaries individually).
-- `cargo test -p crabka-broker --test <name> -- --test-threads=1` per file —
+- `cargo test -p krabka-broker --test <name> -- --test-threads=1` per file —
   PASS, then **stress ≈10×** (these are the known Windows flakes per project
   memory — stress is the primary acceptance signal; zero flakes required).
 - `grep` each file to confirm no state-guessing poll-`sleep` remains (only
   `consumer.poll()` and the calibrated `record_lock_duration`-derived sleeps).
-- `cargo fmt -p crabka-broker` (per-crate; Windows OS-206 path-length) and
-  `cargo clippy -p crabka-broker --features test-helpers --lib -- -D warnings`
+- `cargo fmt -p krabka-broker` (per-crate; Windows OS-206 path-length) and
+  `cargo clippy -p krabka-broker --features test-helpers --lib -- -D warnings`
   plus clippy on each converted test binary — clean.
 
 ## Risks & open questions (resolved during implementation)

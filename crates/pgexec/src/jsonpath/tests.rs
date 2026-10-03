@@ -1,7 +1,7 @@
 use std::cell::Cell;
 
 use assert2::assert;
-use crabka_pgtypes::{Datum, JsonbValue, jsonb};
+use krabka_pgtypes::{Datum, JsonbValue, jsonb};
 
 use super::{Exec, JsonPath};
 

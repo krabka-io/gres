@@ -37,10 +37,10 @@ The Consume role owns:
 
 | CLI | Environment | Default |
 |---|---|---:|
-| `--consumer-session-timeout` | `CRABKA_DEMO_CONSUMER_SESSION_TIMEOUT` | `45s` |
-| `--consumer-rebalance-timeout` | `CRABKA_DEMO_CONSUMER_REBALANCE_TIMEOUT` | `1m` |
-| `--consumer-heartbeat-interval` | `CRABKA_DEMO_CONSUMER_HEARTBEAT_INTERVAL` | `3s` |
-| `--consumer-request-timeout` | `CRABKA_DEMO_CONSUMER_REQUEST_TIMEOUT` | `30s` |
+| `--consumer-session-timeout` | `KRABKA_DEMO_CONSUMER_SESSION_TIMEOUT` | `45s` |
+| `--consumer-rebalance-timeout` | `KRABKA_DEMO_CONSUMER_REBALANCE_TIMEOUT` | `1m` |
+| `--consumer-heartbeat-interval` | `KRABKA_DEMO_CONSUMER_HEARTBEAT_INTERVAL` | `3s` |
+| `--consumer-request-timeout` | `KRABKA_DEMO_CONSUMER_REQUEST_TIMEOUT` | `30s` |
 
 Use optional `Time` fields with the existing positive UOM parser. Absence
 selects the exact builder defaults. Optionality preserves detection of explicit

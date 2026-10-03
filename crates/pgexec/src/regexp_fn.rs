@@ -14,8 +14,8 @@
 //! compile time with 2201B and does not match them. PostgreSQL counts positions
 //! and lengths in characters, not bytes, and crabka counts them the same way.
 
-use crabka_pgparser::ast::{Expr, FuncCall};
-use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
+use krabka_pgparser::ast::{Expr, FuncCall};
+use krabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
 use regex::{Captures, Regex, RegexBuilder};
 
 use crate::{

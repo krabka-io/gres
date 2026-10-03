@@ -189,7 +189,7 @@ mod tests {
     fn local_tiered_storage_names_match_kafka() {
         use std::collections::BTreeMap;
 
-        use crabka_ids::LeaderEpoch;
+        use krabka_ids::LeaderEpoch;
 
         use crate::metadata::{
             RemoteLogSegmentDetails, RemoteLogSegmentId, RemoteLogSegmentState, TopicIdPartition,

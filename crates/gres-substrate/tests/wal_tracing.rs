@@ -16,18 +16,18 @@ use std::{
 };
 
 use assert2::{assert, check};
-use crabka_broker::{Broker, BrokerConfig, BrokerHandle};
-use crabka_client_admin::AdminClient;
-use crabka_client_core::Client;
-use crabka_client_producer::ProducerError;
-use crabka_gres_substrate::{
+use krabka_broker::{Broker, BrokerConfig, BrokerHandle};
+use krabka_client_admin::AdminClient;
+use krabka_client_core::Client;
+use krabka_client_producer::ProducerError;
+use krabka_gres_substrate::{
     GroupCommitAck, GroupCommitRequest, ProducerWalWriter, SubstrateCommitter, SubstrateError,
     TransactionalWalWriter, WalAppendAck, WalFrame, WalWriterFaultInjector, WalWriterFaultStage,
     WriterGeneration, recover_live,
 };
-use crabka_pgexec::Committer as _;
-use crabka_pgkv::{Kv, MemKv, WriteOp};
-use crabka_protocol::{
+use krabka_pgexec::Committer as _;
+use krabka_pgkv::{Kv, MemKv, WriteOp};
+use krabka_protocol::{
     owned::fetch_request::{FetchPartition, FetchRequest, FetchTopic},
     primitives::uuid::Uuid as WireUuid,
     records::Record,

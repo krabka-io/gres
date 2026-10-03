@@ -13,7 +13,7 @@ Make the transaction-ordering primitive a pluggable seam — `TimestampSource` �
 
 ## Architecture Overview
 
-The seam already half-exists. Every engine allocates timestamps through the `crabka_pgexec::TimestampOracle` trait (`timestamp_txn.rs`) — typed allocations for read timestamps, transaction ids (start_ts), write leases, and commit timestamps, each fenced against the durable-horizon floor by the `_after` variants. Below it, the solo stack is `PgexecTsoOracle` → `BatchedTsoClient` → `TsoRpc` → `TsoOracle`, installed per tenant by the four-way match in `tenant.rs` (in-process oracle when hosting range 0, registry-forwarded client otherwise).
+The seam already half-exists. Every engine allocates timestamps through the `krabka_pgexec::TimestampOracle` trait (`timestamp_txn.rs`) — typed allocations for read timestamps, transaction ids (start_ts), write leases, and commit timestamps, each fenced against the durable-horizon floor by the `_after` variants. Below it, the solo stack is `PgexecTsoOracle` → `BatchedTsoClient` → `TsoRpc` → `TsoOracle`, installed per tenant by the four-way match in `tenant.rs` (in-process oracle when hosting range 0, registry-forwarded client otherwise).
 
 This design renames and extends that upper trait into `TimestampSource`. The name change is deliberate: "oracle" now describes only one implementation. The lower layers (`TsoRpc`, `BatchedTsoClient`, `TsoOracle`, `RegistryTsoRpc`) become private machinery of the `LogicalTso` implementation — they are how a centralized logical source is served efficiently, not part of the ordering contract. The `HLC` implementation (see the [HLC spec](2026-07-20-hlc-distributed-mode-design.md)) allocates node-locally and never touches that stack.
 

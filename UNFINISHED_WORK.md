@@ -73,7 +73,7 @@ Rows remain here so completed markers are not rediscovered as unfinished work.
 | SDK-06 | The Linux C++ SDK exposes the v1.1 messaging and queue contract through an nghttp2 transport plus a conformance adapter with per-group queue state. | `sdks/cpp/`; `.github/workflows/sdk-cpp.yml`. **PASS:** ASan/UBSan CTest 4/4, TSan CTest 4/4, and both shared matrices. |
 | D-01 | The compatibility matrix separates implemented behavior, finite missing work, tracked horizons, and deliberate non-goals. | `docs/KIP_MATRIX.md`. |
 | N-01 | The bounded newtype-safety rollout is complete; its old survey is explicitly retained as history rather than an unchecked backlog. | `docs/newtype-safety-rollout.md`; six shared identifiers and their byte-compatibility gates. |
-| P-01 | The gateway has melange/apko packaging, multi-architecture image publication with signing and attestations, release metadata, and SDK workflows triggered by gateway protocol changes. | `packaging/melange/crabka.yaml`; `packaging/apko/crabka-gateway.yaml`; `.github/workflows/{publish-images,sdk-go,sdk-ts,sdk-java,sdk-rust,sdk-cpp}.yml`; `release-plz.toml`. **PASS:** workflow YAML/action structure, shell syntax, and publish allowlist gates. |
+| P-01 | The gateway has melange/apko packaging, multi-architecture image publication with signing and attestations, release metadata, and SDK workflows triggered by gateway protocol changes. | `packaging/melange/crabka.yaml`; `packaging/apko/krabka-gateway.yaml`; `.github/workflows/{publish-images,sdk-go,sdk-ts,sdk-java,sdk-rust,sdk-cpp}.yml`; `release-plz.toml`. **PASS:** workflow YAML/action structure, shell syntax, and publish allowlist gates. |
 | V-01 | ISR catch-up/expansion is enabled and no longer ignored. | `crates/broker/tests/leader_election.rs::isr_expand_on_catchup`. |
 | V-02 | Rust/JVM log interoperability runs in both directions under a dedicated CI job. | `crates/log/tests/integration.rs`; `.github/workflows/ci.yml` `log-integration`. |
 | V-03 | The diskless live fault-injection binary is selected as a shipping gate and changes to its crate trigger that lane. | `crates/integration-tests/tests/diskless_jepsen.rs`; `.github/workflows/ci.yml`. This row closes CI wiring only; S-06 records the completed live result. |
@@ -96,7 +96,7 @@ do not define a bounded repository outcome that can be closed here.
 
 | ID | Directional horizon | Boundary still open |
 | --- | --- | --- |
-| H-01 | Full drop-in JVM Kafka Streams library parity. | `crabka-client-streams` is a separately scoped Rust API; no finite parity set or replacement acceptance gate exists. |
+| H-01 | Full drop-in JVM Kafka Streams library parity. | `krabka-client-streams` is a separately scoped Rust API; no finite parity set or replacement acceptance gate exists. |
 | H-02 | Full KIP-1150 diskless GA beyond Slice 6d. | The umbrella does not pin the benchmark profile, cluster topology, object-store class, fault window, sample size, percentile, numeric meanings of “near-zero” or “seconds-scale,” or the operator/API design for per-topic configuration. Without those inputs, its performance and elasticity statements cannot form a reproducible acceptance gate. |
 | H-04 | Chapter 2 lakehouse-native topics. | Topic-to-Parquet materialization, Iceberg metadata and consistency, in-process topic SQL/Flight SQL, and external catalogs remain separate future designs. |
 | H-05 | Chapter 4 eventing qualification. | The roadmap does not pin an upstream version or manifests, cluster topology, container references, scaler implementation/API, workload, polling windows, thresholds, timing/retry bounds, or a pass/fail harness. Its named qualification checkpoints therefore remain directional until a bounded test plan supplies those parameters. |
@@ -113,10 +113,10 @@ do not define a bounded repository outcome that can be closed here.
 | H-16 | Operator distribution and migration tooling. | An OLM bundle and a manifest migration tool remain roadmap items without accepted implementation gates. |
 
 The eligible Chapter 1 and Chapter 4 sections of
-`docs/superpowers/specs/2026-07-05-crabka-north-star-roadmap-design.md` are
+`docs/superpowers/specs/2026-07-05-krabka-north-star-roadmap-design.md` are
 explicitly a 24+ month, undated vision. Only the messaging, blob, realtime, and
 gateway/client-control passages of
-`docs/superpowers/specs/2026-07-06-crabka-serverless-backend-vision-design.md`
+`docs/superpowers/specs/2026-07-06-krabka-serverless-backend-vision-design.md`
 are used here; no adjacent product program is imported into scope.
 
 ## Documented limitations, not finite commitments
@@ -131,20 +131,20 @@ are used here; no adjacent product program is imported into scope.
 | L-08 | A connector cannot run more than one coordinated worker replica. | `crates/connect/src/runtime.rs`; no distributed assignment or shared worker-membership layer. |
 | L-09 | Broker JVM acceptance has no validated Windows CI/runtime path; its dedicated CI lane runs only on Ubuntu. | `crates/broker/tests/KNOWN_ISSUES.md`; `.github/workflows/ci.yml`. |
 | L-10 | Operator Admin RPCs use the default plaintext internal client and do not load TLS/SASL credentials for a secured internal listener. | `crates/operator/src/context.rs`; topic internal-listener selection. |
-| L-11 | The TypeScript v1 target is Node-only; browser transport and npm publication are deferred. | `docs/superpowers/specs/2026-07-06-crabka-sdk-ts-design.md`. |
-| L-12 | The Java v1 target excludes Android, reactive bindings, and Maven Central publication. | `docs/superpowers/specs/2026-07-06-crabka-sdk-java-design.md`. |
-| L-13 | The Rust application SDK excludes wasm and crates.io publication. | `docs/superpowers/specs/2026-07-06-crabka-sdk-rust-design.md`. |
-| L-14 | The C++ v1 target is Linux/plaintext only and has no package-manager distribution. | `docs/superpowers/specs/2026-07-06-crabka-sdk-cpp-design.md`. |
+| L-11 | The TypeScript v1 target is Node-only; browser transport and npm publication are deferred. | `docs/superpowers/specs/2026-07-06-krabka-sdk-ts-design.md`. |
+| L-12 | The Java v1 target excludes Android, reactive bindings, and Maven Central publication. | `docs/superpowers/specs/2026-07-06-krabka-sdk-java-design.md`. |
+| L-13 | The Rust application SDK excludes wasm and crates.io publication. | `docs/superpowers/specs/2026-07-06-krabka-sdk-rust-design.md`. |
+| L-14 | The C++ v1 target is Linux/plaintext only and has no package-manager distribution. | `docs/superpowers/specs/2026-07-06-krabka-sdk-cpp-design.md`. |
 | L-15 | Diskless partitions reject transactional record batches with `INVALID_TXN_STATE`. | `crates/broker/src/handlers/produce.rs`; diskless Slice 4 design. |
 | L-16 | The Streams source path cannot ingest null-valued source records, so source-row tombstones are not supported. | `crates/client-streams/tests/fk_join_broker.rs`; KIP-1071 Streams client design. |
 | L-17 | Rolling membership that mixes eager and cooperative classic-group protocols remains unsupported. | `STATUS.md` Slice 64 follow-up boundary; classic coordinator and cooperative assignor tests. |
 | L-18 | The native consumer exposes subscription-based flows but no JVM-style manual `assign()` API. | `crates/client-consumer/README.md`; `crates/client-consumer/src/consumer.rs`. |
 | L-19 | The native Admin client covers the repository's current operator needs rather than the full JVM AdminClient surface; log-directory calls target the connected broker and do not retry through controller discovery. | `crates/client-admin/README.md`; `crates/client-admin/src/log_dirs.rs`. |
 | L-20 | The standalone geo-replicator resolves source and target clients with plaintext security; its worker accepts security objects, but the supervisor always supplies `None`. | `crates/replicator/src/supervisor.rs`; `crates/replicator/src/worker.rs`. |
-| L-21 | Queue delivery is unary pull only, uses the group-level fixed lock duration, has no dead-letter queue, and requires single-gateway session affinity. | `docs/superpowers/specs/2026-07-06-crabka-msg6-queue-rpc-design.md`; `crates/grpc-gateway/src/queue.rs`. |
+| L-21 | Queue delivery is unary pull only, uses the group-level fixed lock duration, has no dead-letter queue, and requires single-gateway session affinity. | `docs/superpowers/specs/2026-07-06-krabka-msg6-queue-rpc-design.md`; `crates/grpc-gateway/src/queue.rs`. |
 | L-22 | All five application SDKs expose equality-only filters over structured records rather than the gateway's richer SQL predicate surface. | `crates/app-sdk/src/messaging.rs`; `sdks/{go,ts,java,cpp}` filter adapters. |
-| L-23 | All five application SDKs default subscriptions to auto-commit and do not expose public manual per-offset acknowledgement. | SDK designs under `docs/superpowers/specs/2026-07-06-crabka-sdk-*-design.md`; SDK subscription adapters. |
-| L-24 | The application SDKs expose unary publish but not the gateway's bidirectional `SendStream` batch-produce RPC. | `docs/superpowers/specs/2026-07-06-crabka-polyglot-messaging-sdk-design.md`; SDK messaging clients. |
+| L-23 | All five application SDKs default subscriptions to auto-commit and do not expose public manual per-offset acknowledgement. | SDK designs under `docs/superpowers/specs/2026-07-06-krabka-sdk-*-design.md`; SDK subscription adapters. |
+| L-24 | The application SDKs expose unary publish but not the gateway's bidirectional `SendStream` batch-produce RPC. | `docs/superpowers/specs/2026-07-06-krabka-polyglot-messaging-sdk-design.md`; SDK messaging clients. |
 | L-25 | Gateway bearer-token configuration uses unsecured development JWS material and is not a production authentication surface. | `sdks/go/README.md`; `crates/grpc-gateway/src/config.rs`. |
 | L-26 | The Go SDK does not expose topic auto-provision or typed CloudEvents consumption. | `sdks/go/README.md`. |
 | L-27 | The application SDKs expose blob and identity/control-plane calls only as typed stubs. | `crates/app-sdk/src/stubs.rs`; `sdks/{go,ts,java,cpp}` stub modules. |
@@ -172,9 +172,9 @@ are used here; no adjacent product program is imported into scope.
 | L-49 | `AlterClientQuotas` validates IP entity names as IPv4 only. | `crates/broker/src/handlers/alter_client_quotas.rs`. |
 | L-50 | APIs outside the dispatch throttle-patch table are delayed by request quotas but do not echo that delay in `throttle_time_ms`. | `crates/broker/src/network/dispatch.rs`. |
 | L-51 | IP byte-rate quota entries pass validation but are not enforced. | `STATUS.md` IP quota known limitations; broker quota lookup and connection-rate paths. |
-| L-52 | The rebalancer is single-replica and has no Lease-based leader election or multi-replica HA. | `docs/superpowers/specs/2026-05-17-crabka-rebalancer-roadmap-design.md`; `crates/rebalancer/src/bin/rebalancer.rs`. |
-| L-53 | Operator network policy has no `ipBlock` peers, outbound policy, or per-node-pool override. | `docs/superpowers/specs/2026-05-17-crabka-operator-network-policy-23-design.md`; `crates/operator/src/crd/network_policy.rs`. |
-| L-54 | The operator manages one Kubernetes cluster and has no CRD conversion webhooks for divergent schema versions. | `docs/superpowers/specs/2026-05-15-crabka-operator-roadmap-design.md`; operator controller and CRD inventories. |
+| L-52 | The rebalancer is single-replica and has no Lease-based leader election or multi-replica HA. | `docs/superpowers/specs/2026-05-17-krabka-rebalancer-roadmap-design.md`; `crates/rebalancer/src/bin/rebalancer.rs`. |
+| L-53 | Operator network policy has no `ipBlock` peers, outbound policy, or per-node-pool override. | `docs/superpowers/specs/2026-05-17-krabka-operator-network-policy-23-design.md`; `crates/operator/src/crd/network_policy.rs`. |
+| L-54 | The operator manages one Kubernetes cluster and has no CRD conversion webhooks for divergent schema versions. | `docs/superpowers/specs/2026-05-15-krabka-operator-roadmap-design.md`; operator controller and CRD inventories. |
 | L-55 | The Admin UI manages one configured cluster, authenticates only with SCRAM-SHA-512, and has no OIDC/OAuth, reverse-proxy, mTLS-only, PLAIN, SCRAM-SHA-256, or public non-Dioxus REST surface. | `docs/superpowers/specs/2026-07-04-dioxus-broker-admin-ui-design.md`; `crates/admin-ui/src/{config,auth,server}.rs`. |
 
 ## Closure rule

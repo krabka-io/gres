@@ -1,4 +1,4 @@
-# crabka-gres-ranges
+# krabka-gres-ranges
 
 Internal range-map and deterministic-routing primitives for Chapter Gres multi-range tenants.
 
@@ -27,7 +27,7 @@ nonempty physical SQL data.
 Run the TSO crash/fence model with:
 
 ```sh
-cargo test -p crabka-gres-ranges --test tso_monotonicity_model
+cargo test -p krabka-gres-ranges --test tso_monotonicity_model
 ```
 
 This gate exhaustively traverses its finite two-client configuration: two grants,

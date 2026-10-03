@@ -7,7 +7,7 @@ from kafkatest.services.kafka import KafkaService
 
 
 class CrabkaService(KafkaService):
-    DATA_DIR = "/mnt/kafka/crabka-data"
+    DATA_DIR = "/mnt/kafka/krabka-data"
     CONFIG_FILE = "/mnt/kafka/crabka.toml"
     CONTROLLER_PORT = 9093
     CLUSTER_ID = "00000000-0000-0000-0000-000000000001"
@@ -70,7 +70,7 @@ roles = ["broker", "controller"]
             if offsets else ""
         )
         cmd = (
-            f'/opt/kafka-dev/crabka-broker --broker-id {node_id} '
+            f'/opt/kafka-dev/krabka-broker --broker-id {node_id} '
             f'--config-file {self.CONFIG_FILE} '
             f'--cluster-id {self.CLUSTER_ID} --metrics-listen-addr none '
             f'{offsets_args} '
@@ -106,7 +106,7 @@ roles = ["broker", "controller"]
         return super().create_topic(topic_cfg, node)
 
     def wait_for_start(self, node, monitor, timeout_sec=60):
-        monitor.wait_until("crabka-broker listening", timeout_sec=timeout_sec)
+        monitor.wait_until("krabka-broker listening", timeout_sec=timeout_sec)
 
     def thread_dump(self, node):
         pass

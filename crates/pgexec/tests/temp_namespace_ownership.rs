@@ -13,8 +13,8 @@
 //! because these cases test what happens when that assumption fails.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 /// The backend id both sessions of a colliding pair are opened under.
 const SHARED_BACKEND_ID: i32 = 4242;

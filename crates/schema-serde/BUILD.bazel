@@ -14,7 +14,7 @@ exports_files(["Cargo.toml"])
 rust_library(
     name = "schema-serde",
     srcs = glob(["src/**/*.rs"]),
-    crate_name = "crabka_schema_serde",
+    crate_name = "krabka_schema_serde",
     crate_features = [
         "avro",
         "protobuf",

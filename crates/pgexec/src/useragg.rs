@@ -20,17 +20,17 @@
 
 use std::sync::Arc;
 
-use crabka_pgcatalog::routine::{
+use krabka_pgcatalog::routine::{
     AggregateDefinition, ParamMode, Routine, RoutineKind, RoutineParam, RoutineResult, RoutineType,
     drop_routine_ops, get_routine, put_routine_ops, routines_named, signature_identity,
 };
-use crabka_pgkv::{Kv, WriteOp};
-use crabka_pgparser::ast::{
+use krabka_pgkv::{Kv, WriteOp};
+use krabka_pgparser::ast::{
     AggregateArgs, AggregateOption, AggregateSignature, AlterRoutineAction, CreateAggregateStmt,
     Expr, FuncArgs, FuncCall,
 };
-use crabka_pgtypes::{ColumnType, Datum, ElemType};
-use crabka_pgwire::engine::QueryResult;
+use krabka_pgtypes::{ColumnType, Datum, ElemType};
+use krabka_pgwire::engine::QueryResult;
 
 use crate::{
     clock::EvalCtx,
@@ -238,7 +238,7 @@ fn declared_args(
 #[derive(Debug, Default)]
 struct Collected {
     sfunc: Option<String>,
-    stype: Option<crabka_pgparser::ast::RoutineType>,
+    stype: Option<krabka_pgparser::ast::RoutineType>,
     finalfunc: Option<String>,
     combinefunc: Option<String>,
     serialfunc: Option<String>,
@@ -249,12 +249,12 @@ struct Collected {
     /// is still "the state starts NULL", and both are spelled NULL, but only
     /// the first lets a strict transition function bootstrap from the first row.
     initcond: Written<String>,
-    basetype: Written<crabka_pgparser::ast::RoutineType>,
+    basetype: Written<krabka_pgparser::ast::RoutineType>,
     finalfunc_extra: bool,
     hypothetical: bool,
     msfunc: Option<String>,
     minvfunc: Option<String>,
-    mstype: Option<crabka_pgparser::ast::RoutineType>,
+    mstype: Option<krabka_pgparser::ast::RoutineType>,
     mfinalfunc: Option<String>,
     minitcond: Written<String>,
     mfinalfunc_extra: bool,
@@ -414,7 +414,7 @@ fn build(kv: &dyn Kv, stmt: &CreateAggregateStmt, owner: &str) -> Result<Routine
         language: "internal".into(),
         body: "aggregate_dummy".into(),
         object_file: None,
-        body_form: crabka_pgcatalog::routine::BodyForm::Source,
+        body_form: krabka_pgcatalog::routine::BodyForm::Source,
         volatility: 'i',
         parallel: aggregate_parallel(&options)?,
         window: false,
@@ -1393,7 +1393,7 @@ fn transition_is_strict(kv: &dyn Kv, name: &str, types: &[ColumnType]) -> bool {
 mod tests {
     use std::sync::Arc;
 
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     use super::*;
 
@@ -1407,7 +1407,7 @@ mod tests {
             language: "internal".into(),
             body: "aggregate_dummy".into(),
             object_file: None,
-            body_form: crabka_pgcatalog::routine::BodyForm::Source,
+            body_form: krabka_pgcatalog::routine::BodyForm::Source,
             volatility: 'i',
             parallel: 'u',
             window: false,
@@ -1559,17 +1559,17 @@ fn compile_call(kv: &dyn Kv, name: &str, args: &[Expr], scope: &Scope) -> Result
 ///
 /// Propagates catalog read errors.
 pub(crate) fn pg_aggregate_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    let routines = crabka_pgcatalog::routine::list_routines(kv)?;
+    let routines = krabka_pgcatalog::routine::list_routines(kv)?;
     let builtin_routines = crate::routine::builtin_pg_proc_rows()?;
     let regproc_of = |name: Option<&str>| -> Datum {
         let Some(name) = name else {
-            return Datum::Regclass(crabka_pgtypes::RegclassValue::unresolved(0));
+            return Datum::Regclass(krabka_pgtypes::RegclassValue::unresolved(0));
         };
         if let Some(routine) = routines
             .iter()
             .find(|routine| routine.name == name && !routine.is_aggregate())
         {
-            return Datum::Regclass(crabka_pgtypes::RegclassValue::resolved(
+            return Datum::Regclass(krabka_pgtypes::RegclassValue::resolved(
                 i32::try_from(routine.oid).unwrap_or(0),
                 &routine.name,
             ));
@@ -1582,8 +1582,8 @@ pub(crate) fn pg_aggregate_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecErro
                 _ => None,
             })
             .map_or_else(
-                || Datum::Regclass(crabka_pgtypes::RegclassValue::unresolved(0)),
-                |(oid, name)| Datum::Regclass(crabka_pgtypes::RegclassValue::resolved(oid, &name)),
+                || Datum::Regclass(krabka_pgtypes::RegclassValue::unresolved(0)),
+                |(oid, name)| Datum::Regclass(krabka_pgtypes::RegclassValue::resolved(oid, &name)),
             )
     };
     Ok(routines
@@ -1609,12 +1609,12 @@ pub(crate) fn pg_aggregate_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecErro
                 Datum::Text(definition.finalfunc_modify.to_string()),
                 Datum::Text("r".into()),
                 Datum::Int4(0),
-                Datum::Regclass(crabka_pgtypes::RegclassValue::resolved(
+                Datum::Regclass(krabka_pgtypes::RegclassValue::resolved(
                     transtype,
                     &definition.transtype.name,
                 )),
                 Datum::Int4(0),
-                Datum::Regclass(crabka_pgtypes::RegclassValue::unresolved(0)),
+                Datum::Regclass(krabka_pgtypes::RegclassValue::unresolved(0)),
                 Datum::Int4(0),
                 definition.initcond.clone().map_or(Datum::Null, Datum::Text),
                 Datum::Null,

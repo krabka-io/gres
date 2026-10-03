@@ -9,7 +9,7 @@ wire-protocol changes.
 ## 1. Context
 
 The KIP-1071 streams **client** runtime (`crates/client-streams`, crate
-`crabka-client-streams`) is feature-rich: the original 7-sub-project program
+`krabka-client-streams`) is feature-rich: the original 7-sub-project program
 plus FK-join, global table, suppress, punctuation, EOS, standby/warmup,
 schema-serde, and — most recently — sliding windows (KIP-450) have all merged.
 The remaining DSL-parity gaps are **versioned KTables (KIP-889 / 914)**, cogroup
@@ -244,7 +244,7 @@ tombstone / retention expiry) and on the processor (in-process `Dispatch` /
 `ProcessorContext` harness, mirroring `table.rs` tests).
 
 TDD: write the behavioral + changelog goldens first (red), then port the store +
-processor until green. Full `cargo test -p crabka-client-streams` is the
+processor until green. Full `cargo test -p krabka-client-streams` is the
 erasure-safety gate (DSL type mismatches are runtime downcast failures, not
 compile errors). `cargo fmt --check` and `cargo clippy --workspace --all-targets
 -D warnings` before push.

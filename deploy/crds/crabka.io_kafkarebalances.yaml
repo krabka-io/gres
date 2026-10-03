@@ -21,7 +21,7 @@ spec:
             properties:
               endpoint:
                 description: |-
-                  Connect-RPC base URL of the `crabka-rebalancer` service, for
+                  Connect-RPC base URL of the `krabka-rebalancer` service, for
                   example `http://my-cluster-rebalancer.kafka.svc:9300`. When this
                   field is absent, the operator derives
                   `http://<cluster>-rebalancer.<namespace>.svc.cluster.local:9300`

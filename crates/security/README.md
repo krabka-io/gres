@@ -1,7 +1,7 @@
-# crabka-security
+# krabka-security
 
-[![Crates.io](https://img.shields.io/crates/v/crabka-security.svg)](https://crates.io/crates/crabka-security)
-[![Docs.rs](https://docs.rs/crabka-security/badge.svg)](https://docs.rs/crabka-security)
+[![Crates.io](https://img.shields.io/crates/v/krabka-security.svg)](https://crates.io/crates/krabka-security)
+[![Docs.rs](https://docs.rs/krabka-security/badge.svg)](https://docs.rs/krabka-security)
 [![CI](https://github.com/robot-head/crabka/actions/workflows/ci.yml/badge.svg)](https://github.com/robot-head/crabka/actions/workflows/ci.yml)
 
 TLS, SASL, SCRAM, OAuth, Kerberos, and certificate utilities for Crabka.
@@ -11,7 +11,7 @@ of Apache Kafka-compatible infrastructure and clients.
 
 ## Overview
 
-`crabka-security` collects the reusable security primitives that Crabka brokers,
+`krabka-security` collects the reusable security primitives that Crabka brokers,
 clients, operators, and tests share. It builds rustls configs, implements SASL
 mechanism helpers, and runs SCRAM exchanges. It also validates OAuth bearer
 tokens, extracts Kafka principals from certificates, and issues local
@@ -48,7 +48,7 @@ production.
 ## Install
 
 ```sh
-cargo add crabka-security
+cargo add krabka-security
 ```
 
 For workspace development, use the path dependency from this repository.
@@ -58,7 +58,7 @@ For workspace development, use the path dependency from this repository.
 Build the client-first message for a SCRAM-SHA-256 exchange:
 
 ```rust
-use crabka_security::{SaslMechanism, ScramClientExchange};
+use krabka_security::{SaslMechanism, ScramClientExchange};
 
 let exchange = ScramClientExchange::new(
     "alice".to_string(),
@@ -68,12 +68,12 @@ let exchange = ScramClientExchange::new(
 
 let (client_first, _exchange) = exchange.client_first()?;
 println!("send SCRAM client-first-message: {}", String::from_utf8_lossy(&client_first));
-# Ok::<(), crabka_security::AuthError>(())
+# Ok::<(), krabka_security::AuthError>(())
 ```
 
 ## Documentation
 
-- [API documentation](https://docs.rs/crabka-security)
+- [API documentation](https://docs.rs/krabka-security)
 - [Crabka repository](https://github.com/robot-head/crabka)
 - [Kafka compatibility matrix](https://github.com/robot-head/crabka/blob/main/docs/KIP_MATRIX.md)
 

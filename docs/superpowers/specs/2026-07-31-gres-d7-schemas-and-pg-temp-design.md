@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-31
 **Status:** Proposed
-**Type:** SQL-parity wave. Implements wave D7 of the [SQL-Parity Program](2026-07-09-crabka-gres-sql-parity-program-design.md): real SQL schemas, a real `search_path`, and a real per-session `pg_temp`, replacing the single flat namespace the engine has today. The foreign-key/temp boundary is the seam shared with [D6](2026-07-31-gres-d6-foreign-keys-local-design.md).
+**Type:** SQL-parity wave. Implements wave D7 of the [SQL-Parity Program](2026-07-09-krabka-gres-sql-parity-program-design.md): real SQL schemas, a real `search_path`, and a real per-session `pg_temp`, replacing the single flat namespace the engine has today. The foreign-key/temp boundary is the seam shared with [D6](2026-07-31-gres-d6-foreign-keys-local-design.md).
 
 ## Design Goals
 
@@ -24,7 +24,7 @@ A relation name exists in three forms, and almost every defect described below c
 
 **As stored** is a two-part catalog key built from `(schema, name)` with each part length-prefixed. It is never derived from a name by string surgery.
 
-One function crosses each boundary, and the type system enforces that: after this wave, `crabka_pgcatalog::get_table(kv, &str)` does not exist, so a bare-name lookup does not compile. That is the mechanism, not a convention, and it is what makes shadowing work for *every* operation rather than for the handful someone remembered to update.
+One function crosses each boundary, and the type system enforces that: after this wave, `krabka_pgcatalog::get_table(kv, &str)` does not exist, so a bare-name lookup does not compile. That is the mechanism, not a convention, and it is what makes shadowing work for *every* operation rather than for the handful someone remembered to update.
 
 The thing making a change of this size tractable is that there is no catalog cache anywhere in the engine — no `OnceLock`, no snapshot, no generation counter, no invalidation. `get_table` (`crates/pgcatalog/src/lib.rs:953-975`) is a bare `kv.get`. So there is no cache-coherence problem hiding behind the resolution seam; there is only a large mechanical edit.
 

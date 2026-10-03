@@ -13,8 +13,8 @@ use apache_avro::{
     schema::{DecimalSchema, RecordSchema, UnionSchema},
     types::Value as AvroValue,
 };
-use crabka_pgcatalog::Column;
-use crabka_pgtypes::{ColumnType, Datum};
+use krabka_pgcatalog::Column;
+use krabka_pgtypes::{ColumnType, Datum};
 use prost_reflect::{Kind, Value as ProtoValue};
 use serde_json::Value as JsonValue;
 
@@ -556,7 +556,7 @@ pub fn project(
 #[cfg(test)]
 mod tests {
     use bigdecimal::num_bigint::BigInt;
-    use crabka_pgtypes::{ColumnType, Datum};
+    use krabka_pgtypes::{ColumnType, Datum};
 
     use super::*;
 
@@ -573,8 +573,8 @@ mod tests {
         .expect("schema parses");
         let cols = crate::types::avro_schema_to_columns(&schema);
         assert_eq!(cols[0].name, "id");
-        assert_eq!(cols[0].ty, crabka_pgtypes::ColumnType::Int8);
-        assert_eq!(cols[1].ty, crabka_pgtypes::ColumnType::Text);
+        assert_eq!(cols[0].ty, krabka_pgtypes::ColumnType::Int8);
+        assert_eq!(cols[1].ty, krabka_pgtypes::ColumnType::Text);
 
         let mut record = apache_avro::types::Record::new(&schema).expect("record created");
         record.put("id", 7i64);
@@ -585,8 +585,8 @@ mod tests {
             &cols,
             Some(&schema),
         );
-        assert_eq!(datums[0], crabka_pgtypes::Datum::Int8(7));
-        assert_eq!(datums[1], crabka_pgtypes::Datum::Text("x".into()));
+        assert_eq!(datums[0], krabka_pgtypes::Datum::Int8(7));
+        assert_eq!(datums[1], krabka_pgtypes::Datum::Text("x".into()));
     }
 
     // -----------------------------------------------------------------------

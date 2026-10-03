@@ -32,7 +32,7 @@
 //! 2. `db.operation.name`, `db.collection.name`, `db.namespace` and
 //!    `pg.table_id` are always on.
 //! 3. `db.query.text`, the verbatim SQL, is **off by default**. It sits behind
-//!    [`sql_text_enabled`] (`CRABKA_OTLP_SQL_TEXT`) and is truncated at
+//!    [`sql_text_enabled`] (`KRABKA_OTLP_SQL_TEXT`) and is truncated at
 //!    [`MAX_SQL_TEXT_BYTES`]. It is the one attribute here that can carry
 //!    secrets, as in `INSERT INTO users VALUES ('<ssn>', …)` and
 //!    `ALTER ROLE … PASSWORD '…'`.
@@ -42,19 +42,19 @@
 
 use std::sync::LazyLock;
 
-use crabka_pgparser::ast::{
+use krabka_pgparser::ast::{
     QueryBody, QueryExpr, RelationRef, RoutineObject, SelectStmt, SetExpr, Statement, TableExpr,
     UtilityStatement,
 };
 
 /// `tracing` target that carries the per-statement span tier: `pg.parse.sql`,
 /// `db.statement`, `pg.select` and `pg.write`.
-pub const STATEMENT_TARGET: &str = "crabka_pgexec::statement";
+pub const STATEMENT_TARGET: &str = "krabka_pgexec::statement";
 
 /// `tracing` target that carries the executor's internals: the timestamp
 /// grant, the read-context gate, and, from the executor proper, scans and row
 /// locks.
-pub const EXEC_TARGET: &str = "crabka_pgexec::exec";
+pub const EXEC_TARGET: &str = "krabka_pgexec::exec";
 
 /// Session GUC a client sets to give the engine a W3C `traceparent`.
 ///
@@ -87,14 +87,14 @@ pub const MAX_STATUS_MESSAGE_BYTES: usize = 512;
 
 /// Whether `db.query.text` may carry verbatim SQL.
 ///
-/// The switch is read once from `CRABKA_OTLP_SQL_TEXT`. It is kept here, and
-/// not in `crabka-telemetry`, so that this crate stays publishable. It then
+/// The switch is read once from `KRABKA_OTLP_SQL_TEXT`. It is kept here, and
+/// not in `krabka-telemetry`, so that this crate stays publishable. It then
 /// needs no dependency on the unpublished OTLP pipeline crate to answer the
 /// question.
 #[must_use]
 pub fn sql_text_enabled() -> bool {
     static ENABLED: LazyLock<bool> =
-        LazyLock::new(|| env_flag(std::env::var("CRABKA_OTLP_SQL_TEXT").ok().as_deref()));
+        LazyLock::new(|| env_flag(std::env::var("KRABKA_OTLP_SQL_TEXT").ok().as_deref()));
     *ENABLED
 }
 
@@ -285,12 +285,12 @@ pub fn statement_operation(stmt: &Statement) -> &'static str {
             // kind, and the bare `ALTER`/`DROP OPERATOR` tags belong to the
             // operator itself.
             UtilityStatement::AlterOperatorObject { kind, .. } => match kind {
-                crabka_pgparser::ast::OperatorObjectKind::Class => "ALTER OPERATOR CLASS",
-                crabka_pgparser::ast::OperatorObjectKind::Family => "ALTER OPERATOR FAMILY",
+                krabka_pgparser::ast::OperatorObjectKind::Class => "ALTER OPERATOR CLASS",
+                krabka_pgparser::ast::OperatorObjectKind::Family => "ALTER OPERATOR FAMILY",
             },
             UtilityStatement::DropOperatorObject { kind, .. } => match kind {
-                crabka_pgparser::ast::OperatorObjectKind::Class => "DROP OPERATOR CLASS",
-                crabka_pgparser::ast::OperatorObjectKind::Family => "DROP OPERATOR FAMILY",
+                krabka_pgparser::ast::OperatorObjectKind::Class => "DROP OPERATOR CLASS",
+                krabka_pgparser::ast::OperatorObjectKind::Family => "DROP OPERATOR FAMILY",
             },
             UtilityStatement::CreateOperator(_) => "CREATE OPERATOR",
             UtilityStatement::DropOperator { .. } => "DROP OPERATOR",
@@ -475,7 +475,7 @@ pub fn statement_span(fields: &StatementFields<'_>) -> tracing::Span {
     span
 }
 
-/// Build the span covering `crabka_pgparser::parse`.
+/// Build the span covering `krabka_pgparser::parse`.
 #[must_use]
 pub fn parse_span(sql_bytes: usize) -> tracing::Span {
     tracing::debug_span!(
@@ -694,7 +694,7 @@ mod tests {
     };
 
     use assert2::check;
-    use crabka_pgparser::parse;
+    use krabka_pgparser::parse;
     use tracing::{
         field::{Field, Visit},
         subscriber::Interest,

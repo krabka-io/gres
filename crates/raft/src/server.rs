@@ -3,7 +3,7 @@
 //! Crabka-private observer/forward RPCs and feeds them into the local
 //! [`KraftController`] engine.
 //!
-//! Wire shape matches `crabka_client_core::Connection::raw_request`:
+//! Wire shape matches `krabka_client_core::Connection::raw_request`:
 //!
 //! - Request: `len(i32) | RequestHeader v1/v2 | body`
 //! - Response: `len(i32) | ResponseHeader v0/v1 | body`
@@ -15,8 +15,8 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use crabka_ids::{ApiKey, ApiVersion};
-use crabka_units::prelude::{ByteSize, ByteSizeExt as _};
+use krabka_ids::{ApiKey, ApiVersion};
+use krabka_units::prelude::{ByteSize, ByteSizeExt as _};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::TcpListener,
@@ -44,13 +44,13 @@ type CorrelationId = i32;
 
 struct ConnectionContext {
     peer: SocketAddr,
-    principal: Option<crabka_security::Principal>,
+    principal: Option<krabka_security::Principal>,
     authenticated_via_token: bool,
     cluster_alter_authorized: bool,
 }
 
 /// Kafka's `ApiVersions` API key. The controller TCP listener answers this
-/// because `crabka_client_core::Connection::connect` performs an `ApiVersions`
+/// because `krabka_client_core::Connection::connect` performs an `ApiVersions`
 /// handshake before any other request.
 const API_KEY_API_VERSIONS: i16 = 18;
 
@@ -311,17 +311,17 @@ fn is_native_raft_api(api_key: i16) -> bool {
 
 fn is_eof(e: &RaftError) -> bool {
     matches!(e,
-        RaftError::Storage(crabka_log::LogError::Io(io))
+        RaftError::Storage(krabka_log::LogError::Io(io))
             if io.kind() == std::io::ErrorKind::UnexpectedEof
     )
 }
 
 fn io_err(e: std::io::Error) -> RaftError {
-    RaftError::Storage(crabka_log::LogError::Io(e))
+    RaftError::Storage(krabka_log::LogError::Io(e))
 }
 
 fn truncated(needed: usize) -> RaftError {
-    RaftError::Protocol(crabka_protocol::ProtocolError::UnexpectedEof { needed })
+    RaftError::Protocol(krabka_protocol::ProtocolError::UnexpectedEof { needed })
 }
 
 fn require_remaining(available: usize, required: usize) -> Result<(), RaftError> {
@@ -336,7 +336,7 @@ fn request_is_flexible(
     version: i16,
     admin_router: Option<&dyn crate::ControllerAdminRouter>,
 ) -> bool {
-    use crabka_protocol::owned::{
+    use krabka_protocol::owned::{
         add_raft_voter_request, api_versions_request, begin_quorum_epoch_request,
         broker_heartbeat_request, broker_registration_request, controller_registration_request,
         describe_cluster_request, describe_quorum_request, end_quorum_epoch_request, fetch_request,
@@ -420,19 +420,19 @@ where
             cur = rest;
             Some(
                 std::str::from_utf8(raw)
-                    .map_err(crabka_protocol::ProtocolError::InvalidUtf8)?
+                    .map_err(krabka_protocol::ProtocolError::InvalidUtf8)?
                     .to_owned(),
             )
         }
         _ => {
             return Err(RaftError::Protocol(
-                crabka_protocol::ProtocolError::InvalidValue("client id length below -1"),
+                krabka_protocol::ProtocolError::InvalidValue("client id length below -1"),
             ));
         }
     };
     let response_flexible = request_is_flexible(api_key_n.get(), api_version.get(), admin_router);
     if response_flexible {
-        crabka_protocol::tagged_fields::read_tagged_fields(&mut cur, |_tag, _payload| Ok(false))?;
+        krabka_protocol::tagged_fields::read_tagged_fields(&mut cur, |_tag, _payload| Ok(false))?;
     }
 
     Ok((
@@ -500,7 +500,7 @@ fn api_versions_routing_error(
     expected_cluster_id: &str,
     expected_node_id: u64,
 ) -> Result<i16, RaftError> {
-    use crabka_protocol::{Decode, owned::api_versions_request::ApiVersionsRequest};
+    use krabka_protocol::{Decode, owned::api_versions_request::ApiVersionsRequest};
 
     if req_version < API_VERSIONS_ROUTING_MIN_VERSION {
         return Ok(0);
@@ -509,7 +509,7 @@ fn api_versions_routing_error(
     let mut cur = body;
     let request = ApiVersionsRequest::decode(&mut cur, req_version)?;
     let expected_node_id = i32::try_from(expected_node_id).map_err(|_| {
-        RaftError::Protocol(crabka_protocol::ProtocolError::InvalidValue(
+        RaftError::Protocol(krabka_protocol::ProtocolError::InvalidValue(
             "controller node id exceeds the Kafka wire range",
         ))
     })?;
@@ -541,11 +541,11 @@ fn api_versions_routing_error(
 /// so this is written via [`write_response_no_tagged_fields`].
 fn api_versions_response_body(
     req_version: i16,
-    image: &crabka_metadata::MetadataImage,
+    image: &krabka_metadata::MetadataImage,
     admin_router: Option<&dyn crate::ControllerAdminRouter>,
     error_code: i16,
 ) -> Bytes {
-    use crabka_protocol::{
+    use krabka_protocol::{
         Encode,
         owned::api_versions_response::{
             ApiVersion as ApiVersionEntry, ApiVersionsResponse, FinalizedFeatureKey,
@@ -603,14 +603,14 @@ fn api_versions_response_body(
     // controller-listener view on the same metadata registry and live
     // finalized image as the broker listener, including kraft.version's
     // v4-only zero minimum compatibility rule.
-    let supported_features = crabka_metadata::feature_registry()
+    let supported_features = krabka_metadata::feature_registry()
         .iter()
         .map(|feature| {
             let (minimum, maximum) = feature.supported_range();
             SupportedFeatureKey {
                 name: feature.name().into(),
                 min_version: if feature.name()
-                    == crabka_metadata::metadata_version::KRAFT_VERSION_FEATURE
+                    == krabka_metadata::metadata_version::KRAFT_VERSION_FEATURE
                     && req_version >= KRAFT_ZERO_MIN_API_VERSION
                 {
                     minimum
@@ -634,7 +634,7 @@ fn api_versions_response_body(
         .collect();
     let kraft_version = i16::try_from(image.kraft_version()).unwrap_or(i16::MAX);
     finalized_features.push(FinalizedFeatureKey {
-        name: crabka_metadata::metadata_version::KRAFT_VERSION_FEATURE.into(),
+        name: krabka_metadata::metadata_version::KRAFT_VERSION_FEATURE.into(),
         min_version_level: kraft_version,
         max_version_level: kraft_version,
         ..Default::default()
@@ -702,7 +702,7 @@ fn valid_wire_listeners<'a>(listeners: impl IntoIterator<Item = (&'a str, &'a st
 }
 
 async fn probe_voter_candidate(
-    listeners: &[crabka_protocol::owned::add_raft_voter_request::Listener],
+    listeners: &[krabka_protocol::owned::add_raft_voter_request::Listener],
     finalized_version: u16,
     engine: &KraftController,
 ) -> Result<(), (i16, String)> {
@@ -742,7 +742,7 @@ async fn kip853_admin_response(
 }
 
 fn kip853_authorization_failure(api_key: i16, version: i16) -> Result<Bytes, RaftError> {
-    use crabka_protocol::{Encode, owned};
+    use krabka_protocol::{Encode, owned};
 
     let mut output = BytesMut::new();
     let message = Some("Cluster authorization failed.".into());
@@ -778,7 +778,7 @@ async fn describe_quorum_response(
     body: &[u8],
     engine: &KraftController,
 ) -> Result<Bytes, RaftError> {
-    use crabka_protocol::{
+    use krabka_protocol::{
         Decode, Encode,
         owned::{
             common::describe_quorum_response::replica_state::ReplicaState,
@@ -816,7 +816,7 @@ async fn describe_quorum_response(
                     }
                     let state = |id: crate::NodeId, directory_id: uuid::Uuid| ReplicaState {
                         replica_id: i32::try_from(id.0).unwrap_or(-1),
-                        replica_directory_id: crabka_protocol::primitives::uuid::Uuid(
+                        replica_directory_id: krabka_protocol::primitives::uuid::Uuid(
                             *directory_id.as_bytes(),
                         ),
                         log_end_offset: quorum
@@ -884,7 +884,7 @@ async fn add_raft_voter_response(
     body: &[u8],
     engine: &KraftController,
 ) -> Result<Bytes, RaftError> {
-    use crabka_protocol::{
+    use krabka_protocol::{
         Decode, Encode,
         owned::{
             add_raft_voter_request::AddRaftVoterRequest,
@@ -901,7 +901,7 @@ async fn add_raft_voter_response(
         .as_deref()
         .is_none_or(|request_cluster| request_cluster == cluster_id)
         && request.voter_id >= 0
-        && request.voter_directory_id != crabka_protocol::primitives::uuid::Uuid::ZERO
+        && request.voter_directory_id != krabka_protocol::primitives::uuid::Uuid::ZERO
         && valid_wire_listeners(request.listeners.iter().map(|listener| {
             (
                 listener.name.as_str(),
@@ -919,19 +919,19 @@ async fn add_raft_voter_response(
     } else if let Err((code, message)) = probe {
         (code, Some(message))
     } else {
-        let voter = crabka_metadata::Voter {
+        let voter = krabka_metadata::Voter {
             id: crate::NodeId(u64::try_from(request.voter_id).unwrap_or_default()),
             directory_id: uuid::Uuid::from_bytes(request.voter_directory_id.0),
             endpoints: request
                 .listeners
                 .into_iter()
-                .map(|listener| crabka_metadata::VoterEndpoint {
+                .map(|listener| krabka_metadata::VoterEndpoint {
                     name: listener.name,
                     host: listener.host,
                     port: listener.port,
                 })
                 .collect(),
-            kraft_version: crabka_metadata::KRaftVersionRange::default(),
+            kraft_version: krabka_metadata::KRaftVersionRange::default(),
         };
         reconfiguration_error_code(
             engine
@@ -959,7 +959,7 @@ async fn remove_raft_voter_response(
     body: &[u8],
     engine: &KraftController,
 ) -> Result<Bytes, RaftError> {
-    use crabka_protocol::{
+    use krabka_protocol::{
         Decode, Encode,
         owned::{
             remove_raft_voter_request::RemoveRaftVoterRequest,
@@ -984,7 +984,7 @@ async fn remove_raft_voter_response(
             "voter_id must be non-negative, got {}",
             request.voter_id
         ))
-    } else if request.voter_directory_id == crabka_protocol::primitives::uuid::Uuid::ZERO {
+    } else if request.voter_directory_id == krabka_protocol::primitives::uuid::Uuid::ZERO {
         Some("voter_directory_id must be non-zero".into())
     } else {
         None
@@ -1018,7 +1018,7 @@ async fn update_raft_voter_response(
     body: &[u8],
     engine: &KraftController,
 ) -> Result<Bytes, RaftError> {
-    use crabka_protocol::{
+    use krabka_protocol::{
         Decode, Encode,
         owned::{
             update_raft_voter_request::UpdateRaftVoterRequest,
@@ -1035,7 +1035,7 @@ async fn update_raft_voter_response(
     let valid_range = matches!((&min, &max), (Ok(min), Ok(max)) if min <= max);
     let valid = request.cluster_id.as_deref() == Some(cluster_id.as_str())
         && request.voter_id >= 0
-        && request.voter_directory_id != crabka_protocol::primitives::uuid::Uuid::ZERO
+        && request.voter_directory_id != krabka_protocol::primitives::uuid::Uuid::ZERO
         && i64::from(request.current_leader_epoch) == i64::from(quorum.leader_epoch)
         && valid_range
         && valid_wire_listeners(request.listeners.iter().map(|listener| {
@@ -1046,19 +1046,19 @@ async fn update_raft_voter_response(
             )
         }));
     let error_code = if valid {
-        let voter = crabka_metadata::Voter {
+        let voter = krabka_metadata::Voter {
             id: crate::NodeId(u64::try_from(request.voter_id).unwrap_or_default()),
             directory_id: uuid::Uuid::from_bytes(request.voter_directory_id.0),
             endpoints: request
                 .listeners
                 .into_iter()
-                .map(|listener| crabka_metadata::VoterEndpoint {
+                .map(|listener| krabka_metadata::VoterEndpoint {
                     name: listener.name,
                     host: listener.host,
                     port: listener.port,
                 })
                 .collect(),
-            kraft_version: crabka_metadata::KRaftVersionRange {
+            kraft_version: krabka_metadata::KRaftVersionRange {
                 min: min.unwrap_or_default(),
                 max: max.unwrap_or_default(),
             },
@@ -1133,7 +1133,7 @@ async fn dispatch_with_router(
         ApiKey(API_KEY_SUBMIT_CHANGE) => dispatch_submit_change(&body, engine).await,
         ApiKey(API_KEY_METADATA_FETCH) => dispatch_metadata_fetch(&body, engine).await,
         _ => Err(RaftError::Protocol(
-            crabka_protocol::ProtocolError::InvalidValue("unknown controller api key"),
+            krabka_protocol::ProtocolError::InvalidValue("unknown controller api key"),
         )),
     }
 }
@@ -1155,8 +1155,8 @@ where
 async fn dispatch_submit_change(body: &[u8], engine: &KraftController) -> Result<Bytes, RaftError> {
     let mut cur = body;
     let req = CrabkaSubmitChangeRequest::decode_v0(&mut cur)?;
-    let records: Vec<crabka_metadata::MetadataRecord> = match <serde_wincode::SerdeCompat<
-        Vec<crabka_metadata::MetadataRecord>,
+    let records: Vec<krabka_metadata::MetadataRecord> = match <serde_wincode::SerdeCompat<
+        Vec<krabka_metadata::MetadataRecord>,
     > as wincode::Deserialize>::deserialize(
         &req.records
     ) {
@@ -1257,7 +1257,7 @@ async fn describe_cluster_response_body(
     body: &[u8],
     engine: &KraftController,
 ) -> Result<Bytes, RaftError> {
-    use crabka_protocol::{Decode, owned::describe_cluster_request::DescribeClusterRequest};
+    use krabka_protocol::{Decode, owned::describe_cluster_request::DescribeClusterRequest};
 
     let mut cur = body;
     let req = DescribeClusterRequest::decode(&mut cur, version)?;
@@ -1306,8 +1306,8 @@ fn build_describe_cluster_body(
     voters: &[(i32, String, i32)],
     cluster_id: &str,
     controller_id: i32,
-) -> Result<Bytes, crabka_protocol::ProtocolError> {
-    use crabka_protocol::{
+) -> Result<Bytes, krabka_protocol::ProtocolError> {
+    use krabka_protocol::{
         Encode,
         owned::describe_cluster_response::{DescribeClusterBroker, DescribeClusterResponse},
     };
@@ -1353,9 +1353,9 @@ fn build_describe_cluster_body(
 mod tests {
     use assert2::check;
     use bytes::{BufMut, Bytes};
-    use crabka_metadata::{FeatureLevelRecord, MetadataRecord, NodeId, TopicRecord};
-    use crabka_protocol::Decode;
-    use crabka_units::prelude::{Time, TimeExt as _, millis, secs};
+    use krabka_metadata::{FeatureLevelRecord, MetadataRecord, NodeId, TopicRecord};
+    use krabka_protocol::Decode;
+    use krabka_units::prelude::{Time, TimeExt as _, millis, secs};
     use tokio::io::AsyncWriteExt;
     use uuid::Uuid;
 
@@ -1382,7 +1382,7 @@ mod tests {
             assert2::assert!(is_native_raft_api(api_key));
         }
         assert2::assert!(!is_native_raft_api(
-            crabka_protocol::owned::create_topics_request::API_KEY
+            krabka_protocol::owned::create_topics_request::API_KEY
         ));
     }
 
@@ -1429,17 +1429,17 @@ mod tests {
         length_prefixed(&frame)
     }
 
-    fn voter(id: u64, endpoints: Vec<crabka_metadata::VoterEndpoint>) -> crabka_metadata::Voter {
-        crabka_metadata::Voter {
+    fn voter(id: u64, endpoints: Vec<krabka_metadata::VoterEndpoint>) -> krabka_metadata::Voter {
+        krabka_metadata::Voter {
             id: NodeId(id),
             directory_id: Uuid::from_u128(u128::from(id)),
             endpoints,
-            kraft_version: crabka_metadata::KRaftVersionRange::default(),
+            kraft_version: krabka_metadata::KRaftVersionRange::default(),
         }
     }
 
-    fn controller_endpoint(host: &str, port: u16) -> crabka_metadata::VoterEndpoint {
-        crabka_metadata::VoterEndpoint {
+    fn controller_endpoint(host: &str, port: u16) -> krabka_metadata::VoterEndpoint {
+        krabka_metadata::VoterEndpoint {
             name: "CONTROLLER".into(),
             host: host.into(),
             port,
@@ -1448,14 +1448,14 @@ mod tests {
 
     fn test_engine_with_voters(
         me: u64,
-        voters: impl IntoIterator<Item = crabka_metadata::Voter>,
+        voters: impl IntoIterator<Item = krabka_metadata::Voter>,
     ) -> (KraftController, tempfile::TempDir) {
         let dir = tempfile::TempDir::new().unwrap();
         let ctrl = KraftController::open(
             dir.path().to_path_buf(),
             NodeId(me),
             Uuid::nil(),
-            crabka_metadata::VoterSet::from_voters(voters),
+            krabka_metadata::VoterSet::from_voters(voters),
             TEST_ELECTION_TIMEOUT,
             None,
             crate::ControllerFetchMissLimit::default(),
@@ -1463,7 +1463,7 @@ mod tests {
             crate::MetadataRaftFetchMax::default(),
             std::sync::Arc::new(crate::kraft::NullPeerSender),
             0,
-            crabka_kraft_core::snapshot_fetch::MetadataSnapshotFetchMax::default(),
+            krabka_kraft_core::snapshot_fetch::MetadataSnapshotFetchMax::default(),
         )
         .expect("open engine");
         (ctrl, dir)
@@ -1519,7 +1519,7 @@ mod tests {
     }
 
     fn describe_cluster_body(version: i16, endpoint_type: i8) -> Bytes {
-        use crabka_protocol::{Encode, owned::describe_cluster_request::DescribeClusterRequest};
+        use krabka_protocol::{Encode, owned::describe_cluster_request::DescribeClusterRequest};
 
         let req = DescribeClusterRequest {
             endpoint_type,
@@ -1559,7 +1559,7 @@ mod tests {
     #[test]
     fn is_eof_only_matches_unexpected_eof_io_errors() {
         let io_error = |kind| {
-            super::RaftError::Storage(crabka_log::LogError::Io(std::io::Error::new(kind, "io")))
+            super::RaftError::Storage(krabka_log::LogError::Io(std::io::Error::new(kind, "io")))
         };
         let cases = [
             (
@@ -1574,7 +1574,7 @@ mod tests {
             ),
             (
                 "protocol error",
-                super::RaftError::Protocol(crabka_protocol::ProtocolError::InvalidValue("not io")),
+                super::RaftError::Protocol(krabka_protocol::ProtocolError::InvalidValue("not io")),
                 false,
             ),
         ];
@@ -1680,7 +1680,7 @@ mod tests {
             assert2::assert!(matches!(
                 err,
                 super::RaftError::Protocol(
-                    crabka_protocol::ProtocolError::UnexpectedEof { needed: n }
+                    krabka_protocol::ProtocolError::UnexpectedEof { needed: n }
                 ) if n == needed
             ));
             writer.await.unwrap();
@@ -1892,7 +1892,7 @@ mod tests {
 
     #[tokio::test]
     async fn describe_cluster_response_body_projects_controller_fallbacks() {
-        use crabka_protocol::owned::describe_cluster_response::DescribeClusterResponse;
+        use krabka_protocol::owned::describe_cluster_response::DescribeClusterResponse;
 
         let (engine, _dir) = test_engine_with_voters(1, [voter(u64::MAX, Vec::new())]);
         let body = super::describe_cluster_response_body(1, &describe_cluster_body(1, 2), &engine)
@@ -1915,7 +1915,7 @@ mod tests {
 
     #[tokio::test]
     async fn kip853_controller_apis_describe_exact_identity_and_reject_last_removal() {
-        use crabka_protocol::{
+        use krabka_protocol::{
             Encode,
             owned::{
                 describe_quorum_request::{
@@ -1964,7 +1964,7 @@ mod tests {
         let remove = RemoveRaftVoterRequest {
             cluster_id: Some(engine.current_image().cluster_id().to_string()),
             voter_id: 1,
-            voter_directory_id: crabka_protocol::primitives::uuid::Uuid(
+            voter_directory_id: krabka_protocol::primitives::uuid::Uuid(
                 *Uuid::from_u128(1).as_bytes(),
             ),
             ..Default::default()
@@ -1990,10 +1990,10 @@ mod tests {
 
     #[test]
     fn api_versions_body_advertises_kip595_set_both_shapes() {
-        use crabka_protocol::{Decode, owned::api_versions_response::ApiVersionsResponse};
-        let mut image = crabka_metadata::MetadataImage::new(Uuid::nil());
+        use krabka_protocol::{Decode, owned::api_versions_response::ApiVersionsResponse};
+        let mut image = krabka_metadata::MetadataImage::new(Uuid::nil());
         image.apply(&MetadataRecord::V1FeatureLevel(FeatureLevelRecord {
-            name: crabka_metadata::metadata_version::METADATA_VERSION_FEATURE.into(),
+            name: krabka_metadata::metadata_version::METADATA_VERSION_FEATURE.into(),
             level: 24,
         }));
         for req_v in [0i16, 4i16] {
@@ -2041,7 +2041,7 @@ mod tests {
 
     #[test]
     fn api_versions_v5_validates_controller_routing_identity() {
-        use crabka_protocol::{
+        use krabka_protocol::{
             Encode,
             owned::{
                 api_versions_request::ApiVersionsRequest,
@@ -2051,7 +2051,7 @@ mod tests {
 
         let request = |cluster_id: Option<&str>, node_id| {
             let request = ApiVersionsRequest {
-                client_software_name: "crabka-test".into(),
+                client_software_name: "krabka-test".into(),
                 client_software_version: "1.0.0".into(),
                 cluster_id: cluster_id.map(str::to_string),
                 node_id,
@@ -2076,7 +2076,7 @@ mod tests {
             assert2::assert!(error == expected);
         }
 
-        let image = crabka_metadata::MetadataImage::new(Uuid::nil());
+        let image = krabka_metadata::MetadataImage::new(Uuid::nil());
         let body =
             super::api_versions_response_body(5, &image, None, API_VERSIONS_REBOOTSTRAP_REQUIRED);
         let response = ApiVersionsResponse::decode(&mut body.as_ref(), 5).unwrap();
@@ -2086,7 +2086,7 @@ mod tests {
 
     #[test]
     fn describe_cluster_body_projects_controllers_and_rejects_brokers() {
-        use crabka_protocol::{
+        use krabka_protocol::{
             Decode,
             owned::{
                 api_versions_response::ApiVersionsResponse,
@@ -2095,7 +2095,7 @@ mod tests {
         };
 
         // DescribeCluster (60) is advertised so clients negotiate it (KIP-919).
-        let image = crabka_metadata::MetadataImage::new(Uuid::nil());
+        let image = krabka_metadata::MetadataImage::new(Uuid::nil());
         let av = super::api_versions_response_body(4, &image, None, 0);
         let mut cur = &av[..];
         let avr = ApiVersionsResponse::decode(&mut cur, 4).unwrap();

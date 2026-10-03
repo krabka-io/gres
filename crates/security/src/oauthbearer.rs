@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD as B64URL};
-use crabka_units::{Time, convert::TimeExt, fmt::Human as _, secs};
+use krabka_units::{Time, convert::TimeExt, fmt::Human as _, secs};
 use jsonpath_rust::{parser::model::JpQuery, query::js_path_process};
 use serde_json::Value;
 
@@ -922,7 +922,7 @@ fn merge_userinfo_over_introspection(introspection: &mut Value, userinfo: Value)
 #[cfg(test)]
 mod tests {
 
-    use crabka_units::{millis, minutes};
+    use krabka_units::{millis, minutes};
     use jsonpath_rust::parser::parse_json_path;
 
     use super::*;

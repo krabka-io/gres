@@ -2057,7 +2057,7 @@
      {
       "path": "crates/pgexec/src/exec.rs",
       "symbol": "column_type_from_oid (~24972-25040)",
-      "why": "fall back to crabka_pgtypes::usertype registry (domain/enum/composite/array-of-user oids)"
+      "why": "fall back to krabka_pgtypes::usertype registry (domain/enum/composite/array-of-user oids)"
      }
     ],
     "size": "S",
@@ -9037,7 +9037,7 @@
     "id": "sec-role-membership-model",
     "title": "pg_auth_members with grantor / ADMIN / INHERIT / SET options and PG16+ role administration semantics",
     "what_pg_does": "Membership rows carry (roleid, member, grantor, admin_option, inherit_option, set_option). GRANT r TO m [WITH ADMIN|INHERIT|SET {OPTION|TRUE|FALSE}, ...] [GRANTED BY x]; REVOKE [ADMIN|INHERIT|SET OPTION FOR] r FROM m [GRANTED BY x] [CASCADE|RESTRICT]. Grantor is inferred (must hold ADMIN; superuser grants are recorded as bootstrap superuser oid 10). Errors: 'ADMIN option cannot be granted back to your own grantor'; 'dependent privileges exist' + HINT 'Use CASCADE to revoke them too.'; 'permission denied to grant role \"x\"' DETAIL 'Only roles with the ADMIN option on role \"x\" may grant this role.'; 'permission denied to grant privileges as role \"x\"' DETAIL 'The grantor must have the ADMIN option on role \"x\".'; NOTICE 'role \"m\" has already been granted membership in role \"r\" by role \"g\"'; WARNING 'role \"m\" has not been granted membership in role \"r\" by role \"g\"'; 'permission denied to set role \"x\"' when SET option is absent; SET ROLE suspends the session user's ADMIN rights while SECURITY DEFINER conveys them; DROP ROLE fails with 'role \"x\" cannot be dropped because some objects depend on it' DETAIL 'privileges for membership of role m in role r'; CREATE/ALTER/DROP GROUP synonyms ('ALTER GROUP g ADD/DROP USER u' with DETAIL 'Only roles with the ADMIN option on role \"g\" may add or drop members.'); role_has_privs_of honours INHERIT option and rolinherit; ALTER TABLE ... OWNER TO needs 'must be able to SET ROLE \"x\"'; predefined roles pg_read_all_data, pg_write_all_data, pg_read_all_settings, pg_read_all_stats, pg_monitor, pg_signal_backend, pg_maintain, pg_database_owner exist ('role \"pg_database_owner\" cannot have explicit members' / 'cannot be a member of any role'); pg_has_role answers from memberships; information_schema.enabled_roles/applicable_roles project them; createrole_self_grant GUC; CREATEROLE creator receives implicit ADMIN OPTION on roles it creates.",
-    "what_gres_does": "crabka_pgcatalog stores a membership as a bare key `catalog/role_membership/<member>/<role>` with no payload; parser eat_with_admin_option accepts only WITH ADMIN OPTION and the executor discards it (exec.rs GrantRoles comment); GRANTED BY / CASCADE / WITH INHERIT|SET TRUE|FALSE / REVOKE INHERIT|SET OPTION FOR are syntax errors ('expected ; or end of input, found Ident(\"granted\")', 'expected `admin`, found Ident(\"inherit\")', 'expected a role name, found Keyword(Set)'); CREATE GROUP -> 'expected Keyword(Table), found Keyword(Group)'; ALTER GROUP -> 'unexpected token after ALTER: Keyword(Group)'; ADMIN-option checks admit only superusers ('permission denied to grant role \"regress_group\"' for a legitimate direct manager); predefined roles are absent ('role \"pg_read_all_data\" does not exist', 'object \"pg_read_all_settings\" does not exist' on SET ROLE); pg_has_role returns t/t/t; pg_auth_members relation does not exist; ownership transfer never checks SET ROLE ability.",
+    "what_gres_does": "krabka_pgcatalog stores a membership as a bare key `catalog/role_membership/<member>/<role>` with no payload; parser eat_with_admin_option accepts only WITH ADMIN OPTION and the executor discards it (exec.rs GrantRoles comment); GRANTED BY / CASCADE / WITH INHERIT|SET TRUE|FALSE / REVOKE INHERIT|SET OPTION FOR are syntax errors ('expected ; or end of input, found Ident(\"granted\")', 'expected `admin`, found Ident(\"inherit\")', 'expected a role name, found Keyword(Set)'); CREATE GROUP -> 'expected Keyword(Table), found Keyword(Group)'; ALTER GROUP -> 'unexpected token after ALTER: Keyword(Group)'; ADMIN-option checks admit only superusers ('permission denied to grant role \"regress_group\"' for a legitimate direct manager); predefined roles are absent ('role \"pg_read_all_data\" does not exist', 'object \"pg_read_all_settings\" does not exist' on SET ROLE); pg_has_role returns t/t/t; pg_auth_members relation does not exist; ownership transfer never checks SET ROLE ability.",
     "attributable_lines": 158,
     "files_affected": [
      "privileges",
@@ -9148,7 +9148,7 @@
     "id": "sec-acl-grantor-grantoption",
     "title": "Relation ACL entries with grantor and grant option; grantor-side checks; relacl/attacl projection and \\dp",
     "what_pg_does": "relacl is an aclitem[] with 'grantee=privs/grantor' entries and '*' for grant option; owner default entry 'owner=arwdDxtm/owner' appears once any explicit grant exists; GRANT by a non-owner grants only what it holds WITH GRANT OPTION and warns 'WARNING:  no privileges were granted for \"t\"' / 'not all privileges were granted for \"t\"' or errors 'permission denied for table t' when it holds nothing; REVOKE of a privilege on which dependent grants exist -> 'dependent privileges exist' HINT 'Use CASCADE to revoke them too.'; REVOKE GRANT OPTION FOR ... CASCADE strips '*' and dependent grants; GRANT ... TO GROUP g; GRANTED BY CURRENT_USER/CURRENT_ROLE ('grantor must be current user' otherwise); psql \\dp prints Access privileges column from relacl; information_schema.table_privileges shows grantor/is_grantable/with_hierarchy; has_table_privilege('SELECT WITH GRANT OPTION') consults the '*'.",
-    "what_gres_does": "crabka_pgcatalog::TablePrivilege is (table, grantee, privilege) with no grantor and no grant option; WITH GRANT OPTION and GRANTED BY are syntax errors; GRANT never checks the grantor (`GRANT ALL ON atest1 TO PUBLIC` by user2 succeeds silently and later '-- fail' reads succeed); relacl projects empty (\\dp shows blank Access privileges for every table); REVOKE has no dependency check.",
+    "what_gres_does": "krabka_pgcatalog::TablePrivilege is (table, grantee, privilege) with no grantor and no grant option; WITH GRANT OPTION and GRANTED BY are syntax errors; GRANT never checks the grantor (`GRANT ALL ON atest1 TO PUBLIC` by user2 succeeds silently and later '-- fail' reads succeed); relacl projects empty (\\dp shows blank Access privileges for every table); REVOKE has no dependency check.",
     "attributable_lines": 102,
     "files_affected": [
      "privileges",
@@ -9237,7 +9237,7 @@
      {
       "path": "crates/pgexec/src/catalog_fn.rs",
       "symbol": "has_privilege (1102-1160), RelationPrivilegeCall::of, PRIVILEGE_FUNCTIONS",
-      "why": "answer the eleven object kinds from the new stores; schema question must call crabka_pgcatalog::has_schema_privilege"
+      "why": "answer the eleven object kinds from the new stores; schema question must call krabka_pgcatalog::has_schema_privilege"
      },
      {
       "path": "crates/pgexec/src/routine.rs",
@@ -19904,7 +19904,7 @@
     "id": "txn-seq-drop-owned-sequence-with-table",
     "title": "DROP TABLE / DROP COLUMN drops the serial and identity sequences owned by the table",
     "what_pg_does": "DROP TABLE t removes t_id_seq (internal dependency), so 'CREATE TABLE t (id serial PRIMARY KEY, ...)' can be re-run; the identity sequence goes with the table too.",
-    "what_gres_does": "crabka_pgcatalog::drop_table_ops / exec.rs drop_table_and_dependents_ops never emit drop_sequence_ops for ColumnDefault::NextVal-owned sequences; the next CREATE fails 'sequence \"fast_default.t_id_seq\" already exists' (fast_default: 7 re-creations = 140 lines; identity itest5/itest15; alter_table atacc1).",
+    "what_gres_does": "krabka_pgcatalog::drop_table_ops / exec.rs drop_table_and_dependents_ops never emit drop_sequence_ops for ColumnDefault::NextVal-owned sequences; the next CREATE fails 'sequence \"fast_default.t_id_seq\" already exists' (fast_default: 7 re-creations = 140 lines; identity itest5/itest15; alter_table atacc1).",
     "attributable_lines": 152,
     "files_affected": [
      "fast_default",
@@ -23653,7 +23653,7 @@
    "create_am does not need C loading: the test needs a name-to-handler alias (gist2 = gisthandler, heap2 = heap_tableam_handler) with pg_am rows, opclass/index/table/matview/partition USING <am>, relam inheritance, default_table_access_method validation and ALTER TABLE/MATVIEW SET ACCESS METHOD. Sizing it as 'non-goal' hid an L-size implementable feature.",
    "alter_table is not one cascade: it is ~35 independent roots. Its ATTACH PARTITION half (~150 lines) is poisoned by tables leaked from create_table (list_parted2, range_parted2, part1/2/3 survive because create_table's multi-name DROP TABLE fails on range_parted3, which was never created due to the expression-partition-key refusal). Another ~30 lines come from atacc1 leaked by constraints.out.",
    "The rough classifier's 'gres-error lines' undercounts: drop_if_exists (170 lines) is mostly MISSING NOTICE lines ('does not exist, skipping'), not errors; the same holds for ~50 lines of alter_table.",
-   "Routines carry no schema at all (crabka_pgcatalog::routine::Routine has no namespace field; catalog key is the bare identity 'name(args)'), so 'ALTER FUNCTION SET SCHEMA unsupported' is only a symptom of a larger routine-namespace root that also breaks create_function_sql (temp_func_test schema), object_address (addr_nsp.*), event_trigger (schema_two.add) and alter_table (alter1.plus1).",
+   "Routines carry no schema at all (krabka_pgcatalog::routine::Routine has no namespace field; catalog key is the bare identity 'name(args)'), so 'ALTER FUNCTION SET SCHEMA unsupported' is only a symptom of a larger routine-namespace root that also breaks create_function_sql (temp_func_test schema), object_address (addr_nsp.*), event_trigger (schema_two.add) and alter_table (alter1.plus1).",
    "pg_depend in Gres holds only trigger/event-trigger rows (catalog_rel.rs::pg_depend_rows); every DROP RESTRICT/CASCADE list is ad hoc per object kind. 'dependency tracking' is therefore a subsystem (XXL), not a family of message fixes.",
    "The brief lists 'explain_lines ~0' for alter_table; there are ~68 planner-only lines (Append with constraint exclusion over inheritance children, index-scan row order, EXPLAIN VERBOSE over a view)."
   ],
@@ -24188,7 +24188,7 @@
     "id": "ddl-routine-namespace",
     "title": "Routines/aggregates in schemas (pronamespace, search_path resolution, SET SCHEMA)",
     "what_pg_does": "CREATE FUNCTION s.f / addr_nsp.trig / schema_two.add / alter1.plus1 create in that schema; bare names go to the first search_path schema (temp_func_test); ALTER FUNCTION ... SET SCHEMA moves ('function alt_func2(integer) already exists in schema \"alt_nsp2\"' on conflict); pg_proc.pronamespace and pg_get_functiondef header 'temp_func_test.functest_a_1'; DROP SCHEMA CASCADE drops the routines; information_schema.routines/parameters carry routine_schema.",
-    "what_gres_does": "Routine has no namespace (crabka_pgcatalog::routine::Routine); 'schema \"alter1\" does not exist' on qualified CREATE; routine.rs:992 'ALTER FUNCTION ... SET SCHEMA x is not supported: user routines live in the public schema'; pg_get_functiondef always prints 'public.'; information_schema.parameters filtered by routine_schema returns 0 rows.",
+    "what_gres_does": "Routine has no namespace (krabka_pgcatalog::routine::Routine); 'schema \"alter1\" does not exist' on qualified CREATE; routine.rs:992 'ALTER FUNCTION ... SET SCHEMA x is not supported: user routines live in the public schema'; pg_get_functiondef always prints 'public.'; information_schema.parameters filtered by routine_schema returns 0 rows.",
     "attributable_lines": 49,
     "files_affected": [
      "alter_generic",

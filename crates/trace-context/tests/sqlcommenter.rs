@@ -1,5 +1,5 @@
 use assert2::{assert, check};
-use crabka_trace_context::{SqlCommenterTrace, TraceCarrier, extract_sqlcommenter};
+use krabka_trace_context::{SqlCommenterTrace, TraceCarrier, extract_sqlcommenter};
 
 const TRACEPARENT: &str = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
 /// A second well-formed traceparent. Some cases must show *which* tag the
@@ -242,8 +242,8 @@ fn a_sqlcommenter_tag_changes_no_parsed_statement() {
 
     for sql in statements {
         let tagged = format!("{sql} /*traceparent='{TRACEPARENT}'*/");
-        assert!(let Ok(plain_ast) = crabka_pgparser::parse(sql), "{sql}");
-        assert!(let Ok(tagged_ast) = crabka_pgparser::parse(&tagged), "{sql}");
+        assert!(let Ok(plain_ast) = krabka_pgparser::parse(sql), "{sql}");
+        assert!(let Ok(tagged_ast) = krabka_pgparser::parse(&tagged), "{sql}");
         check!(plain_ast == tagged_ast, "{sql}");
     }
 }

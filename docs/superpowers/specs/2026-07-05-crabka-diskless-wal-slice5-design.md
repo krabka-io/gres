@@ -6,7 +6,7 @@
 
 ## Context — where this sits
 
-Fifth slice of the diskless-broker WAL milestone (see [Slice 1](2026-07-05-crabka-diskless-wal-slice1-design.md) for the decomposition). Slices 1–4 built the single-node diskless data path (fsync-durable ack → KRaft offsets → object flush + index → cold fetch → trim). Each slice introduced an ordering with a crash window. Slice 5 handles a crash at every seam, recovers the partition on restart, and extends the durability model to **inject partial durability** and prove **no acknowledged record is ever lost across a crash-restart of the same node**.
+Fifth slice of the diskless-broker WAL milestone (see [Slice 1](2026-07-05-krabka-diskless-wal-slice1-design.md) for the decomposition). Slices 1–4 built the single-node diskless data path (fsync-durable ack → KRaft offsets → object flush + index → cold fetch → trim). Each slice introduced an ordering with a crash window. Slice 5 handles a crash at every seam, recovers the partition on restart, and extends the durability model to **inject partial durability** and prove **no acknowledged record is ever lost across a crash-restart of the same node**.
 
 **Scope boundary (medium-dictated).** With the Slices 1–4 medium (a single node's local `fsync`), an acked record is by construction on that node's fsync'd local `Log` (`ack` fires strictly *after* `fsync`). So **no-acked-loss is provable for crash-restart of the same node**, and a *different* broker can recover **flushed** data from objects+index. But the **un-flushed acked tail lives only on the accepting node's disk** — node/disk loss or failover to a stateless broker cannot recover it until Slice 6's quorum-replicated WAL. That is a property the medium cannot provide, not a Slice-5 gap.
 

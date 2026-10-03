@@ -4,11 +4,11 @@
 
 **Goal:** Interpret what PG-3 retained: clog/multixact SLRU pages materialized through the layer store (tagged `Key` enum — the PG-3 amendment), a `RelMeta` projection making `GetRelSize` exact (+ `BlockBeyondEof`/`NotFound` semantics), and the five index-rmgr redo arm families — extending the standby gate to SLRU segment bytes and unblocking PG-5's boot gate.
 
-**Architecture:** A light meta interpreter in `crabka-postgres-redo` (`shard_meta`: which keys does this record touch?) feeds the existing ingest; full interpretation lives in new redo arms (clog status folding, multixact writes, RelMeta lifecycle folding) beside PG-4's. Basebackup renders SLRU pages into segment files. Index families land per-arm with per-family fixtures + standby differentials.
+**Architecture:** A light meta interpreter in `krabka-postgres-redo` (`shard_meta`: which keys does this record touch?) feeds the existing ingest; full interpretation lives in new redo arms (clog status folding, multixact writes, RelMeta lifecycle folding) beside PG-4's. Basebackup renders SLRU pages into segment files. Index families land per-arm with per-family fixtures + standby differentials.
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), the PG-2/3/4 crates, `proptest` (fan-out properties), `assert2`/`nextest`, a local/containerized PG 17 for fixture regeneration, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-pg4b-slru-longtail-design.md`](../specs/2026-07-06-crabka-pg4b-slru-longtail-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-pg4b-slru-longtail-design.md`](../specs/2026-07-06-krabka-pg4b-slru-longtail-design.md).
 
 **PREREQUISITES (unlanded):** PG-2, PG-3, PG-4 executed (this plan modifies their crates). If PG-3 execution has not started, implement the `Key` enum there from the start (Task 1 becomes a no-op fold-in).
 
@@ -68,7 +68,7 @@
 - [ ] **Step 2: Implement** — a tag byte (`0=Rel, 1=Slru, 2=RelMeta`) + fixed-width big-endian fields; rename `PageKey` → `Key::Rel` across `page-store` (mechanical; greenfield, no shims); PG-2's `shard_record` output maps to `Key::Rel`.
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-page-store` → PASS (all PG-3/4 tests under the new type).
+Run: `cargo test -p krabka-page-store` → PASS (all PG-3/4 tests under the new type).
 
 ```bash
 git add crates/page-store crates/pageserver crates/postgres-redo
@@ -211,7 +211,7 @@ git commit -m "feat(postgres-redo): GiST redo arms (fixture-gated)"   # then spg
 
 - [ ] **Step 1:** The full standby gate now covers: all PG-4 relations, all five index families' relations, **and** `pg_xact`/`pg_multixact` segment bytes — one test, everything byte-exact at the capture LSN.
 - [ ] **Step 2:** Note in PG-5's plan that Task 7 (the boot gate) is unblocked; un-`#[ignore]` anything remaining.
-- [ ] **Step 3:** `cargo +nightly fmt --check`; `cargo clippy -p crabka-postgres-redo -p crabka-page-store -p crabka-pageserver --all-targets -- -D warnings`; `cargo nextest run -p crabka-postgres-redo -p crabka-page-store -p crabka-pageserver`; `./tools/check-publish-allowlist.sh` — all green. Commit.
+- [ ] **Step 3:** `cargo +nightly fmt --check`; `cargo clippy -p krabka-postgres-redo -p krabka-page-store -p krabka-pageserver --all-targets -- -D warnings`; `cargo nextest run -p krabka-postgres-redo -p krabka-page-store -p krabka-pageserver`; `./tools/check-publish-allowlist.sh` — all green. Commit.
 
 ---
 

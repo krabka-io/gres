@@ -17,12 +17,12 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
-use crabka_pgparser::ast::{Expr, FuncArgs, FuncCall, SelectItem, SelectStmt};
-use crabka_pgtypes::{
+use krabka_pgparser::ast::{Expr, FuncArgs, FuncCall, SelectItem, SelectStmt};
+use krabka_pgtypes::{
     ColumnType, Datum, ElemType, TypeError, json::Layout, numeric::NumericValue, ops,
 };
 #[cfg(test)]
-use crabka_pgwire::engine::QueryResult;
+use krabka_pgwire::engine::QueryResult;
 
 use crate::{
     clock::EvalCtx,
@@ -625,7 +625,7 @@ struct AggSpec {
     /// `agg(args ORDER BY key [, …])` — the order this aggregate's own input is
     /// folded in, within each group. Empty for the far commoner unordered call,
     /// which then keeps folding row by row without buffering anything.
-    order_by: Vec<crabka_pgparser::ast::OrderItem>,
+    order_by: Vec<krabka_pgparser::ast::OrderItem>,
     /// `agg(...) FILTER (WHERE predicate)` — evaluated per source row before the
     /// argument is even looked at, so a row the predicate rejects never reaches
     /// the accumulator and never joins the `DISTINCT` buffer.
@@ -689,7 +689,7 @@ fn validate_aggregate_order_by(fc: &FuncCall, scope: &Scope) -> Result<(), ExecE
     // `string_agg(DISTINCT b, ',' ORDER BY ',')` is 42P10 in PostgreSQL even
     // though the delimiter reads identically. An integer or numeric literal
     // carries its own type in both places and does match.
-    let matches_an_argument = |item: &crabka_pgparser::ast::OrderItem| {
+    let matches_an_argument = |item: &krabka_pgparser::ast::OrderItem| {
         !matches!(
             item.expr,
             Expr::StringLiteral(_) | Expr::BitStringLiteral(_) | Expr::NullLiteral
@@ -1446,7 +1446,7 @@ fn eval_grouped_depth(
             crate::json_fn::eval_sql_json(json, ctx, |child| eval_grouped_depth(child, grouped, d))
         }
         Expr::IntLiteral(s) => Ok(ops::int_literal(s)?),
-        Expr::NumericLiteral(s) => crabka_pgtypes::numeric::parse(s)
+        Expr::NumericLiteral(s) => krabka_pgtypes::numeric::parse(s)
             .map(Datum::Numeric)
             .ok_or_else(|| {
                 ExecError::Type(TypeError::InvalidText {
@@ -1458,7 +1458,7 @@ fn eval_grouped_depth(
         // `B'…'` / `X'…'` — already decoded to binary digits by the parser,
         // which also ran `bit_in`, so the value cannot fail here.
         Expr::BitStringLiteral(bits) => Ok(Datum::BitString(
-            crabka_pgtypes::BitString::parse(bits, false)
+            krabka_pgtypes::BitString::parse(bits, false)
                 .expect("the parser validated the bit-string literal"),
         )),
         Expr::BoolLiteral(b) => Ok(Datum::Bool(*b)),
@@ -1467,7 +1467,7 @@ fn eval_grouped_depth(
         // protocol supplies none, so PostgreSQL reports the placeholder as
         // undefined rather than as an unimplemented feature -- 42P02, the same
         // code and wording a view body already raises.
-        Expr::Param(number) => Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+        Expr::Param(number) => Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
             "42P02",
             format!("there is no parameter ${number}"),
         ))),
@@ -1658,10 +1658,10 @@ fn eval_grouped_depth(
             let args = subscripts
                 .iter()
                 .map(|s| match s {
-                    crabka_pgparser::ast::ArraySubscript::Index(e) => Ok(
+                    krabka_pgparser::ast::ArraySubscript::Index(e) => Ok(
                         crate::array_fn::SubscriptArg::Index(eval_grouped_depth(e, grouped, d)?),
                     ),
-                    crabka_pgparser::ast::ArraySubscript::Slice { lower, upper } => {
+                    krabka_pgparser::ast::ArraySubscript::Slice { lower, upper } => {
                         let bound = |e: &Option<Expr>| {
                             e.as_ref()
                                 .map(|e| eval_grouped_depth(e, grouped, d))
@@ -1828,7 +1828,7 @@ enum AccState {
         acc: Option<Datum>,
     },
     RangeAgg {
-        acc: Option<crabka_pgtypes::MultirangeValue>,
+        acc: Option<krabka_pgtypes::MultirangeValue>,
     },
     RangeIntersect {
         acc: Option<Datum>,
@@ -1979,7 +1979,7 @@ fn sorted_input(
     let mut items = spec.order_by.clone();
     if spec.distinct {
         let widest = rows.iter().map(|(_, args)| args.len()).max().unwrap_or(0);
-        items.extend((0..widest).map(|_| crabka_pgparser::ast::OrderItem {
+        items.extend((0..widest).map(|_| krabka_pgparser::ast::OrderItem {
             expr: Expr::NullLiteral,
             asc: true,
             nulls_first: false,
@@ -2181,7 +2181,7 @@ impl AccState {
                     ));
                 };
                 *acc = Some(match acc {
-                    Some(cur) => crabka_pgtypes::money::add(*cur, add)?,
+                    Some(cur) => krabka_pgtypes::money::add(*cur, add)?,
                     None => add,
                 });
             }
@@ -2215,7 +2215,7 @@ impl AccState {
                 });
             }
             AccState::AvgN { sum, n } => {
-                let vn = crabka_pgtypes::cast::cast(&v, ColumnType::Numeric(None), &ctx.time_zone)?;
+                let vn = krabka_pgtypes::cast::cast(&v, ColumnType::Numeric(None), &ctx.time_zone)?;
                 *sum = Some(match sum.take() {
                     None => vn,
                     Some(cur) => ops::add(&cur, &vn)?,
@@ -2266,7 +2266,7 @@ impl AccState {
                 elems.push(if matches!(v, Datum::Array(_)) {
                     v
                 } else {
-                    crabka_pgtypes::cast::cast(&v, elem.column_type(), &ctx.time_zone)?
+                    krabka_pgtypes::cast::cast(&v, elem.column_type(), &ctx.time_zone)?
                 });
             }
             AccState::JsonItems { items } => items.push(v),
@@ -2284,7 +2284,7 @@ impl AccState {
             AccState::XmlAgg { parts } => match v {
                 Datum::Xml(text) => parts.push(text),
                 Datum::Text(text) => {
-                    crabka_pgtypes::xml::validate(&text, ctx.xml_option)?;
+                    krabka_pgtypes::xml::validate(&text, ctx.xml_option)?;
                     parts.push(text);
                 }
                 other => {
@@ -2328,7 +2328,7 @@ impl AccState {
                         else {
                             unreachable!()
                         };
-                        crabka_pgtypes::multirange::from_ranges(ty, vec![range])?
+                        krabka_pgtypes::multirange::from_ranges(ty, vec![range])?
                     }
                     Datum::Multirange(multirange) => multirange,
                     other => {
@@ -2340,7 +2340,7 @@ impl AccState {
                 };
                 *acc = Some(match acc.take() {
                     None => multirange,
-                    Some(cur) => crabka_pgtypes::multirange::union(&cur, &multirange)?,
+                    Some(cur) => krabka_pgtypes::multirange::union(&cur, &multirange)?,
                 });
             }
             AccState::RangeIntersect { acc } => {
@@ -2353,7 +2353,7 @@ impl AccState {
                                 v.column_type().unwrap_or(ColumnType::Text),
                             ));
                         };
-                        Datum::Range(crabka_pgtypes::range::intersection(&cur, &range)?)
+                        Datum::Range(krabka_pgtypes::range::intersection(&cur, &range)?)
                     }
                     Some(Datum::Multirange(cur)) => {
                         let Datum::Multirange(multirange) = v else {
@@ -2362,7 +2362,7 @@ impl AccState {
                                 v.column_type().unwrap_or(ColumnType::Text),
                             ));
                         };
-                        Datum::Multirange(crabka_pgtypes::multirange::intersection(
+                        Datum::Multirange(krabka_pgtypes::multirange::intersection(
                             &cur,
                             &multirange,
                         )?)
@@ -2400,7 +2400,7 @@ impl AccState {
                 }
             }
             AccState::VarNumeric { n, sum, sum2 } => {
-                let x = crabka_pgtypes::cast::cast(&v, ColumnType::Numeric(None), &ctx.time_zone)?;
+                let x = krabka_pgtypes::cast::cast(&v, ColumnType::Numeric(None), &ctx.time_zone)?;
                 let Datum::Numeric(x) = x else {
                     return Err(undefined_for_arg(
                         "var_pop",
@@ -2408,8 +2408,8 @@ impl AccState {
                     ));
                 };
                 *n += 1;
-                *sum = crabka_pgtypes::numeric::add(sum, &x);
-                *sum2 = crabka_pgtypes::numeric::add(sum2, &crabka_pgtypes::numeric::mul(&x, &x));
+                *sum = krabka_pgtypes::numeric::add(sum, &x);
+                *sum2 = krabka_pgtypes::numeric::add(sum2, &krabka_pgtypes::numeric::mul(&x, &x));
             }
             AccState::Regr {
                 n,
@@ -2585,7 +2585,7 @@ impl AccState {
                     Datum::Null
                 } else {
                     let text: Vec<_> = parts.iter().map(String::as_str).collect();
-                    Datum::Xml(crabka_pgtypes::xml::concat(&text))
+                    Datum::Xml(krabka_pgtypes::xml::concat(&text))
                 }
             }
             AccState::BoolAgg {
@@ -2623,7 +2623,7 @@ impl AccState {
                     .func
                     .variance_shape()
                     .expect("a VarNumeric accumulator belongs to the variance family");
-                crabka_pgtypes::numeric::stddev_internal(*n, sum, sum2, sample, sqrt)
+                krabka_pgtypes::numeric::stddev_internal(*n, sum, sum2, sample, sqrt)
                     .map_or(Datum::Null, Datum::Numeric)
             }
             AccState::Regr {
@@ -2832,7 +2832,7 @@ fn build_jsonb(builder: &str, args: Vec<Datum>, ctx: &EvalCtx) -> Result<Datum, 
 
 /// `json_agg`'s array.
 ///
-/// The `json` family cannot route through a [`JsonbValue`](crabka_pgtypes::jsonb::JsonbValue)
+/// The `json` family cannot route through a [`JsonbValue`](krabka_pgtypes::jsonb::JsonbValue)
 /// the way [`build_jsonb`] does, because building one is exactly what `json_agg`
 /// must not do: `jsonb` would sort an object element's keys, collapse its
 /// duplicates and rewrite its spacing, and preserving all three is the whole
@@ -2921,7 +2921,7 @@ fn json_object_key(key: &Datum, ctx: &EvalCtx) -> Result<String, ExecError> {
     if rendered.starts_with('"') {
         Ok(rendered)
     } else {
-        Ok(crabka_pgtypes::json::quote(&rendered))
+        Ok(krabka_pgtypes::json::quote(&rendered))
     }
 }
 
@@ -3000,7 +3000,7 @@ pub(crate) fn aggregate_rows_with_memory(
     let (fields, out_exprs, _tys) = crate::exec::resolve_projection(&s.projection, scope)?;
     // Only plain DISTINCT restricts ORDER BY to the select-list output; DISTINCT
     // ON sorts before projecting, so its ORDER BY may name source expressions.
-    let require_output = matches!(s.distinct, crabka_pgparser::ast::DistinctClause::Distinct);
+    let require_output = matches!(s.distinct, krabka_pgparser::ast::DistinctClause::Distinct);
     let order_keys = crate::exec::resolve_select_order_keys(
         &s.order_by,
         scope,
@@ -3020,7 +3020,7 @@ pub(crate) fn aggregate_rows_with_memory(
     for expr in &s.group_by {
         crate::eval::require_equality_operator(crate::eval::infer_type(expr, scope)?)?;
     }
-    if matches!(s.distinct, crabka_pgparser::ast::DistinctClause::Distinct) {
+    if matches!(s.distinct, krabka_pgparser::ast::DistinctClause::Distinct) {
         for expr in &out_exprs {
             crate::eval::require_equality_operator(crate::eval::infer_type(expr, scope)?)?;
         }
@@ -3061,7 +3061,7 @@ pub(crate) fn aggregate_rows_with_memory(
         sort: plan
             .sort
             .into_iter()
-            .map(|item| crabka_pgparser::ast::OrderItem {
+            .map(|item| krabka_pgparser::ast::OrderItem {
                 expr: canonical(&item.expr),
                 ..item
             })
@@ -3268,16 +3268,16 @@ struct GroupOutput {
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgcatalog::{Column, RelationName, Table};
-    use crabka_pgparser::ast::{QueryBody, SelectStmt, SetExpr, Statement};
-    use crabka_pgwire::engine::Cell;
+    use krabka_pgcatalog::{Column, RelationName, Table};
+    use krabka_pgparser::ast::{QueryBody, SelectStmt, SetExpr, Statement};
+    use krabka_pgwire::engine::Cell;
 
     use super::*;
 
     fn table() -> Table {
         Table {
             id: 1,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public("t"),
             columns: vec![
                 Column::new("k", ColumnType::Int4),
@@ -3302,7 +3302,7 @@ mod tests {
     }
 
     fn parsed_select(sql: &str) -> SelectStmt {
-        match crabka_pgparser::parse(sql)
+        match krabka_pgparser::parse(sql)
             .expect("parse")
             .pop()
             .expect("one")
@@ -3408,7 +3408,7 @@ mod tests {
             &scope_of(Some(&table())),
             vec![vec![Datum::Int4(1), Datum::Int4(1)]],
             &crate::clock::EvalCtx::test_default(),
-            &crate::scanner::StatementMemory::new(crabka_units::bytes(1)),
+            &crate::scanner::StatementMemory::new(krabka_units::bytes(1)),
         )
         .expect_err("group state must respect the supplied limit")
         .into_pg();
@@ -3418,7 +3418,7 @@ mod tests {
 
     #[test]
     fn range_aggregates_fold_ranges_and_multiranges() {
-        let ty = ColumnType::builtin_range(crabka_pgtypes::oids::INT4RANGE).expect("int4range");
+        let ty = ColumnType::builtin_range(krabka_pgtypes::oids::INT4RANGE).expect("int4range");
         let ColumnType::Range(range_ty) = ty else {
             unreachable!()
         };
@@ -3426,7 +3426,7 @@ mod tests {
         t.columns = vec![Column::new("v", ty)];
         let range = |text| {
             Datum::Range(
-                crabka_pgtypes::range::parse(text, range_ty, &jiff::tz::TimeZone::UTC)
+                krabka_pgtypes::range::parse(text, range_ty, &jiff::tz::TimeZone::UTC)
                     .expect("range"),
             )
         };
@@ -3459,7 +3459,7 @@ mod tests {
             vec![vec![Some("{[1,5),[8,9)}".into())]]
         );
 
-        let multi_ty = ColumnType::builtin_multirange(crabka_pgtypes::oids::INT4MULTIRANGE)
+        let multi_ty = ColumnType::builtin_multirange(krabka_pgtypes::oids::INT4MULTIRANGE)
             .expect("int4multirange");
         let ColumnType::Multirange(multi_ref) = multi_ty else {
             unreachable!()
@@ -3467,7 +3467,7 @@ mod tests {
         t.columns = vec![Column::new("v", multi_ty)];
         let multirange = |text| {
             Datum::Multirange(
-                crabka_pgtypes::multirange::parse(text, multi_ref, &jiff::tz::TimeZone::UTC)
+                krabka_pgtypes::multirange::parse(text, multi_ref, &jiff::tz::TimeZone::UTC)
                     .expect("multirange"),
             )
         };
@@ -3603,7 +3603,7 @@ mod tests {
             let t = typed(*arg);
             let scope = scope_of(Some(&t));
             for (sql, want) in [("sum", sum), ("avg", avg), ("min", min), ("max", max)] {
-                let call = match crabka_pgparser::parser::parse_expr_for_test(&format!("{sql}(v)"))
+                let call = match krabka_pgparser::parser::parse_expr_for_test(&format!("{sql}(v)"))
                     .expect("parse")
                 {
                     Expr::Func(fc) => fc,
@@ -4064,7 +4064,7 @@ mod tests {
         let mut t = table();
         t.columns[1].ty = ColumnType::Interval;
         let interval = |months, days, micros| {
-            Datum::Interval(crabka_pgtypes::datetime::Interval {
+            Datum::Interval(krabka_pgtypes::datetime::Interval {
                 months,
                 days,
                 micros,
@@ -4201,7 +4201,7 @@ mod tests {
     fn ts_table() -> Table {
         Table {
             id: 1,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public("t"),
             columns: vec![
                 Column::new("k", ColumnType::Int4),
@@ -4218,7 +4218,7 @@ mod tests {
     }
 
     fn ts(s: &str) -> Datum {
-        Datum::Timestamp(crabka_pgtypes::datetime::parse_timestamp(s).expect("timestamp"))
+        Datum::Timestamp(krabka_pgtypes::datetime::parse_timestamp(s).expect("timestamp"))
     }
 
     #[test]
@@ -4293,7 +4293,7 @@ mod tests {
     fn collect_table() -> Table {
         Table {
             id: 3,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public("t"),
             columns: vec![
                 Column::new("k", ColumnType::Int4),
@@ -4394,7 +4394,7 @@ mod tests {
         let mut table = collect_table();
         table.columns = vec![Column::new("a", ColumnType::Array(ElemType::Int4))];
         let array = |values: &[i32]| {
-            Datum::Array(crabka_pgtypes::ArrayValue::new(
+            Datum::Array(krabka_pgtypes::ArrayValue::new(
                 ElemType::Int4,
                 values.iter().copied().map(Datum::Int4).collect(),
             ))
@@ -4410,7 +4410,7 @@ mod tests {
         );
         for (rows, code, message) in [
             (
-                vec![r(&[Datum::Array(crabka_pgtypes::ArrayValue::new(
+                vec![r(&[Datum::Array(krabka_pgtypes::ArrayValue::new(
                     ElemType::Int4,
                     Vec::new(),
                 ))])],
@@ -4623,7 +4623,7 @@ mod tests {
     fn json_doc_table() -> Table {
         Table {
             id: 4,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public("t"),
             columns: vec![
                 Column::new("k", ColumnType::Int4),
@@ -4649,7 +4649,7 @@ mod tests {
                 r(&[
                     Datum::Int4(1),
                     Datum::Json(text.to_string()),
-                    Datum::Jsonb(crabka_pgtypes::jsonb::parse(text).expect("jsonb literal")),
+                    Datum::Jsonb(krabka_pgtypes::jsonb::parse(text).expect("jsonb literal")),
                 ])
             })
             .collect()
@@ -4880,7 +4880,7 @@ mod tests {
             (Datum::Float8(f64::NAN), r#"{ "NaN" : 30 }"#),
             (Datum::Bool(true), r#"{ "true" : 30 }"#),
             (
-                Datum::Numeric(crabka_pgtypes::numeric::parse("1.50").expect("numeric")),
+                Datum::Numeric(krabka_pgtypes::numeric::parse("1.50").expect("numeric")),
                 r#"{ "1.50" : 30 }"#,
             ),
             (
@@ -5024,7 +5024,7 @@ mod tests {
     fn stats_table() -> Table {
         Table {
             id: 2,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public("t"),
             columns: vec![
                 Column::new("s", ColumnType::Text),
@@ -5050,7 +5050,7 @@ mod tests {
     /// Row 3 has a NULL text, bool and int, and row 4 has a NULL `y`, so these
     /// rows exercise each family's NULL rule.
     fn stats_rows() -> Vec<Vec<Datum>> {
-        let num = |n: i64| Datum::Numeric(crabka_pgtypes::numeric::from_i64(n));
+        let num = |n: i64| Datum::Numeric(krabka_pgtypes::numeric::from_i64(n));
         vec![
             vec![
                 Datum::Text("a".into()),
@@ -5387,7 +5387,7 @@ mod tests {
             ("regr_slope(y, x)", ColumnType::Float8),
         ];
         for (call, expected) in cases {
-            let expr = crabka_pgparser::parser::parse_expr_for_test(call).expect("parse");
+            let expr = krabka_pgparser::parser::parse_expr_for_test(call).expect("parse");
             let Expr::Func(fc) = &expr else {
                 panic!("{call} is not a function call")
             };
@@ -5403,7 +5403,7 @@ mod tests {
             "var_pop(s)",
             "string_agg(i, s)",
         ] {
-            let expr = crabka_pgparser::parser::parse_expr_for_test(call).expect("parse");
+            let expr = krabka_pgparser::parser::parse_expr_for_test(call).expect("parse");
             let Expr::Func(fc) = &expr else {
                 panic!("{call} is not a function call")
             };

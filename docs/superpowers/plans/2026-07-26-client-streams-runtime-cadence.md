@@ -21,7 +21,7 @@
 - Require positive whole milliseconds representable as `u64`.
 - Keep `KafkaStreams::builder().poll_interval(Duration)` and `.commit_interval(Duration)` source compatible.
 - Validate direct low-level durations before topology setup, DNS, or broker I/O.
-- Exact demo interfaces are `--streams-poll-interval-ms`, `CRABKA_DEMO_STREAMS_POLL_INTERVAL_MS`, `--streams-commit-interval-ms`, and `CRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS`.
+- Exact demo interfaces are `--streams-poll-interval-ms`, `KRABKA_DEMO_STREAMS_POLL_INTERVAL_MS`, `--streams-commit-interval-ms`, and `KRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS`.
 - Demo precedence is CLI over environment over the typed defaults.
 - Demo cadence settings are valid only with `--role stream` and must fail before telemetry or external I/O otherwise.
 - Compose exposes both values only on `demo-stream`, with defaults `200` and `5000`.
@@ -199,11 +199,11 @@ fn runtime_cadence_uses_typed_defaults_and_independent_overrides() {
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-  -p crabka-client-streams --lib --locked \
+  -p krabka-client-streams --lib --locked \
   runtime_intervals
 
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-  -p crabka-client-streams --lib --locked \
+  -p krabka-client-streams --lib --locked \
   runtime_cadence_uses_typed_defaults_and_independent_overrides
 ```
 
@@ -421,18 +421,18 @@ Store them in `Self`. In `run_built`, forward:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-  -p crabka-client-streams --lib --locked \
+  -p krabka-client-streams --lib --locked \
   runtime_intervals
 
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-  -p crabka-client-streams --lib --locked \
+  -p krabka-client-streams --lib --locked \
   runtime_cadence_uses_typed_defaults_and_independent_overrides
 
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-  -p crabka-client-streams --all-targets --locked
+  -p krabka-client-streams --all-targets --locked
 
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy \
-  -p crabka-client-streams --all-targets --locked -- -D warnings
+  -p krabka-client-streams --all-targets --locked -- -D warnings
 
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo fmt --all -- --check
 git diff --check
@@ -468,7 +468,7 @@ git commit -m "feat(streams): validate runtime cadence"
 **Interfaces:**
 - Consumes:
   ```rust
-  crabka_client_streams::{
+  krabka_client_streams::{
       StreamsCommitInterval, StreamsPollInterval,
   }
   StreamsApp::builder()
@@ -478,9 +478,9 @@ git commit -m "feat(streams): validate runtime cadence"
 - Produces:
   ```text
   --streams-poll-interval-ms
-  CRABKA_DEMO_STREAMS_POLL_INTERVAL_MS
+  KRABKA_DEMO_STREAMS_POLL_INTERVAL_MS
   --streams-commit-interval-ms
-  CRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS
+  KRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS
   demo-stream Compose defaults: 200 and 5000
   ```
 
@@ -505,10 +505,10 @@ fn streams_runtime_cadence_uses_defaults_and_independent_overrides() {
     };
     let (poll, commit) =
         effective_streams_runtime_cadence(&defaults).expect("typed defaults");
-    assert_eq!(poll, crabka_client_streams::StreamsPollInterval::default());
+    assert_eq!(poll, krabka_client_streams::StreamsPollInterval::default());
     assert_eq!(
         commit,
-        crabka_client_streams::StreamsCommitInterval::default()
+        krabka_client_streams::StreamsCommitInterval::default()
     );
 
     let overridden = Cli {
@@ -569,8 +569,8 @@ fn demo() -> Command {
     let mut command =
         Command::new(env!("CARGO_BIN_EXE_observability-demo-app"));
     command
-        .env_remove("CRABKA_DEMO_STREAMS_POLL_INTERVAL_MS")
-        .env_remove("CRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS");
+        .env_remove("KRABKA_DEMO_STREAMS_POLL_INTERVAL_MS")
+        .env_remove("KRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS");
     command
 }
 
@@ -578,7 +578,7 @@ fn demo() -> Command {
 fn environment_is_used_and_cli_wins_before_external_io() {
     let environment = demo()
         .args(["--role", "produce"])
-        .env("CRABKA_DEMO_STREAMS_POLL_INTERVAL_MS", "37")
+        .env("KRABKA_DEMO_STREAMS_POLL_INTERVAL_MS", "37")
         .output()
         .expect("run demo");
     assert!(!environment.status.success());
@@ -593,7 +593,7 @@ fn environment_is_used_and_cli_wins_before_external_io() {
             "--streams-poll-interval-ms",
             "41",
         ])
-        .env("CRABKA_DEMO_STREAMS_POLL_INTERVAL_MS", "37")
+        .env("KRABKA_DEMO_STREAMS_POLL_INTERVAL_MS", "37")
         .output()
         .expect("run demo");
     assert!(!cli.status.success());
@@ -603,7 +603,7 @@ fn environment_is_used_and_cli_wins_before_external_io() {
 
     let commit = demo()
         .args(["--role", "consume"])
-        .env("CRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS", "43")
+        .env("KRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS", "43")
         .output()
         .expect("run demo");
     assert!(!commit.status.success());
@@ -617,11 +617,11 @@ fn zero_values_are_rejected_and_help_lists_each_flag_once() {
     for (flag, environment) in [
         (
             "--streams-poll-interval-ms",
-            "CRABKA_DEMO_STREAMS_POLL_INTERVAL_MS",
+            "KRABKA_DEMO_STREAMS_POLL_INTERVAL_MS",
         ),
         (
             "--streams-commit-interval-ms",
-            "CRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS",
+            "KRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS",
         ),
     ] {
         let zero = demo()
@@ -655,18 +655,18 @@ fn streams_runtime_cadence_is_configurable_only_on_the_stream_role() {
     let compose = docker_compose();
     let stream = compose_service_block(&compose, "demo-stream");
     assert2::assert!(stream.contains(
-        "CRABKA_DEMO_STREAMS_POLL_INTERVAL_MS: \"${CRABKA_DEMO_STREAMS_POLL_INTERVAL_MS:-200}\""
+        "KRABKA_DEMO_STREAMS_POLL_INTERVAL_MS: \"${KRABKA_DEMO_STREAMS_POLL_INTERVAL_MS:-200}\""
     ));
     assert2::assert!(stream.contains(
-        "CRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS: \"${CRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS:-5000}\""
+        "KRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS: \"${KRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS:-5000}\""
     ));
     for service in ["demo-produce", "demo-consume"] {
         let service = compose_service_block(&compose, service);
         assert2::assert!(
-            !service.contains("CRABKA_DEMO_STREAMS_POLL_INTERVAL_MS")
+            !service.contains("KRABKA_DEMO_STREAMS_POLL_INTERVAL_MS")
         );
         assert2::assert!(
-            !service.contains("CRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS")
+            !service.contains("KRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS")
         );
     }
 }
@@ -693,14 +693,14 @@ assertion fails because neither pass-through exists.
 - [ ] **Step 5: Add the validated CLI/environment fields**
 
 Import `StreamsCommitInterval` and `StreamsPollInterval` from
-`crabka_client_streams`. Add to `Cli`:
+`krabka_client_streams`. Add to `Cli`:
 
 ```rust
 /// Client Streams processing poll interval in milliseconds.
-#[arg(long, env = "CRABKA_DEMO_STREAMS_POLL_INTERVAL_MS")]
+#[arg(long, env = "KRABKA_DEMO_STREAMS_POLL_INTERVAL_MS")]
 streams_poll_interval_ms: Option<NonZeroU64>,
 /// Client Streams commit interval in milliseconds.
-#[arg(long, env = "CRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS")]
+#[arg(long, env = "KRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS")]
 streams_commit_interval_ms: Option<NonZeroU64>,
 ```
 
@@ -786,8 +786,8 @@ Produce and Consume receive neither value.
 Under the existing `demo-stream.environment`, add:
 
 ```yaml
-CRABKA_DEMO_STREAMS_POLL_INTERVAL_MS: "${CRABKA_DEMO_STREAMS_POLL_INTERVAL_MS:-200}"
-CRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS: "${CRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS:-5000}"
+KRABKA_DEMO_STREAMS_POLL_INTERVAL_MS: "${KRABKA_DEMO_STREAMS_POLL_INTERVAL_MS:-200}"
+KRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS: "${KRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS:-5000}"
 ```
 
 Do not add either variable to `demo-produce`, `demo-consume`, or the shared
@@ -892,12 +892,12 @@ Append `## Client Streams Runtime Cadence` to
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-  -p crabka-client-streams \
+  -p krabka-client-streams \
   -p observability-demo-app \
   --all-targets --locked
 
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy \
-  -p crabka-client-streams \
+  -p krabka-client-streams \
   -p observability-demo-app \
   --all-targets --locked -- -D warnings
 

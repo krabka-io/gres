@@ -1,5 +1,5 @@
 [package]
-name = "crabka-compression"
+name = "krabka-compression"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +8,7 @@ authors = ["The Crabka Authors"]
 description = "Kafka wire-protocol compression codecs for Rust"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-compression"
+documentation = "https://docs.rs/krabka-compression"
 readme = "README.md"
 keywords = ["kafka", "compression", "wire-protocol", "snappy", "zstd"]
 categories = ["compression", "encoding"]
@@ -37,7 +37,7 @@ zstd   = ["dep:zstd"]
 [dependencies]
 assert2 = { workspace = true }
 bytes = { workspace = true }
-crabka-units = { workspace = true }
+krabka-units = { workspace = true }
 refined_type = { workspace = true }
 thiserror = { workspace = true }
 flate2   = { workspace = true, optional = true }

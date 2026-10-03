@@ -19,7 +19,7 @@ pub trait SplitIntentAuthority: Send + Sync {
 
 #[derive(Debug, Clone)]
 pub struct AuthorizedSplitIntent {
-    record: crabka_gres_control::SplitOperationRecord,
+    record: krabka_gres_control::SplitOperationRecord,
     split: crate::SplitState,
     digest: String,
 }
@@ -28,7 +28,7 @@ impl AuthorizedSplitIntent {
     /// # Errors
     ///
     /// Returns an error when the requested operation cannot be completed.
-    pub fn from_record(record: crabka_gres_control::SplitOperationRecord) -> Result<Self, String> {
+    pub fn from_record(record: krabka_gres_control::SplitOperationRecord) -> Result<Self, String> {
         let plan = record
             .plan
             .as_ref()
@@ -41,7 +41,7 @@ impl AuthorizedSplitIntent {
             &plan.current_layout,
         )?;
         let split = match &record.mutation {
-            crabka_gres_control::RangeMutationPlan::Split { split } => {
+            krabka_gres_control::RangeMutationPlan::Split { split } => {
                 crate::SplitState::for_split(
                     record.operation_id.clone(),
                     crate::SplitCommand {
@@ -53,7 +53,7 @@ impl AuthorizedSplitIntent {
                     },
                 )
             }
-            crabka_gres_control::RangeMutationPlan::Move { move_range } => {
+            krabka_gres_control::RangeMutationPlan::Move { move_range } => {
                 crate::SplitState::for_move(
                     record.operation_id.clone(),
                     crate::MoveRangeCommand {
@@ -85,7 +85,7 @@ impl AuthorizedSplitIntent {
     }
 
     #[must_use]
-    pub fn record(&self) -> &crabka_gres_control::SplitOperationRecord {
+    pub fn record(&self) -> &krabka_gres_control::SplitOperationRecord {
         &self.record
     }
     #[must_use]
@@ -101,7 +101,7 @@ impl AuthorizedSplitIntent {
 fn map_from_layout(
     tenant: crate::TenantName,
     epoch: crate::MapEpoch,
-    layout: &[crabka_gres_control::RangeLayoutEntry],
+    layout: &[krabka_gres_control::RangeLayoutEntry],
 ) -> Result<crate::RangeMap, String> {
     let mut start = crate::RangeKey::MIN;
     let mut ranges = Vec::with_capacity(layout.len());
@@ -120,8 +120,8 @@ fn map_from_layout(
 }
 
 fn successor_from_layout(
-    entry: &crabka_gres_control::RangeLayoutEntry,
-    layout: &[crabka_gres_control::RangeLayoutEntry],
+    entry: &krabka_gres_control::RangeLayoutEntry,
+    layout: &[krabka_gres_control::RangeLayoutEntry],
 ) -> Result<crate::SuccessorDescriptor, String> {
     let index = layout
         .iter()
@@ -142,7 +142,7 @@ fn successor_from_layout(
 
 #[cfg(test)]
 pub(crate) fn authorized_test_fixture() -> AuthorizedSplitIntent {
-    use crabka_gres_control::{
+    use krabka_gres_control::{
         RangeBoundary, RangeLayoutEntry, RangeLayoutSplit, RangeLifecycle, SplitOperationPlan,
         SplitOperationRecord, TenantName,
     };
@@ -207,13 +207,13 @@ pub enum IntentAuthorizationContext {
 /// Immutable registry and config snapshot for compute-side authorization.
 #[derive(Debug, Default)]
 pub struct RegistrySplitIntentView {
-    operations: BTreeMap<(String, String), crabka_gres_control::SplitOperationRecord>,
+    operations: BTreeMap<(String, String), krabka_gres_control::SplitOperationRecord>,
 }
 
 impl RegistrySplitIntentView {
     #[must_use]
     pub fn new(
-        operations: impl IntoIterator<Item = crabka_gres_control::SplitOperationRecord>,
+        operations: impl IntoIterator<Item = krabka_gres_control::SplitOperationRecord>,
     ) -> Self {
         Self {
             operations: operations
@@ -303,12 +303,12 @@ pub trait TopologyActivationReceiptStore: Send + Sync {
 /// Production activation store committed through range zero's writer.
 pub struct RangeZeroTopologyActivationStore {
     tenant: String,
-    engine: crabka_pgexec::SqlEngine,
+    engine: krabka_pgexec::SqlEngine,
 }
 
 impl RangeZeroTopologyActivationStore {
     #[must_use]
-    pub fn new(tenant: impl Into<String>, engine: crabka_pgexec::SqlEngine) -> Self {
+    pub fn new(tenant: impl Into<String>, engine: krabka_pgexec::SqlEngine) -> Self {
         Self {
             tenant: tenant.into(),
             engine,
@@ -463,12 +463,12 @@ impl RangeControlReceiptStore for MemoryRangeControlReceiptStore {
 /// Production receipt store committed through range 0's durable SQL-engine committer.
 pub struct RangeZeroReceiptStore {
     tenant: String,
-    engine: crabka_pgexec::SqlEngine,
+    engine: krabka_pgexec::SqlEngine,
 }
 
 impl RangeZeroReceiptStore {
     #[must_use]
-    pub fn new(tenant: impl Into<String>, engine: crabka_pgexec::SqlEngine) -> Self {
+    pub fn new(tenant: impl Into<String>, engine: krabka_pgexec::SqlEngine) -> Self {
         Self {
             tenant: tenant.into(),
             engine,
@@ -856,7 +856,7 @@ fn crash_after_effect_if_requested(request: &RangeControlReq, response: &RangeCo
     ) {
         return;
     }
-    let Ok(requested) = std::env::var("CRABKA_GRES_CONTROL_CRASH_AFTER_EFFECT") else {
+    let Ok(requested) = std::env::var("KRABKA_GRES_CONTROL_CRASH_AFTER_EFFECT") else {
         return;
     };
     let step = match request.operation {
@@ -913,7 +913,7 @@ fn replayed(response: &RangeControlResp) -> RangeControlResp {
 
 fn request_matches_split_operation(
     request: &RangeControlReq,
-    operation: &crabka_gres_control::SplitOperationRecord,
+    operation: &krabka_gres_control::SplitOperationRecord,
     context: IntentAuthorizationContext,
 ) -> bool {
     let source_range_id = operation.source_range_id();
@@ -934,10 +934,10 @@ fn request_matches_split_operation(
             (source && !operation.phase.expects_target_registry_layout())
                 || operation.plan.as_ref().is_some_and(|plan| {
                     let target_phase = operation.phase.is_between(
-                        crabka_gres_control::SplitOperationPhase::Activated,
-                        crabka_gres_control::SplitOperationPhase::Resuming,
+                        krabka_gres_control::SplitOperationPhase::Activated,
+                        krabka_gres_control::SplitOperationPhase::Resuming,
                     ) || (operation.phase
-                        == crabka_gres_control::SplitOperationPhase::Completed
+                        == krabka_gres_control::SplitOperationPhase::Completed
                         && context == IntentAuthorizationContext::CompletedReplay);
                     target_phase
                         && plan.target_layout.iter().any(|successor| {
@@ -979,11 +979,11 @@ fn request_matches_split_operation(
 }
 
 fn phase_authorizes_operation(
-    phase: crabka_gres_control::SplitOperationPhase,
+    phase: krabka_gres_control::SplitOperationPhase,
     operation: &RangeControlOperation,
     context: IntentAuthorizationContext,
 ) -> bool {
-    use crabka_gres_control::SplitOperationPhase as Phase;
+    use krabka_gres_control::SplitOperationPhase as Phase;
     if phase == Phase::Completed {
         return context == IntentAuthorizationContext::CompletedReplay;
     }
@@ -1011,7 +1011,7 @@ fn phase_authorizes_operation(
 
 fn map_matches_layout(
     map: &crate::RangeMap,
-    layout: &[crabka_gres_control::RangeLayoutEntry],
+    layout: &[krabka_gres_control::RangeLayoutEntry],
 ) -> bool {
     map.ranges().len() == layout.len()
         && map.ranges().iter().zip(layout).all(|(range, expected)| {
@@ -1019,12 +1019,12 @@ fn map_matches_layout(
                 && range
                     .end
                     .map(|key| match expected.end_key.and_then(|end| end.bucket) {
-                        Some(_) => crabka_gres_control::RangeBoundary::hash(
+                        Some(_) => krabka_gres_control::RangeBoundary::hash(
                             key.table_id.as_u64(),
                             key.bucket,
                             key.rowid,
                         ),
-                        None => crabka_gres_control::RangeBoundary::new(
+                        None => krabka_gres_control::RangeBoundary::new(
                             key.table_id.as_u64(),
                             key.rowid,
                         ),
@@ -1033,7 +1033,7 @@ fn map_matches_layout(
         })
 }
 
-fn boundary_to_range_key(boundary: crabka_gres_control::RangeBoundary) -> crate::RangeKey {
+fn boundary_to_range_key(boundary: krabka_gres_control::RangeBoundary) -> crate::RangeKey {
     match boundary.bucket {
         Some(bucket) => crate::RangeKey::hash(
             crate::TableId::new(boundary.table_id),
@@ -1093,7 +1093,7 @@ mod tests {
 
     #[test]
     fn journal_phase_only_authorizes_current_or_replay_control_step() {
-        use crabka_gres_control::SplitOperationPhase as Phase;
+        use krabka_gres_control::SplitOperationPhase as Phase;
 
         assert!(phase_authorizes_operation(
             Phase::Running,
@@ -1137,10 +1137,10 @@ mod tests {
 
     #[tokio::test]
     async fn registry_authority_binds_exact_journal_and_sealed_topology() {
-        use crabka_gres_control::SplitOperationPhase as Phase;
+        use krabka_gres_control::SplitOperationPhase as Phase;
 
         async fn allowed(
-            record: crabka_gres_control::SplitOperationRecord,
+            record: krabka_gres_control::SplitOperationRecord,
             request: &RangeControlReq,
         ) -> bool {
             RegistrySplitIntentView::new([record])
@@ -1201,26 +1201,26 @@ mod tests {
         record_mutations.push(changed);
         let mut changed = record.clone();
         match &mut changed.mutation {
-            crabka_gres_control::RangeMutationPlan::Split { split } => {
+            krabka_gres_control::RangeMutationPlan::Split { split } => {
                 split.predecessor_generation += 1;
             }
-            crabka_gres_control::RangeMutationPlan::Move { .. } => unreachable!(),
+            krabka_gres_control::RangeMutationPlan::Move { .. } => unreachable!(),
         }
         record_mutations.push(changed);
         let mut changed = record.clone();
         match &mut changed.mutation {
-            crabka_gres_control::RangeMutationPlan::Split { split } => {
+            krabka_gres_control::RangeMutationPlan::Split { split } => {
                 split.left.endpoint.push_str("-other");
             }
-            crabka_gres_control::RangeMutationPlan::Move { .. } => unreachable!(),
+            krabka_gres_control::RangeMutationPlan::Move { .. } => unreachable!(),
         }
         record_mutations.push(changed);
         let mut changed = record.clone();
         match &mut changed.mutation {
-            crabka_gres_control::RangeMutationPlan::Split { split } => {
+            krabka_gres_control::RangeMutationPlan::Split { split } => {
                 split.right.wal_generation += 1;
             }
-            crabka_gres_control::RangeMutationPlan::Move { .. } => unreachable!(),
+            krabka_gres_control::RangeMutationPlan::Move { .. } => unreachable!(),
         }
         record_mutations.push(changed);
         let mut changed = record.clone();
@@ -1248,12 +1248,12 @@ mod tests {
 
     #[test]
     fn authorized_move_derives_one_exact_replacement_without_split_aliasing() {
-        use crabka_gres_control::{
+        use krabka_gres_control::{
             RangeLayoutEntry, RangeLifecycle, SplitOperationPlan, SplitOperationRecord, TenantName,
         };
         let coordinator = RangeLayoutEntry {
             range_id: 0,
-            end_key: Some(crabka_gres_control::RangeBoundary {
+            end_key: Some(krabka_gres_control::RangeBoundary {
                 table_id: 7,
                 bucket: None,
                 rowid: 50,
@@ -1302,7 +1302,7 @@ mod tests {
             operation_id: "move-1".into(),
             operation: RangeControlOperation::Status,
         };
-        record.phase = crabka_gres_control::SplitOperationPhase::Restored;
+        record.phase = krabka_gres_control::SplitOperationPhase::Restored;
         record.revision = 4;
         record.attempts = 1;
         let completed_stage_replay = RangeControlReq {
@@ -1350,8 +1350,8 @@ mod tests {
             ));
         }
         for phase in [
-            crabka_gres_control::SplitOperationPhase::Initiated,
-            crabka_gres_control::SplitOperationPhase::Failed,
+            krabka_gres_control::SplitOperationPhase::Initiated,
+            krabka_gres_control::SplitOperationPhase::Failed,
         ] {
             let mut invalid_phase = record.clone();
             invalid_phase.phase = phase;
@@ -1366,7 +1366,7 @@ mod tests {
             &record,
             IntentAuthorizationContext::New,
         ));
-        record.phase = crabka_gres_control::SplitOperationPhase::Activated;
+        record.phase = krabka_gres_control::SplitOperationPhase::Activated;
         assert!(request_matches_split_operation(
             &status(2, 5),
             &record,
@@ -1382,13 +1382,13 @@ mod tests {
             &record,
             IntentAuthorizationContext::New,
         ));
-        record.phase = crabka_gres_control::SplitOperationPhase::LayoutPublished;
+        record.phase = krabka_gres_control::SplitOperationPhase::LayoutPublished;
         assert!(!request_matches_split_operation(
             &status(1, 4),
             &record,
             IntentAuthorizationContext::New,
         ));
-        record.phase = crabka_gres_control::SplitOperationPhase::Resuming;
+        record.phase = krabka_gres_control::SplitOperationPhase::Resuming;
         assert!(request_matches_split_operation(
             &RangeControlReq {
                 tenant: "tenant-a".into(),
@@ -1787,7 +1787,7 @@ mod tests {
         let calls = Arc::new(AtomicUsize::new(0));
         let original = request("tenant-a", 7, "durable-restart");
         {
-            let engine = crabka_pgexec::SqlEngine::open(directory.path()).expect("open range zero");
+            let engine = krabka_pgexec::SqlEngine::open(directory.path()).expect("open range zero");
             let control = GenerationFencedRangeControl::new(
                 "tenant-a",
                 RangeId::new(1),
@@ -1806,7 +1806,7 @@ mod tests {
                 RangeControlResp::Ambiguous { .. }
             ));
         }
-        let engine = crabka_pgexec::SqlEngine::open(directory.path()).expect("reopen range zero");
+        let engine = krabka_pgexec::SqlEngine::open(directory.path()).expect("reopen range zero");
         let reopened = GenerationFencedRangeControl::new(
             "tenant-a",
             RangeId::new(1),

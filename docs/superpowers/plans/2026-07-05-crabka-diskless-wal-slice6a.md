@@ -6,9 +6,9 @@
 
 **Architecture:** Each diskless partition gets a WAL group: `QuorumStateMachine` (kraft-core, one per group) + a durable per-replica WAL log (reusing `LocalFsyncWal`/`Log`) implementing `LogView`. A new, leaner **per-shard async engine** drives the core (`on_event → Vec<Action>`, mirroring the deterministic `sim.rs` driver) and executes its actions (send wire, persist quorum state, arm timers, advance HWM). `QuorumWalStore::append_durable` replicates the verbatim batch to the group, returns once f+1 have fsync-acked, and advances the per-partition durable watermark that drives Slice-1's `recompute_hw_for_wal_durable`. Everything above the `WalStore` seam is untouched.
 
-**Tech Stack:** Rust 2024 (pinned stable 1.96.0), `crabka-kraft-core` (sans-IO consensus), `crabka-voters`, `crabka-verified` (`recompute_high_watermark`), `tokio`, `stateright` (dev), `assert2`, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
+**Tech Stack:** Rust 2024 (pinned stable 1.96.0), `krabka-kraft-core` (sans-IO consensus), `krabka-voters`, `krabka-verified` (`recompute_high_watermark`), `tokio`, `stateright` (dev), `assert2`, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
-**Spec:** [`docs/superpowers/specs/2026-07-05-crabka-diskless-wal-slice6a-design.md`](../specs/2026-07-05-crabka-diskless-wal-slice6a-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-05-krabka-diskless-wal-slice6a-design.md`](../specs/2026-07-05-krabka-diskless-wal-slice6a-design.md).
 
 **PREREQUISITES (unlanded):** Slices 1–5. `QuorumWalStore` implements the Slice-1 `WalStore` trait and re-sources the Slice-1 WAL-durable HW. **This is the single largest build in the milestone** — the tasks below are components; land them in order.
 
@@ -35,7 +35,7 @@
 - **`crates/broker/src/wal/quorum/`** (new) — `mod.rs` (`QuorumWalStore`), `engine.rs` (per-shard async engine), `registry.rs` (`ShardId→engine`), `log_view.rs` (the shard log's `LogView`).
 - **`crates/broker/src/wal/quorum/wire.rs`** — shard-addressed WAL RPC (populate the KIP-595 codec `topics[]`/`partitions[]` + a group discriminator).
 - **`crates/kraft-core/src/core.rs`** — (if needed) a `from_durable`/reload constructor helper (else reuse `QuorumStateMachine::new(persisted_state)`).
-- Reuse: `LocalFsyncWal` (Slice 1) per replica; `replica_selector.rs` (AZ); `crabka_verified::recompute_high_watermark`.
+- Reuse: `LocalFsyncWal` (Slice 1) per replica; `replica_selector.rs` (AZ); `krabka_verified::recompute_high_watermark`.
 
 ---
 
@@ -64,7 +64,7 @@ Implement `ShardLog` (wraps the per-replica `Log` + `LocalFsyncWal` durable step
 
 - [ ] **Step 3: Run to verify + commit**
 
-Run: `cargo test -p crabka-broker shard_log_view` → PASS.
+Run: `cargo test -p krabka-broker shard_log_view` → PASS.
 
 ```bash
 git add crates/broker/src/wal/quorum/
@@ -112,7 +112,7 @@ Insert `crates/broker/src/wal/quorum/engine.rs`. The engine owns one `QuorumStat
     }
 ```
 
-The leader's watermark is computed by the core (via `crabka_verified::recompute_high_watermark`, `verified/src/consensus.rs:18`) from the followers' fetched offsets — the engine just persists the batch (fsync) and replies to Fetch with the tail bytes (a lean version of `serve_fetch_records`, but the followers only need durability, so replicate the verbatim WAL bytes). `on_watermark_advance(hw)` moves the per-partition WAL-durable watermark that `QuorumWalStore` reports.
+The leader's watermark is computed by the core (via `krabka_verified::recompute_high_watermark`, `verified/src/consensus.rs:18`) from the followers' fetched offsets — the engine just persists the batch (fsync) and replies to Fetch with the tail bytes (a lean version of `serve_fetch_records`, but the followers only need durability, so replicate the verbatim WAL bytes). `on_watermark_advance(hw)` moves the per-partition WAL-durable watermark that `QuorumWalStore` reports.
 
 - [ ] **Step 3: Run to verify + commit**
 
@@ -211,7 +211,7 @@ Replace the single-node `WalFsync` frontier with a quorum frontier: model per-WA
 
 - [ ] **Step 2: Run the checker**
 
-Run: `cargo test -p crabka-broker diskless_crash_model -- --nocapture`
+Run: `cargo test -p krabka-broker diskless_crash_model -- --nocapture`
 Expected: PASS — `wal_acked_durable` holds under minority WAL-node loss; the witness is reached. Keep `MAX_LEN`/broker count tiny (state explosion). The full re-composition (concurrent appenders + leader change + Jepsen) is **6d** — not here.
 
 - [ ] **Step 3: Commit**
@@ -227,7 +227,7 @@ git commit -m "test(broker): quorum-frontier proof delta (minority WAL-node loss
 
 - [ ] **Step 1:** `cargo +nightly fmt` then `--check` — no diff.
 - [ ] **Step 2:** `cargo clippy --workspace --all-targets -- -D warnings` — no warnings.
-- [ ] **Step 3:** `cargo nextest run -p crabka-kraft-core -p crabka-broker` (or `cargo test`) — PASS, including the 3-replica quorum tests + the model.
+- [ ] **Step 3:** `cargo nextest run -p krabka-kraft-core -p krabka-broker` (or `cargo test`) — PASS, including the 3-replica quorum tests + the model.
 - [ ] **Step 4:** Commit any formatting.
 
 ---

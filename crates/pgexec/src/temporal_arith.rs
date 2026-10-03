@@ -34,8 +34,8 @@
 //! are `pg_operator`'s, and the coercions come from
 //! [`crate::builtin_casts::BUILTIN_CASTS`], which is `pg_cast` itself.
 
-use crabka_pgparser::ast::BinaryOp;
-use crabka_pgtypes::ColumnType;
+use krabka_pgparser::ast::BinaryOp;
+use krabka_pgtypes::ColumnType;
 
 use crate::error::ExecError;
 
@@ -298,9 +298,9 @@ const TEMPORAL_TYPE_NAMES: [&str; 6] = [
 /// cost.
 pub(crate) fn attach_operator_position(
     sql: &str,
-    error: crabka_pgwire::error::PgError,
-) -> crabka_pgwire::error::PgError {
-    use crabka_pgparser::token::Token;
+    error: krabka_pgwire::error::PgError,
+) -> krabka_pgwire::error::PgError {
+    use krabka_pgparser::token::Token;
 
     if !matches!(error.code.as_str(), "42883" | "42725")
         || error
@@ -343,7 +343,7 @@ pub(crate) fn attach_operator_position(
         "*" => Token::Star,
         _ => Token::Slash,
     };
-    let Ok(tokens) = crabka_pgparser::lexer::lex(sql) else {
+    let Ok(tokens) = krabka_pgparser::lexer::lex(sql) else {
         return error;
     };
     let positions: Vec<usize> = tokens
@@ -360,8 +360,8 @@ pub(crate) fn attach_operator_position(
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgparser::ast::BinaryOp;
-    use crabka_pgtypes::ColumnType::{Date, Float8, Int4, Int8, Interval, Time, Timestamp, Timetz};
+    use krabka_pgparser::ast::BinaryOp;
+    use krabka_pgtypes::ColumnType::{Date, Float8, Int4, Int8, Interval, Time, Timestamp, Timetz};
 
     use super::resolve;
     use crate::error::ExecError;
@@ -369,8 +369,8 @@ mod tests {
     /// What `resolve` decided, flattened to something a table can state.
     fn outcome(
         op: BinaryOp,
-        lt: crabka_pgtypes::ColumnType,
-        rt: crabka_pgtypes::ColumnType,
+        lt: krabka_pgtypes::ColumnType,
+        rt: krabka_pgtypes::ColumnType,
     ) -> String {
         match resolve(op, lt, rt) {
             None => "not temporal".to_string(),

@@ -4,7 +4,7 @@
 //! a compute with no OTLP pipeline pays one disabled-callsite level check per
 //! commit and the stdout `fmt` layer never prints them. Only the OTLP filter in
 //! `crates/gres/src/telemetry.rs` enables the target. The constant is
-//! duplicated there and not shared, because `crabka-gres` depends on this
+//! duplicated there and not shared, because `krabka-gres` depends on this
 //! crate and the dependency cannot run the other way.
 //!
 //! # Zero cost when off
@@ -48,7 +48,7 @@ use crate::writer::WriterGeneration;
 ///
 /// This target stays off the `fmt` layer's default filter, so WAL spans
 /// materialise only for OTLP.
-pub const WAL_TARGET: &str = "crabka_gres_substrate::wal";
+pub const WAL_TARGET: &str = "krabka_gres_substrate::wal";
 
 /// Upper bound on the recorded `otel.status_description`, in bytes. A WAL error
 /// message is server-authored, but a broker string can still be long enough to

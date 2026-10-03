@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `std::collections::{BTreeSet,HashMap}`, `tokio`, Connect-RPC, the in-process `Broker::start` harness, `assert2`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-peroffset-subscribe-ack-design.md`](../specs/2026-07-06-crabka-peroffset-subscribe-ack-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-peroffset-subscribe-ack-design.md`](../specs/2026-07-06-krabka-peroffset-subscribe-ack-design.md).
 
 **PREREQUISITE:** none unlanded — the broker already accepts explicit `OffsetCommit` (`offset_commit.rs:327`). Independent of MSG-1/2/4.
 
@@ -130,7 +130,7 @@ mod ack_tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-grpc-gateway --lib consume::ack_tests`
+Run: `cargo test -p krabka-grpc-gateway --lib consume::ack_tests`
 Expected: FAIL — `PartitionAckState`/`record`/`AckOverflow`/`MAX_PENDING_PER_PARTITION` undefined.
 
 - [ ] **Step 3: Implement (pure, no I/O)**
@@ -193,7 +193,7 @@ impl PartitionAckState {
 
 - [ ] **Step 4: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-grpc-gateway --lib consume::ack_tests` → PASS.
+Run: `cargo test -p krabka-grpc-gateway --lib consume::ack_tests` → PASS.
 
 ```bash
 git add crates/grpc-gateway/src/consume.rs
@@ -251,7 +251,7 @@ pub async fn assigned_partitions(&self) -> Vec<(String, i32)> {
 
 - [ ] **Step 3: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-client-consumer commit` → PASS.
+Run: `cargo test -p krabka-client-consumer commit` → PASS.
 
 ```bash
 git add crates/client-consumer/src/commit.rs crates/client-consumer/src/consumer.rs
@@ -327,7 +327,7 @@ Add `GatewayError::too_many_unacked` (a `resource_exhausted`-mapped variant).
 
 - [ ] **Step 3: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-grpc-gateway --lib consume::` → PASS.
+Run: `cargo test -p krabka-grpc-gateway --lib consume::` → PASS.
 
 ```bash
 git add crates/grpc-gateway/src/consume.rs
@@ -393,7 +393,7 @@ if commit {
 
 - [ ] **Step 3: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-grpc-gateway --test streaming` → PASS.
+Run: `cargo test -p krabka-grpc-gateway --test streaming` → PASS.
 
 ```bash
 git add crates/grpc-gateway/src/streaming.rs crates/grpc-gateway/tests/streaming.rs
@@ -408,7 +408,7 @@ git commit -m "feat(gateway): per-offset ack wiring in the Subscribe stream (gap
 - Modify: `crates/grpc-gateway/proto/crabka/gateway/v1/gateway.proto:108-115`
 
 - [ ] **Step 1:** Replace the "advisory / per-offset commit is a follow-up" comment with: the `offset` is the record offset being acked; the gateway commits `offset+1` for `(topic,partition)` gated on a contiguous frontier; the fields are load-bearing only when `auto_commit=false` and are ignored under `auto_commit=true`. No field changes.
-- [ ] **Step 2:** `cargo build -p crabka-grpc-gateway` (regenerates pb, no code change). Commit.
+- [ ] **Step 2:** `cargo build -p krabka-grpc-gateway` (regenerates pb, no code change). Commit.
 
 ```bash
 git add crates/grpc-gateway/proto/crabka/gateway/v1/gateway.proto
@@ -420,8 +420,8 @@ git commit -m "docs(gateway): document SubscribeAck fields as load-bearing (expl
 ## Task 6: Final gate
 
 - [ ] **Step 1:** `cargo +nightly fmt --check` — no diff.
-- [ ] **Step 2:** `cargo clippy -p crabka-grpc-gateway -p crabka-client-consumer --all-targets -- -D warnings` — no warnings.
-- [ ] **Step 3:** `cargo nextest run -p crabka-grpc-gateway -p crabka-client-consumer` — PASS, incl. the frontier unit tests (seed/gap/drain/cap), `commit_offsets_sync` shaping, and the end-to-end gap-safety + filtered-auto-ack + rebalance-ownership integration tests.
+- [ ] **Step 2:** `cargo clippy -p krabka-grpc-gateway -p krabka-client-consumer --all-targets -- -D warnings` — no warnings.
+- [ ] **Step 3:** `cargo nextest run -p krabka-grpc-gateway -p krabka-client-consumer` — PASS, incl. the frontier unit tests (seed/gap/drain/cap), `commit_offsets_sync` shaping, and the end-to-end gap-safety + filtered-auto-ack + rebalance-ownership integration tests.
 - [ ] **Step 4:** Commit any formatting.
 
 ---

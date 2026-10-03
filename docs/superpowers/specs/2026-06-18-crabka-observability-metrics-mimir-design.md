@@ -11,16 +11,16 @@ complete Prometheus/Mimir HTTP API. Bundled **Alertmanager is out of scope** —
 is its own sub-project; the ruler dispatches to any Alertmanager-API endpoint.
 
 This is the second signal in the LGTM+P replacement. It reuses the shared
-substrate designed for logs (`crabka-blockstore`) and follows the same
+substrate designed for logs (`krabka-blockstore`) and follows the same
 "emulate the wire contract, don't fork the product" pattern. See the logs spec:
-[2026-06-18-crabka-observability-logs-design.md](2026-06-18-crabka-observability-logs-design.md).
+[2026-06-18-krabka-observability-logs-design.md](2026-06-18-krabka-observability-logs-design.md).
 
 ## 1. Goal & thesis
 
 Replace Grafana Mimir and serve as Grafana's metrics datasource, by emulating
 Mimir's *external* surfaces (Prometheus HTTP API, remote_write v1/v2, ruler API,
 cardinality/tenant APIs) on Crabka's substrate — the Kafka log as the durable
-WAL, `crabka-blockstore` for columnar Parquet blocks on object storage, and
+WAL, `krabka-blockstore` for columnar Parquet blocks on object storage, and
 DataFusion for query. We reproduce Mimir's *contracts*, not its internal
 components.
 
@@ -39,7 +39,7 @@ replicate.
 | 2 | PromQL engine | `promql-parser` (faithful Prometheus-3.8 grammar port, parser-only — no DataFusion/arrow deps) + **our own** PromQL→DataFusion planner. Symmetric with the LogQL decision; sidesteps the DataFusion-version coupling that vendoring a full engine (e.g. GreptimeDB's) would impose |
 | 3 | Data model | Float samples **and** native (exponential) histograms **and** exemplars. Classic histograms/summaries are ordinary float series (no special support) |
 | 4 | Boundary | Ruler (recording + alerting rule *evaluation*) **in**; bundled multi-tenant Alertmanager **out** (own sub-project) |
-| 5 | Storage | `crabka-blockstore` (shared with logs) with metric-specific block schemas |
+| 5 | Storage | `krabka-blockstore` (shared with logs) with metric-specific block schemas |
 | 6 | Query engine | DataFusion (shared substrate), following the GreptimeDB-proven custom-operator pattern for range-vector semantics |
 | 7 | Integration | Prometheus/Mimir HTTP API emulation → Grafana's built-in Prometheus datasource, unmodified |
 | 8 | Process model | Role-selectable service (`distributor`/`compactor`/`querier`/`query-frontend`/`ruler`); uses the Crabka broker as its WAL |
@@ -52,7 +52,7 @@ replicate.
 |---|---|
 | **Distributor** (validate, HA dedup, tenant split) | `distributor` role — terminates remote_write/OTLP, HA-dedup **before** the WAL append, writes to the WAL topic |
 | **Ingester** (head + WAL + replication) | **The Crabka broker** — WAL topic *is* the WAL; partition replication *is* the ingester RF; the head is an in-memory structure the querier rebuilds from the WAL tail |
-| **Store-gateway + Querier** | `querier` role — DataFusion over `crabka-blockstore`, merging hot (WAL-tail head) + cold (blocks) |
+| **Store-gateway + Querier** | `querier` role — DataFusion over `krabka-blockstore`, merging hot (WAL-tail head) + cold (blocks) |
 | **Query-frontend / scheduler** | `query-frontend` role — time-splitting, query sharding (by series), result caching |
 | **Compactor** | `compactor` role — WAL consumer-group → columnar blocks + index/exemplar sidecar → object storage |
 | **Ruler** | `ruler` role — per-tenant recording + alerting rule evaluation (PromQL on a schedule) |
@@ -62,14 +62,14 @@ replicate.
 
 ### 3.2 Crate layout
 
-- `crabka-blockstore` *(shared with logs)* — extended with three metric block
+- `krabka-blockstore` *(shared with logs)* — extended with three metric block
   schemas (float, native-histogram, exemplar sidecar) + a symbol table. Stays
   signal-agnostic; metrics register different payload columns.
-- `crabka-promql` — `promql-parser` integration + the PromQL→DataFusion planner +
+- `krabka-promql` — `promql-parser` integration + the PromQL→DataFusion planner +
   the custom range-vector operators (`SeriesDivide`/`SeriesNormalize`/
   `InstantManipulate`/`RangeManipulate` + the `RangeArray` Arrow array) +
   rate-family/histogram UDFs + the Prometheus `.test` conformance harness.
-- `crabka-metrics` — the role-selectable service wiring blockstore + promql + a
+- `krabka-metrics` — the role-selectable service wiring blockstore + promql + a
   Kafka client, plus the wire surfaces (remote_write v1/v2, OTLP metrics,
   Prometheus HTTP API). Internal `wire` module owns the remote_write protobuf
   types + content negotiation.
@@ -260,7 +260,7 @@ Prometheus/Mimir ruler API (`/prometheus/config/v1/rules` CRUD, `/api/v1/rules`,
   metrics WAL topic* — derived series are first-class and queryable, no special
   path. **Alerting rules** evaluate, track `pending → firing` per the `for:`
   duration, and dispatch firing alerts to a configured Alertmanager-API endpoint
-  (external today; a future `crabka-alertmanager` sub-project later).
+  (external today; a future `krabka-alertmanager` sub-project later).
 - **State** (alert pending/firing, last-eval) lives in a compacted per-tenant
   topic — rebuildable.
 - **Sharding:** rule groups distributed across ruler instances by
@@ -318,7 +318,7 @@ reached.
 
 1. **Blockstore metrics schemas** — float + native-histogram + exemplar block
    types + symbol table.
-2. **`crabka-promql` core** — parser integration + the operator pattern
+2. **`krabka-promql` core** — parser integration + the operator pattern
    (`SeriesDivide`/`Normalize`/`Instant`/`Range` + `RangeArray`) + selectors +
    rate-family + aggregations + binary ops + the `.test` harness. *(The big one —
    likely sub-sliced.)*
@@ -334,8 +334,8 @@ reached.
 
 ## 12. Relation to the four-signal vision
 
-Metrics is the second tenant of `crabka-blockstore`; `crabka-promql` sits beside
-`crabka-logql` on the same DataFusion substrate and the same role-selectable
+Metrics is the second tenant of `krabka-blockstore`; `krabka-promql` sits beside
+`krabka-logql` on the same DataFusion substrate and the same role-selectable
 service skeleton. This validates the generalization claimed in the logs spec §11:
 each signal = one query-dialect front-end + one wire-compatible API + one block
 schema, all on the shared substrate.

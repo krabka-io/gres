@@ -1,7 +1,7 @@
 use std::time::Instant;
 
-use crabka_gres_control::TenantName;
-use crabka_units::{
+use krabka_gres_control::TenantName;
+use krabka_units::{
     Time,
     convert::{StdDurationExt as _, TimeExt as _},
 };

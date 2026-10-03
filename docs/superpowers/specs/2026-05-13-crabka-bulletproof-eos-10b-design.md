@@ -731,7 +731,7 @@ leader. Verify producer completes; `kafka-console-consumer
 --isolation-level=read_committed --max-messages=100` reads all 100.
 
 UN-ENV-GATE `three_node_replication_byte_compare` and
-`acks_all_durability` (drop their `CRABKA_RUN_*_TEST` gates).
+`acks_all_durability` (drop their `KRABKA_RUN_*_TEST` gates).
 
 ### Acceptance gate
 
@@ -740,7 +740,7 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
-cargo test -p crabka-broker --test jvm_acceptance -- --ignored --nocapture --test-threads=1
+cargo test -p krabka-broker --test jvm_acceptance -- --ignored --nocapture --test-threads=1
 ```
 
 All clean. **No new `#[ignore]`s land in this slice.** The slice-9
@@ -772,9 +772,9 @@ Both are documented and acceptable.
 
 ## Reference
 
-- Spec: this file (`docs/superpowers/specs/2026-05-13-crabka-bulletproof-eos-10b-design.md`)
-- Slice 10a spec: `docs/superpowers/specs/2026-05-12-crabka-bulletproof-eos-10a-design.md`
-- Meta-spec: `docs/superpowers/specs/2026-05-10-crabka-rust-rewrite-design.md`
+- Spec: this file (`docs/superpowers/specs/2026-05-13-krabka-bulletproof-eos-10b-design.md`)
+- Slice 10a spec: `docs/superpowers/specs/2026-05-12-krabka-bulletproof-eos-10a-design.md`
+- Meta-spec: `docs/superpowers/specs/2026-05-10-krabka-rust-rewrite-design.md`
   (item #8 in the decomposition table; slices 10a and 10b together
   close all slice-8 deferrals)
 - KIP-101: `https://cwiki.apache.org/confluence/display/KAFKA/KIP-101`

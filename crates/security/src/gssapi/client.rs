@@ -1,4 +1,4 @@
-use crabka_units::ByteSize;
+use krabka_units::ByteSize;
 
 use super::{
     GssError, GssInitiator, InitStep,
@@ -168,7 +168,7 @@ impl GssapiClientExchange {
 #[cfg(test)]
 mod tests {
 
-    use crabka_units::kibibytes;
+    use krabka_units::kibibytes;
 
     use super::*;
     use crate::gssapi::{GssError, GssInitiator, InitStep};

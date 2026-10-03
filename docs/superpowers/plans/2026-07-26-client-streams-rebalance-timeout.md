@@ -24,7 +24,7 @@
 - Demo precedence is CLI over environment over the typed 30,000 ms default.
 - Demo configuration is valid only for `--role stream`.
 - Do not add a generic duration abstraction, macro, profile, cross-field rule, CRD, or unrelated timing configuration.
-- Do not add dependencies or change `Cargo.lock`; `crabka-client-streams` already directly depends on workspace `refined_type`.
+- Do not add dependencies or change `Cargo.lock`; `krabka-client-streams` already directly depends on workspace `refined_type`.
 - Every Cargo command must set `CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0`.
 - Every lock-aware Cargo command must use `--locked`.
 - Preserve unrelated dirty and untracked files.
@@ -145,8 +145,8 @@ fn low_level_runtime_validation_names_the_invalid_field() {
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams rebalance_timeout --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams low_level_runtime_validation_names_the_invalid_field --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams rebalance_timeout --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams low_level_runtime_validation_names_the_invalid_field --locked
 ```
 
 Expected: compilation fails because `StreamsRebalanceTimeout`,
@@ -286,10 +286,10 @@ not export it through `runtime/mod.rs`.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams rebalance_timeout --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams low_level_runtime_validation_names_the_invalid_field --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-client-streams --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams rebalance_timeout --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams low_level_runtime_validation_names_the_invalid_field --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-client-streams --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all -- --check
 git diff --check
 ```
@@ -326,7 +326,7 @@ git commit -m "feat(streams): validate rebalance timeout"
 **Interfaces:**
 - Consumes: Task 1 `StreamsRebalanceTimeout`, its 30-second default, and `KafkaStreams::builder().rebalance_timeout(Duration)`.
 - Produces: `StreamsApp::builder().rebalance_timeout(StreamsRebalanceTimeout)`.
-- Produces: `--streams-rebalance-timeout-ms` and `CRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS`.
+- Produces: `--streams-rebalance-timeout-ms` and `KRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS`.
 
 - [ ] **Step 1: Write the failing `StreamsApp` ownership test**
 
@@ -377,10 +377,10 @@ use std::process::Command;
 fn demo() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_observability-demo-app"));
     command
-        .env_remove("CRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS")
-        .env_remove("CRABKA_DEMO_STREAMS_POLL_INTERVAL_MS")
-        .env_remove("CRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS")
-        .env_remove("CRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS");
+        .env_remove("KRABKA_DEMO_STREAMS_BROKER_DNS_TIMEOUT_MS")
+        .env_remove("KRABKA_DEMO_STREAMS_POLL_INTERVAL_MS")
+        .env_remove("KRABKA_DEMO_STREAMS_COMMIT_INTERVAL_MS")
+        .env_remove("KRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS");
     command
 }
 
@@ -388,7 +388,7 @@ fn demo() -> Command {
 fn environment_is_used_and_cli_wins_before_external_io() {
     let environment = demo()
         .args(["--role", "produce"])
-        .env("CRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS", "37000")
+        .env("KRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS", "37000")
         .output()
         .expect("run demo");
     assert!(!environment.status.success());
@@ -405,7 +405,7 @@ fn environment_is_used_and_cli_wins_before_external_io() {
             "--streams-rebalance-timeout-ms",
             "41000",
         ])
-        .env("CRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS", "37000")
+        .env("KRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS", "37000")
         .output()
         .expect("run demo");
     assert!(!cli.status.success());
@@ -420,7 +420,7 @@ fn environment_is_used_and_cli_wins_before_external_io() {
 fn invalid_values_fail_early_and_help_lists_the_flag_once() {
     let zero = demo()
         .args(["--role", "stream"])
-        .env("CRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS", "0")
+        .env("KRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS", "0")
         .output()
         .expect("run demo");
     assert!(!zero.status.success());
@@ -429,7 +429,7 @@ fn invalid_values_fail_early_and_help_lists_the_flag_once() {
     let overflow = demo()
         .args(["--role", "stream"])
         .env(
-            "CRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS",
+            "KRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS",
             "2147483648",
         )
         .output()
@@ -459,12 +459,12 @@ it:
 
 ```rust
 assert2::assert!(stream.contains(
-    "CRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS: \"${CRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS:-30000}\""
+    "KRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS: \"${KRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS:-30000}\""
 ));
 for service in ["demo-produce", "demo-consume"] {
     assert2::assert!(
         !compose_service_block(&compose, service)
-            .contains("CRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS")
+            .contains("KRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS")
     );
 }
 ```
@@ -474,7 +474,7 @@ for service in ["demo-produce", "demo-consume"] {
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams rebalance_timeout_uses_typed_default_and_override --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams rebalance_timeout_uses_typed_default_and_override --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p observability-demo-app --test streams_rebalance_timeout_config --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p observability-demo-app streams_runtime_policy_is_configurable_only_on_the_stream_role --locked
 ```
@@ -510,7 +510,7 @@ Import `StreamsRebalanceTimeout`, add this `Cli` field:
 
 ```rust
 /// Client Streams rebalance timeout in milliseconds.
-#[arg(long, env = "CRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS")]
+#[arg(long, env = "KRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS")]
 streams_rebalance_timeout_ms: Option<NonZeroU64>,
 ```
 
@@ -556,7 +556,7 @@ to `StreamsApp::builder()`.
 Add under `demo-stream.environment`:
 
 ```yaml
-CRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS: "${CRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS:-30000}"
+KRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS: "${KRABKA_DEMO_STREAMS_REBALANCE_TIMEOUT_MS:-30000}"
 ```
 
 Do not add it to anchors, Produce, Consume, or any other service.
@@ -566,7 +566,7 @@ Do not add it to anchors, Produce, Consume, or any other service.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams rebalance_timeout_uses_typed_default_and_override --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams rebalance_timeout_uses_typed_default_and_override --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p observability-demo-app --test streams_rebalance_timeout_config --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p observability-demo-app streams_runtime_policy_is_configurable_only_on_the_stream_role --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p observability-demo-app --all-targets --locked
@@ -664,8 +664,8 @@ not configuration policy. Do not nominate that fallback as the next owner.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams -p observability-demo-app --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-client-streams -p observability-demo-app --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams -p observability-demo-app --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-client-streams -p observability-demo-app --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo run -p observability-demo-app --locked -- --help
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all -- --check
 git diff --check

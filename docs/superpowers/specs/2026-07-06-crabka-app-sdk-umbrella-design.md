@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Umbrella design (Chapter F's SDK face). Defines the **language-agnostic module contract** every SDK implements, the **conformance suite** that enforces it, and the **Go reference** cycle — with TS, Java, Rust, and C++ following in their own cycles against the frozen contract. Extends [MSG-5](2026-07-06-crabka-polyglot-messaging-sdk-design.md) (the messaging-SDK foundation: `sdks/` layout, buf codegen, the Connect-transport ground truth, the gateway h2c prerequisite) into the full application-SDK surface.
+**Type:** Umbrella design (Chapter F's SDK face). Defines the **language-agnostic module contract** every SDK implements, the **conformance suite** that enforces it, and the **Go reference** cycle — with TS, Java, Rust, and C++ following in their own cycles against the frozen contract. Extends [MSG-5](2026-07-06-krabka-polyglot-messaging-sdk-design.md) (the messaging-SDK foundation: `sdks/` layout, buf codegen, the Connect-transport ground truth, the gateway h2c prerequisite) into the full application-SDK surface.
 
 ## Context — the decisions that shape this
 
@@ -33,7 +33,7 @@ A closed set, mapped from Connect error codes, identical across languages:
 
 ## The conformance suite (the enforcement)
 
-- **`crates/sdk-conformance`** (`crabka-sdk-conformance`, **`publish = false`** + the release-plz private entry) — a Rust harness that boots **broker + gateway in-process** (the existing integration-test pattern — no containers, no OCI image needed) and drives any SDK through a per-language **adapter CLI** over **JSON-lines on stdio**: the harness writes command objects (`{"cmd": "publish", "topic": …}`), the adapter calls its SDK and replies (`{"ok": …}` / `{"error": {"kind": "unimplemented", "module": "queues", "gated_on": …}}`). Placed under `crates/` so the `members = ["crates/*"]` glob and workspace lints apply unchanged.
+- **`crates/sdk-conformance`** (`krabka-sdk-conformance`, **`publish = false`** + the release-plz private entry) — a Rust harness that boots **broker + gateway in-process** (the existing integration-test pattern — no containers, no OCI image needed) and drives any SDK through a per-language **adapter CLI** over **JSON-lines on stdio**: the harness writes command objects (`{"cmd": "publish", "topic": …}`), the adapter calls its SDK and replies (`{"ok": …}` / `{"error": {"kind": "unimplemented", "module": "queues", "gated_on": …}}`). Placed under `crates/` so the `members = ["crates/*"]` glob and workspace lints apply unchanged.
 - **Vectors** (`crates/sdk-conformance/vectors/*.json`, versioned with the contract) cover: publish→subscribe round-trip (byte-exact value); `publishEvent` CE mapping (`ce_id/ce_source/ce_type/ce_specversion` underscore headers, `content-type` from `datacontenttype`, never `ce_datacontenttype`); filter delivery **and** non-delivery; every stub's exact `Unimplemented{module, gated_on}`; credential config (bearer header present; anonymous fallback); error mapping (unknown topic, bad argument, unreachable endpoint → `Transport`).
 - **The suite version is the contract version** (semver; vectors additive within a major). Each SDK declares the contract version it passes; a green suite is a language cycle's definition of done. The Go reference hardens the vectors before any port begins.
 

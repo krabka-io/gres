@@ -28,7 +28,7 @@ minimum_test_timeout = 120
 exclude_globs = [
     "crates/protocol/generated/**",
     "crates/schema-registry/src/bin/**",
-    # `crabka-broker`'s `main` is pure entrypoint glue: parse CLI args, derive the
+    # `krabka-broker`'s `main` is pure entrypoint glue: parse CLI args, derive the
     # controller listener + self single-voter set, build `BrokerConfig`, hand it to
     # `Broker::start`, then wait for a termination signal and controlled-shutdown.
     # No unit-testable signal (no test constructs the live broker from CLI args);
@@ -38,7 +38,7 @@ exclude_globs = [
     # used rather than an `exclude_re` on the mutant name because name-regex
     # exclusions do not reliably match struct-field-deletion mutants here.
     "crates/broker/src/bin/**",
-    # crabka-audit's `verify` CLI: clap arg-parse + VerifyReport→ExitCode glue.
+    # krabka-audit's `verify` CLI: clap arg-parse + VerifyReport→ExitCode glue.
     # The verification logic lives in verify.rs and IS mutation-tested. Same
     # rationale as the schema-registry / broker `src/bin/**` globs.
     "crates/audit/src/bin/**",
@@ -57,7 +57,7 @@ exclude_globs = [
     "crates/*/src/**/tests.rs",
     "crates/*/src/**/test_*.rs",
     "crates/*/benches/**",
-    # The gres load/chaos harness drives real broker + crabka-gres child
+    # The gres load/chaos harness drives real broker + krabka-gres child
     # processes behind chaos proxies end-to-end. It is a test/bench harness, not
     # the system under test. Most of its
     # surface (cluster orchestration, fault execution, process sampling) is only
@@ -96,21 +96,21 @@ exclude_re = [
     # AlterPartitionReassignments state machine (integration suite). The sibling
     # `adding_replicas` field is pinned by `filtered_success_response_...`.
     "(crates/)?broker/src/handlers/list_partition_reassignments\\.rs.*delete field removing_replicas from struct OngoingPartitionReassignment",
-    # crabka-compression's feature-disabled codec stubs (`#[cfg(not(feature =
+    # krabka-compression's feature-disabled codec stubs (`#[cfg(not(feature =
     # "gzip"))] fn gzip_compress -> Err(FeatureDisabled(..))`, etc.). They are
     # only reachable — and only killable — with the codec feature turned off.
     # The public `compress`/`decompress` dispatchers have no codec prefix, so
     # they are not matched and stay under test.
     "compression/src/lib\\.rs.* replace (gzip|snappy|lz4|zstd)_(compress|decompress) ->",
-    # crabka-kraft-core's `sim` module is `#[cfg(feature = "sim")]` and that
+    # krabka-kraft-core's `sim` module is `#[cfg(feature = "sim")]` and that
     # feature is OFF in the crate's default build. cargo-mutants tests a mutant
-    # in crabka-kraft-core against the crate's own default features, so the whole
+    # in krabka-kraft-core against the crate's own default features, so the whole
     # module is compiled out and every mutation in it is a no-op that always
     # "survives" — the same default-feature-compiles-it-out case as the
     # compression stubs above. The simulator's logic IS exercised: its unit tests
     # run in the feature-enabled workspace test job (codecov covers the lines).
     "kraft-core/src/sim\\.rs",
-    # crabka-security's SSPI provider is behind the optional `sspi-keytab`
+    # krabka-security's SSPI provider is behind the optional `sspi-keytab`
     # feature and is compiled out in the crate's default package run, so default
     # cargo-mutants sees no behavioural difference. The provider's real contract
     # test requires a live MIT KDC fixture and is intentionally ignored unless
@@ -132,7 +132,7 @@ exclude_re = [
     # equivalent — is now skipped in-source via `#[cfg_attr(test, mutants::skip)]`.)
     "(crates/)?client-producer/src/builder\\.rs.*replace match guard !is_retriable_coordinator_code\\(resp.error_code\\) with (true|false) in init_producer_id",
     "(crates/)?client-producer/src/builder\\.rs.*delete ! in init_producer_id",
-    # crabka-metadata feature-registry equivalent mutants: today, the default
+    # krabka-metadata feature-registry equivalent mutants: today, the default
     # min floor for non-metadata.version features is genuinely 0, plain features
     # declare no dependencies, and share/streams default to 0 and support (0, 1).
     # (`validate_feature_dependencies` — a no-op for the real dependency-free
@@ -151,7 +151,7 @@ exclude_re = [
     "crates/metadata/src/kraft_translate\\.rs:.*delete field value from struct ConfigRecord expression",
     "crates/metadata/src/kraft_translate\\.rs:.*delete field name from struct KBrokerEndpoint expression",
     "crates/metadata/src/kraft_translate\\.rs:.*delete field security_protocol from struct KBrokerEndpoint expression",
-    # crabka-schema-serde's format modules are gated behind optional features
+    # krabka-schema-serde's format modules are gated behind optional features
     # (`avro`, `json`, `protobuf`) and the crate's default feature set enables
     # none of them. cargo-mutants' default package run mutates these source
     # files even though they are compiled out, so those mutations are no-op
@@ -469,8 +469,8 @@ exclude_re = [
     "crates/broker/src/coordinator/partitioner\\.rs:39:18: replace > with == in partition_for_group",
     "crates/broker/src/coordinator/partitioner\\.rs:39:18: replace > with >= in partition_for_group",
     "crates/broker/src/coordinator/unified/offsets_log\\.rs:31:9: replace <impl std::fmt::Debug for ProductionOffsetsLog>::fmt -> std::fmt::Result with Ok\\(Default::default\\(\\)\\)",
-    "crates/broker/src/coordinator/unified/streams/actor\\.rs:362:5: replace wait_for_metadata_change -> Option<Arc<crabka_metadata::MetadataImage>> with None",
-    "crates/broker/src/coordinator/unified/streams/actor\\.rs:362:5: replace wait_for_metadata_change -> Option<Arc<crabka_metadata::MetadataImage>> with Some\\(Arc::new\\(Default::default\\(\\)\\)\\)",
+    "crates/broker/src/coordinator/unified/streams/actor\\.rs:362:5: replace wait_for_metadata_change -> Option<Arc<krabka_metadata::MetadataImage>> with None",
+    "crates/broker/src/coordinator/unified/streams/actor\\.rs:362:5: replace wait_for_metadata_change -> Option<Arc<krabka_metadata::MetadataImage>> with Some\\(Arc::new\\(Default::default\\(\\)\\)\\)",
     "crates/broker/src/coordinator/unified/streams/config\\.rs:140:17: delete match arm KEY_ACCEPTABLE_RECOVERY_LAG in StreamsGroupConfig::with_group_overrides",
     "crates/broker/src/coordinator/unified/streams/config\\.rs:143:17: delete match arm KEY_NUM_WARMUP_REPLICAS in StreamsGroupConfig::with_group_overrides",
     "crates/broker/src/coordinator/unified/streams/config\\.rs:149:17: delete match arm KEY_TASK_OFFSET_INTERVAL_MS in StreamsGroupConfig::with_group_overrides",
@@ -515,7 +515,7 @@ exclude_re = [
     "crates/broker/src/handlers/init_producer_id\\.rs:343:38: replace != with == in handle_transactional",
     "crates/broker/src/handlers/init_producer_id\\.rs:348:66: delete - in handle_transactional",
     "crates/broker/src/handlers/init_producer_id\\.rs:349:46: delete - in handle_transactional",
-    "crates/broker/src/handlers/init_producer_id\\.rs:389:5: replace next_init_producer_identity -> Result<\\(crabka_log::ProducerId, i16\\), BrokerError> with Ok\\(\\(Default::default\\(\\), 1\\)\\)",
+    "crates/broker/src/handlers/init_producer_id\\.rs:389:5: replace next_init_producer_identity -> Result<\\(krabka_log::ProducerId, i16\\), BrokerError> with Ok\\(\\(Default::default\\(\\), 1\\)\\)",
     "crates/broker/src/handlers/join_group\\.rs:73:17: delete field error_code from struct JoinGroupResponse expression in handle",
     "crates/broker/src/handlers/leave_group\\.rs:62:21: delete field error_code from struct LeaveGroupResponse expression in handle",
     "crates/broker/src/handlers/leave_group\\.rs:64:21: delete field members from struct LeaveGroupResponse expression in handle",

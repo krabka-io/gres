@@ -37,9 +37,9 @@
 //! An oid no object carries answers NULL rather than false — the family is
 //! strict on its argument and reports "no such object" the same way.
 
-use crabka_pgcatalog::RelationName;
-use crabka_pgkv::Kv;
-use crabka_pgtypes::Datum;
+use krabka_pgcatalog::RelationName;
+use krabka_pgkv::Kv;
+use krabka_pgtypes::Datum;
 
 use crate::{clock::EvalCtx, error::ExecError};
 
@@ -183,7 +183,7 @@ pub(crate) fn is_visible(catalog: Catalog, oid: &Datum, ctx: &EvalCtx) -> Result
     };
     let scope = ctx.resolution();
     for schema in scope.visible_schemas(kv)? {
-        if catalog.skips_temp_schemas() && crabka_pgcatalog::is_temp_schema(&schema) {
+        if catalog.skips_temp_schemas() && krabka_pgcatalog::is_temp_schema(&schema) {
             continue;
         }
         if schema == found.schema {
@@ -267,7 +267,7 @@ fn locate(catalog: Catalog, kv: &dyn Kv, oid: i32) -> Result<Option<Located>, Ex
             .find(|conversion| conversion.0 == oid)
             .map(|conversion| catalog_object(conversion.1)),
         Catalog::StatisticsObject => match u32::try_from(oid) {
-            Ok(oid) => crabka_pgcatalog::statistics::list(kv)?
+            Ok(oid) => krabka_pgcatalog::statistics::list(kv)?
                 .into_iter()
                 .find(|object| object.oid == oid)
                 .map(|object| Located {
@@ -280,12 +280,12 @@ fn locate(catalog: Catalog, kv: &dyn Kv, oid: i32) -> Result<Option<Located>, Ex
         Catalog::TsConfig => locate_text_search(
             kv,
             oid,
-            crabka_pgparser::ast::TextSearchObjectKind::Configuration,
+            krabka_pgparser::ast::TextSearchObjectKind::Configuration,
         )?,
         Catalog::TsDictionary => locate_text_search(
             kv,
             oid,
-            crabka_pgparser::ast::TextSearchObjectKind::Dictionary,
+            krabka_pgparser::ast::TextSearchObjectKind::Dictionary,
         )?,
     })
 }
@@ -314,7 +314,7 @@ fn occupied(
             // quadratic in the number of relations.
             let name = RelationName::new(schema, key.name());
             Ok(crate::catalog_rel::virtual_relation_named(&name)
-                || crabka_pgcatalog::relation_exists(kv, &name)?)
+                || krabka_pgcatalog::relation_exists(kv, &name)?)
         }
         Catalog::Type => type_occupied(kv, schema, key.name()),
         Catalog::Function => function_occupied(kv, schema, key),
@@ -332,7 +332,7 @@ fn occupied(
             && crate::builtin_conversions::BUILTIN_CONVERSIONS
                 .iter()
                 .any(|conversion| conversion.1 == key.name())),
-        Catalog::StatisticsObject => Ok(crabka_pgcatalog::statistics::list(kv)?
+        Catalog::StatisticsObject => Ok(krabka_pgcatalog::statistics::list(kv)?
             .into_iter()
             .any(|object| object.name.schema == schema && object.name.name == key.name())),
         // Nothing crabka stores can occupy these names outside `pg_catalog`,
@@ -343,13 +343,13 @@ fn occupied(
             kv,
             schema,
             key.name(),
-            crabka_pgparser::ast::TextSearchObjectKind::Configuration,
+            krabka_pgparser::ast::TextSearchObjectKind::Configuration,
         ),
         Catalog::TsDictionary => text_search_occupied(
             kv,
             schema,
             key.name(),
-            crabka_pgparser::ast::TextSearchObjectKind::Dictionary,
+            krabka_pgparser::ast::TextSearchObjectKind::Dictionary,
         ),
     }
 }
@@ -360,7 +360,7 @@ fn occupied(
 /// oids `pg_type` reports them by.
 fn locate_type(kv: &dyn Kv, oid: i32) -> Result<Option<Located>, ExecError> {
     if let Ok(wanted) = u32::try_from(oid) {
-        for ty in crabka_pgcatalog::list_user_types(kv)? {
+        for ty in krabka_pgcatalog::list_user_types(kv)? {
             if let Some(located) = user_type_at(&ty, wanted) {
                 return Ok(Some(located));
             }
@@ -377,7 +377,7 @@ fn locate_type(kv: &dyn Kv, oid: i32) -> Result<Option<Located>, ExecError> {
 /// The multirange companion is looked up by its own identity because
 /// `CREATE TYPE … AS RANGE (multirange_type_name = other.name)` can put it in a
 /// different schema from the range type.
-fn user_type_at(ty: &crabka_pgtypes::usertype::UserType, oid: u32) -> Option<Located> {
+fn user_type_at(ty: &krabka_pgtypes::usertype::UserType, oid: u32) -> Option<Located> {
     let here = |name: String| Located {
         schema: ty.schema.clone(),
         key: ShadowKey::Name(name),
@@ -385,7 +385,7 @@ fn user_type_at(ty: &crabka_pgtypes::usertype::UserType, oid: u32) -> Option<Loc
     if ty.oid == oid {
         return Some(here(ty.name.clone()));
     }
-    if crabka_pgtypes::usertype::user_array_oid(ty.oid) == oid {
+    if krabka_pgtypes::usertype::user_array_oid(ty.oid) == oid {
         return Some(here(format!("_{}", ty.name)));
     }
     let multirange_oid = ty.multirange_type()?.oid();
@@ -396,7 +396,7 @@ fn user_type_at(ty: &crabka_pgtypes::usertype::UserType, oid: u32) -> Option<Loc
             key: ShadowKey::Name(name),
         });
     }
-    (crabka_pgtypes::usertype::user_multirange_array_oid(multirange_oid) == oid).then(|| Located {
+    (krabka_pgtypes::usertype::user_multirange_array_oid(multirange_oid) == oid).then(|| Located {
         schema,
         key: ShadowKey::Name(format!("_{name}")),
     })
@@ -411,13 +411,13 @@ fn type_occupied(kv: &dyn Kv, schema: &str, name: &str) -> Result<bool, ExecErro
     if schema == crate::search_path::PG_CATALOG {
         return Ok(crate::exec::regtype_oid(name).is_some());
     }
-    if crabka_pgcatalog::get_user_type(kv, &RelationName::new(schema, name))?.is_some() {
+    if krabka_pgcatalog::get_user_type(kv, &RelationName::new(schema, name))?.is_some() {
         return Ok(true);
     }
     let Some(element) = name.strip_prefix('_') else {
         return Ok(false);
     };
-    Ok(crabka_pgcatalog::get_user_type(kv, &RelationName::new(schema, element))?.is_some())
+    Ok(krabka_pgcatalog::get_user_type(kv, &RelationName::new(schema, element))?.is_some())
 }
 
 /// `pg_proc`: the built-in fixture is `pg_catalog`; crabka's user routines have
@@ -433,13 +433,13 @@ fn locate_function(kv: &dyn Kv, oid: i32) -> Result<Option<Located>, ExecError> 
             },
         }));
     }
-    let routine = crabka_pgcatalog::routine::list_routines(kv)?
+    let routine = krabka_pgcatalog::routine::list_routines(kv)?
         .into_iter()
         .find(|routine| i32::try_from(routine.oid) == Ok(oid));
     routine
         .map(|routine| {
             Ok::<_, ExecError>(Located {
-                schema: crabka_pgcatalog::PUBLIC_SCHEMA.to_string(),
+                schema: krabka_pgcatalog::PUBLIC_SCHEMA.to_string(),
                 key: ShadowKey::Signature {
                     name: routine.name.clone(),
                     args: crate::routine::routine_arg_type_oids(kv, &routine)?,
@@ -457,10 +457,10 @@ fn function_occupied(kv: &dyn Kv, schema: &str, key: &ShadowKey) -> Result<bool,
     if schema == crate::search_path::PG_CATALOG {
         return Ok(crate::reg_fn::builtin_proc_declared(name, args));
     }
-    if schema != crabka_pgcatalog::PUBLIC_SCHEMA {
+    if schema != krabka_pgcatalog::PUBLIC_SCHEMA {
         return Ok(false);
     }
-    for routine in crabka_pgcatalog::routine::routines_named(kv, name)? {
+    for routine in krabka_pgcatalog::routine::routines_named(kv, name)? {
         if crate::routine::routine_arg_type_oids(kv, &routine)? == *args {
             return Ok(true);
         }
@@ -483,7 +483,7 @@ fn locate_operator_class(kv: &dyn Kv, oid: i32) -> Result<Option<Located>, ExecE
             },
         }));
     }
-    Ok(crabka_pgcatalog::list_operator_classes(kv)?
+    Ok(krabka_pgcatalog::list_operator_classes(kv)?
         .into_iter()
         .find(|class| i32::try_from(class.oid) == Ok(oid))
         .map(|class| Located {
@@ -506,7 +506,7 @@ fn operator_class_occupied(kv: &dyn Kv, schema: &str, key: &ShadowKey) -> Result
     {
         return Ok(true);
     }
-    Ok(crabka_pgcatalog::list_operator_classes(kv)?
+    Ok(krabka_pgcatalog::list_operator_classes(kv)?
         .iter()
         .any(|class| {
             class.name.schema == schema
@@ -530,7 +530,7 @@ fn locate_operator_family(kv: &dyn Kv, oid: i32) -> Result<Option<Located>, Exec
             },
         }));
     }
-    Ok(crabka_pgcatalog::list_operator_families(kv)?
+    Ok(krabka_pgcatalog::list_operator_families(kv)?
         .into_iter()
         .find(|family| i32::try_from(family.oid) == Ok(oid))
         .map(|family| Located {
@@ -557,7 +557,7 @@ fn operator_family_occupied(kv: &dyn Kv, schema: &str, key: &ShadowKey) -> Resul
     {
         return Ok(true);
     }
-    Ok(crabka_pgcatalog::list_operator_families(kv)?
+    Ok(krabka_pgcatalog::list_operator_families(kv)?
         .iter()
         .any(|family| {
             family.name.schema == schema
@@ -572,7 +572,7 @@ fn operator_family_occupied(kv: &dyn Kv, schema: &str, key: &ShadowKey) -> Resul
 fn locate_text_search(
     kv: &dyn Kv,
     oid: i32,
-    kind: crabka_pgparser::ast::TextSearchObjectKind,
+    kind: krabka_pgparser::ast::TextSearchObjectKind,
 ) -> Result<Option<Located>, ExecError> {
     Ok(crate::text_search_catalog::catalog_rows(kv, kind)?
         .into_iter()
@@ -584,7 +584,7 @@ fn text_search_occupied(
     kv: &dyn Kv,
     schema: &str,
     name: &str,
-    kind: crabka_pgparser::ast::TextSearchObjectKind,
+    kind: krabka_pgparser::ast::TextSearchObjectKind,
 ) -> Result<bool, ExecError> {
     if schema != crate::search_path::PG_CATALOG {
         return Ok(false);
@@ -597,20 +597,20 @@ fn text_search_occupied(
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgtypes::{ColumnType, Datum};
+    use krabka_pgtypes::{ColumnType, Datum};
 
     use super::{Catalog, is_visible};
     use crate::{clock::EvalCtx, relname::ResolutionScope, search_path::SearchPath};
 
     /// A session context over `kv` whose `search_path` is `path`, spelled the
     /// way `SET search_path = …` spells it.
-    fn ctx(kv: &std::sync::Arc<dyn crabka_pgkv::Kv>, path: &[&str]) -> EvalCtx {
+    fn ctx(kv: &std::sync::Arc<dyn krabka_pgkv::Kv>, path: &[&str]) -> EvalCtx {
         ctx_as(kv, crate::catalog_fn::OBJECT_OWNER, path)
     }
 
     /// [`ctx`] under `user` rather than the bootstrap role, which is what the
     /// schema `USAGE` test the path walk makes is answered against.
-    fn ctx_as(kv: &std::sync::Arc<dyn crabka_pgkv::Kv>, user: &str, path: &[&str]) -> EvalCtx {
+    fn ctx_as(kv: &std::sync::Arc<dyn krabka_pgkv::Kv>, user: &str, path: &[&str]) -> EvalCtx {
         let scope = ResolutionScope {
             search_path: SearchPath::from_items(
                 &path.iter().map(|part| (*part).into()).collect::<Vec<_>>(),
@@ -628,11 +628,11 @@ mod tests {
 
     /// A catalog holding `CREATE SCHEMA s1; CREATE SCHEMA s2;` and one table in
     /// each of the schemas named in `tables`, as `schema.name` pairs.
-    fn catalog(tables: &[(&str, &str)]) -> std::sync::Arc<dyn crabka_pgkv::Kv> {
-        let kv: std::sync::Arc<dyn crabka_pgkv::Kv> =
-            std::sync::Arc::new(crabka_pgkv::MemKv::default());
+    fn catalog(tables: &[(&str, &str)]) -> std::sync::Arc<dyn krabka_pgkv::Kv> {
+        let kv: std::sync::Arc<dyn krabka_pgkv::Kv> =
+            std::sync::Arc::new(krabka_pgkv::MemKv::default());
         for schema in ["s1", "s2", "s3"] {
-            let ops = crabka_pgcatalog::create_schema_ops(
+            let ops = krabka_pgcatalog::create_schema_ops(
                 kv.as_ref(),
                 schema,
                 crate::catalog_fn::OBJECT_OWNER,
@@ -646,19 +646,19 @@ mod tests {
         kv
     }
 
-    fn create_table(kv: &dyn crabka_pgkv::Kv, schema: &str, name: &str) {
-        let (_, ops) = crabka_pgcatalog::create_table_ops(
+    fn create_table(kv: &dyn krabka_pgkv::Kv, schema: &str, name: &str) {
+        let (_, ops) = krabka_pgcatalog::create_table_ops(
             kv,
-            &crabka_pgcatalog::RelationName::new(schema, name),
-            vec![crabka_pgcatalog::Column::new("x", ColumnType::Int4)],
+            &krabka_pgcatalog::RelationName::new(schema, name),
+            vec![krabka_pgcatalog::Column::new("x", ColumnType::Int4)],
         )
         .expect("create table");
         kv.write_batch(&ops).expect("apply");
     }
 
-    fn oid_of(kv: &dyn crabka_pgkv::Kv, schema: &str, name: &str) -> Datum {
+    fn oid_of(kv: &dyn krabka_pgkv::Kv, schema: &str, name: &str) -> Datum {
         let table =
-            crabka_pgcatalog::get_table(kv, &crabka_pgcatalog::RelationName::new(schema, name))
+            krabka_pgcatalog::get_table(kv, &krabka_pgcatalog::RelationName::new(schema, name))
                 .expect("table");
         Datum::Int4(crate::catalog_rel::table_relation_oid(table.id).expect("oid"))
     }
@@ -667,14 +667,14 @@ mod tests {
     fn statistics_objects_follow_search_path_shadowing() {
         let kv = catalog(&[("s1", "t"), ("s2", "t")]);
         for schema in ["s1", "s2"] {
-            let table = crabka_pgcatalog::get_table(
+            let table = krabka_pgcatalog::get_table(
                 kv.as_ref(),
-                &crabka_pgcatalog::RelationName::new(schema, "t"),
+                &krabka_pgcatalog::RelationName::new(schema, "t"),
             )
             .expect("table");
-            let object = crabka_pgcatalog::statistics::Statistics {
+            let object = krabka_pgcatalog::statistics::Statistics {
                 oid: 0,
-                name: crabka_pgcatalog::RelationName::new(schema, "s"),
+                name: krabka_pgcatalog::RelationName::new(schema, "s"),
                 table_id: table.id,
                 owner: crate::catalog_fn::OBJECT_OWNER.into(),
                 target: -1,
@@ -685,11 +685,11 @@ mod tests {
                 inherited_data: None,
             };
             let ops =
-                crabka_pgcatalog::statistics::create_ops(kv.as_ref(), &object).expect("statistics");
+                krabka_pgcatalog::statistics::create_ops(kv.as_ref(), &object).expect("statistics");
             kv.write_batch(&ops).expect("write statistics");
         }
-        let first = Datum::Int4(crabka_pgcatalog::statistics::STATISTICS_OID_BASE as i32);
-        let second = Datum::Int4(crabka_pgcatalog::statistics::STATISTICS_OID_BASE as i32 + 1);
+        let first = Datum::Int4(krabka_pgcatalog::statistics::STATISTICS_OID_BASE as i32);
+        let second = Datum::Int4(krabka_pgcatalog::statistics::STATISTICS_OID_BASE as i32 + 1);
         let ctx = ctx(&kv, &["s1", "s2"]);
         assert!(
             is_visible(Catalog::StatisticsObject, &first, &ctx).expect("s1") == Datum::Bool(true)
@@ -736,8 +736,8 @@ mod tests {
     #[test]
     fn a_relation_in_a_schema_the_role_cannot_search_is_neither_visible_nor_shadowing() {
         let kv = catalog(&[("s1", "t"), ("s2", "t"), ("s1", "only_s1")]);
-        crabka_pgcatalog::create_role(kv.as_ref(), "lowly", true).expect("role");
-        let ops = crabka_pgcatalog::grant_schema_privileges_ops(
+        krabka_pgcatalog::create_role(kv.as_ref(), "lowly", true).expect("role");
+        let ops = krabka_pgcatalog::grant_schema_privileges_ops(
             kv.as_ref(),
             &["s2".to_string()],
             &["lowly".to_string()],
@@ -863,12 +863,12 @@ mod tests {
         assert!(
             is_visible(Catalog::Relation, &oid, &session).expect("visible") == Datum::Bool(false)
         );
-        let call = crabka_pgparser::ast::FuncCall {
+        let call = krabka_pgparser::ast::FuncCall {
             sql_syntax: false,
             name: "pg_relation_is_publishable".into(),
             distinct: false,
-            args: crabka_pgparser::ast::FuncArgs::Exprs(vec![
-                crabka_pgparser::ast::Expr::IntLiteral("0".into()),
+            args: krabka_pgparser::ast::FuncArgs::Exprs(vec![
+                krabka_pgparser::ast::Expr::IntLiteral("0".into()),
             ]),
             order_by: Vec::new(),
             within_group: false,

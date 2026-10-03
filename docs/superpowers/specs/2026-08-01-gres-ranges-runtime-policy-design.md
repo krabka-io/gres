@@ -3,17 +3,17 @@
 ## Goal
 
 Expose the deployment-owned limits and pacing currently embedded in
-`crabka-gres-ranges`, preserving all defaults and keeping protocol, format,
+`krabka-gres-ranges`, preserving all defaults and keeping protocol, format,
 sentinel, and derived values fixed.
 
 ## Configuration ownership
 
-`crabka-gres-ranges` owns one validated `RangeRuntimePolicy`. It contains UOM
+`krabka-gres-ranges` owns one validated `RangeRuntimePolicy`. It contains UOM
 `Time` and `ByteSize` values plus positive refined count/stride newtypes. It
 does not depend on Clap or Kubernetes.
 
-The existing `crabka-gres` `ServeArgs` surface accepts optional flags backed by
-`CRABKA_GRES_RANGE_*` environment variables. `SubstrateRuntimeConfig` resolves
+The existing `krabka-gres` `ServeArgs` surface accepts optional flags backed by
+`KRABKA_GRES_RANGE_*` environment variables. `SubstrateRuntimeConfig` resolves
 omissions to `RangeRuntimePolicy::default()` and carries the policy to the
 existing tenant, transport, forwarder, barrier, and timestamp-oracle owners.
 

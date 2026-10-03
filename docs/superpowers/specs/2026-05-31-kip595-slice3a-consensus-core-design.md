@@ -15,7 +15,7 @@ Slice 3 is itself a mini-program, decomposed into sub-slices that each leave the
 tree green:
 
 - **3a — KRaft consensus core (this doc):** the pure quorum state machine.
-- **3b — KRaft log + pull replication** over `crabka-log`.
+- **3b — KRaft log + pull replication** over `krabka-log`.
 - **3c — wire integration & cutover:** drive core+log from the controller
   listener on the real api keys (1, 52–54), replace the `Raft<TypeConfig>`
   instance behind the unchanged `ControllerHandle`, delete openraft.

@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use assert2::{assert, check};
-use crabka_operator::{
+use krabka_operator::{
     controller::kafka::reconcile,
     crd::{
         BootstrapConfig, BrokerOverride, Kafka, KafkaSpec, Listener, ListenerConfiguration,

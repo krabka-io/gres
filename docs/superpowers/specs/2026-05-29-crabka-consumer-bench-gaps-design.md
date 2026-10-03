@@ -2,15 +2,15 @@
 
 **Status:** Approved (design)
 **Date:** 2026-05-29
-**Scope:** `crabka-protocol` (records payload decode), `crabka-client-consumer`
+**Scope:** `krabka-protocol` (records payload decode), `krabka-client-consumer`
 (group-join + decode), supporting tests. No on-disk format or wire-format
 changes.
 
 ## Background
 
 The Kubernetes benchmark harness (`bench/`) runs a single Rust load driver
-(`crates/bench-driver/`, built on `crabka-client-consumer` /
-`crabka-client-producer`) **unmodified against both stacks** — Apache Kafka
+(`crates/bench-driver/`, built on `krabka-client-consumer` /
+`krabka-client-producer`) **unmodified against both stacks** — Apache Kafka
 via Strimzi and Crabka via its own operator. Running it surfaced two
 consumer-side gaps that are invisible in crabka→crabka testing but break
 crabka→Kafka and degrade failover behavior:
@@ -134,7 +134,7 @@ with backoff up to a timeout.
 
 ### Fix
 
-A bounded retry-with-backoff helper in `crabka-client-consumer`, applied to the
+A bounded retry-with-backoff helper in `krabka-client-consumer`, applied to the
 group-coordinator request path:
 
 - **Retriable conditions:** error codes 14, 15, 16, and transient transport

@@ -133,7 +133,7 @@ Pure, no I/O:
   first-seen order (idempotency guard so a re-reconcile doesn't grow the
   bundle).
 
-### Security crate (`crabka_security::ca`)
+### Security crate (`krabka_security::ca`)
 
 Add same-key re-sign helpers (mirror `generate_cluster_ca` / `generate_clients_ca`,
 but `KeyPair::from_pem(existing)` instead of generating a key):
@@ -306,7 +306,7 @@ probe (below).
 ## Testing & validation strategy
 
 **Unit (pure, no mock) — the bulk:**
-- `crabka_security::ca`: `renew_cluster_ca`/`renew_clients_ca` reuse the key
+- `krabka_security::ca`: `renew_cluster_ca`/`renew_clients_ca` reuse the key
   (same SPKI), keep subject DN (incl. `OU=cluster`), extend validity, and a
   leaf signed by the *old* cert verifies against the *renewed* cert.
 - bundle helpers: split / signing / join round-trip; `prune_expired` keeps the

@@ -1,7 +1,7 @@
-# crabka-broker
+# krabka-broker
 
-[![Crates.io](https://img.shields.io/crates/v/crabka-broker.svg)](https://crates.io/crates/crabka-broker)
-[![Docs.rs](https://docs.rs/crabka-broker/badge.svg)](https://docs.rs/crabka-broker)
+[![Crates.io](https://img.shields.io/crates/v/krabka-broker.svg)](https://crates.io/crates/krabka-broker)
+[![Docs.rs](https://docs.rs/krabka-broker/badge.svg)](https://docs.rs/krabka-broker)
 [![CI](https://github.com/robot-head/crabka/actions/workflows/ci.yml/badge.svg)](https://github.com/robot-head/crabka/actions/workflows/ci.yml)
 
 Single-node Apache Kafka-compatible broker (MVP).
@@ -11,7 +11,7 @@ This crate is part of [Crabka](https://github.com/robot-head/crabka), a Rust imp
 ## Install
 
 ```sh
-cargo add crabka-broker
+cargo add krabka-broker
 ```
 
 For workspace development, use the path dependency from this repository instead.
@@ -22,14 +22,14 @@ Start a single-node broker with a local data directory:
 
 ```rust,no_run
 use std::net::SocketAddr;
-use crabka_broker::{Broker, BrokerConfig};
+use krabka_broker::{Broker, BrokerConfig};
 
 # async fn run() -> Result<(), Box<dyn std::error::Error>> {
 let listen_addr: SocketAddr = "127.0.0.1:9092".parse()?;
 let config = BrokerConfig {
     listen_addr,
     advertised_listener: listen_addr.to_string(),
-    log_dir: "./target/crabka-data".into(),
+    log_dir: "./target/krabka-data".into(),
     ..BrokerConfig::default()
 };
 
@@ -58,7 +58,7 @@ broker restart. Inbound validation uses the existing `[oauthbearer]` policy.
 
 ## Documentation
 
-Read the API documentation on [docs.rs/crabka-broker](https://docs.rs/crabka-broker). The repository README contains the project-wide setup, development, and release notes.
+Read the API documentation on [docs.rs/krabka-broker](https://docs.rs/krabka-broker). The repository README contains the project-wide setup, development, and release notes.
 
 ## License
 

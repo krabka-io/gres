@@ -6,9 +6,9 @@
 
 **Architecture:** A subscription's SQL filter is compiled once (per `schema_id`) into a DataFusion `PhysicalExpr` against the record's Arrow schema; each fetched batch is decoded to an Arrow `RecordBatch` via `RowBridge` (enums → `Dictionary<Utf8>` symbol names), the predicate is evaluated to a boolean mask, and only masked-true records are delivered as their original verbatim bytes. Reuses landed code (Schema Registry, `schema-serde`, `RowBridge`, DataFusion, the `Subscribe` stream); the one net-new decode addition is enum int→name mapping.
 
-**Tech Stack:** Rust 2024 (pinned stable 1.96.0), DataFusion (workspace git pin) + Arrow, `crabka-schema-serde`/`crabka-schema-registry`, `crabka-client-streams` (`RowBridge`/`RowCodec`), `prost`/Connect-RPC, `assert2`, `cargo +nightly fmt`, `clippy::pedantic`.
+**Tech Stack:** Rust 2024 (pinned stable 1.96.0), DataFusion (workspace git pin) + Arrow, `krabka-schema-serde`/`krabka-schema-registry`, `krabka-client-streams` (`RowBridge`/`RowCodec`), `prost`/Connect-RPC, `assert2`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-schema-subscription-filter-design.md`](../specs/2026-07-06-crabka-schema-subscription-filter-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-schema-subscription-filter-design.md`](../specs/2026-07-06-krabka-schema-subscription-filter-design.md).
 
 ---
 
@@ -58,7 +58,7 @@ Remove the `FieldPredicate` message (`:34`) and the `PredicateOp` enum (grep the
 
 - [ ] **Step 2: Build + commit**
 
-Run: `cargo build -p crabka-grpc-gateway` — compiles once the `FieldPredicate` references in `streaming.rs` are removed (Task 4); for now this step just regenerates `pb`. If the build blocks on `streaming.rs`, land Task 4's removal together.
+Run: `cargo build -p krabka-grpc-gateway` — compiles once the `FieldPredicate` references in `streaming.rs` are removed (Task 4); for now this step just regenerates `pb`. If the build blocks on `streaming.rs`, land Task 4's removal together.
 
 ```bash
 git add crates/grpc-gateway/proto/crabka/gateway/v1/gateway.proto
@@ -123,7 +123,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-grpc-gateway filter::`
+Run: `cargo test -p krabka-grpc-gateway filter::`
 Expected: FAIL — `CompiledFilter` undefined.
 
 - [ ] **Step 3: Implement `CompiledFilter`**
@@ -189,7 +189,7 @@ impl CompiledFilter {
 
 - [ ] **Step 4: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-grpc-gateway filter::` → PASS.
+Run: `cargo test -p krabka-grpc-gateway filter::` → PASS.
 
 ```bash
 git add crates/grpc-gateway/src/filter.rs
@@ -220,7 +220,7 @@ In the columnar decode (`crates/client-streams/src/columnar/serde/arrow.rs` and 
 
 - [ ] **Step 3: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-client-streams enum_field_decodes` → PASS.
+Run: `cargo test -p krabka-client-streams enum_field_decodes` → PASS.
 
 ```bash
 git add crates/client-streams/src/columnar/serde/arrow.rs
@@ -249,7 +249,7 @@ Preserve the existing pre-stream Read-ACL gate on the group + topics (unchanged)
 
 - [ ] **Step 3: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-grpc-gateway` (subscribe + filter tests) → PASS.
+Run: `cargo test -p krabka-grpc-gateway` (subscribe + filter tests) → PASS.
 
 ```bash
 git add crates/grpc-gateway/src/streaming.rs crates/grpc-gateway/src/consume.rs
@@ -262,7 +262,7 @@ git commit -m "feat(gateway): server-enforced complex subscription filtering ove
 
 - [ ] **Step 1:** `cargo +nightly fmt --check` — no diff.
 - [ ] **Step 2:** `cargo clippy --workspace --all-targets -- -D warnings` — no warnings.
-- [ ] **Step 3:** `cargo nextest run -p crabka-grpc-gateway -p crabka-client-streams` (or `cargo test`) — PASS, including the nested-protobuf + enum-by-name + Avro-parity + schema-evolution filter tests.
+- [ ] **Step 3:** `cargo nextest run -p krabka-grpc-gateway -p krabka-client-streams` (or `cargo test`) — PASS, including the nested-protobuf + enum-by-name + Avro-parity + schema-evolution filter tests.
 - [ ] **Step 4:** Commit any formatting.
 
 ---

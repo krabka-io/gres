@@ -2,7 +2,7 @@
 
 ## Goal
 
-Add the operator-facing admin handlers to `crabka-broker` so the JVM
+Add the operator-facing admin handlers to `krabka-broker` so the JVM
 `kafka-*.sh` tools work against a Rust broker without skipping or
 falling back to JVM brokers. No new crate. No Rust CLI (deferred to a
 future slice). No ACLs or quotas (deferred).
@@ -50,7 +50,7 @@ changes; the partition writer actor for log trims).
 
 ### Mutable topic config record
 
-New variant in `crabka_metadata::MetadataRecord`:
+New variant in `krabka_metadata::MetadataRecord`:
 
 ```rust
 MetadataRecord::V1TopicConfig {
@@ -98,14 +98,14 @@ Every other key — `INVALID_CONFIG` with the offending key in
 
 ### Live propagation
 
-`crabka_log::Log` currently owns `LogConfig` by value. Wrap in
+`krabka_log::Log` currently owns `LogConfig` by value. Wrap in
 `Arc<RwLock<LogConfig>>` so the broker can swap fields while
 retention/roll loops keep running. Retention and segment-roll checks
 already snapshot the config at the top of each iteration; the lock is
 held for trivially short windows.
 
 ```rust
-// crabka_log
+// krabka_log
 pub struct Log {
     config: Arc<RwLock<LogConfig>>,
     // ...
@@ -349,7 +349,7 @@ Standard guardrails:
 | `controller.submit_change` not leader | 41 `NOT_CONTROLLER` | |
 | Anything else | -1 `UNKNOWN_SERVER_ERROR` | |
 
-All codes already exist in `crabka_broker::codes`. No new variants.
+All codes already exist in `krabka_broker::codes`. No new variants.
 
 ## Testing
 
@@ -438,7 +438,7 @@ broker for any of these calls.
 
 ## Out of scope
 
-- Rust `crabka-cli` (kafka-*.sh-parity command-line tool). Separate
+- Rust `krabka-cli` (kafka-*.sh-parity command-line tool). Separate
   future slice.
 - ACLs (CreateAcls/DescribeAcls/DeleteAcls, api_keys 30/29/31).
   Separate slice; needs an authorizer interface first.

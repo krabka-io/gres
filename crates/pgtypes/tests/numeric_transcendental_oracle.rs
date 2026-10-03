@@ -43,7 +43,7 @@ fn pg(sql: &str) -> String {
 
 /// Our engine's `numeric_out` text for a unary transcendental.
 fn ours_unary(f: &str, arg: &str) -> Option<String> {
-    use crabka_pgtypes::numeric::{num_exp, num_ln, num_log10, num_sqrt, parse, to_text};
+    use krabka_pgtypes::numeric::{num_exp, num_ln, num_log10, num_sqrt, parse, to_text};
     let a = parse(arg).expect("parse arg");
     let bd = match f {
         "sqrt" => num_sqrt(&a).ok()?,
@@ -57,7 +57,7 @@ fn ours_unary(f: &str, arg: &str) -> Option<String> {
 
 /// Our engine's `numeric_out` text for `power(base, exp)`.
 fn ours_power(base: &str, exp: &str) -> Option<String> {
-    use crabka_pgtypes::numeric::{num_power, parse, to_text};
+    use krabka_pgtypes::numeric::{num_power, parse, to_text};
     let b = parse(base).expect("parse base");
     let e = parse(exp).expect("parse exp");
     Some(to_text(&num_power(&b, &e).ok()?))

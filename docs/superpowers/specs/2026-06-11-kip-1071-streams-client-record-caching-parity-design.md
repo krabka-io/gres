@@ -185,7 +185,7 @@ gate in one place (parallel agents in the same worktree don't cross-verify):
 ```bash
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test -p crabka-client-streams
+cargo test -p krabka-client-streams
 cargo build --workspace
 ```
 

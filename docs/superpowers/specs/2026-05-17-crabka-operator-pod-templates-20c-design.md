@@ -156,7 +156,7 @@ The renderer must remain pure (no I/O); all merge logic is local to the function
 
 ### Unit tests (in `controller/kafka_node_pool.rs::tests`)
 
-- `render_statefulset_template_labels_merge_under_operator_labels` — user provides `{foo: bar, app.kubernetes.io/name: hijack}`; assert rendered pod-template labels contain `foo=bar` AND `app.kubernetes.io/name=crabka-broker` (operator wins).
+- `render_statefulset_template_labels_merge_under_operator_labels` — user provides `{foo: bar, app.kubernetes.io/name: hijack}`; assert rendered pod-template labels contain `foo=bar` AND `app.kubernetes.io/name=krabka-broker` (operator wins).
 - `render_statefulset_template_annotations_apply` — user provides `{custom-anno: v}`; assert rendered pod-template annotations contain `custom-anno=v`.
 - `render_statefulset_affinity_passes_through` — construct a small `Affinity` (e.g., `podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution` with one term); assert it serializes into `spec.template.spec.affinity`.
 - `render_statefulset_tolerations_passes_through` — user provides one toleration with key `dedicated`; assert it lands in `spec.template.spec.tolerations`.
@@ -237,9 +237,9 @@ In practice T1 → T2 → T3‖T4 → T5, because T2 imports T1's types.
 
 ## 6. Acceptance criteria
 
-1. `cargo test -p crabka-operator` green (existing + new renderer / round-trip tests).
+1. `cargo test -p krabka-operator` green (existing + new renderer / round-trip tests).
 2. `cargo clippy --workspace --all-targets -- -D warnings` clean.
-3. `helm lint charts/crabka-operator` passes.
+3. `helm lint charts/krabka-operator` passes.
 4. CRD regen is stable.
 5. operator-e2e: `KafkaNodePool brokers` with `template.{metadata.labels, metadata.annotations, tolerations, nodeSelector}` lands on the pod and is observable via `kubectl get pod ... -o jsonpath`.
 

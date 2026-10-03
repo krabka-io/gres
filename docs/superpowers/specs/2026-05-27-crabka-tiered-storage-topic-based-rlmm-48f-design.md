@@ -3,7 +3,7 @@
 **Date:** 2026-05-27
 **Status:** Slice design. Follows slice 48e (remote retention + partition
 delete). Part of the KIP-405 umbrella
-(`docs/superpowers/specs/2026-05-25-crabka-tiered-storage-roadmap-design.md`).
+(`docs/superpowers/specs/2026-05-25-krabka-tiered-storage-roadmap-design.md`).
 
 ## Goal
 
@@ -72,7 +72,7 @@ assignment is an optimization deferred to a follow-up.
 ## Crate layout
 
 A new workspace member, **`crates/remote-storage-topic`**
-(`crabka-remote-storage-topic`):
+(`krabka-remote-storage-topic`):
 
 ```
 crates/remote-storage-topic/
@@ -89,13 +89,13 @@ crates/remote-storage-topic/
 
 Dependencies:
 
-- `crabka-remote-storage` — the SPI traits + data model + the
+- `krabka-remote-storage` — the SPI traits + data model + the
   `RemoteLogMetadataCache` (slice 48a exposes it as `pub` for re-use
   by this crate; the in-memory manager keeps wrapping it).
-- `crabka-client-producer`, `crabka-client-consumer`,
-  `crabka-client-admin`, `crabka-client-core` — the runtime
+- `krabka-client-producer`, `krabka-client-consumer`,
+  `krabka-client-admin`, `krabka-client-core` — the runtime
   publish/subscribe machinery and the topic-create call.
-- `crabka-protocol` — record types (`RecordBatch`, `Record`) for
+- `krabka-protocol` — record types (`RecordBatch`, `Record`) for
   the consumer side.
 - `tokio` — the async runtime the producer/consumer require; the
   TBRLMM holds a `runtime::Handle` to bridge the sync RLMM SPI.
@@ -153,9 +153,9 @@ Two implementations ship in 48f:
   fixture see each other's writes, modeling the multi-broker case
   without bringing up a cluster.
 - **`KafkaMetadataEventLog`** (`kafka_log.rs`) — the production
-  implementation. Holds a `crabka_client_producer::Producer`, spawns
-  per-partition `crabka_client_consumer::Consumer` poll loops, and
-  uses `crabka_client_admin::AdminClient` to ensure the topic exists
+  implementation. Holds a `krabka_client_producer::Producer`, spawns
+  per-partition `krabka_client_consumer::Consumer` poll loops, and
+  uses `krabka_client_admin::AdminClient` to ensure the topic exists
   on startup with the configured partition count and replication
   factor.
 
@@ -454,7 +454,7 @@ configurable RLMM.
 
 - `cargo fmt --all --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test -p crabka-remote-storage-topic`
+- `cargo test -p krabka-remote-storage-topic`
 - `cargo test --workspace` (no regressions; the existing
   remote-storage / broker tests still pass against the in-memory
   default)

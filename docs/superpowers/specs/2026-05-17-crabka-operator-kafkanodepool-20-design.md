@@ -47,7 +47,7 @@
 
 ### Constraints inherited from slice 19
 
-- The `crabka-broker` binary still runs single-broker mixed-mode KRaft (`BootstrapMode::Bootstrap`, self-voter). The operator passes `--broker-id=$(NODE_ID)` (derived in the init script from `nodeIdStart`); broker still binds 9092 + 9093 and self-references in the quorum voter list.
+- The `krabka-broker` binary still runs single-broker mixed-mode KRaft (`BootstrapMode::Bootstrap`, self-voter). The operator passes `--broker-id=$(NODE_ID)` (derived in the init script from `nodeIdStart`); broker still binds 9092 + 9093 and self-references in the quorum voter list.
 - Cluster-ID Secret remains owned by the parent Kafka, not the pool — every pool in a cluster shares the same cluster id.
 - Single-pool deployment is the only validated configuration; multi-pool support requires the broker CLI extensions and is deferred.
 
@@ -176,7 +176,7 @@ Largely identical to slice 19's, with three differences:
 - **Init container's `--broker-id`:** derived from `nodeIdStart + ordinal`, computed in the init script.
 - **`serviceName`:** `<kafka>-broker-headless` (the shared headless service owned by the parent Kafka).
 - **Pod labels:**
-  - `app.kubernetes.io/name = crabka-broker`
+  - `app.kubernetes.io/name = krabka-broker`
   - `app.kubernetes.io/instance = <kafka>` (matches the shared headless `Service` selector)
   - `app.kubernetes.io/version = <Kafka.spec.kafkaVersion>`
   - `crabka.io/pool = <pool>` (selector for future pool-specific queries)
@@ -188,7 +188,7 @@ set -eu
 ORDINAL="${HOSTNAME##*-}"
 NODE_ID=$((NODE_ID_START + ORDINAL))
 if [ ! -f /var/lib/crabka/data/.formatted ]; then
-  /usr/bin/crabka format --log-dir /var/lib/crabka/data --cluster-id "$CRABKA_CLUSTER_ID"
+  /usr/bin/crabka format --log-dir /var/lib/crabka/data --cluster-id "$KRABKA_CLUSTER_ID"
   touch /var/lib/crabka/data/.formatted
 fi
 echo "$NODE_ID" > /var/lib/crabka/data/.node-id
@@ -197,7 +197,7 @@ echo "$NODE_ID" > /var/lib/crabka/data/.node-id
 The main container reads `.node-id` and substitutes it into the broker args via a small entrypoint shell:
 
 ```sh
-exec /usr/bin/crabka-broker \
+exec /usr/bin/krabka-broker \
   --listen-addr=0.0.0.0:9092 \
   --log-dir=/var/lib/crabka/data \
   --broker-id="$(cat /var/lib/crabka/data/.node-id)"
@@ -207,8 +207,8 @@ This requires `busybox` in the broker image (already present from slice 19 hotfi
 
 Env vars on both init and main:
 - `NODE_ID_START` (literal int from pool spec; baked into the StatefulSet template at render time).
-- `CRABKA_CLUSTER_ID` (from the shared cluster-id Secret).
-- `CRABKA_ADVERTISED_LISTENER` = `$(POD_NAME).<kafka>-broker-headless.$(POD_NAMESPACE).svc.cluster.local:9092`.
+- `KRABKA_CLUSTER_ID` (from the shared cluster-id Secret).
+- `KRABKA_ADVERTISED_LISTENER` = `$(POD_NAME).<kafka>-broker-headless.$(POD_NAMESPACE).svc.cluster.local:9092`.
 
 ---
 
@@ -216,11 +216,11 @@ Env vars on both init and main:
 
 ### CRD YAML
 
-`deploy/crds/crabka.io_kafkanodepools.yaml` is regenerated from the Rust types via `crabka-operator gen-crds`. The slice-19 `deploy/crds/crabka.io_kafkas.yaml` also regenerates (the spec lost three fields).
+`deploy/crds/crabka.io_kafkanodepools.yaml` is regenerated from the Rust types via `krabka-operator gen-crds`. The slice-19 `deploy/crds/crabka.io_kafkas.yaml` also regenerates (the spec lost three fields).
 
 ### `ClusterRole`
 
-`charts/crabka-operator/templates/clusterrole.yaml` gains:
+`charts/krabka-operator/templates/clusterrole.yaml` gains:
 
 ```yaml
   - apiGroups: ["crabka.io"]
@@ -304,7 +304,7 @@ Assertions:
 - `Kafka demo` reaches `Ready=True`.
 - `KafkaNodePool brokers` reaches `Ready=True` independently.
 - Pod `demo-brokers-0` runs (broker StatefulSet renamed from slice-19's `demo-broker-0`).
-- `crabka-broker --version` exec returns 0 and `crabka-broker listening` appears in logs (same smoke as slice 19).
+- `krabka-broker --version` exec returns 0 and `krabka-broker listening` appears in logs (same smoke as slice 19).
 - `kubectl delete kafka demo` cascades to the pool, which cascades to the StatefulSet. After 60 s, no `kafkanodepool`, no `statefulset`, no `service`, no `configmap`, no `secret` with the cluster label remain.
 
 The CRD-install step gains `deploy/crds/crabka.io_kafkanodepools.yaml`.
@@ -331,7 +331,7 @@ crates/operator/tests/
 deploy/crds/
 ├── crabka.io_kafkas.yaml              # REGENERATED
 ├── crabka.io_kafkanodepools.yaml      # NEW
-charts/crabka-operator/templates/
+charts/krabka-operator/templates/
 ├── clusterrole.yaml                   # MODIFIED — knp verbs
 .github/workflows/
 ├── operator-e2e.yml                   # MODIFIED — apply KafkaNodePool + assert
@@ -357,8 +357,8 @@ Implementation plan target: **~11 tasks across 4 batches**.
 
 ## 9. Acceptance criteria
 
-1. `cargo test -p crabka-operator` green (existing + new tests across `reconcile_kafka.rs` and `reconcile_pool.rs`).
+1. `cargo test -p krabka-operator` green (existing + new tests across `reconcile_kafka.rs` and `reconcile_pool.rs`).
 2. `cargo clippy --workspace --all-targets -- -D warnings` clean.
-3. `helm lint charts/crabka-operator` passes.
-4. `crabka-operator gen-crds` is stable (both `kafkas` and `kafkanodepools` CRDs regen with no further drift).
+3. `helm lint charts/krabka-operator` passes.
+4. `krabka-operator gen-crds` is stable (both `kafkas` and `kafkanodepools` CRDs regen with no further drift).
 5. operator-e2e workflow: apply `Kafka demo` + `KafkaNodePool brokers`; both reach `Ready=True`; `demo-brokers-0` pod is Ready; cascade-delete clears all owned objects within 60 s.

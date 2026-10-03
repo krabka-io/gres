@@ -232,7 +232,7 @@ mod tests {
 Run:
 
 ```bash
-cargo test -p crabka-broker config_value::tests::refined_scalar_boundaries
+cargo test -p krabka-broker config_value::tests::refined_scalar_boundaries
 ```
 
 Expected: compilation fails because the module, dependency, and parser functions are not implemented.
@@ -306,8 +306,8 @@ pub mod config_value;
 Run:
 
 ```bash
-cargo test -p crabka-broker config_value::tests::refined_scalar_boundaries
-cargo clippy -p crabka-broker --all-targets -- -D warnings
+cargo test -p krabka-broker config_value::tests::refined_scalar_boundaries
+cargo clippy -p krabka-broker --all-targets -- -D warnings
 ```
 
 Expected: both commands pass. Remove any unused import rather than suppressing the warning.
@@ -366,8 +366,8 @@ chmod +x tools/audit-runtime-values.sh
 Run:
 
 ```bash
-tools/audit-runtime-values.sh | rg '^crates/broker/' > /tmp/crabka-broker-runtime-values.txt
-wc -l /tmp/crabka-broker-runtime-values.txt
+tools/audit-runtime-values.sh | rg '^crates/broker/' > /tmp/krabka-broker-runtime-values.txt
+wc -l /tmp/krabka-broker-runtime-values.txt
 ```
 
 Expected: the count is nonzero and includes `STARTUP_LEADER_WAIT_TIMEOUT`, `AUTO_JOIN` retry policy, replicator policy, cleaner cadence, coordinator cadence, and protocol-code constants.
@@ -407,7 +407,7 @@ The audit follows the scope in the runtime-configuration design. Paths and line 
 - Epoch sentinels, bit masks, record markers, and fixed collection sizes derived from protocol shapes: invariants.
 ```
 
-For every remaining line in `/tmp/crabka-broker-runtime-values.txt`, add it to one of these groups before continuing. Do not leave an unclassified broker candidate.
+For every remaining line in `/tmp/krabka-broker-runtime-values.txt`, add it to one of these groups before continuing. Do not leave an unclassified broker candidate.
 
 - [ ] **Step 4: Verify ledger coverage**
 
@@ -498,7 +498,7 @@ fn operational_policy_defaults_match_existing_behavior() {
 Run:
 
 ```bash
-cargo test -p crabka-broker operational_policy_defaults_match_existing_behavior
+cargo test -p krabka-broker operational_policy_defaults_match_existing_behavior
 ```
 
 Expected: compilation fails because the fields and nested replication config do not yet exist.
@@ -564,10 +564,10 @@ For coordinator config structs that already exist, replace their default literal
 Run:
 
 ```bash
-cargo test -p crabka-broker operational_policy_defaults_match_existing_behavior
-cargo test -p crabka-broker config
-cargo test -p crabka-broker replicator
-cargo test -p crabka-broker coordinator
+cargo test -p krabka-broker operational_policy_defaults_match_existing_behavior
+cargo test -p krabka-broker config
+cargo test -p krabka-broker replicator
+cargo test -p krabka-broker coordinator
 ```
 
 Expected: all tests pass, and the default snapshot equals the pre-change values.
@@ -590,7 +590,7 @@ git commit -m "refactor(broker): centralize runtime policy"
 
 **Interfaces:**
 
-- Produces: direct `--<name>` plus `CRABKA_<NAME>` inputs and `[runtime]` TOML inputs.
+- Produces: direct `--<name>` plus `KRABKA_<NAME>` inputs and `[runtime]` TOML inputs.
 - Consumes: refined parser functions from Task 1 and `BrokerConfig` fields from Task 3.
 
 - [ ] **Step 1: Add failing CLI parsing tests**
@@ -620,7 +620,7 @@ fn runtime_policy_cli_rejects_invalid_and_accepts_valid_values() {
 Run:
 
 ```bash
-cargo test -p crabka-broker runtime_policy_cli_rejects_invalid_and_accepts_valid_values
+cargo test -p krabka-broker runtime_policy_cli_rejects_invalid_and_accepts_valid_values
 ```
 
 Expected: the new option names are unknown.
@@ -632,11 +632,11 @@ Add one field per configurable ledger entry. Follow this exact pattern:
 ```rust
 #[arg(
     long,
-    env = "CRABKA_CLEANER_INTERVAL_MS",
+    env = "KRABKA_CLEANER_INTERVAL_MS",
     default_value = "30000",
-    value_parser = crabka_broker::config_value::parse_positive_millis
+    value_parser = krabka_broker::config_value::parse_positive_millis
 )]
-cleaner_interval_ms: crabka_broker::config_value::PositiveMillis,
+cleaner_interval_ms: krabka_broker::config_value::PositiveMillis,
 ```
 
 Use the positive refined parsers for nonzero milliseconds, counts, signed fetch values, delegation-token durations, and byte sizes. Use the percentage parser for bounded percentages.
@@ -683,8 +683,8 @@ Compare the resulting config tuple against the exact durations and integers. Add
 Run:
 
 ```bash
-cargo test -p crabka-broker --bin crabka-broker runtime_policy_cli
-cargo test -p crabka-broker file_config
+cargo test -p krabka-broker --bin krabka-broker runtime_policy_cli
+cargo test -p krabka-broker file_config
 ```
 
 Expected: all tests pass.
@@ -747,7 +747,7 @@ replication_fetch_min_bytes = 2
 Run:
 
 ```bash
-cargo test -p crabka-operator --test reconcile_kafka broker_tuning
+cargo test -p krabka-operator --test reconcile_kafka broker_tuning
 ```
 
 Expected: compilation fails because `broker_tuning` and `BrokerTuning` do not exist.
@@ -786,7 +786,7 @@ pub broker_tuning: Option<BrokerTuning>,
 
 Add `refined_type.workspace = true` to the operator and validate each present field before rendering. Use the same `Greater*` or `MinMax*` rule as the broker input parser. Return a `KafkaConfigInvalid` condition whose message contains the camel-case CRD path.
 
-Do not depend on `crabka-broker` from production operator code merely to share aliases; use `refined_type` directly and keep the service-specific field ownership in the broker.
+Do not depend on `krabka-broker` from production operator code merely to share aliases; use `refined_type` directly and keep the service-specific field ownership in the broker.
 
 - [ ] **Step 5: Render `[runtime]` deterministically**
 
@@ -811,8 +811,8 @@ Expected: generated schema contains `brokerTuning`, representative fields, and n
 Run:
 
 ```bash
-cargo test -p crabka-operator --lib crd
-cargo test -p crabka-operator --test reconcile_kafka
+cargo test -p krabka-operator --lib crd
+cargo test -p krabka-operator --test reconcile_kafka
 ```
 
 Expected: all tests pass.
@@ -844,7 +844,7 @@ Run:
 
 ```bash
 cargo +nightly fmt --all -- --check
-cargo clippy -p crabka-broker -p crabka-operator --all-targets -- -D warnings
+cargo clippy -p krabka-broker -p krabka-operator --all-targets -- -D warnings
 git diff --check
 ```
 
@@ -855,7 +855,7 @@ Expected: all commands pass.
 Run:
 
 ```bash
-cargo nextest run -p crabka-broker -p crabka-operator
+cargo nextest run -p krabka-broker -p krabka-operator
 ```
 
 Expected: all tests pass.
@@ -865,7 +865,7 @@ Expected: all tests pass.
 Run:
 
 ```bash
-tools/audit-runtime-values.sh | rg '^crates/broker/' > /tmp/crabka-broker-runtime-values-final.txt
+tools/audit-runtime-values.sh | rg '^crates/broker/' > /tmp/krabka-broker-runtime-values-final.txt
 ```
 
 Review every line against `docs/configuration-audit.md`. Any operational value still consumed directly is incomplete work; configure it before continuing. Any newly discovered fixed value gets a concrete exclusion reason.
@@ -875,9 +875,9 @@ Review every line against `docs/configuration-audit.md`. Any operational value s
 Run:
 
 ```bash
-cargo run -p crabka-broker -- --help | rg 'cleaner-interval|replication-fetch|opa-http'
-cargo run -p crabka-operator -- gen-crds /tmp/crabka-config-crds
-diff -u deploy/crds/crabka.io_kafkas.yaml /tmp/crabka-config-crds/crabka.io_kafkas.yaml
+cargo run -p krabka-broker -- --help | rg 'cleaner-interval|replication-fetch|opa-http'
+cargo run -p krabka-operator -- gen-crds /tmp/krabka-config-crds
+diff -u deploy/crds/crabka.io_kafkas.yaml /tmp/krabka-config-crds/crabka.io_kafkas.yaml
 ```
 
 Expected: help lists the representative direct options and regenerated CRD output is identical.

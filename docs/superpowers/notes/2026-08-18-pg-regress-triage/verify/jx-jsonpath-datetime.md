@@ -33,7 +33,7 @@ Sub-claims checked against source:
   (`ExecError::Unsupported("jsonpath .datetime(template) is not supported")`),
   precision args -> `self.error_here()` syntax error at line 1023. CONFIRMED.
 - datetime_method (jsonpath.rs:1995-2040) casts through
-  `crabka_pgtypes::cast::cast(&source, target, &TimeZone::UTC)` and returns
+  `krabka_pgtypes::cast::cast(&source, target, &TimeZone::UTC)` and returns
   `JsonbValue::String`; renders with `encoding::encode_text` and swaps the
   first space for `T`. CONFIRMED. Consequences seen in the diff: `.datetime()`
   on "2017-03-10 12:34:56" yields "2017-03-10" (date cast accepts trailing

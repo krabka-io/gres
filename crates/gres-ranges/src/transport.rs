@@ -13,9 +13,9 @@ use std::{
 };
 
 use async_trait::async_trait;
-use crabka_pgwire::engine::{ResultPage, ResultSink};
-use crabka_trace_context::TraceCarrier;
-use crabka_units::{
+use krabka_pgwire::engine::{ResultPage, ResultSink};
+use krabka_trace_context::TraceCarrier;
+use krabka_units::{
     ByteSize, Time,
     convert::{ByteSizeExt as _, StdDurationExt as _, TimeExt as _},
     fmt::Human as _,
@@ -38,7 +38,7 @@ const MAX_FRAME: ByteSize = mebibytes(1);
 /// Bytes of [`MAX_FRAME`] reserved for what [`RangeEnvelope`] adds around a
 /// request.
 ///
-/// A W3C `traceparent` is 55 bytes, and `crabka-trace-context` caps `tracestate`
+/// A W3C `traceparent` is 55 bytes, and `krabka-trace-context` caps `tracestate`
 /// at 512. The rest is the envelope's own JSON keys and quoting. A caller that
 /// sizes a payload against the frame limit must subtract this reserve.
 /// [`JoinRangeReq::fits_transport_frame`] is the caller that matters. Without
@@ -831,8 +831,8 @@ pub struct WireSnapshot {
     pub xip: Vec<u64>,
 }
 
-impl From<&crabka_pgmvcc::visibility::Snapshot> for WireSnapshot {
-    fn from(value: &crabka_pgmvcc::visibility::Snapshot) -> Self {
+impl From<&krabka_pgmvcc::visibility::Snapshot> for WireSnapshot {
+    fn from(value: &krabka_pgmvcc::visibility::Snapshot) -> Self {
         Self {
             xmin: value.xmin,
             xmax: value.xmax,
@@ -841,7 +841,7 @@ impl From<&crabka_pgmvcc::visibility::Snapshot> for WireSnapshot {
     }
 }
 
-impl From<WireSnapshot> for crabka_pgmvcc::visibility::Snapshot {
+impl From<WireSnapshot> for krabka_pgmvcc::visibility::Snapshot {
     fn from(value: WireSnapshot) -> Self {
         Self {
             xmin: value.xmin,
@@ -1057,7 +1057,7 @@ pub struct ScanRangeReq {
 pub struct ScanRangeRow {
     pub rowid: u64,
     pub xmin: u64,
-    /// Tuple payload encoded with `crabka_pgmvcc::version::encode_tuple`.
+    /// Tuple payload encoded with `krabka_pgmvcc::version::encode_tuple`.
     pub tuple: Vec<u8>,
 }
 
@@ -1132,7 +1132,7 @@ impl JoinRangeReq {
     /// # Errors
     ///
     /// Returns an error when the requested operation cannot be completed.
-    pub fn validate(&self) -> Result<(), crabka_pgexec::JoinValidationError> {
+    pub fn validate(&self) -> Result<(), krabka_pgexec::JoinValidationError> {
         self.to_pgexec().validate()
     }
 
@@ -1142,8 +1142,8 @@ impl JoinRangeReq {
     /// Returns an error when the request exceeds or violates the policy.
     pub fn validate_with_policy(
         &self,
-        policy: crabka_pgexec::scanner::JoinPolicy,
-    ) -> Result<(), crabka_pgexec::JoinValidationError> {
+        policy: krabka_pgexec::scanner::JoinPolicy,
+    ) -> Result<(), krabka_pgexec::JoinValidationError> {
         self.to_pgexec().validate_with_policy(policy)
     }
 
@@ -1163,9 +1163,9 @@ impl JoinRangeReq {
             .is_ok_and(|bytes| bytes.len() <= limit)
     }
 
-    pub(crate) fn to_pgexec(&self) -> crabka_pgexec::JoinRangeRequest {
-        use crabka_pgexec::{JoinExecutionStrategy as S, JoinKind as K};
-        crabka_pgexec::JoinRangeRequest {
+    pub(crate) fn to_pgexec(&self) -> krabka_pgexec::JoinRangeRequest {
+        use krabka_pgexec::{JoinExecutionStrategy as S, JoinKind as K};
+        krabka_pgexec::JoinRangeRequest {
             local_snapshot: join_snapshot(&self.local_snapshot),
             global_snapshot: join_snapshot(&self.global_snapshot),
             read_ts: self.read_ts,
@@ -1189,7 +1189,7 @@ impl JoinRangeReq {
             right: join_table(&self.right),
             broadcast_rows: self.broadcast_rows.as_ref().map(|rows| {
                 rows.iter()
-                    .map(|row| crabka_pgexec::JoinRow {
+                    .map(|row| krabka_pgexec::JoinRow {
                         tuple: row.tuple.clone(),
                     })
                     .collect()
@@ -1201,19 +1201,19 @@ impl JoinRangeReq {
     }
 }
 
-fn join_snapshot(snapshot: &WireSnapshot) -> crabka_pgexec::JoinSnapshot {
-    crabka_pgexec::JoinSnapshot {
+fn join_snapshot(snapshot: &WireSnapshot) -> krabka_pgexec::JoinSnapshot {
+    krabka_pgexec::JoinSnapshot {
         xmin: snapshot.xmin,
         xmax: snapshot.xmax,
         xip: snapshot.xip.clone(),
     }
 }
 
-fn join_table(table: &WireJoinTableInterval) -> crabka_pgexec::JoinTableInterval {
-    crabka_pgexec::JoinTableInterval {
+fn join_table(table: &WireJoinTableInterval) -> krabka_pgexec::JoinTableInterval {
+    krabka_pgexec::JoinTableInterval {
         table_id: table.table_id,
         table_name: table.table_name.clone(),
-        interval: crabka_pgexec::RowInterval {
+        interval: krabka_pgexec::RowInterval {
             start: table.interval.start,
             end: table.interval.end,
         },
@@ -1222,28 +1222,28 @@ fn join_table(table: &WireJoinTableInterval) -> crabka_pgexec::JoinTableInterval
 
 fn decode_predicate_for_join(
     predicate: &WirePredicatePushdown,
-) -> crabka_pgexec::PredicatePushdown {
+) -> krabka_pgexec::PredicatePushdown {
     match predicate {
-        WirePredicatePushdown::FullScan => crabka_pgexec::PredicatePushdown::FullScan,
+        WirePredicatePushdown::FullScan => krabka_pgexec::PredicatePushdown::FullScan,
         WirePredicatePushdown::Conjunctive { predicates } => {
-            crabka_pgexec::PredicatePushdown::Conjunctive(
+            krabka_pgexec::PredicatePushdown::Conjunctive(
                 predicates
                     .iter()
-                    .map(|item| crabka_pgexec::ColumnPredicate {
+                    .map(|item| krabka_pgexec::ColumnPredicate {
                         column: item.column,
                         op: match item.op {
-                            WirePredicateOp::Eq => crabka_pgexec::PredicateOp::Eq,
-                            WirePredicateOp::Lt => crabka_pgexec::PredicateOp::Lt,
-                            WirePredicateOp::Le => crabka_pgexec::PredicateOp::Le,
-                            WirePredicateOp::Gt => crabka_pgexec::PredicateOp::Gt,
-                            WirePredicateOp::Ge => crabka_pgexec::PredicateOp::Ge,
+                            WirePredicateOp::Eq => krabka_pgexec::PredicateOp::Eq,
+                            WirePredicateOp::Lt => krabka_pgexec::PredicateOp::Lt,
+                            WirePredicateOp::Le => krabka_pgexec::PredicateOp::Le,
+                            WirePredicateOp::Gt => krabka_pgexec::PredicateOp::Gt,
+                            WirePredicateOp::Ge => krabka_pgexec::PredicateOp::Ge,
                         },
                         value: match &item.value {
-                            WireDatum::Null => crabka_pgtypes::Datum::Null,
-                            WireDatum::Bool(value) => crabka_pgtypes::Datum::Bool(*value),
-                            WireDatum::Int4(value) => crabka_pgtypes::Datum::Int4(*value),
-                            WireDatum::Int8(value) => crabka_pgtypes::Datum::Int8(*value),
-                            WireDatum::Text(value) => crabka_pgtypes::Datum::Text(value.clone()),
+                            WireDatum::Null => krabka_pgtypes::Datum::Null,
+                            WireDatum::Bool(value) => krabka_pgtypes::Datum::Bool(*value),
+                            WireDatum::Int4(value) => krabka_pgtypes::Datum::Int4(*value),
+                            WireDatum::Int8(value) => krabka_pgtypes::Datum::Int8(*value),
+                            WireDatum::Text(value) => krabka_pgtypes::Datum::Text(value.clone()),
                         },
                     })
                     .collect(),
@@ -1366,7 +1366,7 @@ pub enum TransportError {
 #[derive(Debug, Clone)]
 pub struct RangeTlsClientConfig {
     /// TLS identity and trust roots. A client identity and trust roots are mandatory.
-    pub tls: crabka_security::TlsConfig,
+    pub tls: krabka_security::TlsConfig,
     /// DNS name verified against the remote server certificate and sent as SNI.
     pub server_name: String,
 }
@@ -1400,7 +1400,7 @@ pub struct RangeTlsServerConfig {
     /// Immutable tenant served by this listener.
     pub tenant: String,
     /// TLS server identity, client CA, and required client authentication.
-    pub tls: crabka_security::TlsConfig,
+    pub tls: krabka_security::TlsConfig,
     /// Subject DNs allowed to execute ordinary range-to-range RPCs for `tenant`.
     pub range_rpc_principals: BTreeSet<String>,
     /// Subject DNs allowed to execute destructive operator control RPCs.
@@ -1418,7 +1418,7 @@ impl RangeTlsServerConfig {
                 "range TLS requires a tenant".to_string(),
             ));
         }
-        if self.tls.client_auth != crabka_security::ClientAuthMode::Required {
+        if self.tls.client_auth != krabka_security::ClientAuthMode::Required {
             return Err(TransportError::Tls(
                 "range TLS requires client authentication".to_string(),
             ));
@@ -1584,7 +1584,7 @@ struct PooledConn {
 /// Tokio registers a socket with the IO driver of the runtime that created it,
 /// and the socket errors after that runtime shuts down. Several engine paths run
 /// range RPCs on short-lived single-call runtimes: the blocking
-/// [`crabka_pgexec::RangeScanner`] entry points, the bounded cursor collectors,
+/// [`krabka_pgexec::RangeScanner`] entry points, the bounded cursor collectors,
 /// and timestamp-session cleanup. Only the runtime that dialed a connection may
 /// ever reuse it. Ephemeral runtimes therefore get no reuse, which is the same
 /// behavior the code had before the pool existed, and long-lived runtimes get
@@ -1688,7 +1688,7 @@ impl FramedTcpClient {
                 "range TLS requires a non-empty server name".into(),
             ));
         }
-        let config = crabka_security::TlsConfig::build_client_config_from_pem(
+        let config = krabka_security::TlsConfig::build_client_config_from_pem(
             cert_chain_pem,
             private_key_pem,
             trust_roots_pem,
@@ -2077,7 +2077,7 @@ pub async fn serve_tls_with_policy(
                         .ok_or_else(|| TransportError::UnauthorizedPeer {
                             tenant: tenant.clone(),
                         })?;
-                let principal = crabka_security::extract_principal_from_cert(certificate.as_ref())
+                let principal = krabka_security::extract_principal_from_cert(certificate.as_ref())
                     .ok_or_else(|| TransportError::UnauthorizedPeer {
                         tenant: tenant.clone(),
                     })?;
@@ -2910,7 +2910,7 @@ mod tests {
     fn join_range_accepts_near_limit_row_and_rejects_over_limit_row() {
         let mut request = join_request_fixture();
         request.broadcast_rows = Some(vec![JoinRangeRow {
-            tuple: vec![0; crabka_pgexec::scanner::MAX_JOIN_ROW_BYTES],
+            tuple: vec![0; krabka_pgexec::scanner::MAX_JOIN_ROW_BYTES],
         }]);
         request.validate().expect("near-limit row");
         request.broadcast_rows.as_mut().expect("broadcast")[0]
@@ -2918,7 +2918,7 @@ mod tests {
             .push(0);
         assert!(matches!(
             request.validate(),
-            Err(crabka_pgexec::JoinValidationError::JoinRowTooLarge { .. })
+            Err(krabka_pgexec::JoinValidationError::JoinRowTooLarge { .. })
         ));
     }
 
@@ -2979,7 +2979,7 @@ mod tests {
         let layer = tracing_opentelemetry::layer()
             .with_tracer(provider.tracer("transport-envelope"))
             .with_filter(tracing_subscriber::EnvFilter::new(
-                "crabka_gres_ranges::route=debug",
+                "krabka_gres_ranges::route=debug",
             ));
         let subscriber = tracing_subscriber::registry().with(layer);
 
@@ -3008,7 +3008,7 @@ mod tests {
     /// The reserve exists so a join the planner accepted still fits after the
     /// envelope wraps it. Its size covers the worst case the carrier permits: a
     /// 55-byte `traceparent` plus the 512-byte `tracestate` ceiling that
-    /// `crabka-trace-context` enforces.
+    /// `krabka-trace-context` enforces.
     #[test]
     fn largest_accepted_join_still_fits_a_worst_case_traced_frame() {
         use assert2::assert;
@@ -3315,19 +3315,19 @@ mod tests {
             let client_ca = write_fixture(&dir, "client-ca.pem", "dev_client_ca.pem");
             let client_cert = write_fixture(&dir, "client-cert.pem", "dev_client_cert.pem");
             let client_key = write_fixture(&dir, "client-key.pem", "dev_client_key.pem");
-            let server_tls = crabka_security::TlsConfig {
+            let server_tls = krabka_security::TlsConfig {
                 cert_chain_path: server_cert.clone(),
                 private_key_path: server_key,
                 trust_roots_path: Some(server_cert.clone()),
                 client_ca_path: Some(client_ca),
-                client_auth: crabka_security::ClientAuthMode::Required,
+                client_auth: krabka_security::ClientAuthMode::Required,
             };
-            let client_tls = crabka_security::TlsConfig {
+            let client_tls = krabka_security::TlsConfig {
                 cert_chain_path: client_cert,
                 private_key_path: client_key,
                 trust_roots_path: Some(server_cert),
                 client_ca_path: None,
-                client_auth: crabka_security::ClientAuthMode::Disabled,
+                client_auth: krabka_security::ClientAuthMode::Disabled,
             };
             Self {
                 _dir: dir,
@@ -3339,7 +3339,7 @@ mod tests {
                 },
                 client: RangeTlsClientConfig {
                     tls: client_tls,
-                    server_name: "crabka-dev".to_string(),
+                    server_name: "krabka-dev".to_string(),
                 },
             }
         }
@@ -3717,7 +3717,7 @@ mod tests {
             tokio::time::sleep(Duration::from_mins(1)).await;
         });
 
-        let error = FramedTcpClient::with_timeout(crabka_units::millis(20))
+        let error = FramedTcpClient::with_timeout(krabka_units::millis(20))
             .call(
                 &addr.to_string(),
                 &RangeRequest::Sql {
@@ -3739,9 +3739,9 @@ mod tests {
             range_id: RangeId::new(2),
             generation: 7,
             table_id: 50,
-            start_key: crabka_pgkv::key::table_prefix(50),
+            start_key: krabka_pgkv::key::table_prefix(50),
             end_key: {
-                let mut end = crabka_pgkv::key::table_prefix(50);
+                let mut end = krabka_pgkv::key::table_prefix(50);
                 end.push(0xff);
                 end
             },
@@ -3947,7 +3947,7 @@ mod tests {
         use assert2::assert;
         let (addr, accepts) = spawn_counting_loopback(Arc::new(EchoService::default())).await;
         let client = FramedTcpClient::default().with_pool_tuning(
-            crabka_units::millis(50),
+            krabka_units::millis(50),
             crate::RangeRuntimePolicy::default()
                 .rpc_pool_max_idle_per_endpoint
                 .get(),
@@ -4087,7 +4087,7 @@ mod tests {
         let client = FramedTcpClient::default();
 
         for _ in 0..2 {
-            let mut sink = crabka_pgwire::engine::CollectingResultSink::default();
+            let mut sink = krabka_pgwire::engine::CollectingResultSink::default();
             client
                 .call_sql_into(
                     &addr.to_string(),

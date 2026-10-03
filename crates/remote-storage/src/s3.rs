@@ -30,11 +30,11 @@
 
 use std::sync::Arc;
 
-use crabka_object_store::{
+use krabka_object_store::{
     DEFAULT_MULTIPART_CHUNK_SIZE, DEFAULT_MULTIPART_THRESHOLD, ObjectOps, ObjectStoreClient,
     ObjectStoreConfig, ObjectStoreError, S3Config, build_object_store,
 };
-use crabka_units::prelude::{ByteSize, ByteSizeExt as _};
+use krabka_units::prelude::{ByteSize, ByteSizeExt as _};
 use object_store::{GetRange, ObjectStore, path::Path as ObjectPath};
 use tracing::instrument;
 
@@ -61,7 +61,7 @@ pub struct S3RemoteStorage {
     multipart_chunk_size: ByteSize,
 }
 
-/// Lifts a raw byte count from [`crabka_object_store`]'s config layer into
+/// Lifts a raw byte count from [`krabka_object_store`]'s config layer into
 /// the dimensioned domain. That config layer still uses primitive types.
 ///
 /// The conversion saturates and does not wrap. A `usize` above `u64::MAX`
@@ -384,8 +384,8 @@ mod tests {
 
     use assert2::{assert, check};
     use bytes::Bytes;
-    use crabka_ids::LeaderEpoch;
-    use crabka_units::prelude::{kibibytes, mebibytes};
+    use krabka_ids::LeaderEpoch;
+    use krabka_units::prelude::{kibibytes, mebibytes};
     use object_store::memory::InMemory;
     use tempfile::TempDir;
     use uuid::Uuid;
@@ -400,7 +400,7 @@ mod tests {
     }
 
     /// The multipart tunables cross two seams: in from
-    /// [`crabka_object_store`]'s primitive config, and back out to the
+    /// [`krabka_object_store`]'s primitive config, and back out to the
     /// primitive-typed `ObjectOps` substrate. Both must be lossless for every
     /// size the config can express, so a mis-scaled conversion, such as a
     /// stray `* 1024`, cannot silently change when a segment switches to

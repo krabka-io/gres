@@ -17,7 +17,7 @@
       "enabled": false
     },
     {
-      "description": "Hold object_store. The merge gate does not build crabka-object-store, so an automerged object_store bump could break that crate with no failing check. Bump it by hand and build the workspace.",
+      "description": "Hold object_store. The merge gate does not build krabka-object-store, so an automerged object_store bump could break that crate with no failing check. Bump it by hand and build the workspace.",
       "matchPackageNames": ["object_store"],
       "enabled": false
     }

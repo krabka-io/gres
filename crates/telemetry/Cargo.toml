@@ -1,5 +1,5 @@
 [package]
-name = "crabka-telemetry"
+name = "krabka-telemetry"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -9,7 +9,7 @@ rust-version.workspace = true
 description = "Generic OTLP distributed-tracing pipeline for Crabka services"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-telemetry"
+documentation = "https://docs.rs/krabka-telemetry"
 readme = "README.md"
 keywords = ["kafka", "otlp", "tracing", "telemetry", "crabka"]
 categories = ["development-tools::debugging"]
@@ -25,9 +25,9 @@ heap-profiling = ["dep:jemalloc_pprof"]
 
 [dependencies]
 assert2 = { workspace = true }
-crabka-logfmt = { version = "0.4.2", path = "../logfmt" }
-crabka-trace-context = { version = "0.4.2", path = "../trace-context" }
-crabka-units = { workspace = true }
+krabka-logfmt = { version = "0.4.2", path = "../logfmt" }
+krabka-trace-context = { version = "0.4.2", path = "../trace-context" }
+krabka-units = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 refined_type = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }

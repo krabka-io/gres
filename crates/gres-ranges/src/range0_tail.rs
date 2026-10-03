@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use crabka_pgkv::{Kv, KvError, WriteOp};
+use krabka_pgkv::{Kv, KvError, WriteOp};
 use tokio::sync::watch;
 
 use crate::swappable_kv::SwappableKv;
@@ -325,8 +325,8 @@ fn apply_merge_rules(kv: &dyn Kv, ops: &[WriteOp]) -> Result<(), KvError> {
 mod range0_tail_merge {
     use std::collections::{HashMap, HashSet};
 
-    use crabka_pgkv::{Kv, KvError, WriteOp, is_notify_op, key};
-    use crabka_pgmvcc::clog;
+    use krabka_pgkv::{Kv, KvError, WriteOp, is_notify_op, key};
+    use krabka_pgmvcc::clog;
 
     pub(super) fn apply_frame(kv: &dyn Kv, ops: &[WriteOp]) -> Result<(), KvError> {
         let mut counters: HashMap<Vec<u8>, u64> = HashMap::new();
@@ -466,8 +466,8 @@ mod tests {
     use std::sync::Mutex;
 
     use assert2::assert;
-    use crabka_pgkv::{Kv, MemKv, WriteOp, key};
-    use crabka_pgmvcc::clog::{self, XidStatus};
+    use krabka_pgkv::{Kv, MemKv, WriteOp, key};
+    use krabka_pgmvcc::clog::{self, XidStatus};
 
     use super::*;
 
@@ -519,11 +519,11 @@ mod tests {
             self.inner.delete(key)
         }
 
-        fn scan_prefix(&self, prefix: &[u8]) -> Result<crabka_pgkv::KvScan, KvError> {
+        fn scan_prefix(&self, prefix: &[u8]) -> Result<krabka_pgkv::KvScan, KvError> {
             self.inner.scan_prefix(prefix)
         }
 
-        fn scan_range(&self, start: &[u8], end: &[u8]) -> Result<crabka_pgkv::KvScan, KvError> {
+        fn scan_range(&self, start: &[u8], end: &[u8]) -> Result<krabka_pgkv::KvScan, KvError> {
             self.inner.scan_range(start, end)
         }
 

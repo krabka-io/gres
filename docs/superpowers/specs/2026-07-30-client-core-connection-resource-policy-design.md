@@ -1,6 +1,6 @@
 # Client Core Connection Resource Policy Design
 
-Close the four remaining operational constants in `crabka-client-core` while
+Close the four remaining operational constants in `krabka-client-core` while
 preserving current defaults and avoiding settings for fixed protocol behavior.
 
 ## Scope
@@ -13,7 +13,7 @@ This design covers:
 - the client id written into outbound SASL request headers.
 
 The queue and frame policies apply to every connection created by
-`crabka-client-core`. The fetch minimum applies only to callers that construct
+`krabka-client-core`. The fetch minimum applies only to callers that construct
 `IsolatedFetch`. SASL receives no independent setting: it reuses the existing
 connection client id.
 
@@ -25,7 +25,7 @@ Kafka protocol defaults are also separate owners.
 
 ## Validated Types and Defaults
 
-`crabka-client-core` owns three public validated value types.
+`krabka-client-core` owns three public validated value types.
 
 ### `ConnectionDispatchQueueCapacity`
 
@@ -79,7 +79,7 @@ writer channel. Both framed reads and framed writes use `frame_max`.
 
 Outbound SASL negotiation receives the configured `client_id` and `frame_max`
 from `ConnectionOptions`. SASL request headers encode that client id instead of
-the fixed `"crabka-client"` literal. SASL response length is checked against
+the fixed `"krabka-client"` literal. SASL response length is checked against
 the configured frame maximum and the fixed security ceiling before allocating
 the response buffer. Empty or otherwise invalid client ids retain the existing
 client-builder behavior; this slice does not add a second client-id policy.
@@ -97,15 +97,15 @@ supplies an override.
 
 Libraries receive typed policy and do not read environment variables.
 
-- `crabka-client-producer` carries queue capacity and frame maximum through its
+- `krabka-client-producer` carries queue capacity and frame maximum through its
   builder to its main, transaction-coordinator, and group-coordinator clients.
-- `crabka-client-admin` accepts a complete connection policy for callers that
+- `krabka-client-admin` accepts a complete connection policy for callers that
   need overrides while its existing convenience constructors preserve all
   client-core defaults.
-- `crabka-client-streams` carries one connection queue/frame policy to every
+- `krabka-client-streams` carries one connection queue/frame policy to every
   membership, metadata, producer, and offset client. It separately carries one
   `FetchMinBytes` value to its `IsolatedFetch` runtime path.
-- `crabka-gres-fdw`, `crabka-gres-substrate`, and `crabka-gres-control` carry
+- `krabka-gres-fdw`, `krabka-gres-substrate`, and `krabka-gres-control` carry
   their owner-specific typed queue/frame policies to connection or producer
   construction. Their scan, recovery, and registry-reader policies separately
   carry `FetchMinBytes`.
@@ -122,35 +122,35 @@ reconnect paths.
 Each deployed binary that constructs a client or producer exposes one
 process-level connection policy pair using its own existing environment prefix:
 
-- `crabka-bench-driver`;
-- `crabka-broker`;
-- `crabka-gres`;
-- `crabka-grpc-gateway`;
-- `crabka-metrics` and `crabka-metrics-service`;
-- `crabka-observability-demo-app`;
-- `crabka-profiles`;
-- `crabka-rebalancer`;
-- `crabka-replicator`;
-- `crabka-schema-registry`; and
-- `crabka-traces`.
+- `krabka-bench-driver`;
+- `krabka-broker`;
+- `krabka-gres`;
+- `krabka-grpc-gateway`;
+- `krabka-metrics` and `krabka-metrics-service`;
+- `krabka-observability-demo-app`;
+- `krabka-profiles`;
+- `krabka-rebalancer`;
+- `krabka-replicator`;
+- `krabka-schema-registry`; and
+- `krabka-traces`.
 
 The CLI suffixes are `client-dispatch-queue-capacity` and
 `client-frame-max`. Environment names are the binary's established prefix plus
 `CLIENT_DISPATCH_QUEUE_CAPACITY` and `CLIENT_FRAME_MAX`. For example, Profiles
-uses `CRABKA_PROFILES_CLIENT_DISPATCH_QUEUE_CAPACITY` and
-`CRABKA_PROFILES_CLIENT_FRAME_MAX`. UOM inputs use the repository's human
+uses `KRABKA_PROFILES_CLIENT_DISPATCH_QUEUE_CAPACITY` and
+`KRABKA_PROFILES_CLIENT_FRAME_MAX`. UOM inputs use the repository's human
 `ByteSize` syntax, so the default frame value is rendered as `100MiB`.
 
 Only deployments that own an `IsolatedFetch` path expose a fetch-minimum:
 
 - the observability demo Stream role exposes
-  `--streams-fetch-min` / `CRABKA_DEMO_STREAMS_FETCH_MIN`;
-- Gres FDW exposes `--fdw-fetch-min` / `CRABKA_GRES_FDW_FETCH_MIN`;
+  `--streams-fetch-min` / `KRABKA_DEMO_STREAMS_FETCH_MIN`;
+- Gres FDW exposes `--fdw-fetch-min` / `KRABKA_GRES_FDW_FETCH_MIN`;
 - Gres WAL recovery exposes
-  `--wal-recovery-fetch-min` / `CRABKA_GRES_WAL_RECOVERY_FETCH_MIN`; and
+  `--wal-recovery-fetch-min` / `KRABKA_GRES_WAL_RECOVERY_FETCH_MIN`; and
 - the Gres registry reader exposes
   `--registry-reader-fetch-min` /
-  `CRABKA_GRES_REGISTRY_READER_FETCH_MIN`.
+  `KRABKA_GRES_REGISTRY_READER_FETCH_MIN`.
 
 Role-restricted options fail startup when supplied to a role that cannot use
 them, matching existing Gres and observability-demo validation.

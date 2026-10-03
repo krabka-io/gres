@@ -4,9 +4,9 @@
 
 **Goal:** Expose the schema cache's background fetch retry range through one validated UOM policy and the observability-demo and Gres deployment owners while preserving all existing defaults and retry semantics.
 
-**Architecture:** `crabka-schema-serde` owns an opaque `SchemaFetchRetryPolicy` and applies it inside its existing retry-delay algorithm. Client Streams continues to consume `CacheConfig`; the observability demo constructs one policy for all three roles, while Gres threads the same policy through `KafkaFdw` and its compute CRD. The library never reads process-global environment variables.
+**Architecture:** `krabka-schema-serde` owns an opaque `SchemaFetchRetryPolicy` and applies it inside its existing retry-delay algorithm. Client Streams continues to consume `CacheConfig`; the observability demo constructs one policy for all three roles, while Gres threads the same policy through `KafkaFdw` and its compute CRD. The library never reads process-global environment variables.
 
-**Tech Stack:** Rust, Tokio, Clap, `crabka-units`, Kube `JsonSchema`, generated CRDs.
+**Tech Stack:** Rust, Tokio, Clap, `krabka-units`, Kube `JsonSchema`, generated CRDs.
 
 ## Global Constraints
 
@@ -17,7 +17,7 @@
 - Keep Confluent media type and magic byte, the 64-reference traversal ceiling, exponential doubling, exponent cap `7`, deterministic zero-to-25-percent jitter, and terminal/transient error classification fixed.
 - Add no generic retry framework, no library-global environment lookup, and no Kafka or Schema Registry CRD fields.
 - Use the existing Client Streams `cache_config` builder input rather than adding duplicate Client Streams fields.
-- Gres owns `CRABKA_GRES_SCHEMA_FETCH_RETRY_INITIAL_BACKOFF` and `CRABKA_GRES_SCHEMA_FETCH_RETRY_MAX_BACKOFF`; the observability demo owns the corresponding `CRABKA_DEMO_*` variables.
+- Gres owns `KRABKA_GRES_SCHEMA_FETCH_RETRY_INITIAL_BACKOFF` and `KRABKA_GRES_SCHEMA_FETCH_RETRY_MAX_BACKOFF`; the observability demo owns the corresponding `KRABKA_DEMO_*` variables.
 - Preserve unrelated dirty-worktree changes and stage only each task's named hunks.
 - Do not modify or stage the four protected untracked plans dated 2026-07-28.
 - Run Cargo with `TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0`.
@@ -44,7 +44,7 @@
 
 - [x] **Step 1: Write failing default and validation tests**
 
-Add `crabka_units::prelude::*` to the cache test module and write:
+Add `krabka_units::prelude::*` to the cache test module and write:
 
 ```rust
 #[test]
@@ -116,7 +116,7 @@ fn cache_retains_configured_fetch_retry_policy() {
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-schema-serde fetch_retry --all-features --locked
+  cargo test -p krabka-schema-serde fetch_retry --all-features --locked
 ```
 
 Expected: compilation fails because the policy, constants, config field, and
@@ -124,7 +124,7 @@ accessor do not exist.
 
 - [x] **Step 4: Implement the minimal validated policy**
 
-Add `crabka-units = { workspace = true }` to the crate. Replace the two private
+Add `krabka-units = { workspace = true }` to the crate. Replace the two private
 `Duration` constants with:
 
 ```rust
@@ -183,14 +183,14 @@ Re-export the policy and default constants from `lib.rs`.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-schema-serde --all-targets --all-features --locked
+  cargo test -p krabka-schema-serde --all-targets --all-features --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-schema-serde --all-targets --all-features --locked -- -D warnings
+  cargo clippy -p krabka-schema-serde --all-targets --all-features --locked -- -D warnings
 ```
 
 - [x] **Step 7: Commit only the library policy**
 
-Stage the three crate files and only the `crabka-schema-serde` dependency hunk
+Stage the three crate files and only the `krabka-schema-serde` dependency hunk
 in `Cargo.lock`.
 
 ```bash
@@ -213,24 +213,24 @@ git commit -m "feat(schema): configure fetch retry range"
 - Consumes: `CacheConfig::fetch_retry_policy`
 - Consumes: `SchemaCache::fetch_retry_policy()`
 - Produces environment variables:
-  - `CRABKA_DEMO_SCHEMA_FETCH_RETRY_INITIAL_BACKOFF`
-  - `CRABKA_DEMO_SCHEMA_FETCH_RETRY_MAX_BACKOFF`
+  - `KRABKA_DEMO_SCHEMA_FETCH_RETRY_INITIAL_BACKOFF`
+  - `KRABKA_DEMO_SCHEMA_FETCH_RETRY_MAX_BACKOFF`
 
 - [x] **Step 1: Write the failing Client Streams propagation test**
 
 In the existing `streams_app.rs` test module, build an app with:
 
 ```rust
-let policy = crabka_schema_serde::SchemaFetchRetryPolicy::new(
-    crabka_units::millis(37),
-    crabka_units::millis(91),
+let policy = krabka_schema_serde::SchemaFetchRetryPolicy::new(
+    krabka_units::millis(37),
+    krabka_units::millis(91),
 )
 .unwrap();
 let app = StreamsApp::builder()
     .bootstrap("127.0.0.1:9092")
     .application_id("schema-retry")
     .schema_registry("http://127.0.0.1:8081")
-    .cache_config(Some(crabka_schema_serde::CacheConfig {
+    .cache_config(Some(krabka_schema_serde::CacheConfig {
         fetch_retry_policy: policy,
         ..Default::default()
     }))
@@ -261,7 +261,7 @@ starting a role or contacting Schema Registry.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-streams cache_config_carries_schema_fetch_retry --locked
+  cargo test -p krabka-client-streams cache_config_carries_schema_fetch_retry --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo test -p observability-demo-app --test schema_fetch_retry_config --locked
 ```
@@ -276,9 +276,9 @@ Add two `Option<Time>` Clap fields with `parse::positive_time`. Implement:
 ```rust
 fn schema_fetch_retry_policy(
     cli: &Cli,
-) -> std::io::Result<crabka_schema_serde::SchemaFetchRetryPolicy> {
-    let defaults = crabka_schema_serde::SchemaFetchRetryPolicy::default();
-    crabka_schema_serde::SchemaFetchRetryPolicy::new(
+) -> std::io::Result<krabka_schema_serde::SchemaFetchRetryPolicy> {
+    let defaults = krabka_schema_serde::SchemaFetchRetryPolicy::default();
+    krabka_schema_serde::SchemaFetchRetryPolicy::new(
         cli.schema_fetch_retry_initial_backoff
             .unwrap_or_else(|| defaults.initial_backoff()),
         cli.schema_fetch_retry_max_backoff
@@ -313,11 +313,11 @@ once in each role with those defaults.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-streams --all-targets --locked
+  cargo test -p krabka-client-streams --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo test -p observability-demo-app --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-client-streams -p observability-demo-app \
+  cargo clippy -p krabka-client-streams -p observability-demo-app \
     --all-targets --locked -- -D warnings
 ```
 
@@ -345,8 +345,8 @@ Stage only the named Client Streams, demo, test, and compose hunks.
   - `--schema-fetch-retry-initial-backoff`
   - `--schema-fetch-retry-max-backoff`
 - Produces Gres environment variables:
-  - `CRABKA_GRES_SCHEMA_FETCH_RETRY_INITIAL_BACKOFF`
-  - `CRABKA_GRES_SCHEMA_FETCH_RETRY_MAX_BACKOFF`
+  - `KRABKA_GRES_SCHEMA_FETCH_RETRY_INITIAL_BACKOFF`
+  - `KRABKA_GRES_SCHEMA_FETCH_RETRY_MAX_BACKOFF`
 
 - [x] **Step 1: Write failing FDW propagation tests**
 
@@ -379,9 +379,9 @@ Assert:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-fdw schema_fetch_retry --locked
+  cargo test -p krabka-gres-fdw schema_fetch_retry --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres schema_fetch_retry --lib --locked
+  cargo test -p krabka-gres schema_fetch_retry --lib --locked
 ```
 
 Expected: compilation fails on the missing FDW field, methods, Gres flags, and
@@ -400,7 +400,7 @@ CacheConfig {
 }
 ```
 
-Re-export `SchemaFetchRetryPolicy` from `crabka-gres-fdw` so Gres can use the
+Re-export `SchemaFetchRetryPolicy` from `krabka-gres-fdw` so Gres can use the
 type without adding a duplicate direct dependency.
 
 - [x] **Step 5: Add the Gres CLI and effective policy**
@@ -410,9 +410,9 @@ Add two optional UOM fields to `ServeArgs`. Implement:
 ```rust
 fn effective_schema_fetch_retry_policy(
     args: &ServeArgs,
-) -> std::io::Result<crabka_gres_fdw::SchemaFetchRetryPolicy> {
-    let defaults = crabka_gres_fdw::SchemaFetchRetryPolicy::default();
-    crabka_gres_fdw::SchemaFetchRetryPolicy::new(
+) -> std::io::Result<krabka_gres_fdw::SchemaFetchRetryPolicy> {
+    let defaults = krabka_gres_fdw::SchemaFetchRetryPolicy::default();
+    krabka_gres_fdw::SchemaFetchRetryPolicy::new(
         args.schema_fetch_retry_initial_backoff
             .unwrap_or_else(|| defaults.initial_backoff()),
         args.schema_fetch_retry_max_backoff
@@ -431,11 +431,11 @@ registration path default-backed.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-fdw --all-targets --locked
+  cargo test -p krabka-gres-fdw --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres --all-targets --locked
+  cargo test -p krabka-gres --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-gres-fdw -p crabka-gres \
+  cargo clippy -p krabka-gres-fdw -p krabka-gres \
     --all-targets --locked -- -D warnings
 ```
 
@@ -496,9 +496,9 @@ Assert each argument and value appears exactly once:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator schema_fetch_retry --lib --locked
+  cargo test -p krabka-operator schema_fetch_retry --lib --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator schema_fetch_retry --test reconcile_gres_tenant --locked
+  cargo test -p krabka-operator schema_fetch_retry --test reconcile_gres_tenant --locked
 ```
 
 Expected: compilation fails because the CRD fields and effective policy do not
@@ -511,7 +511,7 @@ During `GresComputeSpec::effective_policy`, overlay the optional values onto
 `SchemaFetchRetryPolicy::default()` and call its authoritative constructor.
 Store the validated policy on `EffectiveGresComputePolicy`.
 
-Add `crabka-schema-serde = { version = "0.3.9", path = "../schema-serde" }`
+Add `krabka-schema-serde = { version = "0.3.9", path = "../schema-serde" }`
 as a regular operator dependency. Do not duplicate positivity or ordering
 logic in the operator.
 
@@ -536,9 +536,9 @@ environment overrides.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator schema_fetch_retry --lib --locked
+  cargo test -p krabka-operator schema_fetch_retry --lib --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator schema_fetch_retry --test reconcile_gres_tenant --locked
+  cargo test -p krabka-operator schema_fetch_retry --test reconcile_gres_tenant --locked
 ```
 
 - [x] **Step 7: Regenerate only the Gres CRD safely**
@@ -546,12 +546,12 @@ TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
 Generate twice into exact temporary directories:
 
 ```bash
-crd_tmp_a="$(mktemp -d /var/tmp/crabka-crd-a.XXXXXX)"
-crd_tmp_b="$(mktemp -d /var/tmp/crabka-crd-b.XXXXXX)"
+crd_tmp_a="$(mktemp -d /var/tmp/krabka-crd-a.XXXXXX)"
+crd_tmp_b="$(mktemp -d /var/tmp/krabka-crd-b.XXXXXX)"
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -p crabka-operator --locked -- gen-crds "$crd_tmp_a"
+  cargo run -p krabka-operator --locked -- gen-crds "$crd_tmp_a"
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -p crabka-operator --locked -- gen-crds "$crd_tmp_b"
+  cargo run -p krabka-operator --locked -- gen-crds "$crd_tmp_b"
 diff -u \
   "$crd_tmp_a/crabka.io_greses.yaml" \
   "$crd_tmp_b/crabka.io_greses.yaml"
@@ -560,13 +560,13 @@ diff -u \
 After deterministic output is proven, replace only
 `deploy/crds/crabka.io_greses.yaml`. Verify its diff contains exactly the
 two new optional string properties and descriptions. Resolve both temporary
-paths and remove them only if each begins with `/var/tmp/crabka-crd-`.
+paths and remove them only if each begins with `/var/tmp/krabka-crd-`.
 
 - [x] **Step 8: Run the operator all-target suite**
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator --all-targets --locked
+  cargo test -p krabka-operator --all-targets --locked
 ```
 
 - [x] **Step 9: Commit only the CRD owner**
@@ -599,17 +599,17 @@ Replace the pending design with:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-schema-serde --all-targets --all-features --locked
+  cargo test -p krabka-schema-serde --all-targets --all-features --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-streams --all-targets --locked
+  cargo test -p krabka-client-streams --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo test -p observability-demo-app --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-fdw --all-targets --locked
+  cargo test -p krabka-gres-fdw --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres --all-targets --locked
+  cargo test -p krabka-gres --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator --all-targets --locked
+  cargo test -p krabka-operator --all-targets --locked
 ```
 
 - [x] **Step 3: Format and run strict workspace Clippy**
@@ -624,9 +624,9 @@ cargo +nightly fmt --all -- --check
 - [x] **Step 4: Verify generated schema and scanner evidence**
 
 ```bash
-crd_verify_tmp="$(mktemp -d /var/tmp/crabka-crd-verify.XXXXXX)"
+crd_verify_tmp="$(mktemp -d /var/tmp/krabka-crd-verify.XXXXXX)"
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -p crabka-operator --locked -- gen-crds "$crd_verify_tmp"
+  cargo run -p krabka-operator --locked -- gen-crds "$crd_verify_tmp"
 diff -u \
   deploy/crds/crabka.io_greses.yaml \
   "$crd_verify_tmp/crabka.io_greses.yaml"
@@ -645,7 +645,7 @@ rg -n \
 ```
 
 Resolve `crd_verify_tmp` and remove it only if it begins with
-`/var/tmp/crabka-crd-verify.`.
+`/var/tmp/krabka-crd-verify.`.
 
 - [x] **Step 5: Review scope and plan completeness**
 

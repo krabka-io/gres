@@ -1252,7 +1252,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-audit"
+name = "krabka-audit"
 version = "0.4.2"
 dependencies = [
  "arc-swap",
@@ -1260,10 +1260,10 @@ dependencies = [
  "async-trait",
  "bytes",
  "clap",
- "crabka-ids",
- "crabka-log",
- "crabka-protocol",
- "crabka-units",
+ "krabka-ids",
+ "krabka-log",
+ "krabka-protocol",
+ "krabka-units",
  "derive_more",
  "mutants",
  "qubit-clock",
@@ -1278,19 +1278,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-authz"
+name = "krabka-authz"
 version = "0.4.2"
 dependencies = [
  "assert2",
- "crabka-metadata",
- "crabka-security",
+ "krabka-metadata",
+ "krabka-security",
  "proptest",
  "tracing",
  "uuid",
 ]
 
 [[package]]
-name = "crabka-broker"
+name = "krabka-broker"
 version = "0.4.2"
 dependencies = [
  "arc-swap",
@@ -1300,29 +1300,29 @@ dependencies = [
  "base64 0.23.1",
  "bytes",
  "clap",
- "crabka-audit",
- "crabka-authz",
- "crabka-broker-test-helpers",
- "crabka-client-consumer",
- "crabka-client-core",
- "crabka-client-producer",
- "crabka-compression",
- "crabka-ids",
- "crabka-kraft-core",
- "crabka-log",
- "crabka-metadata",
- "crabka-object-store",
- "crabka-protocol",
- "crabka-raft",
- "crabka-records-legacy",
- "crabka-remote-storage",
- "crabka-remote-storage-topic",
- "crabka-security",
- "crabka-telemetry",
- "crabka-throttle",
- "crabka-units",
- "crabka-verified",
- "crabka-voters",
+ "krabka-audit",
+ "krabka-authz",
+ "krabka-broker-test-helpers",
+ "krabka-client-consumer",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-compression",
+ "krabka-ids",
+ "krabka-kraft-core",
+ "krabka-log",
+ "krabka-metadata",
+ "krabka-object-store",
+ "krabka-protocol",
+ "krabka-raft",
+ "krabka-records-legacy",
+ "krabka-remote-storage",
+ "krabka-remote-storage-topic",
+ "krabka-security",
+ "krabka-telemetry",
+ "krabka-throttle",
+ "krabka-units",
+ "krabka-verified",
+ "krabka-voters",
  "crc32c",
  "dashmap",
  "exponential-backoff",
@@ -1378,27 +1378,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-broker-test-helpers"
+name = "krabka-broker-test-helpers"
 version = "0.4.1"
 dependencies = [
- "crabka-broker",
+ "krabka-broker",
 ]
 
 [[package]]
-name = "crabka-cli"
+name = "krabka-cli"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "clap",
- "crabka-broker",
- "crabka-client-admin",
- "crabka-client-core",
- "crabka-gres-balancer",
- "crabka-gres-control",
- "crabka-metadata",
- "crabka-raft",
- "crabka-security",
- "crabka-units",
+ "krabka-broker",
+ "krabka-client-admin",
+ "krabka-client-core",
+ "krabka-gres-balancer",
+ "krabka-gres-control",
+ "krabka-metadata",
+ "krabka-raft",
+ "krabka-security",
+ "krabka-units",
  "derive_more",
  "ring",
  "serde",
@@ -1414,21 +1414,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-client-admin"
+name = "krabka-client-admin"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "async-trait",
  "bytes",
- "crabka-broker",
- "crabka-client-consumer",
- "crabka-client-core",
- "crabka-client-producer",
- "crabka-ids",
- "crabka-metadata",
- "crabka-protocol",
- "crabka-security",
- "crabka-units",
+ "krabka-broker",
+ "krabka-client-consumer",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-ids",
+ "krabka-metadata",
+ "krabka-protocol",
+ "krabka-security",
+ "krabka-units",
  "futures-util",
  "ring",
  "tempfile",
@@ -1441,19 +1441,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-client-consumer"
+name = "krabka-client-consumer"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "bon",
  "bytes",
- "crabka-broker",
- "crabka-client-core",
- "crabka-client-producer",
- "crabka-ids",
- "crabka-protocol",
- "crabka-security",
- "crabka-units",
+ "krabka-broker",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-ids",
+ "krabka-protocol",
+ "krabka-security",
+ "krabka-units",
  "futures-util",
  "mutants",
  "proptest",
@@ -1468,17 +1468,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-client-core"
+name = "krabka-client-core"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "async-trait",
  "bon",
  "bytes",
- "crabka-ids",
- "crabka-protocol",
- "crabka-security",
- "crabka-units",
+ "krabka-ids",
+ "krabka-protocol",
+ "krabka-security",
+ "krabka-units",
  "crc32c",
  "dashmap",
  "futures-util",
@@ -1503,19 +1503,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-client-producer"
+name = "krabka-client-producer"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "async-trait",
  "bon",
  "bytes",
- "crabka-client-consumer",
- "crabka-client-core",
- "crabka-compression",
- "crabka-protocol",
- "crabka-security",
- "crabka-units",
+ "krabka-client-consumer",
+ "krabka-client-core",
+ "krabka-compression",
+ "krabka-protocol",
+ "krabka-security",
+ "krabka-units",
  "dashmap",
  "futures",
  "mutants",
@@ -1529,13 +1529,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-compression"
+name = "krabka-compression"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "bytes",
  "codspeed-criterion-compat",
- "crabka-units",
+ "krabka-units",
  "flate2",
  "hex",
  "lz4_flex 0.14.0",
@@ -1550,33 +1550,33 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-gres"
+name = "krabka-gres"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "async-trait",
  "bytes",
  "clap",
- "crabka-broker",
- "crabka-client-admin",
- "crabka-client-core",
- "crabka-client-producer",
- "crabka-gres-control",
- "crabka-gres-fdw",
- "crabka-gres-ranges",
- "crabka-gres-substrate",
- "crabka-object-store",
- "crabka-operator",
- "crabka-pgcatalog",
- "crabka-pgexec",
- "crabka-pgkv",
- "crabka-pgmvcc",
- "crabka-pgtypes",
- "crabka-pgwire",
- "crabka-protocol",
- "crabka-security",
- "crabka-telemetry",
- "crabka-units",
+ "krabka-broker",
+ "krabka-client-admin",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-gres-control",
+ "krabka-gres-fdw",
+ "krabka-gres-ranges",
+ "krabka-gres-substrate",
+ "krabka-object-store",
+ "krabka-operator",
+ "krabka-pgcatalog",
+ "krabka-pgexec",
+ "krabka-pgkv",
+ "krabka-pgmvcc",
+ "krabka-pgtypes",
+ "krabka-pgwire",
+ "krabka-protocol",
+ "krabka-security",
+ "krabka-telemetry",
+ "krabka-units",
  "futures-util",
  "rand 0.10.2",
  "refined_type",
@@ -1595,20 +1595,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-gres-activator"
+name = "krabka-gres-activator"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "async-trait",
  "bytes",
  "clap",
- "crabka-client-core",
- "crabka-gres",
- "crabka-gres-control",
- "crabka-gres-substrate",
- "crabka-pgkv",
- "crabka-pgwire",
- "crabka-units",
+ "krabka-client-core",
+ "krabka-gres",
+ "krabka-gres-control",
+ "krabka-gres-substrate",
+ "krabka-pgkv",
+ "krabka-pgwire",
+ "krabka-units",
  "futures-util",
  "refined_type",
  "temp-env",
@@ -1619,30 +1619,30 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-gres-balancer"
+name = "krabka-gres-balancer"
 version = "0.4.2"
 dependencies = [
  "assert2",
- "crabka-gres-control",
- "crabka-gres-substrate",
- "crabka-units",
+ "krabka-gres-control",
+ "krabka-gres-substrate",
+ "krabka-units",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "crabka-gres-conformance"
+name = "krabka-gres-conformance"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "bytes",
  "clap",
- "crabka-pgcatalog",
- "crabka-pgexec",
- "crabka-pgparser",
- "crabka-pgtypes",
- "crabka-pgwire",
- "crabka-units",
+ "krabka-pgcatalog",
+ "krabka-pgexec",
+ "krabka-pgparser",
+ "krabka-pgtypes",
+ "krabka-pgwire",
+ "krabka-units",
  "futures-util",
  "native-tls",
  "postgres-native-tls",
@@ -1656,17 +1656,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-gres-control"
+name = "krabka-gres-control"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "bytes",
- "crabka-broker",
- "crabka-client-admin",
- "crabka-client-core",
- "crabka-client-producer",
- "crabka-protocol",
- "crabka-units",
+ "krabka-broker",
+ "krabka-client-admin",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-protocol",
+ "krabka-units",
  "proptest",
  "refined_type",
  "serde",
@@ -1681,27 +1681,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-gres-fdw"
+name = "krabka-gres-fdw"
 version = "0.4.2"
 dependencies = [
  "apache-avro",
  "assert2",
  "bigdecimal",
  "bytes",
- "crabka-broker",
- "crabka-client-admin",
- "crabka-client-core",
- "crabka-client-producer",
- "crabka-pgcatalog",
- "crabka-pgexec",
- "crabka-pgkv",
- "crabka-pgtypes",
- "crabka-pgwire",
- "crabka-protocol",
- "crabka-schema-registry",
- "crabka-schema-serde",
- "crabka-security",
- "crabka-units",
+ "krabka-broker",
+ "krabka-client-admin",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-pgcatalog",
+ "krabka-pgexec",
+ "krabka-pgkv",
+ "krabka-pgtypes",
+ "krabka-pgwire",
+ "krabka-protocol",
+ "krabka-schema-registry",
+ "krabka-schema-serde",
+ "krabka-security",
+ "krabka-units",
  "jiff",
  "num-bigint 0.5.1",
  "prost-reflect",
@@ -1716,18 +1716,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-gres-loadtest"
+name = "krabka-gres-loadtest"
 version = "0.4.2"
 dependencies = [
  "anyhow",
  "assert2",
  "async-trait",
  "clap",
- "crabka-client-admin",
- "crabka-client-core",
- "crabka-gres-control",
- "crabka-security",
- "crabka-units",
+ "krabka-client-admin",
+ "krabka-client-core",
+ "krabka-gres-control",
+ "krabka-security",
+ "krabka-units",
  "futures",
  "hdrhistogram",
  "opentelemetry-proto",
@@ -1747,25 +1747,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-gres-ranges"
+name = "krabka-gres-ranges"
 version = "0.4.2"
 dependencies = [
  "arc-swap",
  "assert2",
  "async-trait",
- "crabka-broker",
- "crabka-client-admin",
- "crabka-gres-control",
- "crabka-pgcatalog",
- "crabka-pgexec",
- "crabka-pgkv",
- "crabka-pgmvcc",
- "crabka-pgparser",
- "crabka-pgtypes",
- "crabka-pgwire",
- "crabka-security",
- "crabka-trace-context",
- "crabka-units",
+ "krabka-broker",
+ "krabka-client-admin",
+ "krabka-gres-control",
+ "krabka-pgcatalog",
+ "krabka-pgexec",
+ "krabka-pgkv",
+ "krabka-pgmvcc",
+ "krabka-pgparser",
+ "krabka-pgtypes",
+ "krabka-pgwire",
+ "krabka-security",
+ "krabka-trace-context",
+ "krabka-units",
  "derive_more",
  "futures",
  "opentelemetry",
@@ -1788,28 +1788,28 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-gres-substrate"
+name = "krabka-gres-substrate"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "async-trait",
  "bytes",
- "crabka-broker",
- "crabka-client-admin",
- "crabka-client-core",
- "crabka-client-producer",
- "crabka-gres-ranges",
- "crabka-object-store",
- "crabka-pgcatalog",
- "crabka-pgexec",
- "crabka-pgkv",
- "crabka-pgmvcc",
- "crabka-pgtypes",
- "crabka-protocol",
- "crabka-raft",
- "crabka-security",
- "crabka-trace-context",
- "crabka-units",
+ "krabka-broker",
+ "krabka-client-admin",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-gres-ranges",
+ "krabka-object-store",
+ "krabka-pgcatalog",
+ "krabka-pgexec",
+ "krabka-pgkv",
+ "krabka-pgmvcc",
+ "krabka-pgtypes",
+ "krabka-protocol",
+ "krabka-raft",
+ "krabka-security",
+ "krabka-trace-context",
+ "krabka-units",
  "hex",
  "object_store",
  "opentelemetry",
@@ -1831,7 +1831,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-ids"
+name = "krabka-ids"
 version = "0.4.2"
 dependencies = [
  "assert2",
@@ -1841,22 +1841,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-kafka-tap"
+name = "krabka-kafka-tap"
 version = "0.4.2"
 dependencies = [
  "assert2",
- "crabka-ids",
+ "krabka-ids",
 ]
 
 [[package]]
-name = "crabka-kraft-core"
+name = "krabka-kraft-core"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "bytes",
- "crabka-units",
- "crabka-verified",
- "crabka-voters",
+ "krabka-units",
+ "krabka-verified",
+ "krabka-voters",
  "refined_type",
  "serde",
  "tracing",
@@ -1864,17 +1864,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-log"
+name = "krabka-log"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "bytes",
  "codspeed-criterion-compat",
- "crabka-compression",
- "crabka-ids",
- "crabka-protocol",
- "crabka-units",
- "crabka-verified",
+ "krabka-compression",
+ "krabka-ids",
+ "krabka-protocol",
+ "krabka-units",
+ "krabka-verified",
  "crc32c",
  "hex",
  "mutants",
@@ -1890,7 +1890,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-logfmt"
+name = "krabka-logfmt"
 version = "0.4.2"
 dependencies = [
  "assert2",
@@ -1900,17 +1900,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-metadata"
+name = "krabka-metadata"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "bytes",
  "codspeed-criterion-compat",
- "crabka-ids",
- "crabka-protocol",
- "crabka-security",
- "crabka-units",
- "crabka-voters",
+ "krabka-ids",
+ "krabka-protocol",
+ "krabka-security",
+ "krabka-units",
+ "krabka-voters",
  "mutants",
  "proptest",
  "serde",
@@ -1922,7 +1922,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-object-store"
+name = "krabka-object-store"
 version = "0.4.2"
 dependencies = [
  "assert2",
@@ -1937,7 +1937,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-operator"
+name = "krabka-operator"
 version = "0.4.2"
 dependencies = [
  "anyhow",
@@ -1948,24 +1948,24 @@ dependencies = [
  "bytes",
  "chrono",
  "clap",
- "crabka-broker",
- "crabka-client-admin",
- "crabka-client-core",
- "crabka-client-producer",
- "crabka-compression",
- "crabka-gres-control",
- "crabka-gres-ranges",
- "crabka-gres-substrate",
- "crabka-kraft-core",
- "crabka-logfmt",
- "crabka-metadata",
- "crabka-object-store",
- "crabka-pgexec",
- "crabka-pgkv",
- "crabka-rebalancer",
- "crabka-schema-serde",
- "crabka-security",
- "crabka-units",
+ "krabka-broker",
+ "krabka-client-admin",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-compression",
+ "krabka-gres-control",
+ "krabka-gres-ranges",
+ "krabka-gres-substrate",
+ "krabka-kraft-core",
+ "krabka-logfmt",
+ "krabka-metadata",
+ "krabka-object-store",
+ "krabka-pgexec",
+ "krabka-pgkv",
+ "krabka-rebalancer",
+ "krabka-schema-serde",
+ "krabka-security",
+ "krabka-units",
  "derive_more",
  "futures",
  "hex",
@@ -2004,13 +2004,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-pgcatalog"
+name = "krabka-pgcatalog"
 version = "0.4.2"
 dependencies = [
  "assert2",
- "crabka-pgkv",
- "crabka-pgmvcc",
- "crabka-pgtypes",
+ "krabka-pgkv",
+ "krabka-pgmvcc",
+ "krabka-pgtypes",
  "proptest",
  "tempfile",
  "thiserror 2.0.20",
@@ -2018,7 +2018,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-pgexec"
+name = "krabka-pgexec"
 version = "0.4.2"
 dependencies = [
  "assert2",
@@ -2026,14 +2026,14 @@ dependencies = [
  "base64 0.23.1",
  "bigdecimal",
  "bytes",
- "crabka-pgcatalog",
- "crabka-pgkv",
- "crabka-pgmvcc",
- "crabka-pgparser",
- "crabka-pgtypes",
- "crabka-pgwire",
- "crabka-trace-context",
- "crabka-units",
+ "krabka-pgcatalog",
+ "krabka-pgkv",
+ "krabka-pgmvcc",
+ "krabka-pgparser",
+ "krabka-pgtypes",
+ "krabka-pgwire",
+ "krabka-trace-context",
+ "krabka-units",
  "encoding_rs",
  "hex",
  "jiff",
@@ -2060,12 +2060,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-pgkv"
+name = "krabka-pgkv"
 version = "0.4.2"
 dependencies = [
  "assert2",
- "crabka-pgtypes",
- "crabka-units",
+ "krabka-pgtypes",
+ "krabka-units",
  "fjall",
  "jiff",
  "proptest",
@@ -2077,30 +2077,30 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-pgmvcc"
+name = "krabka-pgmvcc"
 version = "0.4.2"
 dependencies = [
  "assert2",
- "crabka-pgkv",
- "crabka-pgtypes",
+ "krabka-pgkv",
+ "krabka-pgtypes",
  "proptest",
  "thiserror 2.0.20",
  "zerocopy",
 ]
 
 [[package]]
-name = "crabka-pgparser"
+name = "krabka-pgparser"
 version = "0.4.2"
 dependencies = [
  "assert2",
- "crabka-pgtypes",
+ "krabka-pgtypes",
  "pg_query",
  "proptest",
  "thiserror 2.0.20",
 ]
 
 [[package]]
-name = "crabka-pgtypes"
+name = "krabka-pgtypes"
 version = "0.4.2"
 dependencies = [
  "assert2",
@@ -2113,14 +2113,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-pgwire"
+name = "krabka-pgwire"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "async-trait",
  "base64 0.23.1",
  "bytes",
- "crabka-trace-context",
+ "krabka-trace-context",
  "hmac",
  "num-traits",
  "opentelemetry",
@@ -2143,16 +2143,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-protocol"
+name = "krabka-protocol"
 version = "0.4.2"
 dependencies = [
  "arbitrary",
  "assert2",
  "bytes",
  "codspeed-criterion-compat",
- "crabka-compression",
- "crabka-kafka-tap",
- "crabka-units",
+ "krabka-compression",
+ "krabka-kafka-tap",
+ "krabka-units",
  "crc32c",
  "datatest-stable",
  "hex",
@@ -2167,22 +2167,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-raft"
+name = "krabka-raft"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "async-trait",
  "base64 0.23.1",
  "bytes",
- "crabka-client-core",
- "crabka-ids",
- "crabka-kraft-core",
- "crabka-log",
- "crabka-metadata",
- "crabka-protocol",
- "crabka-security",
- "crabka-units",
- "crabka-verified",
+ "krabka-client-core",
+ "krabka-ids",
+ "krabka-kraft-core",
+ "krabka-log",
+ "krabka-metadata",
+ "krabka-protocol",
+ "krabka-security",
+ "krabka-units",
+ "krabka-verified",
  "dashmap",
  "futures-util",
  "mockall",
@@ -2201,7 +2201,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-rebalancer"
+name = "krabka-rebalancer"
 version = "0.4.2"
 dependencies = [
  "anyhow",
@@ -2213,12 +2213,12 @@ dependencies = [
  "clap",
  "connectrpc-axum",
  "connectrpc-axum-build",
- "crabka-broker",
- "crabka-client-admin",
- "crabka-client-core",
- "crabka-metadata",
- "crabka-protocol",
- "crabka-units",
+ "krabka-broker",
+ "krabka-client-admin",
+ "krabka-client-core",
+ "krabka-metadata",
+ "krabka-protocol",
+ "krabka-units",
  "mutants",
  "num-traits",
  "parking_lot",
@@ -2244,15 +2244,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-records-legacy"
+name = "krabka-records-legacy"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "bytes",
- "crabka-compression",
- "crabka-ids",
- "crabka-protocol",
- "crabka-units",
+ "krabka-compression",
+ "krabka-ids",
+ "krabka-protocol",
+ "krabka-units",
  "crc32fast",
  "hex",
  "proptest",
@@ -2260,17 +2260,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-remote-storage"
+name = "krabka-remote-storage"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "base64 0.23.1",
  "bytes",
- "crabka-ids",
- "crabka-log",
- "crabka-object-store",
- "crabka-protocol",
- "crabka-units",
+ "krabka-ids",
+ "krabka-log",
+ "krabka-object-store",
+ "krabka-protocol",
+ "krabka-units",
  "object_store",
  "sha2 0.11.0",
  "tempfile",
@@ -2281,20 +2281,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-remote-storage-topic"
+name = "krabka-remote-storage-topic"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "async-trait",
  "bytes",
- "crabka-client-admin",
- "crabka-client-core",
- "crabka-client-producer",
- "crabka-ids",
- "crabka-protocol",
- "crabka-remote-storage",
- "crabka-security",
- "crabka-units",
+ "krabka-client-admin",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-ids",
+ "krabka-protocol",
+ "krabka-remote-storage",
+ "krabka-security",
+ "krabka-units",
  "futures-util",
  "mutants",
  "refined_type",
@@ -2307,7 +2307,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-schema-registry"
+name = "krabka-schema-registry"
 version = "0.4.2"
 dependencies = [
  "anyhow",
@@ -2319,18 +2319,18 @@ dependencies = [
  "bcrypt",
  "bytes",
  "clap",
- "crabka-authz",
- "crabka-broker",
- "crabka-client-admin",
- "crabka-client-consumer",
- "crabka-client-core",
- "crabka-client-producer",
- "crabka-logfmt",
- "crabka-metadata",
- "crabka-protocol",
- "crabka-security",
- "crabka-telemetry",
- "crabka-units",
+ "krabka-authz",
+ "krabka-broker",
+ "krabka-client-admin",
+ "krabka-client-consumer",
+ "krabka-client-core",
+ "krabka-client-producer",
+ "krabka-logfmt",
+ "krabka-metadata",
+ "krabka-protocol",
+ "krabka-security",
+ "krabka-telemetry",
+ "krabka-units",
  "datatest-stable",
  "derive_more",
  "hex",
@@ -2362,13 +2362,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-schema-serde"
+name = "krabka-schema-serde"
 version = "0.4.2"
 dependencies = [
  "apache-avro",
  "assert2",
  "bytes",
- "crabka-units",
+ "krabka-units",
  "hex",
  "jsonschema",
  "prost 0.14.4",
@@ -2383,7 +2383,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-security"
+name = "krabka-security"
 version = "0.4.2"
 dependencies = [
  "arc-swap",
@@ -2392,7 +2392,7 @@ dependencies = [
  "base64 0.23.1",
  "bytes",
  "codspeed-criterion-compat",
- "crabka-units",
+ "krabka-units",
  "hex",
  "hmac",
  "jsonpath-rust",
@@ -2420,15 +2420,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-telemetry"
+name = "krabka-telemetry"
 version = "0.4.2"
 dependencies = [
  "assert2",
  "axum",
  "clap",
- "crabka-logfmt",
- "crabka-trace-context",
- "crabka-units",
+ "krabka-logfmt",
+ "krabka-trace-context",
+ "krabka-units",
  "flate2",
  "jemalloc_pprof",
  "mutants",
@@ -2448,11 +2448,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-throttle"
+name = "krabka-throttle"
 version = "0.4.2"
 dependencies = [
  "assert2",
- "crabka-units",
+ "krabka-units",
  "creusot-std",
  "derive_more",
  "proptest",
@@ -2461,11 +2461,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-trace-context"
+name = "krabka-trace-context"
 version = "0.4.2"
 dependencies = [
  "assert2",
- "crabka-pgparser",
+ "krabka-pgparser",
  "opentelemetry",
  "opentelemetry_sdk",
  "serde",
@@ -2477,7 +2477,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-units"
+name = "krabka-units"
 version = "0.4.2"
 dependencies = [
  "assert2",
@@ -2490,7 +2490,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-verified"
+name = "krabka-verified"
 version = "0.4.2"
 dependencies = [
  "assert2",
@@ -2499,11 +2499,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "crabka-voters"
+name = "krabka-voters"
 version = "0.4.2"
 dependencies = [
  "assert2",
- "crabka-ids",
+ "krabka-ids",
  "serde",
  "uuid",
 ]

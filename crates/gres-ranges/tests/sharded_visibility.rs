@@ -9,19 +9,19 @@
 
 use std::sync::Arc;
 
-use crabka_gres_ranges::{MultiRangeTenant, MultiRangeTenantConfig, TenantName};
-use crabka_pgexec::{
+use krabka_gres_ranges::{MultiRangeTenant, MultiRangeTenantConfig, TenantName};
+use krabka_pgexec::{
     ExecError, PredicatePushdown, RangeScanner, ScanRequest, ScannedRow, SqlEngine,
     timestamp_txn::ReadTimestamp,
 };
-use crabka_pgkv::{Kv, MemKv, WriteOp, key};
-use crabka_pgmvcc::{
+use krabka_pgkv::{Kv, MemKv, WriteOp, key};
+use krabka_pgmvcc::{
     clog::{self, XidStatus},
     version,
     visibility::{Snapshot, satisfies_ts},
 };
-use crabka_pgtypes::Datum;
-use crabka_pgwire::engine::{Engine, QueryResult, Session};
+use krabka_pgtypes::Datum;
+use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
 const LEFT: usize = 0;
 const RIGHT: usize = 1;
@@ -354,8 +354,8 @@ impl VisibilityWorld {
         // hundreds. A real range-0 TSO has already advanced past those commits;
         // model that boundary explicitly rather than relying on MAX visibility.
         query_engine.set_timestamp_oracle(Arc::new(
-            crabka_pgexec::timestamp_txn::LocalTimestampSource::new(
-                crabka_pgexec::timestamp_txn::MonotonicTimestampAllocator::starting_at(10_000)
+            krabka_pgexec::timestamp_txn::LocalTimestampSource::new(
+                krabka_pgexec::timestamp_txn::MonotonicTimestampAllocator::starting_at(10_000)
                     .expect("finite test timestamp allocator"),
             ),
         ));
@@ -435,9 +435,9 @@ impl VisibilityWorld {
                 .map(|kv| ManualShard { kv: Arc::clone(kv) })
                 .collect(),
         };
-        let table = crabka_pgcatalog::get_table(
+        let table = krabka_pgcatalog::get_table(
             self.global.as_ref(),
-            &crabka_pgcatalog::RelationName::public(table_name),
+            &krabka_pgcatalog::RelationName::public(table_name),
         )
         .expect("catalog table");
         let snapshot = Snapshot {
@@ -456,9 +456,9 @@ impl VisibilityWorld {
                 read_ts: Some(read_ts),
                 own_start_ts: None,
                 table: &table,
-                interval: crabka_pgexec::RowInterval::ALL,
+                interval: krabka_pgexec::RowInterval::ALL,
                 predicate: PredicatePushdown::FullScan,
-                projection: crabka_pgexec::ProjectionPushdown::All,
+                projection: krabka_pgexec::ProjectionPushdown::All,
                 partial_aggregate: None,
                 top_k: None,
             })
@@ -475,7 +475,7 @@ impl VisibilityWorld {
 impl RangeScanner for ManualScatterScanner {
     fn scan(&self, request: ScanRequest<'_>) -> Result<Vec<ScannedRow>, ExecError> {
         if !request.table.sharded {
-            return crabka_pgexec::LocalRangeScanner.scan(request);
+            return krabka_pgexec::LocalRangeScanner.scan(request);
         }
         if request.predicate != PredicatePushdown::FullScan {
             return Err(ExecError::Unsupported(
@@ -549,7 +549,7 @@ fn scan_visible_shard(
             continue;
         }
         let (xmin, xmax, cmin, cmax, row) = version::decode_tuple_with_command_ids(&value)?;
-        if crabka_pgmvcc::visibility::satisfies_mvcc(
+        if krabka_pgmvcc::visibility::satisfies_mvcc(
             xmin,
             xmax,
             request.snapshot,
@@ -573,7 +573,7 @@ fn resolve_status(
     global: &dyn Kv,
     global_snapshot: &Snapshot,
     xid: u64,
-) -> Result<XidStatus, crabka_pgkv::KvError> {
+) -> Result<XidStatus, krabka_pgkv::KvError> {
     match clog::get(local, xid)? {
         XidStatus::Prepared(global_xid) => {
             if global_xid >= global_snapshot.xmax
@@ -637,7 +637,7 @@ fn put_prepared_version(
 }
 
 fn table_id(kv: &dyn Kv, table_name: &str) -> u32 {
-    crabka_pgcatalog::get_table(kv, &crabka_pgcatalog::RelationName::public(table_name))
+    krabka_pgcatalog::get_table(kv, &krabka_pgcatalog::RelationName::public(table_name))
         .expect("catalog table")
         .id
 }

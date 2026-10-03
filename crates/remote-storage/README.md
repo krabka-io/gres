@@ -1,7 +1,7 @@
-# crabka-remote-storage
+# krabka-remote-storage
 
-[![Crates.io](https://img.shields.io/crates/v/crabka-remote-storage.svg)](https://crates.io/crates/crabka-remote-storage)
-[![Docs.rs](https://docs.rs/crabka-remote-storage/badge.svg)](https://docs.rs/crabka-remote-storage)
+[![Crates.io](https://img.shields.io/crates/v/krabka-remote-storage.svg)](https://crates.io/crates/krabka-remote-storage)
+[![Docs.rs](https://docs.rs/krabka-remote-storage/badge.svg)](https://docs.rs/krabka-remote-storage)
 [![CI](https://github.com/robot-head/crabka/actions/workflows/ci.yml/badge.svg)](https://github.com/robot-head/crabka/actions/workflows/ci.yml)
 
 KIP-405 tiered-storage SPI (RemoteStorageManager / RemoteLogMetadataManager) and reference implementations for Crabka.
@@ -11,7 +11,7 @@ This crate is part of [Crabka](https://github.com/robot-head/crabka), a Rust imp
 ## Install
 
 ```sh
-cargo add crabka-remote-storage
+cargo add krabka-remote-storage
 ```
 
 For workspace development, use the path dependency from this repository instead.
@@ -23,14 +23,14 @@ Copy a closed log segment into the filesystem-backed remote tier and fetch its o
 ```rust,no_run
 use std::{collections::BTreeMap, path::PathBuf};
 use bytes::Bytes;
-use crabka_remote_storage::{
+use krabka_remote_storage::{
     IndexType, LocalTieredStorage, LogSegmentData, RemoteLogSegmentId,
     RemoteLogSegmentMetadata, RemoteLogSegmentState, RemoteStorageManager, TopicIdPartition,
 };
 use uuid::Uuid;
 
 # fn run() -> Result<(), Box<dyn std::error::Error>> {
-let storage = LocalTieredStorage::new(PathBuf::from("/var/lib/crabka-remote"));
+let storage = LocalTieredStorage::new(PathBuf::from("/var/lib/krabka-remote"));
 let topic_partition = TopicIdPartition::new(Uuid::new_v4(), "orders", 0);
 let segment_id = RemoteLogSegmentId::new(topic_partition, Uuid::new_v4());
 let mut leader_epochs = BTreeMap::new();
@@ -55,7 +55,7 @@ let _offset_index = storage.fetch_index(&metadata, IndexType::Offset)?;
 
 ## Documentation
 
-Read the API documentation at [docs.rs/crabka-remote-storage](https://docs.rs/crabka-remote-storage). The repository README contains the project-wide setup, development, and release notes.
+Read the API documentation at [docs.rs/krabka-remote-storage](https://docs.rs/krabka-remote-storage). The repository README contains the project-wide setup, development, and release notes.
 
 ## License
 

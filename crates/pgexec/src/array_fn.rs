@@ -15,8 +15,8 @@
 //! already-resolved `Datum`s, so it introduces no lock, visibility, or
 //! interleaving rule.
 
-use crabka_pgparser::ast::{Expr, FuncArgs, FuncCall};
-use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType, TypeError, cast};
+use krabka_pgparser::ast::{Expr, FuncArgs, FuncCall};
+use krabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType, TypeError, cast};
 
 use crate::{clock::EvalCtx, error::ExecError, eval::ArgType, scope::Scope};
 
@@ -640,7 +640,7 @@ pub(crate) fn array_append(
             Ok(Datum::Array(ArrayValue::with_dims(
                 a.elem,
                 elems.clone(),
-                vec![crabka_pgtypes::ArrayDim::new(
+                vec![krabka_pgtypes::ArrayDim::new(
                     lower,
                     i32::try_from(elems.len()).unwrap_or(i32::MAX),
                 )],
@@ -684,7 +684,7 @@ pub(crate) fn array_prepend(
             Ok(Datum::Array(ArrayValue::with_dims(
                 a.elem,
                 elems,
-                vec![crabka_pgtypes::ArrayDim::new(lower, len)],
+                vec![krabka_pgtypes::ArrayDim::new(lower, len)],
             )))
         }
         Datum::Null => Ok(singleton_from_element(elem, into)),
@@ -922,7 +922,7 @@ pub(crate) fn build_constructor(elem: ElemType, items: Vec<Datum>) -> Result<Dat
     if arrays != items.len() {
         return Err(mismatched_constructor_dims());
     }
-    let mut inner: Option<Vec<crabka_pgtypes::ArrayDim>> = None;
+    let mut inner: Option<Vec<krabka_pgtypes::ArrayDim>> = None;
     let mut elems = Vec::new();
     for item in &items {
         let Datum::Array(a) = item else {
@@ -935,15 +935,15 @@ pub(crate) fn build_constructor(elem: ElemType, items: Vec<Datum>) -> Result<Dat
         }
         elems.extend(a.elems.iter().cloned());
     }
-    let mut dims = vec![crabka_pgtypes::ArrayDim::from_len(items.len())];
+    let mut dims = vec![krabka_pgtypes::ArrayDim::from_len(items.len())];
     dims.extend(inner.unwrap_or_default());
-    if dims.len() > crabka_pgtypes::MAX_ARRAY_DIM {
+    if dims.len() > krabka_pgtypes::MAX_ARRAY_DIM {
         return Err(ExecError::Type(TypeError::Coded {
             sqlstate: "54000",
             message: format!(
                 "number of array dimensions ({}) exceeds the maximum allowed ({})",
                 dims.len(),
-                crabka_pgtypes::MAX_ARRAY_DIM
+                krabka_pgtypes::MAX_ARRAY_DIM
             ),
         }));
     }
@@ -968,7 +968,7 @@ pub(crate) fn array_from_rows(elem: ElemType, rows: Vec<Datum>) -> Datum {
 // ---- multi-subscript references and slices ----
 
 /// One evaluated entry of a subscript chain. This is
-/// [`crabka_pgparser::ast::ArraySubscript`] with its bound expressions already
+/// [`krabka_pgparser::ast::ArraySubscript`] with its bound expressions already
 /// reduced to values.
 #[derive(Debug, Clone)]
 pub(crate) enum SubscriptArg {
@@ -1090,9 +1090,9 @@ fn array_ref_slice(array: &ArrayValue, subscripts: &[SubscriptArg]) -> Result<Da
         ranges.push((start, end));
     }
     let strides = array.strides();
-    let dims: Vec<crabka_pgtypes::ArrayDim> = ranges
+    let dims: Vec<krabka_pgtypes::ArrayDim> = ranges
         .iter()
-        .map(|(start, end)| crabka_pgtypes::ArrayDim::from_len(end - start))
+        .map(|(start, end)| krabka_pgtypes::ArrayDim::from_len(end - start))
         .collect();
     let mut elems = Vec::new();
     collect_slice(array, &ranges, &strides, 0, 0, &mut elems);
@@ -1145,7 +1145,7 @@ fn clamp_i32(value: i64) -> i32 {
 
 /// The `PostgreSQL` dimension `n` of `array`, counted from 1, or `None` when the
 /// array has no such dimension. That is what makes `array_length('{}', 1)` NULL.
-fn dimension(array: &ArrayValue, n: i32) -> Option<crabka_pgtypes::ArrayDim> {
+fn dimension(array: &ArrayValue, n: i32) -> Option<krabka_pgtypes::ArrayDim> {
     usize::try_from(n)
         .ok()
         .and_then(|n| n.checked_sub(1))
@@ -1216,7 +1216,7 @@ fn resolved_bounds(
                     Some(value) => clamp_i32(assignment_subscript(value)?),
                 };
                 let upper = match upper {
-                    None => dim.map_or(1, crabka_pgtypes::ArrayDim::upper),
+                    None => dim.map_or(1, krabka_pgtypes::ArrayDim::upper),
                     Some(value) => clamp_i32(assignment_subscript(value)?),
                 };
                 (lower, upper)
@@ -1249,7 +1249,7 @@ fn assign_element(
         // A fresh array takes exactly the shape the subscripts describe.
         let dims = bounds
             .iter()
-            .map(|(lower, _)| crabka_pgtypes::ArrayDim::new(*lower, 1))
+            .map(|(lower, _)| krabka_pgtypes::ArrayDim::new(*lower, 1))
             .collect();
         return Ok(Datum::Array(ArrayValue::with_dims(
             array.elem,
@@ -1307,7 +1307,7 @@ fn assign_slice(
             .map(|(lower, upper)| {
                 let len = i32::try_from(i64::from(*upper) - i64::from(*lower) + 1)
                     .map_err(|_| ExecError::Type(TypeError::Overflow))?;
-                Ok(crabka_pgtypes::ArrayDim::new(*lower, len))
+                Ok(krabka_pgtypes::ArrayDim::new(*lower, len))
             })
             .collect::<Result<Vec<_>, ExecError>>()?;
         array = ArrayValue::with_dims(array.elem, vec![Datum::Null; slots], dims);
@@ -1410,7 +1410,7 @@ fn extend_to_cover(array: &mut ArrayValue, lower: i32, upper: i32) -> Result<(),
     elems.extend(std::iter::repeat_n(Datum::Null, above));
     let new_lower = dim.lower.min(lower);
     let len = i32::try_from(elems.len()).unwrap_or(i32::MAX);
-    array.dims = vec![crabka_pgtypes::ArrayDim::new(new_lower, len)];
+    array.dims = vec![krabka_pgtypes::ArrayDim::new(new_lower, len)];
     array.elems = elems;
     Ok(())
 }
@@ -1693,13 +1693,13 @@ fn array_fill(
             lowers
         }
     };
-    if lengths.len() > crabka_pgtypes::MAX_ARRAY_DIM {
+    if lengths.len() > krabka_pgtypes::MAX_ARRAY_DIM {
         return Err(ExecError::Type(TypeError::Coded {
             sqlstate: "54000",
             message: format!(
                 "number of array dimensions ({}) exceeds the maximum allowed ({})",
                 lengths.len(),
-                crabka_pgtypes::MAX_ARRAY_DIM
+                krabka_pgtypes::MAX_ARRAY_DIM
             ),
         }));
     }
@@ -1715,7 +1715,7 @@ fn array_fill(
         total = total
             .checked_mul(usize::try_from(*len).unwrap_or(0))
             .ok_or(ExecError::Type(TypeError::Overflow))?;
-        shape.push(crabka_pgtypes::ArrayDim::new(*lower, *len));
+        shape.push(krabka_pgtypes::ArrayDim::new(*lower, *len));
     }
     if total == 0 {
         return Ok(Datum::Array(ArrayValue::new(elem, Vec::new())));
@@ -2052,7 +2052,7 @@ fn compare_slices(
                     failure.get_or_insert(error);
                     Ordering::Equal
                 }
-                Ok(()) => match crabka_pgtypes::ops::compare(x, y) {
+                Ok(()) => match krabka_pgtypes::ops::compare(x, y) {
                     Ok(Some(ord)) => {
                         if descending {
                             ord.reverse()
@@ -2149,7 +2149,7 @@ fn element_matches(element: &Datum, needle: &Datum) -> Result<bool, ExecError> {
 
 /// A non-NULL datum's PostgreSQL text output.
 fn datum_text(d: &Datum, ctx: &EvalCtx) -> String {
-    String::from_utf8(crabka_pgtypes::encoding::encode_text(d, &ctx.time_zone))
+    String::from_utf8(krabka_pgtypes::encoding::encode_text(d, &ctx.time_zone))
         .expect("a Datum's text encoding is always valid UTF-8")
 }
 
@@ -2952,7 +2952,7 @@ mod tests {
             let got = array_ref(&int_arr(literal), subscripts).expect("reference");
             let text = match &got {
                 Datum::Null => "NULL".to_string(),
-                other => String::from_utf8(crabka_pgtypes::encoding::encode_text(
+                other => String::from_utf8(krabka_pgtypes::encoding::encode_text(
                     other,
                     &ctx().time_zone,
                 ))
@@ -3028,7 +3028,7 @@ mod tests {
             let current = start.map_or(Datum::Null, int_arr);
             let got = array_assign(&current, subscripts, value, ElemType::Int4, &ctx())
                 .expect("assignment");
-            let text = String::from_utf8(crabka_pgtypes::encoding::encode_text(
+            let text = String::from_utf8(krabka_pgtypes::encoding::encode_text(
                 &got,
                 &ctx().time_zone,
             ))
@@ -3305,7 +3305,7 @@ mod tests {
             let got = call(name, args.clone()).expect(name);
             let text = match &got {
                 Datum::Null => "NULL".to_string(),
-                other => String::from_utf8(crabka_pgtypes::encoding::encode_text(
+                other => String::from_utf8(krabka_pgtypes::encoding::encode_text(
                     other,
                     &ctx().time_zone,
                 ))
@@ -3320,7 +3320,7 @@ mod tests {
                 .expect("array")
                 .dims
                 .len()
-                == crabka_pgtypes::MAX_ARRAY_DIM
+                == krabka_pgtypes::MAX_ARRAY_DIM
         );
         let sampled = array_sample(
             &int_arr("[-1:2][2:3]={{1,2},{3,NULL},{5,6},{7,8}}"),
@@ -3329,8 +3329,8 @@ mod tests {
         )
         .expect("sample");
         let sampled = array_value(&sampled, "array_sample").expect("array");
-        assert!(dimension(sampled, 1) == Some(crabka_pgtypes::ArrayDim::new(1, 3)));
-        assert!(dimension(sampled, 2) == Some(crabka_pgtypes::ArrayDim::new(2, 2)));
+        assert!(dimension(sampled, 1) == Some(krabka_pgtypes::ArrayDim::new(1, 3)));
+        assert!(dimension(sampled, 2) == Some(krabka_pgtypes::ArrayDim::new(2, 2)));
     }
 
     #[test]
@@ -3459,7 +3459,7 @@ mod tests {
         ];
         for (left, right, expected) in cases {
             let got = array_cat(&int_arr(left), &int_arr(right)).expect("cat");
-            let text = String::from_utf8(crabka_pgtypes::encoding::encode_text(
+            let text = String::from_utf8(krabka_pgtypes::encoding::encode_text(
                 &got,
                 &ctx().time_zone,
             ))
@@ -3498,11 +3498,11 @@ mod tests {
         let value = Datum::OidVector(ArrayValue::with_dims(
             ElemType::Int4,
             vec![Datum::Int4(23), Datum::Int4(25)],
-            vec![crabka_pgtypes::ArrayDim::new(0, 2)],
+            vec![krabka_pgtypes::ArrayDim::new(0, 2)],
         ));
         assert!(
             dimension(array_value(&value, "array_length").expect("oidvector"), 1)
-                == Some(crabka_pgtypes::ArrayDim::new(0, 2))
+                == Some(krabka_pgtypes::ArrayDim::new(0, 2))
         );
         assert!(array_subscript(&value, &Datum::Int4(0)).expect("subscript") == Datum::Int4(23));
         assert!(
@@ -3513,10 +3513,10 @@ mod tests {
                 == Datum::Bool(true)
         );
         assert!(
-            crabka_pgtypes::encoding::encode_text(&value, &jiff::tz::TimeZone::UTC) == b"23 25"
+            krabka_pgtypes::encoding::encode_text(&value, &jiff::tz::TimeZone::UTC) == b"23 25"
         );
         assert!(
-            crabka_pgtypes::ops::compare(&value, &value).expect("compare")
+            krabka_pgtypes::ops::compare(&value, &value).expect("compare")
                 == Some(std::cmp::Ordering::Equal)
         );
     }

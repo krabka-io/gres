@@ -22,12 +22,12 @@ pub(super) struct StatementWrites {
     pub(super) pending_unique_keys: HashSet<PendingUniqueKey>,
     /// Exclusion keys staged by this statement, which are not visible in KV
     /// until the statement's batch commits.
-    pub(super) pending_exclusion_keys: HashMap<crabka_pgcatalog::IndexId, Vec<(u64, Vec<Datum>)>>,
+    pub(super) pending_exclusion_keys: HashMap<krabka_pgcatalog::IndexId, Vec<(u64, Vec<Datum>)>>,
     /// `(index, rowid)` pairs whose key this statement freed — a deleted row, or
     /// an updated row whose indexed values changed. A row holds exactly one key
     /// per index, so the rowid identifies the freed key. The superseded version
     /// is still in the KV, so the probe still finds it and must discount it.
-    pub(super) released_unique_keys: HashSet<(crabka_pgcatalog::IndexId, u64)>,
+    pub(super) released_unique_keys: HashSet<(krabka_pgcatalog::IndexId, u64)>,
     /// Every `(table, rowid)` this statement has already updated or deleted,
     /// whether by its own DML or by a referential action.
     pub(super) row_claims: HashSet<(TableId, u64)>,
@@ -194,7 +194,7 @@ impl StatementWrites {
 
     /// Does the probe's `holder` still hold the key it was found under, or did
     /// an earlier part of this statement free it?
-    pub(super) fn holder_still_holds(&self, index: crabka_pgcatalog::IndexId, rowid: u64) -> bool {
+    pub(super) fn holder_still_holds(&self, index: krabka_pgcatalog::IndexId, rowid: u64) -> bool {
         !self.released_unique_keys.contains(&(index, rowid))
     }
 
@@ -204,7 +204,7 @@ impl StatementWrites {
     pub(super) fn release_row_keys(
         &mut self,
         table: &Table,
-        indexes: &[crabka_pgcatalog::Index],
+        indexes: &[krabka_pgcatalog::Index],
         rowid: u64,
         old_row: &[Datum],
         next: Option<&[Datum]>,
@@ -326,7 +326,7 @@ struct StatementCascade<'a, 'w> {
     staged: &'a StagedKv<'a>,
     /// One index-set read per cascaded *relation*, not per cascaded row: a
     /// cascade walks a chain of relations and revisits each many times.
-    indexes: HashMap<TableId, Vec<crabka_pgcatalog::Index>>,
+    indexes: HashMap<TableId, Vec<krabka_pgcatalog::Index>>,
 }
 
 impl crate::fk::FkCascade for StatementCascade<'_, '_> {
@@ -350,7 +350,7 @@ impl crate::fk::FkCascade for StatementCascade<'_, '_> {
             self.write_ctx.catalog_kv,
             table,
             event,
-            crabka_pgcatalog::trigger::TriggerTiming::Before,
+            krabka_pgcatalog::trigger::TriggerTiming::Before,
             &columns,
             self.write_ctx.eval_ctx,
         )
@@ -376,7 +376,7 @@ impl crate::fk::FkCascade for StatementCascade<'_, '_> {
             self.write_ctx.catalog_kv,
             table,
             event,
-            crabka_pgcatalog::trigger::TriggerTiming::After,
+            krabka_pgcatalog::trigger::TriggerTiming::After,
             &columns,
             self.write_ctx.eval_ctx,
         )
@@ -385,7 +385,7 @@ impl crate::fk::FkCascade for StatementCascade<'_, '_> {
     async fn modify_row(
         &mut self,
         request: crate::fk::FkCascadeRequest<'_>,
-    ) -> Result<(crate::fk::FkCascadeOutcome, Vec<crabka_pgkv::WriteOp>), ExecError> {
+    ) -> Result<(crate::fk::FkCascadeOutcome, Vec<krabka_pgkv::WriteOp>), ExecError> {
         let crate::fk::FkCascadeRequest {
             table,
             rowid,
@@ -577,8 +577,8 @@ impl crate::fk::FkCascade for StatementCascade<'_, '_> {
 pub(super) async fn drain_statement_fk_checks(
     write_ctx: &WriteContext<'_>,
     writes: &mut StatementWrites,
-    staged: &[crabka_pgkv::WriteOp],
-) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
+    staged: &[krabka_pgkv::WriteOp],
+) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
     if writes.fk_checks.is_empty() {
         return Ok(Vec::new());
     }
@@ -617,7 +617,7 @@ pub(super) async fn drain_statement_fk_checks(
 pub(crate) async fn drain_deferred_fk_checks(
     write_ctx: &WriteContext<'_>,
     checks: Vec<crate::fk::PendingCheck>,
-) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
+) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
     if checks.is_empty() {
         return Ok(Vec::new());
     }
@@ -658,7 +658,7 @@ pub(crate) async fn drain_deferred_fk_checks(
 pub(super) fn drain_statement_unique_checks(
     write_ctx: &WriteContext<'_>,
     writes: &mut StatementWrites,
-    staged: &[crabka_pgkv::WriteOp],
+    staged: &[krabka_pgkv::WriteOp],
 ) -> Result<(), ExecError> {
     if writes.unique_checks.is_empty() {
         return Ok(());
@@ -727,7 +727,7 @@ fn run_unique_recheck(
     kv: &dyn Kv,
     check: &crate::fk::PendingUniqueCheck,
 ) -> Result<(), ExecError> {
-    let Ok(table) = crabka_pgcatalog::get_table(write_ctx.catalog_kv, &check.table) else {
+    let Ok(table) = krabka_pgcatalog::get_table(write_ctx.catalog_kv, &check.table) else {
         return Ok(());
     };
     let holders = probe_unique_key(write_ctx, kv, &table, &check.index, &check.values)?;

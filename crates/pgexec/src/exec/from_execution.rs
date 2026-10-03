@@ -20,7 +20,7 @@ pub(super) fn table_function_call_rows(
 
 pub(super) fn build_table_expr(
     read_ctx: &crate::subquery::SubCtx<'_>,
-    te: &crabka_pgparser::ast::TableExpr,
+    te: &krabka_pgparser::ast::TableExpr,
     // SP40 Task 14: pushed-down offset bounds, `Some` only for a single foreign
     // base table. Applied verbatim to the foreign scan; `None` ⇒ full scan.
     bounds: Option<&ScanBounds>,
@@ -31,7 +31,7 @@ pub(super) fn build_table_expr(
     filter: Option<&Expr>,
 ) -> Result<Relation, ExecError> {
     let ctx = read_ctx.eval_ctx;
-    use crabka_pgparser::ast::TableExpr;
+    use krabka_pgparser::ast::TableExpr;
     match te {
         table @ TableExpr::Table { .. } => build_base_table(read_ctx, table, bounds, scan_plan),
         TableExpr::Join {
@@ -56,10 +56,10 @@ pub(super) fn build_table_expr(
             // matched row into a NULL-padded one — which a predicate like
             // `a.x IS NULL` would then wrongly admit.
             let nested_filter = match kind {
-                crabka_pgparser::ast::JoinKind::Inner
-                | crabka_pgparser::ast::JoinKind::Cross
-                | crabka_pgparser::ast::JoinKind::Left => filter,
-                crabka_pgparser::ast::JoinKind::Right | crabka_pgparser::ast::JoinKind::Full => {
+                krabka_pgparser::ast::JoinKind::Inner
+                | krabka_pgparser::ast::JoinKind::Cross
+                | krabka_pgparser::ast::JoinKind::Left => filter,
+                krabka_pgparser::ast::JoinKind::Right | krabka_pgparser::ast::JoinKind::Full => {
                     None
                 }
             };
@@ -217,7 +217,7 @@ pub(super) fn build_table_expr(
 /// `PostgreSQL` exactly; which rows a partial sample returns does not.
 pub(crate) fn apply_tablesample(
     relation: Relation,
-    sample: &crabka_pgparser::ast::TableSample,
+    sample: &krabka_pgparser::ast::TableSample,
     ctx: &crate::clock::EvalCtx,
 ) -> Result<Relation, ExecError> {
     if !matches!(sample.method.as_str(), "system" | "bernoulli") {
@@ -234,7 +234,7 @@ pub(crate) fn apply_tablesample(
         });
     }
     let Datum::Float8(percent) =
-        crabka_pgtypes::cast::cast(&percent, ColumnType::Float8, &ctx.time_zone)?
+        krabka_pgtypes::cast::cast(&percent, ColumnType::Float8, &ctx.time_zone)?
     else {
         return Err(ExecError::TypeMismatch(
             "TABLESAMPLE percentage must be numeric".into(),
@@ -258,7 +258,7 @@ pub(crate) fn apply_tablesample(
                 });
             }
             let Datum::Float8(seed) =
-                crabka_pgtypes::cast::cast(&value, ColumnType::Float8, &ctx.time_zone)?
+                krabka_pgtypes::cast::cast(&value, ColumnType::Float8, &ctx.time_zone)?
             else {
                 return Err(ExecError::TypeMismatch(
                     "TABLESAMPLE seed must be numeric".into(),
@@ -296,10 +296,10 @@ pub(crate) fn apply_tablesample(
 
 fn try_distributed_inner_equi_join(
     read_ctx: &crate::subquery::SubCtx<'_>,
-    left_expr: &crabka_pgparser::ast::TableExpr,
-    right_expr: &crabka_pgparser::ast::TableExpr,
-    kind: crabka_pgparser::ast::JoinKind,
-    constraint: &crabka_pgparser::ast::JoinConstraint,
+    left_expr: &krabka_pgparser::ast::TableExpr,
+    right_expr: &krabka_pgparser::ast::TableExpr,
+    kind: krabka_pgparser::ast::JoinKind,
+    constraint: &krabka_pgparser::ast::JoinConstraint,
 ) -> Result<Option<Relation>, ExecError> {
     let catalog_kv = read_ctx.catalog_kv;
     let resolution = read_ctx.fctx.resolution;
@@ -308,7 +308,7 @@ fn try_distributed_inner_equi_join(
     let own = read_ctx.own;
     let ctes = read_ctx.ctes;
     let range_scanner = read_ctx.range_scanner;
-    use crabka_pgparser::ast::{BinaryOp, Expr, JoinConstraint, JoinKind, TableExpr};
+    use krabka_pgparser::ast::{BinaryOp, Expr, JoinConstraint, JoinKind, TableExpr};
 
     if kind != JoinKind::Inner {
         return Ok(None);
@@ -358,10 +358,10 @@ fn try_distributed_inner_equi_join(
         return Ok(None);
     };
     let table =
-        |name: &crabka_pgcatalog::RelationName| match crabka_pgcatalog::get_table(catalog_kv, name)
+        |name: &krabka_pgcatalog::RelationName| match krabka_pgcatalog::get_table(catalog_kv, name)
         {
             Ok(table) => Ok(Some(table)),
-            Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => Ok(None),
+            Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => Ok(None),
             Err(error) => Err(ExecError::from(error)),
         };
     let Some(left_table) = table(left_name)? else {
@@ -465,7 +465,7 @@ fn try_distributed_inner_equi_join(
     // join's own: the strategy is a property of how the statement ran, and a
     // span that declares no such field ignores this.
     tracing::Span::current().record("pg.join_strategy", strategy.as_str());
-    let join_snapshot = |source: &crabka_pgmvcc::visibility::Snapshot| JoinSnapshot {
+    let join_snapshot = |source: &krabka_pgmvcc::visibility::Snapshot| JoinSnapshot {
         xmin: source.xmin,
         xmax: source.xmax,
         xip: source.xip.clone(),
@@ -511,7 +511,7 @@ fn try_distributed_inner_equi_join(
         .rows
         .into_iter()
         .map(|JoinRow { tuple }| {
-            crabka_pgmvcc::version::decode_tuple(&tuple)
+            krabka_pgmvcc::version::decode_tuple(&tuple)
                 .map(|(_, _, row)| row)
                 .map_err(ExecError::from)
         })
@@ -545,7 +545,7 @@ fn hash_sharding_matches_join_keys(
     left_column: &str,
     right_column: &str,
 ) -> bool {
-    use crabka_pgcatalog::ShardingStrategy;
+    use krabka_pgcatalog::ShardingStrategy;
 
     let (Some(ShardingStrategy::Hash(left_hash)), Some(ShardingStrategy::Hash(right_hash))) =
         (&left.sharding, &right.sharding)
@@ -679,9 +679,9 @@ fn choose_local_ordered_index(
     catalog_kv: &dyn Kv,
     table: &Table,
     top_k: &crate::TopKSpec,
-) -> Result<Option<crabka_pgcatalog::Index>, ExecError> {
+) -> Result<Option<krabka_pgcatalog::Index>, ExecError> {
     Ok(
-        crabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)?
+        krabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)?
             .into_iter()
             .find(|index| {
                 local_index_supports_ordered_scan(table, index)
@@ -703,12 +703,12 @@ fn choose_local_forced_ordered_index(
     catalog_kv: &dyn Kv,
     table: &Table,
     predicate: &PredicatePushdown,
-) -> Result<Option<crabka_pgcatalog::Index>, ExecError> {
+) -> Result<Option<krabka_pgcatalog::Index>, ExecError> {
     let PredicatePushdown::Conjunctive(predicates) = predicate else {
         return Ok(None);
     };
     Ok(
-        crabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)?
+        krabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)?
             .into_iter()
             .find(|index| {
                 local_index_supports_ordered_scan(table, index)
@@ -735,7 +735,7 @@ pub(crate) enum LocalTextSearchAccess {
 /// A supported local full-text access path selected from the catalog.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LocalTextSearchPath {
-    pub(crate) index: crabka_pgcatalog::Index,
+    pub(crate) index: krabka_pgcatalog::Index,
     pub(crate) access: LocalTextSearchAccess,
 }
 
@@ -751,9 +751,9 @@ pub(crate) fn choose_local_text_search_path(
     enable_indexscan: bool,
     enable_bitmapscan: bool,
 ) -> Result<Option<LocalTextSearchPath>, ExecError> {
-    let indexes = crabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)?;
-    let supports = |index: &crabka_pgcatalog::Index| {
-        index.placement == crabka_pgcatalog::IndexPlacement::Local
+    let indexes = krabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)?;
+    let supports = |index: &krabka_pgcatalog::Index| {
+        index.placement == krabka_pgcatalog::IndexPlacement::Local
             && index.predicate.is_none()
             && index.columns.len() == 1
             && table.column_index(&index.columns[0]) == Some(column)
@@ -761,7 +761,7 @@ pub(crate) fn choose_local_text_search_path(
     if enable_indexscan
         && let Some(index) = indexes
             .iter()
-            .find(|index| supports(index) && index.method == crabka_pgcatalog::IndexMethod::Gist)
+            .find(|index| supports(index) && index.method == krabka_pgcatalog::IndexMethod::Gist)
     {
         return Ok(Some(LocalTextSearchPath {
             index: index.clone(),
@@ -773,7 +773,7 @@ pub(crate) fn choose_local_text_search_path(
             supports(index)
                 && matches!(
                     index.method,
-                    crabka_pgcatalog::IndexMethod::Gin | crabka_pgcatalog::IndexMethod::Gist
+                    krabka_pgcatalog::IndexMethod::Gin | krabka_pgcatalog::IndexMethod::Gist
                 )
         })
     {
@@ -789,20 +789,20 @@ pub(super) fn choose_local_index_equality(
     catalog_kv: &dyn Kv,
     table: &Table,
     predicate: &PredicatePushdown,
-) -> Result<Option<(crabka_pgcatalog::Index, Datum)>, ExecError> {
+) -> Result<Option<(krabka_pgcatalog::Index, Datum)>, ExecError> {
     let PredicatePushdown::Conjunctive(predicates) = predicate else {
         return Ok(None);
     };
-    let indexes = crabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)?;
+    let indexes = krabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)?;
     for predicate in predicates
         .iter()
         .filter(|predicate| predicate.op == crate::PredicateOp::Eq && !predicate.value.is_null())
     {
         let Some(index) = indexes.iter().find(|index| {
-            index.placement == crabka_pgcatalog::IndexPlacement::Local
+            index.placement == krabka_pgcatalog::IndexPlacement::Local
                 && matches!(
                     index.method,
-                    crabka_pgcatalog::IndexMethod::Btree | crabka_pgcatalog::IndexMethod::Hash
+                    krabka_pgcatalog::IndexMethod::Btree | krabka_pgcatalog::IndexMethod::Hash
                 )
                 // A partial index cannot prove the query's row set without
                 // predicate implication, which the planner does not have yet.

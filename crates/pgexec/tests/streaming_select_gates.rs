@@ -24,11 +24,11 @@
 use std::sync::{Arc, Mutex};
 
 use assert2::assert;
-use crabka_pgexec::{
+use krabka_pgexec::{
     ExecError, RangeCursor, RangeScanner, ScanPage, ScanRequest, ScannedRow, SqlEngine, SqlSession,
     scanner::LocalRangeScanner,
 };
-use crabka_pgwire::engine::{Cell, CollectingResultSink, Engine as _, QueryResult, Session as _};
+use krabka_pgwire::engine::{Cell, CollectingResultSink, Engine as _, QueryResult, Session as _};
 
 /// The wire page size every measurement here asks for. Distinctive on purpose:
 /// it is what tells the streaming cursor apart from the materializing path.

@@ -27,12 +27,12 @@ pub(crate) mod hash;
 
 use std::cmp::Ordering;
 
-use crabka_pgcatalog::RelationName;
-use crabka_pgkv::{
+use krabka_pgcatalog::RelationName;
+use krabka_pgkv::{
     Kv, WriteOp,
     key::{key_parts, push_key_part},
 };
-use crabka_pgtypes::{ColumnType, Datum};
+use krabka_pgtypes::{ColumnType, Datum};
 
 use crate::error::ExecError;
 
@@ -246,7 +246,7 @@ fn read_string(cur: &mut &[u8]) -> Result<String, ExecError> {
 }
 
 fn corrupt(message: &str) -> ExecError {
-    ExecError::Kv(crabka_pgkv::KvError::CorruptRow(message.to_string()))
+    ExecError::Kv(krabka_pgkv::KvError::CorruptRow(message.to_string()))
 }
 
 fn serialize_scheme(scheme: &Scheme) -> Vec<u8> {
@@ -278,7 +278,7 @@ fn deserialize_scheme(bytes: &[u8]) -> Result<Scheme, ExecError> {
 /// space. This includes the date/time types a range partition is usually keyed
 /// on.
 fn write_datums(out: &mut Vec<u8>, values: &[Datum]) {
-    let encoded = crabka_pgkv::rowenc::encode_row(values);
+    let encoded = krabka_pgkv::rowenc::encode_row(values);
     let len = u32::try_from(encoded.len()).expect("an encoded bound fits in u32 bytes");
     out.extend_from_slice(&len.to_be_bytes());
     out.extend_from_slice(&encoded);
@@ -287,7 +287,7 @@ fn write_datums(out: &mut Vec<u8>, values: &[Datum]) {
 fn read_datums(cur: &mut &[u8]) -> Result<Vec<Datum>, ExecError> {
     let len = usize::try_from(take_u32(cur)?).expect("u32 fits usize on supported targets");
     let bytes = take_n(cur, len)?;
-    crabka_pgkv::rowenc::decode_row(bytes).map_err(ExecError::Kv)
+    krabka_pgkv::rowenc::decode_row(bytes).map_err(ExecError::Kv)
 }
 
 /// A range tuple is stored as its infinity tags plus the row encoding of the
@@ -684,7 +684,7 @@ pub(crate) fn drop_metadata_ops(
 /// and `RENAME COLUMN` rewrites the key alongside the column.
 pub(crate) fn key_ordinals(
     scheme: &Scheme,
-    columns: &[crabka_pgcatalog::Column],
+    columns: &[krabka_pgcatalog::Column],
 ) -> Result<Vec<usize>, ExecError> {
     scheme
         .keys
@@ -701,7 +701,7 @@ pub(crate) fn key_ordinals(
 /// Extract a row's partition key values. `columns` describes `row`.
 fn key_values(
     scheme: &Scheme,
-    columns: &[crabka_pgcatalog::Column],
+    columns: &[krabka_pgcatalog::Column],
     row: &[Datum],
 ) -> Result<Vec<Datum>, ExecError> {
     key_ordinals(scheme, columns)?
@@ -730,7 +730,7 @@ pub(crate) fn field_text(value: &Datum, ctx: &crate::clock::EvalCtx) -> String {
     match value {
         Datum::Null => "null".to_string(),
         other => {
-            let text = String::from_utf8_lossy(&crabka_pgtypes::encoding::encode_text(
+            let text = String::from_utf8_lossy(&krabka_pgtypes::encoding::encode_text(
                 other,
                 &ctx.time_zone,
             ))
@@ -762,7 +762,7 @@ pub(crate) fn field_text(value: &Datum, ctx: &crate::clock::EvalCtx) -> String {
 /// unconditional; disclosing it is not. See `exec::may_describe_key`.
 pub(crate) fn key_description(
     scheme: &Scheme,
-    columns: &[crabka_pgcatalog::Column],
+    columns: &[krabka_pgcatalog::Column],
     row: &[Datum],
     ctx: &crate::clock::EvalCtx,
 ) -> Result<String, ExecError> {
@@ -784,7 +784,7 @@ pub(crate) fn key_description(
 /// because either operand was NULL or the two types do not compare. Every
 /// caller treats that as "does not belong here" and does not guess.
 fn compare(left: &Datum, right: &Datum) -> Option<Ordering> {
-    crabka_pgtypes::ops::compare(left, right).ok().flatten()
+    krabka_pgtypes::ops::compare(left, right).ok().flatten()
 }
 
 /// Does `key` fall inside `bound`? `None` means "not decidable". [`route`]
@@ -866,7 +866,7 @@ fn compare_range_tuple(key: &[Datum], bound: &[RangeDatum]) -> Result<Ordering, 
 /// parent's own column order.
 pub(crate) fn route<'a>(
     scheme: &Scheme,
-    columns: &[crabka_pgcatalog::Column],
+    columns: &[krabka_pgcatalog::Column],
     partitions: &'a [Partition],
     row: &[Datum],
 ) -> Result<Option<&'a Partition>, ExecError> {
@@ -888,7 +888,7 @@ pub(crate) fn route<'a>(
 /// the caller must supply the sibling bounds too.
 pub(crate) fn satisfies(
     scheme: &Scheme,
-    columns: &[crabka_pgcatalog::Column],
+    columns: &[krabka_pgcatalog::Column],
     bound: &Bound,
     siblings: &[Partition],
     row: &[Datum],
@@ -1107,8 +1107,8 @@ pub(crate) fn reject_sharded_partitioned() -> ExecError {
 /// a constant expression is 42P17. `LIST` with more than one column is 42P17.
 pub(crate) fn key_columns(
     strategy: Strategy,
-    keys: &[crabka_pgparser::ast::PartitionKeyElem],
-    columns: &[crabka_pgcatalog::Column],
+    keys: &[krabka_pgparser::ast::PartitionKeyElem],
+    columns: &[krabka_pgcatalog::Column],
 ) -> Result<Vec<String>, ExecError> {
     if strategy == Strategy::List && keys.len() > 1 {
         return Err(ExecError::InvalidObjectDefinition(
@@ -1158,7 +1158,7 @@ fn expression_key_error(text: &str) -> ExecError {
 /// Type of the key column named `key`, for the coercion of a written bound
 /// value.
 pub(crate) fn key_column_type(
-    columns: &[crabka_pgcatalog::Column],
+    columns: &[krabka_pgcatalog::Column],
     key: &str,
 ) -> Result<ColumnType, ExecError> {
     columns
@@ -1182,7 +1182,7 @@ mod tests {
     fn a_cycle_in_the_partition_tree_does_not_diverge() {
         use assert2::assert;
 
-        let kv = crabka_pgkv::MemKv::default();
+        let kv = krabka_pgkv::MemKv::default();
         // Hand-write a two-node cycle: each table is recorded as the other's
         // partition, which `ATTACH PARTITION` rejects but a direct catalog write
         // could still produce.
@@ -1207,7 +1207,7 @@ mod tests {
         assert!(found == vec![RelationName::public("b")], "got {found:?}");
     }
     use assert2::assert;
-    use crabka_pgtypes::Datum;
+    use krabka_pgtypes::Datum;
 
     use super::*;
 
@@ -1218,7 +1218,7 @@ mod tests {
         }
     }
 
-    fn write(kv: &crabka_pgkv::MemKv, ops: Vec<WriteOp>) {
+    fn write(kv: &krabka_pgkv::MemKv, ops: Vec<WriteOp>) {
         kv.write_batch(&ops).expect("write");
     }
 
@@ -1230,7 +1230,7 @@ mod tests {
     fn partition_metadata_is_stored_outside_the_relation_catalog() {
         let parent = RelationName::new("sch", "p");
         let child = RelationName::new("sch", "c");
-        let catalog = crabka_pgkv::key::catalog_prefix();
+        let catalog = krabka_pgkv::key::catalog_prefix();
         for key in [
             scheme_key(&parent),
             child_key(&child),
@@ -1246,7 +1246,7 @@ mod tests {
     /// would confuse.
     #[test]
     fn the_children_index_returns_one_parents_partitions_only() {
-        let kv = crabka_pgkv::MemKv::default();
+        let kv = krabka_pgkv::MemKv::default();
         let parent = RelationName::new("sch", "p");
         let neighbour = RelationName::new("sch", "p2");
         // A dot in the name is not a qualifier: this leaf is `c.1` in `sch`.
@@ -1276,7 +1276,7 @@ mod tests {
     /// Whether any partition key or value still spells `name`. A rename that
     /// leaves one behind either strands the metadata or hands it to whatever
     /// takes the old name next.
-    fn anything_still_names(kv: &crabka_pgkv::MemKv, name: &str) -> bool {
+    fn anything_still_names(kv: &krabka_pgkv::MemKv, name: &str) -> bool {
         let mut needle = Vec::new();
         push_key_part(&mut needle, name);
         [SCHEME_PREFIX, CHILD_PREFIX, CHILDREN_PREFIX]
@@ -1299,7 +1299,7 @@ mod tests {
     /// accepting rows that belong in no partition.
     #[test]
     fn a_renamed_parent_keeps_its_scheme_and_its_partitions() {
-        let kv = crabka_pgkv::MemKv::default();
+        let kv = krabka_pgkv::MemKv::default();
         let parent = RelationName::new("sch", "p");
         let renamed = RelationName::new("sch", "p_renamed");
         let child = RelationName::new("sch", "c");
@@ -1325,7 +1325,7 @@ mod tests {
     /// every read and every write of the parent failed outright.
     #[test]
     fn a_renamed_leaf_is_still_its_parents_partition() {
-        let kv = crabka_pgkv::MemKv::default();
+        let kv = krabka_pgkv::MemKv::default();
         let parent = RelationName::new("sch", "p");
         let child = RelationName::new("sch", "c");
         let renamed = RelationName::new("sch", "c_renamed");
@@ -1350,7 +1350,7 @@ mod tests {
     /// below it has to survive.
     #[test]
     fn renaming_a_sub_partitioned_level_keeps_the_tree_whole() {
-        let kv = crabka_pgkv::MemKv::default();
+        let kv = krabka_pgkv::MemKv::default();
         let top = RelationName::new("sch", "top");
         let mid = RelationName::new("sch", "mid");
         let renamed = RelationName::new("sch", "middle");
@@ -1370,7 +1370,7 @@ mod tests {
 
     #[test]
     fn renaming_an_unpartitioned_relation_writes_nothing() {
-        let kv = crabka_pgkv::MemKv::default();
+        let kv = krabka_pgkv::MemKv::default();
         let plain = RelationName::new("sch", "plain");
         write(
             &kv,
@@ -1400,8 +1400,8 @@ mod tests {
     }
 
     /// The one-column relation the schemes above are keyed on.
-    fn keyed_columns() -> Vec<crabka_pgcatalog::Column> {
-        vec![crabka_pgcatalog::Column::new("a", ColumnType::Int4)]
+    fn keyed_columns() -> Vec<krabka_pgcatalog::Column> {
+        vec![krabka_pgcatalog::Column::new("a", ColumnType::Int4)]
     }
 
     fn value(n: i32) -> RangeDatum {

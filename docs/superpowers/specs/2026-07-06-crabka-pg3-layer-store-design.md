@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Subsystem design. Second slice of the [Chapter C roadmap](2026-07-06-crabka-postgres-chapter-roadmap-design.md) — the storage half of the pageserver track, sitting between PG-2's decoded stream and PG-4's redo.
+**Type:** Subsystem design. Second slice of the [Chapter C roadmap](2026-07-06-krabka-postgres-chapter-roadmap-design.md) — the storage half of the pageserver track, sitting between PG-2's decoded stream and PG-4's redo.
 
 ## Context — where this sits
 
@@ -29,7 +29,7 @@ PG-3 stores what PG-2 emits and serves what PG-4 needs: an object-bucket-native 
 ## Architecture Overview
 
 ```
-crates/page-store  (crabka-page-store — async, tokio; consumes crabka-postgres-wal, crabka-object-store)
+crates/page-store  (krabka-page-store — async, tokio; consumes krabka-postgres-wal, krabka-object-store)
 │
 │  INGEST (single writer per timeline)
 │  Sharded::Page { key, lsn, rec } ──► OpenLayer (BTreeMap<(PageKey, Lsn), Value>)
@@ -74,8 +74,8 @@ One ingest task per timeline owns the open layer; readers share the layer map be
 
 ## Integration
 
-- **`crates/page-store`** (new, `crabka-page-store`) — **`publish = false` + private release-plz entry** (allowlist gate).
-- **Consumes:** `crabka-postgres-wal` (`Lsn`, `PageKey`, `RelTag`, `Sharded`, `PageImage`) — PG-2's output contract; `crabka-object-store` (`ObjectOps`: `put_from_path`, `get_range`, `list`) — the bucket surface, unchanged.
+- **`crates/page-store`** (new, `krabka-page-store`) — **`publish = false` + private release-plz entry** (allowlist gate).
+- **Consumes:** `krabka-postgres-wal` (`Lsn`, `PageKey`, `RelTag`, `Sharded`, `PageImage`) — PG-2's output contract; `krabka-object-store` (`ObjectOps`: `put_from_path`, `get_range`, `list`) — the bucket surface, unchanged.
 - **Produces for PG-4:** `get_reconstruct_data` + the image-layer writer it will drive; the meta lane for later interpretation.
 - **Object layout:** `pg/<tenant>/<timeline>/…` — beside, never entangled with, `diskless-wal/…` and the blockstore prefixes: one bucket, distinct prefixes.
 

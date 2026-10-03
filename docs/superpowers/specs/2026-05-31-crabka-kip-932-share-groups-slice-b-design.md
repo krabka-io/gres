@@ -4,7 +4,7 @@
 **Status:** Approved (design). Builds on Slice A (membership).
 **KIP:** [KIP-932](https://cwiki.apache.org/confluence/display/KAFKA/KIP-932%3A+Queues+for+Kafka) (+ KIP-1226 lag persistence: `DeliveryCompleteCount`).
 **Target:** Apache Kafka 4.3.0.
-**Slice A spec:** `docs/superpowers/specs/2026-05-30-crabka-kip-932-share-groups-design.md`
+**Slice A spec:** `docs/superpowers/specs/2026-05-30-krabka-kip-932-share-groups-design.md`
 
 ## Goal
 

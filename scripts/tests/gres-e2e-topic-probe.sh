@@ -6,8 +6,8 @@ cd "$(dirname "$0")/../.."
 run_classifier() {
     local status="$1"
     local output="$2"
-    CRABKA_GRES_E2E_TEST_CLASSIFY_STATUS="$status" \
-        CRABKA_GRES_E2E_TEST_CLASSIFY_OUTPUT="$output" \
+    KRABKA_GRES_E2E_TEST_CLASSIFY_STATUS="$status" \
+        KRABKA_GRES_E2E_TEST_CLASSIFY_OUTPUT="$output" \
         scripts/gres-e2e.sh
 }
 

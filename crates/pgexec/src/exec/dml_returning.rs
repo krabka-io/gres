@@ -97,7 +97,7 @@ impl ReturningSpec {
     pub(crate) fn new(
         table: &Table,
         qualifier: &str,
-        returning: Option<&crabka_pgparser::ast::Returning>,
+        returning: Option<&krabka_pgparser::ast::Returning>,
         source: Option<&Scope>,
         merge: bool,
     ) -> Result<Self, ExecError> {
@@ -387,7 +387,7 @@ impl ReturningSpec {
                 let image_width = width - self.images.width();
                 let whole_image = |image: Option<&Vec<Datum>>| {
                     image.map_or(Datum::Null, |image| {
-                        Datum::Record(crabka_pgtypes::RecordValue::anonymous(
+                        Datum::Record(krabka_pgtypes::RecordValue::anonymous(
                             image[..image_width].to_vec(),
                         ))
                     })
@@ -544,7 +544,7 @@ fn rewrite_image_refs(expr: &Expr, aliases: &ImageAliases<'_>) -> Expr {
         Expr::Func(fc)
             if aliases.merge
                 && fc.name == "merge_action"
-                && matches!(&fc.args, crabka_pgparser::ast::FuncArgs::Exprs(a) if a.is_empty()) =>
+                && matches!(&fc.args, krabka_pgparser::ast::FuncArgs::Exprs(a) if a.is_empty()) =>
         {
             Expr::Column {
                 table: None,
@@ -594,17 +594,17 @@ fn rewrite_image_refs(expr: &Expr, aliases: &ImageAliases<'_>) -> Expr {
             left: recurse(left),
             right: recurse(right),
         },
-        Expr::Func(fc) => Expr::Func(crabka_pgparser::ast::FuncCall {
+        Expr::Func(fc) => Expr::Func(krabka_pgparser::ast::FuncCall {
             sql_syntax: fc.sql_syntax,
             name: fc.name.clone(),
             distinct: fc.distinct,
             args: match &fc.args {
-                crabka_pgparser::ast::FuncArgs::Star => crabka_pgparser::ast::FuncArgs::Star,
-                crabka_pgparser::ast::FuncArgs::Exprs(args) => {
-                    crabka_pgparser::ast::FuncArgs::Exprs(recurse_all(args))
+                krabka_pgparser::ast::FuncArgs::Star => krabka_pgparser::ast::FuncArgs::Star,
+                krabka_pgparser::ast::FuncArgs::Exprs(args) => {
+                    krabka_pgparser::ast::FuncArgs::Exprs(recurse_all(args))
                 }
-                crabka_pgparser::ast::FuncArgs::Named { positional, named } => {
-                    crabka_pgparser::ast::FuncArgs::Named {
+                krabka_pgparser::ast::FuncArgs::Named { positional, named } => {
+                    krabka_pgparser::ast::FuncArgs::Named {
                         positional: recurse_all(positional),
                         named: named
                             .iter()
@@ -612,8 +612,8 @@ fn rewrite_image_refs(expr: &Expr, aliases: &ImageAliases<'_>) -> Expr {
                             .collect(),
                     }
                 }
-                crabka_pgparser::ast::FuncArgs::Variadic { positional, array } => {
-                    crabka_pgparser::ast::FuncArgs::Variadic {
+                krabka_pgparser::ast::FuncArgs::Variadic { positional, array } => {
+                    krabka_pgparser::ast::FuncArgs::Variadic {
                         positional: recurse_all(positional),
                         array: recurse(array),
                     }
@@ -624,7 +624,7 @@ fn rewrite_image_refs(expr: &Expr, aliases: &ImageAliases<'_>) -> Expr {
             order_by: fc
                 .order_by
                 .iter()
-                .map(|item| crabka_pgparser::ast::OrderItem {
+                .map(|item| krabka_pgparser::ast::OrderItem {
                     expr: *recurse(&item.expr),
                     asc: item.asc,
                     nulls_first: item.nulls_first,

@@ -7,13 +7,13 @@
 `configuration_expose` from unit-suffixed primitives to explicit UOM values,
 with zero unresolved branch-diff audit results.
 
-**Architecture:** Reuse `crabka-units` parsing, human serde adapters, and UOM
+**Architecture:** Reuse `krabka-units` parsing, human serde adapters, and UOM
 types at CLI, environment, file-config, CRD, Compose, and manifest boundaries.
 Lower quantities once into refined protocol integers where exact wire domains
 require them. Migrate by owner so each commit is independently testable.
 
 **Tech Stack:** Rust 2024, Clap, Serde, Schemars, `uom` through
-`crabka-units`, `refined_type`, Kubernetes CRDs, Docker Compose.
+`krabka-units`, `refined_type`, Kubernetes CRDs, Docker Compose.
 
 ## Global Constraints
 
@@ -63,7 +63,7 @@ initial count remains stable.
 - `crates/schema-registry/src/config_value.rs`
 - `crates/schema-registry/src/bin/schema-registry.rs`
 
-- [ ] Add failing `crabka-units` tests for reusable positive/nonnegative parsers
+- [ ] Add failing `krabka-units` tests for reusable positive/nonnegative parsers
   over `Time`, `ByteSize`, `ByteRate`, and `Ratio`.
 
 - [ ] Prove:
@@ -78,7 +78,7 @@ initial count remains stable.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-units config_quantity --locked
+  cargo test -p krabka-units config_quantity --locked
 ```
 
 - [ ] Add only the shared helpers actually required by the owner inventory.
@@ -94,11 +94,11 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test --locked -p crabka-units -p crabka-grpc-gateway \
-  -p crabka-schema-registry --all-targets
+  cargo test --locked -p krabka-units -p krabka-grpc-gateway \
+  -p krabka-schema-registry --all-targets
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy --locked -p crabka-units -p crabka-grpc-gateway \
-  -p crabka-schema-registry --all-targets -- -D warnings
+  cargo clippy --locked -p krabka-units -p krabka-grpc-gateway \
+  -p krabka-schema-registry --all-targets -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 git diff --check
 git diff -- Cargo.lock
@@ -124,9 +124,9 @@ git commit -m "feat(units): validate config quantities"
 - [ ] Add failing CLI/environment tests for:
 
 ```text
-CRABKA_ADMIN_UI_MUTATION_JSON_BODY_LIMIT=1MiB
-CRABKA_ADMIN_UI_SESSION_TTL=8h
-CRABKA_ADMIN_UI_TOPIC_MUTATION_TIMEOUT=30s
+KRABKA_ADMIN_UI_MUTATION_JSON_BODY_LIMIT=1MiB
+KRABKA_ADMIN_UI_SESSION_TTL=8h
+KRABKA_ADMIN_UI_TOPIC_MUTATION_TIMEOUT=30s
 PGDOG_RELOAD_BACKOFF=100ms
 PGDOG_RELOAD_REQUEUE=15s
 PGDOG_ADMIN_TIMEOUT=20s
@@ -211,9 +211,9 @@ git commit -m "feat(config): use UOM for bench and demo"
 - `crates/blockstore/src/index_snapshot.rs`
 - `crates/blockstore/src/reader.rs`
 - `crates/client-consumer/src/consumer.rs`
-- `crates/traces/src/bin/crabka-traces.rs`
+- `crates/traces/src/bin/krabka-traces.rs`
 - `crates/traces/src/querier/store.rs`
-- `crates/profiles/src/bin/crabka-profiles.rs`
+- `crates/profiles/src/bin/krabka-profiles.rs`
 - `crates/profiles/src/blockbuilder.rs`
 - `crates/observability-demo-app/tests/observability_demo_config.rs`
 - `demo/observability/docker-compose.yml`
@@ -221,15 +221,15 @@ git commit -m "feat(config): use UOM for bench and demo"
 - [ ] Add failing CLI/environment tests for:
 
 ```text
-CRABKA_TRACES_WAL_FETCH_MAX=2MiB
-CRABKA_TRACES_WAL_FETCH_PARTITION_MAX=256KiB
-CRABKA_TRACES_INDEX_SNAPSHOT_MAX=256MiB
-CRABKA_TRACES_BLOCK_READ_MAX=1GiB
-CRABKA_TRACES_SCAN_CONCAT_MAX=1.5GB
-CRABKA_PROFILES_WAL_FETCH_MAX=2MiB
-CRABKA_PROFILES_WAL_FETCH_PARTITION_MAX=256KiB
-CRABKA_PROFILES_INDEX_SNAPSHOT_MAX=256MiB
-CRABKA_PROFILES_WAL_POLL_TIMEOUT=500ms
+KRABKA_TRACES_WAL_FETCH_MAX=2MiB
+KRABKA_TRACES_WAL_FETCH_PARTITION_MAX=256KiB
+KRABKA_TRACES_INDEX_SNAPSHOT_MAX=256MiB
+KRABKA_TRACES_BLOCK_READ_MAX=1GiB
+KRABKA_TRACES_SCAN_CONCAT_MAX=1.5GB
+KRABKA_PROFILES_WAL_FETCH_MAX=2MiB
+KRABKA_PROFILES_WAL_FETCH_PARTITION_MAX=256KiB
+KRABKA_PROFILES_INDEX_SNAPSHOT_MAX=256MiB
+KRABKA_PROFILES_WAL_POLL_TIMEOUT=500ms
 ```
 
 - [ ] Make CLI fields `ByteSize` or `Time`. Remove the recently added
@@ -303,7 +303,7 @@ git commit -m "feat(observability): use UOM config values"
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run --locked -p crabka-operator -- gen-crds deploy/crds
+  cargo run --locked -p krabka-operator -- gen-crds deploy/crds
 ```
 
 - [ ] Verify broker/operator all-target tests, strict Clippy, generated CRD
@@ -538,8 +538,8 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo clippy --workspace --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run --locked -p crabka-operator -- gen-crds /tmp/crabka-uom-crds
-diff -ru /tmp/crabka-uom-crds deploy/crds
+  cargo run --locked -p krabka-operator -- gen-crds /tmp/krabka-uom-crds
+diff -ru /tmp/krabka-uom-crds deploy/crds
 git diff --check
 git diff -- Cargo.lock
 tools/audit-runtime-values.sh

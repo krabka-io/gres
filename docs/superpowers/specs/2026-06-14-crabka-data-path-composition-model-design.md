@@ -34,7 +34,7 @@ clean & unclean failover (with leader-epoch truncation) → consumer fetch (visi
 ## Construction: wrap-real cores at the seams
 
 A single new `stateright` model `crates/broker/src/data_path_model.rs` (`#[cfg(test)]` module in
-`crabka-broker`, which can reach the broker-crate `pub(crate)` cores). It **drives the real pure cores** where
+`krabka-broker`, which can reach the broker-crate `pub(crate)` cores). It **drives the real pure cores** where
 they are the seam under test, and abstracts producer + log as small vectors:
 
 | Seam | Real core driven | Location |
@@ -44,7 +44,7 @@ they are the seam under test, and abstracts producer + log as small vectors:
 | failover (winner selection) | `failover_one` (clean), `select_best_replica` (unclean) | `crates/broker/src/leader_election.rs`, `unclean_recovery.rs` |
 | visibility (what a consumer sees) | `compute_visibility_window` | `crates/broker/src/handlers/fetch.rs` |
 
-**Production change (small, expected):** the log truncation core is `pub(crate)` in `crabka-log`; widen
+**Production change (small, expected):** the log truncation core is `pub(crate)` in `krabka-log`; widen
 `epoch_and_offset_for_entries` + `end_offset_for_epoch` to `pub` so the broker-crate model can drive them
 (greenfield — no compat concern). No logic change. The broker-side cores are already `pub(crate)` and reachable
 from a same-crate test module.
@@ -130,7 +130,7 @@ fix production RED→GREEN, recording the counterexample; if a faithfulness gap 
 
 - `stateright` wrap-real; watchdog-guarded runs (mandatory). `cargo +nightly fmt` per-crate; `cargo clippy
   --all-targets -- -D warnings` clean.
-- Production change limited to widening two `crabka-log` fns to `pub` (no logic change); any further change only
+- Production change limited to widening two `krabka-log` fns to `pub` (no logic change); any further change only
   if a real seam bug is found.
 
 ## Success criteria

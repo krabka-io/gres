@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 // ---------------------------------------------------------------------------
 // Helpers

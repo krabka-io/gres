@@ -29,13 +29,13 @@ policy are separate owners.
 Standalone Gres accepts four optional positive settings:
 
 - `--wal-topic-replication-factor`
-  / `CRABKA_GRES_WAL_TOPIC_REPLICATION_FACTOR`
+  / `KRABKA_GRES_WAL_TOPIC_REPLICATION_FACTOR`
 - `--wal-topic-ensure-timeout-ms`
-  / `CRABKA_GRES_WAL_TOPIC_ENSURE_TIMEOUT_MS`
+  / `KRABKA_GRES_WAL_TOPIC_ENSURE_TIMEOUT_MS`
 - `--wal-admin-connect-timeout-ms`
-  / `CRABKA_GRES_WAL_ADMIN_CONNECT_TIMEOUT_MS`
+  / `KRABKA_GRES_WAL_ADMIN_CONNECT_TIMEOUT_MS`
 - `--wal-admin-request-timeout-ms`
-  / `CRABKA_GRES_WAL_ADMIN_REQUEST_TIMEOUT_MS`
+  / `KRABKA_GRES_WAL_ADMIN_REQUEST_TIMEOUT_MS`
 
 Explicit settings require substrate mode and fail before listener or network
 I/O otherwise.
@@ -54,7 +54,7 @@ for every substrate compute.
 
 ## Ownership and Data Flow
 
-`crabka-gres-substrate::WalAdminPolicy` owns the four compiled defaults and
+`krabka-gres-substrate::WalAdminPolicy` owns the four compiled defaults and
 validates raw values with `refined_type`. It stores private protocol values and
 `Duration`s with typed accessors.
 

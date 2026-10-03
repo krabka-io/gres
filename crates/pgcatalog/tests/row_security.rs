@@ -9,14 +9,14 @@
 //! itself to whatever is created on that table id next.
 
 use assert2::assert;
-use crabka_pgcatalog::{
+use krabka_pgcatalog::{
     BOOTSTRAP_ROLE, Column, RelationName, Table, TableCreation, TableId, TableIdSource,
     TableOptions, create_table_with_options_ops, drop_table_ops, get_table,
     policy::{Policy, PolicyCommand, create_policy_ops, list_policies, policies_for_table},
     rename_table_ops, replace_table_schema_ops, set_row_security_ops,
 };
-use crabka_pgkv::{Kv, MemKv};
-use crabka_pgtypes::ColumnType;
+use krabka_pgkv::{Kv, MemKv};
+use krabka_pgtypes::ColumnType;
 
 fn columns() -> Vec<Column> {
     vec![
@@ -25,7 +25,7 @@ fn columns() -> Vec<Column> {
     ]
 }
 
-fn apply(kv: &MemKv, ops: &[crabka_pgkv::WriteOp]) {
+fn apply(kv: &MemKv, ops: &[krabka_pgkv::WriteOp]) {
     kv.write_batch(ops).expect("catalog batch");
 }
 

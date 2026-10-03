@@ -14,7 +14,7 @@
 //!   `circle('((0,0),(1,1))')` is a `circle_in` failure rather than
 //!   `circle(polygon)`.
 //!
-//! The arithmetic itself is `crabka_pgtypes::geometry`'s; nothing here computes
+//! The arithmetic itself is `krabka_pgtypes::geometry`'s; nothing here computes
 //! a coordinate. The C-level `pg_proc` names that back the *prefix* operators
 //! (`poly_center`, `path_npoints`, `lseg_length`, `line_horizontal`, …) are
 //! callable spellings in `PostgreSQL` too — `geometry.sql` calls `poly_center`
@@ -22,8 +22,8 @@
 //! that back the *infix* operators (`box_add`, `dist_pb`, `close_ps`, …) belong
 //! with the operators and are not here.
 
-use crabka_pgparser::ast::{Expr, FuncCall};
-use crabka_pgtypes::{
+use krabka_pgparser::ast::{Expr, FuncCall};
+use krabka_pgtypes::{
     ColumnType, Datum,
     geometry::{Box2, Circle, Line, Lseg, Path, Point, Polygon},
 };
@@ -680,14 +680,14 @@ pub(crate) fn length_of(value: &Datum) -> Option<f64> {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgparser::ast::FuncArgs;
+    use krabka_pgparser::ast::FuncArgs;
 
     use super::*;
 
     /// A typed argument: a literal wrapped in an explicit cast, so `infer_type`
     /// and `Datum::column_type` both report the type the fixture names.
     fn typed(text: &str, ty: ColumnType) -> (Expr, Datum) {
-        let datum = crabka_pgtypes::cast::cast(
+        let datum = krabka_pgtypes::cast::cast(
             &Datum::Text(text.to_string()),
             ty,
             &jiff::tz::TimeZone::UTC,
@@ -729,7 +729,7 @@ mod tests {
     }
 
     fn rendered(value: &Datum) -> String {
-        String::from_utf8(crabka_pgtypes::encoding::encode_text(
+        String::from_utf8(krabka_pgtypes::encoding::encode_text(
             value,
             &jiff::tz::TimeZone::UTC,
         ))

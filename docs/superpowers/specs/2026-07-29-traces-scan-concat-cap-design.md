@@ -23,7 +23,7 @@ The traces binary accepts:
 
 ```text
 --scan-concat-max-bytes
-CRABKA_TRACES_SCAN_CONCAT_MAX_BYTES
+KRABKA_TRACES_SCAN_CONCAT_MAX_BYTES
 ```
 
 Command-line values win over environment values. The default remains
@@ -37,7 +37,7 @@ before object-store or network I/O.
 
 Add `ScanConcatMaxBytes(u64)` to the traces querier store module. It uses
 `refined_type::rule::MinMaxU64<1, 1_500_000_000>` and implements the parsing
-and display traits needed by Clap. It exposes a `crabka_units::ByteSize` for
+and display traits needed by Clap. It exposes a `krabka_units::ByteSize` for
 the runtime comparison.
 
 The 1,500,000,000-byte upper bound is not configurable. Arrow variable-length
@@ -62,7 +62,7 @@ larger result returns the actionable store error before `concat_batches`.
 ## Deployment Wiring
 
 The observability Docker Compose deployment exposes
-`CRABKA_TRACES_SCAN_CONCAT_MAX_BYTES` only on `traces-querier`, preserving the
+`KRABKA_TRACES_SCAN_CONCAT_MAX_BYTES` only on `traces-querier`, preserving the
 1,500,000,000-byte default. The demo does not run the separate live-store role.
 
 No CRD or operator field is added because traces is not managed by an existing

@@ -28,7 +28,7 @@
 //! approximated. A refused `INSERT` is recoverable. A row routed silently to
 //! the wrong partition is not.
 
-use crabka_pgtypes::{Datum, datetime};
+use krabka_pgtypes::{Datum, datetime};
 
 use crate::error::ExecError;
 
@@ -196,7 +196,7 @@ fn unsupported(type_name: &str) -> ExecError {
 /// `result = result * 31 + element_hash`. NULL elements contribute zero. Array
 /// dimensions and lower bounds are intentionally not part of this hash.
 pub(crate) fn hash_array_extended(
-    array: &crabka_pgtypes::ArrayValue,
+    array: &krabka_pgtypes::ArrayValue,
     seed: u64,
 ) -> Result<u64, ExecError> {
     let mut result = 1_u64;
@@ -402,7 +402,7 @@ fn final_mix(mut a: u32, mut b: u32, mut c: u32) -> (u32, u32, u32) {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgtypes::{
+    use krabka_pgtypes::{
         ArrayValue, ElemType, EnumValue, JsonbValue, RecordValue,
         datetime::{Interval, TimeTz},
         numeric::NumericValue,
@@ -773,7 +773,7 @@ mod tests {
                 ArrayValue::with_dims(
                     ElemType::Int4,
                     vec![Datum::Int4(1), Datum::Int4(2)],
-                    vec![crabka_pgtypes::ArrayDim::new(2, 2)],
+                    vec![krabka_pgtypes::ArrayDim::new(2, 2)],
                 ),
                 -6_212_682_626_571_898_845,
             ),
@@ -787,8 +787,8 @@ mod tests {
                         Datum::Int4(4),
                     ],
                     vec![
-                        crabka_pgtypes::ArrayDim::from_len(2),
-                        crabka_pgtypes::ArrayDim::from_len(2),
+                        krabka_pgtypes::ArrayDim::from_len(2),
+                        krabka_pgtypes::ArrayDim::from_len(2),
                     ],
                 ),
                 2_978_102_737_670_568_589,
@@ -829,25 +829,25 @@ mod tests {
     /// with — so none can be a hash partition key.
     #[test]
     fn no_geometric_type_is_a_hash_partition_key() {
-        let point = crabka_pgtypes::Point { x: 1.0, y: 2.0 };
+        let point = krabka_pgtypes::Point { x: 1.0, y: 2.0 };
         let vectors: [(Datum, &str); 7] = [
             (Datum::Point(point), "point"),
             (
-                Datum::Box(crabka_pgtypes::geometry::Box2 {
+                Datum::Box(krabka_pgtypes::geometry::Box2 {
                     high: point,
                     low: point,
                 }),
                 "box",
             ),
             (
-                Datum::Circle(crabka_pgtypes::geometry::Circle {
+                Datum::Circle(krabka_pgtypes::geometry::Circle {
                     center: point,
                     radius: 1.0,
                 }),
                 "circle",
             ),
             (
-                Datum::Line(crabka_pgtypes::geometry::Line {
+                Datum::Line(krabka_pgtypes::geometry::Line {
                     a: 1.0,
                     b: -1.0,
                     c: 0.0,
@@ -855,21 +855,21 @@ mod tests {
                 "line",
             ),
             (
-                Datum::Lseg(crabka_pgtypes::geometry::Lseg {
+                Datum::Lseg(krabka_pgtypes::geometry::Lseg {
                     start: point,
                     end: point,
                 }),
                 "lseg",
             ),
             (
-                Datum::Path(crabka_pgtypes::Path {
+                Datum::Path(krabka_pgtypes::Path {
                     closed: false,
                     points: vec![point],
                 }),
                 "path",
             ),
             (
-                Datum::Polygon(crabka_pgtypes::Polygon {
+                Datum::Polygon(krabka_pgtypes::Polygon {
                     points: vec![point],
                 }),
                 "polygon",
@@ -910,7 +910,7 @@ mod tests {
                 Datum::Enum(EnumValue {
                     ty: UserTypeRef {
                         oid: 90_000,
-                        array_oid: crabka_pgtypes::usertype::user_array_oid(90_000),
+                        array_oid: krabka_pgtypes::usertype::user_array_oid(90_000),
                         name: "mood",
                     },
                     label: "happy".to_string(),

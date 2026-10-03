@@ -6,7 +6,7 @@
 
 **Architecture:** Keep the public crate API unchanged by converting `engine.rs` into `engine/mod.rs`, then add `engine/aggregation.rs` for aggregate parameter parsing, reducer entry points, aggregate operation/state types, and aggregation-only helpers. `PromqlEngine`, `EngineOpts`, and orchestration remain in `engine/mod.rs`; moved helpers are imported with `use aggregation::{...}` and exposed only as `pub(super)` when needed by `mod.rs`.
 
-**Tech Stack:** Rust 2024, `crabka-promql`, `promql-parser`, `DataFusion`, existing crate-local `MetricStore`, `InstantSample`, `SampleValue`, and `PromqlError` types.
+**Tech Stack:** Rust 2024, `krabka-promql`, `promql-parser`, `DataFusion`, existing crate-local `MetricStore`, `InstantSample`, `SampleValue`, and `PromqlError` types.
 
 ## Global Constraints
 
@@ -16,7 +16,7 @@
 - Preserve existing error messages and error variants.
 - Do not add compatibility shims or alternate behavior paths; Crabka is greenfield.
 - Do not rewrite tests to assert source text or file layout.
-- Use `cargo +nightly fmt --check` and `cargo test -p crabka-promql` as the first-slice verification gates.
+- Use `cargo +nightly fmt --check` and `cargo test -p krabka-promql` as the first-slice verification gates.
 
 ---
 
@@ -119,7 +119,7 @@ Expected: both default and `experimental-functions` builds keep the same availab
 Run:
 
 ```bash
-cargo check -p crabka-promql
+cargo check -p krabka-promql
 ```
 
 Expected: PASS. If it fails, fix only mechanical module-boundary issues:
@@ -144,7 +144,7 @@ Expected: PASS. If formatting fails, run `cargo +nightly fmt`, then rerun `cargo
 Run:
 
 ```bash
-cargo test -p crabka-promql
+cargo test -p krabka-promql
 ```
 
 Expected: PASS. If this is too slow or blocked by an unrelated environment issue, run the narrowest failing or relevant PromQL tests and record the exact blocker and command output.

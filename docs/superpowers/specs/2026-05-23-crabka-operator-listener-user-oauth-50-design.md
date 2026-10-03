@@ -4,7 +4,7 @@ Status: Draft
 Date: 2026-05-23
 Slice: 50
 Pairs with broker slice(s): 49b (already shipped)
-Umbrella: [OAUTHBEARER full-parity roadmap](2026-05-23-crabka-oauth-parity-roadmap-design.md)
+Umbrella: [OAUTHBEARER full-parity roadmap](2026-05-23-krabka-oauth-parity-roadmap-design.md)
 
 ## Goal
 
@@ -349,7 +349,7 @@ Add a new job `oauth-e2e` to `.github/workflows/ci.yml`:
 
 ## Acceptance criteria
 
-1. `cargo build -p crabka-operator` and `cargo test -p crabka-operator`
+1. `cargo build -p krabka-operator` and `cargo test -p krabka-operator`
    pass.
 2. `cargo fmt --check` and `cargo clippy --workspace --all-targets -- -D
    warnings` pass.

@@ -211,7 +211,7 @@ The heartbeat handler's `UNSUPPORTED_ASSIGNOR` (error code 111) guard is unchang
 
 ```rust
 use std::sync::Arc;
-use crabka_broker::coordinator::next_gen::assignor::{
+use krabka_broker::coordinator::next_gen::assignor::{
     Assignment, Assignor, MemberSubscription, TopicMetadata,
 };
 

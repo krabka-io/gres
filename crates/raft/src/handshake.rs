@@ -2,8 +2,8 @@
 //!
 //! This hook lets the broker terminate TLS and SASL on every accepted
 //! controller-listener connection before the raft frames start to flow. The
-//! trait abstraction keeps `crabka-raft` free of any dependency on
-//! `crabka-broker` and `crabka-security`.
+//! trait abstraction keeps `krabka-raft` free of any dependency on
+//! `krabka-broker` and `krabka-security`.
 
 use thiserror::Error;
 use tokio::{
@@ -23,7 +23,7 @@ pub struct RaftConnection {
     pub stream: Box<dyn DuplexStream>,
     /// Authenticated Kafka principal. `None` represents a PLAINTEXT or
     /// one-way TLS connection with the normal `ANONYMOUS` identity.
-    pub principal: Option<crabka_security::Principal>,
+    pub principal: Option<krabka_security::Principal>,
     /// Whether SCRAM authenticated with a delegation token rather than a
     /// regular credential.
     pub authenticated_via_token: bool,

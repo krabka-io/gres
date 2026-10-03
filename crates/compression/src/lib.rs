@@ -22,8 +22,8 @@
 //! ## Compress and decompress a record payload
 //!
 //! ```rust
-//! use crabka_compression::{CompressionType, compress, decompress};
-//! use crabka_units::kibibytes;
+//! use krabka_compression::{CompressionType, compress, decompress};
+//! use krabka_units::kibibytes;
 //!
 //! # fn run() -> Result<(), Box<dyn std::error::Error>> {
 //! let compressed = compress(CompressionType::Lz4, b"order-created")?;
@@ -38,7 +38,7 @@ mod error;
 
 use bytes::Bytes;
 pub use codec_type::CompressionType;
-use crabka_units::{
+use krabka_units::{
     ByteSize, Ratio,
     convert::{ByteSizeExt as _, RatioExt as _},
     fraction, gibibytes, mebibytes,
@@ -253,7 +253,7 @@ fn zstd_decompress(_: &[u8], _: usize) -> Result<Bytes, CompressionError> {
 
 #[cfg(test)]
 mod tests {
-    use crabka_units::{
+    use krabka_units::{
         bytes, convert::ByteSizeExt as _, fraction, gibibytes, kibibytes, mebibytes,
     };
 

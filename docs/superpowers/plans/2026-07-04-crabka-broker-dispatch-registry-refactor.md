@@ -6,7 +6,7 @@
 
 **Architecture:** The refactor adds focused request/context/registry helpers, migrates handler families into registry adapters, then collapses `network::dispatch` onto parsed-request execution. SASL remains connection-stateful and Fetch remains write-plan-special; ordinary API routing moves to `handlers::registry`.
 
-**Tech Stack:** Rust 2024, Tokio, `bytes::Bytes`, `futures_util::future::BoxFuture`, generated `crabka_protocol::owned::*` codecs, existing broker tests with `assert2`.
+**Tech Stack:** Rust 2024, Tokio, `bytes::Bytes`, `futures_util::future::BoxFuture`, generated `krabka_protocol::owned::*` codecs, existing broker tests with `assert2`.
 
 ## Global Constraints
 
@@ -18,7 +18,7 @@
 - Use behavior tests only; do not assert against source text.
 - Crabka is greenfield and undeployed; do not add compatibility shims for old internal handler interfaces.
 - Run `cargo +nightly fmt` before final verification, matching the workspace formatting policy.
-- Run at least `cargo test -p crabka-broker` before claiming the refactor complete.
+- Run at least `cargo test -p krabka-broker` before claiming the refactor complete.
 
 ---
 
@@ -56,7 +56,7 @@ Append this test module to `crates/broker/src/handlers/context.rs`:
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_security::{AuthMethod, Principal};
+    use krabka_security::{AuthMethod, Principal};
 
     use super::*;
 
@@ -86,11 +86,11 @@ mod tests {
     fn telemetry_context_new_preserves_client_identity_fields() {
         let peer = SocketAddr::from(([127, 0, 0, 1], 9092));
 
-        let ctx = TelemetryContext::new(&peer, "client-a", "crabka-test", "1.2.3");
+        let ctx = TelemetryContext::new(&peer, "client-a", "krabka-test", "1.2.3");
 
         assert!(ctx.peer == &peer);
         assert!(ctx.client_id == "client-a");
-        assert!(ctx.software_name == "crabka-test");
+        assert!(ctx.software_name == "krabka-test");
         assert!(ctx.software_version == "1.2.3");
     }
 }
@@ -98,7 +98,7 @@ mod tests {
 
 - [ ] **Step 2: Run tests to verify failure**
 
-Run: `cargo test -p crabka-broker handlers::context::tests --lib`
+Run: `cargo test -p krabka-broker handlers::context::tests --lib`
 
 Expected: FAIL with errors that `RequestContext::new` and `TelemetryContext::new` are not found.
 
@@ -144,7 +144,7 @@ impl<'a> TelemetryContext<'a> {
 
 - [ ] **Step 4: Run tests to verify pass**
 
-Run: `cargo test -p crabka-broker handlers::context::tests --lib`
+Run: `cargo test -p krabka-broker handlers::context::tests --lib`
 
 Expected: PASS for both context constructor tests.
 
@@ -305,7 +305,7 @@ pub(crate) mod request;
 
 - [ ] **Step 2: Run tests to verify failure**
 
-Run: `cargo test -p crabka-broker network::request::tests --lib`
+Run: `cargo test -p krabka-broker network::request::tests --lib`
 
 Expected: FAIL with missing functions `parse_request`, `peek_api_key`, and `peek_client_id`.
 
@@ -392,13 +392,13 @@ pub(crate) fn peek_client_id(frame: &[u8]) -> Option<&str> {
 }
 
 fn protocol_invalid(message: &'static str) -> BrokerError {
-    BrokerError::Protocol(crabka_protocol::ProtocolError::InvalidValue(message))
+    BrokerError::Protocol(krabka_protocol::ProtocolError::InvalidValue(message))
 }
 ```
 
 - [ ] **Step 4: Run tests to verify pass**
 
-Run: `cargo test -p crabka-broker network::request::tests --lib`
+Run: `cargo test -p krabka-broker network::request::tests --lib`
 
 Expected: PASS for all request parser tests.
 
@@ -431,7 +431,7 @@ Create `crates/broker/src/handlers/registry.rs` with this shell and tests:
 //! Broker API dispatch registry.
 
 use bytes::Bytes;
-use crabka_protocol::api_key::ApiKey;
+use krabka_protocol::api_key::ApiKey;
 use futures_util::future::BoxFuture;
 
 use crate::{
@@ -528,7 +528,7 @@ pub(crate) use registry::{
 
 - [ ] **Step 2: Run tests to verify failure**
 
-Run: `cargo test -p crabka-broker handlers::registry::tests --lib`
+Run: `cargo test -p krabka-broker handlers::registry::tests --lib`
 
 Expected: FAIL with missing `build_registry`, `DispatchRegistry::get`, `get_plain`, and `DispatchEntry` methods.
 
@@ -592,7 +592,7 @@ macro_rules! register_plain {
     ($registry:ident, $api:ident, $request:ident, $handler:ident) => {{
         $registry.register(DispatchEntry::plain(
             ApiKey::$api,
-            crabka_protocol::owned::$request::FLEXIBLE_MIN,
+            krabka_protocol::owned::$request::FLEXIBLE_MIN,
             crate::handlers::$handler::handle,
         ));
     }};
@@ -604,12 +604,12 @@ pub(crate) fn build_registry() -> DispatchRegistry {
     register_plain!(registry, ApiVersions, api_versions_request, api_versions);
     registry.register(DispatchEntry::plain(
         ApiKey::AddOffsetsToTxn,
-        crabka_protocol::owned::add_offsets_to_txn_request::FLEXIBLE_MIN,
+        krabka_protocol::owned::add_offsets_to_txn_request::FLEXIBLE_MIN,
         crate::txn::handlers::add_offset_commits_to_txn::handle,
     ));
     registry.register(DispatchEntry::plain(
         ApiKey::WriteTxnMarkers,
-        crabka_protocol::owned::write_txn_markers_request::FLEXIBLE_MIN,
+        krabka_protocol::owned::write_txn_markers_request::FLEXIBLE_MIN,
         crate::txn::handlers::write_txn_markers::handle,
     ));
     register_plain!(registry, FetchSnapshot, fetch_snapshot_request, fetch_snapshot);
@@ -617,27 +617,27 @@ pub(crate) fn build_registry() -> DispatchRegistry {
     register_plain!(registry, AssignReplicasToDirs, assign_replicas_to_dirs_request, assign_replicas_to_dirs);
     registry.register(DispatchEntry::plain(
         ApiKey::InitializeShareGroupState,
-        crabka_protocol::owned::initialize_share_group_state_request::FLEXIBLE_MIN,
+        krabka_protocol::owned::initialize_share_group_state_request::FLEXIBLE_MIN,
         crate::share_coordinator::handlers::initialize::handle,
     ));
     registry.register(DispatchEntry::plain(
         ApiKey::ReadShareGroupState,
-        crabka_protocol::owned::read_share_group_state_request::FLEXIBLE_MIN,
+        krabka_protocol::owned::read_share_group_state_request::FLEXIBLE_MIN,
         crate::share_coordinator::handlers::read::handle,
     ));
     registry.register(DispatchEntry::plain(
         ApiKey::WriteShareGroupState,
-        crabka_protocol::owned::write_share_group_state_request::FLEXIBLE_MIN,
+        krabka_protocol::owned::write_share_group_state_request::FLEXIBLE_MIN,
         crate::share_coordinator::handlers::write::handle,
     ));
     registry.register(DispatchEntry::plain(
         ApiKey::DeleteShareGroupState,
-        crabka_protocol::owned::delete_share_group_state_request::FLEXIBLE_MIN,
+        krabka_protocol::owned::delete_share_group_state_request::FLEXIBLE_MIN,
         crate::share_coordinator::handlers::delete::handle,
     ));
     registry.register(DispatchEntry::plain(
         ApiKey::ReadShareGroupStateSummary,
-        crabka_protocol::owned::read_share_group_state_summary_request::FLEXIBLE_MIN,
+        krabka_protocol::owned::read_share_group_state_summary_request::FLEXIBLE_MIN,
         crate::share_coordinator::handlers::read_summary::handle,
     ));
     register_plain!(registry, StreamsGroupDescribe, streams_group_describe_request, streams_group_describe);
@@ -697,11 +697,11 @@ In `crates/broker/src/handlers/mod.rs`, delete the old `HandlerFn` alias, `Handl
 
 - [ ] **Step 6: Run tests to verify pass**
 
-Run: `cargo test -p crabka-broker handlers::registry::tests --lib`
+Run: `cargo test -p krabka-broker handlers::registry::tests --lib`
 
 Expected: PASS.
 
-Run: `cargo test -p crabka-broker network::dispatch::tests::encode_response_apiversions_uses_v0_header --lib`
+Run: `cargo test -p krabka-broker network::dispatch::tests::encode_response_apiversions_uses_v0_header --lib`
 
 Expected: PASS.
 
@@ -755,7 +755,7 @@ fn registry_registers_telemetry_handlers() {
 
 - [ ] **Step 2: Run tests to verify failure**
 
-Run: `cargo test -p crabka-broker handlers::registry::tests --lib`
+Run: `cargo test -p krabka-broker handlers::registry::tests --lib`
 
 Expected: FAIL because context, produce, and telemetry variants are not defined or registered.
 
@@ -967,262 +967,262 @@ Add these registrations to `build_registry()` after the plain registrations from
 
 ```rust
 registry.register(DispatchEntry::produce(
-    crabka_protocol::owned::produce_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::produce_request::FLEXIBLE_MIN,
     produce_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::Metadata,
-    crabka_protocol::owned::metadata_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::metadata_request::FLEXIBLE_MIN,
     metadata_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::CreateTopics,
-    crabka_protocol::owned::create_topics_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::create_topics_request::FLEXIBLE_MIN,
     create_topics_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::DeleteTopics,
-    crabka_protocol::owned::delete_topics_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::delete_topics_request::FLEXIBLE_MIN,
     delete_topics_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::AlterConfigs,
-    crabka_protocol::owned::alter_configs_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::alter_configs_request::FLEXIBLE_MIN,
     alter_configs_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::IncrementalAlterConfigs,
-    crabka_protocol::owned::incremental_alter_configs_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::incremental_alter_configs_request::FLEXIBLE_MIN,
     incremental_alter_configs_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::DeleteRecords,
-    crabka_protocol::owned::delete_records_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::delete_records_request::FLEXIBLE_MIN,
     delete_records_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::CreatePartitions,
-    crabka_protocol::owned::create_partitions_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::create_partitions_request::FLEXIBLE_MIN,
     create_partitions_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::DescribeGroups,
-    crabka_protocol::owned::describe_groups_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::describe_groups_request::FLEXIBLE_MIN,
     describe_groups_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::ListGroups,
-    crabka_protocol::owned::list_groups_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::list_groups_request::FLEXIBLE_MIN,
     list_groups_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::ShareGroupDescribe,
-    crabka_protocol::owned::share_group_describe_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::share_group_describe_request::FLEXIBLE_MIN,
     share_group_describe_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::ShareFetch,
-    crabka_protocol::owned::share_fetch_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::share_fetch_request::FLEXIBLE_MIN,
     share_fetch_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::ShareAcknowledge,
-    crabka_protocol::owned::share_acknowledge_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::share_acknowledge_request::FLEXIBLE_MIN,
     share_acknowledge_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::DescribeShareGroupOffsets,
-    crabka_protocol::owned::describe_share_group_offsets_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::describe_share_group_offsets_request::FLEXIBLE_MIN,
     describe_share_group_offsets_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::AlterShareGroupOffsets,
-    crabka_protocol::owned::alter_share_group_offsets_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::alter_share_group_offsets_request::FLEXIBLE_MIN,
     alter_share_group_offsets_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::DeleteShareGroupOffsets,
-    crabka_protocol::owned::delete_share_group_offsets_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::delete_share_group_offsets_request::FLEXIBLE_MIN,
     delete_share_group_offsets_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::DeleteGroups,
-    crabka_protocol::owned::delete_groups_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::delete_groups_request::FLEXIBLE_MIN,
     delete_groups_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::JoinGroup,
-    crabka_protocol::owned::join_group_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::join_group_request::FLEXIBLE_MIN,
     join_group_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::OffsetCommit,
-    crabka_protocol::owned::offset_commit_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::offset_commit_request::FLEXIBLE_MIN,
     offset_commit_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::OffsetFetch,
-    crabka_protocol::owned::offset_fetch_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::offset_fetch_request::FLEXIBLE_MIN,
     offset_fetch_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::OffsetDelete,
-    crabka_protocol::owned::offset_delete_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::offset_delete_request::FLEXIBLE_MIN,
     offset_delete_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::DescribeCluster,
-    crabka_protocol::owned::describe_cluster_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::describe_cluster_request::FLEXIBLE_MIN,
     describe_cluster_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::DescribeProducers,
-    crabka_protocol::owned::describe_producers_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::describe_producers_request::FLEXIBLE_MIN,
     describe_producers_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::DescribeTransactions,
-    crabka_protocol::owned::describe_transactions_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::describe_transactions_request::FLEXIBLE_MIN,
     describe_transactions_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::ListTransactions,
-    crabka_protocol::owned::list_transactions_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::list_transactions_request::FLEXIBLE_MIN,
     list_transactions_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::UnregisterBroker,
-    crabka_protocol::owned::unregister_broker_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::unregister_broker_request::FLEXIBLE_MIN,
     unregister_broker_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::DescribeTopicPartitions,
-    crabka_protocol::owned::describe_topic_partitions_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::describe_topic_partitions_request::FLEXIBLE_MIN,
     describe_topic_partitions_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::ListConfigResources,
-    crabka_protocol::owned::list_config_resources_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::list_config_resources_request::FLEXIBLE_MIN,
     list_config_resources_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::DescribeQuorum,
-    crabka_protocol::owned::describe_quorum_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::describe_quorum_request::FLEXIBLE_MIN,
     describe_quorum_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::AddRaftVoter,
-    crabka_protocol::owned::add_raft_voter_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::add_raft_voter_request::FLEXIBLE_MIN,
     add_raft_voter_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::RemoveRaftVoter,
-    crabka_protocol::owned::remove_raft_voter_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::remove_raft_voter_request::FLEXIBLE_MIN,
     remove_raft_voter_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::UpdateRaftVoter,
-    crabka_protocol::owned::update_raft_voter_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::update_raft_voter_request::FLEXIBLE_MIN,
     update_raft_voter_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::AlterPartition,
-    crabka_protocol::owned::alter_partition_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::alter_partition_request::FLEXIBLE_MIN,
     alter_partition_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::BrokerHeartbeat,
-    crabka_protocol::owned::broker_heartbeat_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::broker_heartbeat_request::FLEXIBLE_MIN,
     broker_heartbeat_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::GetReplicaLogInfo,
-    crabka_protocol::owned::get_replica_log_info_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::get_replica_log_info_request::FLEXIBLE_MIN,
     get_replica_log_info_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::Heartbeat,
-    crabka_protocol::owned::heartbeat_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::heartbeat_request::FLEXIBLE_MIN,
     heartbeat_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::SyncGroup,
-    crabka_protocol::owned::sync_group_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::sync_group_request::FLEXIBLE_MIN,
     sync_group_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::LeaveGroup,
-    crabka_protocol::owned::leave_group_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::leave_group_request::FLEXIBLE_MIN,
     leave_group_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::ConsumerGroupHeartbeat,
-    crabka_protocol::owned::consumer_group_heartbeat_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::consumer_group_heartbeat_request::FLEXIBLE_MIN,
     consumer_group_heartbeat_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::ShareGroupHeartbeat,
-    crabka_protocol::owned::share_group_heartbeat_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::share_group_heartbeat_request::FLEXIBLE_MIN,
     share_group_heartbeat_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::StreamsGroupHeartbeat,
-    crabka_protocol::owned::streams_group_heartbeat_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::streams_group_heartbeat_request::FLEXIBLE_MIN,
     streams_group_heartbeat_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::FindCoordinator,
-    crabka_protocol::owned::find_coordinator_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::find_coordinator_request::FLEXIBLE_MIN,
     find_coordinator_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::ListOffsets,
-    crabka_protocol::owned::list_offsets_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::list_offsets_request::FLEXIBLE_MIN,
     list_offsets_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::OffsetForLeaderEpoch,
-    crabka_protocol::owned::offset_for_leader_epoch_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::offset_for_leader_epoch_request::FLEXIBLE_MIN,
     offset_for_leader_epoch_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::DescribeConfigs,
-    crabka_protocol::owned::describe_configs_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::describe_configs_request::FLEXIBLE_MIN,
     describe_configs_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::DescribeLogDirs,
-    crabka_protocol::owned::describe_log_dirs_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::describe_log_dirs_request::FLEXIBLE_MIN,
     describe_log_dirs_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::InitProducerId,
-    crabka_protocol::owned::init_producer_id_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::init_producer_id_request::FLEXIBLE_MIN,
     init_producer_id_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::AddPartitionsToTxn,
-    crabka_protocol::owned::add_partitions_to_txn_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::add_partitions_to_txn_request::FLEXIBLE_MIN,
     add_partitions_to_txn_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::EndTxn,
-    crabka_protocol::owned::end_txn_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::end_txn_request::FLEXIBLE_MIN,
     end_txn_adapter,
 ));
 registry.register(DispatchEntry::context(
     ApiKey::TxnOffsetCommit,
-    crabka_protocol::owned::txn_offset_commit_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::txn_offset_commit_request::FLEXIBLE_MIN,
     txn_offset_commit_adapter,
 ));
 registry.register(DispatchEntry::telemetry(
     ApiKey::GetTelemetrySubscriptions,
-    crabka_protocol::owned::get_telemetry_subscriptions_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::get_telemetry_subscriptions_request::FLEXIBLE_MIN,
     get_telemetry_subscriptions_adapter,
 ));
 registry.register(DispatchEntry::telemetry(
     ApiKey::PushTelemetry,
-    crabka_protocol::owned::push_telemetry_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::push_telemetry_request::FLEXIBLE_MIN,
     push_telemetry_adapter,
 ));
 ```
@@ -1354,11 +1354,11 @@ This helper intentionally runs before the old inline match and leaves the old wr
 
 - [ ] **Step 5: Run representative routing tests**
 
-Run: `cargo test -p crabka-broker handlers::registry::tests --lib`
+Run: `cargo test -p krabka-broker handlers::registry::tests --lib`
 
 Expected: PASS.
 
-Run: `cargo test -p crabka-broker network::dispatch::tests::raft_voter_dispatch_arms_route_to_real_handlers --lib`
+Run: `cargo test -p krabka-broker network::dispatch::tests::raft_voter_dispatch_arms_route_to_real_handlers --lib`
 
 Expected: PASS. The test still drives a socket; the name can be updated in the next cleanup task.
 
@@ -1415,7 +1415,7 @@ fn registry_registers_auth_handlers() {
 
 - [ ] **Step 2: Run tests to verify failure**
 
-Run: `cargo test -p crabka-broker handlers::registry::tests --lib`
+Run: `cargo test -p krabka-broker handlers::registry::tests --lib`
 
 Expected: FAIL because decoded and auth variants are not defined or registered.
 
@@ -1503,9 +1503,9 @@ fn describe_acls_adapter<'a>(
     ctx: &'a RequestContext<'a>,
 ) -> BoxFuture<'a, Result<Bytes, BrokerError>> {
     Box::pin(async move {
-        use crabka_protocol::Decode;
+        use krabka_protocol::Decode;
         let mut cur = body;
-        let req = crabka_protocol::owned::describe_acls_request::DescribeAclsRequest::decode(
+        let req = krabka_protocol::owned::describe_acls_request::DescribeAclsRequest::decode(
             &mut cur,
             version,
         )?;
@@ -1521,9 +1521,9 @@ fn create_acls_adapter<'a>(
     ctx: &'a RequestContext<'a>,
 ) -> BoxFuture<'a, Result<Bytes, BrokerError>> {
     Box::pin(async move {
-        use crabka_protocol::Decode;
+        use krabka_protocol::Decode;
         let mut cur = body;
-        let req = crabka_protocol::owned::create_acls_request::CreateAclsRequest::decode(
+        let req = krabka_protocol::owned::create_acls_request::CreateAclsRequest::decode(
             &mut cur,
             version,
         )?;
@@ -1539,9 +1539,9 @@ fn delete_acls_adapter<'a>(
     ctx: &'a RequestContext<'a>,
 ) -> BoxFuture<'a, Result<Bytes, BrokerError>> {
     Box::pin(async move {
-        use crabka_protocol::Decode;
+        use krabka_protocol::Decode;
         let mut cur = body;
-        let req = crabka_protocol::owned::delete_acls_request::DeleteAclsRequest::decode(
+        let req = krabka_protocol::owned::delete_acls_request::DeleteAclsRequest::decode(
             &mut cur,
             version,
         )?;
@@ -1561,9 +1561,9 @@ fn elect_leaders_adapter<'a>(
     ctx: &'a RequestContext<'a>,
 ) -> BoxFuture<'a, Result<Bytes, BrokerError>> {
     Box::pin(async move {
-        use crabka_protocol::Decode;
+        use krabka_protocol::Decode;
         let mut cur = body;
-        let req = crabka_protocol::owned::elect_leaders_request::ElectLeadersRequest::decode(
+        let req = krabka_protocol::owned::elect_leaders_request::ElectLeadersRequest::decode(
             &mut cur,
             version,
         )?;
@@ -1579,9 +1579,9 @@ fn alter_partition_reassignments_adapter<'a>(
     ctx: &'a RequestContext<'a>,
 ) -> BoxFuture<'a, Result<Bytes, BrokerError>> {
     Box::pin(async move {
-        use crabka_protocol::Decode;
+        use krabka_protocol::Decode;
         let mut cur = body;
-        let req = crabka_protocol::owned::alter_partition_reassignments_request::AlterPartitionReassignmentsRequest::decode(
+        let req = krabka_protocol::owned::alter_partition_reassignments_request::AlterPartitionReassignmentsRequest::decode(
             &mut cur,
             version,
         )?;
@@ -1597,9 +1597,9 @@ fn list_partition_reassignments_adapter<'a>(
     ctx: &'a RequestContext<'a>,
 ) -> BoxFuture<'a, Result<Bytes, BrokerError>> {
     Box::pin(async move {
-        use crabka_protocol::Decode;
+        use krabka_protocol::Decode;
         let mut cur = body;
-        let req = crabka_protocol::owned::list_partition_reassignments_request::ListPartitionReassignmentsRequest::decode(
+        let req = krabka_protocol::owned::list_partition_reassignments_request::ListPartitionReassignmentsRequest::decode(
             &mut cur,
             version,
         )?;
@@ -1615,9 +1615,9 @@ fn describe_client_quotas_adapter<'a>(
     ctx: &'a RequestContext<'a>,
 ) -> BoxFuture<'a, Result<Bytes, BrokerError>> {
     Box::pin(async move {
-        use crabka_protocol::Decode;
+        use krabka_protocol::Decode;
         let mut cur = body;
-        let req = crabka_protocol::owned::describe_client_quotas_request::DescribeClientQuotasRequest::decode(
+        let req = krabka_protocol::owned::describe_client_quotas_request::DescribeClientQuotasRequest::decode(
             &mut cur,
             version,
         )?;
@@ -1633,9 +1633,9 @@ fn alter_client_quotas_adapter<'a>(
     ctx: &'a RequestContext<'a>,
 ) -> BoxFuture<'a, Result<Bytes, BrokerError>> {
     Box::pin(async move {
-        use crabka_protocol::Decode;
+        use krabka_protocol::Decode;
         let mut cur = body;
-        let req = crabka_protocol::owned::alter_client_quotas_request::AlterClientQuotasRequest::decode(
+        let req = krabka_protocol::owned::alter_client_quotas_request::AlterClientQuotasRequest::decode(
             &mut cur,
             version,
         )?;
@@ -1651,9 +1651,9 @@ fn describe_user_scram_credentials_adapter<'a>(
     ctx: &'a RequestContext<'a>,
 ) -> BoxFuture<'a, Result<Bytes, BrokerError>> {
     Box::pin(async move {
-        use crabka_protocol::Decode;
+        use krabka_protocol::Decode;
         let mut cur = body;
-        let req = crabka_protocol::owned::describe_user_scram_credentials_request::DescribeUserScramCredentialsRequest::decode(
+        let req = krabka_protocol::owned::describe_user_scram_credentials_request::DescribeUserScramCredentialsRequest::decode(
             &mut cur,
             version,
         )?;
@@ -1674,10 +1674,10 @@ fn alter_user_scram_credentials_adapter<'a>(
 ) -> BoxFuture<'a, Result<Bytes, BrokerError>> {
     Box::pin(async move {
         use bytes::BytesMut;
-        use crabka_protocol::{Decode, Encode};
+        use krabka_protocol::{Decode, Encode};
 
         let mut cur = body;
-        let req = crabka_protocol::owned::alter_user_scram_credentials_request::AlterUserScramCredentialsRequest::decode(
+        let req = krabka_protocol::owned::alter_user_scram_credentials_request::AlterUserScramCredentialsRequest::decode(
             &mut cur,
             version,
         )?;
@@ -1697,10 +1697,10 @@ fn update_features_adapter<'a>(
 ) -> BoxFuture<'a, Result<Bytes, BrokerError>> {
     Box::pin(async move {
         use bytes::BytesMut;
-        use crabka_protocol::{Decode, Encode};
+        use krabka_protocol::{Decode, Encode};
 
         let mut cur = body;
-        let req = crabka_protocol::owned::update_features_request::UpdateFeaturesRequest::decode(
+        let req = krabka_protocol::owned::update_features_request::UpdateFeaturesRequest::decode(
             &mut cur,
             version,
         )?;
@@ -1729,7 +1729,7 @@ fn alter_replica_log_dirs_adapter<'a>(
         use std::collections::BTreeMap;
 
         use bytes::BytesMut;
-        use crabka_protocol::{
+        use krabka_protocol::{
             Decode, Encode,
             owned::{
                 alter_replica_log_dirs_request::AlterReplicaLogDirsRequest,
@@ -1744,9 +1744,9 @@ fn alter_replica_log_dirs_adapter<'a>(
         let principal = match auth.principal() {
             Some(principal) => principal,
             None => {
-                anonymous = crabka_security::Principal {
+                anonymous = krabka_security::Principal {
                     name: "ANONYMOUS".to_string(),
-                    auth_method: crabka_security::AuthMethod::Anonymous,
+                    auth_method: krabka_security::AuthMethod::Anonymous,
                     groups: vec![],
                 };
                 &anonymous
@@ -1759,9 +1759,9 @@ fn alter_replica_log_dirs_adapter<'a>(
             &crate::authorizer::AuthorizationRequest {
                 principal,
                 host: peer,
-                resource_type: crabka_metadata::ResourceType::Cluster,
+                resource_type: krabka_metadata::ResourceType::Cluster,
                 resource_name: crate::handlers::acl_wire::CLUSTER_RESOURCE_NAME,
-                operation: crabka_metadata::AclOperation::Alter,
+                operation: krabka_metadata::AclOperation::Alter,
             },
         ) == crate::authorizer::AuthorizationResult::Allow;
 
@@ -1816,10 +1816,10 @@ fn create_delegation_token_adapter<'a>(
 ) -> BoxFuture<'a, Result<Bytes, BrokerError>> {
     Box::pin(async move {
         use bytes::BytesMut;
-        use crabka_protocol::{Decode, Encode};
+        use krabka_protocol::{Decode, Encode};
 
         let mut cur = body;
-        let req = crabka_protocol::owned::create_delegation_token_request::CreateDelegationTokenRequest::decode(
+        let req = krabka_protocol::owned::create_delegation_token_request::CreateDelegationTokenRequest::decode(
             &mut cur,
             version,
         )?;
@@ -1853,10 +1853,10 @@ fn renew_delegation_token_adapter<'a>(
 ) -> BoxFuture<'a, Result<Bytes, BrokerError>> {
     Box::pin(async move {
         use bytes::BytesMut;
-        use crabka_protocol::{Decode, Encode};
+        use krabka_protocol::{Decode, Encode};
 
         let mut cur = body;
-        let req = crabka_protocol::owned::renew_delegation_token_request::RenewDelegationTokenRequest::decode(
+        let req = krabka_protocol::owned::renew_delegation_token_request::RenewDelegationTokenRequest::decode(
             &mut cur,
             version,
         )?;
@@ -1885,10 +1885,10 @@ fn expire_delegation_token_adapter<'a>(
 ) -> BoxFuture<'a, Result<Bytes, BrokerError>> {
     Box::pin(async move {
         use bytes::BytesMut;
-        use crabka_protocol::{Decode, Encode};
+        use krabka_protocol::{Decode, Encode};
 
         let mut cur = body;
-        let req = crabka_protocol::owned::expire_delegation_token_request::ExpireDelegationTokenRequest::decode(
+        let req = krabka_protocol::owned::expire_delegation_token_request::ExpireDelegationTokenRequest::decode(
             &mut cur,
             version,
         )?;
@@ -1916,10 +1916,10 @@ fn describe_delegation_token_adapter<'a>(
 ) -> BoxFuture<'a, Result<Bytes, BrokerError>> {
     Box::pin(async move {
         use bytes::BytesMut;
-        use crabka_protocol::{Decode, Encode};
+        use krabka_protocol::{Decode, Encode};
 
         let mut cur = body;
-        let req = crabka_protocol::owned::describe_delegation_token_request::DescribeDelegationTokenRequest::decode(
+        let req = krabka_protocol::owned::describe_delegation_token_request::DescribeDelegationTokenRequest::decode(
             &mut cur,
             version,
         )?;
@@ -1946,22 +1946,22 @@ Each delegation-token adapter must encode the typed response with `BytesMut::wit
 Add `registry.register(...)` calls to `build_registry()` for these APIs:
 
 ```rust
-registry.register(DispatchEntry::decoded_context(ApiKey::DescribeAcls, crabka_protocol::owned::describe_acls_request::FLEXIBLE_MIN, describe_acls_adapter));
-registry.register(DispatchEntry::decoded_context(ApiKey::CreateAcls, crabka_protocol::owned::create_acls_request::FLEXIBLE_MIN, create_acls_adapter));
-registry.register(DispatchEntry::decoded_context(ApiKey::DeleteAcls, crabka_protocol::owned::delete_acls_request::FLEXIBLE_MIN, delete_acls_adapter));
-registry.register(DispatchEntry::decoded_context(ApiKey::ElectLeaders, crabka_protocol::owned::elect_leaders_request::FLEXIBLE_MIN, elect_leaders_adapter));
-registry.register(DispatchEntry::decoded_context(ApiKey::AlterPartitionReassignments, crabka_protocol::owned::alter_partition_reassignments_request::FLEXIBLE_MIN, alter_partition_reassignments_adapter));
-registry.register(DispatchEntry::decoded_context(ApiKey::ListPartitionReassignments, crabka_protocol::owned::list_partition_reassignments_request::FLEXIBLE_MIN, list_partition_reassignments_adapter));
-registry.register(DispatchEntry::decoded_context(ApiKey::DescribeClientQuotas, crabka_protocol::owned::describe_client_quotas_request::FLEXIBLE_MIN, describe_client_quotas_adapter));
-registry.register(DispatchEntry::decoded_context(ApiKey::AlterClientQuotas, crabka_protocol::owned::alter_client_quotas_request::FLEXIBLE_MIN, alter_client_quotas_adapter));
-registry.register(DispatchEntry::decoded_context(ApiKey::DescribeUserScramCredentials, crabka_protocol::owned::describe_user_scram_credentials_request::FLEXIBLE_MIN, describe_user_scram_credentials_adapter));
-registry.register(DispatchEntry::encoded_context(ApiKey::AlterUserScramCredentials, crabka_protocol::owned::alter_user_scram_credentials_request::FLEXIBLE_MIN, alter_user_scram_credentials_adapter));
-registry.register(DispatchEntry::encoded_context(ApiKey::UpdateFeatures, crabka_protocol::owned::update_features_request::FLEXIBLE_MIN, update_features_adapter));
-registry.register(DispatchEntry::auth(ApiKey::AlterReplicaLogDirs, crabka_protocol::owned::alter_replica_log_dirs_request::FLEXIBLE_MIN, alter_replica_log_dirs_adapter));
-registry.register(DispatchEntry::auth(ApiKey::CreateDelegationToken, crabka_protocol::owned::create_delegation_token_request::FLEXIBLE_MIN, create_delegation_token_adapter));
-registry.register(DispatchEntry::auth(ApiKey::RenewDelegationToken, crabka_protocol::owned::renew_delegation_token_request::FLEXIBLE_MIN, renew_delegation_token_adapter));
-registry.register(DispatchEntry::auth(ApiKey::ExpireDelegationToken, crabka_protocol::owned::expire_delegation_token_request::FLEXIBLE_MIN, expire_delegation_token_adapter));
-registry.register(DispatchEntry::auth(ApiKey::DescribeDelegationToken, crabka_protocol::owned::describe_delegation_token_request::FLEXIBLE_MIN, describe_delegation_token_adapter));
+registry.register(DispatchEntry::decoded_context(ApiKey::DescribeAcls, krabka_protocol::owned::describe_acls_request::FLEXIBLE_MIN, describe_acls_adapter));
+registry.register(DispatchEntry::decoded_context(ApiKey::CreateAcls, krabka_protocol::owned::create_acls_request::FLEXIBLE_MIN, create_acls_adapter));
+registry.register(DispatchEntry::decoded_context(ApiKey::DeleteAcls, krabka_protocol::owned::delete_acls_request::FLEXIBLE_MIN, delete_acls_adapter));
+registry.register(DispatchEntry::decoded_context(ApiKey::ElectLeaders, krabka_protocol::owned::elect_leaders_request::FLEXIBLE_MIN, elect_leaders_adapter));
+registry.register(DispatchEntry::decoded_context(ApiKey::AlterPartitionReassignments, krabka_protocol::owned::alter_partition_reassignments_request::FLEXIBLE_MIN, alter_partition_reassignments_adapter));
+registry.register(DispatchEntry::decoded_context(ApiKey::ListPartitionReassignments, krabka_protocol::owned::list_partition_reassignments_request::FLEXIBLE_MIN, list_partition_reassignments_adapter));
+registry.register(DispatchEntry::decoded_context(ApiKey::DescribeClientQuotas, krabka_protocol::owned::describe_client_quotas_request::FLEXIBLE_MIN, describe_client_quotas_adapter));
+registry.register(DispatchEntry::decoded_context(ApiKey::AlterClientQuotas, krabka_protocol::owned::alter_client_quotas_request::FLEXIBLE_MIN, alter_client_quotas_adapter));
+registry.register(DispatchEntry::decoded_context(ApiKey::DescribeUserScramCredentials, krabka_protocol::owned::describe_user_scram_credentials_request::FLEXIBLE_MIN, describe_user_scram_credentials_adapter));
+registry.register(DispatchEntry::encoded_context(ApiKey::AlterUserScramCredentials, krabka_protocol::owned::alter_user_scram_credentials_request::FLEXIBLE_MIN, alter_user_scram_credentials_adapter));
+registry.register(DispatchEntry::encoded_context(ApiKey::UpdateFeatures, krabka_protocol::owned::update_features_request::FLEXIBLE_MIN, update_features_adapter));
+registry.register(DispatchEntry::auth(ApiKey::AlterReplicaLogDirs, krabka_protocol::owned::alter_replica_log_dirs_request::FLEXIBLE_MIN, alter_replica_log_dirs_adapter));
+registry.register(DispatchEntry::auth(ApiKey::CreateDelegationToken, krabka_protocol::owned::create_delegation_token_request::FLEXIBLE_MIN, create_delegation_token_adapter));
+registry.register(DispatchEntry::auth(ApiKey::RenewDelegationToken, krabka_protocol::owned::renew_delegation_token_request::FLEXIBLE_MIN, renew_delegation_token_adapter));
+registry.register(DispatchEntry::auth(ApiKey::ExpireDelegationToken, krabka_protocol::owned::expire_delegation_token_request::FLEXIBLE_MIN, expire_delegation_token_adapter));
+registry.register(DispatchEntry::auth(ApiKey::DescribeDelegationToken, krabka_protocol::owned::describe_delegation_token_request::FLEXIBLE_MIN, describe_delegation_token_adapter));
 ```
 
 - [ ] **Step 7: Extend dispatch helper to execute decoded and auth entries**
@@ -2002,11 +2002,11 @@ crate::handlers::DispatchKind::Auth(handler) => Some(handler(
 
 - [ ] **Step 8: Run tests and remove migrated old-match arms**
 
-Run: `cargo test -p crabka-broker handlers::registry::tests --lib`
+Run: `cargo test -p krabka-broker handlers::registry::tests --lib`
 
 Expected: PASS.
 
-Run: `cargo test -p crabka-broker network::dispatch::tests::raft_voter_dispatch_arms_route_to_real_handlers --lib`
+Run: `cargo test -p krabka-broker network::dispatch::tests::raft_voter_dispatch_arms_route_to_real_handlers --lib`
 
 Expected: PASS.
 
@@ -2044,7 +2044,7 @@ Move the representative cases from `network::dispatch::tests::handler_body_flexi
 ```rust
 #[test]
 fn registry_body_flexible_matches_selected_schema_boundaries() {
-    use crabka_protocol::owned;
+    use krabka_protocol::owned;
 
     let registry = build_registry();
     let cases = [
@@ -2069,7 +2069,7 @@ fn registry_body_flexible_matches_selected_schema_boundaries() {
 
 - [ ] **Step 2: Run test to verify failure**
 
-Run: `cargo test -p crabka-broker handlers::registry::tests::registry_body_flexible_matches_selected_schema_boundaries --lib`
+Run: `cargo test -p krabka-broker handlers::registry::tests::registry_body_flexible_matches_selected_schema_boundaries --lib`
 
 Expected: FAIL because `DispatchRegistry::body_flexible` does not exist and Fetch/SASL metadata is not registered.
 
@@ -2127,7 +2127,7 @@ Register Fetch and the SASL pair:
 
 ```rust
 registry.register(DispatchEntry::fetch(
-    crabka_protocol::owned::fetch_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::fetch_request::FLEXIBLE_MIN,
 ));
 registry.register(DispatchEntry::sasl_metadata(
     ApiKey::SaslHandshake,
@@ -2135,7 +2135,7 @@ registry.register(DispatchEntry::sasl_metadata(
 ));
 registry.register(DispatchEntry::sasl_metadata(
     ApiKey::SaslAuthenticate,
-    crabka_protocol::owned::sasl_authenticate_request::FLEXIBLE_MIN,
+    krabka_protocol::owned::sasl_authenticate_request::FLEXIBLE_MIN,
 ));
 ```
 
@@ -2423,15 +2423,15 @@ In `network::dispatch::tests`, rename `raft_voter_dispatch_arms_route_to_real_ha
 
 - [ ] **Step 9: Run focused tests**
 
-Run: `cargo test -p crabka-broker handlers::registry::tests --lib`
+Run: `cargo test -p krabka-broker handlers::registry::tests --lib`
 
 Expected: PASS.
 
-Run: `cargo test -p crabka-broker network::request::tests --lib`
+Run: `cargo test -p krabka-broker network::request::tests --lib`
 
 Expected: PASS.
 
-Run: `cargo test -p crabka-broker network::dispatch::tests --lib`
+Run: `cargo test -p krabka-broker network::dispatch::tests --lib`
 
 Expected: PASS.
 
@@ -2455,17 +2455,17 @@ git commit -m "refactor(broker): collapse dispatch onto registry"
 
 - [ ] **Step 1: Run broker tests**
 
-Run: `cargo test -p crabka-broker`
+Run: `cargo test -p krabka-broker`
 
 Expected: PASS.
 
 - [ ] **Step 2: Run focused protocol-adjacent tests if broker tests expose no failures**
 
-Run: `cargo test -p crabka-broker network::dispatch::tests --lib`
+Run: `cargo test -p krabka-broker network::dispatch::tests --lib`
 
 Expected: PASS.
 
-Run: `cargo test -p crabka-broker handlers::registry::tests --lib`
+Run: `cargo test -p krabka-broker handlers::registry::tests --lib`
 
 Expected: PASS.
 
@@ -2479,7 +2479,7 @@ If it fails, run `cargo +nightly fmt --all`, inspect the diff, then rerun `cargo
 
 - [ ] **Step 4: Clippy**
 
-Run: `cargo clippy -p crabka-broker --all-targets -- -D warnings`
+Run: `cargo clippy -p krabka-broker --all-targets -- -D warnings`
 
 Expected: PASS.
 

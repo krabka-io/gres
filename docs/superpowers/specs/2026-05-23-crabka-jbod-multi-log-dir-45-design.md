@@ -2,7 +2,7 @@
 
 **Status:** Approved 2026-05-23.
 
-**Goal:** Make `crabka-broker` a real JBOD broker — store partition data
+**Goal:** Make `krabka-broker` a real JBOD broker — store partition data
 across multiple log directories on one broker, place new partitions by
 least-loaded balancing, and report per-directory contents over the wire via
 `DescribeLogDirs` (api key 35). This is the read/placement half of KIP-113;
@@ -19,7 +19,7 @@ deferred to slice 45b. First slice of Phase 8 (storage gaps).
   directories alongside the existing primary `log_dir`. New
   `BrokerConfig::all_log_dirs()` returns `[log_dir] + extra_log_dirs`,
   de-duplicated, primary first.
-- CLI flag `--log-dirs` (env `CRABKA_EXTRA_LOG_DIRS`, comma-separated) and
+- CLI flag `--log-dirs` (env `KRABKA_EXTRA_LOG_DIRS`, comma-separated) and
   TOML `extra_log_dirs` in `FileConfig`.
 - Least-loaded placement helper in `crates/broker/src/log_dir.rs`:
   - `count_partitions(dir)` — number of `topic-partition` subdirs.

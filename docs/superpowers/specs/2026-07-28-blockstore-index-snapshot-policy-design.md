@@ -27,10 +27,10 @@ Both service binaries accept:
 - `--index-snapshot-max-bytes`
 - `--index-snapshot-retain`
 
-The traces binary reads `CRABKA_TRACES_INDEX_SNAPSHOT_MAX_BYTES` and
-`CRABKA_TRACES_INDEX_SNAPSHOT_RETAIN`. The profiles binary reads
-`CRABKA_PROFILES_INDEX_SNAPSHOT_MAX_BYTES` and
-`CRABKA_PROFILES_INDEX_SNAPSHOT_RETAIN`.
+The traces binary reads `KRABKA_TRACES_INDEX_SNAPSHOT_MAX_BYTES` and
+`KRABKA_TRACES_INDEX_SNAPSHOT_RETAIN`. The profiles binary reads
+`KRABKA_PROFILES_INDEX_SNAPSHOT_MAX_BYTES` and
+`KRABKA_PROFILES_INDEX_SNAPSHOT_RETAIN`.
 
 Command-line values win over environment values. Defaults remain 268,435,456
 bytes and eight snapshots.
@@ -50,7 +50,7 @@ Each type implements `FromStr`, `Display`, and `Default`, and exposes its
 validated primitive value. The existing defaults become named constants.
 
 Add the workspace-pinned `refined_type` dependency only to
-`crabka-blockstore`. The traces and profiles binaries reuse the exported
+`krabka-blockstore`. The traces and profiles binaries reuse the exported
 blockstore types. `Cargo.lock` must otherwise remain unchanged.
 
 ## Blockstore API
@@ -64,7 +64,7 @@ Add the minimum configurable variants:
 - snapshot saves accept `IndexSnapshotRetain`; and
 - the shared snapshot writer prunes with the validated retention value.
 
-Both trace and profile loads use `crabka_object_store::read_capped`. This adds
+Both trace and profile loads use `krabka_object_store::read_capped`. This adds
 the existing 256-mebibyte safety boundary to the currently unbounded trace
 snapshot read without changing the default profile boundary.
 

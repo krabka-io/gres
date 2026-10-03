@@ -40,7 +40,7 @@ Slice 17b plumbs `client_id` through every inline-intercept handler by introduci
 ```rust
 use std::net::SocketAddr;
 
-use crabka_security::Principal;
+use krabka_security::Principal;
 
 /// Per-request connection metadata threaded through every inline-intercept
 /// handler. Constructed once per frame in `network::dispatch` from the
@@ -147,9 +147,9 @@ async fn handle_produce_frame(
     let principal = auth
         .principal()
         .cloned()
-        .unwrap_or_else(|| crabka_security::Principal {
+        .unwrap_or_else(|| krabka_security::Principal {
             name: "ANONYMOUS".to_string(),
-            mechanism: crabka_security::SaslMechanism::Plain,
+            mechanism: krabka_security::SaslMechanism::Plain,
         });
     let client_id = peek_client_id(frame).unwrap_or("");
     let ctx = crate::handlers::RequestContext {

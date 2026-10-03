@@ -32,15 +32,15 @@
 
 use std::{borrow::Cow, collections::BTreeMap};
 
-use crabka_pgparser::ast::{
+use krabka_pgparser::ast::{
     ArraySubscript, AssignmentValue, Expr, FuncArgs, FuncCall, SelectItem, SelectStmt, Statement,
     TableFuncCall, TableFuncColumnDef,
 };
-use crabka_pgtypes::{
+use krabka_pgtypes::{
     ArrayDim, ArrayValue, ColumnType, Datum, ElemType, RecordValue, TsVector, TypeError, Weight,
     numeric::NumericValue, usertype::UserTypeRef,
 };
-use crabka_pgwire::engine::FieldDescription;
+use krabka_pgwire::engine::FieldDescription;
 
 use crate::{
     clock::EvalCtx,
@@ -814,7 +814,7 @@ fn plan_record(
             // through the same attribute-name check a `CREATE TABLE` goes
             // through — so a repeated name is 42701, not two columns.
             if let Some(name) = first_duplicate(defs) {
-                return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+                return Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
                     "42701",
                     format!("column name \"{name}\" specified more than once"),
                 )));
@@ -1105,7 +1105,7 @@ fn check_row_type_matches(base: &RecordValue, shape: &RecordShape) -> Result<(),
 
 fn return_row_mismatch(detail: String) -> ExecError {
     ExecError::Remote(
-        crabka_pgwire::error::PgError::error(
+        krabka_pgwire::error::PgError::error(
             "42804",
             "function return row and query-specified return row do not match",
         )
@@ -1162,7 +1162,7 @@ fn pg_options_to_table_rows(vals: &[Datum]) -> Result<Vec<Vec<Datum>>, ExecError
         .map(|option| {
             let Datum::Text(option) = option else {
                 if option.is_null() {
-                    return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+                    return Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
                         "22004",
                         "null array element not allowed in this context",
                     )));
@@ -1185,7 +1185,7 @@ fn pg_mcv_list_item_rows(vals: &[Datum]) -> Result<Vec<Vec<Datum>>, ExecError> {
     let Datum::Text(value) = &vals[0] else {
         return Err(type_error("pg_mcv_list_items", &vals[0]));
     };
-    let items = crabka_pgcatalog::statistics::decode_mcv(value)
+    let items = krabka_pgcatalog::statistics::decode_mcv(value)
         .ok_or_else(|| ExecError::Unsupported("invalid pg_mcv_list value".into()))?;
     items
         .into_iter()
@@ -1238,7 +1238,7 @@ fn snapshot_xip_rows(
     let snapshot = match value {
         Datum::PgSnapshot(snapshot) => snapshot.as_ref().clone(),
         other => {
-            match crabka_pgtypes::cast::cast_in(other, ColumnType::PgSnapshot, ctx.output_style())?
+            match krabka_pgtypes::cast::cast_in(other, ColumnType::PgSnapshot, ctx.output_style())?
             {
                 Datum::PgSnapshot(snapshot) => *snapshot,
                 _ => return Err(undefined_function(name, &[])),
@@ -1276,7 +1276,7 @@ fn partition_ancestor_rows(value: &Datum, ctx: &EvalCtx) -> Result<Vec<Vec<Datum
     // become a relation name to walk from, and every parent the walk reaches has
     // to become an oid to report.
     let mut oids = std::collections::HashMap::new();
-    for table in crabka_pgcatalog::list_tables(catalog)? {
+    for table in krabka_pgcatalog::list_tables(catalog)? {
         oids.insert(
             table.name,
             crate::catalog_rel::table_relation_oid(table.id)?,
@@ -1357,7 +1357,7 @@ fn expand_json(
 
 fn event_context<'a>(
     ctx: &'a EvalCtx,
-    expected: crabka_pgcatalog::trigger::EventTriggerEvent,
+    expected: krabka_pgcatalog::trigger::EventTriggerEvent,
     function: &str,
 ) -> Result<&'a crate::clock::EventTriggerContext, ExecError> {
     ctx.event_trigger
@@ -1372,7 +1372,7 @@ fn event_context<'a>(
 fn event_ddl_command_rows(ctx: &EvalCtx) -> Result<Vec<Vec<Datum>>, ExecError> {
     let context = event_context(
         ctx,
-        crabka_pgcatalog::trigger::EventTriggerEvent::DdlCommandEnd,
+        krabka_pgcatalog::trigger::EventTriggerEvent::DdlCommandEnd,
         "pg_event_trigger_ddl_commands",
     )?;
     Ok(context
@@ -1400,7 +1400,7 @@ fn event_ddl_command_rows(ctx: &EvalCtx) -> Result<Vec<Vec<Datum>>, ExecError> {
 fn event_dropped_object_rows(ctx: &EvalCtx) -> Result<Vec<Vec<Datum>>, ExecError> {
     let context = event_context(
         ctx,
-        crabka_pgcatalog::trigger::EventTriggerEvent::SqlDrop,
+        krabka_pgcatalog::trigger::EventTriggerEvent::SqlDrop,
         "pg_event_trigger_dropped_objects",
     )?;
     Ok(context
@@ -1431,8 +1431,8 @@ fn event_dropped_object_rows(ctx: &EvalCtx) -> Result<Vec<Vec<Datum>>, ExecError
                     .as_ref()
                     .map_or(Datum::Null, |name| Datum::Text(name.clone())),
                 Datum::Text(object.identity.clone()),
-                Datum::Array(crabka_pgtypes::ArrayValue::new(ElemType::Text, names)),
-                Datum::Array(crabka_pgtypes::ArrayValue::new(ElemType::Text, Vec::new())),
+                Datum::Array(krabka_pgtypes::ArrayValue::new(ElemType::Text, names)),
+                Datum::Array(krabka_pgtypes::ArrayValue::new(ElemType::Text, Vec::new())),
             ]
         })
         .collect())
@@ -1745,7 +1745,7 @@ fn reject_ordinality_with_column_defs(
 ) -> Result<(), ExecError> {
     if !rows_from && matches!(functions, [call] if call.column_defs.is_some()) {
         return Err(ExecError::Remote(
-            crabka_pgwire::error::PgError::error(
+            krabka_pgwire::error::PgError::error(
                 "42601",
                 "WITH ORDINALITY cannot be used with a column definition list",
             )
@@ -1989,7 +1989,7 @@ pub(crate) fn exprs_contain_srf(exprs: &[Expr]) -> bool {
 /// Does any `ORDER BY` item call a set-returning function? Such a call expands
 /// the output the same way a select-list one does, so the whole sort/dedup/limit
 /// shape has to run over the expansion.
-pub(crate) fn order_by_contains_srf(order_by: &[crabka_pgparser::ast::OrderItem]) -> bool {
+pub(crate) fn order_by_contains_srf(order_by: &[krabka_pgparser::ast::OrderItem]) -> bool {
     order_by.iter().any(|item| expr_contains_srf(&item.expr))
 }
 
@@ -2061,10 +2061,10 @@ pub(crate) fn reject_write_calls(stmt: &Statement) -> Result<(), ExecError> {
     Ok(())
 }
 
-fn reject_from_arguments(items: &[crabka_pgparser::ast::TableExpr]) -> Result<(), ExecError> {
+fn reject_from_arguments(items: &[krabka_pgparser::ast::TableExpr]) -> Result<(), ExecError> {
     for item in items {
         match item {
-            crabka_pgparser::ast::TableExpr::Function { functions, .. } => {
+            krabka_pgparser::ast::TableExpr::Function { functions, .. } => {
                 if functions
                     .iter()
                     .flat_map(|call| call.arguments())
@@ -2075,26 +2075,26 @@ fn reject_from_arguments(items: &[crabka_pgparser::ast::TableExpr]) -> Result<()
                     ));
                 }
             }
-            crabka_pgparser::ast::TableExpr::Join { left, right, .. } => {
+            krabka_pgparser::ast::TableExpr::Join { left, right, .. } => {
                 reject_from_arguments(std::slice::from_ref(left))?;
                 reject_from_arguments(std::slice::from_ref(right))?;
             }
-            crabka_pgparser::ast::TableExpr::JsonTable(table) => {
+            krabka_pgparser::ast::TableExpr::JsonTable(table) => {
                 if table.exprs().into_iter().any(expr_contains_srf) {
                     return Err(ExecError::Unsupported(
                         "set-returning functions must appear at top level of FROM".into(),
                     ));
                 }
             }
-            crabka_pgparser::ast::TableExpr::XmlTable(table) => {
+            krabka_pgparser::ast::TableExpr::XmlTable(table) => {
                 if table.exprs().into_iter().any(expr_contains_srf) {
                     return Err(ExecError::Unsupported(
                         "set-returning functions must appear at top level of FROM".into(),
                     ));
                 }
             }
-            crabka_pgparser::ast::TableExpr::Table { .. }
-            | crabka_pgparser::ast::TableExpr::Derived { .. } => {}
+            krabka_pgparser::ast::TableExpr::Table { .. }
+            | krabka_pgparser::ast::TableExpr::Derived { .. } => {}
         }
     }
     Ok(())
@@ -2458,7 +2458,7 @@ pub(crate) fn project_rows_ordered_with_memory(
         with_ties: s.with_ties,
     };
     let max_rows = (s.order_by.is_empty()
-        && matches!(s.distinct, crabka_pgparser::ast::DistinctClause::All)
+        && matches!(s.distinct, krabka_pgparser::ast::DistinctClause::All)
         && window.offset.is_none_or(|offset| offset == 0)
         && !window.with_ties)
         .then(|| window.limit)
@@ -2469,7 +2469,7 @@ pub(crate) fn project_rows_ordered_with_memory(
         scope,
         fields,
         out_exprs,
-        matches!(s.distinct, crabka_pgparser::ast::DistinctClause::Distinct),
+        matches!(s.distinct, krabka_pgparser::ast::DistinctClause::Distinct),
     )?;
     let mut kept = kept;
     let mut distinct_on = crate::exec::distinct_on_plan(s, scope, fields, out_exprs, &order_keys)?;
@@ -2578,7 +2578,7 @@ pub(crate) fn project_rows_ordered_with_memory(
         }
     }
 
-    if matches!(s.distinct, crabka_pgparser::ast::DistinctClause::Distinct) {
+    if matches!(s.distinct, krabka_pgparser::ast::DistinctClause::Distinct) {
         let mut seen: std::collections::HashSet<Vec<Datum>> = std::collections::HashSet::new();
         projected.retain(|(_, out, _, _)| seen.insert(out.clone()));
     } else if let Some(plan) = distinct_on {
@@ -3024,14 +3024,14 @@ fn series_rows(
     max_rows: Option<usize>,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
     let value_ty = plan.columns[0].ty;
-    let start = crabka_pgtypes::cast::cast(&vals[0], value_ty, &ctx.time_zone)?;
-    let bound = crabka_pgtypes::cast::cast(&vals[1], value_ty, &ctx.time_zone)?;
+    let start = krabka_pgtypes::cast::cast(&vals[0], value_ty, &ctx.time_zone)?;
+    let bound = krabka_pgtypes::cast::cast(&vals[1], value_ty, &ctx.time_zone)?;
     let step = match vals.get(2) {
         Some(step) => step.clone(),
         None => default_step(value_ty),
     };
     let series_time_zone = match vals.get(3) {
-        Some(Datum::Text(name)) => crabka_pgtypes::datetime::resolve_time_zone(name)
+        Some(Datum::Text(name)) => krabka_pgtypes::datetime::resolve_time_zone(name)
             .ok_or_else(|| ExecError::UnknownTimeZone(name.clone()))?,
         Some(other) => {
             return Err(ExecError::TypeMismatch(format!(
@@ -3058,7 +3058,7 @@ fn series_rows(
         if max_rows.is_some_and(|max_rows| out.len() == max_rows) {
             break;
         }
-        let ordering = crabka_pgtypes::ops::compare(&current, &bound)?;
+        let ordering = krabka_pgtypes::ops::compare(&current, &bound)?;
         let past_end = match ordering {
             Some(std::cmp::Ordering::Greater) => ascending,
             Some(std::cmp::Ordering::Less) => !ascending,
@@ -3115,10 +3115,10 @@ fn series_advance(
 ) -> Result<Datum, ExecError> {
     if let (Datum::Timestamptz(ts), Datum::Interval(iv)) = (current, step) {
         return Ok(Datum::Timestamptz(
-            crabka_pgtypes::datetime::timestamptz_plus_interval(*ts, *iv, time_zone)?,
+            krabka_pgtypes::datetime::timestamptz_plus_interval(*ts, *iv, time_zone)?,
         ));
     }
-    Ok(crabka_pgtypes::ops::add(current, step)?)
+    Ok(krabka_pgtypes::ops::add(current, step)?)
 }
 
 // ---- generate_subscripts ----
@@ -3470,8 +3470,8 @@ fn require_default_parser(parser: &Datum) -> Result<(), ExecError> {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgtypes::{ArrayValue, JsonbValue, jsonb};
-    use crabka_pgwire::engine::{Engine, QueryResult, Session};
+    use krabka_pgtypes::{ArrayValue, JsonbValue, jsonb};
+    use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
     use super::*;
     use crate::SqlEngine;
@@ -3525,7 +3525,7 @@ mod tests {
     /// `json_in` validates and keeps every byte — so the spacing, key order and
     /// duplicate keys written here are what the expansion has to hand back.
     fn json_arg(source: &str) -> Expr {
-        crabka_pgtypes::json::validate(source).expect("valid json");
+        krabka_pgtypes::json::validate(source).expect("valid json");
         constant(Datum::Json(source.to_string()), ColumnType::Json)
     }
 
@@ -3595,7 +3595,7 @@ mod tests {
         )
         .expect("plan");
         let mut values = vec![Datum::Int4(1), Datum::Int4(2)];
-        let statement_memory = crate::scanner::StatementMemory::new(crabka_units::bytes(1));
+        let statement_memory = crate::scanner::StatementMemory::new(krabka_units::bytes(1));
         let error = rows_with_memory(&plan, &args, &mut values, &ctx(), &statement_memory)
             .expect_err("series materialization must respect the supplied limit")
             .into_pg();
@@ -3614,7 +3614,7 @@ mod tests {
         )
         .expect("plan");
         let mut values = vec![Datum::Int4(1), Datum::Int4(1_000_000)];
-        let statement_memory = crate::scanner::StatementMemory::new(crabka_units::bytes(1024));
+        let statement_memory = crate::scanner::StatementMemory::new(krabka_units::bytes(1024));
         let rows = rows_with_memory_up_to(
             &plan,
             &args,
@@ -3630,7 +3630,7 @@ mod tests {
 
     #[test]
     fn expansion_rows_charge_statement_memory() {
-        let statement_memory = crate::scanner::StatementMemory::new(crabka_units::bytes(1));
+        let statement_memory = crate::scanner::StatementMemory::new(krabka_units::bytes(1));
         let error = ensure_expansion_fits(&[vec![Datum::Int4(1)]], &statement_memory)
             .expect_err("expansion rows must consume the statement budget")
             .into_pg();
@@ -4083,18 +4083,18 @@ mod tests {
     fn generate_series_resolves_its_candidate_set_like_postgres() {
         let ts = |s: &str| {
             constant(
-                Datum::Timestamp(crabka_pgtypes::datetime::parse_timestamp(s).expect("timestamp")),
+                Datum::Timestamp(krabka_pgtypes::datetime::parse_timestamp(s).expect("timestamp")),
                 ColumnType::Timestamp,
             )
         };
         let date = |s: &str| {
             constant(
-                Datum::Date(crabka_pgtypes::datetime::parse_date(s).expect("date")),
+                Datum::Date(krabka_pgtypes::datetime::parse_date(s).expect("date")),
                 ColumnType::Date,
             )
         };
         let interval = constant(
-            Datum::Interval(crabka_pgtypes::datetime::Interval {
+            Datum::Interval(krabka_pgtypes::datetime::Interval {
                 months: 0,
                 days: 1,
                 micros: 0,
@@ -4129,7 +4129,7 @@ mod tests {
                 vec![
                     constant(
                         Datum::Timestamptz(
-                            crabka_pgtypes::datetime::parse_timestamptz(
+                            krabka_pgtypes::datetime::parse_timestamptz(
                                 "2024-03-10 05:00:00+00",
                                 &jiff::tz::TimeZone::UTC,
                             )
@@ -4139,7 +4139,7 @@ mod tests {
                     ),
                     constant(
                         Datum::Timestamptz(
-                            crabka_pgtypes::datetime::parse_timestamptz(
+                            krabka_pgtypes::datetime::parse_timestamptz(
                                 "2024-03-12 04:00:00+00",
                                 &jiff::tz::TimeZone::UTC,
                             )
@@ -4237,14 +4237,14 @@ mod tests {
         let zoned = |s| {
             constant(
                 Datum::Timestamptz(
-                    crabka_pgtypes::datetime::parse_timestamptz(s, &jiff::tz::TimeZone::UTC)
+                    krabka_pgtypes::datetime::parse_timestamptz(s, &jiff::tz::TimeZone::UTC)
                         .expect("timestamptz"),
                 ),
                 ColumnType::Timestamptz,
             )
         };
         let day = constant(
-            Datum::Interval(crabka_pgtypes::datetime::Interval {
+            Datum::Interval(krabka_pgtypes::datetime::Interval {
                 months: 0,
                 days: 1,
                 micros: 0,
@@ -4269,7 +4269,7 @@ mod tests {
                 ]
                 .into_iter()
                 .map(|s| Datum::Timestamptz(
-                    crabka_pgtypes::datetime::parse_timestamptz(s, &jiff::tz::TimeZone::UTC)
+                    krabka_pgtypes::datetime::parse_timestamptz(s, &jiff::tz::TimeZone::UTC)
                         .expect("expected timestamptz"),
                 ))
                 .collect::<Vec<_>>()
@@ -4281,7 +4281,7 @@ mod tests {
                     zoned("2024-03-10 05:00:00+00"),
                     zoned("2024-03-11 05:00:00+00"),
                     constant(
-                        Datum::Interval(crabka_pgtypes::datetime::Interval {
+                        Datum::Interval(krabka_pgtypes::datetime::Interval {
                             months: 0,
                             days: 1,
                             micros: 0,
@@ -4295,7 +4295,7 @@ mod tests {
                 == ["2024-03-10 05:00:00+00", "2024-03-11 05:00:00+00"]
                     .into_iter()
                     .map(|s| Datum::Timestamptz(
-                        crabka_pgtypes::datetime::parse_timestamptz(s, &jiff::tz::TimeZone::UTC)
+                        krabka_pgtypes::datetime::parse_timestamptz(s, &jiff::tz::TimeZone::UTC)
                             .expect("expected timestamptz"),
                     ))
                     .collect::<Vec<_>>()
@@ -4318,18 +4318,18 @@ mod tests {
             &[
                 constant(
                     Datum::Timestamp(
-                        crabka_pgtypes::datetime::parse_timestamp("2024-01-01").expect("start"),
+                        krabka_pgtypes::datetime::parse_timestamp("2024-01-01").expect("start"),
                     ),
                     ColumnType::Timestamp,
                 ),
                 constant(
                     Datum::Timestamp(
-                        crabka_pgtypes::datetime::parse_timestamp("2024-01-03").expect("stop"),
+                        krabka_pgtypes::datetime::parse_timestamp("2024-01-03").expect("stop"),
                     ),
                     ColumnType::Timestamp,
                 ),
                 constant(
-                    Datum::Interval(crabka_pgtypes::datetime::Interval::INFINITY),
+                    Datum::Interval(krabka_pgtypes::datetime::Interval::INFINITY),
                     ColumnType::Interval,
                 ),
             ],
@@ -4991,7 +4991,7 @@ mod tests {
         // column keeps the function's name.
         let r = query(&mut s, "SELECT * FROM generate_series(1, 3)").await;
         assert!(shape(&r).0 == vec!["generate_series"]);
-        assert!(shape(&r).1 == vec![crabka_pgtypes::oids::INT4]);
+        assert!(shape(&r).1 == vec![krabka_pgtypes::oids::INT4]);
 
         // A bare alias renames the single column too.
         let r = query(&mut s, "SELECT g FROM generate_series(1, 2) AS g").await;
@@ -5077,7 +5077,7 @@ mod tests {
 
         let r = query(&mut s, "SELECT generate_series(1, 3)").await;
         assert!(shape(&r).0 == vec!["generate_series"]);
-        assert!(shape(&r).1 == vec![crabka_pgtypes::oids::INT4]);
+        assert!(shape(&r).1 == vec![krabka_pgtypes::oids::INT4]);
         assert!(column_of(&r) == vec![Some("1".into()), Some("2".into()), Some("3".into())]);
 
         // The expansion happens below ORDER BY and LIMIT, so both see all rows.
@@ -5486,64 +5486,64 @@ mod tests {
             (
                 "SELECT * FROM generate_series(1, 3)",
                 vec!["generate_series"],
-                vec![crabka_pgtypes::oids::INT4],
+                vec![krabka_pgtypes::oids::INT4],
             ),
             (
                 "SELECT generate_series(1, 3)",
                 vec!["generate_series"],
-                vec![crabka_pgtypes::oids::INT4],
+                vec![krabka_pgtypes::oids::INT4],
             ),
             (
                 "SELECT * FROM jsonb_each('{\"a\": 1}'::jsonb)",
                 vec!["key", "value"],
-                vec![crabka_pgtypes::oids::TEXT, crabka_pgtypes::oids::JSONB],
+                vec![krabka_pgtypes::oids::TEXT, krabka_pgtypes::oids::JSONB],
             ),
             (
                 "SELECT * FROM jsonb_each_text('{\"a\": 1}'::jsonb)",
                 vec!["key", "value"],
-                vec![crabka_pgtypes::oids::TEXT, crabka_pgtypes::oids::TEXT],
+                vec![krabka_pgtypes::oids::TEXT, krabka_pgtypes::oids::TEXT],
             ),
             // The `json` family's sub-document columns are `json` (114), not
             // `jsonb` (3802) — `json` is a type of its own, not an alias.
             (
                 "SELECT * FROM json_each('{\"a\": 1}'::json)",
                 vec!["key", "value"],
-                vec![crabka_pgtypes::oids::TEXT, crabka_pgtypes::oids::JSON],
+                vec![krabka_pgtypes::oids::TEXT, krabka_pgtypes::oids::JSON],
             ),
             (
                 "SELECT * FROM json_each_text('{\"a\": 1}'::json)",
                 vec!["key", "value"],
-                vec![crabka_pgtypes::oids::TEXT, crabka_pgtypes::oids::TEXT],
+                vec![krabka_pgtypes::oids::TEXT, krabka_pgtypes::oids::TEXT],
             ),
             (
                 "SELECT * FROM json_array_elements('[1]'::json)",
                 vec!["value"],
-                vec![crabka_pgtypes::oids::JSON],
+                vec![krabka_pgtypes::oids::JSON],
             ),
             (
                 "SELECT * FROM json_array_elements_text('[1]'::json)",
                 vec!["value"],
-                vec![crabka_pgtypes::oids::TEXT],
+                vec![krabka_pgtypes::oids::TEXT],
             ),
             (
                 "SELECT * FROM json_object_keys('{\"a\": 1}'::json)",
                 vec!["json_object_keys"],
-                vec![crabka_pgtypes::oids::TEXT],
+                vec![krabka_pgtypes::oids::TEXT],
             ),
             (
                 "SELECT * FROM string_to_table('a,b', ',')",
                 vec!["string_to_table"],
-                vec![crabka_pgtypes::oids::TEXT],
+                vec![krabka_pgtypes::oids::TEXT],
             ),
             (
                 "SELECT r.* FROM abs(-1) AS r",
                 vec!["r"],
-                vec![crabka_pgtypes::oids::INT4],
+                vec![krabka_pgtypes::oids::INT4],
             ),
             (
                 "SELECT * FROM unnest(ARRAY[1], ARRAY['a']) AS t(x, y)",
                 vec!["x", "y"],
-                vec![crabka_pgtypes::oids::INT4, crabka_pgtypes::oids::TEXT],
+                vec![krabka_pgtypes::oids::INT4, krabka_pgtypes::oids::TEXT],
             ),
         ];
         for (sql, names, oids) in cases {
@@ -5575,7 +5575,7 @@ mod tests {
             shape(&result)
                 == (
                     vec!["jsonb_each".into()],
-                    vec![crabka_pgtypes::oids::RECORD],
+                    vec![krabka_pgtypes::oids::RECORD],
                     vec![vec![Some("(a,1)".into())]]
                 )
         );
@@ -5617,7 +5617,7 @@ mod tests {
         )
         .await;
         assert!(shape(&r).0 == vec!["key", "value"]);
-        assert!(shape(&r).1 == vec![crabka_pgtypes::oids::TEXT, crabka_pgtypes::oids::JSON]);
+        assert!(shape(&r).1 == vec![krabka_pgtypes::oids::TEXT, krabka_pgtypes::oids::JSON]);
         assert!(
             shape(&r).2
                 == vec![
@@ -5634,7 +5634,7 @@ mod tests {
             &format!("SELECT * FROM jsonb_each('{document}'::jsonb)"),
         )
         .await;
-        assert!(shape(&r).1 == vec![crabka_pgtypes::oids::TEXT, crabka_pgtypes::oids::JSONB]);
+        assert!(shape(&r).1 == vec![krabka_pgtypes::oids::TEXT, krabka_pgtypes::oids::JSONB]);
         assert!(
             shape(&r).2
                 == vec![
@@ -5659,7 +5659,7 @@ mod tests {
             "SELECT * FROM json_array_elements('[1,  { \"b\" : 1 } ]'::json)",
         )
         .await;
-        assert!(shape(&r).1 == vec![crabka_pgtypes::oids::JSON]);
+        assert!(shape(&r).1 == vec![krabka_pgtypes::oids::JSON]);
         assert!(column_of(&r) == vec![Some("1".into()), Some("{ \"b\" : 1 }".into())]);
     }
 
@@ -5728,7 +5728,7 @@ mod tests {
             let sql = format!("SELECT relid FROM pg_partition_ancestors({argument})");
             let r = query(&mut s, &sql).await;
             assert!(shape(&r).0 == vec!["relid"], "{sql}");
-            assert!(shape(&r).1 == vec![crabka_pgtypes::oids::REGCLASS], "{sql}");
+            assert!(shape(&r).1 == vec![krabka_pgtypes::oids::REGCLASS], "{sql}");
             let names: Vec<String> = column_of(&r).into_iter().flatten().collect();
             assert!(names == expected, "{sql} gave {names:?}");
         }

@@ -40,7 +40,7 @@ Generated: 2026-05-10
 ## Next step
 
 Extend codegen and tests to the remaining ~99 Kafka message types via the
-follow-up `crabka-protocol-coverage` plan.  The protocol-foundation
+follow-up `krabka-protocol-coverage` plan.  The protocol-foundation
 infrastructure (codegen pipeline, JVM oracle, differential harness, corpus
 replay, CI matrix) is fully in place and proven correct against a live JVM
 Kafka client for ApiVersions.
@@ -64,9 +64,9 @@ Kafka client for ApiVersions.
 
 ## Slice 12 — auth & security (2026-05-15)
 
-- 2 new crates: `crabka-security` (pure-logic SCRAM-SHA-512 server +
+- 2 new crates: `krabka-security` (pure-logic SCRAM-SHA-512 server +
   client state machines, PBKDF2 hashing, PLAIN constant-time verifier,
-  `rustls` `ServerConfig`/`ClientConfig` builders) and `crabka-cli`
+  `rustls` `ServerConfig`/`ClientConfig` builders) and `krabka-cli`
   (`crabka format --add-scram` bootstrap subcommand).
 - 3 new wire handlers: `SaslHandshake` (17), `SaslAuthenticate` (36),
   `AlterUserScramCredentials` (51, KIP-554).
@@ -106,8 +106,8 @@ Kafka client for ApiVersions.
 
 - New `BrokerConfig.controller_listener_protocol` (default
   `Plaintext`). Controller listener terminates TLS + SASL when set
-  via a new `RaftListenerHandshake` trait in `crabka-raft`. The
-  `crabka-broker::raft_handshake::BrokerRaftHandshake` impl reuses
+  via a new `RaftListenerHandshake` trait in `krabka-raft`. The
+  `krabka-broker::raft_handshake::BrokerRaftHandshake` impl reuses
   slice 12's `network::auth` state machines so the data plane and
   controller share one source of truth for inbound SASL.
 - `InterBrokerDialer` (constructed-but-unused in slice 12) is now
@@ -131,13 +131,13 @@ Kafka client for ApiVersions.
 
 ## Slice 13 — ACLs (2026-05-15)
 
-- New `crabka-metadata::AclEntry` + `AclEntryFilter` + 4 enums
+- New `krabka-metadata::AclEntry` + `AclEntryFilter` + 4 enums
   (`ResourceType`, `PatternType`, `PermissionType`, `AclOperation`).
   Two new `MetadataRecord` variants: `V1AccessControlEntry`,
   `V1DeleteAccessControlEntry`. `MetadataImage` indexes ACLs by
   `(ResourceType, ResourceName)` for LITERAL and by `ResourceType`
   for PREFIXED.
-- New `crabka_broker::authorizer::authorize` — pure-logic Kafka ACL
+- New `krabka_broker::authorizer::authorize` — pure-logic Kafka ACL
   decision algorithm with a compatibility shim: zero ACLs AND
   `super_user_name = None` → ALLOW (preserves slice 11/12 test
   behavior unchanged). Once one ACL or a super-user exists,
@@ -182,7 +182,7 @@ Kafka client for ApiVersions.
 
 ## Slice 13b — ACL implications + multi-super-user (2026-05-15)
 
-- `crabka_broker::authorizer::matches_operation` calls new `implies`
+- `krabka_broker::authorizer::matches_operation` calls new `implies`
   helper: `Read`/`Write`/`Delete`/`Alter` on any resource imply
   `Describe`; `AlterConfigs` implies `DescribeConfigs`. One-way table
   (`Describe` does not imply `Read`). Resource-type independent —
@@ -439,7 +439,7 @@ Kafka client for ApiVersions.
   - **Real finding:** Used `cast_signed()` to convert `u32` iterations to `i32` for the wire `CredentialInfo.iterations`.
 - Authorization: Cluster Alter (matches slice-12 `AlterUserScramCredentials` — JVM AdminClient uses Alter for both Alter and Describe SCRAM ops).
 - Inline-intercept dispatch (handler needs `&Principal`). Mirrors slice-16 `DescribeClientQuotas` framing.
-- **Real finding:** `SaslMechanism` lives in `crabka_security`, not `crabka_metadata` — handler imports adjusted accordingly.
+- **Real finding:** `SaslMechanism` lives in `krabka_security`, not `krabka_metadata` — handler imports adjusted accordingly.
 - 2 broker integration tests in `tests/describe_user_scram_credentials.rs`: all-users round-trip with seeded alice credential, unknown-user RESOURCE_NOT_FOUND.
 - 3 slice-16-family JVM tests retroactively cleaned up: `jvm_kafka_configs_alter_client_quota_end_to_end`, `jvm_kafka_configs_alter_ip_quota_end_to_end`, `jvm_kafka_configs_alter_controller_mutation_rate_end_to_end` now use `docker_run_kafka_tool_with_image_and_mount` + `assert!(status.success())` for `--describe`/`--delete-config` instead of the stdout-only workaround. Stdout-substring assertions kept as additional coverage.
 - 1 new JVM acceptance test: `jvm_kafka_configs_describe_users_scram_credentials_end_to_end` provisions a SCRAM user and confirms `kafka-configs --describe --entity-type users` shows the credential.
@@ -453,7 +453,7 @@ Kafka client for ApiVersions.
   `gzip` / `snappy` / `lz4` / `zstd` / `uncompressed` re-encode every
   Produce batch on this topic before write.
 - `LogConfig` gains
-  `compression_type: Option<crabka_compression::CompressionType>`.
+  `compression_type: Option<krabka_compression::CompressionType>`.
   `None` = pass-through. Defaults to `None`.
 - `config_keys::validate_topic_config` now accepts all five codec
   names plus the existing `producer`. New `parse_compression_type`
@@ -466,15 +466,15 @@ Kafka client for ApiVersions.
   the batch's `Attributes::compression` is overwritten. The encoder
   in `RecordBatch::encode` (called from `Log::append`) re-compresses
   the records body to match.
-- New `crabka-log` dep on `crabka-compression` (for the
+- New `krabka-log` dep on `krabka-compression` (for the
   `CompressionType` enum reference in the new `LogConfig` field).
-  New `crabka-broker` dep on `crabka-compression` for
+  New `krabka-broker` dep on `krabka-compression` for
   `parse_compression_type`.
 - Test inventory:
   - 6 new lib unit tests in `config_keys.rs` (all-five-codecs
     accepted, bogus rejected, producer/concrete mapping,
     `apply_to_log_config` zstd propagates + producer resets-to-None).
-  - 1 new lib unit test in `crabka-log`'s `config` (default is
+  - 1 new lib unit test in `krabka-log`'s `config` (default is
     `None` / pass-through).
   - 2 new broker integration tests in `tests/recompression.rs`:
     `compression.type=lz4` happy path (produce gzip → fetch lz4 +
@@ -492,7 +492,7 @@ Kafka client for ApiVersions.
 
 ## Slice 39 — Prometheus metrics exporter (2026-05-17)
 
-- New `crabka_broker::metrics` module: a `BrokerMetrics` bundle of
+- New `krabka_broker::metrics` module: a `BrokerMetrics` bundle of
   cheap `Arc`-cloneable counter/gauge handles registered against a
   shared `Registry` (`prometheus-client`). Eight metrics covering the
   Kafka JMX surface that operators commonly scrape:
@@ -500,7 +500,7 @@ Kafka client for ApiVersions.
     `topic_produce_requests`, `topic_fetch_requests`
   - scalar gauges: `partitions_led`, `active_controller`
   - scalar counters: `isr_shrinks`, `isr_expands`
-- New `crabka_broker::metrics_server` axum app exposing `GET /metrics`
+- New `krabka_broker::metrics_server` axum app exposing `GET /metrics`
   in OpenMetrics text. Spawned by `Broker::start` when
   `BrokerConfig::metrics_listen_addr` is `Some`; cancelled via the
   supervisor shutdown token.
@@ -546,7 +546,7 @@ Kafka client for ApiVersions.
 
 ## Slice 33 — TLS cert hot-reload (2026-05-16)
 
-- New `crabka_security::DynamicServerConfig` wraps the `rustls::ServerConfig`
+- New `krabka_security::DynamicServerConfig` wraps the `rustls::ServerConfig`
   in an `arc_swap::ArcSwap`. The broker snapshots the current `Arc<ServerConfig>`
   on each TLS accept and wraps it in a fresh `tokio_rustls::TlsAcceptor`,
   so a mid-rotation reload affects only *new* handshakes — in-flight
@@ -562,7 +562,7 @@ Kafka client for ApiVersions.
   200ms `for_tests`). `Duration::ZERO` disables the watcher; callers
   can still drive immediate reloads via the new public
   `BrokerHandle::reload_tls()`.
-- New `crabka_broker::tls_reload::run` background task: polls cert /
+- New `krabka_broker::tls_reload::run` background task: polls cert /
   key / client-CA mtimes every `tls_reload_interval`, reloads on
   change. Spawned only when `tls_config` is set; cancelled via the
   supervisor shutdown token.
@@ -571,9 +571,9 @@ Kafka client for ApiVersions.
   change to take effect immediately without waiting for a watcher
   tick.
 - New dev fixture `dev_cert_alt.pem` / `dev_key_alt.pem` (P-256
-  self-signed, CN=crabka-dev-alt — distinct from the original
-  `dev_cert.pem`'s `CN=crabka-dev` and sha256 fingerprint).
-- 2 new unit tests in `crabka_security::reload` (snapshot stability
+  self-signed, CN=krabka-dev-alt — distinct from the original
+  `dev_cert.pem`'s `CN=krabka-dev` and sha256 fingerprint).
+- 2 new unit tests in `krabka_security::reload` (snapshot stability
   across reload; reload-on-error preserves prior config).
 - 2 new broker integration tests in `tests/cert_hot_reload.rs`:
   explicit `reload_tls()` swaps the served cert; periodic
@@ -600,7 +600,7 @@ Kafka client for ApiVersions.
   `rustls::server::WebPkiClientVerifier` against `client_ca_path`.
   `Required` rejects the handshake when no cert is presented;
   `Optional` accepts both.
-- New `crabka-security::extract_principal_from_cert` parses the
+- New `krabka-security::extract_principal_from_cert` parses the
   DER-encoded X.509 client cert via `x509-parser` and returns the
   Subject DN (matches Kafka's `DefaultKafkaPrincipalBuilder`).
 - New `AuthMethod` enum on `Principal` — strict superset of
@@ -620,7 +620,7 @@ Kafka client for ApiVersions.
   (CN=test-client signed by the CA), `dev_client_key.pem`.
 - 3 new `TlsConfig` unit tests (missing-CA error, Required +
   Optional builders). 2 new mTLS unit tests in
-  `crabka_security::mtls` (Subject DN extraction, malformed-cert
+  `krabka_security::mtls` (Subject DN extraction, malformed-cert
   None). 1 new broker integration test in `tests/mtls.rs`:
   SSL listener with `client_auth=Required`, fixture-cert TLS client,
   `super_users = [CLIENT_PRINCIPAL]`. The test sends `CreateTopics`
@@ -642,7 +642,7 @@ Kafka client for ApiVersions.
 - New `SaslMechanism::ScramSha256` variant + `wire_name`/`from_wire`
   round-trip ("SCRAM-SHA-256") and a `is_scram()` predicate that the
   handler / handshake code uses to treat both SCRAM variants uniformly.
-- `crabka-security` SCRAM primitives now branch on the mechanism:
+- `krabka-security` SCRAM primitives now branch on the mechanism:
   `hash_scram_password_with_salt` runs `PBKDF2-HMAC-{SHA256,SHA512}`
   and stretches to the matching output size (32 / 64 bytes);
   `derive_keys_from_salted` takes a mechanism arg and dispatches
@@ -664,7 +664,7 @@ Kafka client for ApiVersions.
     the mechanism through.
 - `crabka format --add-scram` accepts both `SCRAM-SHA-256=[...]` and
   `SCRAM-SHA-512=[...]` prefixes. 1 new CLI unit test.
-- 7 new unit tests in `crabka-security`: SHA-256 PBKDF2 + key
+- 7 new unit tests in `krabka-security`: SHA-256 PBKDF2 + key
   derivation, SHA-256 round-trip, mechanism wire-name round-trip,
   `is_scram` predicate.
 - 3 new broker integration tests in `tests/auth_handlers.rs`:
@@ -733,8 +733,8 @@ Kafka client for ApiVersions.
 ## Slice 43a — Rebalancer foundation (2026-05-17)
 
 - New workspace member `crates/rebalancer/` producing the
-  `crabka-rebalancer` binary. Connects to a Crabka cluster as a
-  regular admin client (`crabka_client_core::Client`), snapshots
+  `krabka-rebalancer` binary. Connects to a Crabka cluster as a
+  regular admin client (`krabka_client_core::Client`), snapshots
   state every 10s via `Metadata` + `DescribeCluster` +
   `ListPartitionReassignments`, and exposes a Connect-RPC service
   on `:9300` for "what would balance this?" proposals.
@@ -760,11 +760,11 @@ Kafka client for ApiVersions.
 - Operational endpoints (`/healthz`, `/readyz`, `/metrics`) on the
   same axum listener. `/readyz` gates on the first successful
   snapshot. `/metrics` serves OpenMetrics text from a
-  `crabka_rebalancer`-prefixed registry exposing three metrics:
-  `crabka_rebalancer_snapshot_at_ms` (gauge, epoch-millis of the
-  last successful snapshot), `crabka_rebalancer_snapshots_total`
+  `krabka_rebalancer`-prefixed registry exposing three metrics:
+  `krabka_rebalancer_snapshot_at_ms` (gauge, epoch-millis of the
+  last successful snapshot), `krabka_rebalancer_snapshots_total`
   (counter, successful snapshots), and
-  `crabka_rebalancer_proposals_created_total` (counter, proposals
+  `krabka_rebalancer_proposals_created_total` (counter, proposals
   computed via `CreateProposal`). Later slices add usage / latency
   counters off the same registry.
 - New workspace deps: `connectrpc-axum` 0.1, `connectrpc-axum-build` 0.1,
@@ -776,9 +776,9 @@ Kafka client for ApiVersions.
   `Unavailable`). 1 binary-level Connect-protocol smoke test in
   `tests/connect_smoke.rs` (HTTP+JSON `GetState` round-trip).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-17-crabka-rebalancer-43a-design.md`].
+  [`docs/superpowers/specs/2026-05-17-krabka-rebalancer-43a-design.md`].
   Roadmap (slices 43a–43g + operator slice 44) in
-  [`docs/superpowers/specs/2026-05-17-crabka-rebalancer-roadmap-design.md`].
+  [`docs/superpowers/specs/2026-05-17-krabka-rebalancer-roadmap-design.md`].
 - Out of scope (deferred): execute path (slice 43b), persistence
   (slice 43b), metric scraping for usage goals (slice 43e),
   rack-aware / capacity / usage / CPU / anomaly goals (slices
@@ -806,20 +806,20 @@ Kafka client for ApiVersions.
   marker, deleted on terminal). On startup, recovery loads both and
   resumes the persisted phase via re-issuing
   `AlterPartitionReassignments` (KIP-455 idempotent). `data_dir`
-  defaults to `/var/lib/crabka-rebalancer`.
-- Production Helm chart at `charts/crabka-rebalancer/`: Deployment
+  defaults to `/var/lib/krabka-rebalancer`.
+- Production Helm chart at `charts/krabka-rebalancer/`: Deployment
   (replicas: 1, strategy: Recreate), ClusterIP Service on 9300,
   ServiceAccount (no cluster RBAC), RWO PVC. `bootstrapServers` is
   a required value (chart fails to render without it).
 - Five `helm-unittest` test files under
-  `charts/crabka-rebalancer/tests/` run in CI alongside `helm lint`
+  `charts/krabka-rebalancer/tests/` run in CI alongside `helm lint`
   and the `helm template + grep` sanity check.
 - New CLI flags: `--data-dir`, `--default-throttle-bytes-per-sec`
   (default 50 MB/s), `--execute-deadline-secs` (default 1800),
   `--reassignment-poll-interval-secs` (default 5),
   `--reassignment-batch-size` (default 200).
 - New metrics:
-  `crabka_rebalancer_executions_started_total` /
+  `krabka_rebalancer_executions_started_total` /
   `_completed_total` / `_failed_total` / `_cancelled_total`.
 - 62 lib unit tests across `model`, `executor`, `api`,
   `health`, `metrics`, `optimizer`, `goals`, plus 7
@@ -831,7 +831,7 @@ Kafka client for ApiVersions.
   (`connect_smoke.rs` covers ExecuteProposal's FailedPrecondition
   path).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-17-crabka-rebalancer-43b-design.md`].
+  [`docs/superpowers/specs/2026-05-17-krabka-rebalancer-43b-design.md`].
 - Out of scope (deferred): multi-replica HA (later slice), metric
   scraping for usage goals (43e), rack-aware / capacity / usage /
   CPU / anomaly goals (43c–43g), operator `KafkaRebalance` CRD
@@ -854,7 +854,7 @@ Kafka client for ApiVersions.
     that holds at least one replica of a topic should also lead at
     least `N` partitions of that topic. `N` comes from the new
     `--min-topic-leaders-per-broker` CLI flag (env
-    `CRABKA_MIN_TOPIC_LEADERS_PER_BROKER`, default 0). At default
+    `KRABKA_MIN_TOPIC_LEADERS_PER_BROKER`, default 0). At default
     config the goal is a no-op; operators opt in by setting N > 0.
 - `GoalRegistry::default_registry` now contains six goals in
   priority order: `PreferredLeaderIdempotency`, `RackAware`
@@ -866,7 +866,7 @@ Kafka client for ApiVersions.
 - No proto changes, no persistence changes, no executor changes.
   Slice 43c is goal-only.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-17-crabka-rebalancer-43c-design.md`].
+  [`docs/superpowers/specs/2026-05-17-krabka-rebalancer-43c-design.md`].
 - Out of scope (deferred): `RackAwareDistributionGoal` (soft,
   best-effort variant of RackAware); per-proposal goal config
   (requires proto change); capacity / usage / CPU / anomaly goals
@@ -889,7 +889,7 @@ Kafka client for ApiVersions.
   for that resource on that broker; missing broker entry = no limits
   at all.
 - New CLI flag `--broker-capacity-file` (env
-  `CRABKA_BROKER_CAPACITY_FILE`, default empty). When unset, all
+  `KRABKA_BROKER_CAPACITY_FILE`, default empty). When unset, all
   five capacity goals are no-ops. When set, the binary loads + parses
   the YAML at startup and threads an `Arc<BrokerCapacities>` into
   the `AppState`'s `GoalContext`.
@@ -911,7 +911,7 @@ Kafka client for ApiVersions.
 - 14 new unit tests (6 capacity + 4 ReplicaCapacity + 4 stub) + 1
   new integration test (`replica_capacity_evicts_over_capacity_broker`).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-17-crabka-rebalancer-43d-design.md`].
+  [`docs/superpowers/specs/2026-05-17-krabka-rebalancer-43d-design.md`].
 - Out of scope (deferred): per-partition usage data + the four
   metric-dependent capacity goals' real bodies (43e); `CpuUsage`
   soft goal (43f); per-topic resource hints in the capacity config;
@@ -930,9 +930,9 @@ Kafka client for ApiVersions.
 - **Broker-side (the `43e-core` half):**
   - New `PartitionLabel { topic, partition }` drives three new
     metric families on `BrokerMetrics`:
-    `crabka_broker_partition_bytes_in_total{topic,partition}`,
-    `crabka_broker_partition_bytes_out_total{topic,partition}`,
-    and `crabka_broker_partition_disk_bytes{topic,partition}`.
+    `krabka_broker_partition_bytes_in_total{topic,partition}`,
+    `krabka_broker_partition_bytes_out_total{topic,partition}`,
+    and `krabka_broker_partition_disk_bytes{topic,partition}`.
     The slice-39 topic-level counters stay.
   - `handlers/produce.rs` + `handlers/fetch.rs` emit one per-partition
     `record_partition_*` call per (topic, partition) in addition to
@@ -941,7 +941,7 @@ Kafka client for ApiVersions.
     partition's log directory and updates
     `partition_disk_bytes`. CLI flag
     `--partition-disk-scan-interval-secs` (env
-    `CRABKA_PARTITION_DISK_SCAN_INTERVAL_SECS`; `0` disables).
+    `KRABKA_PARTITION_DISK_SCAN_INTERVAL_SECS`; `0` disables).
 - **Rebalancer-side:**
   - New top-level `scraper/` module: `parse` (scoped
     OpenMetrics text parser), `targets` (CLI value parser),
@@ -971,7 +971,7 @@ Kafka client for ApiVersions.
     `default_registry_order_matches_spec` accordingly.
 - New CLI flags:
   `--metrics-scrape-targets` (env
-  `CRABKA_METRICS_SCRAPE_TARGETS`, format
+  `KRABKA_METRICS_SCRAPE_TARGETS`, format
   `id:host:port,id:host:port,…`, empty default = scraper
   disabled),
   `--metrics-scrape-interval-secs` (default 30),
@@ -986,7 +986,7 @@ Kafka client for ApiVersions.
   test + 1 rebalancer integration test
   (`disk_usage_evicts_hot_broker`) + 1 helm-unittest assertion.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-17-crabka-rebalancer-43e-design.md`].
+  [`docs/superpowers/specs/2026-05-17-krabka-rebalancer-43e-design.md`].
 - Out of scope (deferred): `CpuUsage` soft goal + real
   `CpuCapacity` body (slice 43f); discovery of scrape targets
   via `Metadata` (currently operator-supplied);
@@ -1010,7 +1010,7 @@ Kafka client for ApiVersions.
 - **Broker-side:**
   - New `partition_cpu_micros` metric family on `BrokerMetrics`,
     exported as
-    `crabka_broker_partition_cpu_micros_total{topic,partition}`.
+    `krabka_broker_partition_cpu_micros_total{topic,partition}`.
     Counts on-CPU microseconds spent polling each (topic,
     partition)'s work. Microseconds (`u64` counter) instead of
     seconds (`f64`) because `prometheus-client` counters are
@@ -1155,7 +1155,7 @@ Kafka client for ApiVersions.
     six `auto_trigger_skipped_total` reasons (`disabled`,
     `executing`, `reassignments`, `muted`, `no_movements`,
     `optimizer_error`). Shares the existing
-    `crabka_rebalancer_` registry and `/metrics` endpoint.
+    `krabka_rebalancer_` registry and `/metrics` endpoint.
   - `auto_trigger` — maps `AnomalyKind` to a minimal goal list
     via `goals_for_kind`, runs `optimizer::optimize`, inserts
     the resulting `Computed` proposal into `ProposalStore`,
@@ -1240,7 +1240,7 @@ Kafka client for ApiVersions.
   `disk_pressure_anomaly_auto_triggers_proposal`), plus 2 new
   helm-unittest cases.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-17-crabka-rebalancer-roadmap-design.md`]
+  [`docs/superpowers/specs/2026-05-17-krabka-rebalancer-roadmap-design.md`]
   (slice 43g closes the 43-series). No separate design doc;
   the roadmap covers it.
 - Out of scope (deferred): auto-execute (the detector only
@@ -1333,7 +1333,7 @@ Kafka client for ApiVersions.
   handshake (slice 31); PKCS#12 keystore bundle `user.p12` +
   `user.password` (slice 37 follow-up if a JVM-client consumer
   needs it); user-provided clients-CA (BYO-CA, slice 30).
-- Tests: +5 `crabka_security::ca` unit tests (CA round-trip,
+- Tests: +5 `krabka_security::ca` unit tests (CA round-trip,
   CA-signed leaf, leaf DN matches `extract_principal_from_cert`,
   leaf EKU is `clientAuth`, each generate is unique); +5
   `crd::user` unit tests (`Tls(TlsAuth)` round-trip, with-fields
@@ -1348,7 +1348,7 @@ Kafka client for ApiVersions.
   picks up the `tls` discriminator + `validityDays` / `renewalDays`
   properties and `status.{tls,tlsCertNotAfter,tlsPrincipal}`.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-19-crabka-operator-kafkauser-37-design.md`].
+  [`docs/superpowers/specs/2026-05-19-krabka-operator-kafkauser-37-design.md`].
 
 ## Slice 30 — Operator: Cluster CA + clients CA generation (2026-05-21)
 
@@ -1361,7 +1361,7 @@ Kafka client for ApiVersions.
   mTLS on by default: the broker controller listener terminates TLS
   with `client_auth=Required` and the cluster CA cert as the
   truststore. Renewal of leaf certs is handled by a new CronJob
-  (`crabka-operator ca-renewal-check`) shipped in the Helm chart with
+  (`krabka-operator ca-renewal-check`) shipped in the Helm chart with
   a dedicated ServiceAccount + narrower RBAC.
 - BYO CAs (`generateCertificateAuthority: false`) — operator validates
   pre-existing Secret pair and refuses to overwrite; CronJob emits
@@ -1373,7 +1373,7 @@ Kafka client for ApiVersions.
 - Slice-21 config-hash gains a fourth segment (cluster CA cert PEM)
   so CA changes force a cluster roll. Leaf cert renewal piggybacks on
   slice 33's cert hot-reload — no restart.
-- New `crabka-operator ca-renewal-check` CLI subcommand + Helm-chart
+- New `krabka-operator ca-renewal-check` CLI subcommand + Helm-chart
   CronJob with daily schedule (`0 2 * * *`).
 - Per-broker keystore is a single per-cluster Secret with `<id>.crt` +
   `<id>.key` entries; broker container picks its own by node id at
@@ -1504,12 +1504,12 @@ Kafka client for ApiVersions.
   (MetalLB + nginx ssl-passthrough) is a CI follow-up; operator-side
   wiring is covered by the integration tests.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-22-crabka-operator-listener-ingress-route-27-design.md`].
+  [`docs/superpowers/specs/2026-05-22-krabka-operator-listener-ingress-route-27-design.md`].
 
 ## Slice 44 — Operator: `KafkaRebalance` CRD (2026-05-22)
 
 - Closes Phase 7 of the operator roadmap: the standalone
-  `crabka-rebalancer` service (slices 43a–43g) was fully built but had no
+  `krabka-rebalancer` service (slices 43a–43g) was fully built but had no
   operator front-end. Slice 44 adds the `KafkaRebalance` CRD and a
   controller that translates it into Connect-RPC calls against the
   rebalancer and reflects the proposal lifecycle into `status`. Pure
@@ -1530,7 +1530,7 @@ Kafka client for ApiVersions.
   `decide(state, command, has_session) -> RebalanceAction` (unit-tested in
   isolation); reconcile does only I/O. `Rebalancing` polls at 10s, other
   states requeue at 5min (the watch wakes on annotation changes).
-- New `crabka_operator::rebalancer_client`: a `reqwest`-backed Connect/JSON
+- New `krabka_operator::rebalancer_client`: a `reqwest`-backed Connect/JSON
   client (`ConnectRebalancerClient`) + `RebalancerClientLike` trait test
   seam (mirrors `AdminClientLike`). Hand-rolled serde DTOs keep the
   operator decoupled from the rebalancer's prost/pbjson codegen. Decode
@@ -1540,7 +1540,7 @@ Kafka client for ApiVersions.
   client per endpoint, evicted on transport failure.
 - `Cargo.toml`: `async-trait` promoted to a runtime dep; `reqwest` 0.13
   (`default-features = false, features = ["json"]`, plain HTTP) added;
-  `crabka-rebalancer` added as a dev-dep for the e2e wire test.
+  `krabka-rebalancer` added as a dev-dep for the e2e wire test.
   ClusterRole gains `kafkarebalances` + `/status`.
 - ~44 new lib unit tests (CRD round-trip; Connect-JSON decode; full
   `decide` matrix; outcome mapping; `current_state` / `read_command` /
@@ -1557,7 +1557,7 @@ Kafka client for ApiVersions.
   delete-cancels-rebalance finalizer; auto-approval / scheduling; kind-e2e
   (CI follow-up — operator wiring covered by the in-process wire test).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-22-crabka-operator-kafkarebalance-44-design.md`].
+  [`docs/superpowers/specs/2026-05-22-krabka-operator-kafkarebalance-44-design.md`].
 
 ## Slice 28 — Operator: Version upgrades (2026-05-22)
 
@@ -1579,7 +1579,7 @@ Kafka client for ApiVersions.
   metadata version for a two-step upgrade or an online downgrade. On an
   existing cluster the operator applies a change through `UpdateFeatures`;
   a lower target uses safe-downgrade semantics.
-- New `crabka_operator::version` module: `KafkaVersion::parse` (tolerates
+- New `krabka_operator::version` module: `KafkaVersion::parse` (tolerates
   `X`, `X.Y`, `X.Y.Z`, and `X.Y-IVn` IBP suffixes), `(major,minor)`
   metadata-key comparison, and `evaluate(kafka_version, spec_metadata,
   finalized_metadata)`. The resolved metadata version cannot exceed the
@@ -1619,8 +1619,8 @@ Kafka client for ApiVersions.
   `ControlledShutdown` before its roll (the gate orders + waits for Ready
   but does not pre-drain); multi-replica pools.
 - Reference docs:
-  [`docs/superpowers/specs/2026-05-22-crabka-operator-version-upgrades-28-design.md`],
-  [`docs/superpowers/plans/2026-05-22-crabka-operator-version-upgrades-28.md`].
+  [`docs/superpowers/specs/2026-05-22-krabka-operator-version-upgrades-28-design.md`],
+  [`docs/superpowers/plans/2026-05-22-krabka-operator-version-upgrades-28.md`].
 
 ## Slice 41 — Operator: Configurable logging (`Kafka.spec.logging`) (2026-05-23)
 
@@ -1633,7 +1633,7 @@ Kafka client for ApiVersions.
   into a single `RUST_LOG` env-filter directive; `type: external`
   references a user-managed `ConfigMap` key whose value is used verbatim.
   `loggers` keys are **tracing targets** (Rust module paths, e.g.
-  `crabka_broker`); the key `root` (case-insensitive) sets the bare
+  `krabka_broker`); the key `root` (case-insensitive) sets the bare
   global level. Levels are `trace|debug|info|warn|error|off`
   (case-insensitive; `warning`→`warn`, `fatal`→`error`, `none`→`off`).
 - New `crd::logging` (`Logging`, `LoggingType`, `ExternalLoggingSource`,
@@ -1678,7 +1678,7 @@ Kafka client for ApiVersions.
   startup — a future core control surface); log4j-name → tracing-target
   translation; OTLP / structured-logging knobs (slice 42 territory).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-23-crabka-operator-logging-41-design.md`].
+  [`docs/superpowers/specs/2026-05-23-krabka-operator-logging-41-design.md`].
 
 ## Slice 42 — Crabka core: OTLP distributed tracing (2026-05-23)
 
@@ -1688,14 +1688,14 @@ Kafka client for ApiVersions.
   driven entirely by env — a broker with no OTLP env behaves exactly as
   before. The operator-surfacing follow-up (`Kafka.spec.tracing`) is a
   later slice.
-- New `crabka_broker::telemetry` module owns the whole pipeline:
+- New `krabka_broker::telemetry` module owns the whole pipeline:
   - `OtlpConfig::from_env(get, instance_id, version) -> Option<Self>` — a
     pure, injectable env resolver (the `get` closure is the only I/O);
     `None` means disabled. CRABKA vars win over the standard OTel vars:
-    enable via `CRABKA_OTLP_ENDPOINT` / any `OTEL_EXPORTER_OTLP*ENDPOINT` /
-    `CRABKA_OTLP_ENABLED`; `OTEL_SDK_DISABLED=true` force-disables. Protocol
-    (`CRABKA_OTLP_PROTOCOL` / `OTEL_EXPORTER_OTLP_PROTOCOL`, default `grpc`),
-    sample ratio (`CRABKA_OTLP_SAMPLE_RATIO` / `OTEL_TRACES_SAMPLER_ARG`,
+    enable via `KRABKA_OTLP_ENDPOINT` / any `OTEL_EXPORTER_OTLP*ENDPOINT` /
+    `KRABKA_OTLP_ENABLED`; `OTEL_SDK_DISABLED=true` force-disables. Protocol
+    (`KRABKA_OTLP_PROTOCOL` / `OTEL_EXPORTER_OTLP_PROTOCOL`, default `grpc`),
+    sample ratio (`KRABKA_OTLP_SAMPLE_RATIO` / `OTEL_TRACES_SAMPLER_ARG`,
     clamped to `[0,1]`), `OTEL_SERVICE_NAME`, export timeout.
   - `init(otlp, default_filter) -> TelemetryGuard` — installs the global
     subscriber: always a stdout `fmt` layer (the existing `RUST_LOG`
@@ -1705,11 +1705,11 @@ Kafka client for ApiVersions.
     `ParentBased(TraceIdRatioBased(ratio))`. The guard's `shutdown()`
     flushes the final batch before exit.
   - `request_span(...)` + `api_name(api_key)`.
-- **Per-request span on a dedicated `DEBUG` target** (`crabka_broker::request`):
+- **Per-request span on a dedicated `DEBUG` target** (`krabka_broker::request`):
   the `fmt` layer's default `info` filter never enables it (no stdout spam,
   zero cost on a no-OTLP broker), while the OTLP layer carries its own
-  per-layer filter (`info,crabka_broker::request=debug,crabka_log=info`,
-  overridable via `CRABKA_OTLP_FILTER`) that does. Span name = API name via
+  per-layer filter (`info,krabka_broker::request=debug,krabka_log=info`,
+  overridable via `KRABKA_OTLP_FILTER`) that does. Span name = API name via
   `otel.name`; `otel.kind=server`; OTel-semconv attributes
   (`messaging.system`, `kafka.api_key`, `kafka.api_version`,
   `kafka.correlation_id`, `messaging.kafka.client_id`,
@@ -1749,7 +1749,7 @@ Kafka client for ApiVersions.
   slice-39 Prometheus endpoint); operator `Kafka.spec.tracing` surfacing;
   per-response error-code span attributes.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-23-crabka-broker-otlp-tracing-42-design.md`].
+  [`docs/superpowers/specs/2026-05-23-krabka-broker-otlp-tracing-42-design.md`].
 
 ## Slice 34 — Operator: CA rotation orchestration (2026-05-23)
 
@@ -1771,7 +1771,7 @@ Kafka client for ApiVersions.
     key with a fresh `validityDays`, prepend it to the bundle, prune
     expired anchors. The cluster CA rolls while the clients CA hot-reloads;
     broker and user leafs are untouched (same key → same SPKI → existing
-    leafs still chain). New `crabka_security::ca::renew_cluster_ca` /
+    leafs still chain). New `krabka_security::ca::renew_cluster_ca` /
     `renew_clients_ca`.
   - **Cluster-CA key replacement** (`crabka.io/force-replace-ca-key`): a
     staged three-phase machine — `key-replace-trust` (generate new
@@ -1815,7 +1815,7 @@ Kafka client for ApiVersions.
 - Clients-CA promotion bulk-reissues each live TLS `KafkaUser`, verifies
   existing certificate signatures on retry, and waits for both the leaf
   generation marker and pool convergence before pruning old trust.
-- Tests: +4 `crabka_security::ca` unit tests (renew reuses key,
+- Tests: +4 `krabka_security::ca` unit tests (renew reuses key,
   preserves subject incl. `OU=cluster`, extends validity, leaf-still-
   chains) + 17 `controller::cluster_ca` rotation unit tests (bundle
   helpers, full `plan_ca_rotation` decision table, same-key renewal
@@ -1827,7 +1827,7 @@ Kafka client for ApiVersions.
   green; clippy `-D warnings` + fmt clean; CRD YAML regenerated (only the
   new status fields).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-23-crabka-operator-ca-rotation-34-design.md`].
+  [`docs/superpowers/specs/2026-05-23-krabka-operator-ca-rotation-34-design.md`].
 
 ## Slice 45 — Crabka core: JBOD / multi-log-dir + DescribeLogDirs (KIP-113) (2026-05-23)
 
@@ -1841,7 +1841,7 @@ Kafka client for ApiVersions.
   `log_dir` keeps its meaning (primary + `__cluster_metadata` + default data
   dir), so the ~100 existing config sites that build via `..default()` /
   `for_tests` are untouched — only the two constructors gain the field. CLI
-  `--log-dirs a,b` (env `CRABKA_EXTRA_LOG_DIRS`); TOML `extra_log_dirs`.
+  `--log-dirs a,b` (env `KRABKA_EXTRA_LOG_DIRS`); TOML `extra_log_dirs`.
 - **Placement** (`crates/broker/src/log_dir.rs`): stateless
   `place_partition_dir(log_dirs, topic, partition)` — existing on-disk
   location wins (idempotent across restart / re-materialize), else the dir
@@ -1885,7 +1885,7 @@ Kafka client for ApiVersions.
   `kafka-reassign-partitions` per-replica `log_dirs`; offline-dir /
   `KAFKA_STORAGE_ERROR` handling. Operator JBOD surface is slice 46.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-23-crabka-jbod-multi-log-dir-45-design.md`].
+  [`docs/superpowers/specs/2026-05-23-krabka-jbod-multi-log-dir-45-design.md`].
 
 ## Slice 46 — Operator: JBOD in `KafkaNodePool.spec.storage` (2026-05-23)
 
@@ -1912,7 +1912,7 @@ Kafka client for ApiVersions.
   "/var/lib/crabka/data"`) are all untouched. Every other disk `id = N`
   gets PVC `data-{N}` mounted at `/var/lib/crabka/data-{N}`, an extra
   broker-container `volumeMount`, and is handed to the broker via the
-  existing `CRABKA_EXTRA_LOG_DIRS` env (slice 45) — comma-joined, sorted by
+  existing `KRABKA_EXTRA_LOG_DIRS` env (slice 45) — comma-joined, sorted by
   id, primary excluded. Disks are sorted by id before rendering so the pod
   template is deterministic regardless of YAML order. Non-JBOD pools render
   byte-identically (no env, no extra mounts).
@@ -1932,13 +1932,13 @@ Kafka client for ApiVersions.
   — asserts two PVC templates, set-wide retention, and the env in the SSA
   body). CRD YAML regenerated. operator-e2e gains an isolated JBOD smoke
   step (2×1Gi pool in its own namespace: both PVCs `Bound`, both disks
-  mounted, `CRABKA_EXTRA_LOG_DIRS` set). Full operator suite + clippy
+  mounted, `KRABKA_EXTRA_LOG_DIRS` set). Full operator suite + clippy
   `-D warnings` + fmt clean.
 - Out of scope (deferred): adding/removing JBOD disks on a live pool
   (needs `AlterReplicaLogDirs`, slice 45b); per-disk `deleteClaim`;
   ephemeral disks inside a JBOD set; `KafkaNodePool.status.storage` mirror.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-23-crabka-operator-jbod-storage-46-design.md`].
+  [`docs/superpowers/specs/2026-05-23-krabka-operator-jbod-storage-46-design.md`].
 
 ## Slice 49 — Crabka core: SASL/OAUTHBEARER (KIP-255 / RFC 7628) (2026-05-23)
 
@@ -2000,7 +2000,7 @@ Kafka client for ApiVersions.
   Outbound inter-broker/controller OAUTHBEARER subsequently shipped; see the
   wiring note above.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-23-crabka-sasl-oauthbearer-49-design.md`].
+  [`docs/superpowers/specs/2026-05-23-krabka-sasl-oauthbearer-49-design.md`].
 
 ## Slice 49b — Crabka core: SASL/OAUTHBEARER JWKS / signed-JWT validation (2026-05-23)
 
@@ -2065,7 +2065,7 @@ Kafka client for ApiVersions.
   unsecured JVM test still covers the wire handshake, and the signature path is
   covered by the Rust integration tests above.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-23-crabka-sasl-oauthbearer-jwks-49b-design.md`].
+  [`docs/superpowers/specs/2026-05-23-krabka-sasl-oauthbearer-jwks-49b-design.md`].
 
 ## Slice 50 — Operator: Listener OAuth + `KafkaUser` tls-external (2026-05-23)
 
@@ -2150,9 +2150,9 @@ Kafka client for ApiVersions.
   `customClaimCheck`, JWKS refresh policy knobs, `jwksIgnoreKeyUse`
   (49g + 50f).
 - Reference docs:
-  [`docs/superpowers/specs/2026-05-23-crabka-operator-listener-user-oauth-50-design.md`],
-  [`docs/superpowers/specs/2026-05-23-crabka-oauth-parity-roadmap-design.md`],
-  [`docs/superpowers/plans/2026-05-23-crabka-operator-listener-user-oauth-50.md`].
+  [`docs/superpowers/specs/2026-05-23-krabka-operator-listener-user-oauth-50-design.md`],
+  [`docs/superpowers/specs/2026-05-23-krabka-oauth-parity-roadmap-design.md`],
+  [`docs/superpowers/plans/2026-05-23-krabka-operator-listener-user-oauth-50.md`].
 
 ## Slice 49c — Broker: Custom TLS trust to IdP for JWKS (2026-05-23)
 
@@ -2194,7 +2194,7 @@ Kafka client for ApiVersions.
   PEM paths in one key (the operator concatenates before mounting, mirroring
   Strimzi); cert pinning; mTLS to the IdP.
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-23-crabka-broker-jwks-tls-trust-49c-design.md`].
+  [`docs/superpowers/specs/2026-05-23-krabka-broker-jwks-tls-trust-49c-design.md`].
 
 ## Slice 50b — Operator: Listener OAuth `tlsTrustedCertificates` (2026-05-23)
 
@@ -2267,7 +2267,7 @@ Kafka client for ApiVersions.
   managed-Secret cleanup when `tlsTrustedCertificates` is emptied
   mid-life (cascades on Kafka CR delete via owner-ref).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-23-crabka-operator-oauth-tls-trust-50b-design.md`].
+  [`docs/superpowers/specs/2026-05-23-krabka-operator-oauth-tls-trust-50b-design.md`].
 
 ## Slice 49d — Broker: OAUTHBEARER opaque-token introspection (2026-05-24)
 
@@ -2347,7 +2347,7 @@ Kafka client for ApiVersions.
   the shared trust bundle only); per-listener `[oauthbearer]` config
   (still rejected at config-load — future slice 49h).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-24-crabka-broker-oauth-introspection-49d-design.md`].
+  [`docs/superpowers/specs/2026-05-24-krabka-broker-oauth-introspection-49d-design.md`].
 
 ## Slice 50c — Operator: Listener OAuth introspection surface (2026-05-24)
 
@@ -2450,7 +2450,7 @@ Kafka client for ApiVersions.
   (ops bootstrap the IdP's `kafka-broker` client out-of-band — see the
   kind e2e for the manual `kcadm` flow).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-24-crabka-operator-oauth-introspection-50c-design.md`].
+  [`docs/superpowers/specs/2026-05-24-krabka-operator-oauth-introspection-50c-design.md`].
 
 ## Slice 49e — Broker: SASL re-authentication (KIP-368) (2026-05-24)
 
@@ -2520,7 +2520,7 @@ Kafka client for ApiVersions.
   - Client-side re-auth scheduler in Crabka's Kafka client crate
     (broker-only this slice).
 - Reference doc:
-  [`docs/superpowers/specs/2026-05-24-crabka-broker-sasl-reauth-49e-design.md`].
+  [`docs/superpowers/specs/2026-05-24-krabka-broker-sasl-reauth-49e-design.md`].
 
 ## Slice 50d — Operator + Broker: SASL session-lifetime cap (KIP-368 ceiling) (2026-05-24)
 
@@ -2573,7 +2573,7 @@ OAUTHBEARER sessions tighter than the token's natural `exp`.
   `#[serde(default)]` shim.
 - **E2E:** existing `kind-oauth` job's Kafka CR YAML extended with
   `maxSecondsWithoutReauthentication: 300`. No new job.
-- **Reference doc:** `[docs/superpowers/specs/2026-05-24-crabka-sasl-session-cap-50d-design.md]`.
+- **Reference doc:** `[docs/superpowers/specs/2026-05-24-krabka-sasl-session-cap-50d-design.md]`.
 - **Out of scope:** mechanism-agnostic `connections.max.reauth.ms`
   (would force re-auth on PLAIN/SCRAM); per-listener divergent caps
   (still rejected as `ConflictingOAuthListenerConfig`); client-side
@@ -2591,7 +2591,7 @@ introspection skips with a render-time rejection).
 
 - **Broker (`crates/security/`, `crates/broker/`):** `jsonpath-rust`
   promoted to a workspace dependency (T1 polish `3d49458`) and pulled
-  into `crabka-security`. New `[oauthbearer].custom_claim_check: String`
+  into `krabka-security`. New `[oauthbearer].custom_claim_check: String`
   TOML key (RFC 9535 JsonPath, compiled once at broker startup via
   `JsonPath::try_from`). New `[oauthbearer].valid_token_type: String`
   TOML key. All three validators (`UnsecuredJwsValidator`,
@@ -2640,7 +2640,7 @@ introspection skips with a render-time rejection).
   (`oauth_listener_custom_claim_check_empty_scope_rejected`). T2 doc-
   markdown clippy nits cleaned up in the T3 commit. Workspace fmt +
   clippy `-D warnings` + tests + CRD drift gate all green.
-- **Reference doc:** `[docs/superpowers/specs/2026-05-24-crabka-oauth-validation-policies-49g-design.md]`.
+- **Reference doc:** `[docs/superpowers/specs/2026-05-24-krabka-oauth-validation-policies-49g-design.md]`.
 - **Semantic divergence from Strimzi (acknowledged):** Crabka uses
   `jsonpath-rust` 1.0, which implements **RFC 9535** — NOT the
   Jayway dialect Strimzi inherits from its Java JsonPath dependency.
@@ -2720,7 +2720,7 @@ OAuth CRD + broker validators.
   round-trip (T2) + 4 reconciler unit (T3) + extended cross-listener
   divergence walk (T3) + 2 operator integration (T4). Workspace fmt +
   clippy `-D warnings` + tests + CRD drift gate all green.
-- **Reference doc:** `[docs/superpowers/specs/2026-05-24-crabka-oauth-claims-mapping-49h-design.md]`
+- **Reference doc:** `[docs/superpowers/specs/2026-05-24-krabka-oauth-claims-mapping-49h-design.md]`
 - **Semantic divergence from Strimzi:** `groupsClaim` is RFC 9535
   JsonPath (inherited from 49g's jsonpath-rust choice), not Strimzi's
   Jayway flavor. Operators porting Strimzi configs rewrite filter
@@ -2797,7 +2797,7 @@ OAuth CRD + broker JWKS refresher:
   divergence walk. Workspace fmt + clippy `-D warnings` + tests + CRD
   drift gate all green.
 - **Reference doc**:
-  `[docs/superpowers/specs/2026-05-24-crabka-oauth-jwks-refresher-policies-49i-design.md]`
+  `[docs/superpowers/specs/2026-05-24-krabka-oauth-jwks-refresher-policies-49i-design.md]`
 - **Architecture choice**: Approach A (fire-and-forget mpsc signal).
   Validator stays sync; refresher consumes signals in its
   `tokio::select!` loop. Rejected Approach B (async-await on
@@ -2849,14 +2849,14 @@ introspection metadata).
   `visible_to`, `all`) plus `delegation_token_by_hmac` for the
   Renew/Expire handlers and the SCRAM token-fallback path. New image
   type `DelegationToken` mirrors the record minus tombstone shape.
-- **`KafkaPrincipal` type:** New `crabka_security::KafkaPrincipal`
+- **`KafkaPrincipal` type:** New `krabka_security::KafkaPrincipal`
   (`principal_type` + `name`, `Display` as `User:alice`, `FromStr`
   round-trip) added in T1 so records and ACL resource names carry the
   canonical Kafka shape, not the broker's richer `Principal {
   auth_method, groups, .. }`. B3 polish lifted the conversion to a
   `Principal::to_kafka()` method to dedupe four handler call sites.
 - **Master key:** Required broker-wide HMAC-SHA-256 secret. Env wins:
-  `CRABKA_DELEGATION_TOKEN_SECRET_KEY` > `[delegation_token] secret_key`
+  `KRABKA_DELEGATION_TOKEN_SECRET_KEY` > `[delegation_token] secret_key`
   in broker TOML. Absent → all 4 handlers return
   `DELEGATION_TOKEN_AUTH_DISABLED` (err 61); SCRAM token-fallback
   short-circuits to "unknown user"; expiry sweep does not start.
@@ -2940,7 +2940,7 @@ introspection metadata).
   (`org.apache.kafka.server.log.remote.storage`) and its
   `LocalTieredStorage` / `InmemoryRemoteLogMetadataManager` test
   fixtures.
-- **New crate:** `crates/remote-storage` → `crabka-remote-storage`.
+- **New crate:** `crates/remote-storage` → `krabka-remote-storage`.
   Auto-included by the `members = ["crates/*"]` glob; deps are
   `bytes` + `thiserror` + `uuid` (dev: `tempfile`). No async runtime —
   the SPIs are synchronous, matching Kafka's blocking RSM/RLMM (the
@@ -2990,7 +2990,7 @@ introspection metadata).
   manager round-trip + unknown-partition + out-of-order delete (6 in
   `inmemory.rs`); copy→fetch (full + partial + per-index-type)→delete
   round-trips, missing-optional-index, isolation-by-id (8 in `local.rs`).
-- **Design:** `[docs/superpowers/specs/2026-05-25-crabka-tiered-storage-roadmap-design.md]`
+- **Design:** `[docs/superpowers/specs/2026-05-25-krabka-tiered-storage-roadmap-design.md]`
   (umbrella roadmap with the 48a–48g sub-slice breakdown).
 - **Out of scope (deferred to 48b+):** broker `RemoteLogManager` copy
   task; remote read path on `Fetch`; local-vs-remote retention split +
@@ -3049,13 +3049,13 @@ introspection metadata).
   cadence is `expiry - now - renew_before`, clamped to [1m, 24h].
   Finalizer (`crabka.io/delegation-token`) calls
   `expire_owned_tokens` on delete.
-- **`crabka-client-admin`:** four new `AdminClient` methods
+- **`krabka-client-admin`:** four new `AdminClient` methods
   (`create_delegation_token_as_owner`, `renew_delegation_token`,
   `expire_delegation_token`, `describe_delegation_tokens_owned_by`)
   in a new `delegation_tokens` module + matching `AdminClientLike`
   trait extension; `impl DelegationTokenAdmin for AdminClientHandle`
   adapter lives in the operator module so the trait stays
-  operator-local. `crabka-metadata` added as a dep (was previously
+  operator-local. `krabka-metadata` added as a dep (was previously
   leaf-only; doc comment in `users.rs` updated).
 - **CRD cascade:** ~2 fixture sites swept — most `KafkaUserSpec`
   constructors use `default()` for authentication, so the new
@@ -3077,7 +3077,7 @@ introspection metadata).
   follow-up commit lands the CRD-surface cleanup). Brings up a
   single-broker cluster; the `Kafka.spec.delegationToken.secretKeyRef`
   CRD field surfaces the master key cleanly — the operator wires
-  `CRABKA_DELEGATION_TOKEN_SECRET_KEY` into the broker pod via
+  `KRABKA_DELEGATION_TOKEN_SECRET_KEY` into the broker pod via
   `valueFrom.secretKeyRef` on the first SSA render of the
   StatefulSet, so the broker boots with the four delegation-token
   RPCs live and there is no race with the 30s SSA reconcile loop.
@@ -3134,8 +3134,8 @@ introspection metadata).
   `duration_suboptimal_units` × 5, `doc_lazy_continuation`,
   `doc_markdown` × 4, unnecessary raw-string hashes).
 - Reference docs:
-  [`docs/superpowers/specs/2026-05-25-crabka-kafkauser-delegation-tokens-51b-design.md`],
-  [`docs/superpowers/plans/2026-05-25-crabka-kafkauser-delegation-tokens-51b.md`].
+  [`docs/superpowers/specs/2026-05-25-krabka-kafkauser-delegation-tokens-51b-design.md`],
+  [`docs/superpowers/plans/2026-05-25-krabka-kafkauser-delegation-tokens-51b.md`].
 
 ## Slice 51c — Broker: super-user bypass on Renew/Expire delegation token (2026-05-25)
 
@@ -3232,7 +3232,7 @@ introspection metadata).
   all sealed segments copied + recorded Finished + fetchable; idempotent
   re-run copies nothing; empty exports no-op; leader-epoch fallback).
   Workspace lib counts: log 70, remote-storage 33, broker 426.
-- **Design:** `[docs/superpowers/specs/2026-05-25-crabka-tiered-storage-copy-path-48b-design.md]`.
+- **Design:** `[docs/superpowers/specs/2026-05-25-krabka-tiered-storage-copy-path-48b-design.md]`.
 - **Out of scope (48c+):** local-retention deletion +
   `local-log-start-offset`; remote read path on `Fetch` / `ListOffsets`;
   remote-retention + partition delete on `DeleteTopics`; topic-backed
@@ -3416,8 +3416,8 @@ introspection metadata).
   described above so the slice-13 shim removal lands cleanly in
   the pre-existing broker integration tests.
 - Reference docs:
-  [`docs/superpowers/specs/2026-05-26-crabka-opa-authorizer-53-design.md`],
-  [`docs/superpowers/plans/2026-05-26-crabka-opa-authorizer-53.md`].
+  [`docs/superpowers/specs/2026-05-26-krabka-opa-authorizer-53-design.md`],
+  [`docs/superpowers/plans/2026-05-26-krabka-opa-authorizer-53.md`].
 ## Slice 48c — Crabka core: Tiered storage local-retention split (2026-05-26)
 
 - **Goal:** Third sub-slice of KIP-405. Once a sealed segment is durably
@@ -3495,7 +3495,7 @@ introspection metadata).
   `InmemoryRemoteLogMetadataManager`, then drives the retention helper
   and asserts `local_log_start_offset()` advanced + sealed files are
   physically gone). Workspace lib counts: log 78, broker 451.
-- **Design:** `[docs/superpowers/specs/2026-05-26-crabka-tiered-storage-local-retention-48c-design.md]`.
+- **Design:** `[docs/superpowers/specs/2026-05-26-krabka-tiered-storage-local-retention-48c-design.md]`.
 - **Out of scope (48d+):** Remote read path on `Fetch` / `ListOffsets`
   — until 48d ships, fetching below `local_log_start_offset()` returns
   `OFFSET_OUT_OF_RANGE` just as if the data had been deleted by total
@@ -3543,7 +3543,7 @@ introspection metadata).
   - Pure-logic helpers (test-isolated): `parse_offset_index`,
     `position_for_relative_offset`, `parse_time_index`,
     `relative_offset_for_timestamp`, `end_position_for`,
-    `first_batch_at_or_after`. They mirror `crabka_log::index`'s
+    `first_batch_at_or_after`. They mirror `krabka_log::index`'s
     binary-search semantics against the same on-disk byte format the
     copy path (48b) wrote verbatim.
   - Every blocking RSM call (`fetch_index`, `fetch_log_segment`) is
@@ -3584,7 +3584,7 @@ introspection metadata).
   exercising `fetch_batch` happy path / unknown segment / unfinished
   segment, `earliest_offset` populated + empty, `offset_for_timestamp`
   match + past-last). Workspace lib counts: broker 490 (+14).
-- **Design:** `[docs/superpowers/specs/2026-05-26-crabka-tiered-storage-remote-read-48d-design.md]`.
+- **Design:** `[docs/superpowers/specs/2026-05-26-krabka-tiered-storage-remote-read-48d-design.md]`.
 - **Out of scope (48e+):** Read-committed aborted-transaction filtering
   on remote batches (sketched above; mechanical follow-up). Local
   timestamp index lookup on `ListOffsets` (the `-1` stub on the local
@@ -3653,7 +3653,7 @@ introspection metadata).
   retention happy path, retention no-op, and config with no retention
   settings being an early return; 2 cascade tests for full-partition
   delete and empty-partition no-op).
-- **Design:** `[docs/superpowers/specs/2026-05-26-crabka-tiered-storage-remote-retention-48e-design.md]`.
+- **Design:** `[docs/superpowers/specs/2026-05-26-krabka-tiered-storage-remote-retention-48e-design.md]`.
 - **Out of scope (48f+):** `TopicBasedRemoteLogMetadataManager`
   (production RLMM backed by an internal topic). Object-store RSM
   (S3/etc.). Operator CRD surface. Read-committed
@@ -3711,7 +3711,7 @@ introspection metadata).
   mount present when set, both absent when unset). Operator lib
   tests 507 passing.
 - **Design:**
-  `[docs/superpowers/specs/2026-05-26-crabka-tiered-storage-operator-surface-48g-design.md]`.
+  `[docs/superpowers/specs/2026-05-26-krabka-tiered-storage-operator-surface-48g-design.md]`.
 - **CRDs regenerated:** `deploy/crds/crabka.io_kafkas.yaml` gains
   `tieredStorage` schema; other CRDs unchanged.
 - **Workspace fmt + clippy `-D warnings` + operator lib tests** all
@@ -3935,7 +3935,7 @@ introspection metadata).
   `storage_dir = "..."` (local) or a nested `[remote_storage.s3]` table:
   ```toml
   [remote_storage.s3]
-  bucket = "crabka-prod"
+  bucket = "krabka-prod"
   region = "us-east-1"
   prefix = "cluster-a"             # optional
   endpoint = "http://minio:9000"   # optional, for non-AWS
@@ -4078,7 +4078,7 @@ introspection metadata).
      reject return `INVALID_REQUEST (42)` with an empty `api_keys` list.
   2. Surfacing the accepted (name, version) tuple as a labelled
      Prometheus counter so operators can graph which client libraries
-     are connecting (`crabka_broker_client_software_versions_total`,
+     are connecting (`krabka_broker_client_software_versions_total`,
      labels `software_name` + `software_version`).
 - **Helper.** `handlers::api_versions::is_valid_client_info(&str) -> bool`.
   Byte-scan implementation (no `regex` dependency) covering empty,
@@ -4112,8 +4112,8 @@ introspection metadata).
     - pre-v3 requests with empty name/version still succeed (the JVM
       contract — v0-2 don't carry the fields).
     - `/metrics` scrape shows three labelled series with the right
-      counts after driving `(name=crabka-it, version=1.0.0) × 2`,
-      `(name=crabka-it, version=1.0.1)`, and `(name=another-lib,
+      counts after driving `(name=krabka-it, version=1.0.0) × 2`,
+      `(name=krabka-it, version=1.0.1)`, and `(name=another-lib,
       version=9.9.9)`.
     - Rejected v3 handshakes do *not* add a labelled row.
     - Pre-v3 handshakes do *not* add an empty-string row.
@@ -4187,7 +4187,7 @@ introspection metadata).
     both `protocol_type` and `protocol_name` from the group's recorded
     state.
 - **README.** KIP-559 row flipped ⚠️ → ✅.
-- **Workspace fmt + `clippy -p crabka-broker --all-targets -- -D warnings`
+- **Workspace fmt + `clippy -p krabka-broker --all-targets -- -D warnings`
   + broker lib (565 tests) + new `kip559_l7_proxy_fields` (4 tests) +
   regression sweep of `unit` (21), `static_membership` (5),
   `admin_handlers` (6), `group_protocol_negotiation` (3)** — all green.
@@ -4270,7 +4270,7 @@ introspection metadata).
       further cursor.
 - **README.** New KIP-966 row added as ✅ in the protocol-features
   KIP table.
-- **Workspace fmt + `clippy -p crabka-broker --all-targets -- -D warnings`
+- **Workspace fmt + `clippy -p krabka-broker --all-targets -- -D warnings`
   + broker lib (581 tests) + new `describe_topic_partitions` (6 tests) +
   regression sweep of `unit`, `acl_handlers`, `admin_handlers`,
   `authorized_operations`, `client_software_versions`,
@@ -4342,7 +4342,7 @@ introspection metadata).
   both the feature matrix and the KIP table. The ⚠️ (not ✅)
   reflects that Crabka doesn't actually *ingest* the OTel
   `MetricsData` payload — only acknowledges the wire handshake.
-- **Workspace fmt + `clippy -p crabka-broker --all-targets -- -D warnings`
+- **Workspace fmt + `clippy -p krabka-broker --all-targets -- -D warnings`
   + broker lib (593 tests) + new `client_telemetry` (4 tests) + regression
   sweep of `unit`, `describe_topic_partitions`, `client_software_versions`** —
   all green.
@@ -4422,7 +4422,7 @@ introspection metadata).
     request for `partition = 5` on a single-partition topic
     surfaces error 3 on that row only; partition 0 still succeeds.
 - **README.** New KIP-664 ✅ row in the protocol-features KIP table.
-- **Workspace fmt + `clippy -p crabka-broker --all-targets -- -D warnings`
+- **Workspace fmt + `clippy -p krabka-broker --all-targets -- -D warnings`
   + broker lib (604 tests) + new `describe_producers` (5 tests) +
   regression sweep of `unit`, `describe_topic_partitions`,
   `acl_handlers`, `client_telemetry`** — all green.
@@ -4501,7 +4501,7 @@ introspection metadata).
     and 1 for the topic-grouping helper.
 - **README.** KIP-664 row updated to list all three admin APIs
   (`DescribeProducers` + `ListTransactions` + `DescribeTransactions`).
-- **Workspace fmt + `clippy -p crabka-broker --all-targets -- -D warnings`
+- **Workspace fmt + `clippy -p krabka-broker --all-targets -- -D warnings`
   + broker lib (613 tests) + new `list_describe_transactions` (5 tests) +
   regression sweep of `transactions` + `describe_producers`** — all green.
 - **Out of scope.**
@@ -4676,7 +4676,7 @@ introspection metadata).
     (`tests/api_versions_features.rs::v3_response_feature_surface_is_empty_with_unknown_epoch`)
     sends `ApiVersions` v3 and asserts `supported_features` empty,
     `finalized_features` empty, `finalized_features_epoch == -1`.
-- **Workspace fmt + `clippy -p crabka-broker --lib --tests -- -D warnings`
+- **Workspace fmt + `clippy -p krabka-broker --lib --tests -- -D warnings`
   + broker lib (api_versions row) + new `api_versions_features`
   (1 test)** — all green locally.
 - **Out of scope.**
@@ -4713,7 +4713,7 @@ introspection metadata).
     asserts the helper accumulates across calls and that zero-bumps
     are no-ops.
   - Extended `registry_has_broker_prefix_and_all_metrics` to bump
-    the new counter and assert `crabka_broker_messages_in_total`
+    the new counter and assert `krabka_broker_messages_in_total`
     appears in the encoded text.
   - Extended `metrics_endpoint_serves_openmetrics_and_counters_tick`
     integration test to assert
@@ -4721,9 +4721,9 @@ introspection metadata).
     call. End-to-end through `Broker::start` → producer → metrics
     scrape, validating the wire path lands in Prometheus exactly
     once per record (not per batch).
-- **`cargo test -p crabka-broker --lib metrics` (15 pass, +1 new)
-  + `cargo test -p crabka-broker --test metrics` (2 pass, with the
-  new assertion) + `cargo clippy -p crabka-broker --lib --tests -- -D warnings`
+- **`cargo test -p krabka-broker --lib metrics` (15 pass, +1 new)
+  + `cargo test -p krabka-broker --test metrics` (2 pass, with the
+  new assertion) + `cargo clippy -p krabka-broker --lib --tests -- -D warnings`
   + `cargo fmt --check`** — all green.
 - **Out of scope.**
   - Counting messages in legacy (v0/v1) MessageSet payloads. Doing
@@ -4809,7 +4809,7 @@ introspection metadata).
 - **New label set.** `SaslMechanismLabel { mechanism: String }`
   with cardinality bounded by `SaslMechanism::*` + 1. The
   `mechanism` value is the canonical Kafka wire name from
-  `crabka_security::SaslMechanism::wire_name` (`"PLAIN"`,
+  `krabka_security::SaslMechanism::wire_name` (`"PLAIN"`,
   `"SCRAM-SHA-256"`, `"SCRAM-SHA-512"`, `"OAUTHBEARER"`).
   `ILLEGAL_SASL_STATE` rejects (`SaslAuthenticate` without prior
   `SaslHandshake`) land under the `"Unknown"` sentinel so unknown
@@ -4833,8 +4833,8 @@ introspection metadata).
     that the `Unknown` sentinel is countable.
   - Extended `registry_has_broker_prefix_and_all_metrics` to
     bump PLAIN-success, SCRAM-512-failure, and Unknown-failure
-    and assert both `crabka_broker_successful_authentication_total`
-    and `crabka_broker_failed_authentication_total` appear in
+    and assert both `krabka_broker_successful_authentication_total`
+    and `krabka_broker_failed_authentication_total` appear in
     the encoded text.
   - 1 new end-to-end integration test
     `sasl_plain_authentication_metrics_tick_for_success_and_failure`
@@ -4845,10 +4845,10 @@ introspection metadata).
     `successful_authentication_total{mechanism="PLAIN"} 1` and
     `failed_authentication_total{mechanism="PLAIN"} 1`. Validates
     the full dispatch → counter → renderer chain.
-- **`cargo test -p crabka-broker --lib metrics` (17 pass, +1 new)
+- **`cargo test -p krabka-broker --lib metrics` (17 pass, +1 new)
   + `cargo test --test auth_handlers` (30 pass, +1 new) + `--test
   metrics --test raft_sasl` regression sweep (5 pass) + `cargo
-  clippy -p crabka-broker --lib --tests -- -D warnings` + `cargo
+  clippy -p krabka-broker --lib --tests -- -D warnings` + `cargo
   fmt --check`** — all green.
 - **Out of scope.**
   - Re-auth (KIP-368) accounting. The slice-49e re-auth path goes
@@ -4868,7 +4868,7 @@ introspection metadata).
   Kafka-faithful runtime `metadata.version` feature with range
   validation, a downgrade-safety floor, and per-RPC admission gates —
   not just an inert operator-rendered config key.
-- **`MetadataVersion` table (`crabka_metadata::metadata_version`).**
+- **`MetadataVersion` table (`krabka_metadata::metadata_version`).**
   Mirrors Kafka's `MetadataVersion` enum: `METADATA_VERSION_MIN = 7`
   (`3.3-IV3`, the KRaft-GA floor) .. `METADATA_VERSION_MAX = 25`
   (`4.0-IV3`), with `SCRAM_MIN_LEVEL = 11` and
@@ -4881,7 +4881,7 @@ introspection metadata).
   `V1FeatureLevel` (defaults to MAX). The operator (slice 28) now passes
   the resolved metadata.version (normalized to `major.minor`) to the
   format init container via `--release-version
-  "$CRABKA_METADATA_VERSION"` + a `CRABKA_METADATA_VERSION` env var.
+  "$KRABKA_METADATA_VERSION"` + a `KRABKA_METADATA_VERSION` env var.
 - **Fail-fast range guard.** The Raft state machine aborts on an
   out-of-range finalized metadata.version at every entry point —
   `recover` (startup), `apply_entry`, and `install_snapshot` — so a
@@ -4903,7 +4903,7 @@ introspection metadata).
   MIN with `MetadataVersionTooLow`, complementing the existing
   too-high / downgrade reasons; the resolved value is handed to the
   format init container as above.
-- **Tests.** `crabka_metadata` lib: 84 unit tests green (incl. the
+- **Tests.** `krabka_metadata` lib: 84 unit tests green (incl. the
   `MetadataVersion` table). Broker integration: `update_features` (1
   binary, all `metadata.version` finalize / floor / unsupported-level
   cases — adjusted for MIN=7/MAX=25, plus a new
@@ -4922,8 +4922,8 @@ introspection metadata).
   jvm_acceptance sweep should be re-run in CI** to fully re-baseline the
   raised MAX; it was not run in its entirety locally.
 - Reference docs:
-  [`docs/superpowers/specs/2026-05-29-crabka-metadata-version-enforcement-design.md`],
-  [`docs/superpowers/plans/2026-05-29-crabka-metadata-version-enforcement.md`].
+  [`docs/superpowers/specs/2026-05-29-krabka-metadata-version-enforcement-design.md`],
+  [`docs/superpowers/plans/2026-05-29-krabka-metadata-version-enforcement.md`].
 
 ## Slice 64e — KIP-848 JVM-client engagement (2026-05-29)
 
@@ -4995,8 +4995,8 @@ introspection metadata).
   `three_node_*`, `*_raft_replication`) reproduce identically on `main` and are
   unrelated to this slice.
 - Reference docs:
-  [`docs/superpowers/specs/2026-05-30-crabka-kip-848-unified-coordinator-64d-b-design.md`],
-  [`docs/superpowers/plans/2026-05-30-crabka-kip-848-unified-coordinator-64d-b.md`].
+  [`docs/superpowers/specs/2026-05-30-krabka-kip-848-unified-coordinator-64d-b-design.md`],
+  [`docs/superpowers/plans/2026-05-30-krabka-kip-848-unified-coordinator-64d-b.md`].
 ## Slice — Generalized feature-versioning framework + group.version (KIP-584/848/1022) (2026-05-30)
 
 - **Goal.** Generalize the single-feature (`metadata.version`) KIP-584
@@ -5004,7 +5004,7 @@ introspection metadata).
   it with full faithful gating. Spec:
   `docs/superpowers/specs/2026-05-30-feature-versioning-framework-group-txn-design.md`;
   plan: `docs/superpowers/plans/2026-05-30-feature-framework-and-group-version.md`.
-- **`Feature` trait + registry (`crabka_metadata::feature`).** Each feature
+- **`Feature` trait + registry (`krabka_metadata::feature`).** Each feature
   owns its versioning facts — `supported_range`, `default_level(bootstrap_mv)`,
   `min_required_floor(image)`, KIP-1022 `dependencies(level)`, optional
   `level_name`. A static `feature_registry()` is the single source of truth
@@ -5025,7 +5025,7 @@ introspection metadata).
   gated on a finalized `group.version >= 1` with **absence treated as
   disabled** (reject with `UNSUPPORTED_VERSION` → classic fallback, matching
   Kafka). Classic group RPCs are never gated.
-- **Multi-feature bootstrap.** A shared `crabka_metadata::bootstrap_feature_records`
+- **Multi-feature bootstrap.** A shared `krabka_metadata::bootstrap_feature_records`
   seeds one `V1FeatureLevel` per registered feature at its per-release default;
   used by both `crabka format` and the broker's standalone self-bootstrap, so a
   freshly-formatted *and* a standalone/in-process broker finalize
@@ -5047,7 +5047,7 @@ introspection metadata).
   flipped to ✅ once live bidirectional classic↔next-gen group migration was
   wired and JVM-validated (see the KIP-848 live-migration slice below); this
   slice closed only the feature-finalization/gating gap.
-- **Tests.** `crabka_metadata` feature/registry/bootstrap unit tests; broker
+- **Tests.** `krabka_metadata` feature/registry/bootstrap unit tests; broker
   `features`/`update_features` unit tests; generalized range-guard predicate
   test incl. the forward-compat ignore-unknown case; new
   `crates/broker/tests/group_version.rs` (next-gen accepted at gv=1; rejected
@@ -5063,7 +5063,7 @@ introspection metadata).
   `__transaction_state` record format. Plan:
   `docs/superpowers/plans/2026-05-30-transaction-version-downlevel.md`.
 - **Feature registration.** `transaction.version` (range `0..=2`) registered in
-  the `crabka_metadata` feature registry; per-release default jumps `0 -> 2` at
+  the `krabka_metadata` feature registry; per-release default jumps `0 -> 2` at
   metadata.version `4.0-IV2` (level 24), empty `dependencies()` (both pinned
   empirically vs cp-kafka 4.0). A `TxnVersion` resolver (`Classic`/`Flexible`/
   `Verified`) reads the finalized level per request.
@@ -5233,8 +5233,8 @@ introspection metadata).
   controller failover logic is covered by in-process unit tests. `PartitionRecord` apiVersion
   moved v0→v1 (JVM-faithful; KIP-858 emits v1).
 - Design + plan docs:
-  `docs/superpowers/specs/2026-06-03-crabka-kip-112-jbod-disk-failure-design.md`,
-  `docs/superpowers/plans/2026-06-03-crabka-kip-112-jbod-disk-failure.md`.
+  `docs/superpowers/specs/2026-06-03-krabka-kip-112-jbod-disk-failure-design.md`,
+  `docs/superpowers/plans/2026-06-03-krabka-kip-112-jbod-disk-failure.md`.
 
 ## Slice — KIP-320 log-truncation detection (complete) (2026-06-02)
 
@@ -5297,7 +5297,7 @@ introspection metadata).
   so the fencing was dead code. The consumer also exposed no single
   `group_metadata()` accessor.
 - **Client wiring.**
-  - `crabka-client-consumer` gained a public `ConsumerGroupMetadata`
+  - `krabka-client-consumer` gained a public `ConsumerGroupMetadata`
     `{ group_id, generation_id, member_id, group_instance_id }` (mirrors the
     JVM type) plus `Consumer::group_metadata()`. `group_instance_id` is always
     `None` — the consumer has no static-membership support yet.
@@ -5367,7 +5367,7 @@ introspection metadata).
   transaction.version=2, share/streams=0); `downgrade --feature
   transaction.version=1` then `upgrade --feature transaction.version=2`
   round-trip through `UpdateFeatures` (epoch advances 2→3→4). All green.
-- **Tests.** `crabka_metadata` feature unit tests (override resolution, level-0
+- **Tests.** `krabka_metadata` feature unit tests (override resolution, level-0
   omission, unlisted-follows-`bootstrap_mv`, dependency check); `format.rs` unit
   tests (`--feature` parse + ambiguity/unknown/out-of-range rejection +
   `bootstrap_mv` precedence); new `crates/broker/tests/format_features.rs`
@@ -5384,7 +5384,7 @@ introspection metadata).
 - Controller and broker listeners now enforce `DescribeCluster.endpoint_type`:
   controller endpoints serve `CONTROLLERS`, broker endpoints serve `BROKERS`,
   and the wrong surface returns `MISMATCHED_ENDPOINT_TYPE` (114).
-- `crabka-client-admin` exposes controller-bootstrap constructors that discover
+- `krabka-client-admin` exposes controller-bootstrap constructors that discover
   the active voter through `DescribeCluster`, preserve security/options across
   reconnects, and rebootstrap through the configured controller addresses.
 - The controller listener advertises and dispatches KIP-919's supported Admin
@@ -5453,7 +5453,7 @@ introspection metadata).
   resolving each data-partition leader, probing remote leaders without a
   payload, and pruning stale ownership/group/topic series. A checked-in KEDA
   Prometheus `ScaledObject` consumes the resulting
-  `crabka_broker_share_group_backlog` gauge.
+  `krabka_broker_share_group_backlog` gauge.
 - Topic subscription filters are server-enforced SQL boolean expressions.
   Registry-decoded Avro and Protobuf rows are bridged through Arrow and
   evaluated by DataFusion with nested/repeated fields, enum symbols, schema

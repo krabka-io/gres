@@ -1,11 +1,11 @@
 //! Transaction administration.
 
-use crabka_protocol::owned::{
+use krabka_protocol::owned::{
     find_coordinator_request::FindCoordinatorRequest,
     find_coordinator_response::FindCoordinatorResponse,
     init_producer_id_request::InitProducerIdRequest,
 };
-use crabka_units::convert::TimeExt as _;
+use krabka_units::convert::TimeExt as _;
 
 use crate::{AdminClient, AdminError, kafka_error_name};
 
@@ -116,7 +116,7 @@ impl AdminClient {
 
 #[cfg(test)]
 mod tests {
-    use crabka_protocol::owned::find_coordinator_response::Coordinator;
+    use krabka_protocol::owned::find_coordinator_response::Coordinator;
 
     use super::*;
 

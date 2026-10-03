@@ -72,7 +72,7 @@ interval, or commit interval.
 The demo Stream role exposes:
 
 - CLI: `--streams-join-retry-backoff-ms`
-- environment: `CRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS`
+- environment: `KRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS`
 
 Precedence is CLI over environment over the typed 200-ms default. Parsing uses
 a nonzero integer millisecond value, then constructs
@@ -83,7 +83,7 @@ early role-specific error. `run_stream` accepts the typed value and forwards it
 to `StreamsApp`.
 
 Only the `demo-stream` Compose service receives
-`CRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS`, with `${...:-200}` as its
+`KRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS`, with `${...:-200}` as its
 deployment default.
 
 There is no CRD field because the operator does not own or render a Client

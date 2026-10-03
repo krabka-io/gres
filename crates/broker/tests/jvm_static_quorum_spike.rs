@@ -15,7 +15,7 @@
 //!
 //! Run:
 //! ```text
-//! cargo test -p crabka-broker --test jvm_static_quorum_spike -- --ignored --nocapture
+//! cargo test -p krabka-broker --test jvm_static_quorum_spike -- --ignored --nocapture
 //! ```
 //!
 //! ## Topology
@@ -33,14 +33,14 @@ use std::{net::SocketAddr, process::Command, time::Duration};
 
 use assert2::check;
 use base64::Engine as _;
-use crabka_broker::{BootstrapMode, Broker, BrokerConfig, BrokerHandle};
+use krabka_broker::{BootstrapMode, Broker, BrokerConfig, BrokerHandle};
 use tempfile::TempDir;
 use uuid::Uuid;
 
 mod support;
 
 const KAFKA_IMAGE: &str = "mirror.gcr.io/apache/kafka:4.0.0";
-const CONTAINER: &str = "crabka-kip595-slice5-spike";
+const CONTAINER: &str = "krabka-kip595-slice5-spike";
 
 /// Kafka encodes a 16-byte UUID as URL-safe base64 with no padding. The JVM
 /// `--cluster-id` string and Crabka's `uuid::Uuid` must wrap the *same* 16
@@ -53,7 +53,7 @@ fn kafka_cluster_id_string(id: Uuid) -> String {
 /// Builds a Crabka controller `BrokerConfig` for voter `i` in the shared static
 /// 3-voter set, with the shared cluster id. `i` is 0-indexed, and the id is
 /// `i+1`.
-fn crabka_controller_config(
+fn krabka_controller_config(
     i: usize,
     own_client_addr: SocketAddr,
     own_controller_addr: SocketAddr,
@@ -63,7 +63,7 @@ fn crabka_controller_config(
 ) -> BrokerConfig {
     let mut cfg = BrokerConfig::for_tests(log_dir.to_path_buf());
     cfg.broker_id = i32::try_from(i + 1).unwrap();
-    cfg.node_id = crabka_broker::NodeId(u64::try_from(i + 1).unwrap());
+    cfg.node_id = krabka_broker::NodeId(u64::try_from(i + 1).unwrap());
     cfg.listen_addr = own_client_addr;
     cfg.advertised_listener = own_client_addr.to_string();
     cfg.controller_listen_addr = own_controller_addr;
@@ -71,7 +71,7 @@ fn crabka_controller_config(
     cfg.bootstrap_mode = BootstrapMode::Bootstrap;
     cfg.controller_quorum_voters = voters
         .iter()
-        .map(|(id, a)| (crabka_broker::NodeId(*id), a.to_string()))
+        .map(|(id, a)| (krabka_broker::NodeId(*id), a.to_string()))
         .collect();
     cfg.auto_join = false;
     cfg.bootstrap_servers = vec![];
@@ -89,7 +89,7 @@ fn docker_rm(name: &str) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "requires Docker + a published controller port (throwaway spike)"]
-async fn static_mixed_jvm_crabka_quorum() {
+async fn static_mixed_jvm_krabka_quorum() {
     support::init_tracing();
     docker_rm(CONTAINER);
 
@@ -108,12 +108,12 @@ async fn static_mixed_jvm_crabka_quorum() {
     // host.docker.internal. The pre-bound addrs are 127.0.0.1:<p>; rewrite to
     // 0.0.0.0:<p> for the bind, but keep 127.0.0.1 in the voter set Crabka uses
     // to dial *its own* peers (loopback is reachable in-process).
-    let crabka_ctrl_1: SocketAddr = format!("0.0.0.0:{p1}").parse().unwrap();
-    let crabka_ctrl_2: SocketAddr = format!("0.0.0.0:{p2}").parse().unwrap();
+    let krabka_ctrl_1: SocketAddr = format!("0.0.0.0:{p1}").parse().unwrap();
+    let krabka_ctrl_2: SocketAddr = format!("0.0.0.0:{p2}").parse().unwrap();
 
     // Voter set as seen FROM the Crabka side: dial peers on loopback; the JVM
     // (id 3) is reachable at its published host port.
-    let crabka_voters: Vec<(u64, SocketAddr)> = vec![
+    let krabka_voters: Vec<(u64, SocketAddr)> = vec![
         (1, format!("127.0.0.1:{p1}").parse().unwrap()),
         (2, format!("127.0.0.1:{p2}").parse().unwrap()),
         (3, format!("127.0.0.1:{p3}").parse().unwrap()),
@@ -122,19 +122,19 @@ async fn static_mixed_jvm_crabka_quorum() {
     // ── start the 2 Crabka controllers ─────────────────────────────────────
     let dir1 = TempDir::new().unwrap();
     let dir2 = TempDir::new().unwrap();
-    let cfg1 = crabka_controller_config(
+    let cfg1 = krabka_controller_config(
         0,
         client_addrs[0],
-        crabka_ctrl_1,
-        &crabka_voters,
+        krabka_ctrl_1,
+        &krabka_voters,
         cluster_id,
         dir1.path(),
     );
-    let cfg2 = crabka_controller_config(
+    let cfg2 = krabka_controller_config(
         1,
         client_addrs[1],
-        crabka_ctrl_2,
-        &crabka_voters,
+        krabka_ctrl_2,
+        &krabka_voters,
         cluster_id,
         dir2.path(),
     );
@@ -309,7 +309,7 @@ async fn static_mixed_jvm_crabka_quorum() {
     );
 }
 
-const CONTESTED_CONTAINER: &str = "crabka-kip996-contested";
+const CONTESTED_CONTAINER: &str = "krabka-kip996-contested";
 
 /// KIP-996 CONTESTED-ELECTION ACCEPTANCE TEST, Docker-gated and `#[ignore]`.
 ///
@@ -328,12 +328,12 @@ const CONTESTED_CONTAINER: &str = "crabka-kip996-contested";
 ///
 /// Run:
 /// ```text
-/// cargo test -p crabka-broker --test jvm_static_quorum_spike \
-///   contested_election_crabka_counts_jvm_prevote -- --ignored --nocapture
+/// cargo test -p krabka-broker --test jvm_static_quorum_spike \
+///   contested_election_krabka_counts_jvm_prevote -- --ignored --nocapture
 /// ```
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "requires Docker + a published controller port"]
-async fn contested_election_crabka_counts_jvm_prevote() {
+async fn contested_election_krabka_counts_jvm_prevote() {
     support::init_tracing();
     docker_rm(CONTESTED_CONTAINER);
 
@@ -344,9 +344,9 @@ async fn contested_election_crabka_counts_jvm_prevote() {
     let p1 = controller_addrs[0].port();
     let p2 = controller_addrs[1].port();
     let p3 = controller_addrs[2].port();
-    let crabka_ctrl_1: SocketAddr = format!("0.0.0.0:{p1}").parse().unwrap();
-    let crabka_ctrl_2: SocketAddr = format!("0.0.0.0:{p2}").parse().unwrap();
-    let crabka_voters: Vec<(u64, SocketAddr)> = vec![
+    let krabka_ctrl_1: SocketAddr = format!("0.0.0.0:{p1}").parse().unwrap();
+    let krabka_ctrl_2: SocketAddr = format!("0.0.0.0:{p2}").parse().unwrap();
+    let krabka_voters: Vec<(u64, SocketAddr)> = vec![
         (1, format!("127.0.0.1:{p1}").parse().unwrap()),
         (2, format!("127.0.0.1:{p2}").parse().unwrap()),
         (3, format!("127.0.0.1:{p3}").parse().unwrap()),
@@ -357,24 +357,24 @@ async fn contested_election_crabka_counts_jvm_prevote() {
     // the dead leader and promote itself to Prospective (then grant the survivor).
     let dir1 = TempDir::new().unwrap();
     let dir2 = TempDir::new().unwrap();
-    let mut cfg1 = crabka_controller_config(
+    let mut cfg1 = krabka_controller_config(
         0,
         client_addrs[0],
-        crabka_ctrl_1,
-        &crabka_voters,
+        krabka_ctrl_1,
+        &krabka_voters,
         cluster_id,
         dir1.path(),
     );
-    let mut cfg2 = crabka_controller_config(
+    let mut cfg2 = krabka_controller_config(
         1,
         client_addrs[1],
-        crabka_ctrl_2,
-        &crabka_voters,
+        krabka_ctrl_2,
+        &krabka_voters,
         cluster_id,
         dir2.path(),
     );
-    cfg1.controller_election_timeout = crabka_units::secs(2);
-    cfg2.controller_election_timeout = crabka_units::secs(2);
+    cfg1.controller_election_timeout = krabka_units::secs(2);
+    cfg2.controller_election_timeout = krabka_units::secs(2);
 
     let (c1, c2): (BrokerHandle, BrokerHandle) = {
         let s1 = tokio::spawn(Broker::start(cfg1));
@@ -431,7 +431,7 @@ async fn contested_election_crabka_counts_jvm_prevote() {
     while std::time::Instant::now() < deadline {
         let l1 = c1.controller_leader_id();
         let l2 = c2.controller_leader_id();
-        if l1.is_some() && l1 == l2 && matches!(l1, Some(crabka_broker::NodeId(1 | 2))) {
+        if l1.is_some() && l1 == l2 && matches!(l1, Some(krabka_broker::NodeId(1 | 2))) {
             leader0 = l1.map(|n| n.0);
             break;
         }
@@ -451,7 +451,7 @@ async fn contested_election_crabka_counts_jvm_prevote() {
     // is a functional, caught-up voter, the lone survivor (1 of 3) has no
     // reachable majority and stays stuck forever. So gate the kill on the JVM
     // log showing BOTH a role transition (Follower/Leader) AND high-water-mark
-    // catch-up — the same join signals the sibling `static_mixed_jvm_crabka_quorum`
+    // catch-up — the same join signals the sibling `static_mixed_jvm_krabka_quorum`
     // test relies on. Generous deadline to tolerate a slow JVM boot.
     let join_deadline = std::time::Instant::now() + Duration::from_secs(70);
     let mut jvm_joined = false;
@@ -554,7 +554,7 @@ async fn contested_election_crabka_counts_jvm_prevote() {
                 qs.current_term,
             );
         }
-        if qs.current_leader == Some(crabka_broker::NodeId(survivor_id)) && qs.current_term > epoch0
+        if qs.current_leader == Some(krabka_broker::NodeId(survivor_id)) && qs.current_term > epoch0
         {
             recovered = true;
             break;

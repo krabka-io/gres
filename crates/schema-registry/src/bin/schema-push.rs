@@ -6,7 +6,7 @@ use clap::Parser;
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "crabka-schema-push",
+    name = "krabka-schema-push",
     version,
     about = "Import a compiled protobuf FileDescriptorSet into Crabka Schema Registry"
 )]
@@ -14,7 +14,7 @@ struct Args {
     /// Schema Registry base URL.
     #[arg(
         long,
-        env = "CRABKA_SCHEMA_REGISTRY_URL",
+        env = "KRABKA_SCHEMA_REGISTRY_URL",
         default_value = "http://localhost:8081"
     )]
     registry_url: String,

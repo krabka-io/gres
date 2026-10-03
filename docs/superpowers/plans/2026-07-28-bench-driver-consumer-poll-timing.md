@@ -31,7 +31,7 @@ sites. Reuse the existing shell `envsubst` deployment path.
 - Do not add a policy wrapper: the values have no cross-field invariant.
 - Do not expose sampling or producer final-drain timing in this slice.
 - Add no CRD; the benchmark launcher and Job template own this binary.
-- `crabka-bench-driver` already directly depends on the workspace-pinned
+- `krabka-bench-driver` already directly depends on the workspace-pinned
   `refined_type`; do not change dependencies or `Cargo.lock`.
 - Run every Cargo command with
   `CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0`; use `--locked` for
@@ -143,7 +143,7 @@ Add a child-process test that avoids process-global environment races:
 ```rust
 #[test]
 fn consumer_poll_timing_reads_environment_and_prefers_cli() {
-    const CHILD: &str = "CRABKA_BENCH_CONSUMER_POLL_TIMING_CHILD";
+    const CHILD: &str = "KRABKA_BENCH_CONSUMER_POLL_TIMING_CHILD";
 
     if std::env::var_os(CHILD).is_none() {
         let status = std::process::Command::new(
@@ -195,7 +195,7 @@ fn consumer_poll_timing_reads_environment_and_prefers_cli() {
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-bench-driver consumer_poll --locked
+  cargo test -p krabka-bench-driver consumer_poll --locked
 ```
 
 Expected: compilation fails because the newtype, defaults, and CLI fields do
@@ -328,7 +328,7 @@ tokio::time::sleep(poll_error_backoff.duration())
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-bench-driver consumer_poll --locked
+  cargo test -p krabka-bench-driver consumer_poll --locked
 ```
 
 Expected: all focused type, default, parser, and precedence tests pass.
@@ -355,13 +355,13 @@ old literals are absent; and the focused search shows both complete flows.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-bench-driver --all-targets --locked
+  cargo test -p krabka-bench-driver --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-bench-driver --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-bench-driver --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -p crabka-bench-driver --bin crabka-bench-driver --locked -- --help
-test "$(target/debug/crabka-bench-driver --help | rg -c -- '--consumer-poll-timeout-ms')" -eq 1
-test "$(target/debug/crabka-bench-driver --help | rg -c -- '--consumer-poll-error-backoff-ms')" -eq 1
+  cargo run -p krabka-bench-driver --bin krabka-bench-driver --locked -- --help
+test "$(target/debug/krabka-bench-driver --help | rg -c -- '--consumer-poll-timeout-ms')" -eq 1
+test "$(target/debug/krabka-bench-driver --help | rg -c -- '--consumer-poll-error-backoff-ms')" -eq 1
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 git diff --check
 git diff -- Cargo.lock
@@ -475,13 +475,13 @@ Append `## Bench Driver Consumer Poll Timing` with:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-bench-driver --all-targets --locked
+  cargo test -p krabka-bench-driver --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-bench-driver --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-bench-driver --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 bash -n bench/scripts/run-scenario.sh
-test "$(target/debug/crabka-bench-driver --help | rg -c -- '--consumer-poll-timeout-ms')" -eq 1
-test "$(target/debug/crabka-bench-driver --help | rg -c -- '--consumer-poll-error-backoff-ms')" -eq 1
+test "$(target/debug/krabka-bench-driver --help | rg -c -- '--consumer-poll-timeout-ms')" -eq 1
+test "$(target/debug/krabka-bench-driver --help | rg -c -- '--consumer-poll-error-backoff-ms')" -eq 1
 BENCH_CONSUMER_POLL_TIMEOUT_MS=21 \
 BENCH_CONSUMER_POLL_ERROR_BACKOFF_MS=22 \
   envsubst '$BENCH_CONSUMER_POLL_TIMEOUT_MS $BENCH_CONSUMER_POLL_ERROR_BACKOFF_MS' \

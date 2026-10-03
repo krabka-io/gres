@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-use crabka_metadata::MetadataRecord;
+use krabka_metadata::MetadataRecord;
 use serde_wincode::SerdeCompat;
 use wincode::Deserialize;
 
@@ -55,7 +55,7 @@ pub fn read_directory_id(log_dir: &Path) -> Result<uuid::Uuid, BrokerError> {
 /// authoritative. The function returns an empty set when the records hold no
 /// `V1Voters` record, which is the joiner path.
 #[must_use]
-pub fn initial_voters(records: &[MetadataRecord]) -> crabka_metadata::VoterSet {
+pub fn initial_voters(records: &[MetadataRecord]) -> krabka_metadata::VoterSet {
     records
         .iter()
         .rev()
@@ -110,8 +110,8 @@ pub fn load_bootstrap_records(log_dir: &Path) -> Result<Vec<MetadataRecord>, Bro
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_metadata::ScramCredentialRecord;
-    use crabka_security::SaslMechanism;
+    use krabka_metadata::ScramCredentialRecord;
+    use krabka_security::SaslMechanism;
     use serde_wincode::SerdeCompat;
     use wincode::Serialize;
 
@@ -164,23 +164,23 @@ mod tests {
 
     #[test]
     fn initial_voters_roundtrips_seeded_set() {
-        use crabka_metadata::{Voter, VoterEndpoint, VoterSet, VotersRecord};
+        use krabka_metadata::{Voter, VoterEndpoint, VoterSet, VotersRecord};
         let dir = tempfile::tempdir().unwrap();
         let seeded = VoterSet::from_voters([Voter {
-            id: crabka_audit::NodeId(7),
+            id: krabka_audit::NodeId(7),
             directory_id: uuid::Uuid::from_u128(7),
             endpoints: vec![VoterEndpoint {
                 name: "CONTROLLER".into(),
                 host: "h7".into(),
                 port: 9093,
             }],
-            kraft_version: crabka_metadata::KRaftVersionRange::default(),
+            kraft_version: krabka_metadata::KRaftVersionRange::default(),
         }]);
         // Frame the records exactly like `crabka format` does.
         let mut bytes = Vec::new();
         write_frame(
             &mut bytes,
-            &MetadataRecord::V1KRaftVersion(crabka_metadata::KRaftVersionRecord {
+            &MetadataRecord::V1KRaftVersion(krabka_metadata::KRaftVersionRecord {
                 kraft_version: 1,
             }),
         );
@@ -200,7 +200,7 @@ mod tests {
     #[test]
     fn initial_voters_empty_when_no_voters_record() {
         let recs = vec![MetadataRecord::V1KRaftVersion(
-            crabka_metadata::KRaftVersionRecord { kraft_version: 1 },
+            krabka_metadata::KRaftVersionRecord { kraft_version: 1 },
         )];
         assert!(initial_voters(&recs).is_empty());
     }

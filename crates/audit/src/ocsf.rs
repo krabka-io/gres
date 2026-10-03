@@ -2,7 +2,7 @@
 //!
 //! OCSF is the Open Cybersecurity Schema Framework.
 
-use crabka_ids::NodeId;
+use krabka_ids::NodeId;
 use serde_json::json;
 
 use crate::{
@@ -224,7 +224,7 @@ mod tests {
     fn product() -> ProductInfo {
         ProductInfo {
             vendor_name: "Crabka".into(),
-            name: "crabka-broker".into(),
+            name: "krabka-broker".into(),
             version: "0.3.7".into(),
         }
     }

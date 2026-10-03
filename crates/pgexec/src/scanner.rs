@@ -2,10 +2,10 @@
 
 use std::{cmp::Ordering, ops::RangeBounds};
 
-use crabka_pgcatalog::Table;
-use crabka_pgmvcc::visibility::Snapshot;
-use crabka_pgtypes::Datum;
-use crabka_units::convert::ByteSizeExt as _;
+use krabka_pgcatalog::Table;
+use krabka_pgmvcc::visibility::Snapshot;
+use krabka_pgtypes::Datum;
+use krabka_units::convert::ByteSizeExt as _;
 use tracing::Instrument as _;
 
 use crate::ExecError;
@@ -77,7 +77,7 @@ pub struct ColumnPredicate {
     /// Comparison operator.
     pub op: PredicateOp,
     /// Literal value to compare against.
-    pub value: crabka_pgtypes::Datum,
+    pub value: krabka_pgtypes::Datum,
 }
 
 /// Supported predicate comparison operators.
@@ -92,25 +92,25 @@ pub enum PredicateOp {
 
 impl PredicateOp {
     #[must_use]
-    pub const fn from_binary(op: crabka_pgparser::ast::BinaryOp) -> Option<Self> {
+    pub const fn from_binary(op: krabka_pgparser::ast::BinaryOp) -> Option<Self> {
         match op {
-            crabka_pgparser::ast::BinaryOp::Eq => Some(Self::Eq),
-            crabka_pgparser::ast::BinaryOp::Lt => Some(Self::Lt),
-            crabka_pgparser::ast::BinaryOp::Le => Some(Self::Le),
-            crabka_pgparser::ast::BinaryOp::Gt => Some(Self::Gt),
-            crabka_pgparser::ast::BinaryOp::Ge => Some(Self::Ge),
+            krabka_pgparser::ast::BinaryOp::Eq => Some(Self::Eq),
+            krabka_pgparser::ast::BinaryOp::Lt => Some(Self::Lt),
+            krabka_pgparser::ast::BinaryOp::Le => Some(Self::Le),
+            krabka_pgparser::ast::BinaryOp::Gt => Some(Self::Gt),
+            krabka_pgparser::ast::BinaryOp::Ge => Some(Self::Ge),
             _ => None,
         }
     }
 
     #[must_use]
-    pub const fn from_reversed_binary(op: crabka_pgparser::ast::BinaryOp) -> Option<Self> {
+    pub const fn from_reversed_binary(op: krabka_pgparser::ast::BinaryOp) -> Option<Self> {
         match op {
-            crabka_pgparser::ast::BinaryOp::Eq => Some(Self::Eq),
-            crabka_pgparser::ast::BinaryOp::Lt => Some(Self::Gt),
-            crabka_pgparser::ast::BinaryOp::Le => Some(Self::Ge),
-            crabka_pgparser::ast::BinaryOp::Gt => Some(Self::Lt),
-            crabka_pgparser::ast::BinaryOp::Ge => Some(Self::Le),
+            krabka_pgparser::ast::BinaryOp::Eq => Some(Self::Eq),
+            krabka_pgparser::ast::BinaryOp::Lt => Some(Self::Gt),
+            krabka_pgparser::ast::BinaryOp::Le => Some(Self::Ge),
+            krabka_pgparser::ast::BinaryOp::Gt => Some(Self::Lt),
+            krabka_pgparser::ast::BinaryOp::Ge => Some(Self::Le),
             _ => None,
         }
     }
@@ -196,15 +196,15 @@ pub struct ScannedRow {
     /// Deleting command ID of the visible tuple version, or zero when live.
     pub cmax: u32,
     /// Decoded tuple payload.
-    pub row: Vec<crabka_pgtypes::Datum>,
+    pub row: Vec<krabka_pgtypes::Datum>,
 }
 
 /// Inputs for one table scan.
 pub struct ScanRequest<'a> {
     /// This range's local MVCC/clog store.
-    pub local: &'a dyn crabka_pgkv::Kv,
+    pub local: &'a dyn krabka_pgkv::Kv,
     /// Range-0 global clog store.
-    pub global: &'a dyn crabka_pgkv::Kv,
+    pub global: &'a dyn krabka_pgkv::Kv,
     /// Caller global visibility snapshot.
     pub global_snapshot: &'a Snapshot,
     /// Caller local visibility snapshot.
@@ -653,7 +653,7 @@ pub fn execute_materialized_join_with_policy(
                     .collect::<Result<Vec<_>, _>>()?
             };
             rows.push(JoinRow {
-                tuple: crabka_pgmvcc::version::encode_tuple(0, 0, &projected),
+                tuple: krabka_pgmvcc::version::encode_tuple(0, 0, &projected),
             });
         }
     }
@@ -668,9 +668,9 @@ pub fn execute_materialized_join_with_policy(
 fn decode_join_input(
     rows: &[JoinRow],
     predicate: &PredicatePushdown,
-) -> Result<Vec<Vec<crabka_pgtypes::Datum>>, ExecError> {
+) -> Result<Vec<Vec<krabka_pgtypes::Datum>>, ExecError> {
     rows.iter()
-        .map(|row| crabka_pgmvcc::version::decode_tuple(&row.tuple).map(|(_, _, row)| row))
+        .map(|row| krabka_pgmvcc::version::decode_tuple(&row.tuple).map(|(_, _, row)| row))
         .filter_map(|row| match row {
             Ok(row) if row_satisfies_predicate(&row, predicate) => Some(Ok(row)),
             Ok(_) => None,
@@ -680,8 +680,8 @@ fn decode_join_input(
 }
 
 fn join_keys_equal(
-    left: &[crabka_pgtypes::Datum],
-    right: &[crabka_pgtypes::Datum],
+    left: &[krabka_pgtypes::Datum],
+    right: &[krabka_pgtypes::Datum],
     left_keys: &[usize],
     right_keys: &[usize],
 ) -> Result<bool, ExecError> {
@@ -692,8 +692,8 @@ fn join_keys_equal(
         let right = right.get(right_key).ok_or_else(|| {
             ExecError::Unsupported(format!("right join key {right_key} is outside the row"))
         })?;
-        if matches!(left, crabka_pgtypes::Datum::Null)
-            || matches!(right, crabka_pgtypes::Datum::Null)
+        if matches!(left, krabka_pgtypes::Datum::Null)
+            || matches!(right, krabka_pgtypes::Datum::Null)
             || left != right
         {
             return Ok(false);
@@ -744,16 +744,16 @@ pub trait RangeScanner: Send + Sync + 'static {
 
     fn join_strategy(
         &self,
-        _left: &crabka_pgcatalog::Table,
-        _right: &crabka_pgcatalog::Table,
+        _left: &krabka_pgcatalog::Table,
+        _right: &krabka_pgcatalog::Table,
     ) -> crate::plan_dist::JoinStrategy {
         crate::plan_dist::JoinStrategy::Gather
     }
 
     fn join_strategy_for_keys(
         &self,
-        left: &crabka_pgcatalog::Table,
-        right: &crabka_pgcatalog::Table,
+        left: &krabka_pgcatalog::Table,
+        right: &krabka_pgcatalog::Table,
         _left_keys: &[usize],
         _right_keys: &[usize],
     ) -> crate::plan_dist::JoinStrategy {
@@ -777,22 +777,22 @@ pub trait RangeScanner: Send + Sync + 'static {
 mod join_protocol_tests {
     use super::*;
 
-    fn encoded(row: &[crabka_pgtypes::Datum]) -> JoinRow {
+    fn encoded(row: &[krabka_pgtypes::Datum]) -> JoinRow {
         JoinRow {
-            tuple: crabka_pgmvcc::version::encode_tuple(1, 0, row),
+            tuple: krabka_pgmvcc::version::encode_tuple(1, 0, row),
         }
     }
 
-    fn decoded(rows: JoinRangeResult) -> Vec<Vec<crabka_pgtypes::Datum>> {
+    fn decoded(rows: JoinRangeResult) -> Vec<Vec<krabka_pgtypes::Datum>> {
         rows.rows
             .into_iter()
-            .map(|row| crabka_pgmvcc::version::decode_tuple(&row.tuple).unwrap().2)
+            .map(|row| krabka_pgmvcc::version::decode_tuple(&row.tuple).unwrap().2)
             .collect()
     }
 
     #[test]
     fn materialized_inner_join_has_sql_null_filter_projection_and_order_semantics() {
-        use crabka_pgtypes::Datum::{Int4, Null};
+        use krabka_pgtypes::Datum::{Int4, Null};
         let mut request = JoinRangeRequest::test_fixture();
         request.strategy = JoinExecutionStrategy::Gather;
         request.broadcast_rows = None;
@@ -832,8 +832,8 @@ mod join_protocol_tests {
         let mut request = JoinRangeRequest::test_fixture();
         request.strategy = JoinExecutionStrategy::Gather;
         request.broadcast_rows = None;
-        let left = vec![encoded(&[crabka_pgtypes::Datum::Int4(1)]); 257];
-        let right = vec![encoded(&[crabka_pgtypes::Datum::Int4(1)]); 256];
+        let left = vec![encoded(&[krabka_pgtypes::Datum::Int4(1)]); 257];
+        let right = vec![encoded(&[krabka_pgtypes::Datum::Int4(1)]); 256];
 
         let error = execute_materialized_join(&request, &left, &right).unwrap_err();
 
@@ -844,7 +844,7 @@ mod join_protocol_tests {
 
     #[test]
     fn randomized_materialized_strategies_equal_gathered_reference() {
-        use crabka_pgtypes::Datum::{Int4, Null};
+        use krabka_pgtypes::Datum::{Int4, Null};
         let mut state = 0x9e37_79b9_u64;
         for _seed in 0..64 {
             let mut next = || {
@@ -943,7 +943,7 @@ mod join_protocol_tests {
 }
 
 /// Default cap for rows retained by a blocking executor fallback.
-pub const BLOCKING_QUERY_MEMORY: crabka_units::ByteSize = crabka_units::mebibytes(16);
+pub const BLOCKING_QUERY_MEMORY: krabka_units::ByteSize = krabka_units::mebibytes(16);
 
 /// Running memory charge for one blocking operation.
 ///
@@ -952,7 +952,7 @@ pub const BLOCKING_QUERY_MEMORY: crabka_units::ByteSize = crabka_units::mebibyte
 /// accounting.
 #[derive(Debug)]
 pub(crate) struct MemoryBudget {
-    limit: crabka_units::ByteSize,
+    limit: krabka_units::ByteSize,
     used: usize,
 }
 
@@ -977,7 +977,7 @@ pub(crate) struct StatementMemoryReservation {
 }
 
 impl StatementMemory {
-    pub(crate) fn new(limit: crabka_units::ByteSize) -> Self {
+    pub(crate) fn new(limit: krabka_units::ByteSize) -> Self {
         Self(std::sync::Arc::new(std::sync::Mutex::new(
             MemoryBudget::new(limit),
         )))
@@ -1007,7 +1007,7 @@ impl StatementMemory {
         }
     }
 
-    pub(crate) fn limit(&self) -> crabka_units::ByteSize {
+    pub(crate) fn limit(&self) -> krabka_units::ByteSize {
         match self.0.lock() {
             Ok(budget) => budget.limit,
             Err(poisoned) => poisoned.into_inner().limit,
@@ -1046,7 +1046,7 @@ impl Drop for StatementMemoryReservation {
 }
 
 impl MemoryBudget {
-    pub(crate) fn new(limit: crabka_units::ByteSize) -> Self {
+    pub(crate) fn new(limit: krabka_units::ByteSize) -> Self {
         Self { limit, used: 0 }
     }
 
@@ -1067,13 +1067,13 @@ impl MemoryBudget {
 #[cfg(test)]
 mod statement_memory_tests {
     use assert2::assert;
-    use crabka_pgtypes::Datum;
+    use krabka_pgtypes::Datum;
 
     use super::{MemoryBudget, StatementMemory};
 
     #[test]
     fn clones_share_one_charge() {
-        let first = StatementMemory::new(crabka_units::bytes(2));
+        let first = StatementMemory::new(krabka_units::bytes(2));
         let second = first.clone();
 
         first.charge(2).expect("first charge fits");
@@ -1087,7 +1087,7 @@ mod statement_memory_tests {
 
     #[test]
     fn abandoning_a_reservation_preserves_prior_live_charge() {
-        let memory = StatementMemory::new(crabka_units::bytes(2));
+        let memory = StatementMemory::new(krabka_units::bytes(2));
         memory.charge(1).expect("prior retained row fits");
         {
             let attempt = memory.reserve();
@@ -1100,7 +1100,7 @@ mod statement_memory_tests {
 
     #[test]
     fn replacement_keeps_exactly_its_charge() {
-        let memory = StatementMemory::new(crabka_units::bytes(3));
+        let memory = StatementMemory::new(krabka_units::bytes(3));
         memory.charge(1).expect("prior charge fits");
         memory.reserve().replace_with(2).expect("replacement fits");
 
@@ -1109,14 +1109,14 @@ mod statement_memory_tests {
 
     #[test]
     fn row_charge_enforces_the_byte_limit() {
-        let mut budget = MemoryBudget::new(crabka_units::bytes(0));
+        let mut budget = MemoryBudget::new(krabka_units::bytes(0));
 
         assert!(budget.charge_row(&[Datum::Int4(1)]).is_err());
     }
 }
 
 #[must_use]
-pub fn exceeds_query_memory(used: usize, limit: crabka_units::ByteSize) -> bool {
+pub fn exceeds_query_memory(used: usize, limit: krabka_units::ByteSize) -> bool {
     used > limit.bytes_usize()
 }
 
@@ -1192,9 +1192,9 @@ pub(crate) fn collect_partial_aggregates_bounded(
     scanner: &dyn RangeScanner,
     request: ScanRequest<'_>,
     specs: &[PartialAggregateSpec],
-    budget: crabka_units::ByteSize,
+    budget: krabka_units::ByteSize,
 ) -> Result<Vec<Vec<ScannedRow>>, ExecError> {
-    let max_bytes = crabka_units::convert::ByteSizeExt::bytes_usize(budget);
+    let max_bytes = krabka_units::convert::ByteSizeExt::bytes_usize(budget);
     if specs.is_empty() {
         return Err(ExecError::Unsupported(
             "partial aggregate streaming requires at least one aggregate".into(),
@@ -1285,18 +1285,18 @@ fn scanned_rows_bytes<'a>(rows: impl Iterator<Item = &'a ScannedRow>) -> usize {
     })
 }
 
-pub(crate) fn datum_row_bytes(row: &[crabka_pgtypes::Datum]) -> usize {
+pub(crate) fn datum_row_bytes(row: &[krabka_pgtypes::Datum]) -> usize {
     row.iter().fold(0usize, |bytes, datum| {
         let variable = match datum {
-            crabka_pgtypes::Datum::Text(value) | crabka_pgtypes::Datum::JsonPath(value) => {
+            krabka_pgtypes::Datum::Text(value) | krabka_pgtypes::Datum::JsonPath(value) => {
                 value.len()
             }
-            crabka_pgtypes::Datum::Bytea(value) => value.len(),
-            crabka_pgtypes::Datum::Numeric(value) => value.to_string().len(),
+            krabka_pgtypes::Datum::Bytea(value) => value.len(),
+            krabka_pgtypes::Datum::Numeric(value) => value.to_string().len(),
             _ => 0,
         };
         bytes
-            .saturating_add(std::mem::size_of::<crabka_pgtypes::Datum>())
+            .saturating_add(std::mem::size_of::<krabka_pgtypes::Datum>())
             .saturating_add(variable)
     })
 }
@@ -1306,7 +1306,7 @@ fn scanned_row_bytes(row: &ScannedRow) -> usize {
 }
 
 pub(crate) fn memory_budget_exceeded() -> ExecError {
-    ExecError::Remote(crabka_pgwire::error::PgError::error(
+    ExecError::Remote(krabka_pgwire::error::PgError::error(
         "53200",
         "blocking query exceeded the memory budget",
     ))
@@ -1394,8 +1394,8 @@ impl RangeScanner for TimestampedRangeScanner {
 
     fn join_strategy(
         &self,
-        left: &crabka_pgcatalog::Table,
-        right: &crabka_pgcatalog::Table,
+        left: &krabka_pgcatalog::Table,
+        right: &krabka_pgcatalog::Table,
     ) -> crate::plan_dist::JoinStrategy {
         let Some((stats, config)) = &self.join_planner else {
             return crate::plan_dist::JoinStrategy::Gather;
@@ -1405,8 +1405,8 @@ impl RangeScanner for TimestampedRangeScanner {
 
     fn join_strategy_for_keys(
         &self,
-        left: &crabka_pgcatalog::Table,
-        right: &crabka_pgcatalog::Table,
+        left: &krabka_pgcatalog::Table,
+        right: &krabka_pgcatalog::Table,
         left_keys: &[usize],
         right_keys: &[usize],
     ) -> crate::plan_dist::JoinStrategy {
@@ -1505,7 +1505,7 @@ impl RangeCursor for LocalIndexCursor<'_> {
         while self.next < self.entries.len() && rows.len() < max_rows {
             let key = &self.entries[self.next];
             self.next += 1;
-            let rowid = crabka_pgkv::key::secondary_index_rowid_of(
+            let rowid = krabka_pgkv::key::secondary_index_rowid_of(
                 self.request.table.id,
                 self.index_id,
                 key,
@@ -1698,7 +1698,7 @@ impl LocalRangeScanner {
                 "ordered index cursor requires a local non-aggregate scan".into(),
             ));
         }
-        let prefix = crabka_pgkv::key::secondary_index_ordered_prefix(request.table.id, index_id);
+        let prefix = krabka_pgkv::key::secondary_index_ordered_prefix(request.table.id, index_id);
         let entries = request
             .local
             .scan_prefix(&prefix)?
@@ -1777,7 +1777,7 @@ fn apply_partial_aggregate_pushdown(
         .filter(|row| row_satisfies_predicate(&row.row, predicate))
         .collect::<Vec<_>>();
     if !spec.group_by.is_empty() {
-        let mut groups: Vec<(Vec<crabka_pgtypes::Datum>, Vec<ScannedRow>)> = Vec::new();
+        let mut groups: Vec<(Vec<krabka_pgtypes::Datum>, Vec<ScannedRow>)> = Vec::new();
         for row in rows {
             let key = spec
                 .group_by
@@ -1849,7 +1849,7 @@ pub fn merge_partial_aggregate_rows(
         } else {
             1
         };
-        let mut groups: Vec<(Vec<crabka_pgtypes::Datum>, Vec<ScannedRow>)> = Vec::new();
+        let mut groups: Vec<(Vec<krabka_pgtypes::Datum>, Vec<ScannedRow>)> = Vec::new();
         for row in rows {
             if row.row.len() != key_len + state_len {
                 return Err(ExecError::Unsupported(
@@ -1996,18 +1996,18 @@ pub fn finalize_partial_aggregate_rows(
     }])
 }
 
-fn group_keys_equal(left: &[crabka_pgtypes::Datum], right: &[crabka_pgtypes::Datum]) -> bool {
+fn group_keys_equal(left: &[krabka_pgtypes::Datum], right: &[krabka_pgtypes::Datum]) -> bool {
     left.len() == right.len()
         && left.iter().zip(right).all(|(left, right)| {
             (left.is_null() && right.is_null())
-                || crabka_pgtypes::ops::compare(left, right)
+                || krabka_pgtypes::ops::compare(left, right)
                     .is_ok_and(|ordering| ordering == Some(Ordering::Equal))
         })
 }
 
 fn compare_group_keys(
-    left: &[crabka_pgtypes::Datum],
-    right: &[crabka_pgtypes::Datum],
+    left: &[krabka_pgtypes::Datum],
+    right: &[krabka_pgtypes::Datum],
     len: usize,
 ) -> Ordering {
     left.iter()
@@ -2017,7 +2017,7 @@ fn compare_group_keys(
             (true, true) => Ordering::Equal,
             (true, false) => Ordering::Greater,
             (false, true) => Ordering::Less,
-            (false, false) => crabka_pgtypes::ops::compare(left, right)
+            (false, false) => krabka_pgtypes::ops::compare(left, right)
                 .ok()
                 .flatten()
                 .unwrap_or(Ordering::Equal),
@@ -2029,7 +2029,7 @@ fn compare_group_keys(
 fn compute_partial_avg_parts(
     rows: impl Iterator<Item = ScannedRow>,
     column: Option<usize>,
-) -> Result<Vec<crabka_pgtypes::Datum>, ExecError> {
+) -> Result<Vec<krabka_pgtypes::Datum>, ExecError> {
     let Some(column) = column else {
         return Err(ExecError::Unsupported(
             "AVG(*) is not a supported aggregate".into(),
@@ -2048,7 +2048,7 @@ fn compute_partial_avg_parts(
         }
         let value = avg_numeric_value(value)?;
         sum = Some(match sum {
-            Some(current) => crabka_pgtypes::ops::add(&current, &value)?,
+            Some(current) => krabka_pgtypes::ops::add(&current, &value)?,
             None => value,
         });
         count = count
@@ -2056,16 +2056,16 @@ fn compute_partial_avg_parts(
             .ok_or_else(|| ExecError::Unsupported("partial AVG count exceeds int8 range".into()))?;
     }
     Ok(vec![
-        sum.unwrap_or(crabka_pgtypes::Datum::Null),
-        crabka_pgtypes::Datum::Int8(count),
+        sum.unwrap_or(krabka_pgtypes::Datum::Null),
+        krabka_pgtypes::Datum::Int8(count),
     ])
 }
 
-fn merge_partial_avg_parts(rows: Vec<ScannedRow>) -> Result<Vec<crabka_pgtypes::Datum>, ExecError> {
+fn merge_partial_avg_parts(rows: Vec<ScannedRow>) -> Result<Vec<krabka_pgtypes::Datum>, ExecError> {
     let mut sum = None;
     let mut count = 0_i64;
     for row in rows {
-        let [partial_sum, crabka_pgtypes::Datum::Int8(partial_count)] = row.row.as_slice() else {
+        let [partial_sum, krabka_pgtypes::Datum::Int8(partial_count)] = row.row.as_slice() else {
             return Err(ExecError::Unsupported(
                 "remote partial AVG returned an invalid parts shape".into(),
             ));
@@ -2085,7 +2085,7 @@ fn merge_partial_avg_parts(rows: Vec<ScannedRow>) -> Result<Vec<crabka_pgtypes::
         }
         let partial_sum = avg_numeric_value(partial_sum)?;
         sum = Some(match sum {
-            Some(current) => crabka_pgtypes::ops::add(&current, &partial_sum)?,
+            Some(current) => krabka_pgtypes::ops::add(&current, &partial_sum)?,
             None => partial_sum,
         });
         count = count.checked_add(*partial_count).ok_or_else(|| {
@@ -2093,20 +2093,20 @@ fn merge_partial_avg_parts(rows: Vec<ScannedRow>) -> Result<Vec<crabka_pgtypes::
         })?;
     }
     Ok(vec![
-        sum.unwrap_or(crabka_pgtypes::Datum::Null),
-        crabka_pgtypes::Datum::Int8(count),
+        sum.unwrap_or(krabka_pgtypes::Datum::Null),
+        krabka_pgtypes::Datum::Int8(count),
     ])
 }
 
-fn finalize_avg_parts(parts: &[crabka_pgtypes::Datum]) -> Result<crabka_pgtypes::Datum, ExecError> {
-    let [sum, crabka_pgtypes::Datum::Int8(count)] = parts else {
+fn finalize_avg_parts(parts: &[krabka_pgtypes::Datum]) -> Result<krabka_pgtypes::Datum, ExecError> {
+    let [sum, krabka_pgtypes::Datum::Int8(count)] = parts else {
         return Err(ExecError::Unsupported(
             "merged partial AVG returned an invalid parts shape".into(),
         ));
     };
     if *count == 0 {
         if sum.is_null() {
-            return Ok(crabka_pgtypes::Datum::Null);
+            return Ok(krabka_pgtypes::Datum::Null);
         }
         return Err(ExecError::Unsupported(
             "merged partial AVG returned a sum without input values".into(),
@@ -2117,33 +2117,33 @@ fn finalize_avg_parts(parts: &[crabka_pgtypes::Datum]) -> Result<crabka_pgtypes:
             "merged partial AVG returned a negative count".into(),
         ));
     }
-    Ok(crabka_pgtypes::ops::div(
+    Ok(krabka_pgtypes::ops::div(
         &avg_numeric_value(sum)?,
-        &crabka_pgtypes::Datum::Int8(*count),
+        &krabka_pgtypes::Datum::Int8(*count),
     )?)
 }
 
-fn avg_numeric_value(value: &crabka_pgtypes::Datum) -> Result<crabka_pgtypes::Datum, ExecError> {
-    use crabka_pgtypes::numeric::NumericValue;
+fn avg_numeric_value(value: &krabka_pgtypes::Datum) -> Result<krabka_pgtypes::Datum, ExecError> {
+    use krabka_pgtypes::numeric::NumericValue;
 
     match value {
-        crabka_pgtypes::Datum::Int4(value) => {
-            Ok(crabka_pgtypes::Datum::Numeric(NumericValue::from(*value)))
+        krabka_pgtypes::Datum::Int4(value) => {
+            Ok(krabka_pgtypes::Datum::Numeric(NumericValue::from(*value)))
         }
-        crabka_pgtypes::Datum::Int8(value) => {
-            Ok(crabka_pgtypes::Datum::Numeric(NumericValue::from(*value)))
+        krabka_pgtypes::Datum::Int8(value) => {
+            Ok(krabka_pgtypes::Datum::Numeric(NumericValue::from(*value)))
         }
-        crabka_pgtypes::Datum::Numeric(value) => Ok(crabka_pgtypes::Datum::Numeric(value.clone())),
+        krabka_pgtypes::Datum::Numeric(value) => Ok(krabka_pgtypes::Datum::Numeric(value.clone())),
         _ => Err(ExecError::Unsupported(
             "partial AVG pushdown supports only int4/int8/numeric inputs".into(),
         )),
     }
 }
 
-fn merge_partial_counts(rows: Vec<ScannedRow>) -> Result<crabka_pgtypes::Datum, ExecError> {
+fn merge_partial_counts(rows: Vec<ScannedRow>) -> Result<krabka_pgtypes::Datum, ExecError> {
     let mut count = 0_i64;
     for row in rows {
-        let [crabka_pgtypes::Datum::Int8(partial)] = row.row.as_slice() else {
+        let [krabka_pgtypes::Datum::Int8(partial)] = row.row.as_slice() else {
             return Err(ExecError::Unsupported(
                 "remote partial COUNT returned an invalid row shape".into(),
             ));
@@ -2152,13 +2152,13 @@ fn merge_partial_counts(rows: Vec<ScannedRow>) -> Result<crabka_pgtypes::Datum, 
             ExecError::Unsupported("merged partial COUNT result exceeds int8 range".into())
         })?;
     }
-    Ok(crabka_pgtypes::Datum::Int8(count))
+    Ok(krabka_pgtypes::Datum::Int8(count))
 }
 
 fn compute_partial_aggregate_value(
     rows: impl Iterator<Item = ScannedRow>,
     spec: &PartialAggregateSpec,
-) -> Result<crabka_pgtypes::Datum, ExecError> {
+) -> Result<krabka_pgtypes::Datum, ExecError> {
     match spec.function {
         PartialAggregateFunction::Count => compute_partial_count(rows, spec.column),
         PartialAggregateFunction::Sum => compute_partial_sum(rows, spec.column),
@@ -2175,13 +2175,13 @@ fn compute_partial_aggregate_value(
 fn compute_partial_count(
     rows: impl Iterator<Item = ScannedRow>,
     column: Option<usize>,
-) -> Result<crabka_pgtypes::Datum, ExecError> {
+) -> Result<krabka_pgtypes::Datum, ExecError> {
     let mut count = 0_i64;
     for row in rows {
         if column.is_some_and(|column| {
             row.row
                 .get(column)
-                .is_none_or(crabka_pgtypes::Datum::is_null)
+                .is_none_or(krabka_pgtypes::Datum::is_null)
         }) {
             continue;
         }
@@ -2189,13 +2189,13 @@ fn compute_partial_count(
             ExecError::Unsupported("partial COUNT result exceeds int8 range".into())
         })?;
     }
-    Ok(crabka_pgtypes::Datum::Int8(count))
+    Ok(krabka_pgtypes::Datum::Int8(count))
 }
 
 fn compute_partial_sum(
     rows: impl Iterator<Item = ScannedRow>,
     column: Option<usize>,
-) -> Result<crabka_pgtypes::Datum, ExecError> {
+) -> Result<krabka_pgtypes::Datum, ExecError> {
     let Some(column) = column else {
         return Err(ExecError::Unsupported(
             "SUM(*) is not a supported aggregate".into(),
@@ -2216,20 +2216,20 @@ fn compute_partial_sum(
             None => acc = Some(PartialSum::try_from_first(value)?),
         }
     }
-    Ok(acc.map_or(crabka_pgtypes::Datum::Null, PartialSum::finish))
+    Ok(acc.map_or(krabka_pgtypes::Datum::Null, PartialSum::finish))
 }
 
 fn compute_partial_min_max(
     rows: impl Iterator<Item = ScannedRow>,
     column: Option<usize>,
     function: PartialAggregateFunction,
-) -> Result<crabka_pgtypes::Datum, ExecError> {
+) -> Result<krabka_pgtypes::Datum, ExecError> {
     let Some(column) = column else {
         return Err(ExecError::Unsupported(
             "MIN/MAX(*) is not a supported aggregate".into(),
         ));
     };
-    let mut best: Option<crabka_pgtypes::Datum> = None;
+    let mut best: Option<krabka_pgtypes::Datum> = None;
     for row in rows {
         let Some(value) = row.row.get(column) else {
             return Err(ExecError::Unsupported(format!(
@@ -2243,7 +2243,7 @@ fn compute_partial_min_max(
         let should_take = match best.as_ref() {
             None => true,
             Some(current) => {
-                let order = crabka_pgtypes::ops::compare(value, current)?;
+                let order = krabka_pgtypes::ops::compare(value, current)?;
                 matches!(
                     (function, order),
                     (PartialAggregateFunction::Min, Some(Ordering::Less))
@@ -2255,27 +2255,27 @@ fn compute_partial_min_max(
             best = Some(value.clone());
         }
     }
-    Ok(best.unwrap_or(crabka_pgtypes::Datum::Null))
+    Ok(best.unwrap_or(krabka_pgtypes::Datum::Null))
 }
 
 enum PartialSum {
     Int(i64),
     Float(f64),
     Float4(f32),
-    Numeric(crabka_pgtypes::Datum),
+    Numeric(krabka_pgtypes::Datum),
 }
 
 impl PartialSum {
-    fn try_from_first(value: &crabka_pgtypes::Datum) -> Result<Self, ExecError> {
+    fn try_from_first(value: &krabka_pgtypes::Datum) -> Result<Self, ExecError> {
         match value {
-            crabka_pgtypes::Datum::Int2(value) => Ok(Self::Int(i64::from(*value))),
-            crabka_pgtypes::Datum::Int4(value) => Ok(Self::Int(i64::from(*value))),
-            crabka_pgtypes::Datum::Int8(value) => Ok(Self::Int(*value)),
+            krabka_pgtypes::Datum::Int2(value) => Ok(Self::Int(i64::from(*value))),
+            krabka_pgtypes::Datum::Int4(value) => Ok(Self::Int(i64::from(*value))),
+            krabka_pgtypes::Datum::Int8(value) => Ok(Self::Int(*value)),
             // `sum(real)` is `real`, so its partials must stay single-precision
             // all the way to the coordinator rather than widening to float8.
-            crabka_pgtypes::Datum::Float4(value) => Ok(Self::Float4(*value)),
-            crabka_pgtypes::Datum::Float8(value) => Ok(Self::Float(*value)),
-            crabka_pgtypes::Datum::Numeric(_) => Ok(Self::Numeric(value.clone())),
+            krabka_pgtypes::Datum::Float4(value) => Ok(Self::Float4(*value)),
+            krabka_pgtypes::Datum::Float8(value) => Ok(Self::Float(*value)),
+            krabka_pgtypes::Datum::Numeric(_) => Ok(Self::Numeric(value.clone())),
             _ => Err(ExecError::Unsupported(
                 "partial SUM pushdown supports only int2/int4/int8/float4/float8/numeric inputs"
                     .into(),
@@ -2283,27 +2283,27 @@ impl PartialSum {
         }
     }
 
-    fn add(&mut self, value: &crabka_pgtypes::Datum) -> Result<(), ExecError> {
+    fn add(&mut self, value: &krabka_pgtypes::Datum) -> Result<(), ExecError> {
         match (self, value) {
-            (Self::Int(acc), crabka_pgtypes::Datum::Int2(value)) => {
+            (Self::Int(acc), krabka_pgtypes::Datum::Int2(value)) => {
                 *acc = acc
                     .checked_add(i64::from(*value))
-                    .ok_or(ExecError::Type(crabka_pgtypes::TypeError::Overflow))?;
+                    .ok_or(ExecError::Type(krabka_pgtypes::TypeError::Overflow))?;
             }
-            (Self::Int(acc), crabka_pgtypes::Datum::Int4(value)) => {
+            (Self::Int(acc), krabka_pgtypes::Datum::Int4(value)) => {
                 *acc = acc
                     .checked_add(i64::from(*value))
-                    .ok_or(ExecError::Type(crabka_pgtypes::TypeError::Overflow))?;
+                    .ok_or(ExecError::Type(krabka_pgtypes::TypeError::Overflow))?;
             }
-            (Self::Int(acc), crabka_pgtypes::Datum::Int8(value)) => {
+            (Self::Int(acc), krabka_pgtypes::Datum::Int8(value)) => {
                 *acc = acc
                     .checked_add(*value)
-                    .ok_or(ExecError::Type(crabka_pgtypes::TypeError::Overflow))?;
+                    .ok_or(ExecError::Type(krabka_pgtypes::TypeError::Overflow))?;
             }
-            (Self::Float(acc), crabka_pgtypes::Datum::Float8(value)) => *acc += *value,
-            (Self::Float4(acc), crabka_pgtypes::Datum::Float4(value)) => *acc += *value,
-            (Self::Numeric(acc), crabka_pgtypes::Datum::Numeric(_)) => {
-                *acc = crabka_pgtypes::ops::add(acc, value)?;
+            (Self::Float(acc), krabka_pgtypes::Datum::Float8(value)) => *acc += *value,
+            (Self::Float4(acc), krabka_pgtypes::Datum::Float4(value)) => *acc += *value,
+            (Self::Numeric(acc), krabka_pgtypes::Datum::Numeric(_)) => {
+                *acc = krabka_pgtypes::ops::add(acc, value)?;
             }
             _ => {
                 return Err(ExecError::Unsupported(
@@ -2314,34 +2314,34 @@ impl PartialSum {
         Ok(())
     }
 
-    fn finish(self) -> crabka_pgtypes::Datum {
+    fn finish(self) -> krabka_pgtypes::Datum {
         match self {
-            Self::Int(value) => crabka_pgtypes::Datum::Int8(value),
-            Self::Float(value) => crabka_pgtypes::Datum::Float8(value),
-            Self::Float4(value) => crabka_pgtypes::Datum::Float4(value),
+            Self::Int(value) => krabka_pgtypes::Datum::Int8(value),
+            Self::Float(value) => krabka_pgtypes::Datum::Float8(value),
+            Self::Float4(value) => krabka_pgtypes::Datum::Float4(value),
             Self::Numeric(value) => value,
         }
     }
 }
 
 fn ensure_partial_min_max_value_is_supported(
-    value: &crabka_pgtypes::Datum,
+    value: &krabka_pgtypes::Datum,
 ) -> Result<(), ExecError> {
     if matches!(
         value,
-        crabka_pgtypes::Datum::Int2(_)
-            | crabka_pgtypes::Datum::Int4(_)
-            | crabka_pgtypes::Datum::Int8(_)
-            | crabka_pgtypes::Datum::Float4(_)
-            | crabka_pgtypes::Datum::Float8(_)
-            | crabka_pgtypes::Datum::Numeric(_)
-            | crabka_pgtypes::Datum::Text(_)
-            | crabka_pgtypes::Datum::Bool(_)
-            | crabka_pgtypes::Datum::Date(_)
-            | crabka_pgtypes::Datum::Time(_)
-            | crabka_pgtypes::Datum::Timestamp(_)
-            | crabka_pgtypes::Datum::Timestamptz(_)
-            | crabka_pgtypes::Datum::Interval(_)
+        krabka_pgtypes::Datum::Int2(_)
+            | krabka_pgtypes::Datum::Int4(_)
+            | krabka_pgtypes::Datum::Int8(_)
+            | krabka_pgtypes::Datum::Float4(_)
+            | krabka_pgtypes::Datum::Float8(_)
+            | krabka_pgtypes::Datum::Numeric(_)
+            | krabka_pgtypes::Datum::Text(_)
+            | krabka_pgtypes::Datum::Bool(_)
+            | krabka_pgtypes::Datum::Date(_)
+            | krabka_pgtypes::Datum::Time(_)
+            | krabka_pgtypes::Datum::Timestamp(_)
+            | krabka_pgtypes::Datum::Timestamptz(_)
+            | krabka_pgtypes::Datum::Interval(_)
     ) {
         return Ok(());
     }
@@ -2446,11 +2446,11 @@ enum TopKValueType {
     Text,
 }
 
-fn top_k_value_type(value: &crabka_pgtypes::Datum) -> Result<TopKValueType, ExecError> {
+fn top_k_value_type(value: &krabka_pgtypes::Datum) -> Result<TopKValueType, ExecError> {
     match value {
-        crabka_pgtypes::Datum::Int4(_) => Ok(TopKValueType::Int4),
-        crabka_pgtypes::Datum::Int8(_) => Ok(TopKValueType::Int8),
-        crabka_pgtypes::Datum::Text(_) => Ok(TopKValueType::Text),
+        krabka_pgtypes::Datum::Int4(_) => Ok(TopKValueType::Int4),
+        krabka_pgtypes::Datum::Int8(_) => Ok(TopKValueType::Int8),
+        krabka_pgtypes::Datum::Text(_) => Ok(TopKValueType::Text),
         _ => Err(ExecError::Unsupported(
             "top-k pushdown supports only non-null int4/int8/text order keys".into(),
         )),
@@ -2474,8 +2474,8 @@ fn compare_top_k_rows(left: &ScannedRow, right: &ScannedRow, order_by: &[TopKCol
         .then_with(|| left.xmin.cmp(&right.xmin))
 }
 
-fn compare_top_k_values(left: &crabka_pgtypes::Datum, right: &crabka_pgtypes::Datum) -> Ordering {
-    use crabka_pgtypes::Datum;
+fn compare_top_k_values(left: &krabka_pgtypes::Datum, right: &krabka_pgtypes::Datum) -> Ordering {
+    use krabka_pgtypes::Datum;
     match (left, right) {
         (Datum::Int4(left), Datum::Int4(right)) => left.cmp(right),
         (Datum::Int8(left), Datum::Int8(right)) => left.cmp(right),
@@ -2484,7 +2484,7 @@ fn compare_top_k_values(left: &crabka_pgtypes::Datum, right: &crabka_pgtypes::Da
     }
 }
 
-fn row_satisfies_predicate(row: &[crabka_pgtypes::Datum], predicate: &PredicatePushdown) -> bool {
+fn row_satisfies_predicate(row: &[krabka_pgtypes::Datum], predicate: &PredicatePushdown) -> bool {
     match predicate {
         PredicatePushdown::FullScan => true,
         PredicatePushdown::Conjunctive(predicates) => predicates.iter().all(|predicate| {
@@ -2495,17 +2495,17 @@ fn row_satisfies_predicate(row: &[crabka_pgtypes::Datum], predicate: &PredicateP
 }
 
 fn compare_datums(
-    left: &crabka_pgtypes::Datum,
+    left: &krabka_pgtypes::Datum,
     op: PredicateOp,
-    right: &crabka_pgtypes::Datum,
+    right: &krabka_pgtypes::Datum,
 ) -> bool {
-    use crabka_pgtypes::Datum;
+    use krabka_pgtypes::Datum;
     match (left, right) {
         (Datum::Int4(left), Datum::Int4(right)) => compare_order(left.cmp(right), op),
         (Datum::Int8(left), Datum::Int8(right)) => compare_order(left.cmp(right), op),
         (Datum::Text(left), Datum::Text(right)) => compare_order(left.cmp(right), op),
         (Datum::Bool(left), Datum::Bool(right)) => compare_order(left.cmp(right), op),
-        _ => crabka_pgtypes::ops::compare(left, right)
+        _ => krabka_pgtypes::ops::compare(left, right)
             .is_ok_and(|ordering| ordering.is_some_and(|ordering| compare_order(ordering, op))),
     }
 }
@@ -2550,11 +2550,11 @@ mod cursor_contract_tests {
         atomic::{AtomicUsize, Ordering},
     };
 
-    use crabka_pgcatalog::{Column, RelationName, Table};
-    use crabka_pgkv::MemKv;
-    use crabka_pgmvcc::Snapshot;
-    use crabka_pgtypes::{ColumnType, Datum};
-    use crabka_units::bytes;
+    use krabka_pgcatalog::{Column, RelationName, Table};
+    use krabka_pgkv::MemKv;
+    use krabka_pgmvcc::Snapshot;
+    use krabka_pgtypes::{ColumnType, Datum};
+    use krabka_units::bytes;
 
     use super::{
         MaterializedRangeCursor, PredicatePushdown, ProjectionPushdown, RangeCursor, RangeScanner,
@@ -2642,7 +2642,7 @@ mod cursor_contract_tests {
         };
         let table = Table {
             id: 42,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public("items"),
             columns: vec![Column::new("id", ColumnType::Int8)],
             sharded: true,
@@ -2690,7 +2690,7 @@ mod cursor_contract_tests {
         };
         let table = Table {
             id: 42,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public("items"),
             columns: vec![Column::new("id", ColumnType::Int8)],
             sharded: false,
@@ -2748,11 +2748,11 @@ mod cursor_contract_tests {
 #[cfg(test)]
 mod streaming_aggregate_tests {
     use assert2::assert;
-    use crabka_pgcatalog::{Column, RelationName, Table};
-    use crabka_pgkv::MemKv;
-    use crabka_pgmvcc::Snapshot;
-    use crabka_pgtypes::{ColumnType, Datum};
-    use crabka_units::{ByteSize, bytes, convert::ByteSizeExt as _};
+    use krabka_pgcatalog::{Column, RelationName, Table};
+    use krabka_pgkv::MemKv;
+    use krabka_pgmvcc::Snapshot;
+    use krabka_pgtypes::{ColumnType, Datum};
+    use krabka_units::{ByteSize, bytes, convert::ByteSizeExt as _};
 
     use super::{
         PartialAggregateSpec, PredicatePushdown, ProjectionPushdown, RangeScanner, RowInterval,
@@ -2774,7 +2774,7 @@ mod streaming_aggregate_tests {
     fn table() -> Table {
         Table {
             id: 42,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public("items"),
             columns: vec![Column::new("v", ColumnType::Int8)],
             sharded: false,
@@ -2893,7 +2893,7 @@ mod streaming_aggregate_tests {
                     Datum::Int8(3_126_250),
                     Datum::Int8(1),
                     Datum::Int8(2500),
-                    Datum::Numeric(crabka_pgtypes::numeric::parse("1250.5").expect("test literal")),
+                    Datum::Numeric(krabka_pgtypes::numeric::parse("1250.5").expect("test literal")),
                 ]
         );
     }

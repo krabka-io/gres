@@ -1,5 +1,5 @@
 [package]
-name = "crabka-authz"
+name = "krabka-authz"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -9,7 +9,7 @@ rust-version.workspace = true
 description = "Shared Kafka-ACL authorization evaluator for the Crabka broker and gateway"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-authz"
+documentation = "https://docs.rs/krabka-authz"
 readme = "README.md"
 keywords = ["kafka", "authorization", "acl", "security", "crabka"]
 categories = ["authentication", "network-programming"]
@@ -19,8 +19,8 @@ workspace = true
 
 [dependencies]
 assert2 = { workspace = true }
-crabka-metadata = { version = "0.4.2", path = "../metadata" }
-crabka-security = { version = "0.4.2", path = "../security" }
+krabka-metadata = { version = "0.4.2", path = "../metadata" }
+krabka-security = { version = "0.4.2", path = "../security" }
 tracing = { workspace = true }
 
 [dev-dependencies]

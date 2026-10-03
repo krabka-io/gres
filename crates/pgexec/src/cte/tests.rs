@@ -1,5 +1,5 @@
 use assert2::assert;
-use crabka_pgwire::engine::{Engine, QueryResult, Session};
+use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
 use crate::{
     SqlEngine,
@@ -60,17 +60,17 @@ fn a_marked_cycle_row_does_not_recur() {
             columns: Vec::new(),
             mark_name: "is_cycle".into(),
             path_name: "path".into(),
-            marked: crabka_pgtypes::Datum::Bool(true),
-            unmarked: crabka_pgtypes::Datum::Bool(false),
+            marked: krabka_pgtypes::Datum::Bool(true),
+            unmarked: krabka_pgtypes::Datum::Bool(false),
         }),
     };
     assert!(extras.stops_recursion(&[
-        crabka_pgtypes::Datum::Bool(true),
-        crabka_pgtypes::Datum::Null,
+        krabka_pgtypes::Datum::Bool(true),
+        krabka_pgtypes::Datum::Null,
     ]));
     assert!(!extras.stops_recursion(&[
-        crabka_pgtypes::Datum::Bool(false),
-        crabka_pgtypes::Datum::Null,
+        krabka_pgtypes::Datum::Bool(false),
+        krabka_pgtypes::Datum::Null,
     ]));
 }
 
@@ -88,7 +88,7 @@ async fn recursive_union_all_counts_up() {
 #[tokio::test]
 async fn runtime_policy_caps_recursive_cte_materialization() {
     let engine = SqlEngine::new_with_policy(crate::RuntimePolicy {
-        blocking_query_memory: crabka_units::bytes(1),
+        blocking_query_memory: krabka_units::bytes(1),
         ..Default::default()
     })
     .expect("policy");

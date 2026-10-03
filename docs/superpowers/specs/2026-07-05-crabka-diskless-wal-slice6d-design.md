@@ -6,7 +6,7 @@
 
 ## Context — where this sits
 
-Final sub-slice of Slice 6 (see the [6a spec](2026-07-05-crabka-diskless-wal-slice6a-design.md) for the decomposition). 6a gave a quorum-durable WAL, 6b leaderless serving, 6c the concurrent/leaderless write path. 6d **composes all three** and mechanically proves the whole diskless data path never loses an acknowledged record — turning Slice-5's out-of-scope `NodeLoss` **in-scope** (a surviving quorum retains the un-flushed acked tail) across **concurrent appenders + WAL-node loss within quorum + sequencer-authority handoff on leader change** — plus a **Jepsen-style black-box** harness against a real running cluster under real faults. This is the roadmap's gate: *"no acknowledged record lost across broker death, WAL-node loss within quorum, or PUT failure."*
+Final sub-slice of Slice 6 (see the [6a spec](2026-07-05-krabka-diskless-wal-slice6a-design.md) for the decomposition). 6a gave a quorum-durable WAL, 6b leaderless serving, 6c the concurrent/leaderless write path. 6d **composes all three** and mechanically proves the whole diskless data path never loses an acknowledged record — turning Slice-5's out-of-scope `NodeLoss` **in-scope** (a surviving quorum retains the un-flushed acked tail) across **concurrent appenders + WAL-node loss within quorum + sequencer-authority handoff on leader change** — plus a **Jepsen-style black-box** harness against a real running cluster under real faults. This is the roadmap's gate: *"no acknowledged record lost across broker death, WAL-node loss within quorum, or PUT failure."*
 
 6d builds **no new data-path machinery** — it composes and adversarially verifies what 6a–6c built. Its deliverables are proofs and a fault-injection harness.
 
@@ -41,7 +41,7 @@ LINEARIZABILITY (crates/raft/tests/model/mod.rs) — extend:
 
 JEPSEN (greenfield, crates/integration-tests/tests/diskless_jepsen.rs) — black-box, real cluster:
    SUBSTRATE: 3× Broker::start (broker.rs) + KRaft-quorum-WAL diskless cluster
-   GENERATOR: real crabka-client-producer → an acked-record ledger
+   GENERATOR: real krabka-client-producer → an acked-record ledger
    NEMESIS  : kill-accepting-broker / kill-WAL-node-within-quorum / PUT-failure / KRaft-leader-change
               (drop BrokerHandle = in-process kill; pattern from durability.rs/leader_election.rs)
    CHECKER  : direct Kafka Fetch of every acked offset (no-acked-loss) + feed history to
@@ -67,9 +67,9 @@ In `crates/raft/tests/model/mod.rs`: the `LinearizabilityTester` already support
 
 No jepsen/nemesis crate exists (confirmed); assemble one at `crates/integration-tests/tests/diskless_jepsen.rs`:
 - **Substrate:** extend the in-process `Broker::start`/`BrokerHandle`/`listen_addr()` pattern to a 3-broker + quorum-WAL diskless cluster.
-- **Generator:** two real `crabka-client-producer` instances recording an **acked-record ledger**.
+- **Generator:** two real `krabka-client-producer` instances recording an **acked-record ledger**.
 - **Nemesis:** the model actions as fault injectors — kill-accepting-broker, kill-a-WAL-quorum-node-*within-quorum*, force-a-PUT-failure, trigger-a-KRaft-leader-change (in-process "kill" = drop the `BrokerHandle`; the metadata-driven leader resolution + kill pattern from `durability.rs`/`leader_election.rs`).
-- **Checker:** after the fault schedule, issue public `crabka-client-core` partition Fetch requests and assert **every acked offset in the ledger is still consumable** (no-acked-loss). Direct Fetch deliberately avoids coupling the durability gate to classic group-coordinator availability after its host is killed. Feed the acknowledged invocation/return history into `LinearizabilityTester`/`KafkaLogSpec`, and run a Dockerized JVM console consumer over the same partition for the **byte-exact differential** leg.
+- **Checker:** after the fault schedule, issue public `krabka-client-core` partition Fetch requests and assert **every acked offset in the ledger is still consumable** (no-acked-loss). Direct Fetch deliberately avoids coupling the durability gate to classic group-coordinator availability after its host is killed. Feed the acknowledged invocation/return history into `LinearizabilityTester`/`KafkaLogSpec`, and run a Dockerized JVM console consumer over the same partition for the **byte-exact differential** leg.
 
 *Clean split:* stateright = exhaustive interleavings on a tiny model; Creusot = offset-allocator arithmetic (6c) + the WAL-durability watermark (reuse `recompute_high_watermark`); Jepsen = a real running cluster under real faults.
 
@@ -103,7 +103,7 @@ The live 3-broker gate needs a file-descriptor soft limit above the common local
 
 ```bash
 ulimit -n 65536
-CARGO_INCREMENTAL=0 cargo test -p crabka-integration-tests \
+CARGO_INCREMENTAL=0 cargo test -p krabka-integration-tests \
   --test diskless_jepsen \
   three_broker_fault_schedule_preserves_the_acked_ledger \
   -- --ignored --nocapture

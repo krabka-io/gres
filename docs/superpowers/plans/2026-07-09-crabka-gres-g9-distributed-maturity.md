@@ -4,9 +4,9 @@
 
 **Goal:** Remove the last per-table ceilings and operate the result: timestamp transactions (commit rate ~linear in ranges), pushdown execution, hash sharding, distributed indexes, and a goal-based auto-rebalancer.
 
-**Architecture:** Per the [G-9 design](../specs/2026-07-09-crabka-gres-g9-distributed-maturity-design.md): range 0 becomes a batched monotone timestamp oracle (stride-ahead durable); sharded tables move wholesale to ts-visibility with durable intents and primary-range commit records (superseding their g-timeline path); a light planner seam adds equivalence-preserving pushdown and join strategies; hash sharding is a bucket key-prefix over the existing interval machinery; local then global indexes; a gres-balancer drives split/move/merge through the G-8b orchestrator.
+**Architecture:** Per the [G-9 design](../specs/2026-07-09-krabka-gres-g9-distributed-maturity-design.md): range 0 becomes a batched monotone timestamp oracle (stride-ahead durable); sharded tables move wholesale to ts-visibility with durable intents and primary-range commit records (superseding their g-timeline path); a light planner seam adds equivalence-preserving pushdown and join strategies; hash sharding is a bucket key-prefix over the existing interval machinery; local then global indexes; a gres-balancer drives split/move/merge through the G-8b orchestrator.
 
-**Tech Stack:** everything G-7/G-8 built, `crabka-rebalancer` as the goal-framework precedent, stateright, the scaling-demo pipeline.
+**Tech Stack:** everything G-7/G-8 built, `krabka-rebalancer` as the goal-framework precedent, stateright, the scaling-demo pipeline.
 
 ## Global Constraints
 
@@ -90,7 +90,7 @@ Commit `feat(gres): range merges`.
 
 Commit `feat(gres): online auto-shard conversion`.
 
-### Task 9: `crabka-gres-balancer`
+### Task 9: `krabka-gres-balancer`
 
 **Files:** Create `crates/gres-balancer/` (internal-crate manifest; **verify the goal-framework shape against `crates/rebalancer` at execution time and mirror its idioms** — goals, plan, dry-run reporting); metrics aggregation into the registry (store size + checkpoint stats + commit rate + scan bytes — all already emitted, wired to records); goals: size ceiling/floor, load skew, **auto-shard conversion thresholds (Task 8b's operation; per-tenant/table disable knob)**, co-location integrity (9c), index placement (9d), compute anti-affinity; executor client calling the G-8b/Task-8/8b orchestrator under rate limits + cooldowns; CLI (`crabka gres balance [--dry-run]`) + operator knobs.
 

@@ -1,5 +1,5 @@
 //! Real KIP-595 [`PeerSender`] over Kafka TCP framing, using the existing
-//! [`crabka_client_core::Connection`]. One cached connection per peer.
+//! [`krabka_client_core::Connection`]. One cached connection per peer.
 //!
 //! The engine's transport seam ([`crate::kraft::transport::PeerSender`]) hands
 //! this impl an already-encoded KIP-595 request body, the destination peer, and
@@ -21,9 +21,9 @@ use std::{
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use crabka_client_core::{ClientError, Connection, ConnectionOptions};
-use crabka_ids::{ApiKey, ApiVersion};
-use crabka_metadata::voters::VoterSet;
+use krabka_client_core::{ClientError, Connection, ConnectionOptions};
+use krabka_ids::{ApiKey, ApiVersion};
+use krabka_metadata::voters::VoterSet;
 use dashmap::DashMap;
 
 use crate::{
@@ -37,7 +37,7 @@ use crate::{
 
 /// Outbound dialer the controller hands to the peer sender.
 ///
-/// `crabka-raft` cannot depend on `crabka-broker`, because that would be a
+/// `krabka-raft` cannot depend on `krabka-broker`, because that would be a
 /// cycle. The broker therefore supplies an impl that wraps its
 /// `InterBrokerClient`, with TLS and SASL, and injects it through
 /// [`ControllerConfig::dialer`](crate::ControllerConfig). When no dialer is
@@ -114,7 +114,7 @@ fn api_version_for(key: ApiKey) -> ApiVersion {
 }
 
 /// Real [`PeerSender`]: it dials each voter's controller listener and issues
-/// the KIP-595 RPC over [`crabka_client_core::Connection::raw_request`].
+/// the KIP-595 RPC over [`krabka_client_core::Connection::raw_request`].
 ///
 /// The sender caches one connection per peer. A failed RPC evicts the cached
 /// connection, so the next send dials again.
@@ -125,8 +125,8 @@ pub(crate) struct RealPeerSender {
     aliases: RwLock<BTreeMap<NodeId, String>>,
     client_id: String,
     dialer: Arc<dyn OutboundDialer>,
-    dispatch_queue_capacity: crabka_client_core::ConnectionDispatchQueueCapacity,
-    frame_max: crabka_client_core::ClientFrameMax,
+    dispatch_queue_capacity: krabka_client_core::ConnectionDispatchQueueCapacity,
+    frame_max: krabka_client_core::ClientFrameMax,
 }
 
 impl RealPeerSender {
@@ -135,8 +135,8 @@ impl RealPeerSender {
         bootstrap_servers: &[String],
         client_id: String,
         dialer: Arc<dyn OutboundDialer>,
-        dispatch_queue_capacity: crabka_client_core::ConnectionDispatchQueueCapacity,
-        frame_max: crabka_client_core::ClientFrameMax,
+        dispatch_queue_capacity: krabka_client_core::ConnectionDispatchQueueCapacity,
+        frame_max: krabka_client_core::ClientFrameMax,
     ) -> Self {
         let bootstrap = bootstrap_servers
             .iter()
@@ -220,7 +220,7 @@ impl PeerSender for RealPeerSender {
         address: &str,
         finalized_version: u16,
     ) -> Result<bool, RaftError> {
-        use crabka_protocol::owned::api_versions_request::ApiVersionsRequest;
+        use krabka_protocol::owned::api_versions_request::ApiVersionsRequest;
 
         let connection = self
             .dialer
@@ -228,7 +228,7 @@ impl PeerSender for RealPeerSender {
                 NodeId(u64::MAX),
                 address,
                 ConnectionOptions {
-                    client_id: "crabka-voter-probe".into(),
+                    client_id: "krabka-voter-probe".into(),
                     dispatch_queue_capacity: self.dispatch_queue_capacity,
                     frame_max: self.frame_max,
                     ..ConnectionOptions::default()
@@ -249,7 +249,7 @@ impl PeerSender for RealPeerSender {
             .supported_features
             .iter()
             .find(|feature| {
-                feature.name == crabka_metadata::metadata_version::KRAFT_VERSION_FEATURE
+                feature.name == krabka_metadata::metadata_version::KRAFT_VERSION_FEATURE
             })
             .is_some_and(|feature| {
                 i16::try_from(finalized_version).is_ok_and(|version| {
@@ -292,10 +292,10 @@ impl PeerSender for RealPeerSender {
 mod tests {
 
     use bytes::BufMut;
-    use crabka_protocol::{
+    use krabka_protocol::{
         Encode,
         // The generated `ApiVersion` message struct is aliased so the
-        // `crabka_ids::ApiVersion` newtype (via `super::*`) keeps the bare name
+        // `krabka_ids::ApiVersion` newtype (via `super::*`) keeps the bare name
         // this module's header assertions use.
         owned::api_versions_response::{ApiVersion as WireApiVersion, ApiVersionsResponse},
     };
@@ -304,15 +304,15 @@ mod tests {
     use super::*;
 
     fn voter_set_with_controller(id: NodeId, host: &str, port: u16) -> VoterSet {
-        VoterSet::from_voters([crabka_metadata::Voter {
+        VoterSet::from_voters([krabka_metadata::Voter {
             id,
             directory_id: uuid::Uuid::nil(),
-            endpoints: vec![crabka_metadata::VoterEndpoint {
+            endpoints: vec![krabka_metadata::VoterEndpoint {
                 name: "CONTROLLER".into(),
                 host: host.into(),
                 port,
             }],
-            kraft_version: crabka_metadata::KRaftVersionRange::default(),
+            kraft_version: krabka_metadata::KRaftVersionRange::default(),
         }])
     }
 
@@ -347,8 +347,8 @@ mod tests {
             &["controller.example:9093".into()],
             "raft-client".into(),
             Arc::new(PlaintextDialer),
-            crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-            crabka_client_core::ClientFrameMax::default(),
+            krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+            krabka_client_core::ClientFrameMax::default(),
         );
         let bootstrap = sender.discovery_peers();
         assert2::assert!(bootstrap.len() == 1);
@@ -420,22 +420,22 @@ mod tests {
 
     #[test]
     fn controller_addr_prefers_controller_endpoint_and_reports_unknown_voter() {
-        let voters = VoterSet::from_voters([crabka_metadata::Voter {
+        let voters = VoterSet::from_voters([krabka_metadata::Voter {
             id: NodeId(7),
             directory_id: uuid::Uuid::nil(),
             endpoints: vec![
-                crabka_metadata::VoterEndpoint {
+                krabka_metadata::VoterEndpoint {
                     name: "REPLICATION".into(),
                     host: "replication-host".into(),
                     port: 9092,
                 },
-                crabka_metadata::VoterEndpoint {
+                krabka_metadata::VoterEndpoint {
                     name: "CONTROLLER".into(),
                     host: "controller-host".into(),
                     port: 9093,
                 },
             ],
-            kraft_version: crabka_metadata::KRaftVersionRange::default(),
+            kraft_version: krabka_metadata::KRaftVersionRange::default(),
         }]);
 
         assert2::assert!(
@@ -446,15 +446,15 @@ mod tests {
 
     #[test]
     fn controller_addr_falls_back_to_first_endpoint() {
-        let voters = VoterSet::from_voters([crabka_metadata::Voter {
+        let voters = VoterSet::from_voters([krabka_metadata::Voter {
             id: NodeId(7),
             directory_id: uuid::Uuid::nil(),
-            endpoints: vec![crabka_metadata::VoterEndpoint {
+            endpoints: vec![krabka_metadata::VoterEndpoint {
                 name: "PLAINTEXT".into(),
                 host: "only-host".into(),
                 port: 9094,
             }],
-            kraft_version: crabka_metadata::KRaftVersionRange::default(),
+            kraft_version: krabka_metadata::KRaftVersionRange::default(),
         }]);
 
         assert2::assert!(controller_addr(&voters, NodeId(7)) == Some("only-host:9094".to_string()));
@@ -503,11 +503,11 @@ mod tests {
             &[],
             "raft-client".into(),
             Arc::new(PlaintextDialer),
-            crabka_client_core::ConnectionDispatchQueueCapacity::new(7).unwrap(),
-            crabka_client_core::ClientFrameMax::try_from(crabka_units::kibibytes(32)).unwrap(),
+            krabka_client_core::ConnectionDispatchQueueCapacity::new(7).unwrap(),
+            krabka_client_core::ClientFrameMax::try_from(krabka_units::kibibytes(32)).unwrap(),
         );
         assert2::assert!(sender.dispatch_queue_capacity.get() == 7);
-        assert2::assert!(sender.frame_max.size() == crabka_units::kibibytes(32));
+        assert2::assert!(sender.frame_max.size() == krabka_units::kibibytes(32));
         let response = sender
             .send(NodeId(2), api_key::VOTE, Bytes::from_static(b"vote-body"))
             .await

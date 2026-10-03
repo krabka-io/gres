@@ -148,7 +148,7 @@ pub(crate) fn expr_children_mut(expr: &mut Expr) -> Vec<&mut Expr> {
 /// [`expr_children`] stops at a subquery, because an inner query is its own
 /// scope; a walk that has to see inside one — collecting the relations a view
 /// body reads, say — continues through here.
-pub(crate) fn query_children(expr: &Expr) -> Vec<&crabka_pgparser::ast::QueryExpr> {
+pub(crate) fn query_children(expr: &Expr) -> Vec<&krabka_pgparser::ast::QueryExpr> {
     match expr {
         Expr::ScalarSubquery(query) | Expr::ArraySubquery(query) | Expr::Exists(query) => {
             vec![query]
@@ -159,7 +159,7 @@ pub(crate) fn query_children(expr: &Expr) -> Vec<&crabka_pgparser::ast::QueryExp
 }
 
 /// The mutable counterpart of [`query_children`].
-pub(crate) fn query_children_mut(expr: &mut Expr) -> Vec<&mut crabka_pgparser::ast::QueryExpr> {
+pub(crate) fn query_children_mut(expr: &mut Expr) -> Vec<&mut krabka_pgparser::ast::QueryExpr> {
     match expr {
         Expr::ScalarSubquery(query) | Expr::ArraySubquery(query) | Expr::Exists(query) => {
             vec![query]

@@ -35,7 +35,7 @@
 
 ### Constraints inherited from slice 20
 
-- `KafkaNodePool` is the only writer of broker `StatefulSet`s (SSA field manager `crabka-operator`).
+- `KafkaNodePool` is the only writer of broker `StatefulSet`s (SSA field manager `krabka-operator`).
 - Slice 20 invariants stay: replicas = 1, roles = {Controller, Broker}.
 - Slice 21's `crabka.io/config-hash` pod-template annotation still rolls pods on `spec.config` change; slice 24 changes are independent (volume swap rolls the pod via template diff naturally).
 
@@ -118,7 +118,7 @@ A field-absent `spec.storage` is semantically identical to `spec.storage: {type:
        storageClassName: <pc.class or omit>
      ```
      The pod-template `volumeMounts` stay `[{name: data, mountPath: /var/lib/crabka/data}]`.
-   - PVC labels include `app.kubernetes.io/instance=<kafka>` (matches slice-20 GC selector) plus `app.kubernetes.io/name=crabka-broker` and `crabka.io/pool=<pool>`. K8s' StatefulSet controller already propagates labels from the `volumeClaimTemplates.metadata.labels` block onto the bound PVC.
+   - PVC labels include `app.kubernetes.io/instance=<kafka>` (matches slice-20 GC selector) plus `app.kubernetes.io/name=krabka-broker` and `crabka.io/pool=<pool>`. K8s' StatefulSet controller already propagates labels from the `volumeClaimTemplates.metadata.labels` block onto the bound PVC.
 
 2. **PVC retention policy.** Only emitted when `type == PersistentClaim`:
    ```yaml
@@ -319,9 +319,9 @@ Implementation plan target: **~6 tasks across 3 batches.**
 
 ## 8. Acceptance criteria
 
-1. `cargo test -p crabka-operator` green (existing 55 + ~17 new = ~72 tests).
+1. `cargo test -p krabka-operator` green (existing 55 + ~17 new = ~72 tests).
 2. `cargo clippy --workspace --all-targets -- -D warnings` clean.
-3. `helm lint charts/crabka-operator` passes (no chart changes expected).
+3. `helm lint charts/krabka-operator` passes (no chart changes expected).
 4. CRD regen stable for both `kafkas` and `kafkanodepools`.
 5. operator-e2e (kind):
    - `Kafka demo` + `KafkaNodePool brokers` with `storage.type=PersistentClaim, size=1Gi, deleteClaim=true` becomes `Ready=True`.

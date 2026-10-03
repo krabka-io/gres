@@ -8,7 +8,7 @@
 //! identical. `%` and `_` are SQL wildcards, `| * + ? {} () []` keep their
 //! regexp meaning, and everything else is literal.
 
-use crabka_pgtypes::{Datum, TypeError};
+use krabka_pgtypes::{Datum, TypeError};
 
 use crate::error::ExecError;
 

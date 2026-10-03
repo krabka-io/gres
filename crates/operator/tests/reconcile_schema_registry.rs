@@ -8,14 +8,14 @@
 use std::sync::Arc;
 
 use assert2::assert;
-use crabka_operator::{
+use krabka_operator::{
     controller::{common::ReconcileError, schema_registry::reconcile},
     crd::{
         BearerAuthn, BearerMode, SchemaRegistry, SchemaRegistryAuthn, SchemaRegistryAuthz,
         SchemaRegistryHealthChecks, SchemaRegistryRuntime, SchemaRegistrySpec,
     },
 };
-use crabka_units::{bytes, millis, secs};
+use krabka_units::{bytes, millis, secs};
 use http::Method;
 
 #[path = "shared/mod.rs"]
@@ -391,7 +391,7 @@ async fn kafka_present_but_not_ready_gates_with_no_children() {
     let mut ctx = fixture_ctx(client, NS);
     Arc::get_mut(&mut ctx.config)
         .expect("fixture owns operator config")
-        .controller_dependency_requeue = crabka_units::millis(1_234);
+        .controller_dependency_requeue = krabka_units::millis(1_234);
 
     let action = reconcile(Arc::new(sr("sr1", Some(CLUSTER))), Arc::new(ctx))
         .await
@@ -432,12 +432,12 @@ async fn optional_topic_group_and_bearer_render_to_args() {
     cr.spec.bootstrap_servers = Some("ext:9092".into());
     cr.spec.schemas_topic = Some("custom-schemas".into());
     cr.spec.group_id = Some("sr-grp".into());
-    cr.spec.authentication = Some(crabka_operator::crd::SchemaRegistryAuthn {
+    cr.spec.authentication = Some(krabka_operator::crd::SchemaRegistryAuthn {
         require_auth: false,
         realm: None,
         basic: None,
-        bearer: Some(crabka_operator::crd::BearerAuthn {
-            mode: crabka_operator::crd::BearerMode::Unsecured,
+        bearer: Some(krabka_operator::crd::BearerAuthn {
+            mode: krabka_operator::crd::BearerMode::Unsecured,
             principal_claim: Some("email".into()),
             jwks_endpoint_uri: None,
             jwks_valid_issuer: None,
@@ -677,22 +677,22 @@ async fn renders_children_when_kafka_ready() {
 async fn full_security_fields_render_to_args_and_mounts() {
     let mut cr = sr("sr1", Some(CLUSTER));
     cr.spec.bootstrap_servers = Some("ext:9092".into()); // skip the Kafka GET
-    cr.spec.tls = Some(crabka_operator::crd::SchemaRegistryTls {
+    cr.spec.tls = Some(krabka_operator::crd::SchemaRegistryTls {
         secret_name: Some("sr-tls".into()),
         issuer_ref: None,
-        client_auth: Some(crabka_operator::crd::TlsClientAuth::Required),
+        client_auth: Some(krabka_operator::crd::TlsClientAuth::Required),
         client_ca_secret_name: Some("sr-client-ca".into()),
     });
-    cr.spec.authentication = Some(crabka_operator::crd::SchemaRegistryAuthn {
+    cr.spec.authentication = Some(krabka_operator::crd::SchemaRegistryAuthn {
         require_auth: true,
         realm: Some("R".into()),
-        basic: Some(crabka_operator::crd::BasicAuthn {
+        basic: Some(krabka_operator::crd::BasicAuthn {
             users_secret_name: "sr-users".into(),
             users_secret_key: None,
         }),
         bearer: None,
     });
-    cr.spec.authorization = Some(crabka_operator::crd::SchemaRegistryAuthz {
+    cr.spec.authorization = Some(krabka_operator::crd::SchemaRegistryAuthz {
         enabled: true,
         super_users: vec!["User:admin".into()],
         acl_refresh: Some(secs(15)),
@@ -867,13 +867,13 @@ async fn kafka_client_missing_when_absent() {
 async fn kafka_client_sasl_ssl_renders_to_args_and_env() {
     let mut cr = sr("sr1", Some(CLUSTER));
     cr.spec.bootstrap_servers = Some("ext:9092".into());
-    cr.spec.kafka_client = Some(crabka_operator::crd::SchemaRegistryKafkaClient {
+    cr.spec.kafka_client = Some(krabka_operator::crd::SchemaRegistryKafkaClient {
         security_protocol: Some("SASL_SSL".into()),
-        sasl: Some(crabka_operator::crd::KafkaClientSasl {
+        sasl: Some(krabka_operator::crd::KafkaClientSasl {
             mechanism: "PLAIN".into(),
             secret_ref: "kafka-creds".into(),
         }),
-        tls: Some(crabka_operator::crd::KafkaClientTls {
+        tls: Some(krabka_operator::crd::KafkaClientTls {
             ca_secret_name: Some("kafka-ca".into()),
             server_name_override: Some("broker.internal".into()),
         }),
@@ -992,9 +992,9 @@ async fn kafka_client_sasl_ssl_renders_to_args_and_env() {
 async fn secret_name_and_issuer_ref_mutual_exclusion() {
     let mut cr = sr("sr1", Some(CLUSTER));
     cr.spec.bootstrap_servers = Some("ext:9092".into());
-    cr.spec.tls = Some(crabka_operator::crd::SchemaRegistryTls {
+    cr.spec.tls = Some(krabka_operator::crd::SchemaRegistryTls {
         secret_name: Some("explicit-secret".into()),
-        issuer_ref: Some(crabka_operator::crd::CertManagerIssuerRef {
+        issuer_ref: Some(krabka_operator::crd::CertManagerIssuerRef {
             name: "my-issuer".into(),
             kind: None,
             group: None,
@@ -1039,9 +1039,9 @@ async fn secret_name_and_issuer_ref_mutual_exclusion() {
 async fn issuer_ref_creates_certificate_cr_and_waits() {
     let mut cr = sr("sr1", Some(CLUSTER));
     cr.spec.bootstrap_servers = Some("ext:9092".into());
-    cr.spec.tls = Some(crabka_operator::crd::SchemaRegistryTls {
+    cr.spec.tls = Some(krabka_operator::crd::SchemaRegistryTls {
         secret_name: None,
-        issuer_ref: Some(crabka_operator::crd::CertManagerIssuerRef {
+        issuer_ref: Some(krabka_operator::crd::CertManagerIssuerRef {
             name: "my-issuer".into(),
             kind: Some("ClusterIssuer".into()),
             group: None,
@@ -1112,9 +1112,9 @@ async fn issuer_ref_creates_certificate_cr_and_waits() {
 async fn issuer_ref_with_cert_secret_ready_renders_deployment() {
     let mut cr = sr("sr1", Some(CLUSTER));
     cr.spec.bootstrap_servers = Some("ext:9092".into());
-    cr.spec.tls = Some(crabka_operator::crd::SchemaRegistryTls {
+    cr.spec.tls = Some(krabka_operator::crd::SchemaRegistryTls {
         secret_name: None,
-        issuer_ref: Some(crabka_operator::crd::CertManagerIssuerRef {
+        issuer_ref: Some(krabka_operator::crd::CertManagerIssuerRef {
             name: "my-issuer".into(),
             kind: None,
             group: None,
@@ -1215,12 +1215,12 @@ async fn issuer_ref_with_cert_secret_ready_renders_deployment() {
 async fn bearer_jwks_renders_to_args() {
     let mut cr = sr("sr1", Some(CLUSTER));
     cr.spec.bootstrap_servers = Some("ext:9092".into());
-    cr.spec.authentication = Some(crabka_operator::crd::SchemaRegistryAuthn {
+    cr.spec.authentication = Some(krabka_operator::crd::SchemaRegistryAuthn {
         require_auth: false,
         realm: None,
         basic: None,
-        bearer: Some(crabka_operator::crd::BearerAuthn {
-            mode: crabka_operator::crd::BearerMode::Jwks,
+        bearer: Some(krabka_operator::crd::BearerAuthn {
+            mode: krabka_operator::crd::BearerMode::Jwks,
             principal_claim: None,
             jwks_endpoint_uri: Some("https://idp.example.com/jwks".into()),
             jwks_valid_issuer: Some("https://idp.example.com".into()),

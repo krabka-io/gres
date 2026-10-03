@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-09
 **Status:** Approved
-**Type:** Slice design. Revives the donor's multi-range router / cross-range 2PC / GTM layers over substrate-backed ranges, giving one tenant database **table-granular write scale-out**: aggregate write throughput grows linearly with ranges, each range being exactly the single-writer WAL-topic compute G-2/G-3 built. Structured **G-7a** (in-process multi-range) → **G-7b** (distributed range computes). Reverses the chapter's cluster-not-vendored decision for the non-raft ~two-thirds of the crate; the chapter doc is amended accordingly. Single-**table** sharding is deliberately out — that is [G-8](2026-07-09-crabka-gres-g8-sharded-tables-design.md).
+**Type:** Slice design. Revives the donor's multi-range router / cross-range 2PC / GTM layers over substrate-backed ranges, giving one tenant database **table-granular write scale-out**: aggregate write throughput grows linearly with ranges, each range being exactly the single-writer WAL-topic compute G-2/G-3 built. Structured **G-7a** (in-process multi-range) → **G-7b** (distributed range computes). Reverses the chapter's cluster-not-vendored decision for the non-raft ~two-thirds of the crate; the chapter doc is amended accordingly. Single-**table** sharding is deliberately out — that is [G-8](2026-07-09-krabka-gres-g8-sharded-tables-design.md).
 
 ## Context — what the donor actually holds (all claims source-verified)
 
@@ -79,7 +79,7 @@ The donor's leadership-rise sweep (apply-wait → reseed → re-acquire locks �
 
 ## Integration
 
-- **New crate `crates/gres-ranges`** (`crabka-gres-ranges`, `publish = false`): the KEEP/ADAPT subset — router, range map/meta, forward pool, twopc (coordinator/participant/silence sweeper), transport (frames/protocol/server minus raft), recovery gate, the range-compute bring-up skeleton; depends on `crabka-gres-substrate` (per-range committer/recovery/checkpoints), `crabka-gres-control` (layout/discovery), and the vendored engine crates.
+- **New crate `crates/gres-ranges`** (`krabka-gres-ranges`, `publish = false`): the KEEP/ADAPT subset — router, range map/meta, forward pool, twopc (coordinator/participant/silence sweeper), transport (frames/protocol/server minus raft), recovery gate, the range-compute bring-up skeleton; depends on `krabka-gres-substrate` (per-range committer/recovery/checkpoints), `krabka-gres-control` (layout/discovery), and the vendored engine crates.
 - **`crates/gres-substrate`:** per-range parameterization (topic/txn-id/bucket-prefix naming gain a range dimension); the range-0 tail consumer + barrier watermark task.
 - **`crates/gres-control` / operator / CLI:** range layout in the tenant record and `GresTenant` CRD; `crabka gres create-tenant --ranges` (boundaries by table count or explicit); per-range-compute Deployments; the tenant Service.
 - **`crates/pgexec`:** consumed through existing seams (`replicated`, `set_range0_barrier`, the 2PC entry points `begin_global_durable`/`commit_global_decision`/`join_global`/`reacquire_in_doubt_locks`/`advance_clog_scan_lo` — all already public for the cluster crate's sake).
@@ -107,7 +107,7 @@ Per-range journaling is G-2's transactional produce, unchanged. The east-west le
 
 ## Resolved decisions
 
-- Port scope: KEEP+ADAPT subset (~6.4k lines) into `crabka-gres-ranges`; raft storage/consensus dropped; all eight models + protocol suites ported; one new fence-ordering model action.
+- Port scope: KEEP+ADAPT subset (~6.4k lines) into `krabka-gres-ranges`; raft storage/consensus dropped; all eight models + protocol suites ported; one new fence-ordering model action.
 - Substitutions: terms→producer epochs (gate re-keys), rise sweep→recovery prologue (fence first), raft-metrics discovery→registry layout, `Range0Barrier`→broker-log end offset + local tail catch-up (never writer-answered; LEO-conservative), local range-0 replica→READ_COMMITTED topic tail.
 - Topology: every range compute is a gateway; PgDog → tenant Service; forwarding = single-statement SQL over pgwire; 2PC over framed TCP.
 - Layout: write-once at provisioning (registry + CRD); mutability deferred to G-8b.

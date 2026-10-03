@@ -152,13 +152,13 @@ Per tick:
 
 ## Components
 
-### `crabka-broker/src/handlers/elect_leaders.rs` (new, ~150 lines)
+### `krabka-broker/src/handlers/elect_leaders.rs` (new, ~150 lines)
 
 Decode `ElectLeadersRequest`, authorize Cluster Alter, drive
 `select_new_leader_for_partition` per target, submit, build response.
 Mirrors the shape of slice 13's `create_acls`/`delete_acls` handlers.
 
-### `crabka-broker/src/leader_election.rs` (extended)
+### `krabka-broker/src/leader_election.rs` (extended)
 
 Slice 10b's `on_broker_dead` stays. Add:
 - `pub(crate) enum ElectionType { Preferred, Unclean }`
@@ -168,14 +168,14 @@ Slice 10b's `on_broker_dead` stays. Add:
 8 unit tests covering the algorithm (matrix on PREFERRED + UNCLEAN
 paths, ISR + liveness + unknown-topic cases).
 
-### `crabka-broker/src/leader_rebalance.rs` (new, ~120 lines)
+### `krabka-broker/src/leader_rebalance.rs` (new, ~120 lines)
 
 `run` (the spawned task) + `rebalance_tick` (the pure-ish per-tick
 logic, takes a `&dyn ControllerLike` trait object so tests can mock).
 2 unit tests on `rebalance_tick`: below-threshold no-op, above-
 threshold submits exact set.
 
-### `crabka-broker/src/config.rs` (extended)
+### `krabka-broker/src/config.rs` (extended)
 
 Three new fields on `BrokerConfig`:
 
@@ -196,14 +196,14 @@ Production `Default` keeps `true`.
 - `leader_imbalance_per_broker_percentage > 100` →
   `BrokerError::InvalidLeaderRebalanceThreshold { value }`.
 
-### `crabka-broker/src/broker.rs` (extended)
+### `krabka-broker/src/broker.rs` (extended)
 
 `Broker::start` spawns the rebalance task when
 `config.auto_leader_rebalance_enable` AND the broker is configured to
 participate in the controller quorum. Cancellation via the existing
 `shutdown` token.
 
-### `crabka-broker/src/codes.rs` (extended)
+### `krabka-broker/src/codes.rs` (extended)
 
 ```rust
 pub const PREFERRED_LEADER_NOT_AVAILABLE: i16 = 80;
@@ -215,7 +215,7 @@ pub const ELECTION_NOT_NEEDED: i16 = 84;
 `CLUSTER_AUTHORIZATION_FAILED (31)`, `INVALID_REQUEST (42)` are
 already defined.
 
-### `crabka-broker/src/error.rs` (extended)
+### `krabka-broker/src/error.rs` (extended)
 
 Two new `BrokerError` variants for config validation. If a sibling
 `from_broker_error` does exhaustive matching, add map arms.
@@ -357,7 +357,7 @@ into data-loss-bearing decisions.
 
 ## Testing
 
-### Unit tests — `crabka-broker::leader_election`
+### Unit tests — `krabka-broker::leader_election`
 
 8 tests on `select_new_leader_for_partition`:
 
@@ -370,7 +370,7 @@ into data-loss-bearing decisions.
 - `unclean_isr_member_alive_returns_election_not_needed`
 - `unknown_topic_returns_error`
 
-### Unit tests — `crabka-broker::leader_rebalance`
+### Unit tests — `krabka-broker::leader_rebalance`
 
 2 tests on `rebalance_tick` via a small `ControllerLike` trait mock
 that captures submitted records in a `Mutex<Vec<MetadataRecord>>`:
@@ -378,7 +378,7 @@ that captures submitted records in a `Mutex<Vec<MetadataRecord>>`:
 - `below_threshold_skips_submit` (100 partitions, 5 imbalanced, threshold 10% → no submit)
 - `above_threshold_submits_imbalanced_set` (100 partitions, 20 imbalanced, threshold 10% → exactly 20 records)
 
-### Unit tests — `crabka-broker::config`
+### Unit tests — `krabka-broker::config`
 
 - `auto_leader_rebalance_defaults_to_true_in_default`
 - `auto_leader_rebalance_defaults_to_false_in_for_tests`

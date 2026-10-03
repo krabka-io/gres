@@ -1,8 +1,8 @@
-# crabka-gres
+# krabka-gres
 
 PostgreSQL-compatible tenant compute service for Crabka Gres.
 
-`crabka-gres` wires `crabka-pgexec` into the `crabka-pgwire` server runtime. The
+`krabka-gres` wires `krabka-pgexec` into the `krabka-pgwire` server runtime. The
 runtime supplies trust/SCRAM startup authentication, PostgreSQL SSLRequest
 handling, and an ephemeral in-memory default engine. It also supplies optional
 durable local storage with `--data-dir`, G-2 substrate-mode runtime wiring, and
@@ -11,7 +11,7 @@ registration of Crabka's Kafka foreign-data scanner.
 Local durable mode uses fjall directly:
 
 ```bash
-crabka-gres --listen 127.0.0.1:5433 --data-dir /var/lib/crabka-gres
+krabka-gres --listen 127.0.0.1:5433 --data-dir /var/lib/krabka-gres
 ```
 
 Substrate mode adds `--substrate-bootstrap`, `--tenant`, and optional
@@ -25,10 +25,10 @@ Substrate mode intentionally stays in G-2 full-replay mode when there is no
 checkpoint object store:
 
 ```bash
-crabka-gres --listen 127.0.0.1:54398 \
+krabka-gres --listen 127.0.0.1:54398 \
   --substrate-bootstrap 127.0.0.1:9092 \
   --tenant smoke \
-  --cache-dir /tmp/crabka-gres-smoke-cache
+  --cache-dir /tmp/krabka-gres-smoke-cache
 ```
 
 Substrate mode authenticates SQL clients by default with the SCRAM verifier from
@@ -44,11 +44,11 @@ defaults. Use `--auth trust` or `--auth scram --user-cred USER=PASSWORD`
 to control SQL authentication:
 
 ```bash
-crabka-gres --listen 127.0.0.1:54399 \
+krabka-gres --listen 127.0.0.1:54399 \
   --substrate-bootstrap memory:// \
   --tenant smoke \
   --auth trust \
-  --cache-dir /tmp/crabka-gres-memory-cache
+  --cache-dir /tmp/krabka-gres-memory-cache
 ```
 
 ## Substrate broker restarts and exit status
@@ -81,7 +81,7 @@ configuration sets `--range-tls-cert`, `--range-tls-key`, `--range-tls-ca`,
 `--range-tls-server-name`, and at least one `--range-allowed-principal`. The CA
 verifies both peer directions. Forwarding clients verify the server name and
 send it as SNI. Each allowed principal is the exact certificate subject DN that
-`crabka_security::extract_principal_from_cert` returns, for example
+`krabka_security::extract_principal_from_cert` returns, for example
 `CN=tenant-a-range-client`. A completed mTLS handshake alone is not
 authorization. The listener executes no RPC until the peer DN is in this
 tenant's immutable allowlist. Remote range routing also refuses to start without
@@ -91,9 +91,9 @@ plaintext TCP.
 Checkpoint flags reserve the G-3 binary/config surface for bounded replay:
 
 ```bash
-crabka-gres --substrate-bootstrap 127.0.0.1:9092 \
+krabka-gres --substrate-bootstrap 127.0.0.1:9092 \
   --tenant smoke \
-  --checkpoint-bucket crabka-gres-checkpoints \
+  --checkpoint-bucket krabka-gres-checkpoints \
   --checkpoint-region us-east-1 \
   --checkpoint-prefix dev/smoke \
   --checkpoint-frames 10000 \
@@ -125,7 +125,7 @@ crabka gres create-tenant \
 ```
 
 The G-4 control plane stores the fleet view in compacted `__gres_tenants` and the
-compute view in compacted `__gres_cfg.<tenant>`. `crabka-gres` consumes only the
+compute view in compacted `__gres_cfg.<tenant>`. `krabka-gres` consumes only the
 per-tenant config topic at startup, so standalone substrate computes need the
 operator path or an equivalent writer to populate `__gres_cfg.<tenant>` before
 they start. The smoke scripts `scripts/gres-psql-smoke.sh` and

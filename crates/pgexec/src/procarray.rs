@@ -3,7 +3,7 @@
 //! All connections share it behind an `Arc`. It owns the next-xid counter,
 //! which it seeds from the durable `/0/meta/next_xid` at open, and the set of
 //! currently-running xids. It also builds
-//! `crabka_pgmvcc::visibility::Snapshot`s. After a restart it starts empty, so
+//! `krabka_pgmvcc::visibility::Snapshot`s. After a restart it starts empty, so
 //! any clog `in-progress` xid is in no snapshot and resolves as aborted.
 //!
 //! In `Durable` mode the registry persists the on-disk counter in blocks
@@ -26,8 +26,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crabka_pgkv::Kv;
-use crabka_pgmvcc::{
+use krabka_pgkv::Kv;
+use krabka_pgmvcc::{
     visibility::Snapshot,
     xid::{FIRST_NORMAL_XID, first_allocatable_xid_at_or_after},
 };
@@ -83,10 +83,10 @@ impl ProcArray {
         mode: PersistMode,
         durable_block: u64,
     ) -> Result<Self, ExecError> {
-        let next_xid = match kv.get(&crabka_pgkv::key::next_xid_key())? {
+        let next_xid = match kv.get(&krabka_pgkv::key::next_xid_key())? {
             Some(b) => {
                 let (v, _) = U64::read_from_prefix(b.as_slice())
-                    .map_err(|_| crabka_pgkv::KvError::CorruptRow("next_xid is not u64".into()))?;
+                    .map_err(|_| krabka_pgkv::KvError::CorruptRow("next_xid is not u64".into()))?;
                 v.get()
             }
             None => FIRST_NORMAL_XID,
@@ -140,8 +140,8 @@ impl ProcArray {
                     let new_end = new_next.checked_add(self.durable_block).ok_or_else(|| {
                         ExecError::Unsupported("durable XID reservation exhausted u64".into())
                     })?;
-                    self.kv.write_batch(&[crabka_pgkv::WriteOp::Put {
-                        key: crabka_pgkv::key::next_xid_key(),
+                    self.kv.write_batch(&[krabka_pgkv::WriteOp::Put {
+                        key: krabka_pgkv::key::next_xid_key(),
                         value: U64::new(new_end).as_bytes().to_vec(),
                     }])?;
                     g.durable_end = new_end;
@@ -159,10 +159,10 @@ impl ProcArray {
     /// Callers use this when this node becomes leader, so it never hands out an
     /// xid the old leader already used.
     pub fn reseed_from_applied(&self) -> Result<(), ExecError> {
-        let durable = match self.kv.get(&crabka_pgkv::key::next_xid_key())? {
+        let durable = match self.kv.get(&krabka_pgkv::key::next_xid_key())? {
             Some(b) => {
                 let (v, _) = U64::read_from_prefix(b.as_slice())
-                    .map_err(|_| crabka_pgkv::KvError::CorruptRow("next_xid not u64".into()))?;
+                    .map_err(|_| krabka_pgkv::KvError::CorruptRow("next_xid not u64".into()))?;
                 v.get()
             }
             None => FIRST_NORMAL_XID,
@@ -181,10 +181,10 @@ impl ProcArray {
     /// The WriteOp that records the current next_xid.
     ///
     /// In Replicated mode it is folded into the commit batch.
-    pub fn next_xid_op(&self) -> crabka_pgkv::WriteOp {
+    pub fn next_xid_op(&self) -> krabka_pgkv::WriteOp {
         let next = self.inner.lock().expect("procarray").next_xid;
-        crabka_pgkv::WriteOp::Put {
-            key: crabka_pgkv::key::next_xid_key(),
+        krabka_pgkv::WriteOp::Put {
+            key: krabka_pgkv::key::next_xid_key(),
             value: U64::new(next).as_bytes().to_vec(),
         }
     }
@@ -231,7 +231,7 @@ mod tests {
     };
 
     use assert2::assert;
-    use crabka_pgkv::MemKv;
+    use krabka_pgkv::MemKv;
 
     use super::*;
 
@@ -258,19 +258,19 @@ mod tests {
     }
 
     impl Kv for CountingKv {
-        fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, crabka_pgkv::KvError> {
+        fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, krabka_pgkv::KvError> {
             self.inner.get(key)
         }
 
-        fn put(&self, key: Vec<u8>, value: Vec<u8>) -> Result<(), crabka_pgkv::KvError> {
+        fn put(&self, key: Vec<u8>, value: Vec<u8>) -> Result<(), krabka_pgkv::KvError> {
             self.inner.put(key, value)
         }
 
-        fn delete(&self, key: &[u8]) -> Result<(), crabka_pgkv::KvError> {
+        fn delete(&self, key: &[u8]) -> Result<(), krabka_pgkv::KvError> {
             self.inner.delete(key)
         }
 
-        fn scan_prefix(&self, prefix: &[u8]) -> Result<crabka_pgkv::KvScan, crabka_pgkv::KvError> {
+        fn scan_prefix(&self, prefix: &[u8]) -> Result<krabka_pgkv::KvScan, krabka_pgkv::KvError> {
             self.inner.scan_prefix(prefix)
         }
 
@@ -278,18 +278,18 @@ mod tests {
             &self,
             start: &[u8],
             end: &[u8],
-        ) -> Result<crabka_pgkv::KvScan, crabka_pgkv::KvError> {
+        ) -> Result<krabka_pgkv::KvScan, krabka_pgkv::KvError> {
             self.inner.scan_range(start, end)
         }
 
-        fn write_batch(&self, ops: &[crabka_pgkv::WriteOp]) -> Result<(), crabka_pgkv::KvError> {
+        fn write_batch(&self, ops: &[krabka_pgkv::WriteOp]) -> Result<(), krabka_pgkv::KvError> {
             self.write_batches.fetch_add(1, Ordering::SeqCst);
             self.inner.write_batch(ops)
         }
     }
 
     fn persisted_next_xid(kv: &dyn Kv) -> Option<u64> {
-        kv.get(&crabka_pgkv::key::next_xid_key())
+        kv.get(&krabka_pgkv::key::next_xid_key())
             .expect("get")
             .map(|b| u64::from_be_bytes(b.try_into().expect("u64")))
     }
@@ -328,12 +328,12 @@ mod tests {
     #[test]
     fn open_clamps_reserved_durable_counter_to_first_normal_xid() {
         for reserved in [
-            crabka_pgmvcc::xid::INVALID_XID,
-            crabka_pgmvcc::xid::FROZEN_XID,
+            krabka_pgmvcc::xid::INVALID_XID,
+            krabka_pgmvcc::xid::FROZEN_XID,
         ] {
             let kv = Arc::new(MemKv::new());
-            kv.write_batch(&[crabka_pgkv::WriteOp::Put {
-                key: crabka_pgkv::key::next_xid_key(),
+            kv.write_batch(&[krabka_pgkv::WriteOp::Put {
+                key: krabka_pgkv::key::next_xid_key(),
                 value: reserved.to_be_bytes().to_vec(),
             }])
             .expect("seed reserved counter");
@@ -383,8 +383,8 @@ mod tests {
     #[test]
     fn open_seeds_next_xid_from_durable_counter() {
         let kv = Arc::new(MemKv::new());
-        kv.write_batch(&[crabka_pgkv::WriteOp::Put {
-            key: crabka_pgkv::key::next_xid_key(),
+        kv.write_batch(&[krabka_pgkv::WriteOp::Put {
+            key: krabka_pgkv::key::next_xid_key(),
             value: 42u64.to_be_bytes().to_vec(),
         }])
         .expect("seed");
@@ -473,7 +473,7 @@ mod tests {
         assert!(pa.begin_write().expect("bw") == FIRST_NORMAL_XID);
         // Nothing persisted (replicated mode folds via the batch, not here).
         assert!(
-            kv.get(&crabka_pgkv::key::next_xid_key())
+            kv.get(&krabka_pgkv::key::next_xid_key())
                 .expect("get")
                 .is_none()
         );
@@ -481,14 +481,14 @@ mod tests {
         // replicated apply must stay byte-identical across replicas.
         assert!(
             pa.next_xid_op()
-                == crabka_pgkv::WriteOp::Put {
-                    key: crabka_pgkv::key::next_xid_key(),
+                == krabka_pgkv::WriteOp::Put {
+                    key: krabka_pgkv::key::next_xid_key(),
                     value: (FIRST_NORMAL_XID + 1).to_be_bytes().to_vec(),
                 }
         );
         // Simulate the applied store advancing to 50 (via Raft), then becoming leader.
         kv.put(
-            crabka_pgkv::key::next_xid_key(),
+            krabka_pgkv::key::next_xid_key(),
             50u64.to_be_bytes().to_vec(),
         )
         .expect("put");
@@ -505,7 +505,7 @@ mod tests {
         let pa =
             ProcArray::open(Arc::clone(&kv) as Arc<dyn Kv>, PersistMode::Replicated).expect("open");
         kv.put(
-            crabka_pgkv::key::next_xid_key(),
+            krabka_pgkv::key::next_xid_key(),
             1u64.to_be_bytes().to_vec(),
         )
         .expect("put frozen counter");

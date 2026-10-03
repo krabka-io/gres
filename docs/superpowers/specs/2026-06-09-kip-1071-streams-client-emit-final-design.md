@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-09
 **Status:** Approved (brainstorming)
-**Crate:** `crabka-client-streams` (`crates/client-streams`)
+**Crate:** `krabka-client-streams` (`crates/client-streams`)
 **Predecessor slice:** sliding windows (KIP-450), merged 2026-06-09 (#474 feat + #475 goldens)
 
 ## Summary

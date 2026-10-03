@@ -6,8 +6,8 @@
 //! Every expected value here is a capture from a live `PostgreSQL` 18.4, not a
 //! restatement of what crabka happens to produce.
 
-use crabka_pgexec::SqlEngine;
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::SqlEngine;
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 async fn run(engine: &SqlEngine, sql: &str) -> QueryResult {
     engine

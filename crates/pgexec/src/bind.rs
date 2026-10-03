@@ -57,7 +57,7 @@
 //! pairing explicit — construct it immediately before the loop that evaluates
 //! it, against the same `Scope` the loop passes to `eval`.
 
-use crabka_pgparser::ast::Expr;
+use krabka_pgparser::ast::Expr;
 
 use crate::{
     error::ExecError,
@@ -156,9 +156,9 @@ fn positional_reference(index: usize) -> Expr {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgcatalog::{Column, RelationName, Table};
-    use crabka_pgparser::ast::BinaryOp;
-    use crabka_pgtypes::{ColumnType, Datum};
+    use krabka_pgcatalog::{Column, RelationName, Table};
+    use krabka_pgparser::ast::BinaryOp;
+    use krabka_pgtypes::{ColumnType, Datum};
 
     use super::*;
     use crate::clock::EvalCtx;
@@ -166,7 +166,7 @@ mod tests {
     fn tbl(name: &str, cols: &[(&str, ColumnType)]) -> Table {
         Table {
             id: 1,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public(name),
             columns: cols.iter().map(|(n, t)| Column::new(*n, *t)).collect(),
             sharded: false,
@@ -188,7 +188,7 @@ mod tests {
     }
 
     fn parse(sql: &str) -> Expr {
-        crabka_pgparser::parser::parse_expression(sql).expect("expression parses")
+        krabka_pgparser::parser::parse_expression(sql).expect("expression parses")
     }
 
     fn column(table: Option<&str>, name: &str) -> Expr {

@@ -1,7 +1,7 @@
 //! A synthesised catalog relation is present, and present as a *kind*.
 //!
 //! `pg_class` and `information_schema.tables` are answered from the engine
-//! rather than from storage, so `crabka_pgcatalog::relation_exists` and
+//! rather than from storage, so `krabka_pgcatalog::relation_exists` and
 //! `get_table` — which read stored keys only — said they were not there. Every
 //! utility statement that re-asked existence that way reported 42P01 for a
 //! relation `PostgreSQL` resolves.
@@ -17,8 +17,8 @@
 //! Every expectation here was measured against `PostgreSQL` 18.4.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::{
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::{
     engine::{Engine, Session},
     error::PgError,
 };

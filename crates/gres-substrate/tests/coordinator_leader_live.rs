@@ -6,23 +6,23 @@ use std::{
 };
 
 use assert2::assert;
-use crabka_client_admin::AdminClient;
-use crabka_client_core::Client;
-use crabka_client_producer::{Acks, Producer};
-use crabka_gres_ranges::{RangeId, TenantName};
-use crabka_gres_substrate::{
+use krabka_client_admin::AdminClient;
+use krabka_client_core::Client;
+use krabka_client_producer::{Acks, Producer};
+use krabka_gres_ranges::{RangeId, TenantName};
+use krabka_gres_substrate::{
     GroupCommitRequest, ProducerWalWriter, TransactionalWalWriter, WalFrame,
     ensure_wal_topic_for_range, recover_live,
 };
-use crabka_pgkv::{Kv, MemKv, WriteOp};
-use crabka_protocol::owned::find_coordinator_request::FindCoordinatorRequest;
+use krabka_pgkv::{Kv, MemKv, WriteOp};
+use krabka_protocol::owned::find_coordinator_request::FindCoordinatorRequest;
 
 #[path = "../../broker/tests/support/mod.rs"]
 mod broker_support;
 
 fn request(seq: u64, key: &[u8]) -> GroupCommitRequest {
     GroupCommitRequest {
-        generation: crabka_gres_substrate::WriterGeneration(0),
+        generation: krabka_gres_substrate::WriterGeneration(0),
         frames: vec![WalFrame {
             journal_seq: seq,
             ops: vec![WriteOp::Put {
@@ -153,7 +153,7 @@ async fn fencing_falls_back_to_end_txn_when_coordinator_differs_from_partition_l
         .expect_err("stale fenced");
     assert!(matches!(
         stale_error,
-        crabka_gres_substrate::SubstrateError::Fenced
+        krabka_gres_substrate::SubstrateError::Fenced
     ));
     successor
         .commit_group(request(1, b"row/successor"))

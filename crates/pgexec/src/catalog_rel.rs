@@ -21,12 +21,12 @@
 
 use std::collections::BTreeMap;
 
-use crabka_pgcatalog::{
+use krabka_pgcatalog::{
     Column, CommentObject, ConstraintDeferral as Deferral, ForeignKeyId, IndexConstraint,
     MatchType, ReferentialAction, RelationName, Table,
 };
-use crabka_pgkv::Kv;
-use crabka_pgtypes::{
+use krabka_pgkv::Kv;
+use krabka_pgtypes::{
     ColumnType, Datum, ElemType,
     usertype::{CompositeField, UserType, UserTypeBody, UserTypeRef, intern},
 };
@@ -491,7 +491,7 @@ pub(crate) fn namespace_oid(schema: &str) -> i32 {
 
 /// `pg_class` oids of every view, keyed by the view's catalog name.
 pub(crate) fn view_oids(kv: &dyn Kv) -> Result<BTreeMap<RelationName, i32>, ExecError> {
-    let names = crabka_pgcatalog::list_views(kv)?
+    let names = krabka_pgcatalog::list_views(kv)?
         .into_iter()
         .map(|view| view.name)
         .collect::<Vec<_>>();
@@ -500,7 +500,7 @@ pub(crate) fn view_oids(kv: &dyn Kv) -> Result<BTreeMap<RelationName, i32>, Exec
 
 /// `pg_class` oids of every sequence, keyed by the sequence's catalog name.
 pub(crate) fn sequence_oids(kv: &dyn Kv) -> Result<BTreeMap<RelationName, i32>, ExecError> {
-    let names = crabka_pgcatalog::list_sequences(kv)?
+    let names = krabka_pgcatalog::list_sequences(kv)?
         .into_iter()
         .map(|(name, _)| name)
         .collect::<Vec<_>>();
@@ -523,17 +523,17 @@ pub(crate) fn relation_rowtype_oids(
         })
         .collect();
     names.extend(
-        crabka_pgcatalog::list_tables(kv)?
+        krabka_pgcatalog::list_tables(kv)?
             .into_iter()
             .map(|table| table.name),
     );
     names.extend(
-        crabka_pgcatalog::list_views(kv)?
+        krabka_pgcatalog::list_views(kv)?
             .into_iter()
             .map(|view| view.name),
     );
     names.extend(
-        crabka_pgcatalog::list_sequences(kv)?
+        krabka_pgcatalog::list_sequences(kv)?
             .into_iter()
             .map(|(name, _)| name),
     );
@@ -594,20 +594,20 @@ pub(crate) fn relation_rowtype_columns(
     let Some((relation, _)) = relation_name_for_rowtype_oid(kv, oid)? else {
         return Ok(None);
     };
-    let columns = crabka_pgcatalog::list_tables(kv)?
+    let columns = krabka_pgcatalog::list_tables(kv)?
         .into_iter()
         .find(|table| table.name == relation)
         .map(|table| table.columns);
     let columns = match columns {
         Some(columns) => Some(columns),
-        None => crabka_pgcatalog::list_views(kv)?
+        None => krabka_pgcatalog::list_views(kv)?
             .into_iter()
             .find(|view| view.name == relation)
             .map(|view| view.columns),
     };
     let columns = match columns {
         Some(columns) => Some(columns),
-        None => crabka_pgcatalog::list_sequences(kv)?
+        None => krabka_pgcatalog::list_sequences(kv)?
             .into_iter()
             .any(|(name, _)| name == relation)
             .then(|| sequence_rowtype_columns().to_vec()),
@@ -639,7 +639,7 @@ fn relation_name_for_rowtype_oid(
 pub(crate) fn sync_relation_rowtypes(kv: &dyn Kv) -> Result<(), ExecError> {
     let rowtype_oids = relation_rowtype_oids(kv)?;
     let mut types = Vec::new();
-    for table in crabka_pgcatalog::list_tables(kv)? {
+    for table in krabka_pgcatalog::list_tables(kv)? {
         let Some((oid, array_oid)) = rowtype_oids.get(&table.name) else {
             continue;
         };
@@ -650,7 +650,7 @@ pub(crate) fn sync_relation_rowtypes(kv: &dyn Kv) -> Result<(), ExecError> {
             &table.columns,
         ));
     }
-    for view in crabka_pgcatalog::list_views(kv)? {
+    for view in krabka_pgcatalog::list_views(kv)? {
         let Some((oid, array_oid)) = rowtype_oids.get(&view.name) else {
             continue;
         };
@@ -661,7 +661,7 @@ pub(crate) fn sync_relation_rowtypes(kv: &dyn Kv) -> Result<(), ExecError> {
             &view.columns,
         ));
     }
-    for (name, _) in crabka_pgcatalog::list_sequences(kv)? {
+    for (name, _) in krabka_pgcatalog::list_sequences(kv)? {
         let Some((oid, array_oid)) = rowtype_oids.get(&name) else {
             continue;
         };
@@ -692,7 +692,7 @@ pub(crate) fn sync_relation_rowtypes(kv: &dyn Kv) -> Result<(), ExecError> {
     // sync may publish its own rowtypes but must not delete another live
     // engine's entries.
     for ty in types {
-        crabka_pgtypes::usertype::replace(&ty);
+        krabka_pgtypes::usertype::replace(&ty);
     }
     Ok(())
 }
@@ -734,19 +734,19 @@ fn sequence_rowtype_columns() -> [Column; 3] {
 /// The bootstrap superuser keeps PostgreSQL's own oid 10. Every other role gets
 /// a hashed slot.
 pub(crate) fn role_oids(kv: &dyn Kv) -> Result<BTreeMap<String, i32>, ExecError> {
-    let names = crabka_pgcatalog::list_roles(kv)?
+    let names = krabka_pgcatalog::list_roles(kv)?
         .into_iter()
         .map(|role| role.name)
         .filter(|name| name != crate::catalog_fn::OBJECT_OWNER)
         .filter(|name| {
-            !crabka_pgcatalog::PREDEFINED_ROLES
+            !krabka_pgcatalog::PREDEFINED_ROLES
                 .iter()
                 .any(|(predefined, _)| *predefined == name)
         })
         .collect::<Vec<_>>();
     let mut oids = banded_oids(crate::catalog_fn::ROLE_OID_BASE, &names);
     oids.extend(
-        crabka_pgcatalog::PREDEFINED_ROLES
+        krabka_pgcatalog::PREDEFINED_ROLES
             .iter()
             .map(|(name, oid)| ((*name).to_string(), *oid)),
     );
@@ -762,7 +762,7 @@ pub(crate) fn role_oids(kv: &dyn Kv) -> Result<BTreeMap<String, i32>, ExecError>
 pub(crate) fn check_constraint_oids(
     kv: &dyn Kv,
 ) -> Result<BTreeMap<ConstraintKey, i32>, ExecError> {
-    let keys = crabka_pgcatalog::list_tables(kv)?
+    let keys = krabka_pgcatalog::list_tables(kv)?
         .into_iter()
         .flat_map(|table| {
             table
@@ -780,7 +780,7 @@ pub(crate) fn check_constraint_oids(
 pub(crate) fn not_null_constraint_oids(
     kv: &dyn Kv,
 ) -> Result<BTreeMap<ConstraintKey, i32>, ExecError> {
-    let keys = crabka_pgcatalog::list_tables(kv)?
+    let keys = krabka_pgcatalog::list_tables(kv)?
         .into_iter()
         .flat_map(|table| {
             table
@@ -811,7 +811,7 @@ pub(crate) fn not_null_constraint_oids(
 pub(crate) fn foreign_key_constraint_oids(
     kv: &dyn Kv,
 ) -> Result<BTreeMap<(RelationName, String), i32>, ExecError> {
-    crabka_pgcatalog::list_foreign_keys(kv)?
+    krabka_pgcatalog::list_foreign_keys(kv)?
         .into_iter()
         .map(|foreign_key| {
             Ok((
@@ -918,13 +918,13 @@ fn band_slot(base: i32, oid: i32) -> Option<u32> {
 /// Returns storage/corruption errors from the catalog KV seam.
 pub(crate) fn relation_for_oid(kv: &dyn Kv, oid: i32) -> Result<Option<RelationName>, ExecError> {
     if let Some(id) = band_slot(TABLE_OID_BASE, oid) {
-        return Ok(crabka_pgcatalog::relation_name_of(kv, id)?);
+        return Ok(krabka_pgcatalog::relation_name_of(kv, id)?);
     }
     if let Some(name) = crate::exec::catalog_rows::toast_relation_for_oid(kv, oid)? {
         return Ok(Some(name));
     }
     if band_slot(INDEX_OID_BASE, oid).is_some() {
-        return Ok(crabka_pgcatalog::list_indexes(kv)?
+        return Ok(krabka_pgcatalog::list_indexes(kv)?
             .into_iter()
             .find(|index| index_relation_oid(index.id) == Ok(oid))
             .map(|index| index.qualified_name()));
@@ -959,7 +959,7 @@ fn virtual_relation_for_oid(oid: i32) -> Option<RelationName> {
 /// Does a synthesised catalog relation answer to exactly this name?
 ///
 /// The per-schema probe [`crate::visibility`] repeats while walking the search
-/// path, alongside [`crabka_pgcatalog::relation_exists`] for the four kinds the
+/// path, alongside [`krabka_pgcatalog::relation_exists`] for the four kinds the
 /// catalog stores.
 pub(crate) fn virtual_relation_named(name: &RelationName) -> bool {
     virtual_relations().contains_key(name)
@@ -1008,17 +1008,17 @@ fn virtual_relations() -> &'static BTreeMap<RelationName, i32> {
 fn composite_relation_for_oid(
     kv: &dyn Kv,
     oid: i32,
-) -> Result<Option<RelationName>, crabka_pgcatalog::CatalogError> {
+) -> Result<Option<RelationName>, krabka_pgcatalog::CatalogError> {
     let Ok(oid) = u32::try_from(oid) else {
         return Ok(None);
     };
-    Ok(crabka_pgcatalog::list_user_types(kv)?
+    Ok(krabka_pgcatalog::list_user_types(kv)?
         .into_iter()
         .find(|ty| {
             matches!(
                 ty.body,
-                crabka_pgtypes::usertype::UserTypeBody::Composite(_)
-            ) && crabka_pgtypes::usertype::composite_relation_oid(ty.oid) == oid
+                krabka_pgtypes::usertype::UserTypeBody::Composite(_)
+            ) && krabka_pgtypes::usertype::composite_relation_oid(ty.oid) == oid
         })
         .map(|ty| RelationName::new(ty.schema, ty.name)))
 }
@@ -1077,7 +1077,7 @@ pub(crate) struct SessionIdent<'a> {
     /// prints its constants through their types' output functions, exactly as
     /// `pg_get_viewdef` does, so `DateStyle` and `IntervalStyle` decide what
     /// they say.
-    pub style: crabka_pgtypes::encoding::OutputStyle<'a>,
+    pub style: krabka_pgtypes::encoding::OutputStyle<'a>,
 }
 
 /// The relation's rows.
@@ -1154,7 +1154,7 @@ pub(crate) fn rows(
 
 fn pg_enum_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
     let mut rows = Vec::new();
-    for ty in crabka_pgcatalog::list_user_types(kv)? {
+    for ty in krabka_pgcatalog::list_user_types(kv)? {
         let Some(labels) = ty.labels() else {
             continue;
         };
@@ -1178,10 +1178,10 @@ fn pg_enum_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
             ]);
         }
     }
-    for cast in crabka_pgcatalog::list_user_casts(kv)? {
+    for cast in krabka_pgcatalog::list_user_casts(kv)? {
         let oid = cast.oid.to_string();
         if let Some(comment) =
-            crabka_pgcatalog::get_comment(kv, "cast", CommentObject::Named(&oid))?
+            krabka_pgcatalog::get_comment(kv, "cast", CommentObject::Named(&oid))?
         {
             rows.push(vec![
                 int(i32::try_from(cast.oid).expect("cast oid fits int4")),
@@ -1191,10 +1191,10 @@ fn pg_enum_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
             ]);
         }
     }
-    for method in crabka_pgcatalog::list_access_methods(kv)? {
+    for method in krabka_pgcatalog::list_access_methods(kv)? {
         let oid = method.oid.to_string();
         if let Some(comment) =
-            crabka_pgcatalog::get_comment(kv, "access method", CommentObject::Named(&oid))?
+            krabka_pgcatalog::get_comment(kv, "access method", CommentObject::Named(&oid))?
         {
             rows.push(vec![
                 int(i32::try_from(method.oid).expect("access method oid fits int4")),
@@ -1288,7 +1288,7 @@ fn pg_cast_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
             ]
         })
         .collect();
-    for cast in crabka_pgcatalog::list_user_casts(kv)? {
+    for cast in krabka_pgcatalog::list_user_casts(kv)? {
         rows.push(vec![
             int(i32::try_from(cast.oid).unwrap_or(0)),
             int(i32::try_from(cast.source).unwrap_or(0)),
@@ -1339,16 +1339,16 @@ pub(crate) fn is_binary_coercible(source: u32, target: u32) -> bool {
 }
 
 fn pg_trigger_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    use crabka_pgcatalog::trigger::{TriggerLevel, TriggerTiming};
-    let mut tables: std::collections::HashMap<_, _> = crabka_pgcatalog::list_tables(kv)?
+    use krabka_pgcatalog::trigger::{TriggerLevel, TriggerTiming};
+    let mut tables: std::collections::HashMap<_, _> = krabka_pgcatalog::list_tables(kv)?
         .into_iter()
         .map(|table| (table.id, table))
         .collect();
-    for view in crabka_pgcatalog::list_views(kv)? {
+    for view in krabka_pgcatalog::list_views(kv)? {
         let table = crate::trigger::relation_trigger_table(kv, &view.name)?;
         tables.insert(table.id, table);
     }
-    crabka_pgcatalog::trigger::list_triggers(kv)?
+    krabka_pgcatalog::trigger::list_triggers(kv)?
         .into_iter()
         .map(|trigger| {
             let mut ty = match trigger.level {
@@ -1416,7 +1416,7 @@ fn pg_depend_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
     let proc_class = relation_oid("pg_proc");
     let relation_class = relation_oid("pg_class");
     let mut rows = Vec::new();
-    for trigger in crabka_pgcatalog::trigger::list_triggers(kv)? {
+    for trigger in krabka_pgcatalog::trigger::list_triggers(kv)? {
         let oid = i32::try_from(trigger.oid).unwrap_or(0);
         rows.push(vec![
             int(trigger_class),
@@ -1437,7 +1437,7 @@ fn pg_depend_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
             text("a"),
         ]);
     }
-    for trigger in crabka_pgcatalog::trigger::list_event_triggers(kv)? {
+    for trigger in krabka_pgcatalog::trigger::list_event_triggers(kv)? {
         rows.push(vec![
             int(event_trigger_class),
             int(i32::try_from(trigger.oid).unwrap_or(0)),
@@ -1448,7 +1448,7 @@ fn pg_depend_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
             text("n"),
         ]);
     }
-    for cast in crabka_pgcatalog::list_user_casts(kv)? {
+    for cast in krabka_pgcatalog::list_user_casts(kv)? {
         if cast.method == 'f'
             && let Ok(function_oid) = cast.function.parse::<i32>()
         {
@@ -1467,9 +1467,9 @@ fn pg_depend_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
 }
 
 fn pg_event_trigger_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    use crabka_pgcatalog::trigger::EventTriggerEvent;
+    use krabka_pgcatalog::trigger::EventTriggerEvent;
     let role_oids = role_oids(kv)?;
-    Ok(crabka_pgcatalog::trigger::list_event_triggers(kv)?
+    Ok(krabka_pgcatalog::trigger::list_event_triggers(kv)?
         .into_iter()
         .map(|trigger| {
             let event = match trigger.event {
@@ -1496,7 +1496,7 @@ fn pg_event_trigger_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
                 if tags.is_empty() {
                     Datum::Null
                 } else {
-                    Datum::Array(crabka_pgtypes::ArrayValue::new(ElemType::Text, tags))
+                    Datum::Array(krabka_pgtypes::ArrayValue::new(ElemType::Text, tags))
                 },
             ]
         })
@@ -1507,7 +1507,7 @@ fn foreign_option_array(options: &[(String, String)]) -> Datum {
     if options.is_empty() {
         Datum::Null
     } else {
-        Datum::Array(crabka_pgtypes::ArrayValue::new(
+        Datum::Array(krabka_pgtypes::ArrayValue::new(
             ElemType::Text,
             options
                 .iter()
@@ -1518,9 +1518,9 @@ fn foreign_option_array(options: &[(String, String)]) -> Datum {
 }
 
 fn pg_foreign_data_wrapper_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    let wrappers = crabka_pgcatalog::list_fdws(kv)?;
+    let wrappers = krabka_pgcatalog::list_fdws(kv)?;
     let role_oids = role_oids(kv)?;
-    let routines = crabka_pgcatalog::routine::list_routines(kv)?;
+    let routines = krabka_pgcatalog::routine::list_routines(kv)?;
     Ok(wrappers
         .into_iter()
         .map(|wrapper| {
@@ -1532,7 +1532,7 @@ fn pg_foreign_data_wrapper_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecErro
                 foreign_routine_datum(wrapper.validator.as_deref(), &routines, &["text[]", "oid"]),
                 foreign_acl(
                     kv,
-                    crabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper,
+                    krabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper,
                     &wrapper.name,
                     &wrapper.owner,
                 )?,
@@ -1544,11 +1544,11 @@ fn pg_foreign_data_wrapper_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecErro
 
 fn foreign_routine_datum(
     name: Option<&str>,
-    routines: &[crabka_pgcatalog::routine::Routine],
+    routines: &[krabka_pgcatalog::routine::Routine],
     input_types: &[&str],
 ) -> Datum {
     name.map_or_else(
-        || Datum::Regclass(crabka_pgtypes::RegclassValue::unresolved(0)),
+        || Datum::Regclass(krabka_pgtypes::RegclassValue::unresolved(0)),
         |name| {
             let bare = name.rsplit('.').next().unwrap_or(name);
             let oid = if bare == "postgresql_fdw_validator" && input_types == ["text[]", "oid"] {
@@ -1566,18 +1566,18 @@ fn foreign_routine_datum(
                     .and_then(|routine| i32::try_from(routine.oid).ok())
                     .unwrap_or(0)
             };
-            Datum::Regclass(crabka_pgtypes::RegclassValue::resolved(oid, name))
+            Datum::Regclass(krabka_pgtypes::RegclassValue::resolved(oid, name))
         },
     )
 }
 
 fn pg_foreign_server_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    let wrappers = crabka_pgcatalog::list_fdws(kv)?;
+    let wrappers = krabka_pgcatalog::list_fdws(kv)?;
     let wrapper_oids = wrappers
         .iter()
         .map(|wrapper| (wrapper.name.as_str(), wrapper.oid))
         .collect::<BTreeMap<_, _>>();
-    let servers = crabka_pgcatalog::list_servers(kv)?;
+    let servers = krabka_pgcatalog::list_servers(kv)?;
     let role_oids = role_oids(kv)?;
     Ok(servers
         .into_iter()
@@ -1594,7 +1594,7 @@ fn pg_foreign_server_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
                 server.version.as_deref().map_or(Datum::Null, text),
                 foreign_acl(
                     kv,
-                    crabka_pgcatalog::ForeignPrivilegeTarget::Server,
+                    krabka_pgcatalog::ForeignPrivilegeTarget::Server,
                     &server.name,
                     &server.owner,
                 )?,
@@ -1606,11 +1606,11 @@ fn pg_foreign_server_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
 
 fn foreign_acl(
     kv: &dyn Kv,
-    target: crabka_pgcatalog::ForeignPrivilegeTarget,
+    target: krabka_pgcatalog::ForeignPrivilegeTarget,
     name: &str,
     owner: &str,
 ) -> Result<Datum, ExecError> {
-    let grants = crabka_pgcatalog::list_foreign_privileges(kv, target, name)?;
+    let grants = krabka_pgcatalog::list_foreign_privileges(kv, target, name)?;
     if grants.is_empty() {
         return Ok(Datum::Null);
     }
@@ -1619,7 +1619,7 @@ fn foreign_acl(
         grants
             .into_iter()
             .map(|(grantee, _privilege, grant_option)| {
-                let grantee = if grantee == crabka_pgcatalog::PUBLIC_ROLE {
+                let grantee = if grantee == krabka_pgcatalog::PUBLIC_ROLE {
                     String::new()
                 } else {
                     grantee
@@ -1627,20 +1627,20 @@ fn foreign_acl(
                 format!("{grantee}=U{}/{owner}", if grant_option { "*" } else { "" })
             }),
     );
-    Ok(Datum::Array(crabka_pgtypes::ArrayValue::new(
+    Ok(Datum::Array(krabka_pgtypes::ArrayValue::new(
         ElemType::Text,
         items.into_iter().map(Datum::Text).collect(),
     )))
 }
 
 fn pg_user_mapping_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    let servers = crabka_pgcatalog::list_servers(kv)?;
+    let servers = krabka_pgcatalog::list_servers(kv)?;
     let server_oids = servers
         .iter()
         .map(|server| (server.name.as_str(), server.oid))
         .collect::<BTreeMap<_, _>>();
     let role_oids = role_oids(kv)?;
-    let mappings = crabka_pgcatalog::list_user_mappings(kv)?;
+    let mappings = krabka_pgcatalog::list_user_mappings(kv)?;
     Ok(mappings
         .into_iter()
         .map(|mapping| {
@@ -1665,11 +1665,11 @@ fn pg_user_mapping_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
 /// PostgreSQL would let the querying role use that server or own its public map.
 fn pg_user_mappings_rows(kv: &dyn Kv, current_user: &str) -> Result<Vec<Vec<Datum>>, ExecError> {
     let server_owners = foreign_server_owners(kv)?;
-    crabka_pgcatalog::list_user_mappings(kv)?
+    krabka_pgcatalog::list_user_mappings(kv)?
         .into_iter()
         .map(|mapping| {
             let owner = server_owners.get(&mapping.server).ok_or_else(|| {
-                ExecError::Catalog(crabka_pgcatalog::CatalogError::UndefinedObject(
+                ExecError::Catalog(krabka_pgcatalog::CatalogError::UndefinedObject(
                     mapping.server.clone(),
                 ))
             })?;
@@ -1689,12 +1689,12 @@ fn pg_user_mappings_rows(kv: &dyn Kv, current_user: &str) -> Result<Vec<Vec<Datu
 }
 
 fn pg_foreign_table_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    let servers = crabka_pgcatalog::list_servers(kv)?;
+    let servers = krabka_pgcatalog::list_servers(kv)?;
     let server_oids = servers
         .iter()
         .map(|server| (server.name.as_str(), server.oid))
         .collect::<BTreeMap<_, _>>();
-    crabka_pgcatalog::list_tables(kv)?
+    krabka_pgcatalog::list_tables(kv)?
         .into_iter()
         .filter(|table| table.foreign.is_some())
         .map(|table| {
@@ -2342,7 +2342,7 @@ fn pg_am_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
         vec![
             Datum::Oid(oid as u32),
             text(name),
-            Datum::Regclass(crabka_pgtypes::RegclassValue::resolved(
+            Datum::Regclass(krabka_pgtypes::RegclassValue::resolved(
                 handler_oid,
                 handler,
             )),
@@ -2351,7 +2351,7 @@ fn pg_am_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
     })
     .collect::<Vec<_>>();
     rows.extend(
-        crabka_pgcatalog::list_access_methods(kv)?
+        krabka_pgcatalog::list_access_methods(kv)?
             .into_iter()
             .map(|method| {
                 let handler_oid = match method.handler.as_str() {
@@ -2367,13 +2367,13 @@ fn pg_am_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
                 vec![
                     Datum::Oid(method.oid),
                     text(&method.name),
-                    Datum::Regclass(crabka_pgtypes::RegclassValue::resolved(
+                    Datum::Regclass(krabka_pgtypes::RegclassValue::resolved(
                         handler_oid,
                         &method.handler,
                     )),
                     Datum::InternalChar(match method.kind {
-                        crabka_pgcatalog::AccessMethodKind::Index => b'i',
-                        crabka_pgcatalog::AccessMethodKind::Table => b't',
+                        krabka_pgcatalog::AccessMethodKind::Index => b'i',
+                        krabka_pgcatalog::AccessMethodKind::Table => b't',
                     }),
                 ]
             }),
@@ -2415,7 +2415,7 @@ fn pg_language_rows() -> Vec<Vec<Datum>> {
 /// The durable definitions behind `CREATE STATISTICS`.
 fn pg_statistic_ext_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
     let role_oids = role_oids(kv)?;
-    crabka_pgcatalog::statistics::list(kv)?
+    krabka_pgcatalog::statistics::list(kv)?
         .into_iter()
         .map(|object| {
             Ok(vec![
@@ -2436,7 +2436,7 @@ fn pg_statistic_ext_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
                         .collect::<Vec<_>>()
                         .join(" "),
                 ),
-                Datum::Array(crabka_pgtypes::ArrayValue::new(
+                Datum::Array(krabka_pgtypes::ArrayValue::new(
                     ElemType::Text,
                     object.kinds.into_iter().map(Datum::Text).collect(),
                 )),
@@ -2450,7 +2450,7 @@ fn pg_statistic_ext_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
 
 /// The data `ANALYZE` derived for the durable statistics definitions.
 fn pg_statistic_ext_data_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    crabka_pgcatalog::statistics::list(kv)?
+    krabka_pgcatalog::statistics::list(kv)?
         .into_iter()
         .flat_map(|object| {
             [object.data, object.inherited_data]
@@ -2494,8 +2494,8 @@ fn pg_statistic_ext_data_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError>
 /// virtual-catalog seam; this projector only turns durable pages into rows.
 fn pg_largeobject_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
     let mut rows = Vec::new();
-    for metadata in crabka_pgcatalog::largeobject::list_metadata(kv)? {
-        for page in crabka_pgcatalog::largeobject::list_pages(kv, metadata.oid)? {
+    for metadata in krabka_pgcatalog::largeobject::list_metadata(kv)? {
+        for page in krabka_pgcatalog::largeobject::list_pages(kv, metadata.oid)? {
             rows.push(vec![
                 Datum::Oid(page.oid),
                 int(i32::try_from(page.page_no).map_err(|_| {
@@ -2511,13 +2511,13 @@ fn pg_largeobject_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
 /// Ownership and explicit ACLs for large objects.
 fn pg_largeobject_metadata_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
     let role_oids = role_oids(kv)?;
-    Ok(crabka_pgcatalog::largeobject::list_metadata(kv)?
+    Ok(krabka_pgcatalog::largeobject::list_metadata(kv)?
         .into_iter()
         .map(|metadata| {
             let acl = if metadata.acl.is_empty() {
                 Datum::Null
             } else {
-                Datum::Array(crabka_pgtypes::ArrayValue::new(
+                Datum::Array(krabka_pgtypes::ArrayValue::new(
                     ElemType::Text,
                     metadata
                         .acl
@@ -2537,7 +2537,7 @@ fn pg_largeobject_metadata_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecErro
         .collect())
 }
 
-fn largeobject_acl_item(entry: &crabka_pgcatalog::largeobject::AclEntry) -> String {
+fn largeobject_acl_item(entry: &krabka_pgcatalog::largeobject::AclEntry) -> String {
     let mut privileges = String::new();
     if entry.select {
         privileges.push('r');
@@ -2551,7 +2551,7 @@ fn largeobject_acl_item(entry: &crabka_pgcatalog::largeobject::AclEntry) -> Stri
             privileges.push('*');
         }
     }
-    let grantee = if entry.grantee == crabka_pgcatalog::PUBLIC_ROLE {
+    let grantee = if entry.grantee == krabka_pgcatalog::PUBLIC_ROLE {
         ""
     } else {
         &entry.grantee
@@ -2570,14 +2570,14 @@ fn largeobject_acl_item(entry: &crabka_pgcatalog::largeobject::AclEntry) -> Stri
 /// either/or rather than two rows.
 fn pg_attrdef_rows(
     kv: &dyn Kv,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
     /// The source text `adbin` reports for one column, or `None` when the
     /// column has neither a default nor a generation expression.
     fn source_text(
         kv: &dyn Kv,
-        column: &crabka_pgcatalog::Column,
-        style: crabka_pgtypes::encoding::OutputStyle<'_>,
+        column: &krabka_pgcatalog::Column,
+        style: krabka_pgtypes::encoding::OutputStyle<'_>,
     ) -> Option<String> {
         if let Some(generated) = &column.generated {
             // Stored bare, as the catalog holds it. PostgreSQL's non-pretty
@@ -2594,7 +2594,7 @@ fn pg_attrdef_rows(
     }
 
     let mut rows = Vec::new();
-    for table in crabka_pgcatalog::list_tables(kv)? {
+    for table in krabka_pgcatalog::list_tables(kv)? {
         let relid = table_relation_oid(table.id)?;
         let sources = table
             .columns
@@ -2627,9 +2627,9 @@ fn pg_attrdef_rows(
 }
 
 fn pg_authid_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    use crabka_pgcatalog::RoleAttribute;
+    use krabka_pgcatalog::RoleAttribute;
     let oids = role_oids(kv)?;
-    Ok(crabka_pgcatalog::list_roles(kv)?
+    Ok(krabka_pgcatalog::list_roles(kv)?
         .into_iter()
         .map(|role| {
             // The bootstrap owner is a superuser by construction; every other
@@ -2710,9 +2710,9 @@ fn pg_collation_rows() -> Vec<Vec<Datum>> {
 /// "a login event trigger exists". Answering a fixed `false` would have said
 /// no login trigger existed on a database that had just fired one.
 fn pg_database_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datum>>, ExecError> {
-    let has_login_event = crabka_pgcatalog::trigger::list_event_triggers(kv)?
+    let has_login_event = krabka_pgcatalog::trigger::list_event_triggers(kv)?
         .iter()
-        .any(|trigger| trigger.event == crabka_pgcatalog::trigger::EventTriggerEvent::Login);
+        .any(|trigger| trigger.event == krabka_pgcatalog::trigger::EventTriggerEvent::Login);
     Ok(vec![vec![
         int(DATABASE_OID),
         text(database),
@@ -2756,7 +2756,7 @@ fn pg_database_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datum>>, Exec
 /// a column, and `privtype` is `i` — from `initdb` — because none of it comes
 /// from an extension.
 fn pg_init_privs_rows() -> Vec<Vec<Datum>> {
-    let public_select = format!("=r/{}", crabka_pgcatalog::BOOTSTRAP_ROLE);
+    let public_select = format!("=r/{}", krabka_pgcatalog::BOOTSTRAP_ROLE);
     crate::exec::virtual_table_names()
         .iter()
         .map(|name| {
@@ -2765,7 +2765,7 @@ fn pg_init_privs_rows() -> Vec<Vec<Datum>> {
                 int(crate::catalog_fn::PG_CLASS_OID),
                 int(0),
                 text("i"),
-                Datum::Array(crabka_pgtypes::ArrayValue::new(
+                Datum::Array(krabka_pgtypes::ArrayValue::new(
                     ElemType::Text,
                     vec![Datum::Text(public_select.clone())],
                 )),
@@ -2781,13 +2781,13 @@ fn pg_tablespace_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
         .map(|(oid, name)| vec![int(oid), text(name), int(10), Datum::Null, Datum::Null])
         .collect();
     rows.extend(
-        crabka_pgcatalog::list_tablespaces(kv)?
+        krabka_pgcatalog::list_tablespaces(kv)?
             .into_iter()
             .map(|tablespace| {
                 let options = if tablespace.options.is_empty() {
                     Datum::Null
                 } else {
-                    Datum::Array(crabka_pgtypes::ArrayValue::new(
+                    Datum::Array(krabka_pgtypes::ArrayValue::new(
                         ElemType::Text,
                         tablespace
                             .options
@@ -2825,7 +2825,7 @@ fn pg_opfamily_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
         })
         .collect::<Vec<_>>();
     rows.extend(
-        crabka_pgcatalog::list_operator_families(kv)?
+        krabka_pgcatalog::list_operator_families(kv)?
             .into_iter()
             .map(|family| {
                 Ok(vec![
@@ -2874,7 +2874,7 @@ fn pg_amop_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
         })
         .collect::<BTreeMap<_, _>>();
     methods.extend(
-        crabka_pgcatalog::list_operator_families(kv)?
+        krabka_pgcatalog::list_operator_families(kv)?
             .into_iter()
             .map(|family| {
                 (
@@ -2886,7 +2886,7 @@ fn pg_amop_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
     // A family member normally names a built-in operator, but `CREATE OPERATOR`
     // followed by `ALTER OPERATOR FAMILY … ADD` is the documented way to build a
     // cross-type family, so `amopopr` has to resolve a user-defined symbol too.
-    let user_operators = crabka_pgcatalog::list_user_operators(kv)?
+    let user_operators = krabka_pgcatalog::list_user_operators(kv)?
         .into_iter()
         .map(|operator| {
             (
@@ -2899,17 +2899,17 @@ fn pg_amop_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
             )
         })
         .collect::<BTreeMap<_, _>>();
-    for (index, (family, member)) in crabka_pgcatalog::list_operator_family_members(kv)?
+    for (index, (family, member)) in krabka_pgcatalog::list_operator_family_members(kv)?
         .into_iter()
         .filter(|(_, member)| {
             matches!(
                 member,
-                crabka_pgcatalog::OperatorFamilyMember::Operator { .. }
+                krabka_pgcatalog::OperatorFamilyMember::Operator { .. }
             )
         })
         .enumerate()
     {
-        let crabka_pgcatalog::OperatorFamilyMember::Operator {
+        let krabka_pgcatalog::OperatorFamilyMember::Operator {
             number,
             operator,
             left_type_oid,
@@ -2985,7 +2985,7 @@ fn pg_amproc_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
             _ => None,
         })
         .collect::<BTreeMap<_, _>>();
-    for routine in crabka_pgcatalog::routine::list_routines(kv)? {
+    for routine in krabka_pgcatalog::routine::list_routines(kv)? {
         let arguments = routine
             .input_params()
             .map(|param| param.ty.column.map(ColumnType::oid))
@@ -2997,17 +2997,17 @@ fn pg_amproc_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
             );
         }
     }
-    for (index, (family, member)) in crabka_pgcatalog::list_operator_family_members(kv)?
+    for (index, (family, member)) in krabka_pgcatalog::list_operator_family_members(kv)?
         .into_iter()
         .filter(|(_, member)| {
             matches!(
                 member,
-                crabka_pgcatalog::OperatorFamilyMember::Function { .. }
+                krabka_pgcatalog::OperatorFamilyMember::Function { .. }
             )
         })
         .enumerate()
     {
-        let crabka_pgcatalog::OperatorFamilyMember::Function {
+        let krabka_pgcatalog::OperatorFamilyMember::Function {
             number,
             function,
             left_type_oid,
@@ -3103,7 +3103,7 @@ fn pg_opclass_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
         )
         .collect::<Vec<_>>();
     rows.extend(
-        crabka_pgcatalog::list_operator_classes(kv)?
+        krabka_pgcatalog::list_operator_classes(kv)?
             .into_iter()
             .map(|class| {
                 let oid = |oid: u32| {
@@ -3169,7 +3169,7 @@ fn pg_stat_activity_rows(database: &str, backend_pid: i32, query_id: bool) -> Ve
 /// plan tree. Nothing in crabka reads it as a node tree.
 fn pg_rewrite_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
     let oids = view_oids(kv)?;
-    let mut rows: Vec<_> = crabka_pgcatalog::list_views(kv)?
+    let mut rows: Vec<_> = krabka_pgcatalog::list_views(kv)?
         .into_iter()
         .map(|view| {
             let relid = oids.get(&view.name).copied().unwrap_or(0);
@@ -3186,14 +3186,14 @@ fn pg_rewrite_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
         })
         .collect();
     rows.extend(
-        crabka_pgcatalog::rule::list_rules(kv)?
+        krabka_pgcatalog::rule::list_rules(kv)?
             .into_iter()
             .map(|rule| -> Result<_, ExecError> {
                 let event = match rule.event {
-                    crabka_pgcatalog::rule::RuleEvent::Select => "1",
-                    crabka_pgcatalog::rule::RuleEvent::Update => "2",
-                    crabka_pgcatalog::rule::RuleEvent::Insert => "3",
-                    crabka_pgcatalog::rule::RuleEvent::Delete => "4",
+                    krabka_pgcatalog::rule::RuleEvent::Select => "1",
+                    krabka_pgcatalog::rule::RuleEvent::Update => "2",
+                    krabka_pgcatalog::rule::RuleEvent::Insert => "3",
+                    krabka_pgcatalog::rule::RuleEvent::Delete => "4",
                 };
                 Ok(vec![
                     int(i32::try_from(rule.oid).expect("rule oid fits int4")),
@@ -3218,7 +3218,7 @@ fn pg_rewrite_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
 
 /// `pg_rules`, the readable projection of user-defined rewrite rules.
 fn pg_rules_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    let mut rows: Vec<_> = crabka_pgcatalog::rule::list_rules(kv)?
+    let mut rows: Vec<_> = krabka_pgcatalog::rule::list_rules(kv)?
         .into_iter()
         .map(|rule| {
             let definition = crate::catalog_fn::rule_def(
@@ -3243,7 +3243,7 @@ fn pg_rules_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
 
 fn pg_sequence_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
     let oids = sequence_oids(kv)?;
-    Ok(crabka_pgcatalog::list_sequences(kv)?
+    Ok(krabka_pgcatalog::list_sequences(kv)?
         .into_iter()
         .map(|(name, sequence)| {
             vec![
@@ -3301,7 +3301,7 @@ fn pg_description_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
             })
             .collect::<Result<Vec<_>, ExecError>>()?,
     );
-    for table in crabka_pgcatalog::list_tables(kv)? {
+    for table in krabka_pgcatalog::list_tables(kv)? {
         let relid = table_relation_oid(table.id)?;
         let kind = if table.foreign.is_some() {
             "foreign table"
@@ -3311,13 +3311,13 @@ fn pg_description_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
             "table"
         };
         if let Some(comment) =
-            crabka_pgcatalog::get_comment(kv, kind, CommentObject::Relation(&table.name))?
+            krabka_pgcatalog::get_comment(kv, kind, CommentObject::Relation(&table.name))?
         {
             rows.push(description_row(relid, 0, &comment));
         }
         for (idx, column) in table.columns.iter().enumerate() {
             let object = CommentObject::Column(&table.name, &column.name);
-            if let Some(comment) = crabka_pgcatalog::get_comment(kv, "column", object)? {
+            if let Some(comment) = krabka_pgcatalog::get_comment(kv, "column", object)? {
                 let attnum = i32::try_from(idx + 1)
                     .map_err(|_| ExecError::Unsupported("attnum exceeds int4 range".into()))?;
                 rows.push(description_row(relid, attnum, &comment));
@@ -3325,9 +3325,9 @@ fn pg_description_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
         }
     }
     let view_oids = view_oids(kv)?;
-    for view in crabka_pgcatalog::list_views(kv)? {
+    for view in krabka_pgcatalog::list_views(kv)? {
         if let Some(comment) =
-            crabka_pgcatalog::get_comment(kv, "view", CommentObject::Relation(&view.name))?
+            krabka_pgcatalog::get_comment(kv, "view", CommentObject::Relation(&view.name))?
         {
             rows.push(description_row(
                 view_oids.get(&view.name).copied().unwrap_or(0),
@@ -3336,10 +3336,10 @@ fn pg_description_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
             ));
         }
     }
-    for rule in crabka_pgcatalog::rule::list_rules(kv)? {
+    for rule in krabka_pgcatalog::rule::list_rules(kv)? {
         let oid = rule.oid.to_string();
         if let Some(comment) =
-            crabka_pgcatalog::get_comment(kv, "rule", CommentObject::Named(&oid))?
+            krabka_pgcatalog::get_comment(kv, "rule", CommentObject::Named(&oid))?
         {
             rows.push(vec![
                 int(i32::try_from(rule.oid).expect("rule oid fits int4")),
@@ -3349,10 +3349,10 @@ fn pg_description_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
             ]);
         }
     }
-    for trigger in crabka_pgcatalog::trigger::list_triggers(kv)? {
+    for trigger in krabka_pgcatalog::trigger::list_triggers(kv)? {
         let oid = trigger.oid.to_string();
         if let Some(comment) =
-            crabka_pgcatalog::get_comment(kv, "trigger", CommentObject::Named(&oid))?
+            krabka_pgcatalog::get_comment(kv, "trigger", CommentObject::Named(&oid))?
         {
             rows.push(vec![
                 int(i32::try_from(trigger.oid).expect("trigger oid fits int4")),
@@ -3362,10 +3362,10 @@ fn pg_description_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
             ]);
         }
     }
-    for metadata in crabka_pgcatalog::largeobject::list_metadata(kv)? {
+    for metadata in krabka_pgcatalog::largeobject::list_metadata(kv)? {
         let oid = metadata.oid.to_string();
         if let Some(comment) =
-            crabka_pgcatalog::get_comment(kv, "large object", CommentObject::Named(&oid))?
+            krabka_pgcatalog::get_comment(kv, "large object", CommentObject::Named(&oid))?
         {
             rows.push(vec![
                 int(i32::try_from(metadata.oid).expect("large object oid fits int4")),
@@ -3375,11 +3375,11 @@ fn pg_description_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
             ]);
         }
     }
-    for ty in crabka_pgcatalog::list_user_types(kv)? {
+    for ty in krabka_pgcatalog::list_user_types(kv)? {
         let oid = ty.oid.to_string();
-        let comment = match crabka_pgcatalog::get_comment(kv, "type", CommentObject::Named(&oid))? {
+        let comment = match krabka_pgcatalog::get_comment(kv, "type", CommentObject::Named(&oid))? {
             Some(comment) => Some(comment),
-            None => crabka_pgcatalog::get_comment(kv, "domain", CommentObject::Named(&oid))?,
+            None => krabka_pgcatalog::get_comment(kv, "domain", CommentObject::Named(&oid))?,
         };
         if let Some(comment) = comment {
             rows.push(vec![
@@ -3390,10 +3390,10 @@ fn pg_description_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
             ]);
         }
     }
-    for statistics in crabka_pgcatalog::statistics::list(kv)? {
+    for statistics in krabka_pgcatalog::statistics::list(kv)? {
         let oid = statistics.oid.to_string();
         if let Some(comment) =
-            crabka_pgcatalog::get_comment(kv, "statistics", CommentObject::Named(&oid))?
+            krabka_pgcatalog::get_comment(kv, "statistics", CommentObject::Named(&oid))?
         {
             rows.push(vec![
                 int(i32::try_from(statistics.oid).expect("statistics oid fits int4")),
@@ -3403,8 +3403,8 @@ fn pg_description_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
             ]);
         }
     }
-    for wrapper in crabka_pgcatalog::list_fdws(kv)? {
-        if let Some(comment) = crabka_pgcatalog::get_comment(
+    for wrapper in krabka_pgcatalog::list_fdws(kv)? {
+        if let Some(comment) = krabka_pgcatalog::get_comment(
             kv,
             "foreign data wrapper",
             CommentObject::Named(&wrapper.name),
@@ -3417,9 +3417,9 @@ fn pg_description_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
             ]);
         }
     }
-    for server in crabka_pgcatalog::list_servers(kv)? {
+    for server in krabka_pgcatalog::list_servers(kv)? {
         if let Some(comment) =
-            crabka_pgcatalog::get_comment(kv, "server", CommentObject::Named(&server.name))?
+            krabka_pgcatalog::get_comment(kv, "server", CommentObject::Named(&server.name))?
         {
             rows.push(vec![
                 int(i32::try_from(server.oid).expect("server oid fits int4")),
@@ -3445,11 +3445,11 @@ fn description_row(objoid: i32, objsubid: i32, comment: &str) -> Vec<Datum> {
 /// `NOT NULL` and `FOREIGN KEY` constraints.
 fn pg_constraint_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
     let mut rows = Vec::new();
-    for index in crabka_pgcatalog::list_indexes(kv)? {
+    for index in krabka_pgcatalog::list_indexes(kv)? {
         let Some(kind) = index.constraint else {
             continue;
         };
-        let table = crabka_pgcatalog::get_table(kv, &index.table)?;
+        let table = krabka_pgcatalog::get_table(kv, &index.table)?;
         let conkey = index
             .columns
             .iter()
@@ -3496,9 +3496,9 @@ fn pg_constraint_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
 /// into the referenced index's column order.
 fn foreign_key_constraint_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
     let mut rows = Vec::new();
-    for foreign_key in crabka_pgcatalog::list_foreign_keys(kv)? {
-        let child = crabka_pgcatalog::get_table(kv, &foreign_key.table)?;
-        let parent = crabka_pgcatalog::get_table(kv, &foreign_key.referenced_table)?;
+    for foreign_key in krabka_pgcatalog::list_foreign_keys(kv)? {
+        let child = krabka_pgcatalog::get_table(kv, &foreign_key.table)?;
+        let parent = krabka_pgcatalog::get_table(kv, &foreign_key.referenced_table)?;
         // An empty `set_columns` means the action touches every referencing
         // column, which PostgreSQL records as a NULL `confdelsetcols` rather
         // than a copy of `conkey`.
@@ -3582,7 +3582,7 @@ fn check_constraint_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
     let check_oids = check_constraint_oids(kv)?;
     let not_null_oids = not_null_constraint_oids(kv)?;
     let mut rows = Vec::new();
-    for table in crabka_pgcatalog::list_tables(kv)? {
+    for table in krabka_pgcatalog::list_tables(kv)? {
         let relid = table_relation_oid(table.id)?;
         for check in &table.checks {
             let key = ConstraintKey::new(&table.name, &check.name);
@@ -3698,7 +3698,7 @@ const NO_REFERENT_CODE: &str = " ";
 /// An `int2` attnum array column, or NULL where the constraint has no such list.
 fn attnum_array(attnums: Option<Vec<Datum>>) -> Datum {
     attnums.map_or(Datum::Null, |elems| {
-        Datum::Array(crabka_pgtypes::ArrayValue::new(ElemType::Int2, elems))
+        Datum::Array(krabka_pgtypes::ArrayValue::new(ElemType::Int2, elems))
     })
 }
 
@@ -3739,10 +3739,10 @@ fn constraint_row(row: ConstraintRow<'_>) -> Vec<Datum> {
 }
 
 fn pg_indexes_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    crabka_pgcatalog::list_indexes(kv)?
+    krabka_pgcatalog::list_indexes(kv)?
         .into_iter()
         .map(|index| {
-            let table = crabka_pgcatalog::get_table(kv, &index.table)?;
+            let table = krabka_pgcatalog::get_table(kv, &index.table)?;
             Ok(vec![
                 // An index lives in the schema of the table it indexes.
                 text(&index.table.schema),
@@ -3763,11 +3763,11 @@ fn pg_indexes_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
 /// out the way PostgreSQL stores it.
 fn pg_policy_rows(
     kv: &dyn Kv,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
     let role_oids = role_oids(kv)?;
     let relation_oids = policy_relation_oids(kv)?;
-    crabka_pgcatalog::policy::list_policies(kv)?
+    krabka_pgcatalog::policy::list_policies(kv)?
         .into_iter()
         .map(|policy| {
             let roles = if policy.applies_to_public() {
@@ -3787,7 +3787,7 @@ fn pg_policy_rows(
                     .map_or(0, |(oid, _)| *oid)),
                 text(&policy.command.catalog_code().to_string()),
                 Datum::Bool(policy.permissive),
-                Datum::Array(crabka_pgtypes::ArrayValue::new(ElemType::Int4, roles)),
+                Datum::Array(krabka_pgtypes::ArrayValue::new(ElemType::Int4, roles)),
                 policy_qual(policy.using.as_deref(), style),
                 policy_qual(policy.with_check.as_deref(), style),
             ])
@@ -3805,9 +3805,9 @@ fn pg_policy_rows(
 /// is the wrong place to discover otherwise. Text that will not parse falls
 /// back to itself, so `pg_policy` answers a slightly unnormalized row rather
 /// than failing the whole scan and taking every unrelated policy down with it.
-fn policy_qual(source: Option<&str>, style: crabka_pgtypes::encoding::OutputStyle<'_>) -> Datum {
+fn policy_qual(source: Option<&str>, style: krabka_pgtypes::encoding::OutputStyle<'_>) -> Datum {
     source.map_or(Datum::Null, |source| {
-        crabka_pgparser::parser::parse_expression(source).map_or_else(
+        krabka_pgparser::parser::parse_expression(source).map_or_else(
             |_| text(source),
             |expr| text(&crate::viewdef::expression_text(&expr, style)),
         )
@@ -3818,10 +3818,10 @@ fn policy_qual(source: Option<&str>, style: crabka_pgtypes::encoding::OutputStyl
 /// instead of OIDs, and the command spelled as a word.
 fn pg_policies_rows(
     kv: &dyn Kv,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
     let relation_oids = policy_relation_oids(kv)?;
-    crabka_pgcatalog::policy::list_policies(kv)?
+    krabka_pgcatalog::policy::list_policies(kv)?
         .into_iter()
         .map(|policy| {
             let relation = relation_oids.get(&policy.table_id).map(|(_, name)| name);
@@ -3841,7 +3841,7 @@ fn pg_policies_rows(
                 }),
                 // PostgreSQL renders `TO PUBLIC` as the one-element array
                 // `{public}` here, not as an empty array.
-                Datum::Array(crabka_pgtypes::ArrayValue::new(
+                Datum::Array(krabka_pgtypes::ArrayValue::new(
                     ElemType::Text,
                     if roles.is_empty() {
                         vec![text("public")]
@@ -3862,19 +3862,19 @@ fn pg_policies_rows(
 /// per policy.
 fn policy_relation_oids(
     kv: &dyn Kv,
-) -> Result<BTreeMap<crabka_pgcatalog::TableId, (i32, crabka_pgcatalog::RelationName)>, ExecError> {
-    crabka_pgcatalog::list_tables(kv)?
+) -> Result<BTreeMap<krabka_pgcatalog::TableId, (i32, krabka_pgcatalog::RelationName)>, ExecError> {
+    krabka_pgcatalog::list_tables(kv)?
         .into_iter()
         .map(|table| Ok((table.id, (table_relation_oid(table.id)?, table.name))))
         .collect()
 }
 
 fn pg_tables_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    let indexed = crabka_pgcatalog::list_indexes(kv)?
+    let indexed = krabka_pgcatalog::list_indexes(kv)?
         .into_iter()
         .map(|index| index.table)
         .collect::<std::collections::BTreeSet<_>>();
-    Ok(crabka_pgcatalog::list_tables(kv)?
+    Ok(krabka_pgcatalog::list_tables(kv)?
         .into_iter()
         // `pg_tables` is `relkind IN ('r','p')`: a foreign table has its own
         // view and a materialized view is reported by `pg_matviews`, so neither
@@ -3907,13 +3907,13 @@ fn pg_tables_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
 /// relation's own catalog column list rather than from the stored text.
 fn pg_matviews_rows(
     kv: &dyn Kv,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
-    let indexed = crabka_pgcatalog::list_indexes(kv)?
+    let indexed = krabka_pgcatalog::list_indexes(kv)?
         .into_iter()
         .map(|index| index.table)
         .collect::<std::collections::BTreeSet<_>>();
-    crabka_pgcatalog::list_tables(kv)?
+    krabka_pgcatalog::list_tables(kv)?
         .into_iter()
         .filter(|table| table.materialized.is_some())
         .map(|table| {
@@ -3938,9 +3938,9 @@ fn pg_matviews_rows(
 
 fn pg_views_rows(
     kv: &dyn Kv,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
-    Ok(crabka_pgcatalog::list_views(kv)?
+    Ok(krabka_pgcatalog::list_views(kv)?
         .into_iter()
         .map(|view| {
             vec![
@@ -4175,7 +4175,7 @@ fn information_schema_rows(
     database: &str,
     current_user: &str,
     name: &str,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
     match name {
         "information_schema.table_constraints" => table_constraint_rows(kv, database),
@@ -4214,7 +4214,7 @@ fn foreign_data_wrapper_option_rows(
     kv: &dyn Kv,
     database: &str,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
-    Ok(crabka_pgcatalog::list_fdws(kv)?
+    Ok(krabka_pgcatalog::list_fdws(kv)?
         .into_iter()
         .flat_map(|wrapper| {
             wrapper.options.into_iter().map(move |(name, value)| {
@@ -4230,7 +4230,7 @@ fn foreign_data_wrapper_option_rows(
 }
 
 fn foreign_data_wrapper_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datum>>, ExecError> {
-    Ok(crabka_pgcatalog::list_fdws(kv)?
+    Ok(krabka_pgcatalog::list_fdws(kv)?
         .into_iter()
         .map(|wrapper| {
             vec![
@@ -4245,7 +4245,7 @@ fn foreign_data_wrapper_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datu
 }
 
 fn foreign_server_option_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datum>>, ExecError> {
-    Ok(crabka_pgcatalog::list_servers(kv)?
+    Ok(krabka_pgcatalog::list_servers(kv)?
         .into_iter()
         .flat_map(|server| {
             server.options.into_iter().map(move |(name, value)| {
@@ -4261,7 +4261,7 @@ fn foreign_server_option_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Dat
 }
 
 fn foreign_server_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datum>>, ExecError> {
-    Ok(crabka_pgcatalog::list_servers(kv)?
+    Ok(krabka_pgcatalog::list_servers(kv)?
         .into_iter()
         .map(|server| {
             vec![
@@ -4278,7 +4278,7 @@ fn foreign_server_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datum>>, E
 }
 
 fn foreign_table_option_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datum>>, ExecError> {
-    Ok(crabka_pgcatalog::list_tables(kv)?
+    Ok(krabka_pgcatalog::list_tables(kv)?
         .into_iter()
         .filter_map(|table| {
             table.foreign.map(|foreign| {
@@ -4298,7 +4298,7 @@ fn foreign_table_option_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datu
 }
 
 fn foreign_table_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datum>>, ExecError> {
-    Ok(crabka_pgcatalog::list_tables(kv)?
+    Ok(krabka_pgcatalog::list_tables(kv)?
         .into_iter()
         .filter_map(|table| {
             table.foreign.map(|foreign| {
@@ -4359,12 +4359,12 @@ fn user_mapping_rows(
 fn visible_user_mappings(
     kv: &dyn Kv,
     current_user: &str,
-) -> Result<Vec<(crabka_pgcatalog::UserMapping, String)>, ExecError> {
+) -> Result<Vec<(krabka_pgcatalog::UserMapping, String)>, ExecError> {
     let server_owners = foreign_server_owners(kv)?;
     let mut mappings = Vec::new();
-    for mapping in crabka_pgcatalog::list_user_mappings(kv)? {
+    for mapping in krabka_pgcatalog::list_user_mappings(kv)? {
         let owner = server_owners.get(&mapping.server).ok_or_else(|| {
-            ExecError::Catalog(crabka_pgcatalog::CatalogError::UndefinedObject(
+            ExecError::Catalog(krabka_pgcatalog::CatalogError::UndefinedObject(
                 mapping.server.clone(),
             ))
         })?;
@@ -4376,7 +4376,7 @@ fn visible_user_mappings(
 }
 
 fn foreign_server_owners(kv: &dyn Kv) -> Result<BTreeMap<String, String>, ExecError> {
-    Ok(crabka_pgcatalog::list_servers(kv)?
+    Ok(krabka_pgcatalog::list_servers(kv)?
         .into_iter()
         .map(|server| (server.name, server.owner))
         .collect())
@@ -4389,7 +4389,7 @@ fn foreign_server_visible(
 ) -> Result<bool, ExecError> {
     crate::catalog_fn::foreign_usage_is_held(
         kv,
-        crabka_pgcatalog::ForeignPrivilegeTarget::Server,
+        krabka_pgcatalog::ForeignPrivilegeTarget::Server,
         server,
         current_user,
     )
@@ -4397,21 +4397,21 @@ fn foreign_server_visible(
 
 fn user_mapping_option_visible(
     kv: &dyn Kv,
-    mapping: &crabka_pgcatalog::UserMapping,
+    mapping: &krabka_pgcatalog::UserMapping,
     server_owner: &str,
     current_user: &str,
 ) -> Result<bool, ExecError> {
     if crate::rls::role_is_superuser(kv, current_user)? {
         return Ok(true);
     }
-    if mapping.user == crabka_pgcatalog::PUBLIC_ROLE {
-        return crabka_pgcatalog::role_has_privs_of(kv, current_user, server_owner)
+    if mapping.user == krabka_pgcatalog::PUBLIC_ROLE {
+        return krabka_pgcatalog::role_has_privs_of(kv, current_user, server_owner)
             .map_err(Into::into);
     }
     if mapping.user == current_user {
         return crate::catalog_fn::foreign_usage_is_held(
             kv,
-            crabka_pgcatalog::ForeignPrivilegeTarget::Server,
+            krabka_pgcatalog::ForeignPrivilegeTarget::Server,
             &mapping.server,
             current_user,
         );
@@ -4420,7 +4420,7 @@ fn user_mapping_option_visible(
 }
 
 fn user_mapping_authorization_identifier(user: &str) -> &str {
-    if user == crabka_pgcatalog::PUBLIC_ROLE {
+    if user == krabka_pgcatalog::PUBLIC_ROLE {
         "PUBLIC"
     } else {
         user
@@ -4432,10 +4432,10 @@ fn usage_privilege_rows(
     database: &str,
     current_user: &str,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
-    use crabka_pgcatalog::ForeignPrivilegeTarget;
+    use krabka_pgcatalog::ForeignPrivilegeTarget;
 
     let is_superuser = crate::rls::role_is_superuser(kv, current_user)?;
-    let mut objects = crabka_pgcatalog::list_fdws(kv)?
+    let mut objects = krabka_pgcatalog::list_fdws(kv)?
         .into_iter()
         .map(|wrapper| {
             (
@@ -4446,7 +4446,7 @@ fn usage_privilege_rows(
         })
         .collect::<Vec<_>>();
     objects.extend(
-        crabka_pgcatalog::list_servers(kv)?
+        krabka_pgcatalog::list_servers(kv)?
             .into_iter()
             .map(|server| (ForeignPrivilegeTarget::Server, server.name, server.owner)),
     );
@@ -4458,8 +4458,8 @@ fn usage_privilege_rows(
         };
         let mut push = |grantee: &str, grantable: bool| -> Result<(), ExecError> {
             if is_superuser
-                || grantee == crabka_pgcatalog::PUBLIC_ROLE
-                || crabka_pgcatalog::role_has_privs_of(kv, current_user, grantee)?
+                || grantee == krabka_pgcatalog::PUBLIC_ROLE
+                || krabka_pgcatalog::role_has_privs_of(kv, current_user, grantee)?
             {
                 rows.push(vec![
                     text(&owner),
@@ -4476,7 +4476,7 @@ fn usage_privilege_rows(
         };
         push(&owner, true)?;
         for (grantee, privilege, grantable) in
-            crabka_pgcatalog::list_foreign_privileges(kv, target, &name)?
+            krabka_pgcatalog::list_foreign_privileges(kv, target, &name)?
         {
             if privilege == "USAGE" {
                 push(&grantee, grantable)?;
@@ -4524,7 +4524,7 @@ fn ordinal(position: usize) -> Result<i32, ExecError> {
 
 fn table_constraint_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datum>>, ExecError> {
     let mut rows = Vec::new();
-    for index in crabka_pgcatalog::list_indexes(kv)? {
+    for index in krabka_pgcatalog::list_indexes(kv)? {
         let Some(kind) = index.constraint else {
             continue;
         };
@@ -4543,7 +4543,7 @@ fn table_constraint_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datum>>,
             initially_deferred,
         ));
     }
-    for table in crabka_pgcatalog::list_tables(kv)? {
+    for table in krabka_pgcatalog::list_tables(kv)? {
         for check in &table.checks {
             rows.push(table_constraint_row(
                 database,
@@ -4555,7 +4555,7 @@ fn table_constraint_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datum>>,
             ));
         }
     }
-    for foreign_key in crabka_pgcatalog::list_foreign_keys(kv)? {
+    for foreign_key in krabka_pgcatalog::list_foreign_keys(kv)? {
         rows.push(table_constraint_row(
             database,
             &foreign_key.name,
@@ -4600,8 +4600,8 @@ fn table_constraint_row(
 /// the referent, so an index with no constraint marker gives no name.
 fn referential_constraint_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datum>>, ExecError> {
     let mut rows = Vec::new();
-    for foreign_key in crabka_pgcatalog::list_foreign_keys(kv)? {
-        let referent = crabka_pgcatalog::get_index(kv, &referenced_index_name(&foreign_key))?;
+    for foreign_key in krabka_pgcatalog::list_foreign_keys(kv)? {
+        let referent = krabka_pgcatalog::get_index(kv, &referenced_index_name(&foreign_key))?;
         let mut row =
             constraint_identity(database, &foreign_key.table.schema, &foreign_key.name).to_vec();
         if referent.constraint.is_some() {
@@ -4627,7 +4627,7 @@ fn referential_constraint_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Da
 ///
 /// A foreign key stores that index's bare name. An index belongs to the schema
 /// of the table it indexes, which here is the referenced table's schema.
-fn referenced_index_name(foreign_key: &crabka_pgcatalog::ForeignKey) -> RelationName {
+fn referenced_index_name(foreign_key: &krabka_pgcatalog::ForeignKey) -> RelationName {
     foreign_key
         .referenced_table
         .sibling(&foreign_key.referenced_index)
@@ -4656,7 +4656,7 @@ fn referential_action_rule(action: ReferentialAction) -> &'static str {
 
 fn key_column_usage_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datum>>, ExecError> {
     let mut rows = Vec::new();
-    for index in crabka_pgcatalog::list_indexes(kv)? {
+    for index in krabka_pgcatalog::list_indexes(kv)? {
         if index.constraint.is_none() {
             continue;
         }
@@ -4683,8 +4683,8 @@ fn foreign_key_column_usage_rows(
     database: &str,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
     let mut rows = Vec::new();
-    for foreign_key in crabka_pgcatalog::list_foreign_keys(kv)? {
-        let referent = crabka_pgcatalog::get_index(kv, &referenced_index_name(&foreign_key))?;
+    for foreign_key in krabka_pgcatalog::list_foreign_keys(kv)? {
+        let referent = krabka_pgcatalog::get_index(kv, &referenced_index_name(&foreign_key))?;
         for (position, column) in foreign_key.columns.iter().enumerate() {
             let paired = foreign_key
                 .referenced_columns
@@ -4707,7 +4707,7 @@ fn foreign_key_column_usage_rows(
 
 fn constraint_column_usage_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datum>>, ExecError> {
     let mut rows = Vec::new();
-    for index in crabka_pgcatalog::list_indexes(kv)? {
+    for index in krabka_pgcatalog::list_indexes(kv)? {
         if index.constraint.is_none() {
             continue;
         }
@@ -4723,7 +4723,7 @@ fn constraint_column_usage_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<D
     }
     // PostgreSQL 18 records `NOT NULL` in `pg_constraint`, so it shows up here
     // too, one row per constrained column.
-    for table in crabka_pgcatalog::list_tables(kv)? {
+    for table in krabka_pgcatalog::list_tables(kv)? {
         for column in table.columns.iter().filter(|column| column.not_null) {
             let name = not_null_constraint_name(&table.name, &column.name);
             rows.push(column_usage_row(
@@ -4737,7 +4737,7 @@ fn constraint_column_usage_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<D
     }
     // A foreign key is attributed to the columns it *references*, on the parent
     // relation — the mirror of `key_column_usage`, which lists the child's.
-    for foreign_key in crabka_pgcatalog::list_foreign_keys(kv)? {
+    for foreign_key in krabka_pgcatalog::list_foreign_keys(kv)? {
         for column in &foreign_key.referenced_columns {
             rows.push(column_usage_row(
                 database,
@@ -4777,18 +4777,18 @@ fn column_usage_row(
 fn information_schema_view_rows(
     kv: &dyn Kv,
     database: &str,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
     use crate::viewwrite::{DELETE_EVENT, INSERT_EVENT, UPDATE_EVENT};
     const ROW_WRITABLE: i32 = UPDATE_EVENT | DELETE_EVENT;
-    crabka_pgcatalog::list_views(kv)?
+    krabka_pgcatalog::list_views(kv)?
         .into_iter()
         .map(|view| {
             let auto = crate::viewwrite::relation_updatable_events(kv, &view.name, false, None, 0);
             let yes_or_no = |held: bool| if held { "YES" } else { "NO" };
             let check_option = match view.options.check_option {
-                Some(crabka_pgcatalog::ViewCheckOption::Local) => "LOCAL",
-                Some(crabka_pgcatalog::ViewCheckOption::Cascaded) => "CASCADED",
+                Some(krabka_pgcatalog::ViewCheckOption::Local) => "LOCAL",
+                Some(krabka_pgcatalog::ViewCheckOption::Cascaded) => "CASCADED",
                 None => "NONE",
             };
             let view_id = crate::catalog_rel::view_oids(kv)?
@@ -4796,11 +4796,11 @@ fn information_schema_view_rows(
                 .copied()
                 .and_then(|oid| u32::try_from(oid).ok())
                 .unwrap_or(0);
-            let triggers = crabka_pgcatalog::trigger::triggers_for_table(kv, view_id)?;
-            let instead = |matches: fn(&crabka_pgcatalog::trigger::TriggerEvents) -> bool| {
+            let triggers = krabka_pgcatalog::trigger::triggers_for_table(kv, view_id)?;
+            let instead = |matches: fn(&krabka_pgcatalog::trigger::TriggerEvents) -> bool| {
                 if triggers.iter().any(|trigger| {
-                    trigger.timing == crabka_pgcatalog::trigger::TriggerTiming::InsteadOf
-                        && trigger.level == crabka_pgcatalog::trigger::TriggerLevel::Row
+                    trigger.timing == krabka_pgcatalog::trigger::TriggerTiming::InsteadOf
+                        && trigger.level == krabka_pgcatalog::trigger::TriggerLevel::Row
                         && matches(&trigger.events)
                 }) {
                     "YES"
@@ -4826,14 +4826,14 @@ fn information_schema_view_rows(
 }
 
 fn enabled_role_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    Ok(crabka_pgcatalog::list_roles(kv)?
+    Ok(krabka_pgcatalog::list_roles(kv)?
         .into_iter()
         .map(|role| vec![text(&role.name)])
         .collect())
 }
 
 fn sequence_view_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datum>>, ExecError> {
-    Ok(crabka_pgcatalog::list_sequences(kv)?
+    Ok(krabka_pgcatalog::list_sequences(kv)?
         .into_iter()
         .map(|(name, sequence)| {
             let mut row = relation_identity(database, &name).to_vec();
@@ -4870,7 +4870,7 @@ fn table_privilege_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datum>>, 
     ];
     let owner = crate::catalog_fn::OBJECT_OWNER;
     let mut rows = Vec::new();
-    for table in crabka_pgcatalog::list_tables(kv)? {
+    for table in krabka_pgcatalog::list_tables(kv)? {
         // A materialized view is grantable — `has_table_privilege` answers for
         // one — but `information_schema` does not know the relation kind at all,
         // so PostgreSQL leaves it out of this view exactly as it does out of
@@ -4882,7 +4882,7 @@ fn table_privilege_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datum>>, 
             rows.push(privilege_row(database, owner, &table.name, privilege, true));
         }
     }
-    for privilege in crabka_pgcatalog::list_table_privileges(kv)? {
+    for privilege in krabka_pgcatalog::list_table_privileges(kv)? {
         rows.push(privilege_row(
             database,
             &privilege.grantee,
@@ -4906,7 +4906,7 @@ fn table_privilege_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datum>>, 
 /// gives: crabka stores no `WITH GRANT OPTION`, so claiming YES would be a
 /// claim about a right the catalog cannot hold.
 fn column_privilege_rows(kv: &dyn Kv, database: &str) -> Result<Vec<Vec<Datum>>, ExecError> {
-    Ok(crabka_pgcatalog::list_column_privileges(kv)?
+    Ok(krabka_pgcatalog::list_column_privileges(kv)?
         .into_iter()
         .map(|privilege| {
             let mut row = vec![
@@ -4948,9 +4948,9 @@ fn privilege_row(
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgcatalog::{ForeignKey, IndexId, IndexMethod, IndexPlacement, NewIndex, TableId};
-    use crabka_pgkv::{Kv, MemKv};
-    use crabka_pgtypes::ArrayValue;
+    use krabka_pgcatalog::{ForeignKey, IndexId, IndexMethod, IndexPlacement, NewIndex, TableId};
+    use krabka_pgkv::{Kv, MemKv};
+    use krabka_pgtypes::ArrayValue;
 
     use super::*;
 
@@ -4961,11 +4961,11 @@ mod tests {
             std::sync::LazyLock::new(|| jiff::tz::TimeZone::UTC);
         SessionIdent {
             database: crate::exec::DEFAULT_DATABASE,
-            current_user: crabka_pgcatalog::BOOTSTRAP_ROLE,
+            current_user: krabka_pgcatalog::BOOTSTRAP_ROLE,
             backend_pid: 0,
             compute_query_id: false,
             track_activities: false,
-            style: crabka_pgtypes::encoding::OutputStyle::with_zone(&UTC),
+            style: krabka_pgtypes::encoding::OutputStyle::with_zone(&UTC),
         }
     }
 
@@ -4988,9 +4988,9 @@ mod tests {
     #[test]
     fn foreign_catalogs_project_the_stored_object_owner() {
         let kv = MemKv::new();
-        crabka_pgcatalog::create_role(&kv, "alice", true).expect("owner role");
+        krabka_pgcatalog::create_role(&kv, "alice", true).expect("owner role");
         kv.write_batch(
-            &crabka_pgcatalog::create_fdw_with_routines_owned_ops(
+            &krabka_pgcatalog::create_fdw_with_routines_owned_ops(
                 &kv,
                 "w",
                 None,
@@ -5002,7 +5002,7 @@ mod tests {
         )
         .expect("create fdw");
         kv.write_batch(
-            &crabka_pgcatalog::create_server_with_identity_owned_ops(
+            &krabka_pgcatalog::create_server_with_identity_owned_ops(
                 &kv,
                 "s",
                 "w",
@@ -5030,10 +5030,10 @@ mod tests {
     fn user_mapping_view_redacts_other_roles_credentials() {
         let kv = MemKv::new();
         for role in ["owner", "reader", "other"] {
-            crabka_pgcatalog::create_role(&kv, role, true).expect("role");
+            krabka_pgcatalog::create_role(&kv, role, true).expect("role");
         }
         kv.write_batch(
-            &crabka_pgcatalog::create_fdw_with_routines_owned_ops(
+            &krabka_pgcatalog::create_fdw_with_routines_owned_ops(
                 &kv,
                 "w",
                 None,
@@ -5045,7 +5045,7 @@ mod tests {
         )
         .expect("create fdw");
         kv.write_batch(
-            &crabka_pgcatalog::create_server_with_identity_owned_ops(
+            &krabka_pgcatalog::create_server_with_identity_owned_ops(
                 &kv,
                 "s",
                 "w",
@@ -5057,8 +5057,8 @@ mod tests {
             .expect("server ops"),
         )
         .expect("create server");
-        for user in ["reader", "other", crabka_pgcatalog::PUBLIC_ROLE] {
-            crabka_pgcatalog::create_user_mapping(
+        for user in ["reader", "other", krabka_pgcatalog::PUBLIC_ROLE] {
+            krabka_pgcatalog::create_user_mapping(
                 &kv,
                 user,
                 "s",
@@ -5067,9 +5067,9 @@ mod tests {
             .expect("mapping");
         }
         kv.write_batch(
-            &crabka_pgcatalog::grant_foreign_privileges_ops(
+            &krabka_pgcatalog::grant_foreign_privileges_ops(
                 &kv,
-                crabka_pgcatalog::ForeignPrivilegeTarget::Server,
+                krabka_pgcatalog::ForeignPrivilegeTarget::Server,
                 &["s".into()],
                 &["reader".into()],
                 &["USAGE".into()],
@@ -5095,10 +5095,10 @@ mod tests {
 
         assert!(options("reader", "reader") == secret("reader"));
         assert!(options("reader", "other") == Datum::Null);
-        assert!(options("reader", crabka_pgcatalog::PUBLIC_ROLE) == Datum::Null);
+        assert!(options("reader", krabka_pgcatalog::PUBLIC_ROLE) == Datum::Null);
         assert!(options("owner", "reader") == Datum::Null);
-        assert!(options("owner", crabka_pgcatalog::PUBLIC_ROLE) == secret("public"));
-        assert!(options(crabka_pgcatalog::BOOTSTRAP_ROLE, "other") == secret("other"));
+        assert!(options("owner", krabka_pgcatalog::PUBLIC_ROLE) == secret("public"));
+        assert!(options(krabka_pgcatalog::BOOTSTRAP_ROLE, "other") == secret("other"));
 
         let reader_session = SessionIdent {
             current_user: "reader",
@@ -5149,18 +5149,18 @@ mod tests {
     #[test]
     fn information_schema_foreign_views_project_foreign_catalog_options() {
         let kv = MemKv::new();
-        crabka_pgcatalog::create_fdw(&kv, "w", vec![("host".into(), "broker".into())])
+        krabka_pgcatalog::create_fdw(&kv, "w", vec![("host".into(), "broker".into())])
             .expect("fdw");
-        crabka_pgcatalog::create_server(&kv, "s", "w", vec![("port".into(), "5432".into())])
+        krabka_pgcatalog::create_server(&kv, "s", "w", vec![("port".into(), "5432".into())])
             .expect("server");
-        crabka_pgcatalog::create_user_mapping(
+        krabka_pgcatalog::create_user_mapping(
             &kv,
-            crabka_pgcatalog::PUBLIC_ROLE,
+            krabka_pgcatalog::PUBLIC_ROLE,
             "s",
             vec![("user".into(), "guest".into())],
         )
         .expect("mapping");
-        crabka_pgcatalog::create_foreign_table(
+        krabka_pgcatalog::create_foreign_table(
             &kv,
             &RelationName::public("t"),
             vec![Column::new("id", ColumnType::Int4)],
@@ -5180,7 +5180,7 @@ mod tests {
                 == vec![vec![
                     text(database),
                     text("w"),
-                    text(crabka_pgcatalog::BOOTSTRAP_ROLE),
+                    text(krabka_pgcatalog::BOOTSTRAP_ROLE),
                     Datum::Null,
                     text("c"),
                 ]]
@@ -5271,10 +5271,10 @@ mod tests {
     fn information_schema_usage_views_project_visible_foreign_grants() {
         let kv = MemKv::new();
         for role in ["owner", "reader"] {
-            crabka_pgcatalog::create_role(&kv, role, true).expect("role");
+            krabka_pgcatalog::create_role(&kv, role, true).expect("role");
         }
         kv.write_batch(
-            &crabka_pgcatalog::create_fdw_with_routines_owned_ops(
+            &krabka_pgcatalog::create_fdw_with_routines_owned_ops(
                 &kv,
                 "w",
                 None,
@@ -5286,9 +5286,9 @@ mod tests {
         )
         .expect("create fdw");
         kv.write_batch(
-            &crabka_pgcatalog::grant_foreign_privileges_with_option_ops(
+            &krabka_pgcatalog::grant_foreign_privileges_with_option_ops(
                 &kv,
-                crabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper,
+                krabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper,
                 &["w".into()],
                 &["reader".into()],
                 &["USAGE".into()],
@@ -5369,7 +5369,7 @@ mod tests {
     fn relation_rowtype_reverse_lookup_returns_only_its_relation() {
         let kv = MemKv::default();
         let relation = RelationName::public("rowtype_lookup");
-        crabka_pgcatalog::create_table(&kv, &relation, vec![Column::new("id", ColumnType::Int4)])
+        krabka_pgcatalog::create_table(&kv, &relation, vec![Column::new("id", ColumnType::Int4)])
             .expect("create table");
         let rowtype = relation_rowtype(&kv, &relation)
             .expect("rowtype lookup")
@@ -5388,7 +5388,7 @@ mod tests {
     fn sync_relation_rowtypes_registers_the_relation_composite() {
         let kv = MemKv::default();
         let relation = RelationName::public("rowtype_sync");
-        crabka_pgcatalog::create_table(&kv, &relation, vec![Column::new("id", ColumnType::Int4)])
+        krabka_pgcatalog::create_table(&kv, &relation, vec![Column::new("id", ColumnType::Int4)])
             .expect("create table");
 
         sync_relation_rowtypes(&kv).expect("sync row types");
@@ -5396,10 +5396,10 @@ mod tests {
         let rowtype = relation_rowtype(&kv, &relation)
             .expect("rowtype lookup")
             .expect("rowtype exists");
-        let registered = crabka_pgtypes::usertype::lookup_oid(rowtype.oid)
+        let registered = krabka_pgtypes::usertype::lookup_oid(rowtype.oid)
             .expect("relation row type is registered");
         assert!(registered.column_type() == Some(ColumnType::Record(Some(rowtype))));
-        crabka_pgtypes::usertype::unregister_in(&relation.schema, &relation.name);
+        krabka_pgtypes::usertype::unregister_in(&relation.schema, &relation.name);
     }
 
     #[test]
@@ -5409,7 +5409,7 @@ mod tests {
         let first_relation = RelationName::public("rowtype_first_catalog");
         let second_relation = RelationName::public("rowtype_second_catalog");
         for (kv, relation) in [(&first, &first_relation), (&second, &second_relation)] {
-            crabka_pgcatalog::create_table(kv, relation, vec![Column::new("id", ColumnType::Int4)])
+            krabka_pgcatalog::create_table(kv, relation, vec![Column::new("id", ColumnType::Int4)])
                 .expect("create table");
             sync_relation_rowtypes(kv).expect("sync row types");
         }
@@ -5418,8 +5418,8 @@ mod tests {
             let rowtype = relation_rowtype(kv, relation)
                 .expect("rowtype lookup")
                 .expect("rowtype exists");
-            assert!(crabka_pgtypes::usertype::lookup_oid(rowtype.oid).is_some());
-            crabka_pgtypes::usertype::unregister_in(&relation.schema, &relation.name);
+            assert!(krabka_pgtypes::usertype::lookup_oid(rowtype.oid).is_some());
+            krabka_pgtypes::usertype::unregister_in(&relation.schema, &relation.name);
         }
     }
 
@@ -5429,26 +5429,26 @@ mod tests {
         let table = RelationName::public("rowtype_fields_table");
         let view = RelationName::public("rowtype_fields_view");
         let sequence = RelationName::public("rowtype_fields_sequence");
-        crabka_pgcatalog::create_table(
+        krabka_pgcatalog::create_table(
             &kv,
             &table,
             vec![Column::new("table_value", ColumnType::Int4)],
         )
         .expect("create table");
-        crabka_pgcatalog::create_view(
+        krabka_pgcatalog::create_view(
             &kv,
             &view,
             "SELECT 1".into(),
             vec![Column::new("view_value", ColumnType::Text)],
-            crabka_pgcatalog::ViewOptions::default(),
-            crabka_pgcatalog::BOOTSTRAP_ROLE,
+            krabka_pgcatalog::ViewOptions::default(),
+            krabka_pgcatalog::BOOTSTRAP_ROLE,
         )
         .expect("create view");
         kv.write_batch(
-            &crabka_pgcatalog::create_sequence_ops(
+            &krabka_pgcatalog::create_sequence_ops(
                 &kv,
                 &sequence,
-                crabka_pgcatalog::Sequence::new(1, 1, None, None, None, false),
+                krabka_pgcatalog::Sequence::new(1, 1, None, None, None, false),
             )
             .expect("create sequence ops"),
         )
@@ -5504,15 +5504,15 @@ mod tests {
     #[test]
     fn predefined_roles_keep_postgres_oids() {
         let kv = MemKv::default();
-        crabka_pgcatalog::create_role(&kv, "reader", false).expect("reader");
+        krabka_pgcatalog::create_role(&kv, "reader", false).expect("reader");
         let oids = role_oids(&kv).expect("role oids");
 
-        assert!(oids[crabka_pgcatalog::BOOTSTRAP_ROLE] == 10);
-        for (name, expected) in crabka_pgcatalog::PREDEFINED_ROLES {
+        assert!(oids[krabka_pgcatalog::BOOTSTRAP_ROLE] == 10);
+        for (name, expected) in krabka_pgcatalog::PREDEFINED_ROLES {
             assert!(oids[*name] == *expected, "{name}");
         }
         assert!(oids.contains_key("reader"));
-        assert!(!oids.contains_key(crabka_pgcatalog::PUBLIC_ROLE));
+        assert!(!oids.contains_key(krabka_pgcatalog::PUBLIC_ROLE));
     }
 
     /// Every projection that carries a schema reports the relation's own
@@ -5523,10 +5523,10 @@ mod tests {
     fn projections_report_a_relations_real_schema() {
         const VIEW: &str = "information_schema.table_constraints";
         let kv = MemKv::default();
-        let ops = crabka_pgcatalog::create_schema_ops(&kv, "app", "postgres").expect("schema ops");
+        let ops = krabka_pgcatalog::create_schema_ops(&kv, "app", "postgres").expect("schema ops");
         kv.write_batch(&ops).expect("write schema");
         let table = RelationName::new("app", "t");
-        crabka_pgcatalog::create_table(&kv, &table, vec![int4("id")]).expect("t");
+        krabka_pgcatalog::create_table(&kv, &table, vec![int4("id")]).expect("t");
         add_index(
             &kv,
             &table,
@@ -5579,14 +5579,14 @@ mod tests {
         index_columns: &[&str],
         constraint: Option<IndexConstraint>,
     ) -> IndexId {
-        let table = crabka_pgcatalog::get_table(kv, table).expect("table");
-        let (index, ops) = crabka_pgcatalog::create_constraint_index_ops(
+        let table = krabka_pgcatalog::get_table(kv, table).expect("table");
+        let (index, ops) = krabka_pgcatalog::create_constraint_index_ops(
             kv,
             &table,
             &NewIndex {
                 name: name.to_string(),
                 columns: index_columns.iter().map(|c| (*c).to_string()).collect(),
-                key_options: crabka_pgcatalog::default_index_key_options(index_columns.len()),
+                key_options: krabka_pgcatalog::default_index_key_options(index_columns.len()),
                 include: Vec::new(),
                 predicate: None,
                 nulls_not_distinct: false,
@@ -5595,7 +5595,7 @@ mod tests {
                 placement: IndexPlacement::Local,
                 constraint,
                 without_overlaps: false,
-                deferral: crabka_pgcatalog::ConstraintDeferral::Immediate,
+                deferral: krabka_pgcatalog::ConstraintDeferral::Immediate,
             },
         )
         .expect("index ops");
@@ -5604,16 +5604,16 @@ mod tests {
     }
 
     fn add_foreign_key(kv: &MemKv, foreign_key: &ForeignKey) {
-        let ops = crabka_pgcatalog::create_foreign_key_ops(kv, foreign_key).expect("fk ops");
+        let ops = krabka_pgcatalog::create_foreign_key_ops(kv, foreign_key).expect("fk ops");
         kv.write_batch(&ops).expect("write fk");
     }
 
     fn oracle_schema(kv: &MemKv) -> Schema {
         let pp = RelationName::public("pp");
         let parent =
-            crabka_pgcatalog::create_table(kv, &pp, vec![int4("id"), int4("k"), int4("m")])
+            krabka_pgcatalog::create_table(kv, &pp, vec![int4("id"), int4("k"), int4("m")])
                 .expect("pp");
-        let child = crabka_pgcatalog::create_table(
+        let child = krabka_pgcatalog::create_table(
             kv,
             &RelationName::public("cc"),
             vec![int4("a"), int4("b"), int4("c")],
@@ -5714,8 +5714,8 @@ mod tests {
         let kv = MemKv::default();
         let pperm = RelationName::public("pperm");
         let parent =
-            crabka_pgcatalog::create_table(&kv, &pperm, vec![int4("x"), int4("y")]).expect("pperm");
-        let child = crabka_pgcatalog::create_table(
+            krabka_pgcatalog::create_table(&kv, &pperm, vec![int4("x"), int4("y")]).expect("pperm");
+        let child = krabka_pgcatalog::create_table(
             &kv,
             &RelationName::public("cperm"),
             vec![int4("a"), int4("b")],
@@ -6150,18 +6150,18 @@ mod tests {
             not_null: true,
             ..int4("c")
         };
-        let (id, ops) = crabka_pgcatalog::create_table_with_options_ops(
+        let (id, ops) = krabka_pgcatalog::create_table_with_options_ops(
             kv,
             name,
             vec![column],
-            crabka_pgcatalog::TableOptions::default(),
-            vec![crabka_pgcatalog::CheckConstraint {
+            krabka_pgcatalog::TableOptions::default(),
+            vec![krabka_pgcatalog::CheckConstraint {
                 name: "ck".to_string(),
                 expr: "c > 0".to_string(),
                 validated: true,
                 no_inherit: false,
             }],
-            crabka_pgcatalog::TableCreation::bootstrap(),
+            krabka_pgcatalog::TableCreation::bootstrap(),
         )
         .expect("table ops");
         kv.write_batch(&ops).expect("write table");
@@ -6175,10 +6175,10 @@ mod tests {
     /// key named `fk` into `public.p`.
     fn dotted_name_catalog() -> MemKv {
         let kv = MemKv::default();
-        let ops = crabka_pgcatalog::create_schema_ops(&kv, "s", "postgres").expect("schema ops");
+        let ops = krabka_pgcatalog::create_schema_ops(&kv, "s", "postgres").expect("schema ops");
         kv.write_batch(&ops).expect("write schema");
         let referent = RelationName::public("p");
-        let parent = crabka_pgcatalog::create_table(&kv, &referent, vec![int4("id")]).expect("p");
+        let parent = krabka_pgcatalog::create_table(&kv, &referent, vec![int4("id")]).expect("p");
         let unique = add_index(
             &kv,
             &referent,

@@ -1,8 +1,8 @@
 //! Borrowed `RecordBatch<'a>`, `Record<'a>`, and `RecordHeader<'a>`.
 
 use bytes::Bytes;
-use crabka_compression::RecordDecompressionPolicy;
-use crabka_units::{ByteSize, convert::ByteSizeExt as _};
+use krabka_compression::RecordDecompressionPolicy;
+use krabka_units::{ByteSize, convert::ByteSizeExt as _};
 use zerocopy::FromBytes as _;
 
 use crate::{
@@ -138,10 +138,10 @@ fn decode_borrow_impl<'de>(
 
     let attributes = Attributes(hdr.attributes.get());
     let codec = attributes.compression();
-    let body = if codec == crabka_compression::CompressionType::None {
+    let body = if codec == krabka_compression::CompressionType::None {
         RecordBody::Borrowed(raw_body)
     } else {
-        let decompressed = crabka_compression::decompress(
+        let decompressed = krabka_compression::decompress(
             codec,
             raw_body,
             policy.output_limit(ByteSize::from_bytes(raw_body.len() as u64)),
@@ -189,10 +189,10 @@ impl ValidatedBatch<'_> {
         }
 
         let codec = Attributes(self.header.attributes.get()).compression();
-        let decompressed = if codec == crabka_compression::CompressionType::None {
+        let decompressed = if codec == krabka_compression::CompressionType::None {
             None
         } else {
-            Some(crabka_compression::decompress(
+            Some(krabka_compression::decompress(
                 codec,
                 self.raw_body,
                 policy.output_limit(ByteSize::from_bytes(self.raw_body.len() as u64)),
@@ -579,8 +579,8 @@ impl crate::Encode for RecordBatch<'_> {
 mod tests {
 
     use bytes::BytesMut;
-    use crabka_compression::{CompressionError, CompressionType, RecordDecompressionPolicy};
-    use crabka_units::{bytes, fraction};
+    use krabka_compression::{CompressionError, CompressionType, RecordDecompressionPolicy};
+    use krabka_units::{bytes, fraction};
 
     use super::*;
     use crate::DecodeBorrow;

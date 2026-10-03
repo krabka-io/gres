@@ -12,10 +12,10 @@
 //! the index must return exactly what it returns under a generous one.
 
 use assert2::assert;
-use crabka_pgexec::{RuntimePolicy, SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::{RuntimePolicy, SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
-async fn rows_under(budget: crabka_units::ByteSize, sql: &str) -> Vec<Vec<Option<String>>> {
+async fn rows_under(budget: krabka_units::ByteSize, sql: &str) -> Vec<Vec<Option<String>>> {
     let engine = SqlEngine::new_with_policy(RuntimePolicy {
         blocking_query_memory: budget,
         ..RuntimePolicy::default()
@@ -70,8 +70,8 @@ async fn a_memoized_lateral_returns_what_the_indexed_one_returns() {
         // The budget bounds what a lateral entry may retain, so a tight one
         // takes the index-less cached path and a generous one the indexed
         // path. Both must return the same rows.
-        let cramped = rows_under(crabka_units::kibibytes(16), sql).await;
-        let roomy = rows_under(crabka_units::mebibytes(4), sql).await;
+        let cramped = rows_under(krabka_units::kibibytes(16), sql).await;
+        let roomy = rows_under(krabka_units::mebibytes(4), sql).await;
         assert!(cramped == roomy, "{sql}");
         assert!(!cramped.is_empty(), "{sql}");
     }
@@ -83,7 +83,7 @@ async fn a_memoized_lateral_returns_what_the_indexed_one_returns() {
 #[tokio::test]
 async fn a_repeated_binding_reuses_its_entry_without_duplicating_rows() {
     let rows = rows_under(
-        crabka_units::kibibytes(16),
+        krabka_units::kibibytes(16),
         "SELECT o.tag, i.v FROM outer_t o, LATERAL (SELECT v FROM inner_t WHERE k = o.k) i \
          ORDER BY o.tag, i.v",
     )

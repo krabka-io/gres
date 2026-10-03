@@ -2,8 +2,8 @@
 //! in `src/test/regress/sql/strings.sql` that exercise the `bytea` surface.
 
 use assert2::assert;
-use crabka_pgparser::parser::parse_expr_for_test as pexpr;
-use crabka_pgtypes::{
+use krabka_pgparser::parser::parse_expr_for_test as pexpr;
+use krabka_pgtypes::{
     ColumnType, Datum,
     encoding::{ByteaOutput, OutputStyle},
 };
@@ -21,7 +21,7 @@ fn text_of_in(sql: &str, bytea_output: ByteaOutput) -> String {
         crate::eval::eval(&pexpr(sql).expect("parse"), &Scope::empty(), &[], &ctx).expect("eval");
     match value {
         Datum::Null => "<null>".to_string(),
-        other => String::from_utf8(crabka_pgtypes::encoding::encode_text_in(
+        other => String::from_utf8(krabka_pgtypes::encoding::encode_text_in(
             &other,
             OutputStyle {
                 bytea_output,
@@ -88,7 +88,7 @@ fn escape_output_doubles_a_backslash_and_leaves_printable_ascii_alone() {
         bytea_output: ByteaOutput::Escape,
         ..OutputStyle::with_zone(&utc)
     };
-    let rendered = String::from_utf8(crabka_pgtypes::encoding::encode_text_in(&value, style))
+    let rendered = String::from_utf8(krabka_pgtypes::encoding::encode_text_in(&value, style))
         .expect("ASCII and octal escapes");
     // 0x7f is unprintable despite being below the high half, and 0x80 opens it.
     assert!(rendered == r"\\ ~\177\200");

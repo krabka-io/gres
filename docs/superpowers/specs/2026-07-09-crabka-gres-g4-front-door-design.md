@@ -2,14 +2,14 @@
 
 **Date:** 2026-07-09
 **Status:** Approved
-**Type:** Slice design. The fourth slice of [Chapter Gres](2026-07-09-crabka-gres-chapter-design.md): tenants become a product surface — provisioned, routed, and authenticated — with PgDog as the co-deployed pgwire front door and Crabka owning the control plane.
+**Type:** Slice design. The fourth slice of [Chapter Gres](2026-07-09-krabka-gres-chapter-design.md): tenants become a product surface — provisioned, routed, and authenticated — with PgDog as the co-deployed pgwire front door and Crabka owning the control plane.
 
 ## Context — what the tree and PgDog actually hold
 
 1. **PgDog (v0.1.x, AGPL-3.0) fits the role as-is.** `[[databases]]` entries mapping a client-facing database name to a backend host/port are first-class (sharding is opt-in and unused here); config hot-reloads via SIGHUP or the `RELOAD` command on its admin database (only `host`/`port`/`workers` need restarts), with maintenance mode (`MAINTENANCE ON` → `RELOAD` → `MAINTENANCE OFF`) for atomic swaps that stall rather than error clients; **passthrough auth** (`passthrough_auth = "enabled"`, TLS required) forwards client credentials to the backend instead of terminating auth against `users.toml`; TLS exists on both legs including mTLS; there is an official container image (`ghcr.io/pgdogdev/pgdog`), an official Helm chart, and an OpenMetrics endpoint — but **no operator and no scale-to-zero** (a down backend errors after bounded connect/checkout timeouts; nothing queues new connections while a backend cold-starts). That last fact is G-5's central problem; this slice only ensures the registry carries the state G-5 needs.
 2. **The KRaft metadata path is broker-internal; the compacted-topic registry is the ordinary-wire precedent.** Cluster metadata records ride Crabka-private API keys on the controller listener — writing tenant records there would mean broker changes, which the chapter forbids. The schema-registry's `_schemas` store is the proven pattern for a durable cluster-scoped registry over the ordinary Kafka wire: a compacted single-partition topic, one elected writer, produce-then-await-apply read-your-writes, and a tailing reader publishing a watch.
 3. **The operator has the exact scaffolds this slice needs.** One controller per CRD kind (`crabka.io/v1alpha1`), per-instance Deployment precedents (`KafkaGrpcGateway`, `SchemaRegistry`) including rendered-config-Secrets for a third-party process, an **aggregation** precedent for building one config file from many logical entries under a single server-side-apply owner (no partial patches), the `crabka.io/cluster` label convention, a documented new-kind checklist (`crd/`, `gen_crds.rs`, `controller/`, `run.rs`, mock-harness tests), and a KafkaUser→`AlterUserScramCredentials` precedent for "CRD is intent; the wire is the runtime registry".
-4. **SCRAM primitives are shared, with one gap.** KIP-554 is fully implemented broker-side; `crabka-security` exposes mechanism-parameterized SCRAM building blocks (`hash_scram_password`, `derive_keys_from_salted`, `ScramCredential`, client/server exchanges). The vendored `crabka-pgwire` carries its own SCRAM-SHA-256 verifier; what neither has is a `pg_authid`-style verifier-string codec (`SCRAM-SHA-256$<iter>:<salt>$<StoredKey>:<ServerKey>`) — the small shared piece this slice adds so verifiers can travel through the registry.
+4. **SCRAM primitives are shared, with one gap.** KIP-554 is fully implemented broker-side; `krabka-security` exposes mechanism-parameterized SCRAM building blocks (`hash_scram_password`, `derive_keys_from_salted`, `ScramCredential`, client/server exchanges). The vendored `krabka-pgwire` carries its own SCRAM-SHA-256 verifier; what neither has is a `pg_authid`-style verifier-string codec (`SCRAM-SHA-256$<iter>:<salt>$<StoredKey>:<ServerKey>`) — the small shared piece this slice adds so verifiers can travel through the registry.
 
 ## Design Goals
 
@@ -32,16 +32,16 @@
                                │                                    │ TLS + SCRAM
                         Gres / GresTenant CRs                     PgDog  (official image; Deployment,
                                │                                    │     config Secret, admin RELOAD)
-                     crabka-operator controllers                    │ passthrough auth
+                     krabka-operator controllers                    │ passthrough auth
             ┌─ gres_tenant.rs: per tenant ──────────────┐          │
             │    ensure __gres_wal.<t> topic            │   ┌──────┴──────┐
-            │    write registry record                  │   │  computes   │  crabka-gres Deployments
+            │    write registry record                  │   │  computes   │  krabka-gres Deployments
             │    render compute Deployment              │   │  (1/tenant) │  (KafkaGrpcGateway shape)
             └─ gres.rs: the fleet ──────────────────────┘   └──────▲──────┘
                  aggregate all tenants → pgdog.toml +              │ boot: tail registry → own entry
                  users skeleton → Secret → RELOAD                  │ (verifier, bucket, thresholds)
                                │                                   │
-                    crabka-gres-control (lib) ─── ordinary wire ───┤
+                    krabka-gres-control (lib) ─── ordinary wire ───┤
                      __gres_tenants registry                       │
                      (compacted, 1 partition,                      │
                       _schemas pattern)                            │
@@ -53,11 +53,11 @@
 
 ### The registry is a compacted topic, and everything else is a view of it
 
-`__gres_tenants` (compacted, 1 partition, RF configurable) holds one keyed record per tenant: name, state (`active`/`suspended`), SQL user + SCRAM verifier (never a password), WAL-topic settings, bucket prefix, checkpoint thresholds, sizing hints. Writes go through `crabka-gres-control`, a small library implementing the `_schemas` idiom (ensure topic, produce keyed JSON records, await the reader's applied offset for read-your-writes; tombstone = deletion); readers tail and fold. The alternatives fell to the grounding: KRaft records need broker changes; CRD-only leaves non-k8s deployments and the computes themselves without a registry. Computes read their own entry at boot over the connection they already have — the Deployment env stays minimal (bootstrap, tenant name) and secrets never pass through pod specs.
+`__gres_tenants` (compacted, 1 partition, RF configurable) holds one keyed record per tenant: name, state (`active`/`suspended`), SQL user + SCRAM verifier (never a password), WAL-topic settings, bucket prefix, checkpoint thresholds, sizing hints. Writes go through `krabka-gres-control`, a small library implementing the `_schemas` idiom (ensure topic, produce keyed JSON records, await the reader's applied offset for read-your-writes; tombstone = deletion); readers tail and fold. The alternatives fell to the grounding: KRaft records need broker changes; CRD-only leaves non-k8s deployments and the computes themselves without a registry. Computes read their own entry at boot over the connection they already have — the Deployment env stays minimal (bootstrap, tenant name) and secrets never pass through pod specs.
 
 ### CRDs are intent; the controllers reconcile intent into the registry and workloads
 
-Two kinds, `Gres` (the fleet) and `GresTenant` (labeled to its fleet), following the operator's documented new-kind checklist. The `GresTenant` controller: ensure the WAL topic, upsert the registry record (verifier from a referenced Secret, hashed via `crabka-security` + the new codec), server-side-apply the per-tenant compute Deployment/Service (the `KafkaGrpcGateway` shape), surface readiness + last-checkpoint in status. The `Gres` controller owns the fleet pieces: the PgDog Deployment (official image, pinned tag), its Service, and the **aggregated** `pgdog.toml`/`users.toml` Secret rendered from all tenants of the fleet — the one-SSA-owner aggregation pattern; per-tenant partial patches of shared config were rejected as ownerless. The reload is **verified, not fired-and-forgotten** *(amended after the scaling review — mounted-Secret propagation takes up to a kubelet sync period, so a blind `RELOAD` races stale config)*: after the Secret SSA, the controller issues `RELOAD` over PgDog's admin database (ordinary Postgres wire; `tokio-postgres` is a workspace dep) and then confirms the effective config via the admin `SHOW DATABASES`/`SHOW CONFIG` surface matches the rendered generation, retrying the reload on a bounded backoff until it does; maintenance mode wraps changes spanning multiple PgDog replicas. One `Gres` fleet is sized for ~10³ tenants (the chapter's cell posture); more tenants means more cells.
+Two kinds, `Gres` (the fleet) and `GresTenant` (labeled to its fleet), following the operator's documented new-kind checklist. The `GresTenant` controller: ensure the WAL topic, upsert the registry record (verifier from a referenced Secret, hashed via `krabka-security` + the new codec), server-side-apply the per-tenant compute Deployment/Service (the `KafkaGrpcGateway` shape), surface readiness + last-checkpoint in status. The `Gres` controller owns the fleet pieces: the PgDog Deployment (official image, pinned tag), its Service, and the **aggregated** `pgdog.toml`/`users.toml` Secret rendered from all tenants of the fleet — the one-SSA-owner aggregation pattern; per-tenant partial patches of shared config were rejected as ownerless. The reload is **verified, not fired-and-forgotten** *(amended after the scaling review — mounted-Secret propagation takes up to a kubelet sync period, so a blind `RELOAD` races stale config)*: after the Secret SSA, the controller issues `RELOAD` over PgDog's admin database (ordinary Postgres wire; `tokio-postgres` is a workspace dep) and then confirms the effective config via the admin `SHOW DATABASES`/`SHOW CONFIG` surface matches the rendered generation, retrying the reload on a bounded backoff until it does; maintenance mode wraps changes spanning multiple PgDog replicas. One `Gres` fleet is sized for ~10³ tenants (the chapter's cell posture); more tenants means more cells.
 
 ### Pooling mode and timeout budget are product decisions, not deployment details
 
@@ -65,7 +65,7 @@ Two kinds, `Gres` (the fleet) and `GresTenant` (labeled to its fleet), following
 
 ### Auth is passthrough; the verifier lives with the compute
 
-PgDog runs with `passthrough_auth = "enabled"` (TLS on the client leg, per its requirement): the client's SCRAM exchange terminates at the tenant compute, whose `crabka-pgwire` verifier is loaded from the registry entry. This keeps exactly one credential store and makes tenant isolation structural — a connection routed to the wrong backend fails auth because the verifier is wrong. `users.toml`-terminated auth remains a documented dev-mode. The new `pg_authid` verifier codec (`SCRAM-SHA-256$<iter>:<salt>$<StoredKey>:<ServerKey>`) lands next to `crabka-security`'s SCRAM primitives and is shared by the control plane (building verifiers at provision time) and `crabka-pgwire` (consuming them), with round-trip tests against verifiers produced by real PostgreSQL.
+PgDog runs with `passthrough_auth = "enabled"` (TLS on the client leg, per its requirement): the client's SCRAM exchange terminates at the tenant compute, whose `krabka-pgwire` verifier is loaded from the registry entry. This keeps exactly one credential store and makes tenant isolation structural — a connection routed to the wrong backend fails auth because the verifier is wrong. `users.toml`-terminated auth remains a documented dev-mode. The new `pg_authid` verifier codec (`SCRAM-SHA-256$<iter>:<salt>$<StoredKey>:<ServerKey>`) lands next to `krabka-security`'s SCRAM primitives and is shared by the control plane (building verifiers at provision time) and `krabka-pgwire` (consuming them), with round-trip tests against verifiers produced by real PostgreSQL.
 
 ### Substrate authorization: tenant isolation must hold on the Kafka plane too
 
@@ -73,11 +73,11 @@ PgDog runs with `passthrough_auth = "enabled"` (TLS on the client leg, per its r
 
 ### The CLI drives the same control plane
 
-`crabka gres create-tenant|describe|suspend|resume|delete|list` subcommands in `crabka-cli` call `crabka-gres-control` directly, plus `crabka gres render-pgdog` emitting the same `pgdog.toml`/`users.toml` the operator renders — so a non-Kubernetes deployment (compose, bare metal) gets the full product with hand-run PgDog. Renderers are one shared implementation in `crabka-gres-control`, serialized through typed config structs so the emitted files round-trip PgDog's loader in tests.
+`crabka gres create-tenant|describe|suspend|resume|delete|list` subcommands in `krabka-cli` call `krabka-gres-control` directly, plus `crabka gres render-pgdog` emitting the same `pgdog.toml`/`users.toml` the operator renders — so a non-Kubernetes deployment (compose, bare metal) gets the full product with hand-run PgDog. Renderers are one shared implementation in `krabka-gres-control`, serialized through typed config structs so the emitted files round-trip PgDog's loader in tests.
 
 ## Integration
 
-- **New crate `crates/gres-control`** (`crabka-gres-control`, `publish = false`): registry client (writer + tailing reader), tenant record schema (versioned), PgDog config renderers, the verifier codec (or the codec lands in `crabka-security` — decided at plan time by where the deps point most cleanly).
+- **New crate `crates/gres-control`** (`krabka-gres-control`, `publish = false`): registry client (writer + tailing reader), tenant record schema (versioned), PgDog config renderers, the verifier codec (or the codec lands in `krabka-security` — decided at plan time by where the deps point most cleanly).
 - **`crates/operator`:** `Gres` + `GresTenant` CRDs, two controllers, `gen_crds.sh` regen, sample YAML, mock-harness reconcile tests.
 - **`crates/cli`:** the `gres` subcommand family.
 - **`crates/gres`:** boot-time registry read (own entry → SessionConfig with the tenant's verifier, bucket prefix, thresholds); flags become overrides for dev.
@@ -91,7 +91,7 @@ The registry rides ordinary produce/fetch on a compacted topic (the `_schemas` p
 
 - **Registry:** unit + property tests for record round-trips and fold semantics (create/update/suspend/tombstone orderings); read-your-writes pinned against an in-process broker.
 - **Renderers:** golden `pgdog.toml`/`users.toml` outputs; loader round-trip (parse what we render with PgDog's own config shapes where feasible — otherwise a schema-pinned golden corpus with a documented upgrade check against the pinned PgDog version).
-- **Verifier codec:** round-trips against verifiers generated by real PostgreSQL (`CREATE ROLE … PASSWORD` → `pg_authid` fixture) and against `crabka-pgwire`'s SCRAM path.
+- **Verifier codec:** round-trips against verifiers generated by real PostgreSQL (`CREATE ROLE … PASSWORD` → `pg_authid` fixture) and against `krabka-pgwire`'s SCRAM path.
 - **Operator:** mock-harness reconcile tests per the house pattern (exact request sequences for topic-ensure, registry write, Deployment/Secret SSA, RELOAD call), fleet aggregation across N tenants, suspend re-render.
 - **Conformance through the front door** *(added after the scaling review)*: the conformance corpus runs against a tenant **through PgDog in transaction-pooling mode** and must match the same parity baseline — the differential harness is what proves the pooler preserves the engine's SQL semantics (or pins exactly which statements it cannot, as deliberate baseline-visible deviations).
 - **The gate (e2e, CI):** in-CI broker + two provisioned tenants + real PgDog container from the pinned official image → psql through PgDog to both tenants with per-tenant SCRAM over TLS; wrong-tenant credentials fail; kill one compute and confirm the other tenant is unaffected.
@@ -107,7 +107,7 @@ The registry rides ordinary produce/fetch on a compacted topic (the `_schemas` p
 
 ## Resolved decisions
 
-- Registry: `__gres_tenants` compacted topic via `crabka-gres-control` (control-plane principals only); computes self-configure from their ACL-scoped per-tenant `__gres_cfg.<tenant>` topic at boot; CRDs are intent.
+- Registry: `__gres_tenants` compacted topic via `krabka-gres-control` (control-plane principals only); computes self-configure from their ACL-scoped per-tenant `__gres_cfg.<tenant>` topic at boot; CRDs are intent.
 - Substrate authorization (panel amendment C5): per-tenant Kafka principals via KIP-554; ACLs on topic/TransactionalId prefixes; per-tenant bucket prefixes with scoped credentials where supported; deny-cross-tenant assertions in the e2e gate.
 - Operator: `Gres` (fleet + PgDog + aggregated config Secret + RELOAD) and `GresTenant` (topic + registry + compute Deployment) controllers.
 - Auth: PgDog passthrough over TLS; verifier in the registry; `pg_authid` verifier codec shared between control plane and pgwire; `users.toml` as dev fallback.

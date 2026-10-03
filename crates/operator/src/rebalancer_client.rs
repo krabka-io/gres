@@ -1,4 +1,4 @@
-//! Connect-RPC client for the standalone `crabka-rebalancer`
+//! Connect-RPC client for the standalone `krabka-rebalancer`
 //! service.
 //!
 //! The rebalancer gives a Connect-RPC service. The unary protocol of
@@ -21,7 +21,7 @@
 //! The decode path below accepts all of these forms, and this is on
 //! purpose.
 
-use crabka_units::{
+use krabka_units::{
     ByteRate, Time,
     convert::{ByteRateExt as _, TimeExt as _},
 };
@@ -356,7 +356,7 @@ impl RebalancerClientLike for ConnectRebalancerClient {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_units::{bytes_per_sec, mebibytes_per_sec, millis, secs};
+    use krabka_units::{bytes_per_sec, mebibytes_per_sec, millis, secs};
 
     use super::*;
 

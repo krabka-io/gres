@@ -6,15 +6,15 @@
 
 use std::time::Duration;
 
-use crabka_client_producer::ProducerFlushTimeout;
-use crabka_gres_control::{
+use krabka_client_producer::ProducerFlushTimeout;
+use krabka_gres_control::{
     CheckpointPartBytes, DEFAULT_CHECKPOINT_DELETE_RECORDS_TIMEOUT,
     DEFAULT_CHECKPOINT_POLL_INTERVAL, DEFAULT_IDLE_SUSPEND_POLL_INTERVAL,
     DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL, DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING,
     DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR, PgdogConnectAttempts, PgdogPoolerMode,
     PositiveI32, PositiveMillis, PositiveUsize,
 };
-use crabka_gres_substrate::{
+use krabka_gres_substrate::{
     DEFAULT_CHECKPOINT_RETAIN, DEFAULT_DURABLE_INSPECTION_FOLD_MAX_RECORDS,
     DEFAULT_DURABLE_INSPECTION_FOLD_MAX_SIZE, DEFAULT_DURABLE_INSPECTION_TIMEOUT,
     DEFAULT_MAX_FRAME_SIZE, DEFAULT_PART_MAX_SIZE, DEFAULT_WAL_ADMIN_CONNECT_TIMEOUT,
@@ -24,7 +24,7 @@ use crabka_gres_substrate::{
     DEFAULT_WAL_RECOVERY_FETCH_RESPONSE_MAX, DEFAULT_WAL_RECOVERY_REQUEST_TIMEOUT,
     DEFAULT_WAL_TOPIC_ENSURE_TIMEOUT, DEFAULT_WAL_TOPIC_REPLICATION_FACTOR,
 };
-use crabka_units::{
+use krabka_units::{
     ByteSize, Ratio, Time,
     convert::{ByteSizeExt as _, TimeExt as _},
     gibibytes, mebibytes, percent,
@@ -38,7 +38,7 @@ use serde::{Deserialize, Serialize};
 use crate::controller::common::millis_u64;
 use crate::crd::kafka::Tracing;
 
-const DEFAULT_LIFECYCLE_REQUEUE: Time = crabka_units::secs(5);
+const DEFAULT_LIFECYCLE_REQUEUE: Time = krabka_units::secs(5);
 
 fn whole_millis(name: &str, value: Time) -> Result<u64, String> {
     let millis = value.millis_i64();
@@ -138,8 +138,8 @@ pub struct GresSpec {
     /// Distributed-tracing wiring for this fleet's tenant compute pods.
     ///
     /// When this field is set, the `GresTenant` reconciler renders the
-    /// `CRABKA_OTLP_*` and `OTEL_SERVICE_NAME` env contract on every
-    /// compute container, and `crabka-gres` installs the OTLP exporter at
+    /// `KRABKA_OTLP_*` and `OTEL_SERVICE_NAME` env contract on every
+    /// compute container, and `krabka-gres` installs the OTLP exporter at
     /// startup. When the field is absent, the reconciler writes no OTLP env
     /// var at all. That is what keeps tracing off. An empty endpoint would
     /// still switch the exporter on, and the exporter would then fail to
@@ -174,13 +174,13 @@ pub struct GresActivatorSpec {
 
     /// Registry readiness polling interval.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub registry_poll: Option<Time>,
 
     /// Maximum duration to hold one cold-starting connection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub cold_start_timeout: Option<Time>,
 
@@ -198,7 +198,7 @@ pub struct GresActivatorSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_byte_size"
+        with = "krabka_units::serde_units::human::option_byte_size"
     )]
     #[schemars(with = "Option<String>")]
     pub client_frame_max: Option<ByteSize>,
@@ -209,19 +209,19 @@ impl GresActivatorSpec {
         &self,
     ) -> Result<
         (
-            Option<crabka_client_core::ConnectionDispatchQueueCapacity>,
-            Option<crabka_client_core::ClientFrameMax>,
+            Option<krabka_client_core::ConnectionDispatchQueueCapacity>,
+            Option<krabka_client_core::ClientFrameMax>,
         ),
         String,
     > {
         let queue = self
             .client_dispatch_queue_capacity
-            .map(crabka_client_core::ConnectionDispatchQueueCapacity::new)
+            .map(krabka_client_core::ConnectionDispatchQueueCapacity::new)
             .transpose()
             .map_err(|error| format!("spec.activator.clientDispatchQueueCapacity: {error}"))?;
         let frame = self
             .client_frame_max
-            .map(crabka_client_core::ClientFrameMax::try_from)
+            .map(krabka_client_core::ClientFrameMax::try_from)
             .transpose()
             .map_err(|error| format!("spec.activator.clientFrameMax: {error}"))?;
         Ok((queue, frame))
@@ -239,7 +239,7 @@ pub enum WalProducerCompression {
     Zstd,
 }
 
-impl From<WalProducerCompression> for crabka_client_producer::Compression {
+impl From<WalProducerCompression> for krabka_client_producer::Compression {
     fn from(value: WalProducerCompression) -> Self {
         match value {
             WalProducerCompression::None => Self::None,
@@ -269,7 +269,7 @@ pub struct GresComputeSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_byte_size"
+        with = "krabka_units::serde_units::human::option_byte_size"
     )]
     #[schemars(with = "Option<String>")]
     pub client_frame_max: Option<ByteSize>,
@@ -278,26 +278,26 @@ pub struct GresComputeSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_byte_size"
+        with = "krabka_units::serde_units::human::option_byte_size"
     )]
     #[schemars(with = "Option<String>")]
     pub pgwire_max_message_size: Option<ByteSize>,
 
     /// Memory retained by one blocking query operator.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::option_byte_size")]
     #[schemars(with = "Option<String>")]
     pub pgexec_blocking_query_memory: Option<ByteSize>,
 
     /// Maximum encoded size of one result page.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::option_byte_size")]
     #[schemars(with = "Option<String>")]
     pub pgexec_result_page_max: Option<ByteSize>,
 
     /// Largest estimated join input eligible for broadcast.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::option_byte_size")]
     #[schemars(with = "Option<String>")]
     pub pgexec_join_broadcast_threshold: Option<ByteSize>,
 
@@ -323,7 +323,7 @@ pub struct GresComputeSpec {
 
     /// Lag retained behind the timestamp GC floor.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub pgexec_ts_gc_floor_lag: Option<Time>,
 
@@ -331,44 +331,44 @@ pub struct GresComputeSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_byte_size"
+        with = "krabka_units::serde_units::human::option_byte_size"
     )]
     #[schemars(with = "Option<String>")]
     pub fdw_fetch_min: Option<ByteSize>,
 
     /// Maximum time a broker may hold one FDW fetch.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub fdw_fetch_max_wait: Option<Time>,
 
     /// Maximum bytes returned for one FDW partition fetch.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::option_byte_size")]
     #[schemars(with = "Option<String>")]
     pub fdw_fetch_partition_max: Option<ByteSize>,
 
     /// FDW broker TCP connection timeout.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub fdw_connect_timeout: Option<Time>,
 
     /// FDW broker request timeout.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub fdw_request_timeout: Option<Time>,
 
     /// Total deadline for resolving a cold FDW writer schema.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub fdw_schema_fetch_timeout: Option<Time>,
 
     /// Poll cadence while awaiting a cold FDW writer schema.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub fdw_schema_fetch_poll: Option<Time>,
 
@@ -376,14 +376,14 @@ pub struct GresComputeSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_byte_size"
+        with = "krabka_units::serde_units::human::option_byte_size"
     )]
     #[schemars(with = "Option<String>")]
     pub wal_recovery_fetch_min: Option<ByteSize>,
 
     /// Maximum checkpoint object part size.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::option_byte_size")]
     #[schemars(with = "Option<String>")]
     pub checkpoint_part_size: Option<ByteSize>,
 
@@ -394,37 +394,37 @@ pub struct GresComputeSpec {
 
     /// Kafka `DeleteRecords` timeout.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub checkpoint_delete_records_timeout: Option<Time>,
 
     /// Checkpoint threshold polling interval.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub checkpoint_poll_interval: Option<Time>,
 
     /// Idle-suspend polling interval.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub idle_suspend_poll_interval: Option<Time>,
 
     /// Periodic range-0 follower refresh cadence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub range0_follower_poll_interval: Option<Time>,
 
     /// Initial delay before retrying consecutive range-0 follower rebuilds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub range0_follower_rebuild_backoff_floor: Option<Time>,
 
     /// Maximum delay between consecutive range-0 follower rebuilds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub range0_follower_rebuild_backoff_ceiling: Option<Time>,
 
@@ -455,7 +455,7 @@ pub struct GresComputeSpec {
 
     /// Maximum encoded distributed join row size.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::option_byte_size")]
     #[schemars(with = "Option<String>")]
     pub range_join_row_max: Option<ByteSize>,
 
@@ -468,7 +468,7 @@ pub struct GresComputeSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_byte_size"
+        with = "krabka_units::serde_units::human::option_byte_size"
     )]
     #[schemars(with = "Option<String>")]
     pub range_rpc_frame_max: Option<ByteSize>,
@@ -477,7 +477,7 @@ pub struct GresComputeSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub range_rpc_request_timeout: Option<Time>,
@@ -486,7 +486,7 @@ pub struct GresComputeSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub range_rpc_server_idle_timeout: Option<Time>,
@@ -495,7 +495,7 @@ pub struct GresComputeSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub range_rpc_pool_idle_ttl: Option<Time>,
@@ -509,7 +509,7 @@ pub struct GresComputeSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub range_remote_session_idle: Option<Time>,
@@ -523,7 +523,7 @@ pub struct GresComputeSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub range0_wait_timeout: Option<Time>,
@@ -532,7 +532,7 @@ pub struct GresComputeSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub range0_barrier_reply_budget: Option<Time>,
@@ -541,7 +541,7 @@ pub struct GresComputeSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub range_cross_range_lock_wait_cap: Option<Time>,
@@ -555,7 +555,7 @@ pub struct GresComputeSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_byte_size"
+        with = "krabka_units::serde_units::human::option_byte_size"
     )]
     #[schemars(with = "Option<String>")]
     pub range_durable_inspect_max_size: Option<ByteSize>,
@@ -569,7 +569,7 @@ pub struct GresComputeSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub range_decision_release_retry_backoff: Option<Time>,
@@ -578,7 +578,7 @@ pub struct GresComputeSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub range_tso_heartbeat_interval: Option<Time>,
@@ -587,7 +587,7 @@ pub struct GresComputeSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub range_logical_min_persist_interval: Option<Time>,
@@ -606,14 +606,14 @@ pub struct GresComputeSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub range_hlc_horizon_headroom: Option<Time>,
 
     /// Deadline for one durable record inspection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub durable_inspection_timeout: Option<Time>,
 
@@ -624,43 +624,43 @@ pub struct GresComputeSpec {
 
     /// Maximum data materialized by one durable inspection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::option_byte_size")]
     #[schemars(with = "Option<String>")]
     pub durable_inspection_fold_max_size: Option<ByteSize>,
 
     /// Timeout for resolving Kafka broker hostnames used by the FDW.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub fdw_broker_dns_timeout: Option<Time>,
 
     /// Initial delay before retrying a transient Schema Registry fetch failure.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub schema_fetch_retry_initial_backoff: Option<Time>,
 
     /// Maximum delay between transient Schema Registry fetch retries.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub schema_fetch_retry_max_backoff: Option<Time>,
 
     /// Kafka broker long-poll wait for committed-WAL recovery fetches.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub wal_recovery_fetch_max_wait: Option<Time>,
 
     /// Per-partition size limit for committed-WAL recovery fetches.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::option_byte_size")]
     #[schemars(with = "Option<String>")]
     pub wal_recovery_fetch_partition_max: Option<ByteSize>,
 
     /// Whole-response size limit for committed-WAL recovery fetches.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::option_byte_size")]
     #[schemars(with = "Option<String>")]
     pub wal_recovery_fetch_response_max: Option<ByteSize>,
 
@@ -671,37 +671,37 @@ pub struct GresComputeSpec {
 
     /// Timeout for resolving committed-WAL recovery broker hostnames.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub wal_recovery_dns_timeout: Option<Time>,
 
     /// Timeout for opening committed-WAL recovery broker connections.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub wal_recovery_connect_timeout: Option<Time>,
 
     /// Timeout for committed-WAL recovery broker requests.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub wal_recovery_request_timeout: Option<Time>,
 
     /// Deadline for flushing all buffered and in-flight WAL records.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub wal_producer_flush_timeout: Option<Time>,
 
     /// Timeout for resolving WAL producer broker hostnames.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub wal_producer_dns_timeout: Option<Time>,
 
     /// Timeout for WAL producer broker requests.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub wal_producer_request_timeout: Option<Time>,
 
@@ -712,31 +712,31 @@ pub struct GresComputeSpec {
 
     /// WAL producer retry and producer-ID initial backoff.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub wal_producer_retry_backoff: Option<Time>,
 
     /// Per-batch WAL producer routing retry budget.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub wal_producer_routing_retry_budget: Option<Time>,
 
     /// WAL producer-ID initialization retry timeout.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub wal_producer_init_retry_timeout: Option<Time>,
 
     /// WAL producer-ID initialization backoff cap.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub wal_producer_init_max_backoff: Option<Time>,
 
     /// WAL producer transaction timeout.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub wal_producer_transaction_timeout: Option<Time>,
 
@@ -746,25 +746,25 @@ pub struct GresComputeSpec {
 
     /// Delay before sending a partial WAL producer batch.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub wal_producer_linger: Option<Time>,
 
     /// Maximum WAL producer batch size.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::option_byte_size")]
     #[schemars(with = "Option<String>")]
     pub wal_producer_batch: Option<ByteSize>,
 
     /// Target maximum size of one encoded logical WAL frame.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::option_byte_size")]
     #[schemars(with = "Option<String>")]
     pub wal_frame_max_size: Option<ByteSize>,
 
     /// Maximum active memtable size for each on-disk substrate cache.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::option_byte_size")]
     #[schemars(with = "Option<String>")]
     pub pgkv_max_memtable_size: Option<ByteSize>,
 
@@ -780,25 +780,25 @@ pub struct GresComputeSpec {
 
     /// Timeout for ensuring a range WAL topic.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub wal_topic_ensure_timeout: Option<Time>,
 
     /// Timeout for opening WAL admin connections.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub wal_admin_connect_timeout: Option<Time>,
 
     /// Timeout for WAL admin requests.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub wal_admin_request_timeout: Option<Time>,
 
     /// Tenant lifecycle reconciliation interval.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub lifecycle_requeue: Option<Time>,
 }
@@ -807,19 +807,19 @@ pub struct GresComputeSpec {
 pub(crate) struct EffectiveGresComputePolicy {
     pub(crate) readiness_probe_period_seconds: i32,
     pub(crate) client_dispatch_queue_capacity:
-        Option<crabka_client_core::ConnectionDispatchQueueCapacity>,
-    pub(crate) client_frame_max: Option<crabka_client_core::ClientFrameMax>,
+        Option<krabka_client_core::ConnectionDispatchQueueCapacity>,
+    pub(crate) client_frame_max: Option<krabka_client_core::ClientFrameMax>,
     pub(crate) pgwire_max_message_size: ByteSize,
-    pub(crate) pgexec_runtime_policy: crabka_pgexec::RuntimePolicy,
-    pub(crate) registry_reader_fetch_min: Option<crabka_client_core::FetchMinBytes>,
-    pub(crate) fdw_fetch_min: Option<crabka_client_core::FetchMinBytes>,
+    pub(crate) pgexec_runtime_policy: krabka_pgexec::RuntimePolicy,
+    pub(crate) registry_reader_fetch_min: Option<krabka_client_core::FetchMinBytes>,
+    pub(crate) fdw_fetch_min: Option<krabka_client_core::FetchMinBytes>,
     pub(crate) fdw_fetch_max_wait: Time,
     pub(crate) fdw_fetch_partition_max: ByteSize,
     pub(crate) fdw_connect_timeout: Time,
     pub(crate) fdw_request_timeout: Time,
     pub(crate) fdw_schema_fetch_timeout: Time,
     pub(crate) fdw_schema_fetch_poll: Time,
-    pub(crate) wal_recovery_fetch_min: Option<crabka_client_core::FetchMinBytes>,
+    pub(crate) wal_recovery_fetch_min: Option<krabka_client_core::FetchMinBytes>,
     pub(crate) checkpoint_part_size: CheckpointPartBytes,
     pub(crate) checkpoint_retain: PositiveUsize,
     pub(crate) checkpoint_delete_records_timeout_ms: PositiveI32,
@@ -828,12 +828,12 @@ pub(crate) struct EffectiveGresComputePolicy {
     pub(crate) range0_follower_poll_interval_ms: PositiveMillis,
     pub(crate) range0_follower_rebuild_backoff_floor_ms: PositiveMillis,
     pub(crate) range0_follower_rebuild_backoff_ceiling_ms: PositiveMillis,
-    pub(crate) range_runtime_policy: crabka_gres_ranges::RangeRuntimePolicy,
+    pub(crate) range_runtime_policy: krabka_gres_ranges::RangeRuntimePolicy,
     pub(crate) durable_inspection_timeout_ms: PositiveMillis,
     pub(crate) durable_inspection_fold_max_records: PositiveUsize,
     pub(crate) durable_inspection_fold_max_size: ByteSize,
-    pub(crate) fdw_broker_dns_timeout: crabka_client_core::ClientDnsTimeout,
-    pub(crate) schema_fetch_retry_policy: crabka_schema_serde::SchemaFetchRetryPolicy,
+    pub(crate) fdw_broker_dns_timeout: krabka_client_core::ClientDnsTimeout,
+    pub(crate) schema_fetch_retry_policy: krabka_schema_serde::SchemaFetchRetryPolicy,
     pub(crate) wal_recovery_fetch_max_wait_ms: PositiveI32,
     pub(crate) wal_recovery_fetch_partition_max: PositiveI32,
     pub(crate) wal_recovery_fetch_response_max: PositiveI32,
@@ -842,11 +842,11 @@ pub(crate) struct EffectiveGresComputePolicy {
     pub(crate) wal_recovery_connect_timeout_ms: PositiveMillis,
     pub(crate) wal_recovery_request_timeout_ms: PositiveMillis,
     pub(crate) wal_producer_flush_timeout: ProducerFlushTimeout,
-    pub(crate) wal_producer_dns_timeout: crabka_client_core::ClientDnsTimeout,
-    pub(crate) wal_producer_retry_policy: crabka_client_producer::ProducerRetryPolicy,
-    pub(crate) wal_producer_throughput_policy: crabka_client_producer::ProducerThroughputPolicy,
+    pub(crate) wal_producer_dns_timeout: krabka_client_core::ClientDnsTimeout,
+    pub(crate) wal_producer_retry_policy: krabka_client_producer::ProducerRetryPolicy,
+    pub(crate) wal_producer_throughput_policy: krabka_client_producer::ProducerThroughputPolicy,
     pub(crate) wal_frame_max_size: ByteSize,
-    pub(crate) pgkv_options: crabka_pgkv::FjallOptions,
+    pub(crate) pgkv_options: krabka_pgkv::FjallOptions,
     pub(crate) wal_topic_replication_factor: PositiveI32,
     pub(crate) wal_topic_ensure_timeout_ms: PositiveI32,
     pub(crate) wal_admin_connect_timeout_ms: PositiveMillis,
@@ -894,7 +894,7 @@ impl GresComputeSpec {
             .pgwire_max_message_size
             .unwrap_or_else(|| mebibytes(64));
         whole_bytes_usize("spec.compute.pgwireMaxMessageSize", pgwire_max_message_size)?;
-        let pgexec_defaults = crabka_pgexec::RuntimePolicy::default();
+        let pgexec_defaults = krabka_pgexec::RuntimePolicy::default();
         let pgexec_blocking_query_memory = self
             .pgexec_blocking_query_memory
             .unwrap_or(pgexec_defaults.blocking_query_memory);
@@ -946,7 +946,7 @@ impl GresComputeSpec {
             self.pgexec_ts_prune_versions_per_row
                 .unwrap_or(pgexec_defaults.ts_prune_versions_per_row),
         )?;
-        let pgexec_runtime_policy = crabka_pgexec::RuntimePolicy {
+        let pgexec_runtime_policy = krabka_pgexec::RuntimePolicy {
             blocking_query_memory: pgexec_blocking_query_memory,
             result_page_max: pgexec_result_page_max,
             join_broadcast_threshold: pgexec_join_broadcast_threshold,
@@ -964,25 +964,25 @@ impl GresComputeSpec {
         .map_err(|error| format!("spec.compute.pgexecTsGcFloorLag: {error:?}"))?;
         let wal_frame_max_size = self.wal_frame_max_size.unwrap_or(DEFAULT_MAX_FRAME_SIZE);
         whole_bytes_usize("spec.compute.walFrameMaxSize", wal_frame_max_size)?;
-        let pgkv_defaults = crabka_pgkv::FjallOptions::default();
-        let pgkv_options = crabka_pgkv::FjallOptions::new(
+        let pgkv_defaults = krabka_pgkv::FjallOptions::default();
+        let pgkv_options = krabka_pgkv::FjallOptions::new(
             self.pgkv_max_memtable_size
                 .unwrap_or(pgkv_defaults.max_memtable_size()),
             self.pgkv_rotate_after_ops
                 .unwrap_or(pgkv_defaults.rotate_after_ops().get()),
         )
         .map_err(|error| format!("spec.compute.pgkv: {error}"))?;
-        let schema_fetch_retry_defaults = crabka_schema_serde::SchemaFetchRetryPolicy::default();
-        let range_defaults = crabka_gres_ranges::RangeRuntimePolicy::default();
+        let schema_fetch_retry_defaults = krabka_schema_serde::SchemaFetchRetryPolicy::default();
+        let range_defaults = krabka_gres_ranges::RangeRuntimePolicy::default();
         let range_join_row_max = self.range_join_row_max.unwrap_or_else(|| {
-            crabka_units::ByteSize::from_bytes(
+            krabka_units::ByteSize::from_bytes(
                 u64::try_from(range_defaults.join.row_bytes).expect("compiled default fits u64"),
             )
         });
         let range_join_row_bytes =
             whole_bytes_usize("spec.compute.rangeJoinRowMax", range_join_row_max)?;
-        let range_runtime_policy = crabka_gres_ranges::RangeRuntimePolicy {
-            join: crabka_pgexec::scanner::JoinPolicy {
+        let range_runtime_policy = krabka_gres_ranges::RangeRuntimePolicy {
+            join: krabka_pgexec::scanner::JoinPolicy {
                 key_columns: positive_usize(
                     "spec.compute.rangeJoinKeyColumns",
                     self.range_join_key_columns
@@ -1027,7 +1027,7 @@ impl GresComputeSpec {
             rpc_pool_idle_ttl: self
                 .range_rpc_pool_idle_ttl
                 .unwrap_or(range_defaults.rpc_pool_idle_ttl),
-            rpc_pool_max_idle_per_endpoint: crabka_gres_ranges::PositiveUsize::new(
+            rpc_pool_max_idle_per_endpoint: krabka_gres_ranges::PositiveUsize::new(
                 self.range_rpc_pool_max_idle_per_endpoint
                     .unwrap_or(range_defaults.rpc_pool_max_idle_per_endpoint.get()),
             )
@@ -1035,7 +1035,7 @@ impl GresComputeSpec {
             remote_session_idle: self
                 .range_remote_session_idle
                 .unwrap_or(range_defaults.remote_session_idle),
-            remote_session_max: crabka_gres_ranges::PositiveUsize::new(
+            remote_session_max: krabka_gres_ranges::PositiveUsize::new(
                 self.range_remote_session_max
                     .unwrap_or(range_defaults.remote_session_max.get()),
             )
@@ -1049,7 +1049,7 @@ impl GresComputeSpec {
             cross_range_lock_wait_cap: self
                 .range_cross_range_lock_wait_cap
                 .unwrap_or(range_defaults.cross_range_lock_wait_cap),
-            durable_inspect_max_records: crabka_gres_ranges::PositiveU32::new(
+            durable_inspect_max_records: krabka_gres_ranges::PositiveU32::new(
                 self.range_durable_inspect_max_records
                     .unwrap_or(range_defaults.durable_inspect_max_records.get()),
             )
@@ -1057,7 +1057,7 @@ impl GresComputeSpec {
             durable_inspect_max_size: self
                 .range_durable_inspect_max_size
                 .unwrap_or(range_defaults.durable_inspect_max_size),
-            decision_release_lag_retries: crabka_gres_ranges::PositiveU32::new(
+            decision_release_lag_retries: krabka_gres_ranges::PositiveU32::new(
                 self.range_decision_release_lag_retries
                     .unwrap_or(range_defaults.decision_release_lag_retries.get()),
             )
@@ -1071,12 +1071,12 @@ impl GresComputeSpec {
             logical_min_persist_interval: self
                 .range_logical_min_persist_interval
                 .unwrap_or(range_defaults.logical_min_persist_interval),
-            logical_base_persist_stride: crabka_gres_ranges::PositiveU64::new(
+            logical_base_persist_stride: krabka_gres_ranges::PositiveU64::new(
                 self.range_logical_base_persist_stride
                     .unwrap_or(range_defaults.logical_base_persist_stride.get()),
             )
             .map_err(|error| format!("spec.compute.rangeLogicalBasePersistStride: {error}"))?,
-            logical_max_persist_stride: crabka_gres_ranges::PositiveU64::new(
+            logical_max_persist_stride: krabka_gres_ranges::PositiveU64::new(
                 self.range_logical_max_persist_stride
                     .unwrap_or(range_defaults.logical_max_persist_stride.get()),
             )
@@ -1088,7 +1088,7 @@ impl GresComputeSpec {
         range_runtime_policy
             .validate()
             .map_err(|error| format!("spec.compute range runtime policy: {error}"))?;
-        let schema_fetch_retry_policy = crabka_schema_serde::SchemaFetchRetryPolicy::new(
+        let schema_fetch_retry_policy = krabka_schema_serde::SchemaFetchRetryPolicy::new(
             self.schema_fetch_retry_initial_backoff
                 .unwrap_or_else(|| schema_fetch_retry_defaults.initial_backoff()),
             self.schema_fetch_retry_max_backoff
@@ -1102,26 +1102,26 @@ impl GresComputeSpec {
             };
             format!("spec.compute.{field}: {error}")
         })?;
-        let fdw_fetch_max_wait = self.fdw_fetch_max_wait.unwrap_or(crabka_units::secs(5));
+        let fdw_fetch_max_wait = self.fdw_fetch_max_wait.unwrap_or(krabka_units::secs(5));
         whole_millis_i32("spec.compute.fdwFetchMaxWait", fdw_fetch_max_wait)?;
         let fdw_fetch_partition_max = self
             .fdw_fetch_partition_max
-            .unwrap_or_else(|| crabka_units::mebibytes(10));
+            .unwrap_or_else(|| krabka_units::mebibytes(10));
         whole_bytes_i32("spec.compute.fdwFetchPartitionMax", fdw_fetch_partition_max)?;
-        let fdw_connect_timeout = self.fdw_connect_timeout.unwrap_or(crabka_units::secs(10));
+        let fdw_connect_timeout = self.fdw_connect_timeout.unwrap_or(krabka_units::secs(10));
         whole_millis_i32("spec.compute.fdwConnectTimeout", fdw_connect_timeout)?;
-        let fdw_request_timeout = self.fdw_request_timeout.unwrap_or(crabka_units::secs(30));
+        let fdw_request_timeout = self.fdw_request_timeout.unwrap_or(krabka_units::secs(30));
         whole_millis_i32("spec.compute.fdwRequestTimeout", fdw_request_timeout)?;
         let fdw_schema_fetch_timeout = self
             .fdw_schema_fetch_timeout
-            .unwrap_or_else(|| crabka_units::secs(10));
+            .unwrap_or_else(|| krabka_units::secs(10));
         whole_millis(
             "spec.compute.fdwSchemaFetchTimeout",
             fdw_schema_fetch_timeout,
         )?;
         let fdw_schema_fetch_poll = self
             .fdw_schema_fetch_poll
-            .unwrap_or_else(|| crabka_units::millis(20));
+            .unwrap_or_else(|| krabka_units::millis(20));
         whole_millis("spec.compute.fdwSchemaFetchPoll", fdw_schema_fetch_poll)?;
         if fdw_schema_fetch_poll > fdw_schema_fetch_timeout {
             return Err(
@@ -1133,12 +1133,12 @@ impl GresComputeSpec {
             readiness_probe_period_seconds: self.effective_readiness_probe_period_seconds()?,
             client_dispatch_queue_capacity: self
                 .client_dispatch_queue_capacity
-                .map(crabka_client_core::ConnectionDispatchQueueCapacity::new)
+                .map(krabka_client_core::ConnectionDispatchQueueCapacity::new)
                 .transpose()
                 .map_err(|error| format!("spec.compute.clientDispatchQueueCapacity: {error}"))?,
             client_frame_max: self
                 .client_frame_max
-                .map(crabka_client_core::ClientFrameMax::try_from)
+                .map(krabka_client_core::ClientFrameMax::try_from)
                 .transpose()
                 .map_err(|error| format!("spec.compute.clientFrameMax: {error}"))?,
             pgwire_max_message_size,
@@ -1146,7 +1146,7 @@ impl GresComputeSpec {
             registry_reader_fetch_min: None,
             fdw_fetch_min: self
                 .fdw_fetch_min
-                .map(crabka_client_core::FetchMinBytes::try_from)
+                .map(krabka_client_core::FetchMinBytes::try_from)
                 .transpose()
                 .map_err(|error| format!("spec.compute.fdwFetchMin: {error}"))?,
             fdw_fetch_max_wait,
@@ -1157,7 +1157,7 @@ impl GresComputeSpec {
             fdw_schema_fetch_poll,
             wal_recovery_fetch_min: self
                 .wal_recovery_fetch_min
-                .map(crabka_client_core::FetchMinBytes::try_from)
+                .map(krabka_client_core::FetchMinBytes::try_from)
                 .transpose()
                 .map_err(|error| format!("spec.compute.walRecoveryFetchMin: {error}"))?,
             checkpoint_part_size: CheckpointPartBytes::new(whole_bytes_usize(
@@ -1208,9 +1208,9 @@ impl GresComputeSpec {
             )
             .map_err(|error| format!("spec.compute.durableInspectionFoldMaxRecords: {error}"))?,
             durable_inspection_fold_max_size,
-            fdw_broker_dns_timeout: crabka_client_core::ClientDnsTimeout::new(
+            fdw_broker_dns_timeout: krabka_client_core::ClientDnsTimeout::new(
                 self.fdw_broker_dns_timeout
-                    .unwrap_or_else(|| crabka_client_core::ClientDnsTimeout::default().time()),
+                    .unwrap_or_else(|| krabka_client_core::ClientDnsTimeout::default().time()),
             )
             .map_err(|error| format!("spec.compute.fdwBrokerDnsTimeout: {error}"))?,
             schema_fetch_retry_policy,
@@ -1261,9 +1261,9 @@ impl GresComputeSpec {
                     .to_std(),
             )
             .map_err(|error| format!("spec.compute.walProducerFlushTimeout: {error}"))?,
-            wal_producer_dns_timeout: crabka_client_core::ClientDnsTimeout::new(
+            wal_producer_dns_timeout: krabka_client_core::ClientDnsTimeout::new(
                 self.wal_producer_dns_timeout
-                    .unwrap_or_else(|| crabka_client_core::ClientDnsTimeout::default().time()),
+                    .unwrap_or_else(|| krabka_client_core::ClientDnsTimeout::default().time()),
             )
             .map_err(|error| format!("spec.compute.walProducerDnsTimeout: {error}"))?,
             wal_producer_retry_policy: self.effective_wal_producer_retry_policy()?,
@@ -1303,8 +1303,8 @@ impl GresComputeSpec {
 
     fn effective_wal_producer_retry_policy(
         &self,
-    ) -> Result<crabka_client_producer::ProducerRetryPolicy, String> {
-        let defaults = crabka_client_producer::ProducerRetryPolicy::default();
+    ) -> Result<krabka_client_producer::ProducerRetryPolicy, String> {
+        let defaults = krabka_client_producer::ProducerRetryPolicy::default();
         let millis = |name, value| {
             whole_millis_i32(name, value)
                 .map(|value| Duration::from_millis(u64::try_from(value).expect("positive")))
@@ -1319,7 +1319,7 @@ impl GresComputeSpec {
             self.wal_producer_init_max_backoff
                 .unwrap_or_else(|| Time::from_std(defaults.init_max_backoff())),
         )?;
-        crabka_client_producer::ProducerRetryPolicy::new(
+        krabka_client_producer::ProducerRetryPolicy::new(
             millis(
                 "spec.compute.walProducerRequestTimeout",
                 self.wal_producer_request_timeout
@@ -1370,9 +1370,9 @@ impl GresComputeSpec {
 
     fn effective_wal_producer_throughput_policy(
         &self,
-    ) -> Result<crabka_client_producer::ProducerThroughputPolicy, String> {
-        let defaults = crabka_client_producer::ProducerThroughputPolicy::default();
-        crabka_client_producer::ProducerThroughputPolicy::new(
+    ) -> Result<krabka_client_producer::ProducerThroughputPolicy, String> {
+        let defaults = krabka_client_producer::ProducerThroughputPolicy::default();
+        krabka_client_producer::ProducerThroughputPolicy::new(
             self.wal_producer_compression
                 .map_or_else(|| defaults.compression(), Into::into),
             Duration::from_millis(
@@ -1507,17 +1507,17 @@ pub enum GresBalancerGoal {
 #[serde(rename_all = "camelCase")]
 pub struct GresBalancerThresholds {
     /// Split ranges larger than this size.
-    #[serde(with = "crabka_units::serde_units::human::byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::byte_size")]
     #[schemars(with = "String")]
     pub size_ceiling: ByteSize,
     /// Merge adjacent ranges below this combined size.
-    #[serde(with = "crabka_units::serde_units::human::byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::byte_size")]
     #[schemars(with = "String")]
     pub merge_floor: ByteSize,
     /// Row stride used when a range has no upper bound.
     pub split_stride_rows: u64,
     /// Load skew tolerated before move planning.
-    #[serde(with = "crabka_units::serde_units::human::ratio")]
+    #[serde(with = "krabka_units::serde_units::human::ratio")]
     #[schemars(with = "String")]
     pub load_skew_hysteresis: Ratio,
     /// Optional maximum ranges per compute.
@@ -1582,19 +1582,19 @@ pub struct PgdogSpec {
 
     /// Idle pooled-server disconnect window.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub idle_timeout: Option<Time>,
 
     /// Idle timeout used while at least one tenant can suspend.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub suspension_idle_timeout: Option<Time>,
 
     /// Maximum lifetime for pooled backend connections.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub server_lifetime: Option<Time>,
 
@@ -1605,7 +1605,7 @@ pub struct PgdogSpec {
 
     /// Direct-route credential retention grace.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_time")]
+    #[serde(with = "krabka_units::serde_units::human::option_time")]
     #[schemars(with = "Option<String>")]
     pub direct_bootstrap_grace: Option<Time>,
 }
@@ -1721,13 +1721,13 @@ pub struct TenantDefaults {
 
     /// Checkpoint after this much WAL when set.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::option_byte_size")]
     #[schemars(with = "Option<String>")]
     pub checkpoint_size: Option<ByteSize>,
 
     /// Keep the tenant warm when its latest checkpoint exceeds this size.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(with = "crabka_units::serde_units::human::option_byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::option_byte_size")]
     #[schemars(with = "Option<String>")]
     pub suspend_max_checkpoint_size: Option<ByteSize>,
 
@@ -1806,7 +1806,7 @@ mod tests {
     use std::time::Duration;
 
     use assert2::{assert, check};
-    use crabka_units::convert::ByteSizeExt as _;
+    use krabka_units::convert::ByteSizeExt as _;
     use kube::CustomResourceExt as _;
 
     use super::*;
@@ -1864,8 +1864,8 @@ mod tests {
             activator: Some(GresActivatorSpec {
                 image: Some("example.test/activator:v2".into()),
                 replicas: Some(3),
-                registry_poll: Some(crabka_units::millis(500)),
-                cold_start_timeout: Some(crabka_units::secs(45)),
+                registry_poll: Some(krabka_units::millis(500)),
+                cold_start_timeout: Some(krabka_units::secs(45)),
                 readiness_probe_period_seconds: Some(7),
                 client_dispatch_queue_capacity: None,
                 client_frame_max: None,
@@ -1900,7 +1900,7 @@ mod tests {
                     protocol: Some(crate::crd::kafka::OtlpProtocol::HttpProtobuf),
                     sample_ratio: Some(0.25),
                     service_name: Some("gres-analytics".into()),
-                    timeout: Some(crabka_units::secs(7)),
+                    timeout: Some(krabka_units::secs(7)),
                 }),
             }),
         };
@@ -1983,7 +1983,7 @@ mod tests {
     fn activator_client_policy_round_trips_and_validates() {
         let policy = GresActivatorSpec {
             client_dispatch_queue_capacity: Some(7),
-            client_frame_max: Some(crabka_units::kibibytes(32)),
+            client_frame_max: Some(krabka_units::kibibytes(32)),
             ..GresActivatorSpec::default()
         };
         let json = serde_json::to_string(&policy).expect("serialize activator policy");
@@ -1992,7 +1992,7 @@ mod tests {
             .client_resource_policy()
             .expect("valid activator client policy");
         assert!(queue.expect("queue").get() == 7);
-        assert!(frame.expect("frame").size() == crabka_units::kibibytes(32));
+        assert!(frame.expect("frame").size() == krabka_units::kibibytes(32));
 
         let crd = serde_json::to_value(Gres::crd()).expect("serialize Gres CRD");
         let activator = &crd["spec"]["versions"][0]["schema"]["openAPIV3Schema"]["properties"]["spec"]
@@ -2024,7 +2024,7 @@ mod tests {
             ),
             (
                 GresActivatorSpec {
-                    client_frame_max: Some(crabka_units::mebibytes(101)),
+                    client_frame_max: Some(krabka_units::mebibytes(101)),
                     ..GresActivatorSpec::default()
                 },
                 "spec.activator.clientFrameMax",
@@ -2062,15 +2062,15 @@ mod tests {
     fn compute_client_policy_round_trips_and_validates() {
         let policy = GresComputeSpec {
             client_dispatch_queue_capacity: Some(7),
-            client_frame_max: Some(crabka_units::kibibytes(32)),
-            fdw_fetch_min: Some(crabka_units::bytes(2)),
-            fdw_fetch_max_wait: Some(crabka_units::millis(41)),
-            fdw_fetch_partition_max: Some(crabka_units::bytes(43)),
-            fdw_connect_timeout: Some(crabka_units::millis(47)),
-            fdw_request_timeout: Some(crabka_units::millis(53)),
-            fdw_schema_fetch_timeout: Some(crabka_units::millis(59)),
-            fdw_schema_fetch_poll: Some(crabka_units::millis(17)),
-            wal_recovery_fetch_min: Some(crabka_units::bytes(3)),
+            client_frame_max: Some(krabka_units::kibibytes(32)),
+            fdw_fetch_min: Some(krabka_units::bytes(2)),
+            fdw_fetch_max_wait: Some(krabka_units::millis(41)),
+            fdw_fetch_partition_max: Some(krabka_units::bytes(43)),
+            fdw_connect_timeout: Some(krabka_units::millis(47)),
+            fdw_request_timeout: Some(krabka_units::millis(53)),
+            fdw_schema_fetch_timeout: Some(krabka_units::millis(59)),
+            fdw_schema_fetch_poll: Some(krabka_units::millis(17)),
+            wal_recovery_fetch_min: Some(krabka_units::bytes(3)),
             ..GresComputeSpec::default()
         };
         let json = serde_json::to_string(&policy).expect("serialize compute client policy");
@@ -2083,20 +2083,20 @@ mod tests {
                 .get()
                 == 7
         );
-        assert!(effective.client_frame_max.expect("frame").size() == crabka_units::kibibytes(32));
-        assert!(effective.fdw_fetch_min.expect("FDW fetch").size() == crabka_units::bytes(2));
-        assert!(effective.fdw_fetch_max_wait == crabka_units::millis(41));
-        assert!(effective.fdw_fetch_partition_max == crabka_units::bytes(43));
-        assert!(effective.fdw_connect_timeout == crabka_units::millis(47));
-        assert!(effective.fdw_request_timeout == crabka_units::millis(53));
-        assert!(effective.fdw_schema_fetch_timeout == crabka_units::millis(59));
-        assert!(effective.fdw_schema_fetch_poll == crabka_units::millis(17));
+        assert!(effective.client_frame_max.expect("frame").size() == krabka_units::kibibytes(32));
+        assert!(effective.fdw_fetch_min.expect("FDW fetch").size() == krabka_units::bytes(2));
+        assert!(effective.fdw_fetch_max_wait == krabka_units::millis(41));
+        assert!(effective.fdw_fetch_partition_max == krabka_units::bytes(43));
+        assert!(effective.fdw_connect_timeout == krabka_units::millis(47));
+        assert!(effective.fdw_request_timeout == krabka_units::millis(53));
+        assert!(effective.fdw_schema_fetch_timeout == krabka_units::millis(59));
+        assert!(effective.fdw_schema_fetch_poll == krabka_units::millis(17));
         assert!(
             effective
                 .wal_recovery_fetch_min
                 .expect("WAL recovery fetch")
                 .size()
-                == crabka_units::bytes(3)
+                == krabka_units::bytes(3)
         );
 
         let crd = serde_json::to_value(Gres::crd()).expect("serialize Gres CRD");
@@ -2130,7 +2130,7 @@ mod tests {
             ),
             (
                 GresComputeSpec {
-                    client_frame_max: Some(crabka_units::mebibytes(101)),
+                    client_frame_max: Some(krabka_units::mebibytes(101)),
                     ..GresComputeSpec::default()
                 },
                 "spec.compute.clientFrameMax",
@@ -2151,8 +2151,8 @@ mod tests {
             ),
             (
                 GresComputeSpec {
-                    fdw_schema_fetch_timeout: Some(crabka_units::millis(10)),
-                    fdw_schema_fetch_poll: Some(crabka_units::millis(11)),
+                    fdw_schema_fetch_timeout: Some(krabka_units::millis(10)),
+                    fdw_schema_fetch_poll: Some(krabka_units::millis(11)),
                     ..GresComputeSpec::default()
                 },
                 "spec.compute.fdwSchemaFetchPoll",
@@ -2195,18 +2195,18 @@ mod tests {
     #[test]
     fn compute_checkpoint_lifecycle_policy_round_trips_and_has_exact_schema_bounds() {
         let policy = GresComputeSpec {
-            checkpoint_part_size: Some(crabka_units::bytes(8)),
+            checkpoint_part_size: Some(krabka_units::bytes(8)),
             checkpoint_retain: Some(1),
             checkpoint_delete_records_timeout: Some(Time::from_millis(i64::from(i32::MAX))),
-            checkpoint_poll_interval: Some(crabka_units::millis(1)),
-            idle_suspend_poll_interval: Some(crabka_units::millis(1)),
-            range0_follower_poll_interval: Some(crabka_units::millis(1)),
-            range0_follower_rebuild_backoff_floor: Some(crabka_units::millis(2)),
-            range0_follower_rebuild_backoff_ceiling: Some(crabka_units::millis(3)),
-            durable_inspection_timeout: Some(crabka_units::millis(4)),
+            checkpoint_poll_interval: Some(krabka_units::millis(1)),
+            idle_suspend_poll_interval: Some(krabka_units::millis(1)),
+            range0_follower_poll_interval: Some(krabka_units::millis(1)),
+            range0_follower_rebuild_backoff_floor: Some(krabka_units::millis(2)),
+            range0_follower_rebuild_backoff_ceiling: Some(krabka_units::millis(3)),
+            durable_inspection_timeout: Some(krabka_units::millis(4)),
             durable_inspection_fold_max_records: Some(5),
-            durable_inspection_fold_max_size: Some(crabka_units::bytes(6)),
-            lifecycle_requeue: Some(crabka_units::millis(1)),
+            durable_inspection_fold_max_size: Some(krabka_units::bytes(6)),
+            lifecycle_requeue: Some(krabka_units::millis(1)),
             ..GresComputeSpec::default()
         };
         let json = serde_json::to_string(&policy).expect("serialize compute policy");
@@ -2295,7 +2295,7 @@ mod tests {
         for (policy, path) in [
             (
                 GresComputeSpec {
-                    checkpoint_part_size: Some(crabka_units::bytes(7)),
+                    checkpoint_part_size: Some(krabka_units::bytes(7)),
                     ..GresComputeSpec::default()
                 },
                 "spec.compute.checkpointPartSize",
@@ -2383,8 +2383,8 @@ mod tests {
         }
 
         let error = GresComputeSpec {
-            range0_follower_rebuild_backoff_floor: Some(crabka_units::millis(2)),
-            range0_follower_rebuild_backoff_ceiling: Some(crabka_units::millis(1)),
+            range0_follower_rebuild_backoff_floor: Some(krabka_units::millis(2)),
+            range0_follower_rebuild_backoff_ceiling: Some(krabka_units::millis(1)),
             ..GresComputeSpec::default()
         }
         .effective_policy()
@@ -2398,13 +2398,13 @@ mod tests {
     #[test]
     fn compute_wal_recovery_policy_round_trips_validates_and_uses_substrate_defaults() {
         let policy = GresComputeSpec {
-            wal_recovery_fetch_max_wait: Some(crabka_units::millis(11)),
-            wal_recovery_fetch_partition_max: Some(crabka_units::bytes(22)),
-            wal_recovery_fetch_response_max: Some(crabka_units::bytes(33)),
+            wal_recovery_fetch_max_wait: Some(krabka_units::millis(11)),
+            wal_recovery_fetch_partition_max: Some(krabka_units::bytes(22)),
+            wal_recovery_fetch_response_max: Some(krabka_units::bytes(33)),
             wal_recovery_empty_fetch_retries: Some(44),
-            wal_recovery_dns_timeout: Some(crabka_units::millis(77)),
-            wal_recovery_connect_timeout: Some(crabka_units::millis(55)),
-            wal_recovery_request_timeout: Some(crabka_units::millis(66)),
+            wal_recovery_dns_timeout: Some(krabka_units::millis(77)),
+            wal_recovery_connect_timeout: Some(krabka_units::millis(55)),
+            wal_recovery_request_timeout: Some(krabka_units::millis(66)),
             ..GresComputeSpec::default()
         };
         let json = serde_json::to_string(&policy).expect("serialize compute policy");
@@ -2479,14 +2479,14 @@ mod tests {
             ),
             (
                 GresComputeSpec {
-                    wal_recovery_fetch_partition_max: Some(crabka_units::bytes(0)),
+                    wal_recovery_fetch_partition_max: Some(krabka_units::bytes(0)),
                     ..GresComputeSpec::default()
                 },
                 "spec.compute.walRecoveryFetchPartitionMax",
             ),
             (
                 GresComputeSpec {
-                    wal_recovery_fetch_response_max: Some(crabka_units::bytes(0)),
+                    wal_recovery_fetch_response_max: Some(krabka_units::bytes(0)),
                     ..GresComputeSpec::default()
                 },
                 "spec.compute.walRecoveryFetchResponseMax",
@@ -2530,10 +2530,10 @@ mod tests {
         let policy = GresComputeSpec {
             wal_producer_request_timeout: Some(Time::from_millis(i64::from(i32::MAX))),
             wal_producer_retries: Some(0),
-            wal_producer_retry_backoff: Some(crabka_units::millis(1)),
+            wal_producer_retry_backoff: Some(krabka_units::millis(1)),
             wal_producer_routing_retry_budget: Some(Time::from_millis(i64::from(i32::MAX))),
             wal_producer_init_retry_timeout: Some(Time::from_millis(i64::from(i32::MAX))),
-            wal_producer_init_max_backoff: Some(crabka_units::millis(1)),
+            wal_producer_init_max_backoff: Some(krabka_units::millis(1)),
             wal_producer_transaction_timeout: Some(Time::from_millis(i64::from(i32::MAX))),
             ..GresComputeSpec::default()
         };
@@ -2571,14 +2571,14 @@ mod tests {
                 == DEFAULT_MAX_FRAME_SIZE
         );
         let spec = GresComputeSpec {
-            wal_frame_max_size: Some(crabka_units::bytes(37)),
+            wal_frame_max_size: Some(krabka_units::bytes(37)),
             ..Default::default()
         };
         assert!(
             spec.effective_policy()
                 .expect("override")
                 .wal_frame_max_size
-                == crabka_units::bytes(37)
+                == krabka_units::bytes(37)
         );
         let json = serde_json::to_value(&spec).expect("serialize");
         assert!(json["walFrameMaxSize"] == "37B");
@@ -2607,14 +2607,14 @@ mod tests {
                 == mebibytes(64)
         );
         let spec = GresComputeSpec {
-            pgwire_max_message_size: Some(crabka_units::bytes(37)),
+            pgwire_max_message_size: Some(krabka_units::bytes(37)),
             ..Default::default()
         };
         assert!(
             spec.effective_policy()
                 .expect("override")
                 .pgwire_max_message_size
-                == crabka_units::bytes(37)
+                == krabka_units::bytes(37)
         );
         let json = serde_json::to_value(&spec).expect("serialize");
         assert!(json["pgwireMaxMessageSize"] == "37B");
@@ -2637,24 +2637,24 @@ mod tests {
     fn pgexec_runtime_policy_has_overrides_schema_and_validation() {
         let spec = GresComputeSpec {
             pgexec_notify_queue_capacity: Some(37),
-            pgexec_blocking_query_memory: Some(crabka_units::bytes(34)),
-            pgexec_result_page_max: Some(crabka_units::bytes(35)),
-            pgexec_join_broadcast_threshold: Some(crabka_units::bytes(36)),
+            pgexec_blocking_query_memory: Some(krabka_units::bytes(34)),
+            pgexec_result_page_max: Some(krabka_units::bytes(35)),
+            pgexec_join_broadcast_threshold: Some(krabka_units::bytes(36)),
             pgexec_xid_reservation: Some(38),
             pgexec_rowid_reservation: Some(39),
             pgexec_ts_prune_versions_per_row: Some(40),
-            pgexec_ts_gc_floor_lag: Some(crabka_units::millis(41)),
+            pgexec_ts_gc_floor_lag: Some(krabka_units::millis(41)),
             ..Default::default()
         };
         let policy = spec.effective_policy().expect("overrides");
         assert_eq!(policy.pgexec_runtime_policy.notify_queue_capacity, 37);
-        assert!(policy.pgexec_runtime_policy.blocking_query_memory == crabka_units::bytes(34));
-        assert!(policy.pgexec_runtime_policy.result_page_max == crabka_units::bytes(35));
-        assert!(policy.pgexec_runtime_policy.join_broadcast_threshold == crabka_units::bytes(36));
+        assert!(policy.pgexec_runtime_policy.blocking_query_memory == krabka_units::bytes(34));
+        assert!(policy.pgexec_runtime_policy.result_page_max == krabka_units::bytes(35));
+        assert!(policy.pgexec_runtime_policy.join_broadcast_threshold == krabka_units::bytes(36));
         assert_eq!(policy.pgexec_runtime_policy.xid_reservation, 38);
         assert_eq!(policy.pgexec_runtime_policy.rowid_reservation, 39);
         assert_eq!(policy.pgexec_runtime_policy.ts_prune_versions_per_row, 40);
-        assert!(policy.pgexec_runtime_policy.ts_gc_floor_lag == crabka_units::millis(41));
+        assert!(policy.pgexec_runtime_policy.ts_gc_floor_lag == krabka_units::millis(41));
 
         let crd = serde_json::to_value(Gres::crd()).expect("CRD");
         let fields = &crd["spec"]["versions"][0]["schema"]["openAPIV3Schema"]["properties"]["spec"]
@@ -2699,15 +2699,15 @@ mod tests {
             .effective_policy()
             .expect("defaults")
             .pgkv_options;
-        assert_eq!(defaults, crabka_pgkv::FjallOptions::default());
+        assert_eq!(defaults, krabka_pgkv::FjallOptions::default());
 
         let spec = GresComputeSpec {
-            pgkv_max_memtable_size: Some(crabka_units::bytes(37)),
+            pgkv_max_memtable_size: Some(krabka_units::bytes(37)),
             pgkv_rotate_after_ops: Some(41),
             ..Default::default()
         };
         let policy = spec.effective_policy().expect("override").pgkv_options;
-        assert_eq!(policy.max_memtable_size(), crabka_units::bytes(37));
+        assert_eq!(policy.max_memtable_size(), krabka_units::bytes(37));
         assert_eq!(policy.rotate_after_ops().get(), 41);
         let json = serde_json::to_value(&spec).expect("serialize");
         assert!(json["pgkvMaxMemtableSize"] == "37B");
@@ -2743,7 +2743,7 @@ mod tests {
             .effective_policy()
             .expect("default compute policy")
             .wal_producer_retry_policy;
-        assert!(effective == crabka_client_producer::ProducerRetryPolicy::default());
+        assert!(effective == krabka_client_producer::ProducerRetryPolicy::default());
 
         for (policy, expected) in vec![
             (
@@ -2881,8 +2881,8 @@ mod tests {
         }
 
         let error = GresComputeSpec {
-            wal_producer_retry_backoff: Some(crabka_units::millis(2)),
-            wal_producer_init_max_backoff: Some(crabka_units::millis(1)),
+            wal_producer_retry_backoff: Some(krabka_units::millis(2)),
+            wal_producer_init_max_backoff: Some(krabka_units::millis(1)),
             ..GresComputeSpec::default()
         }
         .effective_policy()
@@ -2893,13 +2893,13 @@ mod tests {
         );
 
         let configured = GresComputeSpec {
-            wal_producer_request_timeout: Some(crabka_units::millis(11)),
+            wal_producer_request_timeout: Some(krabka_units::millis(11)),
             wal_producer_retries: Some(12),
-            wal_producer_retry_backoff: Some(crabka_units::millis(13)),
-            wal_producer_routing_retry_budget: Some(crabka_units::millis(14)),
-            wal_producer_init_retry_timeout: Some(crabka_units::millis(15)),
-            wal_producer_init_max_backoff: Some(crabka_units::millis(16)),
-            wal_producer_transaction_timeout: Some(crabka_units::millis(17)),
+            wal_producer_retry_backoff: Some(krabka_units::millis(13)),
+            wal_producer_routing_retry_budget: Some(krabka_units::millis(14)),
+            wal_producer_init_retry_timeout: Some(krabka_units::millis(15)),
+            wal_producer_init_max_backoff: Some(krabka_units::millis(16)),
+            wal_producer_transaction_timeout: Some(krabka_units::millis(17)),
             ..GresComputeSpec::default()
         }
         .effective_policy()
@@ -2907,7 +2907,7 @@ mod tests {
         .wal_producer_retry_policy;
         assert!(
             configured
-                == crabka_client_producer::ProducerRetryPolicy::new(
+                == krabka_client_producer::ProducerRetryPolicy::new(
                     Duration::from_millis(11),
                     12,
                     Duration::from_millis(13),
@@ -2934,7 +2934,7 @@ mod tests {
         assert!(default.milliseconds() == 50_000);
 
         let configured = GresComputeSpec {
-            wal_producer_flush_timeout: Some(crabka_units::millis(12_345)),
+            wal_producer_flush_timeout: Some(krabka_units::millis(12_345)),
             ..GresComputeSpec::default()
         }
         .effective_policy()
@@ -2975,10 +2975,10 @@ mod tests {
             .effective_policy()
             .expect("default compute policy")
             .wal_producer_dns_timeout;
-        assert!(default == crabka_client_core::ClientDnsTimeout::default());
+        assert!(default == krabka_client_core::ClientDnsTimeout::default());
 
         let configured = GresComputeSpec {
-            wal_producer_dns_timeout: Some(crabka_units::millis(37)),
+            wal_producer_dns_timeout: Some(krabka_units::millis(37)),
             ..GresComputeSpec::default()
         }
         .effective_policy()
@@ -3007,11 +3007,11 @@ mod tests {
             .expect("default policy");
         assert_eq!(
             defaults.fdw_broker_dns_timeout,
-            crabka_client_core::ClientDnsTimeout::default()
+            krabka_client_core::ClientDnsTimeout::default()
         );
 
         let overridden = GresComputeSpec {
-            fdw_broker_dns_timeout: Some(crabka_units::millis(37)),
+            fdw_broker_dns_timeout: Some(krabka_units::millis(37)),
             ..GresComputeSpec::default()
         }
         .effective_policy()
@@ -3048,19 +3048,19 @@ mod tests {
             .effective_policy()
             .expect("default policy")
             .schema_fetch_retry_policy;
-        assert_eq!(defaults.initial_backoff(), crabka_units::millis(10));
-        assert_eq!(defaults.max_backoff(), crabka_units::secs(1));
+        assert_eq!(defaults.initial_backoff(), krabka_units::millis(10));
+        assert_eq!(defaults.max_backoff(), krabka_units::secs(1));
 
         let configured = GresComputeSpec {
-            schema_fetch_retry_initial_backoff: Some(crabka_units::millis(37)),
-            schema_fetch_retry_max_backoff: Some(crabka_units::millis(91)),
+            schema_fetch_retry_initial_backoff: Some(krabka_units::millis(37)),
+            schema_fetch_retry_max_backoff: Some(krabka_units::millis(91)),
             ..GresComputeSpec::default()
         }
         .effective_policy()
         .expect("configured policy")
         .schema_fetch_retry_policy;
-        assert_eq!(configured.initial_backoff(), crabka_units::millis(37));
-        assert_eq!(configured.max_backoff(), crabka_units::millis(91));
+        assert_eq!(configured.initial_backoff(), krabka_units::millis(37));
+        assert_eq!(configured.max_backoff(), krabka_units::millis(91));
 
         for (initial, max, path) in [
             (
@@ -3079,8 +3079,8 @@ mod tests {
                 "spec.compute.schemaFetchRetryInitialBackoff:",
             ),
             (
-                Some(crabka_units::millis(91)),
-                Some(crabka_units::millis(37)),
+                Some(krabka_units::millis(91)),
+                Some(krabka_units::millis(37)),
                 "spec.compute.schemaFetchRetryInitialBackoff:",
             ),
         ] {
@@ -3146,12 +3146,12 @@ mod tests {
             .effective_policy()
             .expect("default compute policy")
             .wal_producer_throughput_policy;
-        assert!(effective == crabka_client_producer::ProducerThroughputPolicy::default());
+        assert!(effective == krabka_client_producer::ProducerThroughputPolicy::default());
 
         let configured = GresComputeSpec {
             wal_producer_compression: Some(WalProducerCompression::Lz4),
-            wal_producer_linger: Some(crabka_units::millis(11)),
-            wal_producer_batch: Some(crabka_units::bytes(12)),
+            wal_producer_linger: Some(krabka_units::millis(11)),
+            wal_producer_batch: Some(krabka_units::bytes(12)),
             ..GresComputeSpec::default()
         }
         .effective_policy()
@@ -3159,11 +3159,11 @@ mod tests {
         .wal_producer_throughput_policy;
         assert!(
             configured
-                == crabka_client_producer::ProducerThroughputPolicy::new(
-                    crabka_client_producer::Compression::Lz4,
+                == krabka_client_producer::ProducerThroughputPolicy::new(
+                    krabka_client_producer::Compression::Lz4,
                     Duration::from_millis(11),
                     12,
-                    crabka_client_producer::DEFAULT_PRODUCER_MAX_IN_FLIGHT,
+                    krabka_client_producer::DEFAULT_PRODUCER_MAX_IN_FLIGHT,
                 )
                 .unwrap()
         );
@@ -3178,7 +3178,7 @@ mod tests {
             ),
             (
                 GresComputeSpec {
-                    wal_producer_batch: Some(crabka_units::bytes(0)),
+                    wal_producer_batch: Some(krabka_units::bytes(0)),
                     ..GresComputeSpec::default()
                 },
                 "spec.compute.walProducerBatch: must be a finite, positive whole number of bytes",
@@ -3202,8 +3202,8 @@ mod tests {
         let policy = GresComputeSpec {
             wal_topic_replication_factor: Some(32_767),
             wal_topic_ensure_timeout: Some(Time::from_millis(i64::from(i32::MAX))),
-            wal_admin_connect_timeout: Some(crabka_units::millis(33)),
-            wal_admin_request_timeout: Some(crabka_units::millis(44)),
+            wal_admin_connect_timeout: Some(krabka_units::millis(33)),
+            wal_admin_request_timeout: Some(krabka_units::millis(44)),
             ..GresComputeSpec::default()
         };
         let json = serde_json::to_string(&policy).expect("serialize compute policy");
@@ -3296,11 +3296,11 @@ mod tests {
             },
             pooler_mode: Some(PgdogPoolerModeSpec::Session),
             connect_attempts: Some(7),
-            idle_timeout: Some(crabka_units::secs(61)),
-            suspension_idle_timeout: Some(crabka_units::millis(1_500)),
-            server_lifetime: Some(crabka_units::millis(301_000)),
+            idle_timeout: Some(krabka_units::secs(61)),
+            suspension_idle_timeout: Some(krabka_units::millis(1_500)),
+            server_lifetime: Some(krabka_units::millis(301_000)),
             readiness_probe_period_seconds: Some(6),
-            direct_bootstrap_grace: Some(crabka_units::millis(4_500)),
+            direct_bootstrap_grace: Some(krabka_units::millis(4_500)),
         };
 
         let json = serde_json::to_string(&policy).expect("serialize JSON");
@@ -3335,7 +3335,7 @@ mod tests {
         .effective_policy()
         .expect("default policy");
 
-        assert!(policy.pooler_mode == crabka_gres_control::PgdogPoolerMode::Transaction);
+        assert!(policy.pooler_mode == krabka_gres_control::PgdogPoolerMode::Transaction);
         assert!(policy.connect_attempts.into_value() == 3);
         assert!(policy.idle_timeout.into_value() == 60_000);
         assert!(policy.suspension_idle_timeout.into_value() == 1_000);
@@ -3381,12 +3381,12 @@ mod tests {
             range_join_predicates: Some(5),
             range_join_snapshot_xids: Some(6),
             range_join_broadcast_rows: Some(7),
-            range_join_row_max: Some(crabka_units::kibibytes(8)),
+            range_join_row_max: Some(krabka_units::kibibytes(8)),
             range_join_result_rows: Some(9),
-            range_rpc_frame_max: Some(crabka_units::mebibytes(2)),
-            range_rpc_request_timeout: Some(crabka_units::secs(8)),
-            range_rpc_server_idle_timeout: Some(crabka_units::secs(30)),
-            range_rpc_pool_idle_ttl: Some(crabka_units::secs(3)),
+            range_rpc_frame_max: Some(krabka_units::mebibytes(2)),
+            range_rpc_request_timeout: Some(krabka_units::secs(8)),
+            range_rpc_server_idle_timeout: Some(krabka_units::secs(30)),
+            range_rpc_pool_idle_ttl: Some(krabka_units::secs(3)),
             range_remote_session_max: Some(17),
             range_logical_base_persist_stride: Some(2048),
             range_logical_max_persist_stride: Some(4096),
@@ -3395,7 +3395,7 @@ mod tests {
         let json = serde_json::to_string(&spec).expect("serialize range runtime policy");
         assert!(serde_json::from_str::<GresComputeSpec>(&json).unwrap() == spec);
         let policy = spec.effective_policy().unwrap().range_runtime_policy;
-        assert!(policy.rpc_frame_max == crabka_units::mebibytes(2));
+        assert!(policy.rpc_frame_max == krabka_units::mebibytes(2));
         assert!(policy.remote_session_max.get() == 17);
         assert!(policy.logical_max_persist_stride.get() == 4096);
         assert!(policy.join.key_columns == 3);
@@ -3407,8 +3407,8 @@ mod tests {
         assert!(policy.join.result_rows == 9);
 
         let invalid = GresComputeSpec {
-            range_rpc_request_timeout: Some(crabka_units::secs(2)),
-            range0_barrier_reply_budget: Some(crabka_units::secs(2)),
+            range_rpc_request_timeout: Some(krabka_units::secs(2)),
+            range0_barrier_reply_budget: Some(krabka_units::secs(2)),
             ..GresComputeSpec::default()
         };
         assert!(invalid.effective_policy().is_err());

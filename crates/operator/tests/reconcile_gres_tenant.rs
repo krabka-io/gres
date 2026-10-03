@@ -1,10 +1,10 @@
 use std::{sync::Arc, time::Duration};
 
 use assert2::assert;
-use crabka_gres_control::{
+use krabka_gres_control::{
     RangeBoundary, RangeLayoutEntry, SqlUser, TenantId, TenantName, TenantRecord, TenantState,
 };
-use crabka_operator::{
+use krabka_operator::{
     context::{GresControlLike, GresControlWriteError},
     controller::gres_tenant::reconcile,
     crd::{
@@ -12,7 +12,7 @@ use crabka_operator::{
         SecretKeyRef,
     },
 };
-use crabka_security::scram::PgScramVerifier;
+use krabka_security::scram::PgScramVerifier;
 use http::Method;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 use kube::runtime::controller::Action;
@@ -35,7 +35,7 @@ struct FakeGresControl {
     current: Mutex<Option<TenantRecord>>,
     upserts: Mutex<Vec<TenantRecord>>,
     deletes: Mutex<Vec<TenantName>>,
-    manifests: Mutex<Vec<(TenantName, crabka_gres_control::FinalCheckpoint)>>,
+    manifests: Mutex<Vec<(TenantName, krabka_gres_control::FinalCheckpoint)>>,
     replace_failures_remaining: Mutex<u32>,
 }
 
@@ -68,7 +68,7 @@ impl GresControlLike for FakeGresControl {
         let mut failures_remaining = self.replace_failures_remaining.lock().await;
         if *failures_remaining > 0 {
             *failures_remaining -= 1;
-            return Err(crabka_gres_control::ControlError::InvalidField {
+            return Err(krabka_gres_control::ControlError::InvalidField {
                 field: "replace_tenant_if_version",
                 reason: "injected replacement failure".into(),
             }
@@ -83,7 +83,7 @@ impl GresControlLike for FakeGresControl {
             return Ok(canonical_record);
         }
         if current.as_ref().map(|record| record.record_version) != expected_record_version {
-            return Err(crabka_gres_control::ControlError::RegistryVersionConflict {
+            return Err(krabka_gres_control::ControlError::RegistryVersionConflict {
                 tenant: canonical_record.name.clone(),
                 expected: expected_record_version.unwrap_or(0),
                 actual: current.as_ref().map_or(0, |record| record.record_version),
@@ -106,7 +106,7 @@ impl GresControlLike for FakeGresControl {
     ) -> Result<(), GresControlWriteError> {
         let Some(checkpoint) = record.final_checkpoint.as_ref() else {
             return Err(
-                crabka_operator::context::CheckpointManifestError::Verification(
+                krabka_operator::context::CheckpointManifestError::Verification(
                     "registry record has no final checkpoint".into(),
                 )
                 .into(),
@@ -122,7 +122,7 @@ impl GresControlLike for FakeGresControl {
             return Ok(());
         }
         Err(
-            crabka_operator::context::CheckpointManifestError::Verification(
+            krabka_operator::context::CheckpointManifestError::Verification(
                 "checkpoint is missing or does not match the registry record".into(),
             )
             .into(),
@@ -133,11 +133,11 @@ impl GresControlLike for FakeGresControl {
 fn validate_replacement_version(
     record_version: u64,
     expected_record_version: Option<u64>,
-) -> Result<(), crabka_gres_control::ControlError> {
+) -> Result<(), krabka_gres_control::ControlError> {
     let expected_successor = expected_record_version.map_or(Ok(1), |version| {
         version
             .checked_add(1)
-            .ok_or_else(|| crabka_gres_control::ControlError::InvalidField {
+            .ok_or_else(|| krabka_gres_control::ControlError::InvalidField {
                 field: "record_version",
                 reason: "must not overflow when replaced".into(),
             })
@@ -145,7 +145,7 @@ fn validate_replacement_version(
     if record_version == expected_successor {
         return Ok(());
     }
-    Err(crabka_gres_control::ControlError::InvalidField {
+    Err(krabka_gres_control::ControlError::InvalidField {
         field: "record_version",
         reason: "must advance exactly once from the expected version".into(),
     })
@@ -290,14 +290,14 @@ fn tenant_record(state: TenantState, generation: u64) -> TenantRecord {
     )
     .unwrap();
     record.checkpoint_frames = Some(10_000);
-    record.checkpoint_size = Some(crabka_units::bytes(67_108_864));
+    record.checkpoint_size = Some(krabka_units::bytes(67_108_864));
     record.wal_generation = generation;
     record.ranges = vec![RangeLayoutEntry {
         range_id: 0,
         end_key: None,
         endpoint: "tenant-a-gres.ns.svc.cluster.local:7432".into(),
         wal_generation: generation,
-        lifecycle: crabka_gres_control::RangeLifecycle::default(),
+        lifecycle: krabka_gres_control::RangeLifecycle::default(),
         retirement: None,
     }];
     record
@@ -401,8 +401,8 @@ fn pod_list_body(pods: &[(&str, &str)]) -> serde_json::Value {
     })
 }
 
-fn final_checkpoint(generation: u64) -> crabka_gres_control::FinalCheckpoint {
-    crabka_gres_control::FinalCheckpoint {
+fn final_checkpoint(generation: u64) -> krabka_gres_control::FinalCheckpoint {
+    krabka_gres_control::FinalCheckpoint {
         wal_generation: generation,
         covered_offset: 11,
         manifest_key: "gres/tenant-a/ckpt/manifest".into(),
@@ -596,12 +596,12 @@ async fn deleting_multi_range_tenant_cleans_up_and_removes_its_finalizer() {
             .parse()
             .expect("deletion timestamp parses"),
     ));
-    let registry_policy = crabka_gres_control::RegistryPolicy::new(
+    let registry_policy = krabka_gres_control::RegistryPolicy::new(
         2,
-        crabka_units::millis(15_001),
-        crabka_units::millis(251),
-        crabka_units::millis(501),
-        crabka_units::bytes(1_048_577),
+        krabka_units::millis(15_001),
+        krabka_units::millis(251),
+        krabka_units::millis(501),
+        krabka_units::bytes(1_048_577),
     )
     .expect("registry policy");
     let mut kafka = ready_kafka_body("demo", "ns");
@@ -669,7 +669,7 @@ async fn deleting_multi_range_tenant_cleans_up_and_removes_its_finalizer() {
 async fn dependency_failure_replaces_obsolete_multi_range_status() {
     let mut legacy_tenant = tenant();
     legacy_tenant.status = Some(GresTenantStatus {
-        conditions: vec![crabka_operator::crd::KafkaCondition {
+        conditions: vec![krabka_operator::crd::KafkaCondition {
             type_: "Ready".into(),
             status: "False".into(),
             reason: "MultiRangeUnsupported".into(),
@@ -699,7 +699,7 @@ async fn dependency_failure_replaces_obsolete_multi_range_status() {
     let mut ctx = fixture_ctx(mock_client(&state, "ns"), "ns");
     Arc::get_mut(&mut ctx.config)
         .expect("fixture owns operator config")
-        .controller_dependency_requeue = crabka_units::millis(1_234);
+        .controller_dependency_requeue = krabka_units::millis(1_234);
 
     let action = reconcile(Arc::new(legacy_tenant), Arc::new(ctx))
         .await
@@ -719,7 +719,7 @@ async fn dependency_failure_replaces_obsolete_multi_range_status() {
 async fn successful_single_range_registry_read_allows_a_later_failure_to_replace_legacy_status() {
     let mut legacy_tenant = tenant();
     legacy_tenant.status = Some(GresTenantStatus {
-        conditions: vec![crabka_operator::crd::KafkaCondition {
+        conditions: vec![krabka_operator::crd::KafkaCondition {
             type_: "Ready".into(),
             status: "False".into(),
             reason: "MultiRangeUnsupported".into(),
@@ -862,7 +862,7 @@ async fn reconciles_topics_scram_acls_records_workload_and_status() {
     let mut ctx = fixture_ctx(client, "ns");
     Arc::get_mut(&mut ctx.config)
         .expect("fixture owns operator config")
-        .topic_mutation_timeout = crabka_units::millis(4_321);
+        .topic_mutation_timeout = krabka_units::millis(4_321);
     let admin = Arc::new(tokio::sync::Mutex::new(FakeAdminClient::new()));
     let control = Arc::new(FakeGresControl::default());
     ctx.insert_admin_client_for_test("demo", admin.clone())
@@ -874,16 +874,16 @@ async fn reconciles_topics_scram_acls_records_workload_and_status() {
     assert!(action == Action::requeue(Duration::from_secs(5)));
 
     let calls = admin.lock().await.calls();
-    assert!(admin.lock().await.create_topic_timeouts() == [crabka_units::millis(4_321)]);
-    assert!(calls.iter().any(|call| matches!(call, RecordedCall::CreateTopics(specs) if specs.iter().any(|spec| spec.name == "__gres_wal.tenant-a.r0") && specs.iter().any(|spec| spec.name == "__gres_cfg.tenant-a") && !specs.iter().any(|spec| spec.name == crabka_gres_control::TENANT_REGISTRY_TOPIC))));
+    assert!(admin.lock().await.create_topic_timeouts() == [krabka_units::millis(4_321)]);
+    assert!(calls.iter().any(|call| matches!(call, RecordedCall::CreateTopics(specs) if specs.iter().any(|spec| spec.name == "__gres_wal.tenant-a.r0") && specs.iter().any(|spec| spec.name == "__gres_cfg.tenant-a") && !specs.iter().any(|spec| spec.name == krabka_gres_control::TENANT_REGISTRY_TOPIC))));
     assert!(calls.iter().any(|call| matches!(call, RecordedCall::AlterUserScramCredentials { upsertions, .. } if upsertions.iter().any(|upsert| upsert.username == "gres-tenant-a"))));
-    assert!(calls.iter().any(|call| matches!(call, RecordedCall::CreateAcls(acls) if acls.iter().any(|acl| acl.resource_name == "__gres_wal.tenant-a" && acl.pattern_type == crabka_client_admin::PatternType::Prefixed && acl.principal == "User:gres-tenant-a") && acls.iter().any(|acl| acl.resource_name == "__gres.tenant-a" && acl.pattern_type == crabka_client_admin::PatternType::Prefixed) && !acls.iter().any(|acl| acl.resource_name == "__gres_tenants"))));
+    assert!(calls.iter().any(|call| matches!(call, RecordedCall::CreateAcls(acls) if acls.iter().any(|acl| acl.resource_name == "__gres_wal.tenant-a" && acl.pattern_type == krabka_client_admin::PatternType::Prefixed && acl.principal == "User:gres-tenant-a") && acls.iter().any(|acl| acl.resource_name == "__gres.tenant-a" && acl.pattern_type == krabka_client_admin::PatternType::Prefixed) && !acls.iter().any(|acl| acl.resource_name == "__gres_tenants"))));
     let upserts = control.upserts.lock().await;
     assert!(upserts.len() == 1);
     assert!(!upserts[0].scram_verifier.contains("hunter2"));
     assert!(upserts[0].record_version == 1);
     assert!(upserts[0].checkpoint_frames == Some(10_000));
-    assert!(upserts[0].checkpoint_size == Some(crabka_units::bytes(67_108_864)));
+    assert!(upserts[0].checkpoint_size == Some(krabka_units::bytes(67_108_864)));
     drop(upserts);
     let observed = state.take_observed();
     let deployment = observed
@@ -976,7 +976,7 @@ async fn suspended_registry_state_quiesces_compute_before_parking_wal() {
     let mut ctx = fixture_ctx(client, "ns");
     Arc::get_mut(&mut ctx.config)
         .expect("fixture owns operator config")
-        .topic_mutation_timeout = crabka_units::millis(5_432);
+        .topic_mutation_timeout = krabka_units::millis(5_432);
     let admin = Arc::new(tokio::sync::Mutex::new(FakeAdminClient::new()));
     admin.lock().await.add_topic(
         "__gres_wal.tenant-a.r0.g0000000004",
@@ -1065,7 +1065,7 @@ async fn suspended_registry_state_quiesces_compute_before_parking_wal() {
     reconcile(Arc::new(tenant()), Arc::new(ctx)).await.unwrap();
 
     let calls = admin.lock().await.calls();
-    assert!(admin.lock().await.delete_topic_timeouts() == [crabka_units::millis(5_432)]);
+    assert!(admin.lock().await.delete_topic_timeouts() == [krabka_units::millis(5_432)]);
     assert!(calls.iter().any(|call| matches!(call, RecordedCall::DeleteTopics(names) if names == &vec!["__gres_wal.tenant-a.r0.g0000000004".to_string()])));
     let upserts = control.upserts.lock().await;
     assert!(upserts.len() == 2);
@@ -1111,7 +1111,7 @@ async fn range_parking_deletes_only_predecessor_generation_and_keeps_tenant_acti
             end_key: Some(RangeBoundary::table_start(10)),
             endpoint: "tenant-a-gres.ns.svc.cluster.local:7432".into(),
             wal_generation: 4,
-            lifecycle: crabka_gres_control::RangeLifecycle::default(),
+            lifecycle: krabka_gres_control::RangeLifecycle::default(),
             retirement: None,
         },
         RangeLayoutEntry {
@@ -1119,7 +1119,7 @@ async fn range_parking_deletes_only_predecessor_generation_and_keeps_tenant_acti
             end_key: Some(RangeBoundary::table_start(20)),
             endpoint: "tenant-a-gres-r1.ns.svc.cluster.local:7432".into(),
             wal_generation: 4,
-            lifecycle: crabka_gres_control::RangeLifecycle::default(),
+            lifecycle: krabka_gres_control::RangeLifecycle::default(),
             retirement: None,
         },
         RangeLayoutEntry {
@@ -1127,7 +1127,7 @@ async fn range_parking_deletes_only_predecessor_generation_and_keeps_tenant_acti
             end_key: None,
             endpoint: "tenant-a-gres-r2.ns.svc.cluster.local:7432".into(),
             wal_generation: 4,
-            lifecycle: crabka_gres_control::RangeLifecycle::default(),
+            lifecycle: krabka_gres_control::RangeLifecycle::default(),
             retirement: None,
         },
     ];
@@ -1137,7 +1137,7 @@ async fn range_parking_deletes_only_predecessor_generation_and_keeps_tenant_acti
             "split-7",
             0,
             4,
-            crabka_gres_control::RangeRetirementCheckpoint {
+            krabka_gres_control::RangeRetirementCheckpoint {
                 manifest_key: "tenant-a/r0/g4/manifest".into(),
                 covered_offset: 10,
                 barrier_offset: 12,
@@ -1173,12 +1173,12 @@ async fn range_parking_deletes_only_predecessor_generation_and_keeps_tenant_acti
         stored
             .ranges
             .iter()
-            .all(|range| range.lifecycle == crabka_gres_control::RangeLifecycle::Serving)
+            .all(|range| range.lifecycle == krabka_gres_control::RangeLifecycle::Serving)
     );
     assert_eq!(stored.range_retirements.len(), 1);
     assert_eq!(
         stored.range_retirements[0].phase,
-        crabka_gres_control::RangeRetirementPhase::Parked
+        krabka_gres_control::RangeRetirementPhase::Parked
     );
 }
 

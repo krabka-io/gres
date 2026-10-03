@@ -2,7 +2,7 @@
 
 **Status:** design approved (brainstorm)
 **Builds on:** #2b runtime (`StreamThread`/`StreamTask`, the `RecordFetcher`/`RecordProducer`/`OffsetStore` I/O traits + `io_broker` impls), #3 state stores + changelog restore, #1 membership. Branches from `main` (independent of the open punctuation PR #421; both touch `runtime/task.rs`+`thread.rs`, so rebase when one lands).
-**Ground truth:** Apache Kafka 4.1 `processing.guarantee=exactly_once_v2` (KIP-447). The Crabka broker's transaction coordinator (`crates/broker/src/txn/`) and the native `crabka-client-producer` transactional API already exist; this slice wires the streams runtime onto them.
+**Ground truth:** Apache Kafka 4.1 `processing.guarantee=exactly_once_v2` (KIP-447). The Crabka broker's transaction coordinator (`crates/broker/src/txn/`) and the native `krabka-client-producer` transactional API already exist; this slice wires the streams runtime onto them.
 
 ## 1. Goal
 
@@ -70,7 +70,7 @@ pub trait TransactionalProducer: Send + Sync + 'static {
     async fn abort_transaction(&self) -> Result<(), StreamsClientError>;
 }
 ```
-- `BrokerTransactionalProducer` wraps `crabka_client_producer::Producer` built with `transactional_id(Some(..))`, delegating to its `init_transactions`/`begin_transaction`/`send`/`send_offsets_to_transaction(offsets, &ConsumerGroupMetadata)`/`commit_transaction`/`abort_transaction`.
+- `BrokerTransactionalProducer` wraps `krabka_client_producer::Producer` built with `transactional_id(Some(..))`, delegating to its `init_transactions`/`begin_transaction`/`send`/`send_offsets_to_transaction(offsets, &ConsumerGroupMetadata)`/`commit_transaction`/`abort_transaction`.
 - A `MockTransactionalProducer` (records the call sequence + a configurable failure point) drives the abort unit tests.
 - The task's `producer: Arc<dyn RecordProducer>` is unchanged for `send` (EOS producer also impls `RecordProducer`'s `send`); the thread additionally holds the `Arc<dyn TransactionalProducer>` for the txn-control calls. (`BrokerTransactionalProducer` impls both traits over the one native producer; `flush` in EOS mode is a no-op — `commit_transaction` is the durability barrier.)
 

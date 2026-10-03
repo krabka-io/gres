@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `axum`/`http` `HeaderMap`, `bytes`, `serde_json`, `base64`, `reqwest`, `thiserror`, `assert2`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-cloudevents-binding-design.md`](../specs/2026-07-06-crabka-cloudevents-binding-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-cloudevents-binding-design.md`](../specs/2026-07-06-krabka-cloudevents-binding-design.md).
 
 **PREREQUISITE (narrow):** only the gRPC-Subscribe CE transparency test (Task 5b) is gated on **MSG-1**'s `Inbound.headers` restore. Ingress (Task 2) and webhook egress (Task 3) read `GatewayRecord.headers` / native `ConsumerRecord.headers` respectively and are buildable now.
 
@@ -121,7 +121,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-grpc-gateway --lib ce_translate::`
+Run: `cargo test -p krabka-grpc-gateway --lib ce_translate::`
 Expected: FAIL — module/functions undefined.
 
 - [ ] **Step 3: Implement the module**
@@ -263,7 +263,7 @@ pub fn structured_from_binary(headers: &[(String, Option<Bytes>)], value: &[u8])
 
 - [ ] **Step 4: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-grpc-gateway --lib ce_translate::` → PASS.
+Run: `cargo test -p krabka-grpc-gateway --lib ce_translate::` → PASS.
 
 ```bash
 git add crates/grpc-gateway/src/ce_translate.rs crates/grpc-gateway/src/lib.rs
@@ -311,7 +311,7 @@ Map `CeError` → `400` via the existing error-response path (mirror the schema-
 
 - [ ] **Step 3: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-grpc-gateway --test webhook` → PASS.
+Run: `cargo test -p krabka-grpc-gateway --test webhook` → PASS.
 
 ```bash
 git add crates/grpc-gateway/src/webhook.rs crates/grpc-gateway/tests/webhook.rs
@@ -368,7 +368,7 @@ Compute `sig` over the mode-specific body (the signed-bytes-per-mode contract �
 
 - [ ] **Step 3: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-grpc-gateway --test outbound` → PASS.
+Run: `cargo test -p krabka-grpc-gateway --test outbound` → PASS.
 
 ```bash
 git add crates/grpc-gateway/src/outbound.rs crates/grpc-gateway/src/outbound_config.rs crates/grpc-gateway/tests/outbound.rs
@@ -407,7 +407,7 @@ Assert a record produced with `ce_id/ce_source/ce_type/ce_specversion` surfaces 
 
 - [ ] **Step 3: Run + commit**
 
-Run: `cargo test -p crabka-grpc-gateway --test cloudevents_roundtrip` → PASS (5a; 5b when MSG-1 is in).
+Run: `cargo test -p krabka-grpc-gateway --test cloudevents_roundtrip` → PASS (5a; 5b when MSG-1 is in).
 
 ```bash
 git add crates/grpc-gateway/tests/cloudevents_roundtrip.rs
@@ -419,8 +419,8 @@ git commit -m "test(gateway): end-to-end CloudEvents HTTP<->Kafka<->HTTP round-t
 ## Task 6: Final gate
 
 - [ ] **Step 1:** `cargo +nightly fmt --check` — no diff.
-- [ ] **Step 2:** `cargo clippy -p crabka-grpc-gateway --all-targets -- -D warnings` — no warnings.
-- [ ] **Step 3:** `cargo nextest run -p crabka-grpc-gateway` — PASS, incl. the `ce_translate` conformance units, ingress, egress, and the round-trip.
+- [ ] **Step 2:** `cargo clippy -p krabka-grpc-gateway --all-targets -- -D warnings` — no warnings.
+- [ ] **Step 3:** `cargo nextest run -p krabka-grpc-gateway` — PASS, incl. the `ce_translate` conformance units, ingress, egress, and the round-trip.
 - [ ] **Step 4:** **Empirical `datacontenttype` check** (per CLAUDE.md "match Kafka"): against a real CloudEvents Kafka SDK / cp-kafka image, confirm interop peers emit bare `content-type` (not `ce_datacontenttype`) — document the result. Commit any formatting.
 
 ---

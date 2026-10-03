@@ -8,7 +8,7 @@ use std::{
     sync::atomic::{AtomicU32, Ordering},
 };
 
-use crabka_pgkv::{Kv, KvError, WriteOp};
+use krabka_pgkv::{Kv, KvError, WriteOp};
 
 use crate::CatalogError;
 
@@ -428,7 +428,7 @@ fn too_large() -> CatalogError {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgkv::{Kv as _, MemKv};
+    use krabka_pgkv::{Kv as _, MemKv};
 
     use super::*;
 

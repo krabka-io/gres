@@ -16,7 +16,7 @@ handler (api_key 57) exists and persists a `V1FeatureLevel` record via Raft, and
   behavior, reject operations, or block an unsafe downgrade.
 - A freshly-formatted cluster never establishes a finalized MV at all — it sits
   at `epoch −1` ("UNKNOWN") until an admin runs `UpdateFeatures`.
-- All upgrade safety lives in the operator (`crabka_operator::version`, Slice
+- All upgrade safety lives in the operator (`krabka_operator::version`, Slice
   28), which renders a `metadata.version` *string* into the broker's **inert**
   `[server_properties]` (ignored at `file_config.rs:545`).
 
@@ -162,7 +162,7 @@ treatment of a missing level.
 
 Targeted, since the broker now owns the table:
 
-- `crabka_operator::version::evaluate` gains the broker's `[MIN, MAX]` as bounds.
+- `krabka_operator::version::evaluate` gains the broker's `[MIN, MAX]` as bounds.
   A resolved `metadata.version` below `MIN` (7) yields a new reason
   `MetadataVersionTooLow` (mirror of the existing `MetadataVersionTooHigh`),
   keeping the operator from injecting a value the broker would abort on.

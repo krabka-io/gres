@@ -10,17 +10,17 @@
 use std::process::Command;
 
 use assert2::{assert, check};
-use crabka_broker::{Broker, BrokerConfig};
-use crabka_client_core::Client;
-use crabka_protocol::owned::api_versions_request::ApiVersionsRequest;
+use krabka_broker::{Broker, BrokerConfig};
+use krabka_client_core::Client;
+use krabka_protocol::owned::api_versions_request::ApiVersionsRequest;
 
 mod support;
 
 /// Run `crabka format --standalone … --feature …` as a subprocess. The test
 /// shells out through `env!("CARGO")`, because this crate does not get the
-/// `crabka-cli` `CARGO_BIN_EXE_*` variable. The `crabka-cli` dev-dep keeps the
+/// `krabka-cli` `CARGO_BIN_EXE_*` variable. The `krabka-cli` dev-dep keeps the
 /// build a cache hit.
-fn run_crabka_format_with_features(
+fn run_krabka_format_with_features(
     log_dir: &std::path::Path,
     node_id: u64,
     controller_listener: &str,
@@ -31,7 +31,7 @@ fn run_crabka_format_with_features(
         "run",
         "--quiet",
         "-p",
-        "crabka-cli",
+        "krabka-cli",
         "--bin",
         "crabka",
         "--",
@@ -77,7 +77,7 @@ async fn standalone_format_feature_overrides_surface_in_api_versions() {
     let dir = tempfile::tempdir().unwrap();
     // `crabka format` creates the dir itself and refuses a non-empty one.
     let boot_dir = dir.path().join("boot");
-    run_crabka_format_with_features(
+    run_krabka_format_with_features(
         &boot_dir,
         1,
         &controller_addr.to_string(),
@@ -88,12 +88,12 @@ async fn standalone_format_feature_overrides_surface_in_api_versions() {
 
     let mut cfg = BrokerConfig::for_tests(boot_dir.clone());
     cfg.broker_id = 1;
-    cfg.node_id = crabka_broker::NodeId(1);
+    cfg.node_id = krabka_broker::NodeId(1);
     cfg.listen_addr = client_addr;
     cfg.advertised_listener = client_addr.to_string();
     cfg.controller_listen_addr = controller_addr;
-    cfg.controller_quorum_voters = vec![(crabka_broker::NodeId(1), controller_addr.to_string())];
-    cfg.bootstrap_mode = crabka_broker::BootstrapMode::Bootstrap;
+    cfg.controller_quorum_voters = vec![(krabka_broker::NodeId(1), controller_addr.to_string())];
+    cfg.bootstrap_mode = krabka_broker::BootstrapMode::Bootstrap;
 
     let data_listener = client_listeners.into_iter().next().unwrap();
     let controller_listener = controller_listeners.into_iter().next().unwrap();
@@ -110,7 +110,7 @@ async fn standalone_format_feature_overrides_surface_in_api_versions() {
 
     let av = client
         .send(ApiVersionsRequest {
-            client_software_name: "crabka-test".into(),
+            client_software_name: "krabka-test".into(),
             client_software_version: "0.0.0".into(),
             ..Default::default()
         })

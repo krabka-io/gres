@@ -98,7 +98,7 @@ the oracle. Expectation: GREEN (confirmation + regression guard).
 ## Verification discipline
 
 - Pure test addition in `crates/authz/` (no stateright, no watchdog needed — bounded loops + proptest).
-- `cargo +nightly fmt -p crabka-authz`; `cargo clippy -p crabka-authz --all-targets -- -D warnings` clean
+- `cargo +nightly fmt -p krabka-authz`; `cargo clippy -p krabka-authz --all-targets -- -D warnings` clean
   (watch float/precision/`doc_markdown` style lints as in prior slices).
 
 ## Success criteria

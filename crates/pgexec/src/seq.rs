@@ -14,7 +14,7 @@
 
 use std::{collections::HashMap, sync::Mutex};
 
-use crabka_pgkv::Kv;
+use krabka_pgkv::Kv;
 use zerocopy::{IntoBytes, byteorder::big_endian::U64};
 
 use crate::{PersistMode, error::ExecError};
@@ -48,8 +48,8 @@ struct TableSeq {
 /// same way [`SequenceManager::alloc`] hands out a rowid `WriteOp`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct StagedSequence {
-    pub name: crabka_pgcatalog::RelationName,
-    pub sequence: crabka_pgcatalog::Sequence,
+    pub name: krabka_pgcatalog::RelationName,
+    pub sequence: krabka_pgcatalog::Sequence,
 }
 
 /// A session's sequence advances that are not in the applied store yet.
@@ -62,7 +62,7 @@ pub(crate) struct StagedSequence {
 /// into the one `Put` that records the last of them.
 #[derive(Debug, Default)]
 pub(crate) struct PendingSequences {
-    staged: std::collections::BTreeMap<crabka_pgcatalog::RelationName, crabka_pgcatalog::Sequence>,
+    staged: std::collections::BTreeMap<krabka_pgcatalog::RelationName, krabka_pgcatalog::Sequence>,
 }
 
 impl PendingSequences {
@@ -72,16 +72,16 @@ impl PendingSequences {
 
     /// Remove and return the staged advances as write ops, in name order so a
     /// batch is deterministic.
-    pub fn take_ops(&mut self) -> Vec<crabka_pgkv::WriteOp> {
+    pub fn take_ops(&mut self) -> Vec<krabka_pgkv::WriteOp> {
         std::mem::take(&mut self.staged)
             .into_iter()
-            .map(|(name, sequence)| crabka_pgcatalog::put_sequence_op(&name, sequence))
+            .map(|(name, sequence)| krabka_pgcatalog::put_sequence_op(&name, sequence))
             .collect()
     }
 }
 
 pub(crate) struct SequenceManager {
-    inner: Mutex<HashMap<crabka_pgcatalog::TableId, TableSeq>>,
+    inner: Mutex<HashMap<krabka_pgcatalog::TableId, TableSeq>>,
     /// The `Replicated`-mode SQL sequence cache.
     ///
     /// It holds each sequence's record as of this writer's most recent advance,
@@ -97,7 +97,7 @@ pub(crate) struct SequenceManager {
     /// Cache entries are authoritative only for the writer that filled them.
     /// See [`SequenceManager::reseed_sql_sequences`] for why that is safe and
     /// what enforces it.
-    sql: Mutex<HashMap<crabka_pgcatalog::RelationName, crabka_pgcatalog::Sequence>>,
+    sql: Mutex<HashMap<krabka_pgcatalog::RelationName, krabka_pgcatalog::Sequence>>,
     mode: PersistMode,
     durable_block: u64,
 }
@@ -134,9 +134,9 @@ impl SequenceManager {
     pub fn alloc(
         &self,
         kv: &dyn Kv,
-        table: crabka_pgcatalog::TableId,
+        table: krabka_pgcatalog::TableId,
         count: u64,
-    ) -> Result<(u64, Option<crabka_pgkv::WriteOp>), ExecError> {
+    ) -> Result<(u64, Option<krabka_pgkv::WriteOp>), ExecError> {
         let mut g = self.inner.lock().expect("seqmgr");
         let state = match g.entry(table) {
             std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
@@ -166,8 +166,8 @@ impl SequenceManager {
                     let new_end = new_next.checked_add(self.durable_block).ok_or_else(|| {
                         ExecError::Unsupported("durable row-ID reservation exhausted u64".into())
                     })?;
-                    kv.write_batch(&[crabka_pgkv::WriteOp::Put {
-                        key: crabka_pgkv::key::seq_key(table),
+                    kv.write_batch(&[krabka_pgkv::WriteOp::Put {
+                        key: krabka_pgkv::key::seq_key(table),
                         value: U64::new(new_end).as_bytes().to_vec(),
                     }])?;
                     state.durable_end = new_end;
@@ -176,8 +176,8 @@ impl SequenceManager {
             }
             PersistMode::Replicated => {
                 state.durable_end = new_next;
-                Some(crabka_pgkv::WriteOp::Put {
-                    key: crabka_pgkv::key::seq_key(table),
+                Some(krabka_pgkv::WriteOp::Put {
+                    key: krabka_pgkv::key::seq_key(table),
                     value: U64::new(new_next).as_bytes().to_vec(),
                 })
             }
@@ -234,14 +234,14 @@ impl SequenceManager {
     /// catalog:
     /// `CREATE`/`DROP SEQUENCE`, the implicit sequence of a `SERIAL` column, and
     /// a `DROP TABLE` that cascades to one.
-    pub fn forget_sequences(&self, ops: &[crabka_pgkv::WriteOp]) {
+    pub fn forget_sequences(&self, ops: &[krabka_pgkv::WriteOp]) {
         let names: Vec<_> = ops
             .iter()
             .filter_map(|op| match op {
-                crabka_pgkv::WriteOp::Put { key, .. }
-                | crabka_pgkv::WriteOp::ConditionalPut { key, .. }
-                | crabka_pgkv::WriteOp::Delete { key } => {
-                    crabka_pgcatalog::sequence_name_from_key(key)
+                krabka_pgkv::WriteOp::Put { key, .. }
+                | krabka_pgkv::WriteOp::ConditionalPut { key, .. }
+                | krabka_pgkv::WriteOp::Delete { key } => {
+                    krabka_pgcatalog::sequence_name_from_key(key)
                 }
             })
             .collect();
@@ -257,7 +257,7 @@ impl SequenceManager {
     /// `nextval` over the sequence a stored column default names.
     ///
     /// The stored text is the catalog's own rendering of a
-    /// [`crabka_pgcatalog::RelationName`]: bare in `public`, `schema.name`
+    /// [`krabka_pgcatalog::RelationName`]: bare in `public`, `schema.name`
     /// elsewhere, never quoted. It is not a `regclass` literal, so this reads
     /// it back the way it was written and not through
     /// [`crate::relname::parse_written_relation`]. `nextval('…')` as SQL calls
@@ -296,21 +296,21 @@ impl SequenceManager {
     fn advance(
         &self,
         kv: &dyn Kv,
-        name: crabka_pgcatalog::RelationName,
+        name: krabka_pgcatalog::RelationName,
     ) -> Result<(i64, Option<StagedSequence>), ExecError> {
         match self.mode {
             PersistMode::Durable => {
-                let mut sequence = crabka_pgcatalog::get_sequence(kv, &name)?;
+                let mut sequence = krabka_pgcatalog::get_sequence(kv, &name)?;
                 sequence.last_value = next_sequence_value(&name, &sequence)?;
                 sequence.is_called = true;
-                kv.write_batch(&[crabka_pgcatalog::put_sequence_op(&name, sequence)])?;
+                kv.write_batch(&[krabka_pgcatalog::put_sequence_op(&name, sequence)])?;
                 Ok((sequence.last_value, None))
             }
             PersistMode::Replicated => {
                 let mut cache = self.sql.lock().expect("sql seqmgr");
                 let mut sequence = match cache.get(&name) {
                     Some(cached) => *cached,
-                    None => crabka_pgcatalog::get_sequence(kv, &name)?,
+                    None => krabka_pgcatalog::get_sequence(kv, &name)?,
                 };
                 sequence.last_value = next_sequence_value(&name, &sequence)?;
                 sequence.is_called = true;
@@ -335,16 +335,16 @@ impl SequenceManager {
         let name = written_sequence_name(kv, scope, written)?;
         match self.mode {
             PersistMode::Durable => {
-                let mut sequence = crabka_pgcatalog::get_sequence(kv, &name)?;
+                let mut sequence = krabka_pgcatalog::get_sequence(kv, &name)?;
                 setval_record(&name, &mut sequence, value, is_called)?;
-                kv.write_batch(&[crabka_pgcatalog::put_sequence_op(&name, sequence)])?;
+                kv.write_batch(&[krabka_pgcatalog::put_sequence_op(&name, sequence)])?;
                 Ok((value, None))
             }
             PersistMode::Replicated => {
                 let mut cache = self.sql.lock().expect("sql seqmgr");
                 let mut sequence = match cache.get(&name) {
                     Some(cached) => *cached,
-                    None => crabka_pgcatalog::get_sequence(kv, &name)?,
+                    None => krabka_pgcatalog::get_sequence(kv, &name)?,
                 };
                 setval_record(&name, &mut sequence, value, is_called)?;
                 cache.insert(name.clone(), sequence);
@@ -359,8 +359,8 @@ impl SequenceManager {
 /// This rejects a value outside the record's bounds the way `PostgreSQL` does,
 /// before it writes anything.
 fn setval_record(
-    name: &crabka_pgcatalog::RelationName,
-    sequence: &mut crabka_pgcatalog::Sequence,
+    name: &krabka_pgcatalog::RelationName,
+    sequence: &mut krabka_pgcatalog::Sequence,
     value: i64,
     is_called: bool,
 ) -> Result<(), ExecError> {
@@ -393,7 +393,7 @@ fn written_sequence_name(
     kv: &dyn Kv,
     scope: &crate::relname::ResolutionScope,
     written: &str,
-) -> Result<crabka_pgcatalog::RelationName, ExecError> {
+) -> Result<krabka_pgcatalog::RelationName, ExecError> {
     resolve_sequence(
         kv,
         scope,
@@ -403,16 +403,16 @@ fn written_sequence_name(
 
 /// The sequence a stored `nextval` column default names.
 ///
-/// Its text is a [`crabka_pgcatalog::RelationName`]'s own rendering, not a
+/// Its text is a [`krabka_pgcatalog::RelationName`]'s own rendering, not a
 /// `regclass` literal: unquoted throughout, and dotted only outside `public`.
 fn stored_sequence_name(
     kv: &dyn Kv,
     scope: &crate::relname::ResolutionScope,
     stored: &str,
-) -> Result<crabka_pgcatalog::RelationName, ExecError> {
+) -> Result<krabka_pgcatalog::RelationName, ExecError> {
     let reference = match stored.split_once('.') {
-        Some((schema, name)) => crabka_pgparser::ast::RelationRef::qualified(schema, name),
-        None => crabka_pgparser::ast::RelationRef::bare(stored),
+        Some((schema, name)) => krabka_pgparser::ast::RelationRef::qualified(schema, name),
+        None => krabka_pgparser::ast::RelationRef::bare(stored),
     };
     resolve_sequence(kv, scope, reference)
 }
@@ -420,8 +420,8 @@ fn stored_sequence_name(
 fn resolve_sequence(
     kv: &dyn Kv,
     scope: &crate::relname::ResolutionScope,
-    reference: crabka_pgparser::ast::RelationRef,
-) -> Result<crabka_pgcatalog::RelationName, ExecError> {
+    reference: krabka_pgparser::ast::RelationRef,
+) -> Result<krabka_pgcatalog::RelationName, ExecError> {
     crate::relname::resolve_relation(
         kv,
         scope,
@@ -431,8 +431,8 @@ fn resolve_sequence(
 }
 
 fn next_sequence_value(
-    name: &crabka_pgcatalog::RelationName,
-    sequence: &crabka_pgcatalog::Sequence,
+    name: &krabka_pgcatalog::RelationName,
+    sequence: &krabka_pgcatalog::Sequence,
 ) -> Result<i64, ExecError> {
     if !sequence.is_called {
         return Ok(sequence.last_value);
@@ -447,8 +447,8 @@ fn next_sequence_value(
 }
 
 fn sequence_wrapped_value(
-    name: &crabka_pgcatalog::RelationName,
-    sequence: &crabka_pgcatalog::Sequence,
+    name: &krabka_pgcatalog::RelationName,
+    sequence: &krabka_pgcatalog::Sequence,
 ) -> Result<i64, ExecError> {
     if !sequence.cycle {
         // `PostgreSQL` names the sequence with `RelationGetRelationName`, so the
@@ -470,12 +470,12 @@ mod tests {
     use std::sync::Arc;
 
     use assert2::assert;
-    use crabka_pgkv::MemKv;
+    use krabka_pgkv::MemKv;
 
     use super::*;
 
-    fn persisted_seq(kv: &dyn Kv, table: crabka_pgcatalog::TableId) -> Option<u64> {
-        kv.get(&crabka_pgkv::key::seq_key(table))
+    fn persisted_seq(kv: &dyn Kv, table: krabka_pgcatalog::TableId) -> Option<u64> {
+        kv.get(&krabka_pgkv::key::seq_key(table))
             .expect("get")
             .map(|b| u64::from_be_bytes(b.try_into().expect("u64")))
     }
@@ -489,12 +489,12 @@ mod tests {
         let kv = MemKv::new();
         for schema in ["sch", "other"] {
             let ops =
-                crabka_pgcatalog::create_schema_ops(&kv, schema, "postgres").expect("schema ops");
+                krabka_pgcatalog::create_schema_ops(&kv, schema, "postgres").expect("schema ops");
             kv.write_batch(&ops).expect("write");
-            let ops = crabka_pgcatalog::create_sequence_ops(
+            let ops = krabka_pgcatalog::create_sequence_ops(
                 &kv,
-                &crabka_pgcatalog::RelationName::new(schema, "s"),
-                crabka_pgcatalog::Sequence::new(1, 1, None, None, Some(1), false),
+                &krabka_pgcatalog::RelationName::new(schema, "s"),
+                krabka_pgcatalog::Sequence::new(1, 1, None, None, Some(1), false),
             )
             .expect("sequence ops");
             kv.write_batch(&ops).expect("write");
@@ -504,12 +504,12 @@ mod tests {
             ..crate::relname::ResolutionScope::default()
         };
         let cases = [
-            ("s", crabka_pgcatalog::RelationName::new("sch", "s")),
-            ("other.s", crabka_pgcatalog::RelationName::new("other", "s")),
-            ("S", crabka_pgcatalog::RelationName::new("sch", "s")),
+            ("s", krabka_pgcatalog::RelationName::new("sch", "s")),
+            ("other.s", krabka_pgcatalog::RelationName::new("other", "s")),
+            ("S", krabka_pgcatalog::RelationName::new("sch", "s")),
             (
                 " OTHER . \"s\" ",
-                crabka_pgcatalog::RelationName::new("other", "s"),
+                krabka_pgcatalog::RelationName::new("other", "s"),
             ),
         ];
         for (written, expected) in cases {
@@ -519,7 +519,7 @@ mod tests {
 
     #[test]
     fn allocates_distinct_increasing_rowids() {
-        let kv: Arc<dyn crabka_pgkv::Kv> = Arc::new(MemKv::new());
+        let kv: Arc<dyn krabka_pgkv::Kv> = Arc::new(MemKv::new());
         let seq = SequenceManager::new(PersistMode::Durable);
         let (start, _op) = seq.alloc(&*kv, 7, 3).expect("alloc");
         assert!(start == 1); // rows 1,2,3
@@ -531,7 +531,7 @@ mod tests {
 
     #[test]
     fn durable_alloc_persists_a_block_ahead_and_returns_no_op() {
-        let kv: Arc<dyn crabka_pgkv::Kv> = Arc::new(MemKv::new());
+        let kv: Arc<dyn krabka_pgkv::Kv> = Arc::new(MemKv::new());
         let seq = SequenceManager::new(PersistMode::Durable);
         let (start, op) = seq.alloc(&*kv, 7, 3).expect("alloc");
         assert!(start == 1);
@@ -543,7 +543,7 @@ mod tests {
 
     #[test]
     fn durable_allocs_within_the_block_do_not_touch_the_store() {
-        let kv: Arc<dyn crabka_pgkv::Kv> = Arc::new(MemKv::new());
+        let kv: Arc<dyn krabka_pgkv::Kv> = Arc::new(MemKv::new());
         let seq = SequenceManager::new(PersistMode::Durable);
         seq.alloc(&*kv, 7, 3).expect("alloc"); // extends + persists 4 + BLOCK
         let end = persisted_seq(&*kv, 7);
@@ -565,7 +565,7 @@ mod tests {
 
     #[test]
     fn durable_seq_is_monotonic_and_seeds_a_fresh_manager() {
-        let kv: Arc<dyn crabka_pgkv::Kv> = Arc::new(MemKv::new());
+        let kv: Arc<dyn krabka_pgkv::Kv> = Arc::new(MemKv::new());
         let seq = SequenceManager::new(PersistMode::Durable);
         seq.alloc(&*kv, 7, 5).expect("alloc"); // consumes 1..=5, persists 6 + BLOCK
         let seq2 = SequenceManager::new(PersistMode::Durable); // simulate restart
@@ -576,7 +576,7 @@ mod tests {
 
     #[test]
     fn partial_block_use_never_collides_after_a_crash() {
-        let kv: Arc<dyn crabka_pgkv::Kv> = Arc::new(MemKv::new());
+        let kv: Arc<dyn krabka_pgkv::Kv> = Arc::new(MemKv::new());
         // A "process" that only ever used a small slice of its persisted block.
         let seq = SequenceManager::new(PersistMode::Durable);
         let mut max_end = 0u64;
@@ -595,7 +595,7 @@ mod tests {
 
     #[test]
     fn concurrent_allocs_hand_out_disjoint_ranges() {
-        let kv: Arc<dyn crabka_pgkv::Kv> = Arc::new(MemKv::new());
+        let kv: Arc<dyn krabka_pgkv::Kv> = Arc::new(MemKv::new());
         let seq = Arc::new(SequenceManager::new(PersistMode::Durable));
         const THREADS: u64 = 8;
         const ALLOCS_PER_THREAD: u64 = 300;
@@ -634,9 +634,9 @@ mod tests {
 
     #[test]
     fn seeds_from_existing_durable_seq_key() {
-        let kv: Arc<dyn crabka_pgkv::Kv> = Arc::new(MemKv::new());
-        kv.write_batch(&[crabka_pgkv::WriteOp::Put {
-            key: crabka_pgkv::key::seq_key(7),
+        let kv: Arc<dyn krabka_pgkv::Kv> = Arc::new(MemKv::new());
+        kv.write_batch(&[krabka_pgkv::WriteOp::Put {
+            key: krabka_pgkv::key::seq_key(7),
             value: 42u64.to_be_bytes().to_vec(),
         }])
         .expect("seed");
@@ -645,18 +645,18 @@ mod tests {
         assert!(start == 42);
     }
 
-    fn seed_sequence(kv: &dyn Kv, name: &crabka_pgcatalog::RelationName) {
-        let ops = crabka_pgcatalog::create_sequence_ops(
+    fn seed_sequence(kv: &dyn Kv, name: &krabka_pgcatalog::RelationName) {
+        let ops = krabka_pgcatalog::create_sequence_ops(
             kv,
             name,
-            crabka_pgcatalog::Sequence::new(1, 1, None, None, Some(1), false),
+            krabka_pgcatalog::Sequence::new(1, 1, None, None, Some(1), false),
         )
         .expect("sequence ops");
         kv.write_batch(&ops).expect("write");
     }
 
-    fn public(name: &str) -> crabka_pgcatalog::RelationName {
-        crabka_pgcatalog::RelationName::new("public", name)
+    fn public(name: &str) -> krabka_pgcatalog::RelationName {
+        krabka_pgcatalog::RelationName::new("public", name)
     }
 
     /// The `Replicated` advance mirrors `alloc`: the value comes from the cache,
@@ -677,16 +677,16 @@ mod tests {
         }
         // Nothing was written: the applied store still holds the seeded record.
         assert!(
-            crabka_pgcatalog::get_sequence(&*kv, &name).expect("get")
-                == crabka_pgcatalog::Sequence::new(1, 1, None, None, Some(1), false),
+            krabka_pgcatalog::get_sequence(&*kv, &name).expect("get")
+                == krabka_pgcatalog::Sequence::new(1, 1, None, None, Some(1), false),
             "Replicated mode must not write the sequence through the store"
         );
         // Three advances collapse to the one op that records the last of them.
         assert!(
             staged.take_ops()
-                == vec![crabka_pgcatalog::put_sequence_op(&name, {
+                == vec![krabka_pgcatalog::put_sequence_op(&name, {
                     let mut expected =
-                        crabka_pgcatalog::Sequence::new(1, 1, None, None, Some(1), false);
+                        krabka_pgcatalog::Sequence::new(1, 1, None, None, Some(1), false);
                     expected.last_value = 3;
                     expected.is_called = true;
                     expected
@@ -752,13 +752,13 @@ mod tests {
         // `reused` is dropped and recreated; `kept` is untouched. An unrelated
         // key in the same batch must not disturb anything.
         seq.forget_sequences(&[
-            crabka_pgkv::WriteOp::Delete {
-                key: crabka_pgkv::key::seq_key(7),
+            krabka_pgkv::WriteOp::Delete {
+                key: krabka_pgkv::key::seq_key(7),
             },
-            crabka_pgcatalog::drop_sequence_ops(&*kv, &public("reused")).expect("drop")[0].clone(),
+            krabka_pgcatalog::drop_sequence_ops(&*kv, &public("reused")).expect("drop")[0].clone(),
         ]);
         kv.write_batch(
-            &crabka_pgcatalog::drop_sequence_ops(&*kv, &public("reused")).expect("drop"),
+            &krabka_pgcatalog::drop_sequence_ops(&*kv, &public("reused")).expect("drop"),
         )
         .expect("apply drop");
         seed_sequence(&*kv, &public("reused"));
@@ -808,10 +808,10 @@ mod tests {
     fn replicated_setval_out_of_bounds_leaves_the_cache_alone() {
         let kv: Arc<dyn Kv> = Arc::new(MemKv::new());
         let name = public("s");
-        let ops = crabka_pgcatalog::create_sequence_ops(
+        let ops = krabka_pgcatalog::create_sequence_ops(
             &*kv,
             &name,
-            crabka_pgcatalog::Sequence::new(1, 1, Some(1), Some(10), Some(1), false),
+            krabka_pgcatalog::Sequence::new(1, 1, Some(1), Some(10), Some(1), false),
         )
         .expect("sequence ops");
         kv.write_batch(&ops).expect("write");
@@ -827,21 +827,21 @@ mod tests {
 
     #[test]
     fn replicated_alloc_folds_op_and_does_not_persist_and_reseed_clears_cache() {
-        let kv: Arc<dyn crabka_pgkv::Kv> = Arc::new(MemKv::new());
+        let kv: Arc<dyn krabka_pgkv::Kv> = Arc::new(MemKv::new());
         let seq = SequenceManager::new(PersistMode::Replicated);
         // Replicated alloc returns the op to fold and persists nothing itself.
         let (start, op) = seq.alloc(&*kv, 7, 3).expect("alloc");
         assert!(start == 1);
         let op = op.expect("Replicated mode folds the seq op via the batch");
         assert!(
-            op == crabka_pgkv::WriteOp::Put {
-                key: crabka_pgkv::key::seq_key(7),
+            op == krabka_pgkv::WriteOp::Put {
+                key: krabka_pgkv::key::seq_key(7),
                 value: 4u64.to_be_bytes().to_vec(),
             },
             "Replicated ops carry the exact next-rowid, never a block"
         );
         assert!(
-            kv.get(&crabka_pgkv::key::seq_key(7))
+            kv.get(&krabka_pgkv::key::seq_key(7))
                 .expect("get")
                 .is_none(),
             "Replicated mode must not self-persist the seq counter"
@@ -852,8 +852,8 @@ mod tests {
         // Simulate the applied store advancing (via Raft) to next-rowid=50, then
         // becoming leader: reseed clears the cache so the next alloc re-seeds from
         // the applied store via read_seq_kv.
-        kv.write_batch(&[crabka_pgkv::WriteOp::Put {
-            key: crabka_pgkv::key::seq_key(7),
+        kv.write_batch(&[krabka_pgkv::WriteOp::Put {
+            key: krabka_pgkv::key::seq_key(7),
             value: 50u64.to_be_bytes().to_vec(),
         }])
         .expect("apply");

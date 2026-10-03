@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use bytes::{BufMut, BytesMut};
-use crabka_pgwire::{
+use krabka_pgwire::{
     engine::{
         BoundParam, CloseTarget, Engine, ExecuteOutcome, PortalDescription, PreparedDescription,
         QueryResult, ResultPage, ResultSink, Session, TxStatus,
@@ -130,7 +130,7 @@ impl Session for NoticeSession {
 async fn spawn_server() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("listener address").port();
-    tokio::spawn(crabka_pgwire::server::serve(
+    tokio::spawn(krabka_pgwire::server::serve(
         listener,
         Arc::new(NoticeEngine),
         Arc::new(SessionConfig::trust()),

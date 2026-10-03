@@ -4,8 +4,8 @@
 //! partition keys continue to resolve their live column names correctly.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Engine, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Engine, Session};
 
 async fn run(session: &mut SqlSession, sql: &str) {
     session
@@ -31,7 +31,7 @@ async fn rows_of(session: &mut SqlSession, sql: &str) -> Vec<String> {
         .unwrap_or_else(|error| panic!("{sql} should succeed: {error:?}"))
         .iter()
         .filter_map(|outcome| match outcome {
-            crabka_pgwire::engine::QueryResult::Rows { rows, .. } => Some(rows),
+            krabka_pgwire::engine::QueryResult::Rows { rows, .. } => Some(rows),
             _ => None,
         })
         .flatten()

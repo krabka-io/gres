@@ -18,8 +18,8 @@
 //! so the mapping is direct.
 
 use bytes::Bytes;
-use crabka_metadata::{AclOperation, ResourceType};
-use crabka_protocol::{
+use krabka_metadata::{AclOperation, ResourceType};
+use krabka_protocol::{
     Decode,
     owned::{
         list_transactions_request::ListTransactionsRequest,
@@ -297,11 +297,11 @@ mod tests {
     /// versions. This also protects the producer-id filter from being inverted.
     #[tokio::test]
     async fn filters_follow_wire_versions_and_keep_matching_entries() {
-        use crabka_log::ProducerId;
+        use krabka_log::ProducerId;
 
         use crate::txn::state::TxnEntry;
 
-        let version = crabka_protocol::owned::list_transactions_response::MAX_VERSION;
+        let version = krabka_protocol::owned::list_transactions_response::MAX_VERSION;
         let (broker_handle, dir) =
             start_broker(Arc::new(crate::authorizer::AllowAllAuthorizer)).await;
         let broker = broker_handle.broker_arc_for_test();
@@ -314,7 +314,7 @@ mod tests {
         let part_dir =
             crate::log_dir::partition_dir(dir.path(), crate::txn::bootstrap::TOPIC, p.get());
         std::fs::create_dir_all(&part_dir).unwrap();
-        let log = crabka_log::Log::open(&part_dir, crabka_log::LogConfig::default()).unwrap();
+        let log = krabka_log::Log::open(&part_dir, krabka_log::LogConfig::default()).unwrap();
         let part = crate::broker::spawn_partition(
             crate::txn::bootstrap::TOPIC.to_string(),
             p,
@@ -398,7 +398,7 @@ mod tests {
 
     #[tokio::test]
     async fn handler_reports_unknown_state_filters_and_top_level_fields() {
-        let version = crabka_protocol::owned::list_transactions_response::MAX_VERSION;
+        let version = krabka_protocol::owned::list_transactions_response::MAX_VERSION;
         let (broker_handle, _dir) =
             start_broker(Arc::new(crate::authorizer::AllowAllAuthorizer)).await;
         let broker = broker_handle.broker_arc_for_test();
@@ -424,7 +424,7 @@ mod tests {
             error_code: codes::NONE,
             unknown_state_filters: vec!["MysteryState".to_string()],
             transaction_states: vec![],
-            unknown_tagged_fields: crabka_protocol::UnknownTaggedFields(vec![]),
+            unknown_tagged_fields: krabka_protocol::UnknownTaggedFields(vec![]),
         };
         assert!(resp == expected);
         broker_handle.shutdown().await;

@@ -7,27 +7,27 @@ use std::{
 };
 
 use clap::{ArgGroup, Args, Subcommand, ValueEnum};
-use crabka_client_admin::{
+use krabka_client_admin::{
     AclEntry, AclOperation, AdminClient, PatternType, PermissionType, ResourceType,
     ScramIterations, ScramUpsertion,
 };
-use crabka_client_core::{
+use krabka_client_core::{
     ClientFrameMax, ConnectionDispatchQueueCapacity, FetchMinBytes,
     security::{ClientSecurity, SaslCredentials},
 };
-use crabka_gres_balancer::{
+use krabka_gres_balancer::{
     BalanceOperation, BalancerConfig, ExecutionPolicy, ExecutionReport, Planner, TenantMetrics,
     UnsupportedExecutor, execute_plan,
 };
-use crabka_gres_control::{
+use krabka_gres_control::{
     HashPlacement, PgdogConnectAttempts, PgdogGeneral, PgdogPoolerMode, PgdogRenderInput,
     PgdogUser, RangeBoundary, RangeLayoutEntry, RangeLayoutSplit, RangeLifecycle, Registry,
     RegistryPolicy, RegistryReplicationFactor, SplitOperationPlan, SplitOperationRecord, SqlUser,
     TenantEndpoint, TenantId, TenantName, TenantRecord, TenantState, render_pgdog_toml,
     render_users_toml, tenant_config_topic,
 };
-use crabka_security::{ListenerProtocol, SaslMechanism, scram::PgScramVerifier};
-use crabka_units::{ByteSize, Time};
+use krabka_security::{ListenerProtocol, SaslMechanism, scram::PgScramVerifier};
+use krabka_units::{ByteSize, Time};
 use serde::Serialize;
 
 const EXIT_OK: i32 = 0;
@@ -46,69 +46,69 @@ pub struct GresArgs {
 struct RegistryOptions {
     #[arg(
         long = "client-dispatch-queue-capacity",
-        env = "CRABKA_GRES_CLIENT_DISPATCH_QUEUE_CAPACITY",
-        default_value_t = crabka_client_core::DEFAULT_CONNECTION_DISPATCH_QUEUE_CAPACITY,
+        env = "KRABKA_GRES_CLIENT_DISPATCH_QUEUE_CAPACITY",
+        default_value_t = krabka_client_core::DEFAULT_CONNECTION_DISPATCH_QUEUE_CAPACITY,
         value_parser = parse_client_dispatch_queue_capacity
     )]
     client_dispatch_queue_capacity: usize,
     #[arg(
         long = "client-frame-max",
-        env = "CRABKA_GRES_CLIENT_FRAME_MAX",
+        env = "KRABKA_GRES_CLIENT_FRAME_MAX",
         default_value = "100MiB",
         value_parser = parse_client_frame_max
     )]
     client_frame_max: ByteSize,
     #[arg(
         long = "registry-reader-fetch-min",
-        env = "CRABKA_GRES_REGISTRY_READER_FETCH_MIN",
+        env = "KRABKA_GRES_REGISTRY_READER_FETCH_MIN",
         default_value = "1B",
         value_parser = parse_fetch_min
     )]
     registry_reader_fetch_min: ByteSize,
     #[arg(
         long = "registry-replication-factor",
-        env = "CRABKA_GRES_REGISTRY_REPLICATION_FACTOR",
+        env = "KRABKA_GRES_REGISTRY_REPLICATION_FACTOR",
         default_value = "1"
     )]
     replication_factor: RegistryReplicationFactor,
     #[arg(
         long = "registry-topic-create-timeout",
-        env = "CRABKA_GRES_REGISTRY_TOPIC_CREATE_TIMEOUT",
+        env = "KRABKA_GRES_REGISTRY_TOPIC_CREATE_TIMEOUT",
         default_value = "15s",
-        value_parser = crabka_units::parse::positive_time
+        value_parser = krabka_units::parse::positive_time
     )]
     topic_create_timeout: Time,
     #[arg(
         long = "registry-reader-retry-backoff",
-        env = "CRABKA_GRES_REGISTRY_READER_RETRY_BACKOFF",
+        env = "KRABKA_GRES_REGISTRY_READER_RETRY_BACKOFF",
         default_value = "250ms",
-        value_parser = crabka_units::parse::positive_time
+        value_parser = krabka_units::parse::positive_time
     )]
     reader_retry_backoff: Time,
     #[arg(
         long = "registry-fetch-max-wait",
-        env = "CRABKA_GRES_REGISTRY_FETCH_MAX_WAIT",
+        env = "KRABKA_GRES_REGISTRY_FETCH_MAX_WAIT",
         default_value = "500ms",
-        value_parser = crabka_units::parse::positive_time
+        value_parser = krabka_units::parse::positive_time
     )]
     fetch_max_wait: Time,
     #[arg(
         long = "registry-fetch-partition-max",
-        env = "CRABKA_GRES_REGISTRY_FETCH_PARTITION_MAX",
+        env = "KRABKA_GRES_REGISTRY_FETCH_PARTITION_MAX",
         default_value = "1MiB",
-        value_parser = crabka_units::parse::positive_byte_size
+        value_parser = krabka_units::parse::positive_byte_size
     )]
     fetch_partition_max: ByteSize,
     #[arg(
         long = "registry-producer-dns-timeout",
-        env = "CRABKA_GRES_REGISTRY_PRODUCER_DNS_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time
+        env = "KRABKA_GRES_REGISTRY_PRODUCER_DNS_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time
     )]
     producer_dns_timeout: Option<Time>,
     #[arg(
         long = "registry-reader-admin-dns-timeout",
-        env = "CRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time
+        env = "KRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time
     )]
     reader_admin_dns_timeout: Option<Time>,
 }
@@ -153,13 +153,13 @@ fn parse_client_dispatch_queue_capacity(value: &str) -> Result<usize, String> {
 
 fn parse_client_frame_max(value: &str) -> Result<ByteSize, String> {
     let value =
-        crabka_units::parse::positive_byte_size(value).map_err(|error| error.to_string())?;
+        krabka_units::parse::positive_byte_size(value).map_err(|error| error.to_string())?;
     ClientFrameMax::try_from(value).map(ClientFrameMax::size)
 }
 
 fn parse_fetch_min(value: &str) -> Result<ByteSize, String> {
     let value =
-        crabka_units::parse::positive_byte_size(value).map_err(|error| error.to_string())?;
+        krabka_units::parse::positive_byte_size(value).map_err(|error| error.to_string())?;
     FetchMinBytes::try_from(value).map(FetchMinBytes::size)
 }
 
@@ -227,10 +227,10 @@ struct CreateTenantArgs {
     #[arg(long)]
     password_stdin: bool,
     /// WAL topic replication factor for this tenant.
-    #[arg(long, env = "CRABKA_GRES_WAL_REPLICATION", default_value = "1")]
+    #[arg(long, env = "KRABKA_GRES_WAL_REPLICATION", default_value = "1")]
     wal_replication: RegistryReplicationFactor,
     /// PBKDF2 iteration count for the tenant's Kafka and `PostgreSQL` SCRAM credentials.
-    #[arg(long, env = "CRABKA_GRES_SCRAM_ITERATIONS", default_value = "4096")]
+    #[arg(long, env = "KRABKA_GRES_SCRAM_ITERATIONS", default_value = "4096")]
     scram_iterations: ScramIterations,
     /// Optional object-store prefix for tenant checkpoints.
     #[arg(long)]
@@ -239,7 +239,7 @@ struct CreateTenantArgs {
     #[arg(long)]
     checkpoint_frames: Option<u64>,
     /// Optional size threshold for checkpointing.
-    #[arg(long, value_parser = crabka_units::parse::positive_byte_size)]
+    #[arg(long, value_parser = krabka_units::parse::positive_byte_size)]
     checkpoint_size: Option<ByteSize>,
     /// Idle seconds before automatic suspension. Zero means never.
     #[arg(long)]
@@ -272,83 +272,83 @@ struct BootstrapArgs {
 #[derive(Args, Debug)]
 struct RenderPgdogArgs {
     /// Kafka bootstrap address used for the Gres registry.
-    #[arg(long, env = "CRABKA_GRES_PGDOG_BOOTSTRAP")]
+    #[arg(long, env = "KRABKA_GRES_PGDOG_BOOTSTRAP")]
     bootstrap: String,
     /// Directory that will receive pgdog.toml and users.toml.
-    #[arg(long, env = "CRABKA_GRES_PGDOG_OUT_DIR")]
+    #[arg(long, env = "KRABKA_GRES_PGDOG_OUT_DIR")]
     out_dir: PathBuf,
     /// Suspended-tenant activator route as host:port.
     #[arg(
         long,
-        env = "CRABKA_GRES_PGDOG_ACTIVATOR",
+        env = "KRABKA_GRES_PGDOG_ACTIVATOR",
         value_parser = parse_activator
     )]
     activator: Option<(String, u16)>,
     /// Client-facing `PgDog` listen port.
-    #[arg(long, env = "CRABKA_GRES_PGDOG_LISTEN_PORT", default_value = "6432")]
+    #[arg(long, env = "KRABKA_GRES_PGDOG_LISTEN_PORT", default_value = "6432")]
     listen_port: NonZeroU16,
     /// Client-facing TLS certificate path as visible inside the `PgDog` runtime.
     #[arg(
         long,
-        env = "CRABKA_GRES_PGDOG_TLS_CERTIFICATE",
+        env = "KRABKA_GRES_PGDOG_TLS_CERTIFICATE",
         requires = "tls_private_key"
     )]
     tls_certificate: Option<PathBuf>,
     /// Client-facing TLS private-key path as visible inside the `PgDog` runtime.
     #[arg(
         long,
-        env = "CRABKA_GRES_PGDOG_TLS_PRIVATE_KEY",
+        env = "KRABKA_GRES_PGDOG_TLS_PRIVATE_KEY",
         requires = "tls_certificate"
     )]
     tls_private_key: Option<PathBuf>,
     /// Client CA path as visible inside the `PgDog` runtime.
     #[arg(
         long,
-        env = "CRABKA_GRES_PGDOG_TLS_CLIENT_CA_CERTIFICATE",
+        env = "KRABKA_GRES_PGDOG_TLS_CLIENT_CA_CERTIFICATE",
         requires_all = ["tls_certificate", "tls_private_key"]
     )]
     tls_client_ca_certificate: Option<PathBuf>,
     /// Fleet-wide pooling mode for backend connections.
     #[arg(
         long,
-        env = "CRABKA_GRES_PGDOG_POOLER_MODE",
+        env = "KRABKA_GRES_PGDOG_POOLER_MODE",
         default_value = "transaction",
         value_parser = parse_pgdog_pooler_mode
     )]
     pooler_mode: PgdogPoolerMode,
     /// Number of backend connection attempts.
-    #[arg(long, env = "CRABKA_GRES_PGDOG_CONNECT_ATTEMPTS", default_value = "3")]
+    #[arg(long, env = "KRABKA_GRES_PGDOG_CONNECT_ATTEMPTS", default_value = "3")]
     connect_attempts: PgdogConnectAttempts,
     /// Maximum acceptable tenant wake latency.
     #[arg(
         long,
-        env = "CRABKA_GRES_PGDOG_COLD_START_CEILING",
+        env = "KRABKA_GRES_PGDOG_COLD_START_CEILING",
         default_value = "30s",
-        value_parser = crabka_units::parse::positive_time
+        value_parser = krabka_units::parse::positive_time
     )]
     cold_start_ceiling: Time,
     /// Normal pooled-server idle timeout.
     #[arg(
         long,
-        env = "CRABKA_GRES_PGDOG_IDLE_TIMEOUT",
+        env = "KRABKA_GRES_PGDOG_IDLE_TIMEOUT",
         default_value = "60s",
-        value_parser = crabka_units::parse::positive_time
+        value_parser = krabka_units::parse::positive_time
     )]
     idle_timeout: Time,
     /// Pooled-server idle timeout when at least one tenant may suspend.
     #[arg(
         long,
-        env = "CRABKA_GRES_PGDOG_SUSPENSION_IDLE_TIMEOUT",
+        env = "KRABKA_GRES_PGDOG_SUSPENSION_IDLE_TIMEOUT",
         default_value = "1s",
-        value_parser = crabka_units::parse::positive_time
+        value_parser = krabka_units::parse::positive_time
     )]
     suspension_idle_timeout: Time,
     /// Maximum pooled backend connection lifetime.
     #[arg(
         long,
-        env = "CRABKA_GRES_PGDOG_SERVER_LIFETIME",
+        env = "KRABKA_GRES_PGDOG_SERVER_LIFETIME",
         default_value = "5m",
-        value_parser = crabka_units::parse::positive_time
+        value_parser = krabka_units::parse::positive_time
     )]
     server_lifetime: Time,
 }
@@ -485,7 +485,7 @@ struct RedactedTenantRecord {
     wal_replication: i32,
     bucket_prefix: Option<String>,
     checkpoint_frames: Option<u64>,
-    #[serde(with = "crabka_units::serde_units::human::option_byte_size")]
+    #[serde(with = "krabka_units::serde_units::human::option_byte_size")]
     checkpoint_size: Option<ByteSize>,
     idle_seconds: Option<u64>,
     ranges: Vec<RangeLayoutEntry>,
@@ -623,7 +623,7 @@ fn plan_balance_apply(
     let output = planner.plan(&input.tenants, &input.config.context);
     let report = match mode {
         BalanceExecuteMode::DryRun => {
-            crabka_gres_balancer::DryRunExecutor::default().execute(&output.plan)
+            krabka_gres_balancer::DryRunExecutor::default().execute(&output.plan)
         }
         BalanceExecuteMode::Validate => {
             let mut executor = UnsupportedExecutor;
@@ -901,10 +901,10 @@ async fn provision_tenant_kafka_access(
     let username = tenant_kafka_username(tenant);
     let mut admin = AdminClient::connect_with_options(
         &bootstrap_addrs,
-        crabka_client_core::ConnectionOptions {
+        krabka_client_core::ConnectionOptions {
             dispatch_queue_capacity: policy.dispatch_queue_capacity(),
             frame_max: policy.frame_max(),
-            ..crabka_client_core::ConnectionOptions::default()
+            ..krabka_client_core::ConnectionOptions::default()
         },
     )
     .await
@@ -1380,7 +1380,7 @@ fn parse_pgdog_pooler_mode(value: &str) -> Result<PgdogPoolerMode, String> {
 mod tests {
     use assert2::{assert, check};
     use clap::Parser as _;
-    use crabka_units::convert::TimeExt as _;
+    use krabka_units::convert::TimeExt as _;
 
     use super::*;
 
@@ -1437,7 +1437,7 @@ mod tests {
 
     #[test]
     fn create_tenant_policy_reads_environment_and_prefers_cli() {
-        const CHILD: &str = "CRABKA_TEST_CLI_CREATE_TENANT_POLICY_CHILD";
+        const CHILD: &str = "KRABKA_TEST_CLI_CREATE_TENANT_POLICY_CHILD";
         if std::env::var_os(CHILD).is_none() {
             let status = std::process::Command::new(std::env::current_exe().expect("test exe"))
                 .args([
@@ -1445,8 +1445,8 @@ mod tests {
                     "gres::tests::create_tenant_policy_reads_environment_and_prefers_cli",
                 ])
                 .env(CHILD, "1")
-                .env("CRABKA_GRES_WAL_REPLICATION", "2")
-                .env("CRABKA_GRES_SCRAM_ITERATIONS", "8192")
+                .env("KRABKA_GRES_WAL_REPLICATION", "2")
+                .env("KRABKA_GRES_SCRAM_ITERATIONS", "8192")
                 .status()
                 .expect("child test");
             assert!(status.success());
@@ -1466,7 +1466,7 @@ mod tests {
     fn registry_policy_options_use_exact_defaults_and_validation() {
         let defaults =
             TestCli::try_parse_from(["test", "list", "--bootstrap=broker:9092"]).expect("defaults");
-        assert!(defaults.gres.registry.policy() == crabka_gres_control::RegistryPolicy::default());
+        assert!(defaults.gres.registry.policy() == krabka_gres_control::RegistryPolicy::default());
         for option in [
             "--registry-replication-factor=0",
             "--registry-replication-factor=32768",
@@ -1489,18 +1489,18 @@ mod tests {
 
     #[test]
     fn registry_policy_options_read_environment_and_prefer_cli() {
-        const CHILD: &str = "CRABKA_TEST_CLI_REGISTRY_ENV_CHILD";
+        const CHILD: &str = "KRABKA_TEST_CLI_REGISTRY_ENV_CHILD";
         let vars = [
-            ("CRABKA_GRES_REGISTRY_REPLICATION_FACTOR", "2"),
-            ("CRABKA_GRES_REGISTRY_TOPIC_CREATE_TIMEOUT", "15001ms"),
-            ("CRABKA_GRES_REGISTRY_READER_RETRY_BACKOFF", "251ms"),
-            ("CRABKA_GRES_REGISTRY_FETCH_MAX_WAIT", "501ms"),
-            ("CRABKA_GRES_REGISTRY_FETCH_PARTITION_MAX", "1048577B"),
-            ("CRABKA_GRES_REGISTRY_PRODUCER_DNS_TIMEOUT", "37ms"),
-            ("CRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT", "37ms"),
-            ("CRABKA_GRES_CLIENT_DISPATCH_QUEUE_CAPACITY", "7"),
-            ("CRABKA_GRES_CLIENT_FRAME_MAX", "32KiB"),
-            ("CRABKA_GRES_REGISTRY_READER_FETCH_MIN", "3B"),
+            ("KRABKA_GRES_REGISTRY_REPLICATION_FACTOR", "2"),
+            ("KRABKA_GRES_REGISTRY_TOPIC_CREATE_TIMEOUT", "15001ms"),
+            ("KRABKA_GRES_REGISTRY_READER_RETRY_BACKOFF", "251ms"),
+            ("KRABKA_GRES_REGISTRY_FETCH_MAX_WAIT", "501ms"),
+            ("KRABKA_GRES_REGISTRY_FETCH_PARTITION_MAX", "1048577B"),
+            ("KRABKA_GRES_REGISTRY_PRODUCER_DNS_TIMEOUT", "37ms"),
+            ("KRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT", "37ms"),
+            ("KRABKA_GRES_CLIENT_DISPATCH_QUEUE_CAPACITY", "7"),
+            ("KRABKA_GRES_CLIENT_FRAME_MAX", "32KiB"),
+            ("KRABKA_GRES_REGISTRY_READER_FETCH_MIN", "3B"),
         ];
         if std::env::var_os(CHILD).is_none() {
             let status = std::process::Command::new(std::env::current_exe().expect("test exe"))
@@ -1519,20 +1519,20 @@ mod tests {
             TestCli::try_parse_from(["test", "list", "--bootstrap=broker:9092"]).expect("env");
         let environment_policy = RegistryPolicy::new(
             2,
-            crabka_units::millis(15_001),
-            crabka_units::millis(251),
-            crabka_units::millis(501),
-            crabka_units::bytes(1_048_577),
+            krabka_units::millis(15_001),
+            krabka_units::millis(251),
+            krabka_units::millis(501),
+            krabka_units::bytes(1_048_577),
         )
         .expect("policy")
-        .with_producer_dns_timeout(crabka_units::millis(37))
+        .with_producer_dns_timeout(krabka_units::millis(37))
         .expect("environment DNS timeout")
-        .with_reader_admin_dns_timeout(crabka_units::millis(37))
+        .with_reader_admin_dns_timeout(krabka_units::millis(37))
         .expect("environment reader/admin DNS timeout")
         .with_client_resource_policy(
             ConnectionDispatchQueueCapacity::new(7).unwrap(),
-            ClientFrameMax::try_from(crabka_units::kibibytes(32)).unwrap(),
-            FetchMinBytes::try_from(crabka_units::bytes(3)).unwrap(),
+            ClientFrameMax::try_from(krabka_units::kibibytes(32)).unwrap(),
+            FetchMinBytes::try_from(krabka_units::bytes(3)).unwrap(),
         );
         assert!(environment.gres.registry.policy() == environment_policy);
         let cli = TestCli::try_parse_from([
@@ -1553,20 +1553,20 @@ mod tests {
         .expect("CLI over environment");
         let cli_policy = RegistryPolicy::new(
             3,
-            crabka_units::millis(15_002),
-            crabka_units::millis(252),
-            crabka_units::millis(502),
-            crabka_units::bytes(1_048_578),
+            krabka_units::millis(15_002),
+            krabka_units::millis(252),
+            krabka_units::millis(502),
+            krabka_units::bytes(1_048_578),
         )
         .expect("policy")
-        .with_producer_dns_timeout(crabka_units::millis(47))
+        .with_producer_dns_timeout(krabka_units::millis(47))
         .expect("CLI DNS timeout")
-        .with_reader_admin_dns_timeout(crabka_units::millis(47))
+        .with_reader_admin_dns_timeout(krabka_units::millis(47))
         .expect("CLI reader/admin DNS timeout")
         .with_client_resource_policy(
             ConnectionDispatchQueueCapacity::new(9).unwrap(),
-            ClientFrameMax::try_from(crabka_units::kibibytes(64)).unwrap(),
-            FetchMinBytes::try_from(crabka_units::bytes(5)).unwrap(),
+            ClientFrameMax::try_from(krabka_units::kibibytes(64)).unwrap(),
+            FetchMinBytes::try_from(krabka_units::bytes(5)).unwrap(),
         );
         assert!(cli.gres.registry.policy() == cli_policy);
     }
@@ -1667,21 +1667,21 @@ mod tests {
 
     #[test]
     fn render_pgdog_options_read_environment_and_prefer_cli() {
-        const CHILD: &str = "CRABKA_TEST_CLI_PGDOG_ENV_CHILD";
+        const CHILD: &str = "KRABKA_TEST_CLI_PGDOG_ENV_CHILD";
         let vars = [
-            ("CRABKA_GRES_PGDOG_BOOTSTRAP", "env:9092"),
-            ("CRABKA_GRES_PGDOG_OUT_DIR", "/tmp/env-pgdog"),
-            ("CRABKA_GRES_PGDOG_ACTIVATOR", "env-activator:7443"),
-            ("CRABKA_GRES_PGDOG_LISTEN_PORT", "6542"),
-            ("CRABKA_GRES_PGDOG_TLS_CERTIFICATE", "/env/cert.pem"),
-            ("CRABKA_GRES_PGDOG_TLS_PRIVATE_KEY", "/env/key.pem"),
-            ("CRABKA_GRES_PGDOG_TLS_CLIENT_CA_CERTIFICATE", "/env/ca.pem"),
-            ("CRABKA_GRES_PGDOG_POOLER_MODE", "session"),
-            ("CRABKA_GRES_PGDOG_CONNECT_ATTEMPTS", "5"),
-            ("CRABKA_GRES_PGDOG_COLD_START_CEILING", "30005ms"),
-            ("CRABKA_GRES_PGDOG_IDLE_TIMEOUT", "60005ms"),
-            ("CRABKA_GRES_PGDOG_SUSPENSION_IDLE_TIMEOUT", "1005ms"),
-            ("CRABKA_GRES_PGDOG_SERVER_LIFETIME", "300005ms"),
+            ("KRABKA_GRES_PGDOG_BOOTSTRAP", "env:9092"),
+            ("KRABKA_GRES_PGDOG_OUT_DIR", "/tmp/env-pgdog"),
+            ("KRABKA_GRES_PGDOG_ACTIVATOR", "env-activator:7443"),
+            ("KRABKA_GRES_PGDOG_LISTEN_PORT", "6542"),
+            ("KRABKA_GRES_PGDOG_TLS_CERTIFICATE", "/env/cert.pem"),
+            ("KRABKA_GRES_PGDOG_TLS_PRIVATE_KEY", "/env/key.pem"),
+            ("KRABKA_GRES_PGDOG_TLS_CLIENT_CA_CERTIFICATE", "/env/ca.pem"),
+            ("KRABKA_GRES_PGDOG_POOLER_MODE", "session"),
+            ("KRABKA_GRES_PGDOG_CONNECT_ATTEMPTS", "5"),
+            ("KRABKA_GRES_PGDOG_COLD_START_CEILING", "30005ms"),
+            ("KRABKA_GRES_PGDOG_IDLE_TIMEOUT", "60005ms"),
+            ("KRABKA_GRES_PGDOG_SUSPENSION_IDLE_TIMEOUT", "1005ms"),
+            ("KRABKA_GRES_PGDOG_SERVER_LIFETIME", "300005ms"),
         ];
         if std::env::var_os(CHILD).is_none() {
             let status = std::process::Command::new(std::env::current_exe().expect("test exe"))
@@ -1838,10 +1838,10 @@ mod tests {
             password_file: None,
             password_stdin: true,
             wal_replication: RegistryReplicationFactor::new(3).unwrap(),
-            scram_iterations: crabka_client_admin::ScramIterations::new(12_288).unwrap(),
+            scram_iterations: krabka_client_admin::ScramIterations::new(12_288).unwrap(),
             bucket_prefix: Some("prefix".to_string()),
             checkpoint_frames: Some(10),
-            checkpoint_size: Some(crabka_units::bytes(20)),
+            checkpoint_size: Some(krabka_units::bytes(20)),
             idle_seconds: Some(30),
             ranges: Some("0,100,200".to_string()),
             hash_placements: Vec::new(),
@@ -1969,7 +1969,7 @@ mod tests {
     #[test]
     fn split_boundary_requires_exact_hash_bucket_contract() {
         let mut record = test_record("tenant-a", TenantState::Active);
-        record.hash_placements = vec![crabka_gres_control::HashPlacement {
+        record.hash_placements = vec![krabka_gres_control::HashPlacement {
             table_id: 7,
             hash_columns: vec!["id".into()],
             bucket_count: 8,
@@ -2228,7 +2228,7 @@ mod tests {
                 .report
                 .operation_results
                 .iter()
-                .all(|result| result.status == crabka_gres_balancer::OperationStatus::Planned)
+                .all(|result| result.status == krabka_gres_balancer::OperationStatus::Planned)
         );
     }
 

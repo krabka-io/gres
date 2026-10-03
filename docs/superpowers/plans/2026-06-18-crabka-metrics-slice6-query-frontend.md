@@ -1,10 +1,10 @@
-# crabka-metrics Slice 6 — Query-frontend (time-splitting + query sharding + fan-out + result cache)
+# krabka-metrics Slice 6 — Query-frontend (time-splitting + query sharding + fan-out + result cache)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the `query-frontend` role — an axum server that sits in front of N queriers and (1) splits a long `query_range` into step-aligned per-day sub-ranges, (2) vertically shards a shardable query by injecting Mimir's `__query_shard__="<i>_of_<n>"` selector and merging the partials *correctly*, (3) fans sub-queries across queriers in parallel through a trait-abstracted backend, and (4) caches `query_range` results split on cache boundaries so a moving time window reuses cached older sub-ranges — all while preserving the Prometheus HTTP API byte-shapes the querier (Slice 5) exposes.
 
-**Architecture:** A new `frontend` module tree inside `crabka-metrics`. The querier backend is a `QuerierBackend` **trait** (`async fn instant_query` / `async fn range_query`) so tests drive a `MockQuerier` returning canned partials and real deployments use an `HttpQuerier` pool (reqwest, the grpc-gateway `forward.rs` pattern). A `QueryResult` type mirrors the Prometheus JSON envelope (`status`/`data.resultType`∈{vector,matrix,scalar,string}) so splitting/sharding logic manipulates parsed results, not raw bytes. PromQL AST inspection (`promql_parser::parser::parse`) decides shardability and rewrites leaf selectors. The pipeline composes as `split → (per sub-range) cache-lookup → shard → fan-out → shard-merge → stitch → cache-store`. The role binary is `crabka-metrics --target query-frontend`.
+**Architecture:** A new `frontend` module tree inside `krabka-metrics`. The querier backend is a `QuerierBackend` **trait** (`async fn instant_query` / `async fn range_query`) so tests drive a `MockQuerier` returning canned partials and real deployments use an `HttpQuerier` pool (reqwest, the grpc-gateway `forward.rs` pattern). A `QueryResult` type mirrors the Prometheus JSON envelope (`status`/`data.resultType`∈{vector,matrix,scalar,string}) so splitting/sharding logic manipulates parsed results, not raw bytes. PromQL AST inspection (`promql_parser::parser::parse`) decides shardability and rewrites leaf selectors. The pipeline composes as `split → (per sub-range) cache-lookup → shard → fan-out → shard-merge → stitch → cache-store`. The role binary is `krabka-metrics --target query-frontend`.
 
 **Tech Stack:** Rust 2024 · `axum` 0.8 (`http1`, `tokio`) · `reqwest` 0.13 (`json`, `rustls`) · `promql-parser` 0.10 (AST parse/inspect/rewrite) · `object_store` 0.13 (cache backend) · `serde`/`serde_json` (Prometheus JSON) · `tokio` (`rt-multi-thread`, `macros`, `time`, `sync`) · `futures` (parallel `join_all`) · `thiserror` · `async-trait`. Tests: `assert2`, `tokio` (`test`, `macros`).
 
@@ -12,8 +12,8 @@
 
 - **No backwards compatibility.** Greenfield/undeployed. Change schemas/enums/wire shapes freely; no shims, no migration code, no default-off feature gates.
 - **`unsafe_code = "forbid"`** workspace-wide. No `unsafe`.
-- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p crabka-metrics --all-targets` before each commit.
-- **Formatting:** `cargo fmt -p crabka-metrics` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
+- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p krabka-metrics --all-targets` before each commit.
+- **Formatting:** `cargo fmt -p krabka-metrics` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
 - **Assertions:** `assert2::assert!`/`assert2::check!` in tests.
 - **Kafka/Prometheus wire fidelity:** the frontend must round-trip the querier's Prometheus JSON unchanged for the no-op path (single sub-range, non-shardable, cache-miss) — that is the byte-equality analog. Splitting/sharding only ever *rearranges* the same sample set; a sharded result MUST equal the unsharded result over identical data.
 - **Tenant propagation:** the inbound `X-Scope-OrgID` header is threaded onto every backend sub-request and into every cache key. Never collapse tenants in the cache.
@@ -31,12 +31,12 @@
 
 **The querier's `__query_shard__` support is assumed (Slice 5 contract):** the querier honors a `__query_shard__="<i>_of_<n>"` matcher on a vector selector by restricting its series scan to the shard whose `fingerprint % n == i`. The frontend's job is to *inject* that matcher and *merge* the partials; the querier's job is to *honor* it. This slice does not implement querier-side shard filtering.
 
-**Slice 6 talks to the querier over HTTP, not via the engine API.** The frontend's `frontend::result::QueryResult` is a **serde JSON DTO** (Prometheus `{"status","data":{"resultType","result"}}`), deliberately distinct from Slice 2's Rust engine enum `crabka_promql::QueryResult` (which is `Scalar`/`InstantVector`/`RangeMatrix`/`Str`). They share a friendly name but are different layers: the engine value model vs. the wire DTO this slice parses out of the querier's response body. Do **not** import Slice 2/5's engine `QueryResult` here — Slice 5 serializes via `query_result_to_json(&QueryResult) -> serde_json::Value` and exposes no typed JSON DTO, so this slice owns `frontend/result.rs` and must keep its byte-shape identical to what Slice 5's `query_result_to_json` emits (pinned by the serde test in Task 1).
+**Slice 6 talks to the querier over HTTP, not via the engine API.** The frontend's `frontend::result::QueryResult` is a **serde JSON DTO** (Prometheus `{"status","data":{"resultType","result"}}`), deliberately distinct from Slice 2's Rust engine enum `krabka_promql::QueryResult` (which is `Scalar`/`InstantVector`/`RangeMatrix`/`Str`). They share a friendly name but are different layers: the engine value model vs. the wire DTO this slice parses out of the querier's response body. Do **not** import Slice 2/5's engine `QueryResult` here — Slice 5 serializes via `query_result_to_json(&QueryResult) -> serde_json::Value` and exposes no typed JSON DTO, so this slice owns `frontend/result.rs` and must keep its byte-shape identical to what Slice 5's `query_result_to_json` emits (pinned by the serde test in Task 1).
 
 **The 8 metrics slices** (this plan = Slice 6):
 
 1. Data layer — block schemas + native-histogram codec + symbol table. *(done)*
-2. `crabka-promql` core — parser + operator pattern + selectors + rate-family + aggregations + binary ops + `.test` harness.
+2. `krabka-promql` core — parser + operator pattern + selectors + rate-family + aggregations + binary ops + `.test` harness.
 3. Query completeness — `histogram_quantile`, full function catalog, subqueries, `@`/`offset`.
 4. Ingest service — remote_write v1/v2 + OTLP + Kafka produce + distributor + HA dedup + compactor.
 5. Querier + Prometheus HTTP API + hot/cold merge.
@@ -60,7 +60,7 @@
 | `src/frontend/cache.rs` | `ResultCache` trait + `InMemoryCache` (test) + `ObjectStoreCache` + cache key + TTL + `Cache-Control` bypass |
 | `src/frontend/server.rs` | axum router + handlers (`/api/v1/query`, `/api/v1/query_range`) wiring the orchestrator |
 | `src/frontend/config.rs` | `FrontendConfig` (backend addrs, split interval, shard count, cache TTL, timeouts) |
-| `src/bin/crabka-metrics.rs` | (modify/create) `--target query-frontend` role dispatch |
+| `src/bin/krabka-metrics.rs` | (modify/create) `--target query-frontend` role dispatch |
 | `tests/frontend_shard_equivalence.rs` | integration: sharded `sum(rate(...))` == unsharded over canned data |
 | `tests/frontend_split_stitch.rs` | integration: split+stitch == single range over canned data |
 
@@ -169,7 +169,7 @@ mod tests {
 
 - [ ] **Step 3: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib frontend::result`
+Run: `cargo test -p krabka-metrics --lib frontend::result`
 Expected: FAIL — `cannot find type QueryResult` / unresolved module `frontend`.
 
 - [ ] **Step 4: Implement `result.rs`**
@@ -310,14 +310,14 @@ pub mod frontend;
 
 - [ ] **Step 6: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib frontend::result`
+Run: `cargo test -p krabka-metrics --lib frontend::result`
 Expected: PASS (3 tests).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): query-frontend result model (Prometheus JSON envelope)"
 ```
@@ -382,7 +382,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib frontend::backend`
+Run: `cargo test -p krabka-metrics --lib frontend::backend`
 Expected: FAIL — `cannot find type QuerierBackend` / `MockQuerier`.
 
 - [ ] **Step 3: Implement `backend.rs`**
@@ -524,14 +524,14 @@ pub use backend::{BackendError, InstantRequest, MockQuerier, QuerierBackend, Ran
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib frontend::backend`
+Run: `cargo test -p krabka-metrics --lib frontend::backend`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): QuerierBackend trait + MockQuerier fixture"
 ```
@@ -626,7 +626,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib frontend::split`
+Run: `cargo test -p krabka-metrics --lib frontend::split`
 Expected: FAIL — `cannot find function split_range`.
 
 - [ ] **Step 3: Implement `split.rs`**
@@ -745,14 +745,14 @@ pub use split::{split_range, stitch_matrices};
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib frontend::split`
+Run: `cargo test -p krabka-metrics --lib frontend::split`
 Expected: PASS (4 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): query_range time-splitting + matrix stitching"
 ```
@@ -826,7 +826,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib frontend::shard`
+Run: `cargo test -p krabka-metrics --lib frontend::shard`
 Expected: FAIL — `cannot find function analyze`.
 
 - [ ] **Step 3: Implement `shard.rs`**
@@ -954,14 +954,14 @@ pub use shard::{QUERY_SHARD_LABEL, ShardError, ShardPlan, analyze, rewrite_shard
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib frontend::shard`
+Run: `cargo test -p krabka-metrics --lib frontend::shard`
 Expected: PASS (5 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): shardability analysis + __query_shard__ AST rewrite"
 ```
@@ -1047,7 +1047,7 @@ Append to the `tests` module in `shard.rs`:
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib frontend::shard::tests::sharded_sum_equals_unsharded_matrix`
+Run: `cargo test -p krabka-metrics --lib frontend::shard::tests::sharded_sum_equals_unsharded_matrix`
 Expected: FAIL — `cannot find type AggrOp` / `merge_shards`.
 
 - [ ] **Step 3: Implement the merge**
@@ -1313,7 +1313,7 @@ pub fn divide_results(sum_res: QueryResult, count_res: QueryResult) -> QueryResu
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib frontend::shard`
+Run: `cargo test -p krabka-metrics --lib frontend::shard`
 Expected: PASS (all shard tests).
 
 - [ ] **Step 5: Re-export the merge API from `mod.rs`**
@@ -1323,8 +1323,8 @@ Extend the shard re-export: `pub use shard::{AggrOp, QUERY_SHARD_LABEL, ShardErr
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): shard-merge (sum/count/min/max) — sharded == unsharded"
 ```
@@ -1421,7 +1421,7 @@ mod orch_tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib frontend::orch_tests`
+Run: `cargo test -p krabka-metrics --lib frontend::orch_tests`
 Expected: FAIL — `cannot find type FrontendConfig` / `QueryFrontend` / `NoCache`.
 
 (Note: `NoCache`/`CacheControl` are defined in Task 7's `cache.rs`. Implement the **minimal** `cache.rs` skeleton — the `ResultCache` trait + `CacheControl` + `NoCache` — as part of this step so the orchestrator compiles; Task 7 then fills in `InMemoryCache`/`ObjectStoreCache` + the split-and-cache logic and its own tests.)
@@ -1665,14 +1665,14 @@ use crate::frontend::{shard, split};
 
 - [ ] **Step 6: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib frontend::orch_tests`
+Run: `cargo test -p krabka-metrics --lib frontend::orch_tests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): QueryFrontend orchestrator (split+shard+fan-out+merge)"
 ```
@@ -1756,7 +1756,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib frontend::cache`
+Run: `cargo test -p krabka-metrics --lib frontend::cache`
 Expected: FAIL — `cannot find function cache_key` / `InMemoryCache` / `ObjectStoreCache`.
 
 - [ ] **Step 3: Implement the key + impls**
@@ -1881,14 +1881,14 @@ If `cargo test` reports `chrono` unresolved, add to `Cargo.toml` `[dependencies]
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib frontend::cache`
+Run: `cargo test -p krabka-metrics --lib frontend::cache`
 Expected: PASS (3 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): ResultCache — in-memory + object-store, TTL, split key"
 ```
@@ -1914,11 +1914,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use assert2::assert;
-use crabka_metrics::frontend::backend::MockQuerier;
-use crabka_metrics::frontend::cache::{CacheControl, InMemoryCache};
-use crabka_metrics::frontend::config::FrontendConfig;
-use crabka_metrics::frontend::result::{QueryResult, ResultData, SampleStream};
-use crabka_metrics::frontend::QueryFrontend;
+use krabka_metrics::frontend::backend::MockQuerier;
+use krabka_metrics::frontend::cache::{CacheControl, InMemoryCache};
+use krabka_metrics::frontend::config::FrontendConfig;
+use krabka_metrics::frontend::result::{QueryResult, ResultData, SampleStream};
+use krabka_metrics::frontend::QueryFrontend;
 
 fn matrix(vals: &[(f64, &str)]) -> QueryResult {
     QueryResult::success(ResultData::Matrix(vec![SampleStream {
@@ -1986,11 +1986,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use assert2::assert;
-use crabka_metrics::frontend::backend::{MockQuerier, QuerierBackend, RangeRequest};
-use crabka_metrics::frontend::cache::{CacheControl, NoCache};
-use crabka_metrics::frontend::config::FrontendConfig;
-use crabka_metrics::frontend::result::{QueryResult, ResultData, SampleStream};
-use crabka_metrics::frontend::QueryFrontend;
+use krabka_metrics::frontend::backend::{MockQuerier, QuerierBackend, RangeRequest};
+use krabka_metrics::frontend::cache::{CacheControl, NoCache};
+use krabka_metrics::frontend::config::FrontendConfig;
+use krabka_metrics::frontend::result::{QueryResult, ResultData, SampleStream};
+use krabka_metrics::frontend::QueryFrontend;
 
 fn matrix_empty_labels(vals: &[(f64, f64)]) -> QueryResult {
     QueryResult::success(ResultData::Matrix(vec![SampleStream {
@@ -2079,7 +2079,7 @@ async fn sharded_avg_equals_unsharded() {
 
 - [ ] **Step 3: Run to verify they pass**
 
-Run: `cargo test -p crabka-metrics --test frontend_split_stitch --test frontend_shard_equivalence`
+Run: `cargo test -p krabka-metrics --test frontend_split_stitch --test frontend_shard_equivalence`
 Expected: PASS.
 
 > **Mock-stub ordering caveat:** `MockQuerier` pops stubs FIFO and repeats the last. The `sum`-shard test programs 4 distinct stubs (one per shard) in shard-index order; the `avg` test programs 8 (4 `sum`-shard stubs, then 4 `count`-shard stubs) because the orchestrator fully awaits the sharded `sum(...)` sub-query before the sharded `count(...)` one. This works because `join_all` preserves index order in the returned `Vec` and the *dispatch* order into the mock is the deterministic `(0..shards)` map order (and, for `avg`, sum-then-count). If a future change makes dispatch concurrent-nondeterministic w.r.t. stub consumption, switch `MockQuerier` to match on `RangeRequest.query` (its `__query_shard__` value and `sum`/`count` prefix) instead of FIFO (a small fixture upgrade; flagged here, not needed yet).
@@ -2087,8 +2087,8 @@ Expected: PASS.
 - [ ] **Step 4: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "test(metrics): frontend split-and-cache reuse + shard-equivalence"
 ```
@@ -2123,8 +2123,8 @@ use assert2::assert;
 use axum::extract::{Form, State};
 use axum::routing::post;
 use axum::Router;
-use crabka_metrics::frontend::backend::{QuerierBackend, RangeRequest};
-use crabka_metrics::frontend::http_backend::HttpQuerier;
+use krabka_metrics::frontend::backend::{QuerierBackend, RangeRequest};
+use krabka_metrics::frontend::http_backend::HttpQuerier;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -2184,7 +2184,7 @@ async fn http_querier_posts_and_parses() {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --test frontend_http_backend`
+Run: `cargo test -p krabka-metrics --test frontend_http_backend`
 Expected: FAIL — `cannot find type HttpQuerier`.
 
 - [ ] **Step 3: Implement `http_backend.rs`**
@@ -2310,14 +2310,14 @@ pub use http_backend::HttpQuerier;
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --test frontend_http_backend`
+Run: `cargo test -p krabka-metrics --test frontend_http_backend`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): HttpQuerier reqwest fan-out backend"
 ```
@@ -2328,7 +2328,7 @@ git commit -m "feat(metrics): HttpQuerier reqwest fan-out backend"
 
 **Files:**
 - Create: `crates/metrics/src/frontend/server.rs`
-- Create/Modify: `crates/metrics/src/bin/crabka-metrics.rs`
+- Create/Modify: `crates/metrics/src/bin/krabka-metrics.rs`
 - Modify: `crates/metrics/src/frontend/mod.rs`
 - Modify: `crates/metrics/Cargo.toml` (add `[[bin]]` if not present)
 
@@ -2347,12 +2347,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use assert2::assert;
-use crabka_metrics::frontend::backend::MockQuerier;
-use crabka_metrics::frontend::cache::NoCache;
-use crabka_metrics::frontend::config::FrontendConfig;
-use crabka_metrics::frontend::result::{QueryResult, ResultData, SampleStream};
-use crabka_metrics::frontend::server::router_with_backend;
-use crabka_metrics::frontend::QueryFrontend;
+use krabka_metrics::frontend::backend::MockQuerier;
+use krabka_metrics::frontend::cache::NoCache;
+use krabka_metrics::frontend::config::FrontendConfig;
+use krabka_metrics::frontend::result::{QueryResult, ResultData, SampleStream};
+use krabka_metrics::frontend::server::router_with_backend;
+use krabka_metrics::frontend::QueryFrontend;
 
 #[tokio::test]
 async fn server_round_trips_query_range() {
@@ -2389,7 +2389,7 @@ async fn server_round_trips_query_range() {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --test frontend_server`
+Run: `cargo test -p krabka-metrics --test frontend_server`
 Expected: FAIL — `cannot find function router_with_backend`.
 
 - [ ] **Step 3: Implement `server.rs`**
@@ -2604,10 +2604,10 @@ pub async fn run_query_frontend(
 
 Re-export in `mod.rs`: `pub mod server; pub use server::{router_with_backend, run_query_frontend};`.
 
-Create/extend `crates/metrics/src/bin/crabka-metrics.rs`:
+Create/extend `crates/metrics/src/bin/krabka-metrics.rs`:
 
 ```rust
-//! The role-selectable `crabka-metrics` service binary.
+//! The role-selectable `krabka-metrics` service binary.
 
 use clap::{Parser, ValueEnum};
 
@@ -2621,7 +2621,7 @@ enum Target {
 }
 
 #[derive(Parser, Debug)]
-#[command(name = "crabka-metrics")]
+#[command(name = "krabka-metrics")]
 struct Args {
     /// Which role this process runs.
     #[arg(long, value_enum)]
@@ -2636,9 +2636,9 @@ async fn main() -> std::io::Result<()> {
             use std::sync::Arc;
             use std::time::Duration;
 
-            use crabka_metrics::frontend::cache::ObjectStoreCache;
-            use crabka_metrics::frontend::config::FrontendConfig;
-            use crabka_metrics::frontend::server::run_query_frontend;
+            use krabka_metrics::frontend::cache::ObjectStoreCache;
+            use krabka_metrics::frontend::config::FrontendConfig;
+            use krabka_metrics::frontend::server::run_query_frontend;
             use object_store::memory::InMemory;
             use object_store::path::Path;
             use tokio_util::sync::CancellationToken;
@@ -2666,17 +2666,17 @@ Ensure `Cargo.toml` declares the binary (add if missing):
 
 ```toml
 [[bin]]
-name = "crabka-metrics"
-path = "src/bin/crabka-metrics.rs"
+name = "krabka-metrics"
+path = "src/bin/krabka-metrics.rs"
 ```
 
 > **Binary-config note:** this slice wires the role *dispatch* and a working in-memory-backed `ObjectStoreCache`; real config loading (backend addrs / object-store selection / listen addr from flags or a config file) lands in Slice 8 hardening. The default `FrontendConfig` is enough to boot and pass the server test, which targets the library router, not the binary.
 
 - [ ] **Step 6: Run to verify it passes + whole-crate gate**
 
-Run: `cargo test -p crabka-metrics --test frontend_server`
-Then the full gate: `cargo test -p crabka-metrics && cargo clippy -p crabka-metrics --all-targets && cargo fmt -p crabka-metrics --check`
-Expected: all PASS, no warnings, formatting clean. Also confirm the binary builds: `cargo build -p crabka-metrics --bin crabka-metrics`.
+Run: `cargo test -p krabka-metrics --test frontend_server`
+Then the full gate: `cargo test -p krabka-metrics && cargo clippy -p krabka-metrics --all-targets && cargo fmt -p krabka-metrics --check`
+Expected: all PASS, no warnings, formatting clean. Also confirm the binary builds: `cargo build -p krabka-metrics --bin krabka-metrics`.
 
 - [ ] **Step 7: Commit**
 
@@ -2694,7 +2694,7 @@ git commit -m "feat(metrics): query-frontend axum server + --target query-fronte
 - **Query sharding** (Mimir `__query_shard__` injection via parsed AST, shardability decision, parallel dispatch, correct merge, no-shard fallback for non-decomposable) → Tasks 4, 5, 6, 8.
 - **Fan-out** (HTTP client pool, configurable backends, parallel dispatch w/ timeouts, merge into one Prometheus JSON) → Tasks 2 (trait), 6 (`join_all`), 9 (`HttpQuerier`).
 - **Result cache** (key by `(tenant, query, start, end, step)`, split-on-boundary reuse, `ResultCache` trait + in-memory + object_store impls, TTL, `no-store`/`Cache-Control` bypass) → Tasks 6, 7, 8.
-- **Role binary** `crabka-metrics --target query-frontend` → Task 10.
+- **Role binary** `krabka-metrics --target query-frontend` → Task 10.
 - **First-class correctness** (sharded `sum(rate(...))` == unsharded over identical data; split+stitch == single range; moving-window cache reuse) → Tasks 5, 8.
 
 **Contract fidelity:** consumes the Slice 5 querier surface exactly (`/api/v1/query`, `/api/v1/query_range`, Prometheus JSON `resultType`, `X-Scope-OrgID`). The `QueryResult` model (Task 1) is shaped to Prometheus's JSON and pinned by a serde test; the no-op path (single sub-range, non-shardable, cache-miss) round-trips the querier's body unchanged — the byte-equality analog.

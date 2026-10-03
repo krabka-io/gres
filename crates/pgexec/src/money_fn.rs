@@ -9,8 +9,8 @@
 //! operator table here is exhaustive rather than falling back on the numeric
 //! family's rules.
 
-use crabka_pgparser::ast::{BinaryOp, Expr, FuncCall};
-use crabka_pgtypes::{ColumnType, Datum, money};
+use krabka_pgparser::ast::{BinaryOp, Expr, FuncCall};
+use krabka_pgtypes::{ColumnType, Datum, money};
 
 use crate::{
     clock::EvalCtx,
@@ -247,7 +247,7 @@ fn apply_scalar(op: BinaryOp, cash: i64, scalar: &Datum) -> Result<Datum, ExecEr
         Datum::Float8(f) => float_op(divide, cash, *f)?,
         // A `numeric` operand reaches `cash_mul_flt8`/`cash_div_flt8` through
         // its implicit widening, so it is float arithmetic and not exact.
-        Datum::Numeric(value) => float_op(divide, cash, crabka_pgtypes::numeric::to_f64(value))?,
+        Datum::Numeric(value) => float_op(divide, cash, krabka_pgtypes::numeric::to_f64(value))?,
         other => {
             return Err(crate::eval::undefined_operator(
                 crate::eval::op_spelling(op),
@@ -314,8 +314,8 @@ fn money_arg(fc: &FuncCall, value: &Datum) -> Result<i64, ExecError> {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgparser::ast::BinaryOp;
-    use crabka_pgtypes::{Datum, money};
+    use krabka_pgparser::ast::BinaryOp;
+    use krabka_pgtypes::{Datum, money};
 
     use super::{apply_money_operator, is_money_func};
 
@@ -395,7 +395,7 @@ mod tests {
     #[test]
     fn a_numeric_operand_widens_to_float8() {
         let numeric = |text: &str| {
-            Datum::Numeric(crabka_pgtypes::numeric::parse(text).expect("valid numeric"))
+            Datum::Numeric(krabka_pgtypes::numeric::parse(text).expect("valid numeric"))
         };
         assert!(rendered(&apply(BinaryOp::Mul, &cash("1"), &numeric("2.5"))) == "$2.50");
         assert!(rendered(&apply(BinaryOp::Div, &cash("878.08"), &numeric("11"))) == "$79.83");

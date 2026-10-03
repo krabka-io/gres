@@ -52,7 +52,7 @@ The family scripts contain these literal expected name sets. Validation fails on
 
 ## Harness architecture
 
-Add a Split-specific `SplitKillPoint`; do not overload Move's `SourceKillPoint`. Each variant owns its exact predicate, expected pre-kill durable evidence, restart hosted ranges, and maximum pause/operation bound. A single exact test reads `CRABKA_G8_SPLIT_KILL_POINT`, creates unique tenant/operation/sentinel identities, starts the real cluster and continuous workload, initiates Split through the CLI, and drives production reconciliation.
+Add a Split-specific `SplitKillPoint`; do not overload Move's `SourceKillPoint`. Each variant owns its exact predicate, expected pre-kill durable evidence, restart hosted ranges, and maximum pause/operation bound. A single exact test reads `KRABKA_G8_SPLIT_KILL_POINT`, creates unique tenant/operation/sentinel identities, starts the real cluster and continuous workload, initiates Split through the CLI, and drives production reconciliation.
 
 The mutation-client wrapper records authenticated requests and responses for checkpoint, pause, stage, marker/claim, prologue, status, and retire operations. Receipt probes replay the exact authorized request and may only observe the durable response; they never synthesize state. The counting retirement admin records requested topics, successful deletes, injected post-delete ambiguity, and rejects unrelated deletion.
 

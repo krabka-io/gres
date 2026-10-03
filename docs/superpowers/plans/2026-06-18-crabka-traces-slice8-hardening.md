@@ -1,10 +1,10 @@
-# crabka-traces Slice 8 — Hardening (per-tenant limits, multi-tenancy isolation, TraceQL conformance gate, differential-vs-Tempo + Grafana integration)
+# krabka-traces Slice 8 — Hardening (per-tenant limits, multi-tenancy isolation, TraceQL conformance gate, differential-vs-Tempo + Grafana integration)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the traces backend production-faithful at its multi-tenant edges and prove it is a drop-in Tempo replacement. Add per-tenant limits/quotas (traces-per-search, spans-per-trace, ingest rate, max attribute size) with **Tempo-shaped** errors and a YAML runtime-overrides file; harden tenant isolation so org A can never observe org B's traces/tags/spans through the HTTP API; wire the Slice 3 TraceQL golden corpus as a CI conformance gate with a per-file coverage report; and build the two external-system differential suites — **differential-vs-real-Tempo** (testcontainers) and **Grafana** (built-in Tempo datasource → Crabka, including the Service-Graph-via-the-metrics-backend path). The two headline tests are (1) end-to-end tenant isolation through the Tempo HTTP API with two `X-Scope-OrgID`s across every read surface and (2) query-corpus equality vs real Tempo over identically-ingested OTLP traces.
 
-**Architecture:** This slice adds **no new TraceQL or storage semantics** — it is a hardening band around the Slice 4 distributor (ingest), the Slice 5 querier + Tempo HTTP API, the Slice 6 query-frontend, the Slice 7 metrics-generator, and the Slice 2/3 `TraceqlEngine`. New code lives in three areas of `crabka-traces`: (a) a `limits` module (a per-tenant `Limits` struct, a YAML `OverridesProvider` modeled on Tempo's `overrides.yaml` / `per_tenant_override_config`, and enforcement points wired into the distributor write path and the querier read path, reusing the broker's `TokenBucket` for the two *rate* limits); (b) HTTP error-mapping that projects `LimitError` onto the **Tempo** error envelope and status codes; (c) the black-box differential + Grafana harnesses over the compiled Tempo HTTP server + Docker containers. Tenant isolation is **not** a new mechanism — it is the assertion that every existing key (WAL partition key, span-block/`TraceIndex` object key, live-store map key, quota bucket key, metrics-generator edge-store key) is already `(tenant, …)`-prefixed; this slice adds the tests that prove it and fixes any leak they expose. The external suites (Tempo, Grafana) are black-box harnesses over the compiled HTTP server + Docker containers, all `#[ignore]`, run in a dedicated CI job.
+**Architecture:** This slice adds **no new TraceQL or storage semantics** — it is a hardening band around the Slice 4 distributor (ingest), the Slice 5 querier + Tempo HTTP API, the Slice 6 query-frontend, the Slice 7 metrics-generator, and the Slice 2/3 `TraceqlEngine`. New code lives in three areas of `krabka-traces`: (a) a `limits` module (a per-tenant `Limits` struct, a YAML `OverridesProvider` modeled on Tempo's `overrides.yaml` / `per_tenant_override_config`, and enforcement points wired into the distributor write path and the querier read path, reusing the broker's `TokenBucket` for the two *rate* limits); (b) HTTP error-mapping that projects `LimitError` onto the **Tempo** error envelope and status codes; (c) the black-box differential + Grafana harnesses over the compiled Tempo HTTP server + Docker containers. Tenant isolation is **not** a new mechanism — it is the assertion that every existing key (WAL partition key, span-block/`TraceIndex` object key, live-store map key, quota bucket key, metrics-generator edge-store key) is already `(tenant, …)`-prefixed; this slice adds the tests that prove it and fixes any leak they expose. The external suites (Tempo, Grafana) are black-box harnesses over the compiled HTTP server + Docker containers, all `#[ignore]`, run in a dedicated CI job.
 
 **Tech Stack:** Rust 2024 · `arrow` 59 · `axum` 0.8 (handlers + error envelope, reuse the Slice 5 router) · `serde_yaml` 0.9 + `serde` (overrides file) · the broker `TokenBucket` (KIP-73, via a path dep / thin re-export) · `dashmap` 6 (per-tenant bucket cache) · `thiserror`. Tests: `assert2`; `reqwest` 0.13 + `tokio` for in-process HTTP drive; `testcontainers` 0.27 + `testcontainers-modules` 0.15 for the Docker differential suites; `serde_json` for response diffing; `opentelemetry-proto` 0.32 (build identical OTLP push payloads for both backends).
 
@@ -12,12 +12,12 @@
 
 - **No backwards compatibility.** Greenfield/undeployed. Change the `Limits` schema, the overrides YAML shape, and any error-body shape freely; no shims, no migration code, no `#[serde(default)]` "to keep old configs readable".
 - **`unsafe_code = "forbid"`** workspace-wide. No `unsafe`.
-- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p crabka-traces --all-targets` before each commit.
-- **Formatting:** `cargo fmt -p crabka-traces` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
+- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p krabka-traces --all-targets` before each commit.
+- **Formatting:** `cargo fmt -p krabka-traces` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
 - **Assertions:** `assert2::assert!` / `assert2::check!` in tests.
 - **Kafka wire compat is the only Kafka contract that must not drift.** This slice touches no Kafka bytes. The **Tempo HTTP** byte-exactness is the *analog* constraint here: error bodies, status codes, and JSON response shapes must match Tempo exactly (that is what the differential suites verify). The Tempo error body is a plain-text/JSON `{ "status": "error", "error": "<message>" }`-style envelope — pin it against the real container in Task 11, do not invent it.
 - **Docker/external-system tests are `#[ignore]`.** Every test that needs a running Tempo or Grafana container is annotated `#[ignore = "requires Docker"]` and lives behind the dedicated CI job (`traces-differential`), never in the default `cargo test --workspace` path. Reuse the Confluent-image rationale and bootstrap-retry patterns from `crates/client-core/tests/integration.rs`.
-- **Reuse, don't reinvent, the token bucket.** Per-tenant *rate* limits (ingest rate, in spans/sec) use the broker's `crabka_broker::throttle::TokenBucket` (`new()`, `set_rate(u64)`, `try_consume(u64) -> u64` granted; rate-0 ⇒ unthrottled, granting the full request). Do not write a second rate limiter. The *count/length* limits (max traces-per-search, max spans-per-trace, max attribute size) are plain comparisons, not buckets.
+- **Reuse, don't reinvent, the token bucket.** Per-tenant *rate* limits (ingest rate, in spans/sec) use the broker's `krabka_broker::throttle::TokenBucket` (`new()`, `set_rate(u64)`, `try_consume(u64) -> u64` granted; rate-0 ⇒ unthrottled, granting the full request). Do not write a second rate limiter. The *count/length* limits (max traces-per-search, max spans-per-trace, max attribute size) are plain comparisons, not buckets.
 - **Tempo limit parity.** Limit names mirror Tempo's `overrides` block where one exists: `max_search_duration` / `max_bytes_per_trace` (`max_traces_per_user`-adjacent) / `ingestion_rate_limit_bytes` / `max_bytes_per_tag_values_query`. We adopt the *semantics* and the *4xx/429 mapping*, not byte-for-byte config-key names where the spec (§9) names them differently; each field carries a doc-comment naming the Tempo analog.
 
 ---
@@ -25,8 +25,8 @@
 ## Dependency & slice roadmap
 
 **Depends on:**
-- **Slice 1** (`crabka-blockstore` generalization) — the `BlockIndex` trait, `TraceIndex`, the flattened span block schema. ✅ planned. This slice does not touch block bytes; it consumes the `TraceIndex` only transitively through the querier.
-- **Slice 2/3** (`crabka-traceql`) — the `TraceqlEngine`/`SpanStore` the limits cap and the conformance gate exercise. **Consumed via contract** (see Shared Contract below); if Slice 3 is unlanded, the conformance-gate task points at whatever subset of the corpus the harness currently passes and records the rest in `KNOWN_UNSUPPORTED` with a reason.
+- **Slice 1** (`krabka-blockstore` generalization) — the `BlockIndex` trait, `TraceIndex`, the flattened span block schema. ✅ planned. This slice does not touch block bytes; it consumes the `TraceIndex` only transitively through the querier.
+- **Slice 2/3** (`krabka-traceql`) — the `TraceqlEngine`/`SpanStore` the limits cap and the conformance gate exercise. **Consumed via contract** (see Shared Contract below); if Slice 3 is unlanded, the conformance-gate task points at whatever subset of the corpus the harness currently passes and records the rest in `KNOWN_UNSUPPORTED` with a reason.
 - **Slice 4** (ingest service) — the `distributor` write path (`decode → tenant-route → hash(trace_id) → produce`) where ingest-rate / spans-per-trace / attribute-size limits are enforced; the `SpanRecord` WAL record used to build identical OTLP payloads for the differential suites.
 - **Slice 5** (querier + Tempo HTTP API) — the axum router, the `X-Scope-OrgID` tenancy extractor, the Tempo-shaped JSON response/error envelope, and the `SpanStore` impl (`CrabkaSpanStore`). **This slice extends that router's error envelope** (adds `429`/`400`/`422` limit errors) and asserts isolation through it.
 - **Slice 6** (query-frontend) — the search-sharding/queue layer the `max_search_duration` / traces-per-search caps are applied in front of (the frontend is where Tempo enforces `max_search_duration`).
@@ -42,9 +42,9 @@
 | axum `Router` + Tempo JSON envelope + Tempo error envelope | Slice 5 | extended with new error variants (`429`/`400`/`422`) |
 | distributor write path hook (`SpanRecord` batch, per-tenant, before WAL append) | Slice 4 | the enforcement point for ingest-rate / spans-per-trace / attribute-size limits |
 | `SpanRecord` (WAL record: tenant + OTLP-derived span) encode/decode | Slice 4 | building identical OTLP push payloads for the differential suites |
-| `crabka_broker::throttle::TokenBucket` | broker | the per-tenant ingest-rate bucket |
+| `krabka_broker::throttle::TokenBucket` | broker | the per-tenant ingest-rate bucket |
 
-**The 8 traces slices** (this plan = Slice 8, the last): 1 blockstore generalization + span schema + `TraceIndex` · 2 `crabka-traceql` core · 3 TraceQL completeness · 4 ingest · 5 querier + Tempo HTTP API · 6 query-frontend · 7 metrics-generator · **8 hardening (this plan)**.
+**The 8 traces slices** (this plan = Slice 8, the last): 1 blockstore generalization + span schema + `TraceIndex` · 2 `krabka-traceql` core · 3 TraceQL completeness · 4 ingest · 5 querier + Tempo HTTP API · 6 query-frontend · 7 metrics-generator · **8 hardening (this plan)**.
 
 ---
 
@@ -138,7 +138,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traces --lib limits`
+Run: `cargo test -p krabka-traces --lib limits`
 Expected: FAIL — `cannot find type Limits`.
 
 - [x] **Step 3: Implement `Limits` + `LimitError`**
@@ -149,14 +149,14 @@ Prepend above `tests`. Define `Limits` with the fields/`Default` above, and `Lim
 
 - [x] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-traces --lib limits`
+Run: `cargo test -p krabka-traces --lib limits`
 Expected: PASS (3 tests).
 
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/
 git commit -m "feat(traces): per-tenant Limits model + Tempo-shaped LimitError"
 ```
@@ -230,7 +230,7 @@ overrides:
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traces --lib overrides`
+Run: `cargo test -p krabka-traces --lib overrides`
 Expected: FAIL — `cannot find type OverridesProvider`.
 
 - [x] **Step 3: Implement `overrides.rs`**
@@ -241,14 +241,14 @@ Define an internal `#[derive(Deserialize)] struct PartialLimits` with every fiel
 
 - [x] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-traces --lib overrides`
+Run: `cargo test -p krabka-traces --lib overrides`
 Expected: PASS (3 tests).
 
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/
 git commit -m "feat(traces): Tempo-style overrides.yaml OverridesProvider"
 ```
@@ -260,10 +260,10 @@ git commit -m "feat(traces): Tempo-style overrides.yaml OverridesProvider"
 **Files:**
 - Create: `crates/traces/src/limits/enforce.rs`
 - Modify: `crates/traces/src/limits/mod.rs` (declare submodule + re-export)
-- Modify: `crates/traces/Cargo.toml` (add `crabka-broker` path dep for `TokenBucket` + `dashmap`)
+- Modify: `crates/traces/Cargo.toml` (add `krabka-broker` path dep for `TokenBucket` + `dashmap`)
 
 **Interfaces:**
-- Consumes: `Limits`, `LimitError` (Task 1); `crabka_broker::throttle::TokenBucket`; the Slice 4 `SpanRecord` (read its attrs for the attribute-size check).
+- Consumes: `Limits`, `LimitError` (Task 1); `krabka_broker::throttle::TokenBucket`; the Slice 4 `SpanRecord` (read its attrs for the attribute-size check).
 - Produces:
   - `struct IngestEnforcer` holding a `DashMap<String /*tenant*/, Arc<TokenBucket>>` for the per-tenant ingest-rate bucket.
   - `impl IngestEnforcer`:
@@ -275,7 +275,7 @@ git commit -m "feat(traces): Tempo-style overrides.yaml OverridesProvider"
     - `pub fn check_search_limit(limits: &Limits, requested: u64) -> Result<(), LimitError>` — `requested > max_traces_per_search` (when nonzero) ⇒ `TracesPerSearchExceeded`.
     - `pub fn check_search_duration(limits: &Limits, start_ns: i64, end_ns: i64) -> Result<(), LimitError>` — `(end_ns - start_ns) / 1_000_000_000 > max_search_duration_secs` (when nonzero) ⇒ `SearchDurationExceeded`.
 
-> **TokenBucket reuse note:** `crabka_broker::throttle::TokenBucket` is the KIP-73 bucket (`new()`, `set_rate(u64)` seeds a one-second burst at the new rate, `try_consume(u64) -> u64` granted; rate-0 grants the full request). It meters in whatever integer unit you set the rate in; here the unit is *spans*, rate = `ingestion_rate_spans_per_sec` rounded to `u64`, and `set_rate(burst)` seeds the burst (set the rate to `ingestion_burst_spans` on creation so the first burst is `ingestion_burst_spans`, then the steady-state refill is `ingestion_rate_spans_per_sec`/sec — match the metrics-slice-8 mapping: `set_rate` once at the *burst* to seed `available`, and store the steady `rate` for refills if the bucket exposes a separate refill rate; if `TokenBucket` couples burst==rate, seed at `max(rate, burst)` and document the approximation). If `crabka-broker` is too heavy/cyclic a dep, lift `throttle/bucket.rs` into a tiny `crabka-throttle` crate and depend on that from both — but **prefer the path dep** unless a cycle appears, and note the choice in the commit. The pure arithmetic (`plan_consume`) is already unit-tested in the broker, so this task tests only the *mapping* (limit → bucket config → decision), not the bucket math.
+> **TokenBucket reuse note:** `krabka_broker::throttle::TokenBucket` is the KIP-73 bucket (`new()`, `set_rate(u64)` seeds a one-second burst at the new rate, `try_consume(u64) -> u64` granted; rate-0 grants the full request). It meters in whatever integer unit you set the rate in; here the unit is *spans*, rate = `ingestion_rate_spans_per_sec` rounded to `u64`, and `set_rate(burst)` seeds the burst (set the rate to `ingestion_burst_spans` on creation so the first burst is `ingestion_burst_spans`, then the steady-state refill is `ingestion_rate_spans_per_sec`/sec — match the metrics-slice-8 mapping: `set_rate` once at the *burst* to seed `available`, and store the steady `rate` for refills if the bucket exposes a separate refill rate; if `TokenBucket` couples burst==rate, seed at `max(rate, burst)` and document the approximation). If `krabka-broker` is too heavy/cyclic a dep, lift `throttle/bucket.rs` into a tiny `krabka-throttle` crate and depend on that from both — but **prefer the path dep** unless a cycle appears, and note the choice in the commit. The pure arithmetic (`plan_consume`) is already unit-tested in the broker, so this task tests only the *mapping* (limit → bucket config → decision), not the bucket math.
 
 - [x] **Step 1: Write the failing test**
 
@@ -354,25 +354,25 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traces --lib enforce`
+Run: `cargo test -p krabka-traces --lib enforce`
 Expected: FAIL — `cannot find type IngestEnforcer`.
 
 - [x] **Step 3: Implement `enforce.rs`**
 
-Implement `IngestEnforcer` (with `DashMap` bucket cache, `new()`), `QueryEnforcer`, and the five check methods exactly per the interfaces. For `check_span_rate`: round `ingestion_rate_spans_per_sec` to `u64`; get-or-create the tenant's `TokenBucket`, `set_rate` on creation (seeds the burst); `try_consume(n)`; granted `< n` ⇒ error. Add `crabka-broker` (path) + `dashmap` to `Cargo.toml`.
+Implement `IngestEnforcer` (with `DashMap` bucket cache, `new()`), `QueryEnforcer`, and the five check methods exactly per the interfaces. For `check_span_rate`: round `ingestion_rate_spans_per_sec` to `u64`; get-or-create the tenant's `TokenBucket`, `set_rate` on creation (seeds the burst); `try_consume(n)`; granted `< n` ⇒ error. Add `krabka-broker` (path) + `dashmap` to `Cargo.toml`.
 
 - [x] **Step 4: Wire into `mod.rs`** — `mod enforce; pub use enforce::{IngestEnforcer, QueryEnforcer};` + re-export from `lib.rs`.
 
 - [x] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-traces --lib enforce`
+Run: `cargo test -p krabka-traces --lib enforce`
 Expected: PASS (5 tests).
 
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/
 git commit -m "feat(traces): per-tenant limit enforcement (ingest rate/trace-size/attr-size + search caps)"
 ```
@@ -450,7 +450,7 @@ overrides:
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traces --test limits_overrides`
+Run: `cargo test -p krabka-traces --test limits_overrides`
 Expected: FAIL — `support::traces_server` / enforcement not wired; over-limit requests currently succeed (`200`/`204`). (The `support::traces_server` boot helper is authored in Task 5 Step 1; cross-reference noted — write that helper first, or stub a minimal boot here and converge.)
 
 - [x] **Step 3: Implement `http/error.rs` + wire enforcement into the live handlers**
@@ -459,14 +459,14 @@ Implement `limit_error_response`. Call `IngestEnforcer::check_attributes` + `che
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traces --test limits_overrides`
+Run: `cargo test -p krabka-traces --test limits_overrides`
 Expected: PASS.
 
 - [x] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/
 git commit -m "feat(traces): enforce per-tenant limits at live write/read edges with Tempo error bodies"
 ```
@@ -489,7 +489,7 @@ git commit -m "feat(traces): enforce per-tenant limits at live write/read edges 
   - read helpers, each issuing the HTTP request with the tenant header and returning parsed JSON: `search(base, tenant, q, start_ns, end_ns, limit)`, `trace_by_id(base, tenant, trace_id_hex)`, `search_tags(base, tenant, scope)`, `tag_values(base, tenant, tag)`.
   - error variants `push_otlp_expect_error(...) -> (u16, serde_json::Value)`, `search_expect_error(...) -> (u16, serde_json::Value)` (used by Task 4).
 
-> **Contract gap note:** if the Slice 4/5 in-process boot isn't available, this helper assembles it from the public role constructors `crabka-traces` exposes; if those are absent, the task spins the `axum::Router` directly over an in-memory `CrabkaSpanStore` (live-store only) + `TraceqlEngine` and drives writes through the distributor entry fn. Either way: **real HTTP over a real socket** (so `X-Scope-OrgID` goes through the genuine extractor), not a function-call shortcut — the whole point is to exercise the tenancy boundary as Grafana would.
+> **Contract gap note:** if the Slice 4/5 in-process boot isn't available, this helper assembles it from the public role constructors `krabka-traces` exposes; if those are absent, the task spins the `axum::Router` directly over an in-memory `CrabkaSpanStore` (live-store only) + `TraceqlEngine` and drives writes through the distributor entry fn. Either way: **real HTTP over a real socket** (so `X-Scope-OrgID` goes through the genuine extractor), not a function-call shortcut — the whole point is to exercise the tenancy boundary as Grafana would.
 
 - [x] **Step 1: Write the failing isolation test**
 
@@ -550,7 +550,7 @@ async fn tenants_are_fully_isolated_across_all_read_surfaces() {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traces --test tenant_isolation`
+Run: `cargo test -p krabka-traces --test tenant_isolation`
 Expected: FAIL — `support::traces_server` / boot not yet present (or, if present, a real leak surfaces — fix it).
 
 - [x] **Step 3: Implement `support::traces_server` + fix any leak**
@@ -563,14 +563,14 @@ Append a test: boot with an `OverridesProvider` setting a tiny `ingestion_rate_s
 
 - [x] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-traces --test tenant_isolation`
+Run: `cargo test -p krabka-traces --test tenant_isolation`
 Expected: PASS.
 
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/
 git commit -m "test(traces): headline multi-tenant isolation across all read surfaces + per-tenant quota"
 ```
@@ -580,7 +580,7 @@ git commit -m "test(traces): headline multi-tenant isolation across all read sur
 ### Task 6: TraceQL conformance gate + per-file coverage report
 
 **Files:**
-- Create: `crates/traces/tests/traceql_conformance.rs` (or in `crabka-traceql` if the corpus harness lives there — **place it beside the harness from Slice 3**; this task wires it as a *gate* + report).
+- Create: `crates/traces/tests/traceql_conformance.rs` (or in `krabka-traceql` if the corpus harness lives there — **place it beside the harness from Slice 3**; this task wires it as a *gate* + report).
 - Modify: CI workflow (a `traces-conformance` job) — see Task 9.
 
 **Interfaces:**
@@ -594,7 +594,7 @@ git commit -m "test(traces): headline multi-tenant isolation across all read sur
 - [x] **Step 1: Write the failing test**
 
 ```rust
-// crates/traces/tests/traceql_conformance.rs  (or crabka-traceql/tests/)
+// crates/traces/tests/traceql_conformance.rs  (or krabka-traceql/tests/)
 use assert2::assert;
 
 /// Cases we knowingly don't pass yet (each MUST carry a reason).
@@ -604,7 +604,7 @@ const KNOWN_UNSUPPORTED: &[(&str, &str)] = &[
 
 #[test]
 fn full_traceql_golden_corpus_passes() {
-    let report = crabka_traceql::testkit::run_corpus_dir(
+    let report = krabka_traceql::testkit::run_corpus_dir(
         "tests/testdata/traceql", // the Slice-3 curated golden set
     );
     report.write_to("target/traceql-conformance-report.txt").unwrap();
@@ -619,23 +619,23 @@ fn full_traceql_golden_corpus_passes() {
 
 - [x] **Step 2: Run to verify it fails (or passes if the harness is complete)**
 
-Run: `cargo test -p crabka-traces --test traceql_conformance -- --nocapture` (or `-p crabka-traceql`).
+Run: `cargo test -p krabka-traces --test traceql_conformance -- --nocapture` (or `-p krabka-traceql`).
 Expected: FAIL — `run_corpus_dir`/`Report::write_to` missing, **or** a real conformance gap surfaces.
 
 - [x] **Step 3: Implement the report API on the harness + the gate**
 
-Add `run_corpus_dir(dir) -> Report` and `Report { cases: Vec<CaseResult { name, passed, passed_assertions, total_assertions }>, write_to(path) }` to the Slice 3 harness — the `pub mod testkit` in `crabka-traceql` that also hosts `run_golden_file` (small addition — per-case iteration + a text writer). Ensure the curated golden set covers selectors (scope/intrinsic/array semantics, the single-span rule), the core + negated + union structural operators, pipeline aggregations, TraceQL metrics, and the by-id path.
+Add `run_corpus_dir(dir) -> Report` and `Report { cases: Vec<CaseResult { name, passed, passed_assertions, total_assertions }>, write_to(path) }` to the Slice 3 harness — the `pub mod testkit` in `krabka-traceql` that also hosts `run_golden_file` (small addition — per-case iteration + a text writer). Ensure the curated golden set covers selectors (scope/intrinsic/array semantics, the single-span rule), the core + negated + union structural operators, pipeline aggregations, TraceQL metrics, and the by-id path.
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traces --test traceql_conformance -- --nocapture`
+Run: `cargo test -p krabka-traces --test traceql_conformance -- --nocapture`
 Expected: PASS; `target/traceql-conformance-report.txt` lists every case.
 
 - [x] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/ docs/
 git commit -m "test(traces): TraceQL golden corpus conformance gate + per-file coverage report"
 ```
@@ -703,7 +703,7 @@ fn corpus_is_nonempty_and_covers_key_operators() {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traces --test diff_corpus_selftest`
+Run: `cargo test -p krabka-traces --test diff_corpus_selftest`
 Expected: FAIL — `diff_corpus` module absent.
 
 - [x] **Step 3: Implement `support/diff_corpus.rs`**
@@ -712,14 +712,14 @@ Implement the seed dataset, `to_otlp`, the search/by-id corpora, both normalizer
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traces --test diff_corpus_selftest`
+Run: `cargo test -p krabka-traces --test diff_corpus_selftest`
 Expected: PASS.
 
 - [x] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/
 git commit -m "test(traces): shared differential OTLP corpus + Tempo JSON differ (Docker-free)"
 ```
@@ -740,7 +740,7 @@ git commit -m "test(traces): shared differential OTLP corpus + Tempo JSON differ
 > - **Container:** `GenericImage::new("mirror.gcr.io/grafana/tempo", "<pinned tag>")` with cmd `-target=all -config.file=/etc/tempo.yaml`, a bind-mounted minimal `tempo.yaml` (`storage.trace.backend: local`, a short `block.flush_check_period`/`complete_block_timeout` so blocks flush fast, OTLP receiver on `4318`, a fixed single tenant). `WaitFor` on Tempo's `/ready` (poll the mapped HTTP port until `200`). Map the HTTP `3200` and OTLP `4318` ports.
 > - **Data load:** build the OTLP `ExportTraceServiceRequest` once via `to_otlp(seed_dataset())`, serialize to protobuf, `POST /v1/traces` (`Content-Type: application/x-protobuf`, `X-Scope-OrgID: diff`) to **both** Tempo (`http://localhost:<mapped 4318>/v1/traces`) and Crabka — identical bytes, two destinations — guaranteeing identical input.
 > - **Settle / flush:** both engines serve recent traces from the hot tier immediately; for cases that must read from a flushed block, either keep the corpus within the live-store/ingester window (simplest, deterministic — **default**) or poll until a by-id query returns the trace on both sides (bounded, ~15s, mirroring the `client-core` bootstrap-retry pattern). Do not assume instantaneous visibility.
-> - **Assert:** for each `SearchCase`, fetch from both, `assert_trace_query_equal(case.name, crabka_json, tempo_json)`. For each `by_id` trace, fetch `/api/v2/traces/{id}` from both and `assert_trace_query_equal`. A `TEMPO_KNOWN_DIVERGENCE: &[(&str,&str)]` list (each entry justified) covers any Tempo-specific volatile metadata not already dropped by `normalize_*` (e.g. Tempo's `rootServiceName` for a root-less partial trace, or a `metrics` field shape).
+> - **Assert:** for each `SearchCase`, fetch from both, `assert_trace_query_equal(case.name, krabka_json, tempo_json)`. For each `by_id` trace, fetch `/api/v2/traces/{id}` from both and `assert_trace_query_equal`. A `TEMPO_KNOWN_DIVERGENCE: &[(&str,&str)]` list (each entry justified) covers any Tempo-specific volatile metadata not already dropped by `normalize_*` (e.g. Tempo's `rootServiceName` for a root-less partial trace, or a `metrics` field shape).
 > - **Documented limitation:** TraceQL-metrics (`| rate()`) result parity is asserted only if both sides expose the same Prometheus-shaped series JSON on `/api/metrics/query_range`; otherwise that case is in `TEMPO_KNOWN_DIVERGENCE` with a reason. The by-id + search-spanSets equality is the firm headline.
 > - **Why headline:** Tempo is the system Crabka claims to replace; corpus equality over identical OTLP input is the strongest single correctness signal in the slice. Keep this the most carefully curated corpus. **Also pin the real Tempo error-body strings here** (push an oversized trace / out-of-range `limit` against the container, capture the exact 4xx body, and feed those literals back into Task 1's `LimitError::message()` + Task 4's assertions) — this closes the "verify-against-Tempo" notes left in Tasks 1/4.
 
@@ -750,14 +750,14 @@ Create `crates/traces/tests/diff_tempo.rs` (embed the minimal `tempo.yaml` as a 
 
 - [x] **Step 2: Run to verify ignored-by-default + runnable**
 
-Run (default): `cargo test -p crabka-traces --test diff_tempo` → reports `0 run, 1 ignored`.
-Run (with Docker): `cargo test -p crabka-traces --test diff_tempo -- --ignored --nocapture` → PASS (or surfaces a real divergence to fix).
+Run (default): `cargo test -p krabka-traces --test diff_tempo` → reports `0 run, 1 ignored`.
+Run (with Docker): `cargo test -p krabka-traces --test diff_tempo -- --ignored --nocapture` → PASS (or surfaces a real divergence to fix).
 
 - [x] **Step 3: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/
 git commit -m "test(traces): headline differential vs real Tempo (ignored, testcontainers)"
 ```
@@ -775,7 +775,7 @@ git commit -m "test(traces): headline differential vs real Tempo (ignored, testc
   - Boot Crabka in-process (seed `seed_dataset()`); start `mirror.gcr.io/grafana/grafana:<pinned tag>` with a **provisioned built-in Tempo datasource** whose `url` points at the Crabka Tempo-API base URL, plus (for Service Graph) a **provisioned Prometheus datasource** pointing at Crabka's metrics querier. Drive Grafana's datasource **proxy/Explore query API** for each leg and assert each renders.
 
 > **Harness structure & data loading (explicit):**
-> - **Datasource provisioning:** mount a `datasources.yaml` (`apiVersion: 1`) with (a) a `tempo` datasource (`url: http://host.docker.internal:<crabka_tempo_port>`, a fixed `uid`, `httpHeaderName1: X-Scope-OrgID` / `httpHeaderValue1: grafana`), and (b) a `prometheus` datasource (`url: http://host.docker.internal:<crabka_metrics_port>`, the same tenant header) so the Service Graph can read `traces_service_graph_*`. Set `GF_AUTH_ANONYMOUS_ENABLED=true`, `GF_AUTH_ANONYMOUS_ORG_ROLE=Admin` so the test calls the API without login.
+> - **Datasource provisioning:** mount a `datasources.yaml` (`apiVersion: 1`) with (a) a `tempo` datasource (`url: http://host.docker.internal:<krabka_tempo_port>`, a fixed `uid`, `httpHeaderName1: X-Scope-OrgID` / `httpHeaderValue1: grafana`), and (b) a `prometheus` datasource (`url: http://host.docker.internal:<krabka_metrics_port>`, the same tenant header) so the Service Graph can read `traces_service_graph_*`. Set `GF_AUTH_ANONYMOUS_ENABLED=true`, `GF_AUTH_ANONYMOUS_ORG_ROLE=Admin` so the test calls the API without login.
 > - **Host reach:** start Crabka bound to `0.0.0.0` and pass the container `--add-host=host.docker.internal:host-gateway` (Linux) so the datasource URLs resolve; document this platform-specific knob.
 > - **Drive — the five legs Grafana's Tempo datasource exercises (spec §8):**
 >   1. **Echo / health:** `GET` the Tempo datasource health (Grafana hits `/api/echo` → expect `200 "echo"`).
@@ -791,14 +791,14 @@ Create `crates/traces/tests/grafana_integration.rs` with the provisioning + the 
 
 - [x] **Step 2: Run to verify ignored + runnable**
 
-Run (default): `cargo test -p crabka-traces --test grafana_integration` → `0 run, 1 ignored`.
-Run (Docker): `cargo test -p crabka-traces --test grafana_integration -- --ignored --nocapture` → PASS.
+Run (default): `cargo test -p krabka-traces --test grafana_integration` → `0 run, 1 ignored`.
+Run (Docker): `cargo test -p krabka-traces --test grafana_integration -- --ignored --nocapture` → PASS.
 
 - [x] **Step 3: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/
 git commit -m "test(traces): Grafana built-in Tempo datasource + Service-Graph integration (ignored, Docker)"
 ```
@@ -813,8 +813,8 @@ git commit -m "test(traces): Grafana built-in Tempo datasource + Service-Graph i
 
 **Interfaces:**
 - Produces:
-  - A **`traces-conformance`** CI job (Linux): `cargo test -p crabka-traces --test traceql_conformance` (and the `crabka-traceql` harness tests) — runs on every PR as a **gate**; uploads `target/traceql-conformance-report.txt` as an artifact.
-  - A **`traces-differential`** CI job (Linux, Docker available): `cargo test -p crabka-traces -- --ignored` scoped to the two Docker suites (`diff_tempo`, `grafana_integration`) — runs on a schedule + on-demand label (not every PR, to keep PR latency low), mirroring how the repo gates other Docker-heavy suites (`client-core-integration`). Document that these never run in the default `cargo test --workspace`.
+  - A **`traces-conformance`** CI job (Linux): `cargo test -p krabka-traces --test traceql_conformance` (and the `krabka-traceql` harness tests) — runs on every PR as a **gate**; uploads `target/traceql-conformance-report.txt` as an artifact.
+  - A **`traces-differential`** CI job (Linux, Docker available): `cargo test -p krabka-traces -- --ignored` scoped to the two Docker suites (`diff_tempo`, `grafana_integration`) — runs on a schedule + on-demand label (not every PR, to keep PR latency low), mirroring how the repo gates other Docker-heavy suites (`client-core-integration`). Document that these never run in the default `cargo test --workspace`.
 
 - [x] **Step 1: Add the two CI jobs**
 
@@ -822,18 +822,18 @@ Add `traces-conformance` (every PR) and `traces-differential` (scheduled/labeled
 
 - [x] **Step 2: Verify locally**
 
-Run the default suite (no Docker): `cargo test -p crabka-traces` → all non-ignored pass, the two Docker suites report ignored.
-Run the gate: `cargo test -p crabka-traces --test traceql_conformance` → PASS.
+Run the default suite (no Docker): `cargo test -p krabka-traces` → all non-ignored pass, the two Docker suites report ignored.
+Run the gate: `cargo test -p krabka-traces --test traceql_conformance` → PASS.
 
 - [x] **Step 3: Final whole-crate gate**
 
-Run: `cargo test -p crabka-traces && cargo clippy -p crabka-traces --all-targets && cargo fmt -p crabka-traces --check`
+Run: `cargo test -p krabka-traces && cargo clippy -p krabka-traces --all-targets && cargo fmt -p krabka-traces --check`
 Expected: all PASS, no warnings, formatting clean. (Docker suites remain ignored.)
 
 - [x] **Step 4: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
+cargo fmt -p krabka-traces
 git add .github/ crates/traces/ docs/
 git commit -m "ci(traces): conformance gate + dedicated traces-differential Docker job"
 ```
@@ -860,8 +860,8 @@ git commit -m "ci(traces): conformance gate + dedicated traces-differential Dock
 
 **No-back-compat respected.** No `#[serde(default)]`-as-compat-shim, no version variants, no migration. The single `#[serde(default)]` use (Task 2, `PartialLimits`) is the *partial-config mechanism* (a tenant overrides only named fields), explicitly distinguished in-task from a compat shim, with a code comment so a reviewer doesn't misflag it.
 
-**Placeholder scan.** Every in-process task (1–7) has a failing-test → run-fails-with-expected → real-code → run-passes → commit cycle with concrete `cargo test -p crabka-traces …` commands and assert2 assertions. The Docker tasks (8/9), where literal code would be guesswork against live container behavior, instead provide a **fully specified harness structure** — exact image/tag knobs, the one-push-two-destinations data-load mechanism, the settle/flush strategy, the per-leg drive, the assertion, and an explicit known-divergence list — which is the honest level of detail for a black-box external suite, not a placeholder. The two deferred string-literal pins (Tempo error-body messages in Tasks 1/4) are explicitly closed by the Task 8 container run rather than fabricated.
+**Placeholder scan.** Every in-process task (1–7) has a failing-test → run-fails-with-expected → real-code → run-passes → commit cycle with concrete `cargo test -p krabka-traces …` commands and assert2 assertions. The Docker tasks (8/9), where literal code would be guesswork against live container behavior, instead provide a **fully specified harness structure** — exact image/tag knobs, the one-push-two-destinations data-load mechanism, the settle/flush strategy, the per-leg drive, the assertion, and an explicit known-divergence list — which is the honest level of detail for a black-box external suite, not a placeholder. The two deferred string-literal pins (Tempo error-body messages in Tasks 1/4) are explicitly closed by the Task 8 container run rather than fabricated.
 
 **Type/name consistency.** The `Limits` field set is identical across Tasks 1/2/3/4 and every test (`ingestion_rate_spans_per_sec`, `ingestion_burst_spans`, `max_traces_per_search`, `max_spans_per_trace`, `max_attribute_bytes`, `max_search_duration_secs`). `LimitError` variants and their `http_status` mapping are defined once (Task 1) and asserted unchanged in Tasks 3/4. The `IngestEnforcer`/`QueryEnforcer` method set is consistent between Tasks 3 and 4. The `support::traces_server` and `support::diff_corpus` helper signatures are fixed in Tasks 5/7 and consumed unchanged in Tasks 4/8/9.
 
-**Known risks (flagged).** (1) The `crabka-broker` path dep for `TokenBucket` could introduce a heavy/cyclic dependency into `crabka-traces`; Task 3's note gives the escape hatch (lift `bucket.rs` into a tiny `crabka-throttle` crate) and prefers the path dep unless a cycle appears. (2) `TokenBucket`'s burst-vs-refill coupling (`set_rate` resets `available` to the rate) means the spans/sec-vs-burst split is approximate; Task 3 documents seeding at `max(rate, burst)` and notes it. (3) Docker-host reachability for Grafana (Task 9) is platform-specific (`host.docker.internal` + `--add-host`); flagged with the exact knob. (4) Tempo internal-metadata + volatile `metrics` noise (Task 8) is contained by `normalize_*` + an explicit `TEMPO_KNOWN_DIVERGENCE` list rather than loosening the differ. (5) The Tempo status map (429 rate, 400 size/range) **differs** from the metrics slice's (429/422/400); called out in Task 1 and verified live in Task 8 so the divergence is intentional and tested.
+**Known risks (flagged).** (1) The `krabka-broker` path dep for `TokenBucket` could introduce a heavy/cyclic dependency into `krabka-traces`; Task 3's note gives the escape hatch (lift `bucket.rs` into a tiny `krabka-throttle` crate) and prefers the path dep unless a cycle appears. (2) `TokenBucket`'s burst-vs-refill coupling (`set_rate` resets `available` to the rate) means the spans/sec-vs-burst split is approximate; Task 3 documents seeding at `max(rate, burst)` and notes it. (3) Docker-host reachability for Grafana (Task 9) is platform-specific (`host.docker.internal` + `--add-host`); flagged with the exact knob. (4) Tempo internal-metadata + volatile `metrics` noise (Task 8) is contained by `normalize_*` + an explicit `TEMPO_KNOWN_DIVERGENCE` list rather than loosening the differ. (5) The Tempo status map (429 rate, 400 size/range) **differs** from the metrics slice's (429/422/400); called out in Task 1 and verified live in Task 8 so the divergence is intentional and tested.

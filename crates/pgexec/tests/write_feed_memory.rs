@@ -1,10 +1,10 @@
-use crabka_pgexec::{RuntimePolicy, SqlEngine};
-use crabka_pgwire::engine::{Engine, Session};
+use krabka_pgexec::{RuntimePolicy, SqlEngine};
+use krabka_pgwire::engine::{Engine, Session};
 
 #[tokio::test]
 async fn write_feed_uses_configured_blocking_memory() {
     let engine = SqlEngine::new_with_policy(RuntimePolicy {
-        blocking_query_memory: crabka_units::bytes(512),
+        blocking_query_memory: krabka_units::bytes(512),
         ..RuntimePolicy::default()
     })
     .expect("runtime policy");

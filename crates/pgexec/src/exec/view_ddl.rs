@@ -2,9 +2,9 @@ use super::*;
 
 pub(super) fn requalify_view_relation(
     mut relation: Relation,
-    view: &crabka_pgcatalog::View,
+    view: &krabka_pgcatalog::View,
     qualifier: &str,
-    row_type: Option<crabka_pgtypes::usertype::UserTypeRef>,
+    row_type: Option<krabka_pgtypes::usertype::UserTypeRef>,
 ) -> Result<Relation, ExecError> {
     if relation.scope.width() != view.columns.len() {
         return Err(ExecError::Unsupported(
@@ -25,19 +25,19 @@ pub(super) fn requalify_view_relation(
 pub(crate) fn resolve_user_type(
     kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
-    reference: &crabka_pgparser::ast::RelationRef,
-) -> Result<crabka_pgcatalog::RelationName, ExecError> {
+    reference: &krabka_pgparser::ast::RelationRef,
+) -> Result<krabka_pgcatalog::RelationName, ExecError> {
     if reference.schema.is_some() {
         return resolve_relation(kv, resolution, reference, SchemaDisposition::Utility);
     }
-    let user_types = crabka_pgcatalog::list_user_types(kv)?;
+    let user_types = krabka_pgcatalog::list_user_types(kv)?;
     for schema in resolution.visible_schemas(kv)? {
-        let candidate = crabka_pgcatalog::RelationName::new(schema, reference.name.clone());
+        let candidate = krabka_pgcatalog::RelationName::new(schema, reference.name.clone());
         if candidate.schema == "pg_catalog" && is_builtin_catalog_type_name(&candidate.name) {
             return Ok(candidate);
         }
         let identity = (candidate.schema.clone(), candidate.name.clone());
-        if crabka_pgcatalog::get_user_type(kv, &candidate)?.is_some()
+        if krabka_pgcatalog::get_user_type(kv, &candidate)?.is_some()
             || user_types
                 .iter()
                 .any(|ty| ty.multirange_identity() == Some(identity.clone()))
@@ -51,8 +51,8 @@ pub(crate) fn resolve_user_type(
 pub(super) fn resolve_user_types(
     kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
-    references: &[crabka_pgparser::ast::RelationRef],
-) -> Result<Vec<crabka_pgcatalog::RelationName>, ExecError> {
+    references: &[krabka_pgparser::ast::RelationRef],
+) -> Result<Vec<krabka_pgcatalog::RelationName>, ExecError> {
     references
         .iter()
         .map(|reference| resolve_user_type(kv, resolution, reference))
@@ -62,7 +62,7 @@ pub(super) fn resolve_user_types(
 pub(super) fn check_view_columns_replaceable(
     existing: &[Column],
     replacement: &[Column],
-    view: &crabka_pgcatalog::RelationName,
+    view: &krabka_pgcatalog::RelationName,
 ) -> Result<(), ExecError> {
     if replacement.len() < existing.len() {
         return Err(ExecError::InvalidTableDefinition(
@@ -72,7 +72,7 @@ pub(super) fn check_view_columns_replaceable(
     for (old, new) in existing.iter().zip(replacement) {
         if old.name != new.name {
             return Err(ExecError::Remote(
-                crabka_pgwire::error::PgError::error(
+                krabka_pgwire::error::PgError::error(
                     "42P16",
                     format!(
                         "cannot change name of view column \"{}\" to \"{}\"",
@@ -107,8 +107,8 @@ pub(super) fn check_view_columns_replaceable(
 pub(super) fn validate_view_definition(
     catalog_kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
-    query: &crabka_pgparser::ast::QueryExpr,
-) -> Result<Vec<crabka_pgcatalog::RelationName>, ExecError> {
+    query: &krabka_pgparser::ast::QueryExpr,
+) -> Result<Vec<krabka_pgcatalog::RelationName>, ExecError> {
     if query.locking.is_some() {
         return Err(ExecError::Unsupported(
             "CREATE VIEW does not support locking SELECT".into(),
@@ -123,7 +123,7 @@ pub(super) fn validate_view_definition(
                 return;
             }
             crate::viewdeps::Node::Expr(Expr::Param(number)) => {
-                ExecError::Remote(crabka_pgwire::error::PgError::error(
+                ExecError::Remote(krabka_pgwire::error::PgError::error(
                     "42P02",
                     format!("there is no parameter ${number}"),
                 ))

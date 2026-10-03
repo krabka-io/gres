@@ -8,7 +8,7 @@
 
 ## 1. Goal
 
-Add Kafka Streams' **record cache** to `crabka-client-streams`: the
+Add Kafka Streams' **record cache** to `krabka-client-streams`: the
 `statestore.cache.max.bytes` write-back cache layered between a materializing
 processor and its state store. With the cache on, a processor does **not**
 forward every intermediate update downstream — it writes to a per-store LRU
@@ -287,7 +287,7 @@ Modified:
 ```
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test -p crabka-client-streams
+cargo test -p krabka-client-streams
 cargo build --workspace
 ```
 

@@ -9,7 +9,7 @@ operator-configurable while preserving existing behavior.
 router/admin entry points. Existing entry points delegate with defaults. Owning
 binaries flatten and pass the shared config.
 
-**Tech Stack:** Rust, axum, clap, crabka-units, refined_type, pprof, jemalloc.
+**Tech Stack:** Rust, axum, clap, krabka-units, refined_type, pprof, jemalloc.
 
 ### Task 1: Shared validated profiling policy
 
@@ -35,7 +35,7 @@ binaries flatten and pass the shared config.
 
 ### Task 4: Closure
 
-- [x] Run `cargo test -p crabka-telemetry --all-targets --locked` and affected owner tests.
+- [x] Run `cargo test -p krabka-telemetry --all-targets --locked` and affected owner tests.
 - [x] Run workspace all-target check and strict warnings-as-errors Clippy.
 - [x] Run nightly formatting and `git diff --check`.
 - [x] Update `docs/configuration-audit.md` with the implemented surface and evidence.

@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use bytes::{Bytes, BytesMut};
-use crabka_trace_context::TraceCarrier;
+use krabka_trace_context::TraceCarrier;
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     sync::mpsc,

@@ -718,8 +718,8 @@ spec:
                   Distributed-tracing wiring for this fleet's tenant compute pods.
 
                   When this field is set, the `GresTenant` reconciler renders the
-                  `CRABKA_OTLP_*` and `OTEL_SERVICE_NAME` env contract on every
-                  compute container, and `crabka-gres` installs the OTLP exporter at
+                  `KRABKA_OTLP_*` and `OTEL_SERVICE_NAME` env contract on every
+                  compute container, and `krabka-gres` installs the OTLP exporter at
                   startup. When the field is absent, the reconciler writes no OTLP env
                   var at all. That is what keeps tracing off. An empty endpoint would
                   still switch the exporter on, and the exporter would then fail to
@@ -742,8 +742,8 @@ spec:
                       endpoint:
                         description: |-
                           Required. OTLP collector endpoint in the form `scheme://host:port`.
-                          The operator renders it as `CRABKA_OTLP_ENDPOINT`. A set field also
-                          sets `CRABKA_OTLP_ENABLED=true`.
+                          The operator renders it as `KRABKA_OTLP_ENDPOINT`. A set field also
+                          sets `KRABKA_OTLP_ENABLED=true`.
                         type: string
                       protocol:
                         description: |-
@@ -758,7 +758,7 @@ spec:
                       sampleRatio:
                         description: |-
                           Optional sampling ratio in `[0.0, 1.0]`. The operator renders it as
-                          `CRABKA_OTLP_SAMPLE_RATIO`. An unset field leaves the binary's own
+                          `KRABKA_OTLP_SAMPLE_RATIO`. An unset field leaves the binary's own
                           default of `1.0`, which samples every trace.
                         format: double
                         nullable: true
@@ -767,13 +767,13 @@ spec:
                         description: |-
                           Optional `service.name` resource attribute. The operator renders it as
                           `OTEL_SERVICE_NAME`. An unset field leaves the binary's own name, which
-                          is `"crabka-broker"` for `Kafka` and `"crabka-gres"` for `Gres`.
+                          is `"krabka-broker"` for `Kafka` and `"krabka-gres"` for `Gres`.
                         nullable: true
                         type: string
                       timeout:
                         description: |-
                           Optional export timeout. The operator renders it as
-                          `CRABKA_OTLP_TIMEOUT`. An unset field leaves the binary's own default
+                          `KRABKA_OTLP_TIMEOUT`. An unset field leaves the binary's own default
                           of `10s`.
                         nullable: true
                         type: string

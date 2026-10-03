@@ -18,8 +18,8 @@
 //! cannot be tested in one position and forgotten in another.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 /// The 330 words `PostgreSQL` 18.4 classifies `unreserved_keyword`. Each may
 /// be a column name, a table name and an alias.

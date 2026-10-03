@@ -1,5 +1,5 @@
 [package]
-name = "crabka-gres-balancer"
+name = "krabka-gres-balancer"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -9,7 +9,7 @@ rust-version.workspace = true
 description = "Goal-based dry-run planner for Chapter Gres range balancing"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-gres-balancer"
+documentation = "https://docs.rs/krabka-gres-balancer"
 readme = "README.md"
 keywords = ["postgres", "gres", "balancer", "ranges", "crabka"]
 categories = ["algorithms", "database-implementations"]
@@ -18,9 +18,9 @@ categories = ["algorithms", "database-implementations"]
 workspace = true
 
 [dependencies]
-crabka-gres-control = { version = "0.4.2", path = "../gres-control" }
-crabka-gres-substrate = { version = "0.4.2", path = "../gres-substrate" }
-crabka-units = { workspace = true }
+krabka-gres-control = { version = "0.4.2", path = "../gres-control" }
+krabka-gres-substrate = { version = "0.4.2", path = "../gres-substrate" }
+krabka-units = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]

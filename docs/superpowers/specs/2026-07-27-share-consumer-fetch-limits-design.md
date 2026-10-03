@@ -107,7 +107,7 @@ The removed per-partition assignment has no supported-wire effect because the
 field is excluded from ShareFetch v1 and v2 encoding.
 
 No existing builder input changes type or meaning. No dependency is added:
-`crabka-client-consumer` already directly depends on the workspace
+`krabka-client-consumer` already directly depends on the workspace
 `refined_type` dependency.
 
 ## Deployment Ownership
@@ -138,7 +138,7 @@ Focused tests prove:
 - `batch_size` exactly equals the configured record limit; and
 - fetch topics no longer stamp the version-0-only partition byte limit.
 
-Final gates run the complete `crabka-client-consumer` all-target suite under
+Final gates run the complete `krabka-client-consumer` all-target suite under
 the locked dependency graph, strict all-target Clippy, nightly formatting, and
 `git diff --check`. `Cargo.lock` must remain unchanged. The runtime-value
 scanner and focused ShareConsumer search are recorded in

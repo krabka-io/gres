@@ -17,14 +17,14 @@ use std::{
 };
 
 use assert2::assert;
-use crabka_broker::{BootstrapMode, Broker, BrokerConfig, BrokerHandle};
-use crabka_client_producer::{ProducerError, ProducerRetryPolicy};
-use crabka_gres_ranges::{RangeId, TenantName};
-use crabka_gres_substrate::{
+use krabka_broker::{BootstrapMode, Broker, BrokerConfig, BrokerHandle};
+use krabka_client_producer::{ProducerError, ProducerRetryPolicy};
+use krabka_gres_ranges::{RangeId, TenantName};
+use krabka_gres_substrate::{
     GroupCommitRequest, LiveRecoveryConfig, ProducerWalWriter, TransactionalWalWriter, WalFrame,
     WalWriterFaultInjector, WalWriterFaultStage, WriterGeneration, recover_live_for_range,
 };
-use crabka_pgkv::{Kv, MemKv, WriteOp};
+use krabka_pgkv::{Kv, MemKv, WriteOp};
 use tempfile::TempDir;
 use tokio::{net::TcpListener, sync::oneshot};
 

@@ -7,7 +7,7 @@
 **Goal:** Make the traces Parquet block-read cap configurable while preserving
 the one-gibibyte default.
 
-**Architecture:** Validate one scalar in `crabka-blockstore`, keep the size
+**Architecture:** Validate one scalar in `krabka-blockstore`, keep the size
 check at the shared reader boundary, store the value in `BlockStore`, and pass
 the same typed value from the traces CLI to compactor, query-frontend, and
 querier paths. Existing APIs remain default wrappers.
@@ -31,7 +31,7 @@ querier paths. Existing APIs remain default wrappers.
 - `crates/blockstore/src/lib.rs`
 - `crates/blockstore/src/reader.rs`
 - `crates/blockstore/src/store.rs`
-- `crates/traces/src/bin/crabka-traces.rs`
+- `crates/traces/src/bin/krabka-traces.rs`
 - `crates/traces/src/compactor.rs`
 - `crates/traces/src/frontend/job.rs`
 - `demo/observability/docker-compose.yml`
@@ -60,9 +60,9 @@ and selected-row-group reads and survives `empty_like`.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-blockstore block_read --locked
+  cargo test -p krabka-blockstore block_read --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-blockstore max_bytes --locked
+  cargo test -p krabka-blockstore max_bytes --locked
 ```
 
 - [ ] Implement in `reader.rs`:
@@ -99,9 +99,9 @@ the stored cap in it and `scan_block_row_groups`. Preserve the value in
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-blockstore --all-targets --locked
+  cargo test -p krabka-blockstore --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-blockstore --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-blockstore --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 git diff --check
 git diff -- Cargo.lock
@@ -123,7 +123,7 @@ git commit -m "feat(blockstore): expose parquet read cap"
 and command-line precedence:
 
 ```text
-CRABKA_TRACES_BLOCK_READ_MAX_BYTES=1024
+KRABKA_TRACES_BLOCK_READ_MAX_BYTES=1024
 --block-read-max-bytes 2048
 ```
 
@@ -139,14 +139,14 @@ Use the existing hermetic child-process pattern for environment mutation.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-traces block_read_max_bytes --locked
+  cargo test -p krabka-traces block_read_max_bytes --locked
 ```
 
 - [ ] Add the typed CLI field:
 
 ```text
 --block-read-max-bytes
-CRABKA_TRACES_BLOCK_READ_MAX_BYTES
+KRABKA_TRACES_BLOCK_READ_MAX_BYTES
 ```
 
 - [ ] Keep existing compactor helpers as default wrappers and add configurable
@@ -164,12 +164,12 @@ read persisted Parquet blocks.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-traces --all-targets --locked
+  cargo test -p krabka-traces --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-traces --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-traces --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -p crabka-traces --bin crabka-traces --locked -- --help
-test "$(target/debug/crabka-traces --help | rg -c -- '--block-read-max-bytes')" -eq 1
+  cargo run -p krabka-traces --bin krabka-traces --locked -- --help
+test "$(target/debug/krabka-traces --help | rg -c -- '--block-read-max-bytes')" -eq 1
 rg -n 'read_block|read_row_group_metadata|scan_block_row_groups|BlockStore::new' \
   crates/traces/src crates/traces/tests
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
@@ -184,7 +184,7 @@ is unchanged.
 - [ ] Commit only traces files:
 
 ```bash
-git add crates/traces/src/bin/crabka-traces.rs crates/traces/src/compactor.rs \
+git add crates/traces/src/bin/krabka-traces.rs crates/traces/src/compactor.rs \
   crates/traces/src/frontend/job.rs
 git commit -m "feat(traces): configure parquet read cap"
 ```
@@ -194,7 +194,7 @@ git commit -m "feat(traces): configure parquet read cap"
 - [ ] Add a failing demo configuration test proving the traces querier has:
 
 ```text
-CRABKA_TRACES_BLOCK_READ_MAX_BYTES=${CRABKA_TRACES_BLOCK_READ_MAX_BYTES:-1073741824}
+KRABKA_TRACES_BLOCK_READ_MAX_BYTES=${KRABKA_TRACES_BLOCK_READ_MAX_BYTES:-1073741824}
 ```
 
 and that an explicit override renders unchanged.
@@ -215,12 +215,12 @@ to roles absent from the demo.
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo test -p observability-demo-app observability_demo_config --locked
 docker compose -f demo/observability/docker-compose.yml config \
-  > /tmp/crabka-parquet-cap-default.yml
-CRABKA_TRACES_BLOCK_READ_MAX_BYTES=2048 \
+  > /tmp/krabka-parquet-cap-default.yml
+KRABKA_TRACES_BLOCK_READ_MAX_BYTES=2048 \
   docker compose -f demo/observability/docker-compose.yml config \
-  > /tmp/crabka-parquet-cap-override.yml
-rg -n 'CRABKA_TRACES_BLOCK_READ_MAX_BYTES' \
-  /tmp/crabka-parquet-cap-default.yml /tmp/crabka-parquet-cap-override.yml
+  > /tmp/krabka-parquet-cap-override.yml
+rg -n 'KRABKA_TRACES_BLOCK_READ_MAX_BYTES' \
+  /tmp/krabka-parquet-cap-default.yml /tmp/krabka-parquet-cap-override.yml
 git diff --check
 ```
 
@@ -255,10 +255,10 @@ counts, and verification evidence.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-blockstore -p crabka-traces \
+  cargo test -p krabka-blockstore -p krabka-traces \
     -p observability-demo-app --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-blockstore -p crabka-traces \
+  cargo clippy -p krabka-blockstore -p krabka-traces \
     -p observability-demo-app --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 docker compose -f demo/observability/docker-compose.yml config --quiet

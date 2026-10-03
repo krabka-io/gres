@@ -6,7 +6,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use crabka_gres_ranges::{
+use krabka_gres_ranges::{
     CheckpointManifest, RangeId, RangeTransferBarrier, RangeTransferCapability,
     control::RangeControlExecutor,
     transport::{RangeControlOperation, RangeControlReq, RangeControlResp},
@@ -29,11 +29,11 @@ impl LiveRangeControlReceiptStore {
 }
 
 #[async_trait]
-impl crabka_gres_ranges::control::RangeControlReceiptStore for LiveRangeControlReceiptStore {
+impl krabka_gres_ranges::control::RangeControlReceiptStore for LiveRangeControlReceiptStore {
     async fn load(
         &self,
         key: &str,
-    ) -> Result<Option<crabka_gres_ranges::control::RangeControlReceipt>, String> {
+    ) -> Result<Option<krabka_gres_ranges::control::RangeControlReceipt>, String> {
         self.transfer
             .upgrade()
             .ok_or_else(|| "range-control runtime stopped".to_owned())?
@@ -45,7 +45,7 @@ impl crabka_gres_ranges::control::RangeControlReceiptStore for LiveRangeControlR
             .transpose()
     }
 
-    async fn list(&self) -> Result<Vec<crabka_gres_ranges::control::RangeControlReceipt>, String> {
+    async fn list(&self) -> Result<Vec<krabka_gres_ranges::control::RangeControlReceipt>, String> {
         self.transfer
             .upgrade()
             .ok_or_else(|| "range-control runtime stopped".to_owned())?
@@ -62,7 +62,7 @@ impl crabka_gres_ranges::control::RangeControlReceiptStore for LiveRangeControlR
         &self,
         key: &str,
         expected_revision: Option<u64>,
-        receipt: crabka_gres_ranges::control::RangeControlReceipt,
+        receipt: krabka_gres_ranges::control::RangeControlReceipt,
     ) -> Result<bool, String> {
         let transfer = self
             .transfer
@@ -76,7 +76,7 @@ impl crabka_gres_ranges::control::RangeControlReceiptStore for LiveRangeControlR
             .map_err(|error| format!("{error:?}"))?;
         let current_revision = current
             .as_deref()
-            .map(serde_json::from_slice::<crabka_gres_ranges::control::RangeControlReceipt>)
+            .map(serde_json::from_slice::<krabka_gres_ranges::control::RangeControlReceipt>)
             .transpose()
             .map_err(|error| error.to_string())?
             .map(|receipt| receipt.revision);
@@ -136,9 +136,9 @@ pub(super) const fn requires_startup_reconcile(operation: &RangeControlOperation
 struct OperationRuntime {
     checkpoint: Option<CheckpointManifest>,
     barrier: Option<RangeTransferBarrier>,
-    staged: Option<crabka_gres_ranges::StagedRangeSuccessors>,
-    claimed: Option<crabka_gres_ranges::ClaimedStagedSuccessors>,
-    split: Option<crabka_gres_ranges::SplitState>,
+    staged: Option<krabka_gres_ranges::StagedRangeSuccessors>,
+    claimed: Option<krabka_gres_ranges::ClaimedStagedSuccessors>,
+    split: Option<krabka_gres_ranges::SplitState>,
     tail_sha256: Option<String>,
     published: bool,
     resumed: bool,
@@ -163,14 +163,14 @@ impl OperationRuntime {
 /// Compute-local executor behind the mTLS range-control service.
 pub(super) struct LiveRangeControlExecutor {
     transfer: Weak<LiveMultiRangeTransfer>,
-    gateway: crabka_gres_ranges::MultiRangeTenant,
+    gateway: krabka_gres_ranges::MultiRangeTenant,
     operations: tokio::sync::Mutex<BTreeMap<String, OperationRuntime>>,
 }
 
 impl LiveRangeControlExecutor {
     pub(super) fn new(
         transfer: &Arc<LiveMultiRangeTransfer>,
-        gateway: crabka_gres_ranges::MultiRangeTenant,
+        gateway: krabka_gres_ranges::MultiRangeTenant,
     ) -> Self {
         Self {
             transfer: Arc::downgrade(transfer),
@@ -203,7 +203,7 @@ impl LiveRangeControlExecutor {
     async fn stage_filtered_restore(
         &self,
         request: &RangeControlReq,
-        intent: &crabka_gres_ranges::control::AuthorizedSplitIntent,
+        intent: &krabka_gres_ranges::control::AuthorizedSplitIntent,
         transfer: &LiveMultiRangeTransfer,
     ) -> Result<RangeControlResp, RangeControlResp> {
         let split = intent.split();
@@ -279,7 +279,7 @@ impl LiveRangeControlExecutor {
     async fn inherit_markers(
         &self,
         request: &RangeControlReq,
-        intent: &crabka_gres_ranges::control::AuthorizedSplitIntent,
+        intent: &krabka_gres_ranges::control::AuthorizedSplitIntent,
         transfer: &LiveMultiRangeTransfer,
     ) -> Result<RangeControlResp, RangeControlResp> {
         let authorized_split = intent.split();
@@ -305,7 +305,7 @@ impl LiveRangeControlExecutor {
         }
         let (left, right) = if let Some(claimed) = runtime.claimed.as_ref() {
             (
-                crabka_gres_ranges::tenant::in_doubt_markers_for_engine(
+                krabka_gres_ranges::tenant::in_doubt_markers_for_engine(
                     &claimed.left.engine,
                     split.predecessor_after.start,
                     split.predecessor_after.end,
@@ -315,7 +315,7 @@ impl LiveRangeControlExecutor {
                     .right
                     .as_ref()
                     .map(|right| {
-                        crabka_gres_ranges::tenant::in_doubt_markers_for_engine(
+                        krabka_gres_ranges::tenant::in_doubt_markers_for_engine(
                             &right.engine,
                             split.successor_after.start,
                             split.successor_after.end,
@@ -383,7 +383,7 @@ impl LiveRangeControlExecutor {
     async fn apply(
         &self,
         request: &RangeControlReq,
-        intent: &crabka_gres_ranges::control::AuthorizedSplitIntent,
+        intent: &krabka_gres_ranges::control::AuthorizedSplitIntent,
     ) -> Result<RangeControlResp, RangeControlResp> {
         let transfer = self.transfer()?;
         match &request.operation {
@@ -566,7 +566,7 @@ impl RangeControlExecutor for LiveRangeControlExecutor {
     async fn execute(
         &self,
         request: &RangeControlReq,
-        intent: &crabka_gres_ranges::control::AuthorizedSplitIntent,
+        intent: &krabka_gres_ranges::control::AuthorizedSplitIntent,
     ) -> RangeControlResp {
         self.apply(request, intent)
             .await
@@ -576,7 +576,7 @@ impl RangeControlExecutor for LiveRangeControlExecutor {
     async fn reconcile(
         &self,
         request: &RangeControlReq,
-        intent: &crabka_gres_ranges::control::AuthorizedSplitIntent,
+        intent: &krabka_gres_ranges::control::AuthorizedSplitIntent,
     ) -> RangeControlResp {
         match request.operation {
             RangeControlOperation::Status => {
@@ -592,7 +592,7 @@ impl RangeControlExecutor for LiveRangeControlExecutor {
     async fn reconcile_completed(
         &self,
         request: &RangeControlReq,
-        intent: &crabka_gres_ranges::control::AuthorizedSplitIntent,
+        intent: &krabka_gres_ranges::control::AuthorizedSplitIntent,
         previous: &RangeControlResp,
     ) -> RangeControlResp {
         if let (
@@ -699,16 +699,16 @@ fn terminal_step_succeeded(response: &RangeControlResp) -> bool {
     )
 }
 
-fn transfer_error(error: &crabka_gres_ranges::RangeTransferError) -> RangeControlResp {
+fn transfer_error(error: &krabka_gres_ranges::RangeTransferError) -> RangeControlResp {
     rejected("transfer_failed", error.to_string())
 }
 
 fn wire_marker(
-    marker: &crabka_gres_ranges::InDoubtMarker,
-) -> crabka_gres_ranges::transport::WireInDoubtMarker {
-    crabka_gres_ranges::transport::WireInDoubtMarker {
+    marker: &krabka_gres_ranges::InDoubtMarker,
+) -> krabka_gres_ranges::transport::WireInDoubtMarker {
+    krabka_gres_ranges::transport::WireInDoubtMarker {
         transaction_id: marker.transaction_id,
-        key: crabka_gres_ranges::transport::WireRangeKey {
+        key: krabka_gres_ranges::transport::WireRangeKey {
             table_id: marker.key.table_id.as_u64(),
             bucket: marker.hash_bucket,
             rowid: marker.key.rowid,
@@ -717,11 +717,11 @@ fn wire_marker(
 }
 
 fn verify_marker_partition(
-    source: &[crabka_gres_ranges::InDoubtMarker],
-    left: &[crabka_gres_ranges::InDoubtMarker],
-    right: Option<&[crabka_gres_ranges::InDoubtMarker]>,
-    left_interval: &crabka_gres_ranges::RangeSpec,
-    right_interval: &crabka_gres_ranges::RangeSpec,
+    source: &[krabka_gres_ranges::InDoubtMarker],
+    left: &[krabka_gres_ranges::InDoubtMarker],
+    right: Option<&[krabka_gres_ranges::InDoubtMarker]>,
+    left_interval: &krabka_gres_ranges::RangeSpec,
+    right_interval: &krabka_gres_ranges::RangeSpec,
 ) -> Result<(), RangeControlResp> {
     if left
         .iter()
@@ -761,7 +761,7 @@ fn verify_marker_partition(
     Ok(())
 }
 
-fn marker_digest(markers: &[crabka_gres_ranges::transport::WireInDoubtMarker]) -> String {
+fn marker_digest(markers: &[krabka_gres_ranges::transport::WireInDoubtMarker]) -> String {
     use std::fmt::Write as _;
 
     use sha2::{Digest as _, Sha256};
@@ -789,7 +789,7 @@ fn recovery_extension_is_structural(
     tenant: &str,
     old_barrier: i64,
     new_barrier: i64,
-    records: &[crabka_gres_ranges::CommittedTailRecord],
+    records: &[krabka_gres_ranges::CommittedTailRecord],
 ) -> Result<(), RangeControlResp> {
     if new_barrier < old_barrier {
         return Err(rejected(
@@ -807,8 +807,8 @@ fn recovery_extension_is_structural(
             ))
         };
     }
-    let control_prefix = crabka_pgkv::key::range_control_receipt_prefix(tenant);
-    let activation_prefix = crabka_pgkv::key::topology_activation_receipt_prefix(tenant);
+    let control_prefix = krabka_pgkv::key::range_control_receipt_prefix(tenant);
+    let activation_prefix = krabka_pgkv::key::topology_activation_receipt_prefix(tenant);
     let mut previous_offset = old_barrier;
     for record in records {
         if record.offset <= previous_offset || record.offset > new_barrier {
@@ -817,7 +817,7 @@ fn recovery_extension_is_structural(
                 "replacement pause tail is out of order or outside the widened interval",
             ));
         }
-        let frame = crabka_gres_substrate::WalFrame::decode(&record.bytes).map_err(|error| {
+        let frame = krabka_gres_substrate::WalFrame::decode(&record.bytes).map_err(|error| {
             rejected(
                 "unsafe_recovery_tail",
                 format!("decode recovery tail: {error}"),
@@ -825,9 +825,9 @@ fn recovery_extension_is_structural(
         })?;
         let offending = frame.ops.iter().enumerate().find_map(|(op_index, op)| {
             let key = match op {
-                crabka_pgkv::WriteOp::Put { key, .. }
-                | crabka_pgkv::WriteOp::ConditionalPut { key, .. }
-                | crabka_pgkv::WriteOp::Delete { key } => key,
+                krabka_pgkv::WriteOp::Put { key, .. }
+                | krabka_pgkv::WriteOp::ConditionalPut { key, .. }
+                | krabka_pgkv::WriteOp::Delete { key } => key,
             };
             (!key.starts_with(&control_prefix) && !key.starts_with(&activation_prefix))
                 .then(|| (op_index, recovery_key_class(key)))
@@ -879,10 +879,10 @@ fn rejected(code: &str, message: impl Into<String>) -> RangeControlResp {
 mod tests {
     use std::sync::Arc;
 
-    use crabka_gres_ranges::{
+    use krabka_gres_ranges::{
         InDoubtMarker, RangeId, RangeKey, RangeSpec, TableId, transport::RangeControlResp,
     };
-    use crabka_pgkv::WriteOp;
+    use krabka_pgkv::WriteOp;
 
     use super::{
         OperationRuntime, marker_digest, recovery_extension_is_structural, terminal_step_succeeded,
@@ -972,10 +972,10 @@ mod tests {
         assert!(terminal_step_succeeded(&RangeControlResp::AlreadyApplied));
     }
 
-    fn tail_record(offset: i64, ops: Vec<WriteOp>) -> crabka_gres_ranges::CommittedTailRecord {
-        crabka_gres_ranges::CommittedTailRecord {
+    fn tail_record(offset: i64, ops: Vec<WriteOp>) -> krabka_gres_ranges::CommittedTailRecord {
+        krabka_gres_ranges::CommittedTailRecord {
             offset,
-            bytes: crabka_gres_substrate::WalFrame {
+            bytes: krabka_gres_substrate::WalFrame {
                 journal_seq: u64::try_from(offset).unwrap(),
                 ops,
             }
@@ -991,7 +991,7 @@ mod tests {
             tail_record(
                 12,
                 vec![WriteOp::ConditionalPut {
-                    key: crabka_pgkv::key::range_control_receipt_key(tenant, "split-42/pause"),
+                    key: krabka_pgkv::key::range_control_receipt_key(tenant, "split-42/pause"),
                     expected: None,
                     value: b"receipt".to_vec(),
                 }],
@@ -999,7 +999,7 @@ mod tests {
             tail_record(
                 13,
                 vec![WriteOp::Put {
-                    key: crabka_pgkv::key::topology_activation_receipt_key(tenant, "split-42"),
+                    key: krabka_pgkv::key::topology_activation_receipt_key(tenant, "split-42"),
                     value: b"activation".to_vec(),
                 }],
             ),
@@ -1012,7 +1012,7 @@ mod tests {
         let records = vec![tail_record(
             11,
             vec![WriteOp::Put {
-                key: crabka_pgkv::key::row_key(7, 99),
+                key: krabka_pgkv::key::row_key(7, 99),
                 value: b"user-data".to_vec(),
             }],
         )];
@@ -1030,12 +1030,12 @@ mod tests {
             11,
             vec![
                 WriteOp::ConditionalPut {
-                    key: crabka_pgkv::key::range_control_receipt_key(tenant, "split-42/pause"),
+                    key: krabka_pgkv::key::range_control_receipt_key(tenant, "split-42/pause"),
                     expected: None,
                     value: b"receipt".to_vec(),
                 },
                 WriteOp::Put {
-                    key: crabka_pgkv::key::row_key(7, 99),
+                    key: krabka_pgkv::key::row_key(7, 99),
                     value: b"user-data".to_vec(),
                 },
             ],

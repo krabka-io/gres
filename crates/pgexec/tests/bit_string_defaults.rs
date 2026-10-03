@@ -13,8 +13,8 @@
 //! `src/test/regress/expected/bit.out`.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 fn cell_text(cell: Option<&Cell>) -> Option<String> {
     cell.map(|c| String::from_utf8(c.text.to_vec()).expect("utf8"))

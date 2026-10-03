@@ -1,7 +1,7 @@
-//! Scenario-driven scalability and fault-injection harness for crabka-gres.
+//! Scenario-driven scalability and fault-injection harness for krabka-gres.
 //!
-//! The harness boots a real multi-process cluster: one `crabka-broker` child
-//! and N `crabka-gres` compute nodes. A [`proxy::ChaosProxy`] fronts every
+//! The harness boots a real multi-process cluster: one `krabka-broker` child
+//! and N `krabka-gres` compute nodes. A [`proxy::ChaosProxy`] fronts every
 //! inter-node and client-facing TCP endpoint. A YAML [`scenario::Scenario`]
 //! describes the topology, the timestamp-source mode, which is either the
 //! Percolator-style `LogicalTso` or a hybrid logical clock, the SQL workload
@@ -17,13 +17,13 @@
 //! there, and resource sampling covers the local processes found by listening
 //! port, or named with `--external-pids`.
 //!
-//! Every magnitude the harness handles is a [`crabka_units`] quantity and not
+//! Every magnitude the harness handles is a [`krabka_units`] quantity and not
 //! a bare number. Those magnitudes are the run and warmup lengths, the fault
 //! offsets and durations, the target rates, the injected delays, the bandwidth
 //! caps, the measured latencies, and the sampled RSS. The scenario YAML and
 //! the JSON report therefore carry their units, and the conversions happen
 //! only at the seams: the `tokio` timers, the `/proc` reads, and the
-//! `crabka-gres` command line.
+//! `krabka-gres` command line.
 //!
 //! Module map:
 //! - [`scenario`] — the YAML schema and its validation.

@@ -9,7 +9,7 @@
 //!
 //! This module emits every span at `DEBUG` under the dedicated
 //! [`SESSION_TARGET`] target, which only the OTLP layer enables. See
-//! `crabka_gres::telemetry`. A disabled callsite costs a load and a branch, but
+//! `krabka_gres::telemetry`. A disabled callsite costs a load and a branch, but
 //! its *field expressions still evaluate*. Anything more expensive than a field
 //! read therefore sits behind an explicit `tracing::enabled!` check with a
 //! [`tracing::Span::none`] fallback. Two costs are worth avoiding: the
@@ -32,27 +32,27 @@
 //! name. The field the layer looks for is the one this module must spell.
 //!
 //! This module deliberately does **not** record `db.query.text`. Verbatim SQL
-//! is off by default behind `CRABKA_OTLP_SQL_TEXT`, and the engine attaches it.
+//! is off by default behind `KRABKA_OTLP_SQL_TEXT`, and the engine attaches it.
 //! The engine is also where the parsed statement that `db.query.summary` needs
 //! exists.
 
 use std::net::SocketAddr;
 
-use crabka_trace_context::{TraceCarrier, extract_sqlcommenter};
+use krabka_trace_context::{TraceCarrier, extract_sqlcommenter};
 use num_traits::ToPrimitive as _;
 
 use crate::error::{PgError, sqlstate};
 
 /// `tracing` target carrying the pgwire session and statement spans.
 ///
-/// This crate spells the target out rather than imports it. `crabka-gres`
-/// names the same string in its default OTLP `EnvFilter`, but `crabka-pgwire`
+/// This crate spells the target out rather than imports it. `krabka-gres`
+/// names the same string in its default OTLP `EnvFilter`, but `krabka-pgwire`
 /// cannot depend on it without a cycle. The two must stay in step, and
-/// `crabka_gres::telemetry` has a test that its filter enables every target.
-pub const SESSION_TARGET: &str = "crabka_pgwire::session";
+/// `krabka_gres::telemetry` has a test that its filter enables every target.
+pub const SESSION_TARGET: &str = "krabka_pgwire::session";
 
 /// Sampling ratio assumed when nothing configures one, matching
-/// `CRABKA_OTLP_SAMPLE_RATIO`'s own default.
+/// `KRABKA_OTLP_SAMPLE_RATIO`'s own default.
 pub const DEFAULT_SAMPLE_RATIO: f64 = 1.0;
 
 /// A span status is a human-readable description, not a payload. A runaway
@@ -95,7 +95,7 @@ pub enum IngressTracePolicy {
     /// and traces stay whole across the boundary.
     ///
     /// `ratio` must be the same value the OTLP pipeline was built with
-    /// (`CRABKA_OTLP_SAMPLE_RATIO`). This enum carries it because pgwire has
+    /// (`KRABKA_OTLP_SAMPLE_RATIO`). This enum carries it because pgwire has
     /// no access to the tracer provider. Use [`IngressTracePolicy::resample`]
     /// to build one from an unvalidated number.
     Resample {
@@ -438,7 +438,7 @@ fn truncate_message(message: &str) -> &str {
 /// to it under `policy`, and return the carrier so the extended protocol can
 /// reuse it at `Execute` time.
 ///
-/// This function never rewrites the SQL text. `crabka_pgparser`'s lexer
+/// This function never rewrites the SQL text. `krabka_pgparser`'s lexer
 /// discards comments without a token, so the tag changes no AST. The parser
 /// also keeps the original string, so a `ParseError`'s byte offset still
 /// points at the right character in the SQLSTATE 42601 the client receives.

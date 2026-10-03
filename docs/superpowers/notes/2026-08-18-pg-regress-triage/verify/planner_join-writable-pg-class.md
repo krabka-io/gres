@@ -28,7 +28,7 @@ Hunks 7-10 (oracle 1027-1165) are two later, independent transactions and are NO
 ## 2. Fix location
 
 - `crates/pgexec/src/exec.rs`, `execute_write_body`, `Statement::Update` arm (line 6453).
-  Line 6463-6464: `resolve_relation(...)` then `crabka_pgcatalog::get_table(catalog_kv, table)?`.
+  Line 6463-6464: `resolve_relation(...)` then `krabka_pgcatalog::get_table(catalog_kv, table)?`.
   `pg_class` resolves to `pg_catalog.pg_class` (virtual, `is_virtual_relation` exec.rs:19786)
   and `get_table` returns `CatalogError::UndefinedTable` -> `relation "pg_catalog.pg_class"
   does not exist` (pgcatalog/src/lib.rs:872). Nothing today parses-and-refuses; it is a plain

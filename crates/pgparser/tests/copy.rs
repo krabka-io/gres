@@ -3,7 +3,7 @@
 //! forms and the exact error text it reports for the rejected ones.
 
 use assert2::assert;
-use crabka_pgparser::ast::{
+use krabka_pgparser::ast::{
     CopyColumns, CopyDestination, CopyDirection, CopyFormat, CopyHeader, CopyLogVerbosity,
     CopyOnError, CopyOptions, CopySource, CopyStmt, CopyTarget, Expr, QueryBody, QueryExpr,
     RelationRef, SelectItem, SetExpr, Statement,
@@ -11,7 +11,7 @@ use crabka_pgparser::ast::{
 
 /// Parse a statement that must be a single `COPY`.
 fn copy(sql: &str) -> CopyStmt {
-    let statements = crabka_pgparser::parse(sql).unwrap_or_else(|e| panic!("{sql}: {e}"));
+    let statements = krabka_pgparser::parse(sql).unwrap_or_else(|e| panic!("{sql}: {e}"));
     match <[Statement; 1]>::try_from(statements) {
         Ok([Statement::Copy(stmt)]) => *stmt,
         Ok([other]) => panic!("{sql}: expected a COPY statement, got {other:?}"),
@@ -27,7 +27,7 @@ fn options(sql: &str) -> CopyOptions {
 
 /// The `(sqlstate, message)` of a statement that must not parse.
 fn rejection(sql: &str) -> (&'static str, String) {
-    let error = crabka_pgparser::parse(sql).expect_err(sql);
+    let error = krabka_pgparser::parse(sql).expect_err(sql);
     (error.sqlstate(), error.message.clone())
 }
 

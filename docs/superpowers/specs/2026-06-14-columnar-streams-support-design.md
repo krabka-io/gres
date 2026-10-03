@@ -1,4 +1,4 @@
-# Columnar / DataFrame support for `crabka-client-streams`
+# Columnar / DataFrame support for `krabka-client-streams`
 
 **Date:** 2026-06-14
 **Status:** Approved design — in implementation
@@ -233,7 +233,7 @@ follow-up, out of scope for this spec.
   round-trips and `__key` / `__timestamp` reconstruction.
 - **Codec property tests.** `decode ∘ encode` round-trips preserve
   key / timestamp / payload for both `RowCodec` and `BlobCodec`.
-- **Broker integration** (behind feature + `crabka-broker` test-helpers). A
+- **Broker integration** (behind feature + `krabka-broker` test-helpers). A
   columnar topology runs against a live in-process broker, verifying offset
   commit at batch boundaries, EOS, and rebalance — reusing existing
   integration-test scaffolding.

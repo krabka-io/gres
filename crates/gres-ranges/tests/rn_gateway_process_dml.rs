@@ -1,6 +1,6 @@
 //! Live-process end-to-end for any-node DML coordination.
 //!
-//! This test uses real `crabka-gres` binaries over a real broker. Node 0 hosts
+//! This test uses real `krabka-gres` binaries over a real broker. Node 0 hosts
 //! r0. Node 1 hosts only r1 and carries a range-0 follower catalog replica that
 //! truly lags. Every statement drives through node 1's SQL front door, so
 //! classification and planning run against the follower replica, timestamps mint

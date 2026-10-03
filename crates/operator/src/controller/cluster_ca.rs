@@ -16,10 +16,10 @@
 
 use std::{collections::BTreeMap, net::IpAddr};
 
-use crabka_security::ca::{
+use krabka_security::ca::{
     CaMaterial, SubjectAltName, generate_clients_ca, generate_cluster_ca, issue_broker_cert,
 };
-use crabka_units::{
+use krabka_units::{
     Time,
     convert::TimeExt as _,
     days,
@@ -612,10 +612,10 @@ async fn apply_ca_rotation(
         CaRotationPlan::RenewCertSameKey => {
             let new_cert = match which {
                 WhichCa::Cluster => {
-                    crabka_security::ca::renew_cluster_ca(&key_pem, cn, whole_days(inp.validity))?
+                    krabka_security::ca::renew_cluster_ca(&key_pem, cn, whole_days(inp.validity))?
                 }
                 WhichCa::Clients => {
-                    crabka_security::ca::renew_clients_ca(&key_pem, cn, whole_days(inp.validity))?
+                    krabka_security::ca::renew_clients_ca(&key_pem, cn, whole_days(inp.validity))?
                 }
             };
             let mut blocks = vec![normalize_block(&new_cert)];
@@ -1154,7 +1154,7 @@ fn span_as_time(span: time::Duration) -> Time {
 }
 
 /// Converts a certificate lifetime into whole days, which is the unit that
-/// `crabka_security::ca` uses.
+/// `krabka_security::ca` uses.
 ///
 /// The CRD carries these values as `u32` days, so the round-trip is exact
 /// for every configured value. A negative extent becomes zero, and a very
@@ -1339,9 +1339,9 @@ async fn flag_ca_if_expiring(
                     "CA {} is within renewalDays; scheduled a same-key renewal on the next reconcile",
                     which.condition_name()
                 ),
-                generate_name: "crabka-ca-renewal-",
+                generate_name: "krabka-ca-renewal-",
                 action: "RenewalCheck",
-                reporting_component: "crabka-operator/ca-renewal-check",
+                reporting_component: "krabka-operator/ca-renewal-check",
             },
         )
         .await?;
@@ -1359,9 +1359,9 @@ async fn flag_ca_if_expiring(
                      rotation is the cluster admin's responsibility (BYO)",
                     which.condition_name()
                 ),
-                generate_name: "crabka-ca-renewal-",
+                generate_name: "krabka-ca-renewal-",
                 action: "RenewalCheck",
-                reporting_component: "crabka-operator/ca-renewal-check",
+                reporting_component: "krabka-operator/ca-renewal-check",
             },
         )
         .await?;
@@ -1529,9 +1529,9 @@ async fn renew_broker_leafs(
                 type_: "Normal",
                 reason: "BrokerCertRenewed",
                 message: &format!("broker={id} reissued by ca-renewal-check"),
-                generate_name: "crabka-ca-renewal-",
+                generate_name: "krabka-ca-renewal-",
                 action: "RenewalCheck",
-                reporting_component: "crabka-operator/ca-renewal-check",
+                reporting_component: "krabka-operator/ca-renewal-check",
             },
         )
         .await?;
@@ -1586,7 +1586,7 @@ pub(crate) async fn emit_event(
         action: Some(action.into()),
         reporting_component: Some(reporting_component.into()),
         reporting_instance: Some(
-            std::env::var("POD_NAME").unwrap_or_else(|_| "crabka-operator-renewal".into()),
+            std::env::var("POD_NAME").unwrap_or_else(|_| "krabka-operator-renewal".into()),
         ),
         ..Default::default()
     };
@@ -1602,7 +1602,7 @@ pub(crate) async fn emit_event(
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_security::ca::{generate_clients_ca, generate_cluster_ca, issue_user_cert};
+    use krabka_security::ca::{generate_clients_ca, generate_cluster_ca, issue_user_cert};
 
     use super::*;
 
@@ -1658,7 +1658,7 @@ mod tests {
 #[cfg(test)]
 mod reissue_tests {
     use assert2::assert;
-    use crabka_security::ca::SubjectAltName;
+    use krabka_security::ca::SubjectAltName;
 
     use super::compute_san_digest;
 
@@ -1700,7 +1700,7 @@ mod reissue_tests {
 #[cfg(test)]
 mod san_tests {
     use assert2::assert;
-    use crabka_security::ca::{SubjectAltName, generate_cluster_ca, issue_broker_cert};
+    use krabka_security::ca::{SubjectAltName, generate_cluster_ca, issue_broker_cert};
     use rustls::pki_types::{CertificateDer, pem::PemObject};
     use x509_parser::{
         extensions::GeneralName,
@@ -1827,7 +1827,7 @@ mod san_tests {
 #[cfg(test)]
 mod rotation_tests {
     use assert2::assert;
-    use crabka_security::ca::{generate_cluster_ca, renew_cluster_ca};
+    use krabka_security::ca::{generate_cluster_ca, renew_cluster_ca};
 
     use super::*;
 
@@ -2076,11 +2076,11 @@ mod rotation_tests {
         use x509_parser::prelude::{FromDer, X509Certificate};
 
         let ca = generate_cluster_ca("c1-cluster-ca", 20).expect("CA");
-        let leaf = crabka_security::ca::issue_broker_cert(
+        let leaf = krabka_security::ca::issue_broker_cert(
             &ca.cert_pem,
             &ca.key_pem,
             "c1-broker-0",
-            &[crabka_security::ca::SubjectAltName::Dns(
+            &[krabka_security::ca::SubjectAltName::Dns(
                 "c1-broker-0".into(),
             )],
             &[],

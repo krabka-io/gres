@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use assert2::assert;
-use crabka_gres_ranges::{
+use krabka_gres_ranges::{
     CheckpointManifest, CheckpointOperation, FilteredSuccessorRestoreOperation, InDoubtMarker,
     InDoubtMarkerInheritanceOperation, MapEpoch, PredecessorParkingOperation, RangeId, RangeKey,
     RangeMap, RangeMapCommitOperation, RangeSpec, SplitCommand, SplitError,
@@ -178,7 +178,7 @@ impl PredecessorParkingOperation for RecordingParking {
     }
 }
 
-fn fully_wired_adapter(recorder: &Recorder) -> crabka_gres_ranges::SplitHookAdapter {
+fn fully_wired_adapter(recorder: &Recorder) -> krabka_gres_ranges::SplitHookAdapter {
     SplitHookAdapterBuilder::new()
         .checkpoint(Arc::new(RecordingCheckpoint(recorder.clone())))
         .write_gate(Arc::new(RecordingWriteGate(recorder.clone())))

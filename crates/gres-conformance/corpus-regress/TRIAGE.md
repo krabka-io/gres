@@ -5,9 +5,9 @@ Work queue for M4 (progressive `pg_regress` adoption) and M5 (no `Wave-assigned`
 ## 2026-08-02 measurement
 
 ```sh
-cargo build --locked -p crabka-gres -p crabka-gres-conformance
-setsid ./target/debug/crabka-gres --listen 127.0.0.1:54360 >/tmp/gres.log 2>&1 </dev/null &
-./target/debug/crabka-gres-conformance \
+cargo build --locked -p krabka-gres -p krabka-gres-conformance
+setsid ./target/debug/krabka-gres --listen 127.0.0.1:54360 >/tmp/gres.log 2>&1 </dev/null &
+./target/debug/krabka-gres-conformance \
   --oracle-url "host=127.0.0.1 port=54320 user=postgres dbname=<fresh empty db>" \
   --subject-url "host=127.0.0.1 port=54360 user=crab dbname=crab" \
   --corpus crates/gres-conformance/corpus \

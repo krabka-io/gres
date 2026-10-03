@@ -23,10 +23,10 @@ The broker owns these CLI and environment pairs:
 
 | CLI | Environment |
 |---|---|
-| existing `--controller-heartbeat-interval` | `CRABKA_CONTROLLER_HEARTBEAT_INTERVAL` |
-| `--controller-fetch-miss-limit` | `CRABKA_CONTROLLER_FETCH_MISS_LIMIT` |
-| `--metadata-raft-command-queue-capacity` | `CRABKA_METADATA_RAFT_COMMAND_QUEUE_CAPACITY` |
-| `--metadata-raft-fetch-max` | `CRABKA_METADATA_RAFT_FETCH_MAX` |
+| existing `--controller-heartbeat-interval` | `KRABKA_CONTROLLER_HEARTBEAT_INTERVAL` |
+| `--controller-fetch-miss-limit` | `KRABKA_CONTROLLER_FETCH_MISS_LIMIT` |
+| `--metadata-raft-command-queue-capacity` | `KRABKA_METADATA_RAFT_COMMAND_QUEUE_CAPACITY` |
+| `--metadata-raft-fetch-max` | `KRABKA_METADATA_RAFT_FETCH_MAX` |
 
 Runtime TOML uses matching snake-case keys. `Kafka.spec.brokerTuning` gains:
 

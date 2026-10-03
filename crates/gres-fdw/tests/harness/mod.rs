@@ -23,14 +23,14 @@ use std::{
 };
 
 use bytes::Bytes;
-use crabka_broker::{Broker, BrokerConfig, BrokerHandle};
-use crabka_client_core::Client;
-use crabka_client_producer::{Acks, Header, Producer, ProducerRecord};
-use crabka_protocol::owned::{
+use krabka_broker::{Broker, BrokerConfig, BrokerHandle};
+use krabka_client_core::Client;
+use krabka_client_producer::{Acks, Header, Producer, ProducerRecord};
+use krabka_protocol::owned::{
     create_topics_request::{CreatableTopic, CreateTopicsRequest},
     metadata_request::MetadataRequest,
 };
-use crabka_schema_registry::{
+use krabka_schema_registry::{
     config::{RegistryConfig, RegistryRuntimeConfig, SecurityConfig},
     format::SchemaType,
     kafkastore::{KafkaStore, RegisterSchema, record::SchemaReference},
@@ -73,7 +73,7 @@ impl KafkaStack {
     /// not become ready within [`READY_TIMEOUT`]. A test harness needs a loud
     /// failure.
     pub async fn start() -> Self {
-        crabka_fdw_install_provider();
+        krabka_fdw_install_provider();
 
         // ── broker ───────────────────────────────────────────────────────
         let log_dir = TempDir::new().expect("broker temp log dir");
@@ -331,8 +331,8 @@ impl Drop for KafkaStack {
 }
 
 /// Installs the rustcrypto rustls provider that the FDW and crabka clients use.
-fn crabka_fdw_install_provider() {
-    crabka_gres_fdw::provider::install_default_provider();
+fn krabka_fdw_install_provider() {
+    krabka_gres_fdw::provider::install_default_provider();
 }
 
 /// Waits until a `Metadata` RPC against `bootstrap` succeeds.

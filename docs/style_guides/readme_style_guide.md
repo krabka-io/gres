@@ -30,10 +30,10 @@ Each crate README is the **entry point for someone who sees the crate for the fi
 ### Library Crates
 
 ```markdown
-# crabka-<name>
+# krabka-<name>
 
-[![Crates.io](https://img.shields.io/crates/v/crabka-<name>.svg)](https://crates.io/crates/crabka-<name>)
-[![Docs.rs](https://docs.rs/crabka-<name>/badge.svg)](https://docs.rs/crabka-<name>)
+[![Crates.io](https://img.shields.io/crates/v/krabka-<name>.svg)](https://crates.io/crates/krabka-<name>)
+[![Docs.rs](https://docs.rs/krabka-<name>/badge.svg)](https://docs.rs/krabka-<name>)
 
 <One-line description of what this crate does.>
 
@@ -60,7 +60,7 @@ standard(s) / KIP(s) it implements, and its relationship to other Crabka crates.
 
 - [Design](docs/design.md)
 - [Test Coverage](docs/test_coverage_report.md)
-- [API Documentation](https://docs.rs/crabka-<name>)
+- [API Documentation](https://docs.rs/krabka-<name>)
 - [KIP Matrix](../../docs/KIP_MATRIX.md)
 
 ## License
@@ -71,7 +71,7 @@ Apache-2.0. Derivative work of [Apache Kafka](https://kafka.apache.org); see [NO
 ### Server / Binary Crates
 
 ```markdown
-# crabka-<name>
+# krabka-<name>
 
 <One-line description of what this binary does.>
 
@@ -95,7 +95,7 @@ Configuration is read from TOML files and environment variables
 ## Container Image
 
 ```bash
-docker pull ghcr.io/robot-head/crabka-<name>:latest
+docker pull ghcr.io/robot-head/krabka-<name>:latest
 ```
 
 ## Documentation
@@ -114,7 +114,7 @@ Apache-2.0. Derivative work of [Apache Kafka](https://kafka.apache.org); see [NO
 For crates under about 200 lines with a single responsibility:
 
 ```markdown
-# crabka-<name>
+# krabka-<name>
 
 <One-line description.>
 
@@ -140,7 +140,7 @@ The standard badge set is the one form of image Crabka READMEs use, because the 
 
 ## Naming Conventions
 
-- **Title**: use the crate name as-is (for example, `# crabka-protocol`, not `# Kafka Protocol Library`).
+- **Title**: use the crate name as-is (for example, `# krabka-protocol`, not `# Kafka Protocol Library`).
 - **Links**: use relative paths within the repo (for example, `../../NOTICE`, `../../docs/KIP_MATRIX.md`), not absolute URLs, except for external sites (crates.io, docs.rs, kafka.apache.org, KIP pages).
 - **License**: American spelling (`## License`), Apache-2.0, and the Kafka derivative-work line that points at `NOTICE`. Every crate is a derivative work of Apache Kafka.
 

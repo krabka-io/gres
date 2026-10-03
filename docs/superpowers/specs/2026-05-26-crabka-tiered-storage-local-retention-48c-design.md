@@ -3,7 +3,7 @@
 **Date:** 2026-05-26
 **Status:** Slice design. Follows slice 48b (copy path). Part of the
 KIP-405 umbrella
-(`docs/superpowers/specs/2026-05-25-crabka-tiered-storage-roadmap-design.md`).
+(`docs/superpowers/specs/2026-05-25-krabka-tiered-storage-roadmap-design.md`).
 
 ## Goal
 
@@ -257,6 +257,6 @@ thin wrapper that gathers inputs and calls the helper.
 
 - `cargo fmt --all --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test -p crabka-log -p crabka-broker`
+- `cargo test -p krabka-log -p krabka-broker`
 - `cargo build --workspace`
 - No CRD drift (no CRDs touched).

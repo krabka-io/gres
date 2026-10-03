@@ -58,13 +58,13 @@ The observability demo Consume role exposes the seven fields:
 
 | CLI | Environment |
 |---|---|
-| `--consumer-startup-attempt-timeout` | `CRABKA_DEMO_CONSUMER_STARTUP_ATTEMPT_TIMEOUT` |
-| `--consumer-startup-deadline` | `CRABKA_DEMO_CONSUMER_STARTUP_DEADLINE` |
-| `--consumer-startup-initial-backoff` | `CRABKA_DEMO_CONSUMER_STARTUP_INITIAL_BACKOFF` |
-| `--consumer-startup-max-backoff` | `CRABKA_DEMO_CONSUMER_STARTUP_MAX_BACKOFF` |
-| `--consumer-coordinator-retry-timeout` | `CRABKA_DEMO_CONSUMER_COORDINATOR_RETRY_TIMEOUT` |
-| `--consumer-coordinator-initial-backoff` | `CRABKA_DEMO_CONSUMER_COORDINATOR_INITIAL_BACKOFF` |
-| `--consumer-coordinator-max-backoff` | `CRABKA_DEMO_CONSUMER_COORDINATOR_MAX_BACKOFF` |
+| `--consumer-startup-attempt-timeout` | `KRABKA_DEMO_CONSUMER_STARTUP_ATTEMPT_TIMEOUT` |
+| `--consumer-startup-deadline` | `KRABKA_DEMO_CONSUMER_STARTUP_DEADLINE` |
+| `--consumer-startup-initial-backoff` | `KRABKA_DEMO_CONSUMER_STARTUP_INITIAL_BACKOFF` |
+| `--consumer-startup-max-backoff` | `KRABKA_DEMO_CONSUMER_STARTUP_MAX_BACKOFF` |
+| `--consumer-coordinator-retry-timeout` | `KRABKA_DEMO_CONSUMER_COORDINATOR_RETRY_TIMEOUT` |
+| `--consumer-coordinator-initial-backoff` | `KRABKA_DEMO_CONSUMER_COORDINATOR_INITIAL_BACKOFF` |
+| `--consumer-coordinator-max-backoff` | `KRABKA_DEMO_CONSUMER_COORDINATOR_MAX_BACKOFF` |
 
 All values use unit-bearing syntax such as `90s` and `500ms`; no raw
 millisecond options or environment variables are added. Explicit values are

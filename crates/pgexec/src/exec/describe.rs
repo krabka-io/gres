@@ -9,8 +9,8 @@ pub(crate) fn describe(
     _kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
     sql: &str,
-) -> Result<Vec<crabka_pgwire::engine::FieldDescription>, ExecError> {
-    let statements = crabka_pgparser::parse(sql)?;
+) -> Result<Vec<krabka_pgwire::engine::FieldDescription>, ExecError> {
+    let statements = krabka_pgparser::parse(sql)?;
     let Some(statement) = statements.first() else {
         return Ok(Vec::new());
     };
@@ -21,7 +21,7 @@ pub(crate) fn describe_statement(
     catalog_kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
     statement: &Statement,
-) -> Result<Vec<crabka_pgwire::engine::FieldDescription>, ExecError> {
+) -> Result<Vec<krabka_pgwire::engine::FieldDescription>, ExecError> {
     match statement {
         Statement::Query(q) => crate::query::describe_query_expr(catalog_kv, resolution, q),
         Statement::Insert {
@@ -52,14 +52,14 @@ pub(crate) fn describe_statement(
 
 pub(crate) fn describe_returning(
     catalog_kv: &dyn Kv,
-    table: &crabka_pgcatalog::RelationName,
-    returning: Option<&crabka_pgparser::ast::Returning>,
+    table: &krabka_pgcatalog::RelationName,
+    returning: Option<&krabka_pgparser::ast::Returning>,
     merge: bool,
 ) -> Result<Vec<FieldDescription>, ExecError> {
     // The target is resolved even with no RETURNING clause, because analysing a
     // DML statement must reject a missing table (42P01) whether or not the
     // statement would have returned rows.
-    let table = crabka_pgcatalog::get_table(catalog_kv, table)?;
+    let table = krabka_pgcatalog::get_table(catalog_kv, table)?;
     let Some(returning) = returning else {
         return Ok(Vec::new());
     };
@@ -100,8 +100,8 @@ pub(crate) fn describe_returning(
 /// resolved; see [`PendingForeignKey`]).
 pub(super) type TableDefinition = (
     Vec<Column>,
-    Vec<crabka_pgcatalog::CheckConstraint>,
-    Vec<(crabka_pgcatalog::RelationName, Sequence)>,
-    Vec<crabka_pgcatalog::NewIndex>,
+    Vec<krabka_pgcatalog::CheckConstraint>,
+    Vec<(krabka_pgcatalog::RelationName, Sequence)>,
+    Vec<krabka_pgcatalog::NewIndex>,
     Vec<PendingForeignKey>,
 );

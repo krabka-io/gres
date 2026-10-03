@@ -14,7 +14,7 @@ succeed, the limit hunk starts at line 368 with the first tenk1 statement.
 
 Two DIFFERENT budgets are in play (the analyst says "fixed 16 MiB"):
 
-* CI runs `crabka-gres --pgexec-blocking-query-memory=20MiB`
+* CI runs `krabka-gres --pgexec-blocking-query-memory=20MiB`
   (ci-artifact/gres-serial/server-command.txt; scripts/gres-pg-regress.sh:267
   default `GRES_PG_REGRESS_BLOCKING_QUERY_MEMORY:-20MiB`; crates/gres/src/lib.rs:857
   flag -> RuntimePolicy.blocking_query_memory, lib.rs:409/425).

@@ -1,4 +1,4 @@
-use crabka_pgparser::{
+use krabka_pgparser::{
     ast::{
         AlterEventTriggerAction, AlterTriggerAction, EventTriggerEvent, Statement,
         TriggerEnableMode, TriggerEvent, TriggerLevel, TriggerTiming,

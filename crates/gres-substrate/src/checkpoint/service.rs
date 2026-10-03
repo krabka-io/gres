@@ -5,10 +5,10 @@ use std::{
     time::Duration,
 };
 
-use crabka_client_admin::DeleteRecordsOp;
-use crabka_object_store::{ObjectOps, ObjectStoreClient, ObjectStoreConfig, build_object_store};
-use crabka_pgkv::{KvSnapshot, SnapshotKv};
-use crabka_units::{ByteSize, convert::ByteSizeExt as _};
+use krabka_client_admin::DeleteRecordsOp;
+use krabka_object_store::{ObjectOps, ObjectStoreClient, ObjectStoreConfig, build_object_store};
+use krabka_pgkv::{KvSnapshot, SnapshotKv};
+use krabka_units::{ByteSize, convert::ByteSizeExt as _};
 use tokio::{
     sync::{Mutex as AsyncMutex, mpsc, oneshot},
     task::JoinHandle,
@@ -115,7 +115,7 @@ impl CheckpointConfig {
                 "at least one checkpoint threshold must be non-zero".into(),
             ));
         }
-        if self.part_max_size < crabka_units::bytes(8) {
+        if self.part_max_size < krabka_units::bytes(8) {
             return Err(SubstrateError::Checkpoint(
                 "checkpoint part_max_bytes must fit one empty key/value pair".into(),
             ));
@@ -235,7 +235,7 @@ impl CheckpointPlannerStats {
     }
 }
 
-impl crabka_pgexec::plan_dist::Stats for CheckpointPlannerStats {
+impl krabka_pgexec::plan_dist::Stats for CheckpointPlannerStats {
     fn estimated_bytes(&self, _table_id: u64) -> Option<u64> {
         self.latest
             .read()
@@ -820,7 +820,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
 
     use assert2::assert;
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
     use tokio::sync::Notify;
 
     use super::*;
@@ -931,7 +931,7 @@ mod tests {
         let stats = Arc::new(CheckpointStats::default());
         let service = Arc::new(
             CheckpointService::new(
-                polling(config(0, crabka_units::bytes(64))),
+                polling(config(0, krabka_units::bytes(64))),
                 kv,
                 store,
                 pruner.clone(),
@@ -1040,7 +1040,7 @@ mod tests {
         let stats = Arc::new(CheckpointStats::default());
         let service = Arc::new(
             CheckpointService::new(
-                config(0, crabka_units::bytes(10)),
+                config(0, krabka_units::bytes(10)),
                 kv,
                 store,
                 pruner.clone(),
@@ -1159,16 +1159,16 @@ mod tests {
 
     #[tokio::test]
     async fn verified_checkpoint_publication_changes_next_join_plan() {
-        use crabka_pgexec::plan_dist::{
+        use krabka_pgexec::plan_dist::{
             CombinedStats, JoinInputs, JoinStrategy, PlannerConfig, plan_join, plan_join_for_tables,
         };
 
         let concrete_kv = Arc::new(MemKv::default());
         concrete_kv
-            .put(crabka_pgkv::key::seq_key(1), 1_u64.to_be_bytes().to_vec())
+            .put(krabka_pgkv::key::seq_key(1), 1_u64.to_be_bytes().to_vec())
             .expect("left sequence");
         concrete_kv
-            .put(crabka_pgkv::key::seq_key(2), 100_u64.to_be_bytes().to_vec())
+            .put(krabka_pgkv::key::seq_key(2), 100_u64.to_be_bytes().to_vec())
             .expect("right sequence");
         concrete_kv
             .put(b"large-checkpoint-key".to_vec(), vec![7; 512])
@@ -1183,8 +1183,8 @@ mod tests {
             Arc::new(CheckpointStats::default()),
         )
         .expect("service");
-        let engine_kv: Arc<dyn crabka_pgkv::Kv> = concrete_kv;
-        let mut engine = crabka_pgexec::SqlEngine::with_kv(engine_kv).expect("engine");
+        let engine_kv: Arc<dyn krabka_pgkv::Kv> = concrete_kv;
+        let mut engine = krabka_pgexec::SqlEngine::with_kv(engine_kv).expect("engine");
         engine.set_join_stats(Arc::new(CombinedStats::new(
             engine.join_stats(),
             service.planner_stats(),
@@ -1225,31 +1225,31 @@ mod tests {
             .expect("verified checkpoint");
         restarted.publish_planner_metadata(restored);
         assert!(
-            crabka_pgexec::plan_dist::Stats::estimated_bytes(restarted.planner_stats().as_ref(), 1)
+            krabka_pgexec::plan_dist::Stats::estimated_bytes(restarted.planner_stats().as_ref(), 1)
                 .is_some_and(|bytes| bytes > 64)
         );
         assert_eq!(
-            crabka_pgexec::plan_dist::Stats::estimated_bytes(restarted.planner_stats().as_ref(), 1,),
-            crabka_pgexec::plan_dist::Stats::estimated_bytes(
+            krabka_pgexec::plan_dist::Stats::estimated_bytes(restarted.planner_stats().as_ref(), 1,),
+            krabka_pgexec::plan_dist::Stats::estimated_bytes(
                 restarted.planner_stats().as_ref(),
                 999,
             ),
             "range checkpoint bytes are a global upper bound, not per-table metadata",
         );
 
-        let table = |id, name: &str, group: &str| crabka_pgcatalog::Table {
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+        let table = |id, name: &str, group: &str| krabka_pgcatalog::Table {
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             id,
-            name: crabka_pgcatalog::RelationName::public(name),
-            columns: vec![crabka_pgcatalog::Column::new(
+            name: krabka_pgcatalog::RelationName::public(name),
+            columns: vec![krabka_pgcatalog::Column::new(
                 "id",
-                crabka_pgtypes::ColumnType::Int4,
+                krabka_pgtypes::ColumnType::Int4,
             )],
             sharded: true,
             row_security: false,
             force_row_security: false,
-            sharding: Some(crabka_pgcatalog::ShardingStrategy::Hash(
-                crabka_pgcatalog::HashSharding {
+            sharding: Some(krabka_pgcatalog::ShardingStrategy::Hash(
+                krabka_pgcatalog::HashSharding {
                     columns: vec!["id".into()],
                     buckets: 4,
                     co_location_group: Some(group.into()),

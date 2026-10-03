@@ -1,8 +1,8 @@
 use clap::{Parser, Subcommand};
-use crabka_operator::{config::OperatorConfig, gen_crds, run};
+use krabka_operator::{config::OperatorConfig, gen_crds, run};
 
 #[derive(Debug, Parser)]
-#[command(name = "crabka-operator", version, about)]
+#[command(name = "krabka-operator", version, about)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -52,7 +52,7 @@ async fn main() -> anyhow::Result<()> {
         Command::CaRenewalCheck(args) => {
             tracing_subscriber::fmt::init();
             let client = kube::Client::try_default().await?;
-            crabka_operator::controller::cluster_ca::run_renewal_check(
+            krabka_operator::controller::cluster_ca::run_renewal_check(
                 client,
                 args.namespace.as_deref(),
             )

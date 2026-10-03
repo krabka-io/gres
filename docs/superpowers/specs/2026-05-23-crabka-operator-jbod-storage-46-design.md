@@ -6,7 +6,7 @@
 through the operator. Add a `Jbod` variant to `KafkaNodePool.spec.storage`
 that materializes **multiple PVCs per pod** — one persistent volume per
 JBOD disk — and wires the broker to spread partition data across them via
-the `CRABKA_EXTRA_LOG_DIRS` env var (slice 45). Phase 8, the operator
+the `KRABKA_EXTRA_LOG_DIRS` env var (slice 45). Phase 8, the operator
 surface for the core JBOD work landed in slice 45.
 
 ---
@@ -21,7 +21,7 @@ surface for the core JBOD work landed in slice 45.
   `id: i32`, a `size: String` (K8s `Quantity`), and an optional
   `class: Option<String>`.
 - Renderer materializes **one `volumeClaimTemplate` per JBOD volume** plus the
-  matching pod `volumeMounts`, and sets `CRABKA_EXTRA_LOG_DIRS` on the broker
+  matching pod `volumeMounts`, and sets `KRABKA_EXTRA_LOG_DIRS` on the broker
   container so the broker treats every disk as a log dir.
 - Static validation: volumes non-empty, ids unique, every `size` a positive
   `Quantity`.
@@ -51,7 +51,7 @@ surface for the core JBOD work landed in slice 45.
   (`log_dir = "/var/lib/crabka/data"`), and main script **unchanged**.
 - **Every non-primary volume `id = N`** gets PVC template `data-{N}` mounted at
   `/var/lib/crabka/data-{N}`, and is passed to the broker via
-  `CRABKA_EXTRA_LOG_DIRS` (comma-joined, sorted by id). The broker (slice 45)
+  `KRABKA_EXTRA_LOG_DIRS` (comma-joined, sorted by id). The broker (slice 45)
   splits the env value on commas and spreads partitions across
   `[/var/lib/crabka/data] + extras` by least-loaded placement.
 - **No broker / init-script / main-script / cluster-TOML change.** JBOD is
@@ -143,7 +143,7 @@ regardless of YAML order. Let `primary = volumes_sorted[0]`,
        size`, optional `storageClassName`, labels = pod labels (GC selector).
 2. **`render_broker_container`**: for each extra volume, add a
    `volumeMount {name: data-{N}, mountPath: /var/lib/crabka/data-{N}}`, and add
-   env `CRABKA_EXTRA_LOG_DIRS = "/var/lib/crabka/data-{N1},/var/lib/crabka/data-{N2},…"`
+   env `KRABKA_EXTRA_LOG_DIRS = "/var/lib/crabka/data-{N1},/var/lib/crabka/data-{N2},…"`
    (extras only, sorted by id). The init container is untouched (it only
    formats the primary metadata dir).
 3. **`render_pvc_retention_policy`** (JBOD arm): `whenDeleted = Delete` iff
@@ -207,7 +207,7 @@ shape, `volumes` array, `deleteClaim`).
 
 **`tests/reconcile_pool.rs`:** `pool_jbod_renders_multiple_volume_claim_templates`
 — apply a 2-volume JBOD pool, capture the SSA PATCH, assert two
-`volumeClaimTemplates` (`data`, `data-1`) and the `CRABKA_EXTRA_LOG_DIRS` env.
+`volumeClaimTemplates` (`data`, `data-1`) and the `KRABKA_EXTRA_LOG_DIRS` env.
 The shared `fake_sts_body_with_storage` helper grows a JBOD-aware variant for a
 shrink-rejection integration test.
 
@@ -240,9 +240,9 @@ No broker, init-script, main-script, or cluster-level ConfigMap/TOML change.
 
 ## 7. Acceptance criteria
 
-1. `cargo test -p crabka-operator` green (existing + JBOD unit/integration).
+1. `cargo test -p krabka-operator` green (existing + JBOD unit/integration).
 2. `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo fmt --check`.
 3. CRD regen stable (`tools/regen-crds.sh` leaves no diff after commit).
-4. `helm lint charts/crabka-operator` passes.
+4. `helm lint charts/krabka-operator` passes.
 5. operator-e2e (kind): JBOD pool becomes `Ready=True`; both PVCs `Bound`;
    broker reports both disks as log dirs; PVCs GC'd on cluster delete.

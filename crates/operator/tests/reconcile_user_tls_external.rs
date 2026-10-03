@@ -7,10 +7,10 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use assert2::{assert, check};
-use crabka_client_admin::{
+use krabka_client_admin::{
     AclEntry, AclOperation, PatternType, PermissionType, QuotaOp, ResourceType,
 };
-use crabka_operator::{
+use krabka_operator::{
     controller::user::reconcile,
     crd::{
         AclOp, AclPatternType, AclPermission, AclResource, AclResourceKind, AclRule,

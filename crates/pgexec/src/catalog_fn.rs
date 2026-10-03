@@ -15,12 +15,12 @@
 
 use std::fmt::Write;
 
-use crabka_pgcatalog::{
+use krabka_pgcatalog::{
     CommentObject, ForeignKey, Index, MatchType, ReferentialAction, RelationName, Table, View,
 };
-use crabka_pgkv::Kv;
-use crabka_pgparser::ast::{Expr, FuncCall};
-use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
+use krabka_pgkv::Kv;
+use krabka_pgparser::ast::{Expr, FuncCall};
+use krabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
 
 use crate::{
     clock::EvalCtx,
@@ -465,7 +465,7 @@ fn tablespace_location(value: &Datum, ctx: &EvalCtx) -> Result<Datum, ExecError>
     let kv = ctx.catalog().ok_or_else(|| {
         ExecError::Unsupported("pg_tablespace_location requires a catalog".into())
     })?;
-    Ok(crabka_pgcatalog::list_tablespaces(kv)?
+    Ok(krabka_pgcatalog::list_tablespaces(kv)?
         .into_iter()
         .find(|tablespace| tablespace.oid == oid)
         .map_or(Datum::Null, |tablespace| {
@@ -628,7 +628,7 @@ fn flag_arg(value: &Datum) -> Result<bool, ExecError> {
 /// materialized view genuinely has none, which is why `INSERT` into one is
 /// 42809 rather than a rewrite.
 fn updatable_relation_name(kv: &dyn Kv, oid: i32) -> Result<Option<RelationName>, ExecError> {
-    for table in crabka_pgcatalog::list_tables(kv)? {
+    for table in krabka_pgcatalog::list_tables(kv)? {
         if crate::catalog_rel::table_relation_oid(table.id)? == oid {
             if table.materialized.is_some() {
                 return Ok(None);
@@ -645,18 +645,18 @@ fn trigger_def(
     kv: &dyn Kv,
     reference: &Datum,
     pretty: bool,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> Result<Datum, ExecError> {
     let Ok(oid) = u32::try_from(int_arg(reference)?) else {
         return Ok(Datum::Null);
     };
-    let Some(trigger) = crabka_pgcatalog::trigger::list_triggers(kv)?
+    let Some(trigger) = krabka_pgcatalog::trigger::list_triggers(kv)?
         .into_iter()
         .find(|trigger| trigger.oid == oid)
     else {
         return Ok(Datum::Null);
     };
-    use crabka_pgcatalog::trigger::{TriggerLevel, TriggerTiming};
+    use krabka_pgcatalog::trigger::{TriggerLevel, TriggerTiming};
     let mut sql = if trigger.constraint {
         format!(
             "CREATE CONSTRAINT TRIGGER {}",
@@ -701,17 +701,17 @@ fn trigger_def(
         let _ = write!(
             sql,
             "{}.",
-            quote_identifier(crabka_pgcatalog::displayed_schema(&trigger.table.schema)),
+            quote_identifier(krabka_pgcatalog::displayed_schema(&trigger.table.schema)),
         );
     }
     sql.push_str(&quote_identifier(&trigger.table.name));
     if let Some(referenced) = trigger.referenced_table_id
-        && let Ok(table) = crabka_pgcatalog::table_by_id(kv, referenced)
+        && let Ok(table) = krabka_pgcatalog::table_by_id(kv, referenced)
     {
         let _ = write!(
             sql,
             " FROM {}.{}",
-            quote_identifier(crabka_pgcatalog::displayed_schema(&table.name.schema)),
+            quote_identifier(krabka_pgcatalog::displayed_schema(&table.name.schema)),
             quote_identifier(&table.name.name)
         );
     }
@@ -739,7 +739,7 @@ fn trigger_def(
         TriggerLevel::Statement => " FOR EACH STATEMENT",
     });
     if let Some(predicate) = &trigger.when {
-        let predicate = crabka_pgparser::parser::parse_expression(predicate)?;
+        let predicate = krabka_pgparser::parser::parse_expression(predicate)?;
         let predicate = crate::viewdef::expression_text_with_qualifiers(&predicate, style);
         let _ = if pretty {
             write!(sql, " WHEN {predicate}")
@@ -765,13 +765,13 @@ pub(crate) fn rule_def(kv: &dyn Kv, reference: &Datum, pretty: bool) -> Result<D
     let Ok(oid) = u32::try_from(int_arg(reference)?) else {
         return Ok(Datum::Null);
     };
-    let Some(rule) = crabka_pgcatalog::rule::list_rules(kv)?
+    let Some(rule) = krabka_pgcatalog::rule::list_rules(kv)?
         .into_iter()
         .find(|rule| rule.oid == oid)
     else {
         let utc = jiff::tz::TimeZone::UTC;
         let views = crate::catalog_rel::view_oids(kv)?;
-        let Some(view) = crabka_pgcatalog::list_views(kv)?.into_iter().find(|view| {
+        let Some(view) = krabka_pgcatalog::list_views(kv)?.into_iter().find(|view| {
             views
                 .get(&view.name)
                 .is_some_and(|view_oid| u32::try_from(*view_oid) == Ok(oid))
@@ -784,22 +784,22 @@ pub(crate) fn rule_def(kv: &dyn Kv, reference: &Datum, pretty: bool) -> Result<D
             view_definition_text(
                 &view,
                 true,
-                crabka_pgtypes::encoding::OutputStyle::with_zone(&utc),
+                krabka_pgtypes::encoding::OutputStyle::with_zone(&utc),
             ),
         )));
     };
     let event = match rule.event {
-        crabka_pgcatalog::rule::RuleEvent::Select => "SELECT",
-        crabka_pgcatalog::rule::RuleEvent::Insert => "INSERT",
-        crabka_pgcatalog::rule::RuleEvent::Update => "UPDATE",
-        crabka_pgcatalog::rule::RuleEvent::Delete => "DELETE",
+        krabka_pgcatalog::rule::RuleEvent::Select => "SELECT",
+        krabka_pgcatalog::rule::RuleEvent::Insert => "INSERT",
+        krabka_pgcatalog::rule::RuleEvent::Update => "UPDATE",
+        krabka_pgcatalog::rule::RuleEvent::Delete => "DELETE",
     };
     let utc = jiff::tz::TimeZone::UTC;
-    let style = crabka_pgtypes::encoding::OutputStyle::with_zone(&utc);
+    let style = krabka_pgtypes::encoding::OutputStyle::with_zone(&utc);
     let source_columns = rule_source_columns(kv, &rule.table)?;
-    let source_is_view = match crabka_pgcatalog::get_table(kv, &rule.table) {
+    let source_is_view = match krabka_pgcatalog::get_table(kv, &rule.table) {
         Ok(_) => false,
-        Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => true,
+        Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => true,
         Err(error) => return Err(error.into()),
     };
     let target = if pretty && rule.table.is_public() {
@@ -807,7 +807,7 @@ pub(crate) fn rule_def(kv: &dyn Kv, reference: &Datum, pretty: bool) -> Result<D
     } else {
         format!(
             "{}.{}",
-            quote_identifier(crabka_pgcatalog::displayed_schema(&rule.table.schema)),
+            quote_identifier(krabka_pgcatalog::displayed_schema(&rule.table.schema)),
             quote_identifier(&rule.table.name),
         )
     };
@@ -816,7 +816,7 @@ pub(crate) fn rule_def(kv: &dyn Kv, reference: &Datum, pretty: bool) -> Result<D
         quote_identifier(&rule.name),
     );
     if let Some(condition) = &rule.condition {
-        let condition = crabka_pgparser::parser::parse_expression(condition)?;
+        let condition = krabka_pgparser::parser::parse_expression(condition)?;
         let _ = write!(
             sql,
             "\n   WHERE {}",
@@ -847,11 +847,11 @@ pub(crate) fn rule_def(kv: &dyn Kv, reference: &Datum, pretty: bool) -> Result<D
 fn rule_action_definition(
     kv: &dyn Kv,
     source_schema: &str,
-    source_columns: &[crabka_pgcatalog::Column],
+    source_columns: &[krabka_pgcatalog::Column],
     source_is_view: bool,
     action_source: &str,
     pretty: bool,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> Result<String, ExecError> {
     if action_source.eq_ignore_ascii_case("nothing") {
         return Ok(" NOTHING;".into());
@@ -861,7 +861,7 @@ fn rule_action_definition(
         .strip_prefix('(')
         .and_then(|action| action.strip_suffix(')'))
         .unwrap_or(action_source);
-    let actions = crabka_pgparser::parse(action_sql)?;
+    let actions = krabka_pgparser::parse(action_sql)?;
     let grouped = action_source.trim_start().starts_with('(') && actions.len() > 1;
     if actions.iter().any(|action| !is_simple_rule_action(action)) {
         return Ok(format!(" {};", action_source.trim().trim_end_matches(';')));
@@ -900,15 +900,15 @@ fn rule_action_definition(
     Ok(format!("  {};", actions.join("; ")))
 }
 
-fn is_simple_rule_action(action: &crabka_pgparser::ast::Statement) -> bool {
-    use crabka_pgparser::ast::{AssignmentValue, InsertSource, Statement};
+fn is_simple_rule_action(action: &krabka_pgparser::ast::Statement) -> bool {
+    use krabka_pgparser::ast::{AssignmentValue, InsertSource, Statement};
 
     match action {
         Statement::Notify { .. } => true,
         Statement::Query(query)
             if matches!(
                 &query.body,
-                crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Values(_))
+                krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Values(_))
             ) =>
         {
             true
@@ -958,19 +958,19 @@ fn is_simple_rule_action(action: &crabka_pgparser::ast::Statement) -> bool {
     }
 }
 
-fn rule_action_with_is_simple(with: &crabka_pgparser::ast::WithClause) -> bool {
+fn rule_action_with_is_simple(with: &krabka_pgparser::ast::WithClause) -> bool {
     with.ctes.iter().all(|cte| match &cte.body {
-        crabka_pgparser::ast::CteBody::Query(_) => true,
-        crabka_pgparser::ast::CteBody::Dml(statement) => is_simple_rule_action(statement),
+        krabka_pgparser::ast::CteBody::Query(_) => true,
+        krabka_pgparser::ast::CteBody::Dml(statement) => is_simple_rule_action(statement),
     })
 }
 
 fn simple_rule_returning(
-    returning: &Option<crabka_pgparser::ast::Returning>,
-    table: &crabka_pgparser::ast::RelationRef,
+    returning: &Option<krabka_pgparser::ast::Returning>,
+    table: &krabka_pgparser::ast::RelationRef,
     alias: Option<&str>,
 ) -> bool {
-    use crabka_pgparser::ast::{Expr, SelectItem};
+    use krabka_pgparser::ast::{Expr, SelectItem};
 
     returning.as_ref().is_none_or(|returning| {
         returning.items.iter().all(|item| match item {
@@ -1000,14 +1000,14 @@ fn simple_rule_returning(
 fn rule_action_statement(
     kv: &dyn Kv,
     source_schema: &str,
-    source_columns: &[crabka_pgcatalog::Column],
+    source_columns: &[krabka_pgcatalog::Column],
     source_is_view: bool,
-    statement: &crabka_pgparser::ast::Statement,
+    statement: &krabka_pgparser::ast::Statement,
     target_alias: Option<&str>,
     pretty: bool,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> Result<String, ExecError> {
-    use crabka_pgparser::ast::{InsertSource, Statement};
+    use krabka_pgparser::ast::{InsertSource, Statement};
 
     if let Statement::Notify { channel, payload } = statement {
         let payload = payload
@@ -1018,7 +1018,7 @@ fn rule_action_statement(
     }
 
     if let Statement::Query(query) = statement
-        && let crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Values(rows)) =
+        && let krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Values(rows)) =
             &query.body
     {
         return Ok(format!(
@@ -1148,12 +1148,12 @@ fn rule_action_statement(
     }
     let query_names = match insert_source {
         InsertSource::Query(query) => match &query.body {
-            crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Select(
+            krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Select(
                 select,
             )) if select.projection.iter().any(|item| {
                 matches!(
                     item,
-                    crabka_pgparser::ast::SelectItem::QualifiedWildcard(name)
+                    krabka_pgparser::ast::SelectItem::QualifiedWildcard(name)
                         if name.eq_ignore_ascii_case("old") || name.eq_ignore_ascii_case("new")
                 )
             }) =>
@@ -1243,11 +1243,11 @@ fn rule_action_statement(
 fn rule_action_with_clause(
     kv: &dyn Kv,
     source_schema: &str,
-    source_columns: &[crabka_pgcatalog::Column],
+    source_columns: &[krabka_pgcatalog::Column],
     source_is_view: bool,
-    with: &crabka_pgparser::ast::WithClause,
+    with: &krabka_pgparser::ast::WithClause,
     pretty: bool,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> Result<String, ExecError> {
     let mut text = if with.recursive {
         "WITH RECURSIVE ".to_string()
@@ -1269,7 +1269,7 @@ fn rule_action_with_clause(
         }
         text.push_str(" AS (\n");
         let (body, dml) = match &cte.body {
-            crabka_pgparser::ast::CteBody::Query(query) => {
+            krabka_pgparser::ast::CteBody::Query(query) => {
                 let mut body = String::new();
                 crate::viewdef::write_query_with_qualifiers(
                     &mut body,
@@ -1281,7 +1281,7 @@ fn rule_action_with_clause(
                 );
                 (body, false)
             }
-            crabka_pgparser::ast::CteBody::Dml(statement) => (
+            krabka_pgparser::ast::CteBody::Dml(statement) => (
                 rule_action_statement(
                     kv,
                     source_schema,
@@ -1325,12 +1325,12 @@ fn rule_action_cte_body(body: &str, dml: bool) -> String {
 }
 
 fn rule_assignment_text(
-    assignment: &crabka_pgparser::ast::Assignment,
+    assignment: &krabka_pgparser::ast::Assignment,
     target_alias: Option<&str>,
     pretty: bool,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> String {
-    use crabka_pgparser::ast::{ArraySubscript, AssignmentValue, TargetIndirection};
+    use krabka_pgparser::ast::{ArraySubscript, AssignmentValue, TargetIndirection};
 
     let targets = assignment
         .targets
@@ -1371,7 +1371,7 @@ fn rule_assignment_text(
     } else {
         format!("({})", targets.join(", "))
     };
-    let expression = |expr: &crabka_pgparser::ast::Expr| {
+    let expression = |expr: &krabka_pgparser::ast::Expr| {
         target_alias.map_or_else(
             || crate::viewdef::expression_text_with_qualifiers(expr, style),
             |alias| crate::viewdef::expression_text_with_qualifier(expr, alias, pretty, style),
@@ -1394,10 +1394,10 @@ fn rule_assignment_text(
 }
 
 fn rule_action_filter_text(
-    filter: &crabka_pgparser::ast::Expr,
+    filter: &krabka_pgparser::ast::Expr,
     qualifier: Option<&str>,
     pretty: bool,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> String {
     let text = qualifier.map_or_else(
         || crate::viewdef::expression_text_with_qualifiers(filter, style),
@@ -1405,7 +1405,7 @@ fn rule_action_filter_text(
             crate::viewdef::expression_text_with_qualifier(filter, qualifier, pretty, style)
         },
     );
-    if pretty && matches!(filter, crabka_pgparser::ast::Expr::Binary { .. }) {
+    if pretty && matches!(filter, krabka_pgparser::ast::Expr::Binary { .. }) {
         text.strip_prefix('(')
             .and_then(|text| text.strip_suffix(')'))
             .unwrap_or(&text)
@@ -1416,12 +1416,12 @@ fn rule_action_filter_text(
 }
 
 fn coerce_rule_values_literals(
-    rows: &mut [Vec<crabka_pgparser::ast::Expr>],
-    source_columns: &[crabka_pgcatalog::Column],
-    target_columns: &[crabka_pgcatalog::Column],
+    rows: &mut [Vec<krabka_pgparser::ast::Expr>],
+    source_columns: &[krabka_pgcatalog::Column],
+    target_columns: &[krabka_pgcatalog::Column],
     columns: &[String],
 ) {
-    use crabka_pgparser::ast::Expr;
+    use krabka_pgparser::ast::Expr;
 
     for row in rows {
         let mut target_index = 0;
@@ -1443,12 +1443,12 @@ fn coerce_rule_values_literals(
 }
 
 fn rule_values_rows(
-    rows: &[Vec<crabka_pgparser::ast::Expr>],
-    source_columns: &[crabka_pgcatalog::Column],
+    rows: &[Vec<krabka_pgparser::ast::Expr>],
+    source_columns: &[krabka_pgcatalog::Column],
     pretty: bool,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> String {
-    use crabka_pgparser::ast::Expr;
+    use krabka_pgparser::ast::Expr;
 
     rows.iter()
         .map(|row| {
@@ -1492,12 +1492,12 @@ fn rule_values_rows(
 
 fn write_rule_on_conflict(
     out: &mut String,
-    on_conflict: &Option<crabka_pgparser::ast::OnConflict>,
-    target_columns: &[crabka_pgcatalog::Column],
+    on_conflict: &Option<krabka_pgparser::ast::OnConflict>,
+    target_columns: &[krabka_pgcatalog::Column],
     target_name: &str,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) {
-    use crabka_pgparser::ast::{OnConflictAction, OnConflictTarget};
+    use krabka_pgparser::ast::{OnConflictAction, OnConflictTarget};
 
     let Some(mut on_conflict) = on_conflict.clone() else {
         return;
@@ -1570,11 +1570,11 @@ fn write_rule_on_conflict(
 /// target columns during analysis. Reapply that narrow type context before
 /// deparsing an `ON CONFLICT` predicate or filter.
 fn coerce_rule_on_conflict_literals(
-    on_conflict: &mut crabka_pgparser::ast::OnConflict,
-    columns: &[crabka_pgcatalog::Column],
+    on_conflict: &mut krabka_pgparser::ast::OnConflict,
+    columns: &[krabka_pgcatalog::Column],
     target_name: &str,
 ) {
-    use crabka_pgparser::ast::{OnConflictAction, OnConflictTarget};
+    use krabka_pgparser::ast::{OnConflictAction, OnConflictTarget};
 
     if let OnConflictTarget::Columns {
         index_predicate: Some(predicate),
@@ -1597,7 +1597,7 @@ fn coerce_rule_on_conflict_literals(
                 .iter()
                 .find(|candidate| candidate.name == *column)
                 .map(|column| column.ty);
-            if let crabka_pgparser::ast::AssignmentValue::Expr(value) = &mut assignment.value {
+            if let krabka_pgparser::ast::AssignmentValue::Expr(value) = &mut assignment.value {
                 coerce_rule_unknown_literals(value, columns, target_name, expected);
             }
         }
@@ -1608,12 +1608,12 @@ fn coerce_rule_on_conflict_literals(
 }
 
 fn coerce_rule_unknown_literals(
-    expr: &mut crabka_pgparser::ast::Expr,
-    columns: &[crabka_pgcatalog::Column],
+    expr: &mut krabka_pgparser::ast::Expr,
+    columns: &[krabka_pgcatalog::Column],
     target_name: &str,
-    expected: Option<crabka_pgtypes::ColumnType>,
+    expected: Option<krabka_pgtypes::ColumnType>,
 ) {
-    use crabka_pgparser::ast::Expr;
+    use krabka_pgparser::ast::Expr;
 
     if coerce_rule_unknown_literal(expr, expected) {
         return;
@@ -1633,10 +1633,10 @@ fn coerce_rule_unknown_literals(
 }
 
 fn coerce_rule_unknown_literal(
-    expr: &mut crabka_pgparser::ast::Expr,
-    expected: Option<crabka_pgtypes::ColumnType>,
+    expr: &mut krabka_pgparser::ast::Expr,
+    expected: Option<krabka_pgtypes::ColumnType>,
 ) -> bool {
-    use crabka_pgparser::ast::Expr;
+    use krabka_pgparser::ast::Expr;
 
     if matches!(expr, Expr::StringLiteral(_) | Expr::NullLiteral)
         && let Some(ty) = expected
@@ -1651,11 +1651,11 @@ fn coerce_rule_unknown_literal(
 }
 
 fn rule_action_column_type(
-    expr: &crabka_pgparser::ast::Expr,
-    columns: &[crabka_pgcatalog::Column],
+    expr: &krabka_pgparser::ast::Expr,
+    columns: &[krabka_pgcatalog::Column],
     target_name: &str,
-) -> Option<crabka_pgtypes::ColumnType> {
-    let crabka_pgparser::ast::Expr::Column { table, name } = expr else {
+) -> Option<krabka_pgtypes::ColumnType> {
+    let krabka_pgparser::ast::Expr::Column { table, name } = expr else {
         return None;
     };
     let qualified_target = table.as_deref().is_none_or(|table| {
@@ -1671,8 +1671,8 @@ fn rule_action_column_type(
         .map(|column| column.ty)
 }
 
-fn rule_literal_type(ty: crabka_pgtypes::ColumnType) -> crabka_pgtypes::ColumnType {
-    use crabka_pgtypes::ColumnType;
+fn rule_literal_type(ty: krabka_pgtypes::ColumnType) -> krabka_pgtypes::ColumnType {
+    use krabka_pgtypes::ColumnType;
 
     match ty {
         ColumnType::Char(_) => ColumnType::Char(None),
@@ -1694,11 +1694,11 @@ fn quote_qualified_identifier(name: &str) -> String {
 fn rule_source_columns(
     kv: &dyn Kv,
     name: &RelationName,
-) -> Result<Vec<crabka_pgcatalog::Column>, ExecError> {
-    match crabka_pgcatalog::get_table(kv, name) {
+) -> Result<Vec<krabka_pgcatalog::Column>, ExecError> {
+    match krabka_pgcatalog::get_table(kv, name) {
         Ok(table) => Ok(table.columns),
-        Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => {
-            Ok(crabka_pgcatalog::get_view(kv, name)?.columns)
+        Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => {
+            Ok(krabka_pgcatalog::get_view(kv, name)?.columns)
         }
         Err(error) => Err(error.into()),
     }
@@ -1707,16 +1707,16 @@ fn rule_source_columns(
 fn rule_action_columns(
     kv: &dyn Kv,
     source_schema: &str,
-    table: &crabka_pgparser::ast::RelationRef,
-) -> Result<Vec<crabka_pgcatalog::Column>, ExecError> {
+    table: &krabka_pgparser::ast::RelationRef,
+) -> Result<Vec<krabka_pgcatalog::Column>, ExecError> {
     let target = RelationName::new(
         table.schema.as_deref().unwrap_or(source_schema),
         &table.name,
     );
-    match crabka_pgcatalog::get_table(kv, &target) {
+    match krabka_pgcatalog::get_table(kv, &target) {
         Ok(table) => Ok(table.columns),
-        Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => {
-            Ok(crabka_pgcatalog::get_view(kv, &target)?.columns)
+        Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => {
+            Ok(krabka_pgcatalog::get_view(kv, &target)?.columns)
         }
         Err(error) => Err(error.into()),
     }
@@ -1724,11 +1724,11 @@ fn rule_action_columns(
 
 fn write_rule_returning(
     out: &mut String,
-    table: &crabka_pgparser::ast::RelationRef,
+    table: &krabka_pgparser::ast::RelationRef,
     alias: Option<&str>,
-    target_columns: &[crabka_pgcatalog::Column],
-    source_columns: &[crabka_pgcatalog::Column],
-    returning: &Option<crabka_pgparser::ast::Returning>,
+    target_columns: &[krabka_pgcatalog::Column],
+    source_columns: &[krabka_pgcatalog::Column],
+    returning: &Option<krabka_pgparser::ast::Returning>,
     _pretty: bool,
 ) {
     let Some(returning) = returning else {
@@ -1747,11 +1747,11 @@ fn write_rule_returning(
         .items
         .iter()
         .flat_map(|item| match item {
-            crabka_pgparser::ast::SelectItem::Wildcard => target_columns
+            krabka_pgparser::ast::SelectItem::Wildcard => target_columns
                 .iter()
                 .map(|column| format!("{}.{}", return_target, quote_identifier(&column.name)))
                 .collect::<Vec<_>>(),
-            crabka_pgparser::ast::SelectItem::QualifiedWildcard(qualifier) => {
+            krabka_pgparser::ast::SelectItem::QualifiedWildcard(qualifier) => {
                 let (columns, target) = if qualifier.eq_ignore_ascii_case("old")
                     || qualifier.eq_ignore_ascii_case("new")
                 {
@@ -1764,8 +1764,8 @@ fn write_rule_returning(
                     .map(|column| format!("{target}.{}", quote_identifier(&column.name)))
                     .collect()
             }
-            crabka_pgparser::ast::SelectItem::Expr {
-                expr: crabka_pgparser::ast::Expr::Column { table, name },
+            krabka_pgparser::ast::SelectItem::Expr {
+                expr: krabka_pgparser::ast::Expr::Column { table, name },
                 alias,
             } => {
                 let output_alias = alias
@@ -1798,7 +1798,7 @@ fn write_rule_returning(
     let _ = write!(out, "\n  RETURNING{images} {columns}");
 }
 
-fn rule_action_relation(table: &crabka_pgparser::ast::RelationRef) -> String {
+fn rule_action_relation(table: &krabka_pgparser::ast::RelationRef) -> String {
     table.schema.as_ref().map_or_else(
         || quote_identifier(&table.name),
         |schema| {
@@ -1811,7 +1811,7 @@ fn rule_action_relation(table: &crabka_pgparser::ast::RelationRef) -> String {
     )
 }
 
-fn rule_action_target(table: &crabka_pgparser::ast::RelationRef, alias: Option<&str>) -> String {
+fn rule_action_target(table: &krabka_pgparser::ast::RelationRef, alias: Option<&str>) -> String {
     let relation = rule_action_relation(table);
     alias.map_or(relation.clone(), |alias| {
         format!("{relation} AS {}", quote_identifier(alias))
@@ -1819,7 +1819,7 @@ fn rule_action_target(table: &crabka_pgparser::ast::RelationRef, alias: Option<&
 }
 
 fn rule_action_dml_target(
-    table: &crabka_pgparser::ast::RelationRef,
+    table: &krabka_pgparser::ast::RelationRef,
     alias: Option<&str>,
 ) -> String {
     let relation = rule_action_relation(table);
@@ -2061,8 +2061,8 @@ fn size_pretty(size: &Datum) -> Result<Datum, ExecError> {
     Ok(Datum::Text(format!("{value} bytes")))
 }
 
-fn size_pretty_numeric(value: &crabka_pgtypes::numeric::NumericValue) -> Result<Datum, ExecError> {
-    use crabka_pgtypes::numeric;
+fn size_pretty_numeric(value: &krabka_pgtypes::numeric::NumericValue) -> Result<Datum, ExecError> {
+    use krabka_pgtypes::numeric;
 
     let mut value = value.clone();
     let zero = numeric::from_i64(0);
@@ -2150,8 +2150,8 @@ fn size_bytes(size: &Datum) -> Result<Datum, ExecError> {
     }
 
     let number = &input[number_start..number_end];
-    let Some(mut value) = crabka_pgtypes::numeric::parse(number) else {
-        return Err(ExecError::Type(crabka_pgtypes::TypeError::OutOfRange {
+    let Some(mut value) = krabka_pgtypes::numeric::parse(number) else {
+        return Err(ExecError::Type(krabka_pgtypes::TypeError::OutOfRange {
             message: "value overflows numeric format".into(),
         }));
     };
@@ -2184,10 +2184,10 @@ fn size_bytes(size: &Datum) -> Result<Datum, ExecError> {
         return Err(invalid_size_unit(input, unit));
     };
     if unit_bits > 0 {
-        let multiplier = crabka_pgtypes::numeric::from_i64(1_i64 << unit_bits);
-        value = crabka_pgtypes::numeric::mul(&value, &multiplier);
+        let multiplier = krabka_pgtypes::numeric::from_i64(1_i64 << unit_bits);
+        value = krabka_pgtypes::numeric::mul(&value, &multiplier);
     }
-    Ok(Datum::Int8(crabka_pgtypes::numeric::to_i64(&value)?))
+    Ok(Datum::Int8(krabka_pgtypes::numeric::to_i64(&value)?))
 }
 
 fn invalid_size(input: &str) -> ExecError {
@@ -2199,7 +2199,7 @@ fn invalid_size(input: &str) -> ExecError {
 
 fn invalid_size_unit(input: &str, unit: &str) -> ExecError {
     ExecError::Remote(
-        crabka_pgwire::error::PgError::error("22023", format!("invalid size: \"{input}\""))
+        krabka_pgwire::error::PgError::error("22023", format!("invalid size: \"{input}\""))
             .with_detail(format!("Invalid size unit: \"{unit}\"."))
             .with_hint(
                 "Valid units are \"bytes\", \"B\", \"kB\", \"MB\", \"GB\", \"TB\", and \"PB\".",
@@ -2261,7 +2261,7 @@ fn has_privilege(name: &str, vals: &[Datum], ctx: &EvalCtx) -> Result<Datum, Exe
     let role = effective_privilege_role(&role);
     let privilege_ctx = crate::privilege::PrivilegeCtx::new(kv, &role);
     let wanted = bare.to_ascii_uppercase();
-    if !crabka_pgcatalog::TABLE_PRIVILEGES.contains(&wanted.as_str()) {
+    if !krabka_pgcatalog::TABLE_PRIVILEGES.contains(&wanted.as_str()) {
         // A privilege that is recognized somewhere but cannot be granted on a
         // relation (`CONNECT`, `USAGE`, `EXECUTE`, …). PostgreSQL raises 22023
         // for these in a relation position; answering `true` is what this
@@ -2278,11 +2278,11 @@ fn has_privilege(name: &str, vals: &[Datum], ctx: &EvalCtx) -> Result<Datum, Exe
     crate::privilege::holds_named(&privilege_ctx, &relation, &owner, &wanted).map(Datum::Bool)
 }
 
-fn foreign_privilege_target(name: &str) -> Option<crabka_pgcatalog::ForeignPrivilegeTarget> {
+fn foreign_privilege_target(name: &str) -> Option<krabka_pgcatalog::ForeignPrivilegeTarget> {
     match name {
-        "has_server_privilege" => Some(crabka_pgcatalog::ForeignPrivilegeTarget::Server),
+        "has_server_privilege" => Some(krabka_pgcatalog::ForeignPrivilegeTarget::Server),
         "has_foreign_data_wrapper_privilege" => {
-            Some(crabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper)
+            Some(krabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper)
         }
         _ => None,
     }
@@ -2291,7 +2291,7 @@ fn foreign_privilege_target(name: &str) -> Option<crabka_pgcatalog::ForeignPrivi
 fn has_foreign_privilege(
     vals: &[Datum],
     ctx: &EvalCtx,
-    target: crabka_pgcatalog::ForeignPrivilegeTarget,
+    target: krabka_pgcatalog::ForeignPrivilegeTarget,
     privilege: &str,
     grant_option: bool,
 ) -> Result<Datum, ExecError> {
@@ -2315,15 +2315,15 @@ fn has_foreign_privilege(
     };
     let role = effective_privilege_role(&role);
     let owner = match target {
-        crabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper => {
-            crabka_pgcatalog::get_fdw(kv, &object)?.owner
+        krabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper => {
+            krabka_pgcatalog::get_fdw(kv, &object)?.owner
         }
-        crabka_pgcatalog::ForeignPrivilegeTarget::Server => {
-            crabka_pgcatalog::get_server(kv, &object)?.owner
+        krabka_pgcatalog::ForeignPrivilegeTarget::Server => {
+            krabka_pgcatalog::get_server(kv, &object)?.owner
         }
     };
     if crate::rls::role_is_superuser(kv, &role)?
-        || crabka_pgcatalog::role_has_privs_of(kv, &role, &owner)?
+        || krabka_pgcatalog::role_has_privs_of(kv, &role, &owner)?
     {
         return Ok(Datum::Bool(true));
     }
@@ -2335,7 +2335,7 @@ fn has_foreign_privilege(
 
 fn foreign_privilege_object_name(
     kv: &dyn Kv,
-    target: crabka_pgcatalog::ForeignPrivilegeTarget,
+    target: krabka_pgcatalog::ForeignPrivilegeTarget,
     object: &Datum,
 ) -> Result<Option<String>, ExecError> {
     if let Datum::Text(name) = object {
@@ -2347,11 +2347,11 @@ fn foreign_privilege_object_name(
             .map_err(|_| ExecError::Unsupported("foreign object oid is out of range".into()))?,
     };
     Ok(match target {
-        crabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper => crabka_pgcatalog::list_fdws(kv)?
+        krabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper => krabka_pgcatalog::list_fdws(kv)?
             .into_iter()
             .find(|wrapper| wrapper.oid == oid)
             .map(|wrapper| wrapper.name),
-        crabka_pgcatalog::ForeignPrivilegeTarget::Server => crabka_pgcatalog::list_servers(kv)?
+        krabka_pgcatalog::ForeignPrivilegeTarget::Server => krabka_pgcatalog::list_servers(kv)?
             .into_iter()
             .find(|server| server.oid == oid)
             .map(|server| server.name),
@@ -2362,7 +2362,7 @@ fn foreign_privilege_object_name(
 /// an explicit/public `USAGE` grant.
 pub(crate) fn foreign_usage_is_held(
     kv: &dyn Kv,
-    target: crabka_pgcatalog::ForeignPrivilegeTarget,
+    target: krabka_pgcatalog::ForeignPrivilegeTarget,
     object: &str,
     role: &str,
 ) -> Result<bool, ExecError> {
@@ -2372,7 +2372,7 @@ pub(crate) fn foreign_usage_is_held(
 /// Whether `role` can grant `USAGE` on one foreign object.
 pub(crate) fn foreign_usage_grant_option_is_held(
     kv: &dyn Kv,
-    target: crabka_pgcatalog::ForeignPrivilegeTarget,
+    target: krabka_pgcatalog::ForeignPrivilegeTarget,
     object: &str,
     role: &str,
 ) -> Result<bool, ExecError> {
@@ -2381,27 +2381,27 @@ pub(crate) fn foreign_usage_grant_option_is_held(
 
 fn foreign_usage_access_is_held(
     kv: &dyn Kv,
-    target: crabka_pgcatalog::ForeignPrivilegeTarget,
+    target: krabka_pgcatalog::ForeignPrivilegeTarget,
     object: &str,
     role: &str,
     grant_option: bool,
 ) -> Result<bool, ExecError> {
     let owner = match target {
-        crabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper => {
-            crabka_pgcatalog::get_fdw(kv, object)?.owner
+        krabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper => {
+            krabka_pgcatalog::get_fdw(kv, object)?.owner
         }
-        crabka_pgcatalog::ForeignPrivilegeTarget::Server => {
-            crabka_pgcatalog::get_server(kv, object)?.owner
+        krabka_pgcatalog::ForeignPrivilegeTarget::Server => {
+            krabka_pgcatalog::get_server(kv, object)?.owner
         }
     };
     if crate::rls::role_is_superuser(kv, role)?
-        || crabka_pgcatalog::role_has_privs_of(kv, role, &owner)?
+        || krabka_pgcatalog::role_has_privs_of(kv, role, &owner)?
     {
         return Ok(true);
     }
-    for grantee in crabka_pgcatalog::list_roles(kv)? {
+    for grantee in krabka_pgcatalog::list_roles(kv)? {
         let has_usage = if grant_option {
-            crabka_pgcatalog::foreign_privilege_has_grant_option(
+            krabka_pgcatalog::foreign_privilege_has_grant_option(
                 kv,
                 target,
                 object,
@@ -2409,7 +2409,7 @@ fn foreign_usage_access_is_held(
                 "USAGE",
             )?
         } else {
-            crabka_pgcatalog::foreign_privilege_is_granted(
+            krabka_pgcatalog::foreign_privilege_is_granted(
                 kv,
                 target,
                 object,
@@ -2417,25 +2417,25 @@ fn foreign_usage_access_is_held(
                 "USAGE",
             )?
         };
-        if crabka_pgcatalog::role_has_privs_of(kv, role, &grantee.name)? && has_usage {
+        if krabka_pgcatalog::role_has_privs_of(kv, role, &grantee.name)? && has_usage {
             return Ok(true);
         }
     }
     if grant_option {
-        crabka_pgcatalog::foreign_privilege_has_grant_option(
+        krabka_pgcatalog::foreign_privilege_has_grant_option(
             kv,
             target,
             object,
-            crabka_pgcatalog::PUBLIC_ROLE,
+            krabka_pgcatalog::PUBLIC_ROLE,
             "USAGE",
         )
         .map_err(Into::into)
     } else {
-        crabka_pgcatalog::foreign_privilege_is_granted(
+        krabka_pgcatalog::foreign_privilege_is_granted(
             kv,
             target,
             object,
-            crabka_pgcatalog::PUBLIC_ROLE,
+            krabka_pgcatalog::PUBLIC_ROLE,
             "USAGE",
         )
         .map_err(Into::into)
@@ -2540,7 +2540,7 @@ fn relation_acl_target(
     kv: &dyn Kv,
     oid: i32,
 ) -> Result<Option<(RelationName, String, crate::privilege::RelationKind)>, ExecError> {
-    for table in crabka_pgcatalog::list_tables(kv)? {
+    for table in krabka_pgcatalog::list_tables(kv)? {
         if crate::catalog_rel::table_relation_oid(table.id)? == oid {
             return Ok(Some((
                 table.name,
@@ -2550,7 +2550,7 @@ fn relation_acl_target(
         }
     }
     let view_oids = crate::catalog_rel::view_oids(kv)?;
-    for view in crabka_pgcatalog::list_views(kv)? {
+    for view in krabka_pgcatalog::list_views(kv)? {
         if view_oids.get(&view.name) == Some(&oid) {
             return Ok(Some((
                 view.name,
@@ -2581,8 +2581,8 @@ fn role_argument_name(kv: &dyn Kv, argument: &Datum) -> Result<String, ExecError
 /// a different role than the enforcement path uses would let a session be told
 /// it may not read a relation it can read.
 pub(crate) fn effective_privilege_role(role: &str) -> String {
-    if role == crabka_pgcatalog::PUBLIC_ROLE {
-        crabka_pgcatalog::BOOTSTRAP_ROLE.to_string()
+    if role == krabka_pgcatalog::PUBLIC_ROLE {
+        krabka_pgcatalog::BOOTSTRAP_ROLE.to_string()
     } else {
         role.to_string()
     }
@@ -2635,7 +2635,7 @@ fn relation_size_with_fork(
         Some(Datum::Text(fork)) if matches!(fork.as_str(), "fsm" | "vm" | "init") => fork.as_str(),
         Some(Datum::Text(_)) => {
             return Err(ExecError::Remote(
-                crabka_pgwire::error::PgError::error("22023", "invalid fork name")
+                krabka_pgwire::error::PgError::error("22023", "invalid fork name")
                     .with_hint("Valid fork names are \"main\", \"fsm\", \"vm\", and \"init\"."),
             ));
         }
@@ -2706,7 +2706,7 @@ fn total_relation_size(
 }
 
 fn relation_size_bytes(catalog_kv: &dyn Kv, data_kv: &dyn Kv, oid: i32) -> Result<i64, ExecError> {
-    let indexes = crabka_pgcatalog::list_indexes(catalog_kv)?;
+    let indexes = krabka_pgcatalog::list_indexes(catalog_kv)?;
     let Some(index) = indexes.iter().find(|index| {
         crate::catalog_rel::index_relation_oid(index.id).is_ok_and(|index_oid| index_oid == oid)
     }) else {
@@ -2716,7 +2716,7 @@ fn relation_size_bytes(catalog_kv: &dyn Kv, data_kv: &dyn Kv, oid: i32) -> Resul
 }
 
 fn indexes_size_bytes(catalog_kv: &dyn Kv, data_kv: &dyn Kv, oid: i32) -> Result<i64, ExecError> {
-    let Some(table_id) = crabka_pgcatalog::list_tables(catalog_kv)?
+    let Some(table_id) = krabka_pgcatalog::list_tables(catalog_kv)?
         .into_iter()
         .find_map(|table| {
             (crate::catalog_rel::table_relation_oid(table.id).ok() == Some(oid)).then_some(table.id)
@@ -2724,7 +2724,7 @@ fn indexes_size_bytes(catalog_kv: &dyn Kv, data_kv: &dyn Kv, oid: i32) -> Result
     else {
         return Ok(0);
     };
-    crabka_pgcatalog::list_indexes(catalog_kv)?
+    krabka_pgcatalog::list_indexes(catalog_kv)?
         .iter()
         .filter(|index| index.table_id == table_id)
         .try_fold(0_i64, |total, index| {
@@ -2734,9 +2734,9 @@ fn indexes_size_bytes(catalog_kv: &dyn Kv, data_kv: &dyn Kv, oid: i32) -> Result
         })
 }
 
-fn secondary_index_size(kv: &dyn Kv, index: &crabka_pgcatalog::Index) -> Result<i64, ExecError> {
-    if index.method == crabka_pgcatalog::IndexMethod::Btree {
-        let entries = kv.scan_prefix(&crabka_pgkv::key::secondary_index_ordered_prefix(
+fn secondary_index_size(kv: &dyn Kv, index: &krabka_pgcatalog::Index) -> Result<i64, ExecError> {
+    if index.method == krabka_pgcatalog::IndexMethod::Btree {
+        let entries = kv.scan_prefix(&krabka_pgkv::key::secondary_index_ordered_prefix(
             index.table_id,
             index.id,
         ))?;
@@ -2776,7 +2776,7 @@ fn secondary_index_size(kv: &dyn Kv, index: &crabka_pgcatalog::Index) -> Result<
                 .ok_or_else(|| ExecError::Unsupported("relation size exceeds int8".into()));
         }
     }
-    let prefix = crabka_pgkv::key::secondary_index_prefix(index.table_id, index.id);
+    let prefix = krabka_pgkv::key::secondary_index_prefix(index.table_id, index.id);
     kv.scan_prefix(&prefix)?
         .into_iter()
         .try_fold(0_i64, |total, (key, value)| {
@@ -2847,7 +2847,7 @@ pub(crate) fn resolve_relation_in_scope(
 ) -> Result<i32, ExecError> {
     let written = parse_written_relation(scope, name)?;
     let schemas = match &written.reference.schema {
-        Some(schema) if schema == crabka_pgcatalog::PG_TEMP_ALIAS => vec![scope.temp_schema()],
+        Some(schema) if schema == krabka_pgcatalog::PG_TEMP_ALIAS => vec![scope.temp_schema()],
         Some(schema) => vec![schema.clone()],
         None => scope.visible_schemas(kv)?,
     };
@@ -2909,12 +2909,12 @@ pub(crate) fn relation_oid(kv: &dyn Kv, name: &RelationName) -> Result<Option<i3
         Ok(oid) => return Ok(Some(oid)),
         // Not a virtual relation and not a table; the other three `pg_class`
         // kinds are this module's to check.
-        Err(ExecError::Catalog(crabka_pgcatalog::CatalogError::UndefinedTable(_))) => {}
+        Err(ExecError::Catalog(krabka_pgcatalog::CatalogError::UndefinedTable(_))) => {}
         Err(other) => return Err(other),
     }
-    if let Some(ty) = crabka_pgcatalog::get_user_type(kv, name)? {
+    if let Some(ty) = krabka_pgcatalog::get_user_type(kv, name)? {
         if ty.fields().is_some() {
-            return i32::try_from(crabka_pgtypes::usertype::composite_relation_oid(ty.oid))
+            return i32::try_from(krabka_pgtypes::usertype::composite_relation_oid(ty.oid))
                 .map(Some)
                 .map_err(|_| ExecError::Unsupported("composite relation OID exceeds int4".into()));
         }
@@ -2928,7 +2928,7 @@ pub(crate) fn relation_oid(kv: &dyn Kv, name: &RelationName) -> Result<Option<i3
     if let Some(oid) = crate::catalog_rel::sequence_oids(kv)?.get(name) {
         return Ok(Some(*oid));
     }
-    for index in crabka_pgcatalog::list_indexes(kv)? {
+    for index in krabka_pgcatalog::list_indexes(kv)? {
         if index.qualified_name() == *name {
             return crate::catalog_rel::index_relation_oid(index.id).map(Some);
         }
@@ -3039,7 +3039,7 @@ fn user_by_id(kv: &dyn Kv, oid: &Datum) -> Result<Datum, ExecError> {
         return Ok(Datum::Text(OBJECT_OWNER.into()));
     }
     if i64::from(DATABASE_OWNER_ROLE_OID) == wanted {
-        return Ok(Datum::Text(crabka_pgcatalog::PUBLIC_SCHEMA_OWNER.into()));
+        return Ok(Datum::Text(krabka_pgcatalog::PUBLIC_SCHEMA_OWNER.into()));
     }
     for (name, role_oid) in crate::catalog_rel::role_oids(kv)? {
         if i64::from(role_oid) == wanted {
@@ -3059,14 +3059,14 @@ fn serial_sequence(
     let (Datum::Text(relation), Datum::Text(column)) = (&vals[0], &vals[1]) else {
         return Ok(Datum::Null);
     };
-    let table = crabka_pgcatalog::get_table(kv, &resolve_relation_name(kv, scope, relation)?)?;
+    let table = krabka_pgcatalog::get_table(kv, &resolve_relation_name(kv, scope, relation)?)?;
     let found = table
         .columns
         .iter()
         .find(|candidate| candidate.name == *column)
         .ok_or_else(|| ExecError::UndefinedColumn(column.clone()))?;
     match &found.default {
-        Some(crabka_pgcatalog::ColumnDefault::NextVal(sequence)) => Ok(Datum::Text(
+        Some(krabka_pgcatalog::ColumnDefault::NextVal(sequence)) => Ok(Datum::Text(
             qualified_sequence_name(kv, scope, &table.name, sequence)?,
         )),
         _ => Ok(Datum::Null),
@@ -3092,7 +3092,7 @@ fn serial_sequence(
 /// session's temporary namespace can hold the sequence its own default names,
 /// so the other sessions' namespaces are dropped before the match is made.
 ///
-/// The schema is spelled as [`crabka_pgcatalog::displayed_schema`] spells it —
+/// The schema is spelled as [`krabka_pgcatalog::displayed_schema`] spells it —
 /// measured on `postgres:18.4`, where a temporary table's
 /// `pg_get_serial_sequence` answers `pg_temp.probe_t_s_seq`.
 fn qualified_sequence_name(
@@ -3102,15 +3102,15 @@ fn qualified_sequence_name(
     spelled: &str,
 ) -> Result<String, ExecError> {
     let temp = scope.temp_schema();
-    let sequence = crabka_pgcatalog::list_sequences(kv)?
+    let sequence = krabka_pgcatalog::list_sequences(kv)?
         .into_iter()
         .map(|(name, _)| name)
-        .filter(|name| !crabka_pgcatalog::is_temp_schema(&name.schema) || name.schema == temp)
+        .filter(|name| !krabka_pgcatalog::is_temp_schema(&name.schema) || name.schema == temp)
         .find(|name| name.to_string() == spelled)
         .unwrap_or_else(|| table.sibling(spelled));
     Ok(format!(
         "{}.{}",
-        quote_identifier(crabka_pgcatalog::displayed_schema(&sequence.schema)),
+        quote_identifier(krabka_pgcatalog::displayed_schema(&sequence.schema)),
         quote_identifier(&sequence.name)
     ))
 }
@@ -3127,7 +3127,7 @@ fn description(
         return Ok(Datum::Null);
     }
     let oid = resolve_relation_oid(kv, scope, object)?;
-    for table in crabka_pgcatalog::list_tables(kv)? {
+    for table in krabka_pgcatalog::list_tables(kv)? {
         if crate::catalog_rel::table_relation_oid(table.id)? != oid {
             continue;
         }
@@ -3158,12 +3158,12 @@ fn description(
             return comment_datum(kv, "view", CommentObject::Relation(&name));
         }
     }
-    for ty in crabka_pgcatalog::list_user_types(kv)? {
+    for ty in krabka_pgcatalog::list_user_types(kv)? {
         let name = RelationName::new(ty.schema.clone(), ty.name.clone());
         let Some(fields) = ty.fields() else {
             continue;
         };
-        if i32::try_from(crabka_pgtypes::usertype::composite_relation_oid(ty.oid)).ok() != Some(oid)
+        if i32::try_from(krabka_pgtypes::usertype::composite_relation_oid(ty.oid)).ok() != Some(oid)
         {
             continue;
         }
@@ -3195,7 +3195,7 @@ fn object_description(
     if class_oid == crate::catalog_rel::relation_oid("pg_type") {
         let oid = u32::try_from(crate::func::int_arg(&values[0])?)
             .map_err(|_| ExecError::Unsupported("type OID is out of range".into()))?;
-        let Some(ty) = crabka_pgcatalog::list_user_types(kv)?
+        let Some(ty) = krabka_pgcatalog::list_user_types(kv)?
             .into_iter()
             .find(|ty| ty.oid == oid)
         else {
@@ -3215,7 +3215,7 @@ fn object_description(
     if class_oid == crate::catalog_rel::relation_oid("pg_cast") {
         let oid = u32::try_from(crate::func::int_arg(&values[0])?)
             .map_err(|_| ExecError::Unsupported("cast OID is out of range".into()))?;
-        let Some(cast) = crabka_pgcatalog::list_user_casts(kv)?
+        let Some(cast) = krabka_pgcatalog::list_user_casts(kv)?
             .into_iter()
             .find(|cast| cast.oid == oid)
         else {
@@ -3226,7 +3226,7 @@ fn object_description(
     if class_oid == crate::catalog_rel::relation_oid("pg_am") {
         let oid = u32::try_from(crate::func::int_arg(&values[0])?)
             .map_err(|_| ExecError::Unsupported("access method OID is out of range".into()))?;
-        let Some(method) = crabka_pgcatalog::list_access_methods(kv)?
+        let Some(method) = krabka_pgcatalog::list_access_methods(kv)?
             .into_iter()
             .find(|method| method.oid == oid)
         else {
@@ -3241,7 +3241,7 @@ fn object_description(
     if class_oid == crate::catalog_rel::relation_oid("pg_statistic_ext") {
         let oid = u32::try_from(crate::func::int_arg(&values[0])?)
             .map_err(|_| ExecError::Unsupported("statistics OID is out of range".into()))?;
-        let Some(statistics) = crabka_pgcatalog::statistics::list(kv)?
+        let Some(statistics) = krabka_pgcatalog::statistics::list(kv)?
             .into_iter()
             .find(|statistics| statistics.oid == oid)
         else {
@@ -3266,9 +3266,9 @@ fn object_description(
     }
     let oid = u32::try_from(crate::func::int_arg(&values[0])?)
         .map_err(|_| ExecError::Unsupported("large object OID is out of range".into()))?;
-    match crabka_pgcatalog::largeobject::get_metadata(kv, oid) {
+    match krabka_pgcatalog::largeobject::get_metadata(kv, oid) {
         Ok(_) => comment_datum(kv, "large object", CommentObject::Named(&oid.to_string())),
-        Err(crabka_pgcatalog::CatalogError::UndefinedLargeObject(_)) => Ok(Datum::Null),
+        Err(krabka_pgcatalog::CatalogError::UndefinedLargeObject(_)) => Ok(Datum::Null),
         Err(error) => Err(error.into()),
     }
 }
@@ -3292,7 +3292,7 @@ fn describe_object(
     if subid != 0 {
         return Ok(Datum::Null);
     }
-    let Some(statistics) = crabka_pgcatalog::statistics::list(kv)?
+    let Some(statistics) = krabka_pgcatalog::statistics::list(kv)?
         .into_iter()
         .find(|statistics| statistics.oid == oid)
     else {
@@ -3306,7 +3306,7 @@ fn describe_object(
 }
 
 fn comment_datum(kv: &dyn Kv, kind: &str, object: CommentObject<'_>) -> Result<Datum, ExecError> {
-    Ok(crabka_pgcatalog::get_comment(kv, kind, object)?.map_or(Datum::Null, Datum::Text))
+    Ok(krabka_pgcatalog::get_comment(kv, kind, object)?.map_or(Datum::Null, Datum::Text))
 }
 
 // ------------------------------------------------------ definition rebuilding
@@ -3320,7 +3320,7 @@ fn view_def(
     kv: &dyn Kv,
     scope: &ResolutionScope,
     vals: &[Datum],
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> Result<Datum, ExecError> {
     if matches!(vals.first(), Some(Datum::Int4(0) | Datum::Int8(0))) {
         return Ok(Datum::Null);
@@ -3357,7 +3357,7 @@ fn lookup_materialized(
     kv: &dyn Kv,
     scope: &ResolutionScope,
     object: &Datum,
-) -> Result<Option<crabka_pgcatalog::Table>, ExecError> {
+) -> Result<Option<krabka_pgcatalog::Table>, ExecError> {
     let wanted = match object {
         Datum::Null => return Ok(None),
         Datum::Text(name) => match resolve_relation_in_scope(kv, scope, name) {
@@ -3367,7 +3367,7 @@ fn lookup_materialized(
         other => i32::try_from(int_arg(other)?)
             .map_err(|_| ExecError::Unsupported("oid exceeds int4 range".into()))?,
     };
-    for table in crabka_pgcatalog::list_tables(kv)? {
+    for table in krabka_pgcatalog::list_tables(kv)? {
         if table.materialized.is_some()
             && crate::catalog_rel::table_relation_oid(table.id)? == wanted
         {
@@ -3398,7 +3398,7 @@ fn lookup_view(
             .map_err(|_| ExecError::Unsupported("oid exceeds int4 range".into()))?,
     };
     let oids = crate::catalog_rel::view_oids(kv)?;
-    Ok(crabka_pgcatalog::list_views(kv)?
+    Ok(krabka_pgcatalog::list_views(kv)?
         .into_iter()
         .find(|view| oids.get(&view.name) == Some(&wanted)))
 }
@@ -3414,13 +3414,13 @@ fn lookup_view(
 pub(crate) fn view_definition_text(
     view: &View,
     pretty: bool,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> String {
     view_definition(view, pretty, None, style)
 }
 
 /// The same rendering for a materialized view, whose definition and output
-/// column list live on its [`crabka_pgcatalog::Table`] record rather than on a
+/// column list live on its [`krabka_pgcatalog::Table`] record rather than on a
 /// [`View`].
 ///
 /// It borrows the view renderer rather than duplicating it because
@@ -3431,19 +3431,19 @@ pub(crate) fn view_definition_text(
 /// `ALTER MATERIALIZED VIEW … RENAME COLUMN` show up in the definition, as it
 /// does in PostgreSQL.
 pub(crate) fn materialized_definition_text(
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     pretty: bool,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> String {
     materialized_definition(table, pretty, None, style)
 }
 
 /// [`materialized_definition_text`] with an explicit select-list wrap column.
 fn materialized_definition(
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     pretty: bool,
     wrap: Option<usize>,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> String {
     let Some(matview) = &table.materialized else {
         return String::new();
@@ -3454,7 +3454,7 @@ fn materialized_definition(
             definition: matview.definition.clone(),
             owner: table.owner.clone(),
             columns: table.columns.clone(),
-            options: crabka_pgcatalog::ViewOptions::default(),
+            options: krabka_pgcatalog::ViewOptions::default(),
         },
         pretty,
         wrap,
@@ -3467,12 +3467,12 @@ fn view_definition(
     view: &View,
     pretty: bool,
     wrap: Option<usize>,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> String {
-    let Ok(statements) = crabka_pgparser::parse(&view.definition) else {
+    let Ok(statements) = krabka_pgparser::parse(&view.definition) else {
         return format!("{};", view.definition.trim_end_matches(';'));
     };
-    let [crabka_pgparser::ast::Statement::Query(query)] = statements.as_slice() else {
+    let [krabka_pgparser::ast::Statement::Query(query)] = statements.as_slice() else {
         return format!("{};", view.definition.trim_end_matches(';'));
     };
     let names = view
@@ -3497,11 +3497,11 @@ fn index_def(
         return Ok(Datum::Null);
     }
     let oid = resolve_relation_oid(kv, scope, object)?;
-    for index in crabka_pgcatalog::list_indexes(kv)? {
+    for index in krabka_pgcatalog::list_indexes(kv)? {
         if crate::catalog_rel::index_relation_oid(index.id)? != oid {
             continue;
         }
-        let table = crabka_pgcatalog::get_table(kv, &index.table)?;
+        let table = krabka_pgcatalog::get_table(kv, &index.table)?;
         let qualify = !pretty || !scope.visible_schemas(kv)?.contains(&table.name.schema);
         return Ok(Datum::Text(index_definition_as(&index, &table, qualify)));
     }
@@ -3522,13 +3522,13 @@ fn statistics_object_def(
     let Some(wanted) = u32::try_from(wanted).ok() else {
         return Ok(Datum::Null);
     };
-    let Some(object) = crabka_pgcatalog::statistics::list(kv)?
+    let Some(object) = krabka_pgcatalog::statistics::list(kv)?
         .into_iter()
         .find(|object| object.oid == wanted)
     else {
         return Ok(Datum::Null);
     };
-    let table = crabka_pgcatalog::table_by_id(kv, object.table_id)?;
+    let table = krabka_pgcatalog::table_by_id(kv, object.table_id)?;
     let ncolumns = object.keys.iter().filter(|key| **key != 0).count() + object.expressions.len();
     let Some(mut columns) = object
         .keys
@@ -3570,7 +3570,7 @@ fn statistics_object_def(
             let kinds = (enabled.len() != 3 && ncolumns > 1).then(|| enabled.join(", "));
             Ok(Datum::Text(format!(
                 "CREATE STATISTICS {}.{}{} ON {columns} FROM {}",
-                quote_identifier(crabka_pgcatalog::displayed_schema(&object.name.schema)),
+                quote_identifier(krabka_pgcatalog::displayed_schema(&object.name.schema)),
                 quote_identifier(&object.name.name),
                 kinds.map_or_else(String::new, |kinds| format!(" ({kinds})")),
                 quote_identifier(&table.name.name),
@@ -3598,7 +3598,7 @@ fn index_definition_as(index: &Index, table: &Table, qualify: bool) -> String {
     let relation = if qualify {
         format!(
             "{}.{}",
-            quote_identifier(crabka_pgcatalog::displayed_schema(&table.name.schema)),
+            quote_identifier(krabka_pgcatalog::displayed_schema(&table.name.schema)),
             quote_identifier(&table.name.name)
         )
     } else {
@@ -3609,11 +3609,11 @@ fn index_definition_as(index: &Index, table: &Table, qualify: bool) -> String {
         if index.unique { "UNIQUE " } else { "" },
         quote_identifier(&index.name),
         match index.method {
-            crabka_pgcatalog::IndexMethod::Btree => "btree",
-            crabka_pgcatalog::IndexMethod::Hash => "hash",
-            crabka_pgcatalog::IndexMethod::Gist => "gist",
-            crabka_pgcatalog::IndexMethod::Gin => "gin",
-            crabka_pgcatalog::IndexMethod::Spgist => "spgist",
+            krabka_pgcatalog::IndexMethod::Btree => "btree",
+            krabka_pgcatalog::IndexMethod::Hash => "hash",
+            krabka_pgcatalog::IndexMethod::Gist => "gist",
+            krabka_pgcatalog::IndexMethod::Gin => "gin",
+            krabka_pgcatalog::IndexMethod::Spgist => "spgist",
         },
         index_key_list(&index.columns, &index.key_options, table, index.method),
     );
@@ -3679,7 +3679,7 @@ fn constraint_def(
     }
     let wanted = i32::try_from(int_arg(object)?)
         .map_err(|_| ExecError::Unsupported("oid exceeds int4 range".into()))?;
-    for index in crabka_pgcatalog::list_indexes(kv)? {
+    for index in krabka_pgcatalog::list_indexes(kv)? {
         let Some(kind) = index.constraint else {
             continue;
         };
@@ -3687,9 +3687,9 @@ fn constraint_def(
             continue;
         }
         let keyword = match kind {
-            crabka_pgcatalog::IndexConstraint::PrimaryKey => "PRIMARY KEY",
-            crabka_pgcatalog::IndexConstraint::Unique => "UNIQUE",
-            crabka_pgcatalog::IndexConstraint::Exclusion(_) => "EXCLUDE",
+            krabka_pgcatalog::IndexConstraint::PrimaryKey => "PRIMARY KEY",
+            krabka_pgcatalog::IndexConstraint::Unique => "UNIQUE",
+            krabka_pgcatalog::IndexConstraint::Exclusion(_) => "EXCLUDE",
         };
         // `WITHOUT OVERLAPS` rides on the last key column, and this rendering
         // is what psql echoes verbatim for such a constraint instead of the
@@ -3726,7 +3726,7 @@ fn foreign_key_constraint_def(
     wanted: i32,
 ) -> Result<Option<String>, ExecError> {
     let oids = crate::catalog_rel::foreign_key_constraint_oids(kv)?;
-    for foreign_key in crabka_pgcatalog::list_foreign_keys(kv)? {
+    for foreign_key in krabka_pgcatalog::list_foreign_keys(kv)? {
         let key = (foreign_key.table.clone(), foreign_key.name.clone());
         if oids.get(&key) == Some(&wanted) {
             return Ok(Some(foreign_key_definition(kv, scope, &foreign_key)?));
@@ -3826,7 +3826,7 @@ fn qualified_unless_visible(
     }
     Ok(format!(
         "{}.{}",
-        quote_identifier(crabka_pgcatalog::displayed_schema(&name.schema)),
+        quote_identifier(krabka_pgcatalog::displayed_schema(&name.schema)),
         quote_identifier(&name.name)
     ))
 }
@@ -3859,14 +3859,14 @@ fn quoted_column_list(columns: &[String]) -> String {
 
 fn index_key_list(
     keys: &[String],
-    options: &[crabka_pgcatalog::IndexKeyOptions],
+    options: &[krabka_pgcatalog::IndexKeyOptions],
     table: &Table,
-    method: crabka_pgcatalog::IndexMethod,
+    method: krabka_pgcatalog::IndexMethod,
 ) -> String {
     keys.iter()
         .zip(options)
         .map(|(key, option)| {
-            let mut definition = crabka_pgcatalog::index_key_expression(key).map_or_else(
+            let mut definition = krabka_pgcatalog::index_key_expression(key).map_or_else(
                 || quote_identifier(key),
                 |expression| format!("({expression})"),
             );
@@ -3905,17 +3905,17 @@ fn is_default_index_opclass(
     key: &str,
     opclass: &str,
     table: &Table,
-    method: crabka_pgcatalog::IndexMethod,
+    method: krabka_pgcatalog::IndexMethod,
 ) -> bool {
     let Some(column) = table.columns.iter().find(|column| column.name == key) else {
         return false;
     };
     let method_oid = match method {
-        crabka_pgcatalog::IndexMethod::Btree => crate::catalog_rel::BTREE_AM_OID,
-        crabka_pgcatalog::IndexMethod::Hash => crate::catalog_rel::HASH_AM_OID,
-        crabka_pgcatalog::IndexMethod::Gist => crate::catalog_rel::GIST_AM_OID,
-        crabka_pgcatalog::IndexMethod::Gin => crate::catalog_rel::GIN_AM_OID,
-        crabka_pgcatalog::IndexMethod::Spgist => crate::catalog_rel::SPGIST_AM_OID,
+        krabka_pgcatalog::IndexMethod::Btree => crate::catalog_rel::BTREE_AM_OID,
+        krabka_pgcatalog::IndexMethod::Hash => crate::catalog_rel::HASH_AM_OID,
+        krabka_pgcatalog::IndexMethod::Gist => crate::catalog_rel::GIST_AM_OID,
+        krabka_pgcatalog::IndexMethod::Gin => crate::catalog_rel::GIN_AM_OID,
+        krabka_pgcatalog::IndexMethod::Spgist => crate::catalog_rel::SPGIST_AM_OID,
     };
     let name = opclass.rsplit('.').next().unwrap_or(opclass);
     crate::builtin_opclasses::BUILTIN_OPERATOR_CLASSES
@@ -3926,7 +3926,7 @@ fn is_default_index_opclass(
                     && *candidate_method == method_oid
                     && *candidate_name == name
                     && (*input_oid == column.ty.oid() as i32
-                        || (*input_oid == crabka_pgtypes::oids::TEXT as i32
+                        || (*input_oid == krabka_pgtypes::oids::TEXT as i32
                             && matches!(column.ty, ColumnType::Text | ColumnType::Varchar(_))))
             },
         )
@@ -3935,7 +3935,7 @@ fn is_default_index_opclass(
 fn check_constraint_def(kv: &dyn Kv, wanted: i32) -> Result<Datum, ExecError> {
     let check_oids = crate::catalog_rel::check_constraint_oids(kv)?;
     let not_null_oids = crate::catalog_rel::not_null_constraint_oids(kv)?;
-    for table in crabka_pgcatalog::list_tables(kv)? {
+    for table in krabka_pgcatalog::list_tables(kv)? {
         for check in &table.checks {
             let key = crate::catalog_rel::ConstraintKey::new(&table.name, &check.name);
             if check_oids.get(&key) == Some(&wanted) {
@@ -3964,15 +3964,15 @@ fn check_constraint_def(kv: &dyn Kv, wanted: i32) -> Result<Datum, ExecError> {
 /// The source text of a stored column default, as `pg_attrdef.adbin` holds it.
 pub(crate) fn default_source_text(
     kv: &dyn Kv,
-    default: &crabka_pgcatalog::ColumnDefault,
+    default: &krabka_pgcatalog::ColumnDefault,
     ty: ColumnType,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> String {
     match default {
-        crabka_pgcatalog::ColumnDefault::NextVal(sequence) => {
+        krabka_pgcatalog::ColumnDefault::NextVal(sequence) => {
             format!("nextval('{}'::regclass)", sequence.replace('\'', "''"))
         }
-        crabka_pgcatalog::ColumnDefault::Expression(source) => source.clone(),
+        krabka_pgcatalog::ColumnDefault::Expression(source) => source.clone(),
         // A `regclass` default stores only the oid, so the name it deparses to
         // is read from the catalog now: a `RENAME` of the relation changes what
         // `\d` and `pg_get_expr` print, as it does in PostgreSQL.
@@ -3980,13 +3980,13 @@ pub(crate) fn default_source_text(
         // The default scope, not the reader's, for the reason
         // `crate::exec::format_column_default` gives: `pg_attrdef.adbin` is one
         // stored text per column and cannot vary by who reads it.
-        crabka_pgcatalog::ColumnDefault::Value(Datum::Regclass(value)) => {
+        krabka_pgcatalog::ColumnDefault::Value(Datum::Regclass(value)) => {
             let resolved = crate::exec::regclass_by_oid(
                 kv,
                 crate::relname::ResolutionScope::default_scope(),
                 value.oid,
             )
-            .unwrap_or_else(|_| crabka_pgtypes::RegclassValue::unresolved(value.oid));
+            .unwrap_or_else(|_| krabka_pgtypes::RegclassValue::unresolved(value.oid));
             crate::viewdef::const_text(&Datum::Regclass(resolved), ty, style)
         }
         // A bit-string default deparses with the *literal's* type, not the
@@ -3998,7 +3998,7 @@ pub(crate) fn default_source_text(
         // read by the column's own input function and prints the column's base
         // type. The stored datum's `varying` flag is what records which of the
         // two happened, so this reads the flag rather than the column.
-        crabka_pgcatalog::ColumnDefault::Value(value @ Datum::BitString(bits)) => {
+        krabka_pgcatalog::ColumnDefault::Value(value @ Datum::BitString(bits)) => {
             let literal = if bits.varying {
                 ColumnType::VarBit(None)
             } else {
@@ -4006,7 +4006,7 @@ pub(crate) fn default_source_text(
             };
             crate::viewdef::const_text(value, literal, style)
         }
-        crabka_pgcatalog::ColumnDefault::Value(value) => {
+        krabka_pgcatalog::ColumnDefault::Value(value) => {
             crate::viewdef::const_text(value, ty, style)
         }
     }
@@ -4041,12 +4041,12 @@ mod tests {
     use std::sync::Arc;
 
     use assert2::assert;
-    use crabka_pgcatalog::{
+    use krabka_pgcatalog::{
         Column, ForeignKey, IndexPlacement, MatchType, ReferentialAction, RelationName, Table,
     };
-    use crabka_pgkv::{Kv, MemKv};
-    use crabka_pgparser::parser::{parse, parse_expr_for_test as pexpr};
-    use crabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
+    use krabka_pgkv::{Kv, MemKv};
+    use krabka_pgparser::parser::{parse, parse_expr_for_test as pexpr};
+    use krabka_pgtypes::{ArrayValue, ColumnType, Datum, ElemType};
 
     use super::{
         StatisticsDefKind, catalog_func, char_to_encoding, coerce_rule_unknown_literals,
@@ -4070,7 +4070,7 @@ mod tests {
                 &MemKv::default(),
                 &crate::relname::ResolutionScope::default(),
                 &[Datum::Int4(0)],
-                crabka_pgtypes::encoding::OutputStyle::with_zone(&utc),
+                krabka_pgtypes::encoding::OutputStyle::with_zone(&utc),
             )
             .expect("view definition")
                 == Datum::Null
@@ -4081,7 +4081,7 @@ mod tests {
     fn statistics_object_def_reconstructs_columns_and_expressions() {
         let kv = MemKv::new();
         let table_name = RelationName::public("t");
-        let (table_id, ops) = crabka_pgcatalog::create_table_ops(
+        let (table_id, ops) = krabka_pgcatalog::create_table_ops(
             &kv,
             &table_name,
             vec![
@@ -4091,7 +4091,7 @@ mod tests {
         )
         .expect("table");
         kv.write_batch(&ops).expect("write table");
-        let object = crabka_pgcatalog::statistics::Statistics {
+        let object = krabka_pgcatalog::statistics::Statistics {
             oid: 0,
             name: RelationName::public("ab_stats"),
             table_id,
@@ -4103,9 +4103,9 @@ mod tests {
             data: None,
             inherited_data: None,
         };
-        let ops = crabka_pgcatalog::statistics::create_ops(&kv, &object).expect("statistics");
+        let ops = krabka_pgcatalog::statistics::create_ops(&kv, &object).expect("statistics");
         kv.write_batch(&ops).expect("write statistics");
-        let oid = Datum::Int4(crabka_pgcatalog::statistics::STATISTICS_OID_BASE as i32);
+        let oid = Datum::Int4(krabka_pgcatalog::statistics::STATISTICS_OID_BASE as i32);
         assert!(
             statistics_object_def(&kv, StatisticsDefKind::Definition, &oid).expect("definition")
                 == Datum::Text("CREATE STATISTICS public.ab_stats ON a, (b + 1) FROM t".into())
@@ -4125,7 +4125,7 @@ mod tests {
 
     #[test]
     fn rule_literal_coercion_restores_insert_and_expression_types() {
-        use crabka_pgparser::ast::Expr;
+        use krabka_pgparser::ast::Expr;
 
         let columns = vec![
             Column::new("id", ColumnType::Int4),
@@ -4185,7 +4185,7 @@ mod tests {
         assert!(
             crate::viewdef::expression_text(
                 &expression,
-                crabka_pgtypes::encoding::OutputStyle::with_zone(&utc),
+                krabka_pgtypes::encoding::OutputStyle::with_zone(&utc),
             )
             .contains("NULL::integer")
         );
@@ -4258,7 +4258,7 @@ mod tests {
         let kv = MemKv::new();
         for schema in ["app", "shadow"] {
             kv.write_batch(
-                &crabka_pgcatalog::create_schema_ops(&kv, schema, "postgres").expect("schema ops"),
+                &krabka_pgcatalog::create_schema_ops(&kv, schema, "postgres").expect("schema ops"),
             )
             .expect("seed schema");
         }
@@ -4268,10 +4268,10 @@ mod tests {
     /// Make `name` exist as a table, so that it occupies its bare name in its
     /// schema and can shadow a relation of the same name further down the path.
     fn seed_relation(kv: &MemKv, name: &RelationName) {
-        let (_, ops) = crabka_pgcatalog::create_table_ops(
+        let (_, ops) = krabka_pgcatalog::create_table_ops(
             kv,
             name,
-            vec![crabka_pgcatalog::Column::new("x", ColumnType::Int4)],
+            vec![krabka_pgcatalog::Column::new("x", ColumnType::Int4)],
         )
         .expect("create table");
         kv.write_batch(&ops).expect("apply");
@@ -4336,13 +4336,13 @@ mod tests {
     #[test]
     fn foreign_object_privilege_functions_read_their_acls() {
         let kv = Arc::new(MemKv::new());
-        crabka_pgcatalog::create_role(kv.as_ref(), "reader", true).expect("reader role");
-        crabka_pgcatalog::create_fdw(kv.as_ref(), "w", Vec::new()).expect("fdw");
-        crabka_pgcatalog::create_server(kv.as_ref(), "s", "w", Vec::new()).expect("server");
-        let wrapper_oid = crabka_pgcatalog::get_fdw(kv.as_ref(), "w")
+        krabka_pgcatalog::create_role(kv.as_ref(), "reader", true).expect("reader role");
+        krabka_pgcatalog::create_fdw(kv.as_ref(), "w", Vec::new()).expect("fdw");
+        krabka_pgcatalog::create_server(kv.as_ref(), "s", "w", Vec::new()).expect("server");
+        let wrapper_oid = krabka_pgcatalog::get_fdw(kv.as_ref(), "w")
             .expect("fdw")
             .oid;
-        let server_oid = crabka_pgcatalog::get_server(kv.as_ref(), "s")
+        let server_oid = krabka_pgcatalog::get_server(kv.as_ref(), "s")
             .expect("server")
             .oid;
         let catalog: Arc<dyn Kv> = kv.clone();
@@ -4386,10 +4386,10 @@ mod tests {
         }
 
         for (target, name) in [
-            (crabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper, "w"),
-            (crabka_pgcatalog::ForeignPrivilegeTarget::Server, "s"),
+            (krabka_pgcatalog::ForeignPrivilegeTarget::DataWrapper, "w"),
+            (krabka_pgcatalog::ForeignPrivilegeTarget::Server, "s"),
         ] {
-            let ops = crabka_pgcatalog::grant_foreign_privileges_ops(
+            let ops = krabka_pgcatalog::grant_foreign_privileges_ops(
                 kv.as_ref(),
                 target,
                 &[name.into()],
@@ -4522,7 +4522,7 @@ mod tests {
             ("Infinity", "Infinity PB"),
             ("-Infinity", "-Infinity PB"),
         ] {
-            let value = crabka_pgtypes::numeric::parse(input).expect("numeric size");
+            let value = krabka_pgtypes::numeric::parse(input).expect("numeric size");
             let got = size_pretty(&Datum::Numeric(value)).expect("numeric size_pretty");
             assert!(got == Datum::Text(expected.into()), "{input}");
         }
@@ -4531,7 +4531,7 @@ mod tests {
     #[test]
     fn size_pretty_resolves_domains_through_their_base_type() {
         let domain = |oid, name, base| {
-            ColumnType::Domain(crabka_pgtypes::usertype::DomainRef {
+            ColumnType::Domain(krabka_pgtypes::usertype::DomainRef {
                 oid,
                 name,
                 base: Box::leak(Box::new(base)),
@@ -4543,7 +4543,7 @@ mod tests {
         ] {
             let table = Table {
                 id: 1,
-                owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+                owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
                 name: RelationName::public("size_domains"),
                 columns: vec![Column::new("v", ty)],
                 sharded: false,
@@ -4568,7 +4568,7 @@ mod tests {
         let int4_domain = domain(900_103, "size_int4_domain", ColumnType::Int4);
         let table = Table {
             id: 1,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public("size_domains"),
             columns: vec![Column::new("v", int4_domain)],
             sharded: false,
@@ -4666,13 +4666,13 @@ mod tests {
         let catalog = MemKv::new();
         let data = MemKv::new();
         let table = RelationName::public("size_probe");
-        let table_id = crabka_pgcatalog::create_table(
+        let table_id = krabka_pgcatalog::create_table(
             &catalog,
             &table,
             vec![Column::new("a", ColumnType::Int4)],
         )
         .expect("table");
-        let (ordinary_id, ops) = crabka_pgcatalog::create_index_ops(
+        let (ordinary_id, ops) = krabka_pgcatalog::create_index_ops(
             &catalog,
             "size_probe_a_idx",
             &table,
@@ -4682,18 +4682,18 @@ mod tests {
         )
         .expect("ordinary index");
         catalog.write_batch(&ops).expect("write ordinary index");
-        let (expression_id, ops) = crabka_pgcatalog::create_index_ops(
+        let (expression_id, ops) = krabka_pgcatalog::create_index_ops(
             &catalog,
             "size_probe_expr_idx",
             &table,
-            vec![crabka_pgcatalog::expression_index_key("(1)")],
+            vec![krabka_pgcatalog::expression_index_key("(1)")],
             false,
             IndexPlacement::Local,
         )
         .expect("expression index");
         catalog.write_batch(&ops).expect("write expression index");
 
-        let key = crabka_pgkv::key::secondary_index_entry_key(
+        let key = krabka_pgkv::key::secondary_index_entry_key(
             table_id,
             ordinary_id,
             &[Datum::Int4(7)],
@@ -4705,7 +4705,7 @@ mod tests {
             .checked_add(value.len())
             .and_then(|bytes| i64::try_from(bytes).ok())
             .expect("entry size");
-        data.write_batch(&[crabka_pgkv::WriteOp::Put { key, value }])
+        data.write_batch(&[krabka_pgkv::WriteOp::Put { key, value }])
             .expect("write index entry");
 
         let scope = crate::relname::ResolutionScope::default();
@@ -5044,7 +5044,7 @@ mod tests {
             let kv = MemKv::new();
             for schema in ["app", "shadow"] {
                 kv.write_batch(
-                    &crabka_pgcatalog::create_schema_ops(&kv, schema, "postgres")
+                    &krabka_pgcatalog::create_schema_ops(&kv, schema, "postgres")
                         .expect("schema ops"),
                 )
                 .expect("seed schema");
@@ -5068,11 +5068,11 @@ mod tests {
         let kv = MemKv::new();
         let scope = crate::relname::ResolutionScope::default();
         let foreign_key = sample_foreign_key();
-        kv.write_batch(&crabka_pgcatalog::put_foreign_key_ops(&foreign_key))
+        kv.write_batch(&krabka_pgcatalog::put_foreign_key_ops(&foreign_key))
             .expect("seed the catalog");
         let oids = crate::catalog_rel::foreign_key_constraint_oids(&kv).expect("foreign key oids");
         let oid = oids[&(
-            crabka_pgcatalog::RelationName::public("cc"),
+            krabka_pgcatalog::RelationName::public("cc"),
             "cc_a_fkey".to_string(),
         )];
         assert!(

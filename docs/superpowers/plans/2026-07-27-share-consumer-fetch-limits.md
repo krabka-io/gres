@@ -148,7 +148,7 @@ The deliberately unresolvable bootstrap proves that relation validation happens 
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer share_fetch_limits --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer share_fetch_limits --locked
 ```
 
 Expected: compilation fails because the semantic types, constants, and builder setters do not exist.
@@ -324,7 +324,7 @@ Mirror those six new names in the `pub use share::{...};` block in `crates/clien
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer share_fetch_limits --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer share_fetch_limits --locked
 ```
 
 Expected: all three focused tests pass.
@@ -356,8 +356,8 @@ In `share_fetch_topics_group_assignment_and_attach_partition_acks`, change the t
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer share_fetch_request_preserves_configured_limits_and_timeout_bounds --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer share_fetch_topics_group_assignment_and_attach_partition_acks --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer share_fetch_request_preserves_configured_limits_and_timeout_bounds --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer share_fetch_topics_group_assignment_and_attach_partition_acks --locked
 ```
 
 Expected: the request test does not compile with the old helper signature, and the topic test fails because the old code still writes `1_048_576`.
@@ -400,11 +400,11 @@ between `timeout` and `topics`.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer share_fetch_limits --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer share_fetch_request_preserves_configured_limits_and_timeout_bounds --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer share_fetch_topics_group_assignment_and_attach_partition_acks --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-client-consumer --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer share_fetch_limits --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer share_fetch_request_preserves_configured_limits_and_timeout_bounds --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer share_fetch_topics_group_assignment_and_attach_partition_acks --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-client-consumer --all-targets --locked -- -D warnings
 cargo +nightly fmt --all -- --check
 git diff --check
 git diff -- Cargo.lock
@@ -507,8 +507,8 @@ rg -n \
   "fetch_min_bytes|fetch_max_bytes|fetch_max_records|ShareConsumerFetch(MinBytes|MaxBytes|MaxRecords)|DEFAULT_SHARE_CONSUMER_FETCH_(MIN_BYTES|MAX_BYTES|MAX_RECORDS)|PARTITION_MAX_BYTES|batch_size|share_acquire_mode" \
   crates/client-consumer \
   docs/configuration-audit.md
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-client-consumer --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-client-consumer --all-targets --locked -- -D warnings
 cargo +nightly fmt --all -- --check
 git diff --check
 git diff -- Cargo.lock

@@ -5,7 +5,7 @@
 //! Every refusal asserted here comes from a live `PostgreSQL` 18.4.
 
 use assert2::assert;
-use crabka_pgparser::{
+use krabka_pgparser::{
     ParseError,
     ast::{
         ColumnConstraint, ColumnConstraintKind, ConstraintAttributes, ForeignKeyRef, MatchType,
@@ -516,7 +516,7 @@ fn a_named_foreign_key_carries_its_name_and_its_whole_tail() {
 // `CREATE TABLE` spelling.
 #[test]
 fn alter_table_add_foreign_key_carries_the_whole_clause() {
-    use crabka_pgparser::ast::AlterTableAction;
+    use krabka_pgparser::ast::AlterTableAction;
 
     let Statement::AlterTable { actions, .. } = one(
         "ALTER TABLE c ADD CONSTRAINT c_fk FOREIGN KEY (a) REFERENCES p (id) ON DELETE CASCADE \

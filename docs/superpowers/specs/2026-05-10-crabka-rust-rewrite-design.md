@@ -11,7 +11,7 @@ Apache License 2.0 as a derivative work of the upstream project. This
 document is a **meta-spec**: it defines the decomposition of the work into
 sub-projects, the ordering and dependencies between them, and what "done"
 means for each. It also contains a detailed design for the first slice —
-the wire protocol codec library, `crabka-protocol`.
+the wire protocol codec library, `krabka-protocol`.
 
 Every later sub-project gets its own brainstorm → spec → plan cycle when
 its turn comes. This document does not attempt to design the broker,
@@ -50,7 +50,7 @@ and may never reach the north star at all.
 
 ## Project framing
 
-- **Name:** Crabka. Crate-prefix `crabka-`.
+- **Name:** Crabka. Crate-prefix `krabka-`.
 - **License:** Apache 2.0, treating the work as a derivative of Apache
   Kafka. The `NOTICE` file carries Apache Kafka attribution. No attempt to
   upstream to the ASF; Crabka lives as a separate project.
@@ -69,21 +69,21 @@ its turn comes. Items 1 and 3 can be developed in parallel; items 14 and
 
 | #  | Sub-project                          | Crate(s)                                | Depends on | Done means                                                                                                                                                | Risk      |
 |----|--------------------------------------|-----------------------------------------|------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------|-----------|
-|  1 | Wire protocol codec                  | `crabka-protocol`                       | —          | Encodes/decodes every Kafka request/response version of the pinned upstream release; byte-equal with the JVM client across a differential corpus.         | Low       |
-|  2 | Client foundation                    | `crabka-client-core`                    | 1          | Connection management, broker discovery, API-version negotiation, request dispatch. No producer/consumer semantics yet.                                   | Medium    |
-|  3 | Storage / log layer                  | `crabka-log`                            | —          | Read/write existing Kafka on-disk format byte-compatibly: segments, offset/time indexes, record batch v2, retention, compaction. Verified via JVM log dirs. | High      |
-|  4 | Single-node broker MVP               | `crabka-broker`                         | 1, 3       | Produce/fetch/metadata/api-versions over TCP. Single node, no replication, no groups, no auth. JVM clients can produce and consume.                       | High      |
-|  5 | Consumer groups + coordinator        | `crabka-broker`, `crabka-client-consumer` | 4        | Classic rebalance first, then KIP-848. Offset commits to `__consumer_offsets`.                                                                            | High      |
-|  6 | Producer client                      | `crabka-client-producer`                | 2          | Idempotent producer; batching, compression, partitioner. No transactions yet.                                                                             | Medium    |
-|  7 | KRaft / metadata quorum              | `crabka-raft`, `crabka-metadata`        | 1, 3       | Raft log, snapshots, metadata records, controller election. Replaces ZooKeeper entirely (Kafka 4.x is KRaft-only).                                        | Very high |
-|  8 | Replication + ISR                    | `crabka-broker`                         | 4, 7       | Multi-broker clusters; per-partition leader election; ISR; follower fetch.                                                                                | Very high |
-|  9 | Transactions                         | `crabka-broker`, `crabka-client-producer` | 5, 8     | Transactional producer, transaction coordinator, exactly-once. Includes in-flight KIP-1319 work.                                                          | High      |
-| 10 | Admin API + tooling                  | `crabka-client-admin`, `crabka-cli`     | 4–9        | All CreateTopics/DescribeConfigs/AlterConfigs/ACLs/quotas. CLI parity with `kafka-*.sh`.                                                                   | Medium    |
-| 11 | Auth / security                      | `crabka-security`                       | 2, 4       | SASL (PLAIN, SCRAM, GSSAPI, OAUTHBEARER), TLS, delegation tokens, authorizer interface.                                                                   | Med-high  |
-| 12 | Tiered storage                       | `crabka-tiered-storage`                 | 3, 8       | KIP-405. Pluggable remote storage manager; S3 reference impl.                                                                                             | High      |
-| 13 | Share groups                         | `crabka-broker`                         | 5, 8       | KIP-932 queue-style consumption.                                                                                                                          | Medium    |
-| 14 | Streams equivalent (separate product)| `crabka-streams-*` (own repo)           | 5, 6       | Processor API + DSL, state stores (RocksDB or sled), exactly-once. Own meta-spec when started.                                                            | Very high |
-| 15 | Connect equivalent (separate product)| `crabka-connect-*` (own repo)           | 10         | Distributed runtime, REST API, plugin isolation. Own meta-spec when started.                                                                              | Very high |
+|  1 | Wire protocol codec                  | `krabka-protocol`                       | —          | Encodes/decodes every Kafka request/response version of the pinned upstream release; byte-equal with the JVM client across a differential corpus.         | Low       |
+|  2 | Client foundation                    | `krabka-client-core`                    | 1          | Connection management, broker discovery, API-version negotiation, request dispatch. No producer/consumer semantics yet.                                   | Medium    |
+|  3 | Storage / log layer                  | `krabka-log`                            | —          | Read/write existing Kafka on-disk format byte-compatibly: segments, offset/time indexes, record batch v2, retention, compaction. Verified via JVM log dirs. | High      |
+|  4 | Single-node broker MVP               | `krabka-broker`                         | 1, 3       | Produce/fetch/metadata/api-versions over TCP. Single node, no replication, no groups, no auth. JVM clients can produce and consume.                       | High      |
+|  5 | Consumer groups + coordinator        | `krabka-broker`, `krabka-client-consumer` | 4        | Classic rebalance first, then KIP-848. Offset commits to `__consumer_offsets`.                                                                            | High      |
+|  6 | Producer client                      | `krabka-client-producer`                | 2          | Idempotent producer; batching, compression, partitioner. No transactions yet.                                                                             | Medium    |
+|  7 | KRaft / metadata quorum              | `krabka-raft`, `krabka-metadata`        | 1, 3       | Raft log, snapshots, metadata records, controller election. Replaces ZooKeeper entirely (Kafka 4.x is KRaft-only).                                        | Very high |
+|  8 | Replication + ISR                    | `krabka-broker`                         | 4, 7       | Multi-broker clusters; per-partition leader election; ISR; follower fetch.                                                                                | Very high |
+|  9 | Transactions                         | `krabka-broker`, `krabka-client-producer` | 5, 8     | Transactional producer, transaction coordinator, exactly-once. Includes in-flight KIP-1319 work.                                                          | High      |
+| 10 | Admin API + tooling                  | `krabka-client-admin`, `krabka-cli`     | 4–9        | All CreateTopics/DescribeConfigs/AlterConfigs/ACLs/quotas. CLI parity with `kafka-*.sh`.                                                                   | Medium    |
+| 11 | Auth / security                      | `krabka-security`                       | 2, 4       | SASL (PLAIN, SCRAM, GSSAPI, OAUTHBEARER), TLS, delegation tokens, authorizer interface.                                                                   | Med-high  |
+| 12 | Tiered storage                       | `krabka-tiered-storage`                 | 3, 8       | KIP-405. Pluggable remote storage manager; S3 reference impl.                                                                                             | High      |
+| 13 | Share groups                         | `krabka-broker`                         | 5, 8       | KIP-932 queue-style consumption.                                                                                                                          | Medium    |
+| 14 | Streams equivalent (separate product)| `krabka-streams-*` (own repo)           | 5, 6       | Processor API + DSL, state stores (RocksDB or sled), exactly-once. Own meta-spec when started.                                                            | Very high |
+| 15 | Connect equivalent (separate product)| `krabka-connect-*` (own repo)           | 10         | Distributed runtime, REST API, plugin isolation. Own meta-spec when started.                                                                              | Very high |
 
 ### Notes on ordering
 
@@ -102,13 +102,13 @@ its turn comes. Items 1 and 3 can be developed in parallel; items 14 and
   OpenTelemetry traces and metrics from the first PR.
 - **Compatibility matrix.** Every slice declares which Kafka protocol
   versions and KIPs it targets and which it explicitly does not.
-- **Conformance suite.** A shared test harness (`crabka-conformance`)
+- **Conformance suite.** A shared test harness (`krabka-conformance`)
   runs JVM Kafka client and broker images via testcontainers. Every
   slice that touches the wire contributes test cases.
 
 ---
 
-# Slice 1 detailed design: `crabka-protocol`
+# Slice 1 detailed design: `krabka-protocol`
 
 ## Purpose
 
@@ -133,7 +133,7 @@ crabka/                              # workspace root
 ├── Cargo.toml
 └── crates/
     └── protocol/
-        ├── Cargo.toml               # name = "crabka-protocol"
+        ├── Cargo.toml               # name = "krabka-protocol"
         ├── build.rs                 # invokes codegen at build time
         ├── schemas/                 # vendored from apache/kafka, pinned by commit SHA
         │   ├── VERSION              # records source SHA + Kafka version
@@ -238,8 +238,8 @@ pub fn write_frame<B: BufMut>(buf: &mut B, frame: &impl Encode, version: i16)
 - **No record-batch compression integration.** Record-batch parsing
   produces a `RecordBatch` value with a `compression: CompressionType`
   field and a still-compressed payload. Decompression lives in a
-  separate `crabka-compression` crate (gzip, snappy, lz4, zstd) that
-  slice 2 wires up. This keeps `crabka-protocol` free of C deps.
+  separate `krabka-compression` crate (gzip, snappy, lz4, zstd) that
+  slice 2 wires up. This keeps `krabka-protocol` free of C deps.
 - **No higher-level domain types.** A topic name is a `String`, not a
   `TopicName` newtype. The crate is a wire-level mapping, not a domain
   model. Newtypes belong to the consuming crates.
@@ -386,6 +386,6 @@ belong in the implementation plan where evidence can be gathered.
 ## Next step after this spec
 
 Invoke the `writing-plans` skill on this document to produce a detailed,
-reviewable implementation plan for slice 1 (`crabka-protocol`). Later
+reviewable implementation plan for slice 1 (`krabka-protocol`). Later
 slices get their own brainstorm → spec → plan cycle when their turn
 comes.

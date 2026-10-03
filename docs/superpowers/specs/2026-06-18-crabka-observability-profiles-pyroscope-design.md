@@ -13,14 +13,14 @@ flamebearer surface for the Profiles Drilldown app), native query-time symboliza
 (debuginfod + DWARF/ELF/`.gopclntab`), and multi-tenancy.
 
 This is the **fourth and final** signal in the LGTM+P replacement. It reuses the shared
-substrate designed for logs (`crabka-blockstore`), the pluggable `BlockIndex` seam that
+substrate designed for logs (`krabka-blockstore`), the pluggable `BlockIndex` seam that
 traces extracted, the label-postings machinery the metrics signal built, and the
 role-selectable service skeleton — and follows the same "emulate the wire/API contract,
 don't fork the product" pattern. See the sibling specs:
-[2026-06-18-crabka-observability-logs-design.md](2026-06-18-crabka-observability-logs-design.md),
-[2026-06-18-crabka-observability-metrics-mimir-design.md](2026-06-18-crabka-observability-metrics-mimir-design.md),
+[2026-06-18-krabka-observability-logs-design.md](2026-06-18-krabka-observability-logs-design.md),
+[2026-06-18-krabka-observability-metrics-mimir-design.md](2026-06-18-krabka-observability-metrics-mimir-design.md),
 and
-[2026-06-18-crabka-observability-traces-tempo-design.md](2026-06-18-crabka-observability-traces-tempo-design.md).
+[2026-06-18-krabka-observability-traces-tempo-design.md](2026-06-18-krabka-observability-traces-tempo-design.md).
 
 ## 1. Goal & thesis
 
@@ -28,7 +28,7 @@ Replace Grafana Pyroscope and serve as Grafana's profiles datasource, by emulati
 Pyroscope's *external* surfaces (the Connect `querier.v1.QuerierService` API, the
 `push.v1.PusherService` + legacy `/ingest` push doors, the experimental OTLP-profiles
 door, and the legacy `/pyroscope/render` flamebearer endpoints) on Crabka's substrate —
-the Kafka log as the durable ingest WAL, `crabka-blockstore` for columnar Parquet profile
+the Kafka log as the durable ingest WAL, `krabka-blockstore` for columnar Parquet profile
 blocks + a deduplicated symbol DB on object storage, and DataFusion for the cheap
 fold-by-stacktrace step. We reproduce Pyroscope's *contracts* (the profile-type strings,
 the `FlameGraph` 4-ints-per-bar encoding, the Connect method/field shapes, the flamebearer
@@ -69,7 +69,7 @@ tree → the 4-ints-per-bar `FlameGraph`). The final heavy slice is **native sym
 | 2 | Query model | **No query language.** A query = label selector + profile type + aggregation over Connect-RPC. The engine weight is the **symbol-DB data model** + the **flamegraph-merge engine**. No parser, no grammar, no conformance corpus |
 | 3 | Ingest substrate | **Crabka broker as the Kafka WAL** — a *deliberate divergence* from Pyroscope v2 (distributor → direct gRPC → diskless segment-writer → object store, coordinated by a Raft metastore, with an object-store DLQ). Consistent with logs/metrics/traces; aligns with Mimir/Tempo ingest-storage. Durability = partition replication; consumers replay offsets |
 | 4 | Metastore replacement | **No Raft metastore.** Block discovery/metadata is the blockstore **`ProfileIndex` (`impl BlockIndex`) + Crabka KRaft** — we reuse the consensus the broker already has rather than adding Pyroscope's standalone Raft |
-| 5 | Storage | `crabka-blockstore` (shared with logs/metrics/traces), reusing the **`BlockIndex` trait** that traces extracted. Add a `ProfileIndex` (`impl BlockIndex`) = label-series postings (**reuse the metrics `SeriesIndex` label-postings machinery**) + a profile-type index (`__profile_type__` → series) + per-block time-range + a stacktrace-partition map |
+| 5 | Storage | `krabka-blockstore` (shared with logs/metrics/traces), reusing the **`BlockIndex` trait** that traces extracted. Add a `ProfileIndex` (`impl BlockIndex`) = label-series postings (**reuse the metrics `SeriesIndex` label-postings machinery**) + a profile-type index (`__profile_type__` → series) + per-block time-range + a stacktrace-partition map |
 | 6 | Profile block format | **Crabka choice: a flattened samples fact table** — *one row per SAMPLE* — plus a deduplicated **symbol DB**. *Not* phlaredb byte-format compatible (phlaredb is one-row-per-profile with nested `Samples[]`; greenfield). We need semantic/API compat, not block-format compat |
 | 7 | Profile types | **Not hardcoded.** `profile_type` = the 5-part `name:sample_type:sample_unit:period_type:period_unit` string carried as the `__profile_type__` label (Go/pprof and Java/JFR differ; discover from data) |
 | 8 | Symbolization | **In scope** (the final heavy slice). SDK/pprof + Alloy-eBPF arrive **pre-symbolized**; OTel-native-eBPF arrive **unsymbolized** (build_id + address) and are symbolized **lazily at query time** via debuginfod + DWARF/ELF/`.gopclntab` parse + demangle |
@@ -112,7 +112,7 @@ segment-writer coordinated by a Raft metastore, Crabka inserts its Kafka WAL and
                           │ produce                      └────────────────────┬──────────────────┘
                           ▼                                                   │ consume (cold blocks)
                   ┌───────────────┐                                           │
-                  │   WAL TOPIC   │  __crabka_profiles_wal                     │
+                  │   WAL TOPIC   │  __krabka_profiles_wal                     │
                   │ (Crabka       │  partition key = hash(tenant, series_fp)   │
                   │  broker, RF≥1)│ ───────────────── consume ─────────────────┤
                   └───────┬───────┘                                           │
@@ -132,7 +132,7 @@ tail. No Raft metastore; no segment-writer; no object-store DLQ.
 
 ### 3.3 Crate layout
 
-- `crabka-blockstore` *(shared with logs/metrics/traces; the `BlockIndex` trait already
+- `krabka-blockstore` *(shared with logs/metrics/traces; the `BlockIndex` trait already
   extracted by traces)* — slice 1 adds a **`ProfileIndex` (`impl BlockIndex`)** =
   label-series postings (**reuse the metrics `SeriesIndex` label-postings machinery**) + a
   **profile-type index** (`__profile_type__` → series) + per-block time-range + a
@@ -141,11 +141,11 @@ tail. No Raft metastore; no segment-writer; no object-store DLQ.
   `BlockStore`/`BlockWriter`/`BlockMeta`/`scan_context`, `Labels`/`LabelMatcher`/`MatchOp`,
   `COL_FINGERPRINT = "series_fingerprint"` (UInt64), `COL_TIMESTAMP = "timestamp"` (Int64)
   stay available.
-- `crabka-pprof` *(slices 2–3)* — the **language-less** engine: the pprof model + codec,
+- `krabka-pprof` *(slices 2–3)* — the **language-less** engine: the pprof model + codec,
   the `SymbolDb` (parent-pointer stacktrace tree + dedup tables), the `ProfileStore` query
   boundary, the `ProfileType` parser, and the flamegraph-merge / select-series / diff
   engine. **No query parser — there is no language.**
-- `crabka-profiles` *(slices 4–8)* — the role-selectable service binary wiring blockstore +
+- `krabka-profiles` *(slices 4–8)* — the role-selectable service binary wiring blockstore +
   pprof + a Kafka client, plus the wire surfaces (the `push.v1` + `/ingest` + OTLP-profiles
   ingest doors, the Connect `querier.v1` API, the legacy `/pyroscope/render` flamebearer
   endpoints, and the query-time symbolizer).
@@ -285,7 +285,7 @@ Kafka write is acknowledged.
 `ProfileRecord` = tenant + the series `Labels` + `profile_type: String` + the decoded
 payload (`samples [(stacktrace_location_refs, value, span_id, trace_id)]` + the profile's
 **symbol set to merge into the block symbol DB**). Encoded via `serde` + `serde-wincode`
-(workspace convention). The WAL topic is `__crabka_profiles_wal`; **partition key =
+(workspace convention). The WAL topic is `__krabka_profiles_wal`; **partition key =
 `hash(tenant, series_fingerprint)`** so a series' samples stay together and per-series order
 is preserved (unlike traces, profiles need no `trace_id` co-location — there is no
 cross-span structural join here).
@@ -299,7 +299,7 @@ tree), then writes the block (via blockstore `BlockWriter`) + the symbol-DB arti
 `ProfileIndex` updates → object storage → commits offsets. **Write-then-commit + deterministic
 idempotent block keys** make a mid-flush crash re-do work, never lose or double-count it.
 
-## 6. The flamegraph-merge engine (`crabka-pprof`)
+## 6. The flamegraph-merge engine (`krabka-pprof`)
 
 The engine is the heart of this signal, because there is no language. The key choice is the
 **DataFusion/Rust split**: DataFusion does the cheap, set-shrinking fold *before*
@@ -354,7 +354,7 @@ across block boundaries. This is the load-bearing invariant of the distributed m
 
 ### 6.5 The `ProfileStore` boundary (the query seam)
 
-`crabka-pprof` is storage-agnostic via an injected `ProfileStore`. The querier (slice 5)
+`krabka-pprof` is storage-agnostic via an injected `ProfileStore`. The querier (slice 5)
 implements it as the hot/cold UNION. Pinned public contract:
 
 ```rust
@@ -408,13 +408,13 @@ period_unit }` with `parse(&str)` + `Display` (the 5-part colon form); `Tree`
 (`add_stack(&[Frame], i64)`, `merge(Tree)`, `to_flamegraph(max_nodes) -> FlameGraph`);
 `FlameGraph` / `Level` / `FlameGraphDiff`; `Series` / `SeriesAgg { Sum, Average }`;
 `ProfileError { Decode, Plan, Exec, Store, Unsupported, Symbolize }`. **`label_selector` is a
-Prometheus matcher STRING** parsed to `Vec<LabelMatcher>` by a small helper in `crabka-pprof`
+Prometheus matcher STRING** parsed to `Vec<LabelMatcher>` by a small helper in `krabka-pprof`
 (reusing blockstore `LabelMatcher`/`MatchOp`) — this is the closest thing to a "parser," and
 it is just Prometheus label matching, not a profiles query language.
 
 ## 7. API surface
 
-Two surfaces, both projections of the `crabka-pprof` engine + `ProfileStore` results. Tenant
+Two surfaces, both projections of the `krabka-pprof` engine + `ProfileStore` results. Tenant
 via `X-Scope-OrgID`. The Connect API uses `POST /querier.v1.QuerierService/<Method>` with
 `application/proto`; `start`/`end` are **unix MILLIS** (`int64`). Built via
 `connectrpc-axum` + `connectrpc-axum-build` codegen reusing the grpc-gateway/rebalancer
@@ -548,7 +548,7 @@ file sets are non-overlapping where noted, enabling parallel subagent batches.
    `SeriesIndex` label-postings) + profile-type index (`__profile_type__` → series) +
    per-block time-range + stacktrace-partition map. Define the samples fact-table column
    constants (`PCOL_*`) + schema and the symbol-DB on-block artifact.
-2. **`crabka-pprof` core** — the pprof model + codec, the `SymbolDb` (parent-pointer tree +
+2. **`krabka-pprof` core** — the pprof model + codec, the `SymbolDb` (parent-pointer tree +
    dedup tables + `encode`/`decode` + `SymbolSource`), the `ProfileType` parser, the
    `ProfileStore` trait + the pinned engine result types, and the **MERGE → flamegraph**
    engine (fold-before-symbolize, `Tree`, the 4-ints-per-bar `FlameGraph`). **No query
@@ -577,7 +577,7 @@ file sets are non-overlapping where noted, enabling parallel subagent batches.
 
 ## 12. Relation to the four-signal vision
 
-Profiles is the **fourth and final tenant** of `crabka-blockstore`, and it lands cleanly on
+Profiles is the **fourth and final tenant** of `krabka-blockstore`, and it lands cleanly on
 the seams the earlier signals carved:
 
 - It **reuses the `BlockIndex` trait** that *traces* extracted — the `ProfileIndex` is just
@@ -587,7 +587,7 @@ the seams the earlier signals carved:
 - It **reuses the label-postings machinery** that *metrics* built — the `ProfileIndex`'s label
   dimension *is* a `SeriesIndex`-style postings index, with a profile-type index +
   stacktrace-partition map layered on top.
-- `crabka-pprof` sits beside `crabka-logql`, `crabka-promql`, and `crabka-traceql` on the same
+- `krabka-pprof` sits beside `krabka-logql`, `krabka-promql`, and `krabka-traceql` on the same
   DataFusion substrate and the same role-selectable service skeleton — but it is the **odd one
   out: a LANGUAGE-LESS engine.** Where the other three are "parser + planner + custom
   operators," profiles is "symbol-DB + flamegraph-merge." The shared claim still holds: each
@@ -601,10 +601,10 @@ layer.
 
 | Signal | Front-end crate | API emulated | Block payload | Index impl |
 |---|---|---|---|---|
-| **Logs** | `crabka-logql` | Loki HTTP | `line`, metadata | `SeriesIndex` |
-| **Metrics** | `crabka-promql` | Prometheus HTTP | float / native-hist / exemplar | `SeriesIndex` |
-| **Traces** | `crabka-traceql` | Tempo HTTP | flattened span + nested-set | `TraceIndex` |
-| **Profiles** | **`crabka-pprof`** *(language-less)* | **Pyroscope Connect + legacy** | **samples fact table + dedup symbol DB** | **`ProfileIndex`** |
+| **Logs** | `krabka-logql` | Loki HTTP | `line`, metadata | `SeriesIndex` |
+| **Metrics** | `krabka-promql` | Prometheus HTTP | float / native-hist / exemplar | `SeriesIndex` |
+| **Traces** | `krabka-traceql` | Tempo HTTP | flattened span + nested-set | `TraceIndex` |
+| **Profiles** | **`krabka-pprof`** *(language-less)* | **Pyroscope Connect + legacy** | **samples fact table + dedup symbol DB** | **`ProfileIndex`** |
 
 ## 13. Open questions for planning
 

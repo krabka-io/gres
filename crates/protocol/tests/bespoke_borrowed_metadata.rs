@@ -2,7 +2,7 @@
 // wrappers.
 
 use bytes::BytesMut;
-use crabka_protocol::{
+use krabka_protocol::{
     DecodeBorrow, Encode, UnknownTaggedFields,
     borrowed::{
         metadata_request::{MAX_VERSION, MIN_VERSION, MetadataRequest},

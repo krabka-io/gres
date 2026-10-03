@@ -6,7 +6,7 @@
 
 ## Context — where this sits
 
-Fourth slice of the diskless-broker WAL milestone (see [Slice 1](2026-07-05-crabka-diskless-wal-slice1-design.md) for the decomposition). Slice 3 built the per-broker flusher (acked WAL tails → shared objects) + the `WalIndexCache` offset→object index, and a **gated-off** local-WAL trim seam. Slice 4 makes trimming *safe and enabled*: serve a Fetch for a **trimmed** offset from object storage, fix `ListOffsets` so trimming doesn't corrupt the consumer-visible earliest, then flip the trim gate on. Hot reads (offset still in the local `Log`) continue via the existing Fetch/sendfile path unchanged.
+Fourth slice of the diskless-broker WAL milestone (see [Slice 1](2026-07-05-krabka-diskless-wal-slice1-design.md) for the decomposition). Slice 3 built the per-broker flusher (acked WAL tails → shared objects) + the `WalIndexCache` offset→object index, and a **gated-off** local-WAL trim seam. Slice 4 makes trimming *safe and enabled*: serve a Fetch for a **trimmed** offset from object storage, fix `ListOffsets` so trimming doesn't corrupt the consumer-visible earliest, then flip the trim gate on. Hot reads (offset still in the local `Log`) continue via the existing Fetch/sendfile path unchanged.
 
 **Prerequisites (unlanded):** Slices 1–3 (the `diskless` flag, `high_watermark`-from-WAL-durable, the flusher + `WalIndexCache`, the gated trim seam). Land them first.
 

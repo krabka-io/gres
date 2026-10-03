@@ -24,8 +24,8 @@ use std::{io, net::SocketAddr, process::Command};
 
 use assert2::assert;
 use bytes::{Buf, BufMut, BytesMut};
-use crabka_broker::{Broker, BrokerConfig, config::ListenerSpec};
-use crabka_protocol::{
+use krabka_broker::{Broker, BrokerConfig, config::ListenerSpec};
+use krabka_protocol::{
     Decode, Encode,
     owned::{
         api_versions_request::ApiVersionsRequest, api_versions_response::ApiVersionsResponse,
@@ -36,7 +36,7 @@ use crabka_protocol::{
         sasl_handshake_response::SaslHandshakeResponse,
     },
 };
-use crabka_security::{ListenerProtocol, SaslMechanism};
+use krabka_security::{ListenerProtocol, SaslMechanism};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
@@ -47,17 +47,17 @@ use tokio::{
 /// Cargo populates `CARGO_BIN_EXE_<name>` only for integration tests inside
 /// the package that declares the binary. This function therefore shells out
 /// through the parent `cargo` invocation, `env!("CARGO")`, and lets cargo find
-/// or rebuild the `crabka-cli` binary. The `crabka-cli` dev-dependency in this
+/// or rebuild the `krabka-cli` binary. The `krabka-cli` dev-dependency in this
 /// crate's `Cargo.toml` puts the binary in this test's compile graph, so the
 /// inner `cargo run` is a cache hit instead of a fresh build.
-fn run_crabka_format(log_dir: &std::path::Path, add_scram: &str) {
+fn run_krabka_format(log_dir: &std::path::Path, add_scram: &str) {
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let out = Command::new(cargo)
         .args([
             "run",
             "--quiet",
             "-p",
-            "crabka-cli",
+            "krabka-cli",
             "--bin",
             "crabka",
             "--",
@@ -90,7 +90,7 @@ async fn bootstrap_records_provisions_scram_user() {
     // to overwrite a non-empty directory, and `tempfile::tempdir()` returns
     // a path whose parent already exists.
     let boot_dir = dir.path().join("boot");
-    run_crabka_format(
+    run_krabka_format(
         &boot_dir,
         "SCRAM-SHA-512=[name=alice,password=wonderland,iterations=4096]",
     );
@@ -106,7 +106,7 @@ async fn bootstrap_records_provisions_scram_user() {
     }];
     cfg.inter_broker_listener_name = "SASL_PLAINTEXT".into();
     cfg.enabled_sasl_mechanisms = vec![SaslMechanism::ScramSha512];
-    cfg.bootstrap_mode = crabka_broker::BootstrapMode::Bootstrap;
+    cfg.bootstrap_mode = krabka_broker::BootstrapMode::Bootstrap;
 
     let handle = Broker::start(cfg).await.expect("broker must start");
     let addr = handle.listen_addr();
@@ -134,7 +134,7 @@ async fn corrupt_bootstrap_refuses_start() {
     // be `{:?}`-formatted directly. Branch on the variant for the panic
     // message instead.
     match result {
-        Err(crabka_broker::BrokerError::BootstrapFile { .. }) => {}
+        Err(krabka_broker::BrokerError::BootstrapFile { .. }) => {}
         Err(other) => panic!("expected BootstrapFile error, got {other:?}"),
         Ok(handle) => {
             handle.shutdown().await;
@@ -201,10 +201,10 @@ async fn drive_sasl_scram_session(
     }
 
     // 3. SCRAM client-first → server-first.
-    let client = crabka_security::ScramClientExchange::new(
+    let client = krabka_security::ScramClientExchange::new(
         user.to_string(),
         password.as_bytes().to_vec(),
-        crabka_security::SaslMechanism::ScramSha512,
+        krabka_security::SaslMechanism::ScramSha512,
     );
     let (client_first, client) = client
         .client_first()
@@ -290,7 +290,7 @@ async fn round_trip(
     frame.put_i16(api_key);
     frame.put_i16(api_version);
     frame.put_i32(corr_id);
-    let client_id = "crabka-bootstrap-test";
+    let client_id = "krabka-bootstrap-test";
     frame.put_i16(i16::try_from(client_id.len()).expect("client_id fits in i16"));
     frame.put_slice(client_id.as_bytes());
     if flexible {

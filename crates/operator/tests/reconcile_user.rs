@@ -3,11 +3,11 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use assert2::{assert, check};
-use crabka_client_admin::{
+use krabka_client_admin::{
     AclEntry, AclEntryFilter, AclOperation, PatternType, PermissionType, QuotaOp, ResourceType,
     UserQuotaConfig,
 };
-use crabka_operator::{
+use krabka_operator::{
     controller::user::reconcile,
     crd::{
         AclOp, AclPatternType, AclPermission, AclResource, AclResourceKind, AclRule,
@@ -16,7 +16,7 @@ use crabka_operator::{
         user::TlsAuth,
     },
 };
-use crabka_security::ca;
+use krabka_security::ca;
 use http::{Method, Response};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 use serde_json::json;
@@ -100,7 +100,7 @@ fn ku_with_finalizer(name: &str, acls: Vec<AclRule>) -> KafkaUser {
 fn ku_full(
     name: &str,
     acls: Vec<AclRule>,
-    quotas: Option<crabka_operator::crd::KafkaUserQuotas>,
+    quotas: Option<krabka_operator::crd::KafkaUserQuotas>,
 ) -> KafkaUser {
     let mut ku = KafkaUser::new(
         name,
@@ -147,7 +147,7 @@ async fn invalid_spec_uses_configured_requeue() {
     let mut ctx = fixture_ctx(mock_client(&state, NS), NS);
     Arc::get_mut(&mut ctx.config)
         .expect("fixture owns operator config")
-        .controller_invalid_requeue = crabka_units::millis(2_345);
+        .controller_invalid_requeue = krabka_units::millis(2_345);
     let user = ku_with_finalizer(USER, vec![rule_topic("orders", &[])]);
 
     let action = reconcile(Arc::new(user), Arc::new(ctx)).await.unwrap();
@@ -179,7 +179,7 @@ async fn missing_cluster_uses_configured_dependency_requeue() {
     let mut ctx = fixture_ctx(mock_client(&state, NS), NS);
     Arc::get_mut(&mut ctx.config)
         .expect("fixture owns operator config")
-        .controller_dependency_requeue = crabka_units::millis(3_456);
+        .controller_dependency_requeue = krabka_units::millis(3_456);
 
     let action = reconcile(Arc::new(ku_with_finalizer(USER, vec![])), Arc::new(ctx))
         .await
@@ -212,7 +212,7 @@ async fn secret_read_failure_uses_configured_error_requeue() {
     let mut ctx = fixture_ctx(mock_client(&state, NS), NS);
     Arc::get_mut(&mut ctx.config)
         .expect("fixture owns operator config")
-        .controller_error_requeue = crabka_units::millis(4_567);
+        .controller_error_requeue = krabka_units::millis(4_567);
 
     let action = reconcile(Arc::new(ku_with_finalizer(USER, vec![])), Arc::new(ctx))
         .await
@@ -354,7 +354,7 @@ async fn first_reconcile_provisions_scram_and_acls() {
     let mut ctx = fixture_ctx(client, NS);
     Arc::get_mut(&mut ctx.config)
         .expect("fixture owns operator config")
-        .controller_drift_requeue = crabka_units::millis(1_234);
+        .controller_drift_requeue = krabka_units::millis(1_234);
     let ctx = Arc::new(ctx);
 
     let fake = Arc::new(tokio::sync::Mutex::new(FakeAdminClient::new()));

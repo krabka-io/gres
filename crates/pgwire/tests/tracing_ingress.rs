@@ -15,7 +15,7 @@ use std::{collections::BTreeMap, future::Future, net::SocketAddr, sync::Arc};
 
 use assert2::{assert, check};
 use bytes::BytesMut;
-use crabka_pgwire::{
+use krabka_pgwire::{
     engine::{
         BoundParam, Cell, CloseTarget, Engine, ExecuteOutcome, ExecuteOutcome::Rows,
         FieldDescription, PortalDescription, PreparedDescription, QueryResult, Session, TxStatus,
@@ -538,7 +538,7 @@ fn serving_a_real_connection_raises_a_session_span_for_its_peer() {
             let client = connected.expect("connect to the listener");
             client_port = client.local_addr().expect("client address").port();
 
-            let serving = crabka_pgwire::server::serve_conn_with_activity(
+            let serving = krabka_pgwire::server::serve_conn_with_activity(
                 server,
                 Arc::new(TraceEngine::new(1)),
                 Arc::new(SessionConfig::trust()),

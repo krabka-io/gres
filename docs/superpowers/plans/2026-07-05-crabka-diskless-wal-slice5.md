@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `stateright` (dev), `tokio`, `assert2`, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
-**Spec:** [`docs/superpowers/specs/2026-07-05-crabka-diskless-wal-slice5-design.md`](../specs/2026-07-05-crabka-diskless-wal-slice5-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-05-krabka-diskless-wal-slice5-design.md`](../specs/2026-07-05-krabka-diskless-wal-slice5-design.md).
 
 **PREREQUISITES (unlanded):** Slices 1–4. Tasks 3–4 edit Slice-2's `append_verbatim_at` and Slice-4's trim gate (both spec-only) — written against their specced shapes. The model (Task 5) builds on the Slice-1 `wal_acked` ghost. Land Slices 1–4 first.
 
@@ -62,7 +62,7 @@ In `crates/log/src/log.rs` tests: open a log, append a batch that introduces lea
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-log open_truncates_epoch_checkpoint`
+Run: `cargo test -p krabka-log open_truncates_epoch_checkpoint`
 Expected: FAIL — the dangling entry survives.
 
 - [ ] **Step 3: Implement**
@@ -80,7 +80,7 @@ In `crates/log/src/log.rs` `Log::open`, change `let epoch_checkpoint = ...` (`:2
 
 - [ ] **Step 4: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-log open_truncates_epoch_checkpoint` → PASS. Also `cargo test -p crabka-log` (no classic regression).
+Run: `cargo test -p krabka-log open_truncates_epoch_checkpoint` → PASS. Also `cargo test -p krabka-log` (no classic regression).
 
 ```bash
 git add crates/log/src/log.rs
@@ -114,7 +114,7 @@ Run → FAIL. Add a rebuild routine that scans the recovered tail and populates 
 /// Scans verbatim batches (offset order) and replays each idempotent batch's
 /// (producer_id, epoch, base_sequence, last_offset_delta) through the same
 /// `ProducerState::commit` the produce path uses, so `last_sequence` matches.
-fn rebuild_producer_state(log: &crabka_log::Log, partition: PartitionIndex, ps: &ProducerState) {
+fn rebuild_producer_state(log: &krabka_log::Log, partition: PartitionIndex, ps: &ProducerState) {
     let start = log.log_start_offset();
     let end = log.log_end_offset();
     let raw = match log.read_raw(start, end, usize::MAX) {
@@ -123,12 +123,12 @@ fn rebuild_producer_state(log: &crabka_log::Log, partition: PartitionIndex, ps: 
     };
     let mut cur: &[u8] = &raw;
     while !cur.is_empty() {
-        let Ok(batch) = crabka_protocol::records::RecordBatch::decode(&mut cur) else { break };
+        let Ok(batch) = krabka_protocol::records::RecordBatch::decode(&mut cur) else { break };
         if batch.producer_id < 0 { continue; } // -1 sentinel: non-idempotent
         // Mirror the produce-path commit (grep handlers/produce.rs for `.commit(`):
         ps.commit(
             partition,
-            crabka_log::ProducerId(batch.producer_id),
+            krabka_log::ProducerId(batch.producer_id),
             batch.producer_epoch,
             batch.base_sequence,
             batch.last_offset_delta,
@@ -143,7 +143,7 @@ Call it from the diskless partition-open path after `Log::open`, before the part
 
 - [ ] **Step 3: Run to verify + commit**
 
-Run → PASS. `cargo test -p crabka-broker producer_dedup_rebuilt`.
+Run → PASS. `cargo test -p krabka-broker producer_dedup_rebuilt`.
 
 ```bash
 git add -A
@@ -230,7 +230,7 @@ Mirror the structure of `data_path_model.rs` but drop ISR/replication actions an
 
 - [ ] **Step 3: Run the checker**
 
-Run: `cargo test -p crabka-broker diskless_crash_model -- --nocapture`
+Run: `cargo test -p krabka-broker diskless_crash_model -- --nocapture`
 Expected: PASS — `wal_acked_durable` + `producer_dedup_no_regress` hold across every interleaving; all `sometimes` witnesses reached. A counterexample means a real crash window loses acked data — reconcile with the recovery logic (Tasks 1–4); do NOT weaken the property. Watch state-space bounds; keep `MAX_LEN` small.
 
 - [ ] **Step 4: Commit**
@@ -246,7 +246,7 @@ git commit -m "test(broker): diskless partial-durability crash model (no acked l
 
 - [ ] **Step 1:** `cargo +nightly fmt` then `--check` — no diff.
 - [ ] **Step 2:** `cargo clippy --workspace --all-targets -- -D warnings` — no warnings.
-- [ ] **Step 3:** `cargo nextest run -p crabka-log -p crabka-broker` (or `cargo test`) — PASS, including the crash model.
+- [ ] **Step 3:** `cargo nextest run -p krabka-log -p krabka-broker` (or `cargo test`) — PASS, including the crash model.
 - [ ] **Step 4:** Commit any formatting.
 
 ---

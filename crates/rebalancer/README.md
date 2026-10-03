@@ -1,7 +1,7 @@
-# crabka-rebalancer
+# krabka-rebalancer
 
-[![Crates.io](https://img.shields.io/crates/v/crabka-rebalancer.svg)](https://crates.io/crates/crabka-rebalancer)
-[![Docs.rs](https://docs.rs/crabka-rebalancer/badge.svg)](https://docs.rs/crabka-rebalancer)
+[![Crates.io](https://img.shields.io/crates/v/krabka-rebalancer.svg)](https://crates.io/crates/krabka-rebalancer)
+[![Docs.rs](https://docs.rs/krabka-rebalancer/badge.svg)](https://docs.rs/krabka-rebalancer)
 [![CI](https://github.com/robot-head/crabka/actions/workflows/ci.yml/badge.svg)](https://github.com/robot-head/crabka/actions/workflows/ci.yml)
 
 Cruise-Control-equivalent partition rebalancer for Crabka clusters.
@@ -11,7 +11,7 @@ This crate is part of [Crabka](https://github.com/robot-head/crabka), a Rust imp
 ## Install
 
 ```sh
-cargo add crabka-rebalancer
+cargo add krabka-rebalancer
 ```
 
 For workspace development, use the path dependency from this repository instead.
@@ -22,12 +22,12 @@ Evaluate a leader-distribution goal against an in-memory cluster model:
 
 ```rust,no_run
 use std::sync::Arc;
-use crabka_rebalancer::capacity::BrokerCapacities;
-use crabka_rebalancer::goals::{GoalContext, leader_distribution::LeaderDistribution};
-use crabka_rebalancer::model::{BrokerView, ClusterState, PartitionView};
-use crabka_rebalancer::optimizer;
-use crabka_rebalancer::scraper::UsageStore;
-use crabka_units::percent;
+use krabka_rebalancer::capacity::BrokerCapacities;
+use krabka_rebalancer::goals::{GoalContext, leader_distribution::LeaderDistribution};
+use krabka_rebalancer::model::{BrokerView, ClusterState, PartitionView};
+use krabka_rebalancer::optimizer;
+use krabka_rebalancer::scraper::UsageStore;
+use krabka_units::percent;
 
 # fn run() -> Result<(), Box<dyn std::error::Error>> {
 let state = ClusterState {
@@ -62,7 +62,7 @@ println!("{} proposed movements", out.proposal.movements.len());
 
 ## Documentation
 
-Read the API documentation at [docs.rs/crabka-rebalancer](https://docs.rs/crabka-rebalancer). The repository README contains the project-wide setup, development, and release notes.
+Read the API documentation at [docs.rs/krabka-rebalancer](https://docs.rs/krabka-rebalancer). The repository README contains the project-wide setup, development, and release notes.
 
 ## License
 

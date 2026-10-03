@@ -1,4 +1,4 @@
-# crabka-gres-control
+# krabka-gres-control
 
 Internal control-plane library for Chapter Gres. It defines the tenant registry
 records in the compacted `__gres_tenants` topic. It also supplies pure folding,

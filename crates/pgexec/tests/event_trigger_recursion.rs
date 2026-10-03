@@ -19,8 +19,8 @@
 //! reachable, and a depth limit is what makes it safe.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
 /// A trigger function that re-enters DDL, and so re-raises the event that
 /// invoked it.

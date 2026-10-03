@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Language cycle under the [application-SDK umbrella](2026-07-06-crabka-app-sdk-umbrella-design.md) — deliberately the **last** cycle, eyes open: the matrix's expensive cell. Implements contract v1 in C++; definition of done = the conformance suite green through the C++ adapter.
+**Type:** Language cycle under the [application-SDK umbrella](2026-07-06-krabka-app-sdk-umbrella-design.md) — deliberately the **last** cycle, eyes open: the matrix's expensive cell. Implements contract v1 in C++; definition of done = the conformance suite green through the C++ adapter.
 
 ## Context — why this is the expensive cell
 

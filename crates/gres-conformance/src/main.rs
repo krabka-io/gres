@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use clap::Parser;
-use crabka_gres_conformance::{
+use krabka_gres_conformance::{
     Baseline, CaseResult, QueryOutcome, RegressBaseline, Report, corpus_file_name, diff,
     discover_sql_files, load_extended_case_files, run_corpus_statement, run_extended_one,
     split_statements, subject_sharded_extended_case, subject_sharded_statement, tls,
@@ -261,7 +261,7 @@ impl Endpoint {
     async fn reset_session(&mut self) {
         for sql in ["ROLLBACK", "DISCARD ALL"] {
             let outcome = self
-                .run_once(&crabka_gres_conformance::CorpusStatement::plain(sql))
+                .run_once(&krabka_gres_conformance::CorpusStatement::plain(sql))
                 .await;
             // A failed ROLLBACK just means there was no open block. A failed
             // DISCARD means the session is not usable, so replace it.
@@ -281,7 +281,7 @@ impl Endpoint {
     /// `XXIO` is the harness's marker for "no SQLSTATE — the connection failed",
     /// which means the statement never reached the server; re-running it after a
     /// reconnect measures it rather than losing it.
-    async fn run(&mut self, statement: &crabka_gres_conformance::CorpusStatement) -> QueryOutcome {
+    async fn run(&mut self, statement: &krabka_gres_conformance::CorpusStatement) -> QueryOutcome {
         let outcome = self.run_once(statement).await;
         match outcome.error_code.as_deref() {
             // The connection failed: the statement never ran, so re-running it
@@ -307,7 +307,7 @@ impl Endpoint {
     /// An engine that never answers must not be able to hang the whole run: a
     /// timeout is reported as a distinct outcome so it shows up as a ranked root
     /// cause instead of an empty report.
-    async fn run_once(&self, statement: &crabka_gres_conformance::CorpusStatement) -> QueryOutcome {
+    async fn run_once(&self, statement: &krabka_gres_conformance::CorpusStatement) -> QueryOutcome {
         let execution = run_corpus_statement(&self.client, statement);
         match tokio::time::timeout(self.statement_timeout, execution).await {
             Ok(outcome) => outcome,
@@ -338,7 +338,7 @@ async fn run_corpus(
         for statement in split_statements(&sql) {
             let o = oracle.run(&statement).await;
             let subject_statement = if subject_sharded_ddl {
-                crabka_gres_conformance::CorpusStatement {
+                krabka_gres_conformance::CorpusStatement {
                     sql: subject_sharded_statement(&statement.sql)?,
                     stdin_data: statement.stdin_data.clone(),
                 }

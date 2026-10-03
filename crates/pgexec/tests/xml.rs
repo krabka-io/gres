@@ -10,8 +10,8 @@
 //! `xml → text` cast is binary-coercible and does not.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 /// `pg_type.oid` of `xml` and `xml[]`.
 const XML_OID: u32 = 142;

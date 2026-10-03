@@ -19,13 +19,13 @@ use super::*;
 pub(crate) fn push_local_where(
     left: &mut Relation,
     right: &mut Relation,
-    kind: crabka_pgparser::ast::JoinKind,
+    kind: krabka_pgparser::ast::JoinKind,
     filter: &Expr,
     ctx: &crate::clock::EvalCtx,
     left_is_security_free: bool,
     right_is_security_free: bool,
 ) -> Result<(), ExecError> {
-    use crabka_pgparser::ast::JoinKind;
+    use krabka_pgparser::ast::JoinKind;
     push_left_where(left, kind, filter, ctx, left_is_security_free)?;
     let push_right = matches!(kind, JoinKind::Inner | JoinKind::Cross | JoinKind::Right);
     let mut conjuncts = Vec::new();
@@ -50,16 +50,16 @@ pub(crate) fn push_local_where(
 /// its right side once for every left row before the final WHERE runs.
 pub(crate) fn push_left_where(
     left: &mut Relation,
-    kind: crabka_pgparser::ast::JoinKind,
+    kind: krabka_pgparser::ast::JoinKind,
     filter: &Expr,
     ctx: &crate::clock::EvalCtx,
     is_security_free: bool,
 ) -> Result<(), ExecError> {
     if !matches!(
         kind,
-        crabka_pgparser::ast::JoinKind::Inner
-            | crabka_pgparser::ast::JoinKind::Cross
-            | crabka_pgparser::ast::JoinKind::Left
+        krabka_pgparser::ast::JoinKind::Inner
+            | krabka_pgparser::ast::JoinKind::Cross
+            | krabka_pgparser::ast::JoinKind::Left
     ) {
         return Ok(());
     }
@@ -101,7 +101,7 @@ pub(crate) fn leakproof_predicate(expr: &Expr) -> bool {
         ) && !matches!(
             node,
             Expr::Binary {
-                op: crabka_pgparser::ast::BinaryOp::Div | crabka_pgparser::ast::BinaryOp::Mod,
+                op: krabka_pgparser::ast::BinaryOp::Div | krabka_pgparser::ast::BinaryOp::Mod,
                 ..
             }
         );
@@ -144,7 +144,7 @@ pub(crate) fn inner_join_predicate(
         })
         .cloned()
         .reduce(|left, right| Expr::Binary {
-            op: crabka_pgparser::ast::BinaryOp::And,
+            op: krabka_pgparser::ast::BinaryOp::And,
             left: Box::new(left),
             right: Box::new(right),
         })

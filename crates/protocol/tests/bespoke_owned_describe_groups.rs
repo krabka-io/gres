@@ -3,7 +3,7 @@
 // here for continuity. Relocated from hand-written wrappers.
 
 use bytes::BytesMut;
-use crabka_protocol::{
+use krabka_protocol::{
     Decode, Encode,
     owned::{
         describe_groups_request::{DescribeGroupsRequest, MAX_VERSION, MIN_VERSION},

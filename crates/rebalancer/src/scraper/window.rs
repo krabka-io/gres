@@ -14,7 +14,7 @@
 
 use std::collections::{HashMap, VecDeque};
 
-use crabka_units::prelude::*;
+use krabka_units::prelude::*;
 use num_traits::ToPrimitive;
 use parking_lot::RwLock;
 
@@ -279,7 +279,7 @@ impl UsageStore {
 #[cfg(test)]
 mod tests {
 
-    use crabka_units::prelude::*;
+    use krabka_units::prelude::*;
 
     use super::*;
 

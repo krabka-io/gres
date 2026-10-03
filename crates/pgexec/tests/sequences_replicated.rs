@@ -17,9 +17,9 @@ use std::sync::{
 
 use assert2::assert;
 use bytes::Bytes;
-use crabka_pgexec::{Committer, ExecError, Linearizer, SqlEngine};
-use crabka_pgkv::{Kv, MemKv, WriteOp};
-use crabka_pgwire::engine::{Engine, QueryResult, Session};
+use krabka_pgexec::{Committer, ExecError, Linearizer, SqlEngine};
+use krabka_pgkv::{Kv, MemKv, WriteOp};
+use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
 /// Commits straight to a shared in-memory KV, and stands in for the substrate
 /// committer.
@@ -73,12 +73,12 @@ fn replicated() -> (Arc<dyn Kv>, SqlEngine, Arc<AtomicBool>) {
     (kv, engine, accepting)
 }
 
-async fn run(session: &mut crabka_pgexec::SqlSession, sql: &str) {
+async fn run(session: &mut krabka_pgexec::SqlSession, sql: &str) {
     session.simple_query(sql).await.expect(sql);
 }
 
 /// Every value in the first column, as text.
-async fn column(session: &mut crabka_pgexec::SqlSession, sql: &str) -> Vec<String> {
+async fn column(session: &mut krabka_pgexec::SqlSession, sql: &str) -> Vec<String> {
     let mut results = session.simple_query(sql).await.expect(sql);
     match results.remove(0) {
         QueryResult::Rows { rows, .. } => rows
@@ -92,7 +92,7 @@ async fn column(session: &mut crabka_pgexec::SqlSession, sql: &str) -> Vec<Strin
     }
 }
 
-async fn scalar(session: &mut crabka_pgexec::SqlSession, sql: &str) -> String {
+async fn scalar(session: &mut krabka_pgexec::SqlSession, sql: &str) -> String {
     let mut values = column(session, sql).await;
     assert!(values.len() == 1, "{sql} returned {} rows", values.len());
     values.remove(0)

@@ -3,7 +3,7 @@
 **Date:** 2026-05-29
 **Status:** Slice design. Depends on 48o (assign + seek). Closes a 48f
 follow-up. Part of the KIP-405 umbrella
-(`docs/superpowers/specs/2026-05-25-crabka-tiered-storage-roadmap-design.md`).
+(`docs/superpowers/specs/2026-05-25-krabka-tiered-storage-roadmap-design.md`).
 
 ## Goal
 
@@ -132,6 +132,6 @@ Requires 48o (resume needs `PartitionStart.start_offset`). Sequenced after
 
 - `cargo fmt --all --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test -p crabka-remote-storage-topic -p crabka-remote-storage`
+- `cargo test -p krabka-remote-storage-topic -p krabka-remote-storage`
 - `cargo test --workspace` (no regressions)
 - No CRD drift.

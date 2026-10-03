@@ -1,7 +1,7 @@
 //! SQL/XML `XMLTABLE` FROM-item support.
 
-use crabka_pgparser::ast::{XmlTable, XmlTableColumn, XmlTableValueColumn};
-use crabka_pgtypes::{ColumnType, Datum, TypeError, xml};
+use krabka_pgparser::ast::{XmlTable, XmlTableColumn, XmlTableValueColumn};
+use krabka_pgtypes::{ColumnType, Datum, TypeError, xml};
 
 use crate::{
     clock::EvalCtx,
@@ -63,7 +63,7 @@ pub(crate) fn references_scope(table: &XmlTable, outer: &Scope) -> bool {
 
 fn relation(
     table: &XmlTable,
-    rows: Vec<Vec<crabka_pgtypes::Datum>>,
+    rows: Vec<Vec<krabka_pgtypes::Datum>>,
 ) -> Result<Relation, ExecError> {
     let mut columns = table
         .columns
@@ -73,7 +73,7 @@ fn relation(
                 exposure: Exposure::Output,
                 qualifier: None,
                 name: name.clone(),
-                ty: crabka_pgtypes::ColumnType::Int4,
+                ty: krabka_pgtypes::ColumnType::Int4,
             },
             XmlTableColumn::Value(column) => ColumnBinding {
                 exposure: Exposure::Output,
@@ -190,7 +190,7 @@ fn xpath(
     values.map_err(ExecError::from)
 }
 
-fn expression_text(expr: &crabka_pgparser::ast::Expr, ctx: &EvalCtx) -> Result<String, ExecError> {
+fn expression_text(expr: &krabka_pgparser::ast::Expr, ctx: &EvalCtx) -> Result<String, ExecError> {
     Ok(crate::xml_fn::text_of(
         &crate::eval::eval(expr, &Scope::empty(), &[], ctx)?,
         ctx,

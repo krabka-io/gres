@@ -8,7 +8,7 @@
 use std::path::Path;
 
 use bytes::BytesMut;
-use crabka_protocol::{
+use krabka_protocol::{
     Decode, Encode,
     owned::{
         begin_quorum_epoch_request::BeginQuorumEpochRequest,

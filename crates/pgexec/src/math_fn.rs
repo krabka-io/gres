@@ -21,8 +21,8 @@
 use std::{cell::RefCell, cmp::Ordering};
 
 use bigdecimal::{BigDecimal, num_bigint::Sign};
-use crabka_pgparser::ast::{Expr, FuncCall};
-use crabka_pgtypes::{ColumnType, Datum, numeric, numeric::NumericValue};
+use krabka_pgparser::ast::{Expr, FuncCall};
+use krabka_pgtypes::{ColumnType, Datum, numeric, numeric::NumericValue};
 
 use crate::{
     clock::EvalCtx,
@@ -370,11 +370,11 @@ fn coerce_unknown_args(
     let family = value_family(f, &args[..family_args], &vals[..family_args]);
     for (a, v) in args.iter().zip(vals.iter_mut()).take(family_args) {
         if is_unknown_arg(a) {
-            *v = crabka_pgtypes::cast::cast(v, family.column_type(), &ctx.time_zone)?;
+            *v = krabka_pgtypes::cast::cast(v, family.column_type(), &ctx.time_zone)?;
         }
     }
     if count_arg && is_unknown_arg(&args[3]) {
-        vals[3] = crabka_pgtypes::cast::cast(&vals[3], ColumnType::Int4, &ctx.time_zone)?;
+        vals[3] = krabka_pgtypes::cast::cast(&vals[3], ColumnType::Int4, &ctx.time_zone)?;
     }
     Ok(())
 }
@@ -390,15 +390,15 @@ fn coerce_threshold_args(
     if is_unknown_arg(&args[1]) {
         let elem = vals[0]
             .column_type()
-            .and_then(crabka_pgtypes::ElemType::from_column_type)
+            .and_then(krabka_pgtypes::ElemType::from_column_type)
             .ok_or_else(|| type_error("width_bucket", &vals[0]))?;
-        vals[1] = crabka_pgtypes::cast::cast(&vals[1], ColumnType::Array(elem), &ctx.time_zone)?;
+        vals[1] = krabka_pgtypes::cast::cast(&vals[1], ColumnType::Array(elem), &ctx.time_zone)?;
         return Ok(());
     }
     if is_unknown_arg(&args[0])
         && let Some(ColumnType::Array(elem)) = vals[1].column_type()
     {
-        vals[0] = crabka_pgtypes::cast::cast(&vals[0], elem.column_type(), &ctx.time_zone)?;
+        vals[0] = krabka_pgtypes::cast::cast(&vals[0], elem.column_type(), &ctx.time_zone)?;
     }
     Ok(())
 }
@@ -590,7 +590,7 @@ fn gcd_lcm(f: MathFunc, a: &Datum, b: &Datum) -> Result<Datum, ExecError> {
             };
             i32::try_from(v)
                 .map(Datum::Int4)
-                .map_err(|_| ExecError::Type(crabka_pgtypes::TypeError::Overflow))
+                .map_err(|_| ExecError::Type(krabka_pgtypes::TypeError::Overflow))
         }
         _ => {
             if let (Some(x), Some(y)) = (as_i64(a), as_i64(b)) {
@@ -600,7 +600,7 @@ fn gcd_lcm(f: MathFunc, a: &Datum, b: &Datum) -> Result<Datum, ExecError> {
                     lcm_i128(i128::from(x), i128::from(y))?
                 };
                 return i64::try_from(v).map(Datum::Int8).map_err(|_| {
-                    ExecError::Type(crabka_pgtypes::TypeError::OutOfRange {
+                    ExecError::Type(krabka_pgtypes::TypeError::OutOfRange {
                         message: "bigint out of range".into(),
                     })
                 });
@@ -656,7 +656,7 @@ fn lcm_i128(a: i128, b: i128) -> Result<i128, ExecError> {
     (a / g)
         .checked_mul(b)
         .map(i128::abs)
-        .ok_or(ExecError::Type(crabka_pgtypes::TypeError::Overflow))
+        .ok_or(ExecError::Type(krabka_pgtypes::TypeError::Overflow))
 }
 
 fn gcd_numeric(a: &BigDecimal, b: &BigDecimal) -> BigDecimal {
@@ -688,7 +688,7 @@ const MAX_FACTORIAL: i64 = 32_177;
 
 fn factorial(n: i64) -> Result<Datum, ExecError> {
     if n < 0 {
-        return Err(ExecError::Type(crabka_pgtypes::TypeError::Domain {
+        return Err(ExecError::Type(krabka_pgtypes::TypeError::Domain {
             sqlstate: "22003",
             message: "factorial of a negative number is undefined",
         }));
@@ -697,7 +697,7 @@ fn factorial(n: i64) -> Result<Datum, ExecError> {
         // PostgreSQL runs out of `numeric` digits, not of integer range, so the
         // 22003 it reports names the format: `factorial(100000)` is
         // `value overflows numeric format`.
-        return Err(ExecError::Type(crabka_pgtypes::TypeError::Domain {
+        return Err(ExecError::Type(krabka_pgtypes::TypeError::Domain {
             sqlstate: "22003",
             message: "value overflows numeric format",
         }));
@@ -771,7 +771,7 @@ fn width_bucket_array(operand: &Datum, thresholds: &Datum) -> Result<Datum, Exec
     let (mut left, mut right) = (0usize, array.elems.len());
     while left < right {
         let mid = left + (right - left) / 2;
-        let below = crabka_pgtypes::ops::compare(operand, &array.elems[mid])
+        let below = krabka_pgtypes::ops::compare(operand, &array.elems[mid])
             .map_err(ExecError::Type)?
             .is_none_or(Ordering::is_lt);
         if below {
@@ -781,7 +781,7 @@ fn width_bucket_array(operand: &Datum, thresholds: &Datum) -> Result<Datum, Exec
         }
     }
     Ok(Datum::Int4(i32::try_from(left).map_err(|_| {
-        ExecError::Type(crabka_pgtypes::TypeError::Overflow)
+        ExecError::Type(krabka_pgtypes::TypeError::Overflow)
     })?))
 }
 
@@ -794,7 +794,7 @@ fn width_bucket(op: &Datum, low: &Datum, high: &Datum, count: i64) -> Result<Dat
         return Err(width_bucket_error("count must be greater than zero"));
     }
     let count_i32 =
-        i32::try_from(count).map_err(|_| ExecError::Type(crabka_pgtypes::TypeError::Overflow))?;
+        i32::try_from(count).map_err(|_| ExecError::Type(krabka_pgtypes::TypeError::Overflow))?;
     let float_input = [op, low, high]
         .iter()
         .any(|d| matches!(d, Datum::Float8(_)));
@@ -978,14 +978,14 @@ impl Prng {
 
 /// A one-off seed for a session (or a fallback thread's first `random()`). Uses
 /// the wall clock and process entropy so independent streams do not start from
-/// the same state. The `CRABKA_RANDOM_SEED` override makes integration tests
+/// the same state. The `KRABKA_RANDOM_SEED` override makes integration tests
 /// reproducible.
 pub(crate) fn entropy_seed() -> u64 {
     use std::{
         hash::{BuildHasher, RandomState},
         time::{SystemTime, UNIX_EPOCH},
     };
-    if let Some(seed) = configured_random_seed(std::env::var("CRABKA_RANDOM_SEED").ok().as_deref())
+    if let Some(seed) = configured_random_seed(std::env::var("KRABKA_RANDOM_SEED").ok().as_deref())
     {
         return seed;
     }
@@ -1063,7 +1063,7 @@ fn random_numeric(lo: &NumericValue, hi: &NumericValue, ctx: &EvalCtx) -> Result
         .max(0);
     let unit = BigDecimal::from(1).with_scale(scale);
     let steps = numeric::to_i64(&numeric::trunc(&NumericValue::from((hi - lo) / &unit), 0))
-        .map_err(|_| ExecError::Type(crabka_pgtypes::TypeError::Overflow))?;
+        .map_err(|_| ExecError::Type(krabka_pgtypes::TypeError::Overflow))?;
     let offset = with_prng(ctx, |p| p.next_below(steps as u64));
     let value = lo + BigDecimal::from(offset as i64) * &unit;
     Ok(Datum::Numeric(NumericValue::from(value.with_scale(scale))))
@@ -1146,7 +1146,7 @@ fn unary_float(f: MathFunc, x: f64) -> Result<Datum, ExecError> {
         MathFunc::Sinh | MathFunc::Cosh | MathFunc::Degrees | MathFunc::Radians
     );
     if v.is_infinite() && x.is_finite() && can_overflow {
-        return Err(ExecError::Type(crabka_pgtypes::TypeError::Overflow));
+        return Err(ExecError::Type(krabka_pgtypes::TypeError::Overflow));
     }
     Ok(Datum::Float8(v))
 }

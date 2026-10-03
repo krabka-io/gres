@@ -2,7 +2,7 @@
 
 **Status:** design
 **Date:** 2026-05-30
-**Roadmap:** `2026-05-29-crabka-classic-nextgen-migration-roadmap-design.md`, Slice B.
+**Roadmap:** `2026-05-29-krabka-classic-nextgen-migration-roadmap-design.md`, Slice B.
 Builds on Slice A (64e, JVM-client engagement) which has landed. Slices C–F
 (migration policy, upgrade path, downgrade path, rolling-migration JVM
 acceptance) depend on this slice.

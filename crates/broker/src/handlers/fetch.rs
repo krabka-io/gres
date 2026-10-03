@@ -15,9 +15,9 @@
 use std::{sync::Arc, time::Duration};
 
 use bytes::BytesMut;
-use crabka_log::{LeaderEpoch, Offset};
-use crabka_metadata::AclOperation;
-use crabka_protocol::{
+use krabka_log::{LeaderEpoch, Offset};
+use krabka_metadata::AclOperation;
+use krabka_protocol::{
     Decode, Encode,
     owned::{
         fetch_request::FetchRequest,
@@ -29,7 +29,7 @@ use crabka_protocol::{
     primitives::uuid::Uuid as WireUuid,
     records::{RecordBatch, RecordsPayload},
 };
-use crabka_units::{
+use krabka_units::{
     ByteSize, Time,
     convert::{ByteSizeExt as _, TimeExt},
 };
@@ -139,7 +139,7 @@ pub(crate) async fn handle(
     let handler_start = std::time::Instant::now();
     let mut cur: &[u8] = req_bytes;
     let req: FetchRequest = if version < 4 {
-        crabka_protocol::kafka_3_6_2::owned::fetch_request::FetchRequest::decode(&mut cur, version)?
+        krabka_protocol::kafka_3_6_2::owned::fetch_request::FetchRequest::decode(&mut cur, version)?
             .into()
     } else {
         FetchRequest::decode(&mut cur, version)?
@@ -250,7 +250,7 @@ struct EffectivePartition {
 struct FetchPreparation {
     decision: SessionDecision,
     effective_topics: Vec<EffectiveTopic>,
-    image: Arc<crabka_metadata::MetadataImage>,
+    image: Arc<krabka_metadata::MetadataImage>,
     denied_topics: std::collections::HashSet<String>,
     effective_replica_id: i32,
     is_follower_fetch: bool,
@@ -341,7 +341,7 @@ async fn update_follower_progress(partition: &Partition, follower_id: i32, fetch
         let mut state = partition.replica_state.lock().await;
         let previous = state.hw;
         state.update_follower_leo(
-            crabka_metadata::NodeId(u64::try_from(follower_id).unwrap_or(0)),
+            krabka_metadata::NodeId(u64::try_from(follower_id).unwrap_or(0)),
             Offset(fetch_offset),
             leader_leo,
             std::time::Instant::now(),
@@ -354,7 +354,7 @@ async fn update_follower_progress(partition: &Partition, follower_id: i32, fetch
 
 fn preferred_read_replica(
     broker: &Broker,
-    image: &crabka_metadata::MetadataImage,
+    image: &krabka_metadata::MetadataImage,
     topic: &str,
     partition: i32,
     rack_id: &str,
@@ -365,7 +365,7 @@ fn preferred_read_replica(
     let Some(record) = image.partition(topic, partition) else {
         return -1;
     };
-    let isr: std::collections::HashSet<crabka_metadata::NodeId> =
+    let isr: std::collections::HashSet<krabka_metadata::NodeId> =
         record.isr.iter().copied().collect();
     let replicas: Vec<crate::replica_selector::ReplicaView> = record
         .replicas
@@ -384,7 +384,7 @@ fn preferred_read_replica(
 }
 
 fn apply_epoch_checks(
-    image: &crabka_metadata::MetadataImage,
+    image: &krabka_metadata::MetadataImage,
     topic: &str,
     partition_index: i32,
     request: &EffectivePartition,
@@ -433,7 +433,7 @@ fn apply_epoch_checks(
 
 struct PendingPlanContext<'a> {
     broker: &'a Broker,
-    image: &'a crabka_metadata::MetadataImage,
+    image: &'a krabka_metadata::MetadataImage,
     denied_topics: &'a std::collections::HashSet<String>,
     rack_id: &'a str,
     mode: (bool, bool),
@@ -462,7 +462,7 @@ async fn plan_partition_read(
     let partition = context
         .broker
         .partitions
-        .get(topic_name, crabka_ids::PartitionIndex(request.partition));
+        .get(topic_name, krabka_ids::PartitionIndex(request.partition));
     if let Some(partition) = partition.as_ref()
         && apply_epoch_checks(
             context.image,
@@ -615,12 +615,12 @@ fn record_fetch_metrics(
 
 fn throttle_follower_responses(
     broker: &Broker,
-    image: &crabka_metadata::MetadataImage,
+    image: &krabka_metadata::MetadataImage,
     follower_id: i32,
     responses: &mut [FetchableTopicResponse],
 ) {
     use crate::throttle::TopicThrottle;
-    let follower_id = crabka_metadata::NodeId(u64::try_from(follower_id).unwrap_or(0));
+    let follower_id = krabka_metadata::NodeId(u64::try_from(follower_id).unwrap_or(0));
     let mut byte_count = 0;
     let mut indexes = Vec::new();
     for (topic_index, topic) in responses.iter().enumerate() {
@@ -648,7 +648,7 @@ fn throttle_follower_responses(
 
 async fn apply_consumer_fetch_quota(
     broker: &Broker,
-    image: &crabka_metadata::MetadataImage,
+    image: &krabka_metadata::MetadataImage,
     context: &crate::handlers::RequestContext<'_>,
     handler_start: std::time::Instant,
     responses: &[FetchableTopicResponse],
@@ -1016,7 +1016,7 @@ pub(crate) fn compute_visibility_window(
     log_end: Offset,
     fetch_offset: Offset,
 ) -> VisibilityWindow {
-    let verified = crabka_verified::fetch_visibility(
+    let verified = krabka_verified::fetch_visibility(
         is_follower,
         read_committed,
         log_start.0,
@@ -1350,7 +1350,7 @@ async fn try_remote_read(broker: &Broker, p: &mut PendingRead, part: &Partition)
         return None;
     }
     let topic_id = uuid::Uuid::from_bytes(p.topic_id.0);
-    let tp = crabka_remote_storage::TopicIdPartition::new(
+    let tp = krabka_remote_storage::TopicIdPartition::new(
         topic_id,
         p.topic_name.clone(),
         p.partition_index,
@@ -1431,7 +1431,7 @@ async fn try_remote_read(broker: &Broker, p: &mut PendingRead, part: &Partition)
             Some(bytes_est)
         }
         Ok(None) => None,
-        Err(crabka_remote_storage::RemoteStorageError::NotReady { partition }) => {
+        Err(krabka_remote_storage::RemoteStorageError::NotReady { partition }) => {
             // The metadata partition that would answer this read is assigned
             // to this broker but its consumer has not caught up yet. Leave
             // OFFSET_OUT_OF_RANGE (retryable) — NOT a definitive miss — so the
@@ -1607,7 +1607,7 @@ fn sum_response_bytes(responses: &[FetchableTopicResponse]) -> u64 {
 /// second. It returns `Duration::ZERO` when the config sets no quota, or when
 /// the bucket has enough capacity.
 fn consume_consumer_quota(
-    image: &crabka_metadata::MetadataImage,
+    image: &krabka_metadata::MetadataImage,
     buckets: &crate::quota::QuotaBuckets,
     principal: &str,
     client_id: &str,
@@ -1691,7 +1691,7 @@ pub(crate) fn encode_fetch_response(
     version: i16,
 ) -> Result<BytesMut, crate::error::BrokerError> {
     if version < 4 {
-        let legacy: crabka_protocol::kafka_3_6_2::owned::fetch_response::FetchResponse =
+        let legacy: krabka_protocol::kafka_3_6_2::owned::fetch_response::FetchResponse =
             resp.into();
         let mut buf = BytesMut::with_capacity(legacy.encoded_len(version));
         legacy.encode(&mut buf, version)?;
@@ -1709,14 +1709,14 @@ mod tests {
 
     use assert2::assert;
     use bytes::{Bytes, BytesMut};
-    use crabka_ids::PartitionIndex;
-    use crabka_log::{Log, LogConfig, Offset};
-    use crabka_protocol::{
+    use krabka_ids::PartitionIndex;
+    use krabka_log::{Log, LogConfig, Offset};
+    use krabka_protocol::{
         Encode as _,
         records::{Record, RecordBatch, RecordsPayload},
     };
-    use crabka_security::{AuthMethod, Principal};
-    use crabka_units::{Time, convert::TimeExt, millis};
+    use krabka_security::{AuthMethod, Principal};
+    use krabka_units::{Time, convert::TimeExt, millis};
 
     use crate::{
         broker::Broker,
@@ -1765,7 +1765,7 @@ mod tests {
                 partition: PartitionIndex(0),
             },
             std::sync::Arc::new(WalShardEngine::for_logs(BTreeMap::from([(
-                crabka_raft::NodeId(1),
+                krabka_raft::NodeId(1),
                 source,
             )]))),
         );
@@ -1792,7 +1792,7 @@ mod tests {
                 local_node_id,
                 0,
                 0,
-                crabka_units::mebibytes(1),
+                krabka_units::mebibytes(1),
             );
             let mut encoded = BytesMut::new();
             request
@@ -1878,7 +1878,7 @@ mod tests {
 
     #[test]
     fn consume_consumer_quota_tuple_match_overage_throttles() {
-        use crabka_metadata::{ClientQuotaRecord, MetadataImage, MetadataRecord, QuotaEntity};
+        use krabka_metadata::{ClientQuotaRecord, MetadataImage, MetadataRecord, QuotaEntity};
         let mut img = MetadataImage::new(uuid::Uuid::nil());
         img.apply(&MetadataRecord::V1ClientQuota(ClientQuotaRecord {
             entity: vec![

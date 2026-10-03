@@ -1,23 +1,23 @@
-# crabka-metrics Slice 5 — Querier + Prometheus HTTP API (hot/cold merge)
+# krabka-metrics Slice 5 — Querier + Prometheus HTTP API (hot/cold merge)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the **querier role** — a concrete `crabka-promql::MetricStore` impl (`CrabkaMetricStore`) that merges *cold* blockstore data with a *hot* in-memory WAL-tail head, and the **Prometheus HTTP query API** (axum) that drives `PromqlEngine` and serializes `QueryResult` into byte-exact Prometheus JSON for Grafana's built-in Prometheus datasource. Plus the `crabka-metrics --target querier` role binary.
+**Goal:** Build the **querier role** — a concrete `krabka-promql::MetricStore` impl (`CrabkaMetricStore`) that merges *cold* blockstore data with a *hot* in-memory WAL-tail head, and the **Prometheus HTTP query API** (axum) that drives `PromqlEngine` and serializes `QueryResult` into byte-exact Prometheus JSON for Grafana's built-in Prometheus datasource. Plus the `krabka-metrics --target querier` role binary.
 
 **Architecture:** Three layers, bottom-up.
 
-1. **WAL-tail head** (`head.rs`): an in-memory, per-`(tenant, fingerprint)` ring of recent samples (float + native-histogram), fed by a `crabka-client-consumer::Consumer` tailing the metrics WAL topic (Slice 4's topic). Decodes each record via Slice 4's `WalRecord`. Bounded by a retention window (default ~3h) and exposed as DataFusion `MemTable`s. The head tracks its **lowest retained offset** and the consumer's **current offset** so it is rebuildable from the WAL purely by replaying offsets — the spec's "no separate ingester WAL" realization (§1, §6.3).
+1. **WAL-tail head** (`head.rs`): an in-memory, per-`(tenant, fingerprint)` ring of recent samples (float + native-histogram), fed by a `krabka-client-consumer::Consumer` tailing the metrics WAL topic (Slice 4's topic). Decodes each record via Slice 4's `WalRecord`. Bounded by a retention window (default ~3h) and exposed as DataFusion `MemTable`s. The head tracks its **lowest retained offset** and the consumer's **current offset** so it is rebuildable from the WAL purely by replaying offsets — the spec's "no separate ingester WAL" realization (§1, §6.3).
 2. **`CrabkaMetricStore`** (`store.rs`): implements the `MetricStore` trait by, per `scan()`, registering the cold blockstore tables (`BlockStore::scan_context`) *and* the hot head tables into one `SessionContext`, then building a **UNION view** split at the **compaction frontier** (the compactor's committed offset, surfaced as a per-tenant `min_ts` cut) so a sample counted in a sealed block is not also counted from the head. `label_names`/`label_values`/`series` union the blockstore `Index` with the head's live series.
 3. **HTTP API** (`http/`): an axum `Router` mounted under both bare `/api/v1/` and `/prometheus/api/v1/`, tenant via `X-Scope-OrgID`. `/query` + `/query_range` call `PromqlEngine` and map `QueryResult` → Prometheus JSON with exact shapes; `/series`, `/labels`, `/label/{name}/values`, `/metadata`, `/query_exemplars`, `/status/buildinfo` round out Grafana's discovery calls. Errors use the Prometheus `{"status":"error",...}` envelope. **Response-shape fidelity is the byte-equality analog** and is tested with exact-JSON assertions for vector, matrix, scalar, and error.
 
-**Tech Stack:** Rust 2024 · `datafusion` (git pin below) · `arrow` 59 · `tokio` · `axum` 0.8 (workspace base `http1`,`tokio`; querier adds `json`,`query`) · `serde`/`serde_json` · `async-trait` · `thiserror` · `tracing` · `crabka-promql` (Slices 2–3) · `crabka-blockstore` · `crabka-client-consumer`. Tests: `assert2`, `tower::ServiceExt::oneshot` (in-process router), `crabka-broker` in-process test-support / testcontainers (`#[ignore]`).
+**Tech Stack:** Rust 2024 · `datafusion` (git pin below) · `arrow` 59 · `tokio` · `axum` 0.8 (workspace base `http1`,`tokio`; querier adds `json`,`query`) · `serde`/`serde_json` · `async-trait` · `thiserror` · `tracing` · `krabka-promql` (Slices 2–3) · `krabka-blockstore` · `krabka-client-consumer`. Tests: `assert2`, `tower::ServiceExt::oneshot` (in-process router), `krabka-broker` in-process test-support / testcontainers (`#[ignore]`).
 
 ## Global Constraints
 
 - **No backwards compatibility.** Greenfield/undeployed. Change schemas/enums/wire formats/role flags freely; no shims, no migration code, no default-off gates. (Only Kafka wire compat matters — this slice consumes the WAL with the existing consumer client; it adds no new Kafka surface.)
 - **`unsafe_code = "forbid"`** workspace-wide. No `unsafe`.
-- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean (`module_name_repetitions`/`missing_errors_doc`/`missing_panics_doc` allowed workspace-wide). Run `cargo clippy -p crabka-metrics --all-targets` before each commit.
-- **Formatting:** `cargo fmt -p crabka-metrics` before every commit (never `cargo +nightly fmt --all` — OS error 206 / path-too-long in deep worktrees on Windows; always `-p`).
+- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean (`module_name_repetitions`/`missing_errors_doc`/`missing_panics_doc` allowed workspace-wide). Run `cargo clippy -p krabka-metrics --all-targets` before each commit.
+- **Formatting:** `cargo fmt -p krabka-metrics` before every commit (never `cargo +nightly fmt --all` — OS error 206 / path-too-long in deep worktrees on Windows; always `-p`).
 - **Assertions:** `assert2::assert!` / `assert2::check!` in tests.
 - **Async tests:** `#[tokio::test]`. Dev-dep `tokio` features `["macros","rt-multi-thread"]`.
 - **Dependency pin (locked):** `datafusion = { git = "https://github.com/apache/datafusion", rev = "0838a4ddb902535b0e95a1c5a254be7e9c7fe9bf" }`, `arrow` 59. Same instance as blockstore/promql — types cross the DataFusion boundary without conversion.
@@ -28,15 +28,15 @@
 ## Dependency & slice roadmap
 
 **Depends on:**
-- **`crabka-promql` (Slices 2–3)** — provides the `MetricStore` trait, `ScanResult`, `PromqlEngine<S>`, `QueryResult`, `InstantSample`, `RangeSeries`, `SampleValue`, `NativeHistogram`, `EngineOpts`, `PromqlError`. This slice *consumes* that contract verbatim (see "Shared contract" below) and implements `MetricStore` against it.
-- **`crabka-blockstore`** — `BlockStore::scan_context`, `Index`, `Labels`, `LabelMatcher`/`MatchOp`.
-- **`crabka-metrics` Slice 4 (ingest)** — `WalRecord` (encode/decode) + the metrics WAL topic name + the per-tenant **compaction frontier** the compactor commits (consumer-group committed offset / sealed-block `max_ts`). The real `WalRecord` has **public fields** `tenant: String`, `labels: Vec<(String,String)>`, `payload: SamplePayload`, `exemplars` (no accessor methods); `SamplePayload` is `Float { timestamp_ms, value }` / `Hist { timestamp_ms, hist }` (no `WalSample` enum). Slice 1 — `float_sample_schema()`/`native_histogram_schema()`, `NativeHistogram`, `encode_float_samples`/`decode_*`.
-- **`crabka-client-consumer`** — `Consumer::builder()…subscribe(vec).auto_offset_reset(Earliest).build().await`, `poll(Duration) -> Result<Vec<ConsumerRecord>, ConsumerError>`, `ConsumerRecord{topic,partition,offset,timestamp,key,value,headers}`, `IsolationLevel`, `AutoOffsetReset`.
+- **`krabka-promql` (Slices 2–3)** — provides the `MetricStore` trait, `ScanResult`, `PromqlEngine<S>`, `QueryResult`, `InstantSample`, `RangeSeries`, `SampleValue`, `NativeHistogram`, `EngineOpts`, `PromqlError`. This slice *consumes* that contract verbatim (see "Shared contract" below) and implements `MetricStore` against it.
+- **`krabka-blockstore`** — `BlockStore::scan_context`, `Index`, `Labels`, `LabelMatcher`/`MatchOp`.
+- **`krabka-metrics` Slice 4 (ingest)** — `WalRecord` (encode/decode) + the metrics WAL topic name + the per-tenant **compaction frontier** the compactor commits (consumer-group committed offset / sealed-block `max_ts`). The real `WalRecord` has **public fields** `tenant: String`, `labels: Vec<(String,String)>`, `payload: SamplePayload`, `exemplars` (no accessor methods); `SamplePayload` is `Float { timestamp_ms, value }` / `Hist { timestamp_ms, hist }` (no `WalSample` enum). Slice 1 — `float_sample_schema()`/`native_histogram_schema()`, `NativeHistogram`, `encode_float_samples`/`decode_*`.
+- **`krabka-client-consumer`** — `Consumer::builder()…subscribe(vec).auto_offset_reset(Earliest).build().await`, `poll(Duration) -> Result<Vec<ConsumerRecord>, ConsumerError>`, `ConsumerRecord{topic,partition,offset,timestamp,key,value,headers}`, `IsolationLevel`, `AutoOffsetReset`.
 
 **The 8 metrics slices** (this plan = Slice 5; each gets its own plan):
 
 1. Data layer — block schemas + native-histogram codec + symbol table.
-2. `crabka-promql` core — parser + operator pattern + selectors + rate-family + aggregations + binary ops + `.test` harness.
+2. `krabka-promql` core — parser + operator pattern + selectors + rate-family + aggregations + binary ops + `.test` harness.
 3. Query completeness — `histogram_quantile`, full function catalog, subqueries, `@`/`offset`.
 4. Ingest service — remote_write v1/v2 + OTLP + Kafka produce + distributor + HA dedup + compactor.
 5. **Querier + Prometheus HTTP API + hot/cold merge** *(this plan)*.
@@ -48,7 +48,7 @@
 
 ## Shared contract (consume exactly — do not redefine)
 
-From `crabka-promql` (Slices 2–3). This slice depends on these signatures unchanged:
+From `krabka-promql` (Slices 2–3). This slice depends on these signatures unchanged:
 
 ```rust
 #[async_trait::async_trait]
@@ -110,7 +110,7 @@ pub struct RangeSeries  { pub labels: Labels, pub samples: Vec<(i64, SampleValue
 pub enum SampleValue { Float(f64), Histogram(NativeHistogram) }
 ```
 
-> **Verify-before-use (do not fabricate):** the exact field names / enum discriminants of `QueryResult`, `InstantSample`, `RangeSeries`, `SampleValue`, and the `MetricStore` method shapes are owned by Slices 2–3. Before Task 4, run `cargo doc -p crabka-promql --no-deps` (or read `crates/promql/src/lib.rs` re-exports) and reconcile. If a name differs (e.g. `ts_ms` vs `timestamp_ms`, the `Scalar`/`Str` struct-field names), adapt the **mapping code and tests together** — keep the asserted *JSON* exact (that is the contract this slice owns); the Rust field names bend to promql.
+> **Verify-before-use (do not fabricate):** the exact field names / enum discriminants of `QueryResult`, `InstantSample`, `RangeSeries`, `SampleValue`, and the `MetricStore` method shapes are owned by Slices 2–3. Before Task 4, run `cargo doc -p krabka-promql --no-deps` (or read `crates/promql/src/lib.rs` re-exports) and reconcile. If a name differs (e.g. `ts_ms` vs `timestamp_ms`, the `Scalar`/`Str` struct-field names), adapt the **mapping code and tests together** — keep the asserted *JSON* exact (that is the contract this slice owns); the Rust field names bend to promql.
 
 ---
 
@@ -127,7 +127,7 @@ pub enum SampleValue { Float(f64), Histogram(NativeHistogram) }
 | `src/querier/http/json.rs` | Prometheus JSON value types + `QueryResult`→JSON + `format_sample_value` |
 | `src/querier/http/query.rs` | `/query`, `/query_range` handlers |
 | `src/querier/http/meta.rs` | `/series`, `/labels`, `/label/{name}/values`, `/metadata`, `/query_exemplars`, `/status/buildinfo` |
-| `src/bin/crabka-metrics.rs` | role binary `--target querier` (extended in later slices) |
+| `src/bin/krabka-metrics.rs` | role binary `--target querier` (extended in later slices) |
 
 `store.rs` + `head.rs` are the only files touching DataFusion's query layer; `http/json.rs` is the only file owning wire-shape serialization. This keeps the two churn-prone surfaces (DataFusion UNION, Prometheus JSON) each in one file.
 
@@ -141,7 +141,7 @@ pub enum SampleValue { Float(f64), Histogram(NativeHistogram) }
 - Create: `crates/metrics/src/querier/mod.rs`
 
 **Interfaces:**
-- Produces: a compiling `crabka-metrics` with a `querier` module + `QuerierConfig` and a smoke test.
+- Produces: a compiling `krabka-metrics` with a `querier` module + `QuerierConfig` and a smoke test.
 
 - [ ] **Step 1: Add the Slice-5 dependencies to `crates/metrics/Cargo.toml`**
 
@@ -149,9 +149,9 @@ Append to `[dependencies]` (Slice 1 already has `arrow`, `thiserror`):
 
 ```toml
 datafusion = { workspace = true }
-crabka-promql = { path = "../promql" }
-crabka-blockstore = { path = "../blockstore" }
-crabka-client-consumer = { path = "../client-consumer" }
+krabka-promql = { path = "../promql" }
+krabka-blockstore = { path = "../blockstore" }
+krabka-client-consumer = { path = "../client-consumer" }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time"] }
 axum = { workspace = true, features = ["json", "query"] }  # workspace base lacks these; Json/Query handlers need them
 serde = { workspace = true }
@@ -168,7 +168,7 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "ti
 tower = { workspace = true }            # ServiceExt::oneshot for in-process router tests
 http-body-util = "0.1"                  # collect router response bodies
 object_store = { workspace = true }     # InMemory store behind a test BlockStore
-crabka-broker = { path = "../broker" }  # in-process WAL for #[ignore] tailer tests
+krabka-broker = { path = "../broker" }  # in-process WAL for #[ignore] tailer tests
 ```
 
 > If `http-body-util` is not yet a workspace dep, add `http-body-util = "0.1"` to root `[workspace.dependencies]` and use `{ workspace = true }`. `tower`/`object_store`/`async-trait` are already workspace deps.
@@ -208,9 +208,9 @@ impl Default for QuerierConfig {
     fn default() -> Self {
         Self {
             bootstrap: "localhost:9092".to_string(),
-            // Slice 4 defines this constant in the same crate (`crabka-metrics`).
+            // Slice 4 defines this constant in the same crate (`krabka-metrics`).
             wal_topic: crate::WAL_TOPIC.to_string(),
-            group_id: "crabka-querier-head".to_string(),
+            group_id: "krabka-querier-head".to_string(),
             head_retention: Duration::from_secs(3 * 60 * 60),
             listen_addr: ([0, 0, 0, 0], 9009).into(),
         }
@@ -218,7 +218,7 @@ impl Default for QuerierConfig {
 }
 ```
 
-> `wal_topic` defaults to Slice 4's `crate::WAL_TOPIC` (`"__crabka_metrics_wal"`), defined in the same `crabka-metrics` crate. The head/tailer take the topic as a parameter so they stay agnostic; the binary (Task 6) can override it from a flag.
+> `wal_topic` defaults to Slice 4's `crate::WAL_TOPIC` (`"__krabka_metrics_wal"`), defined in the same `krabka-metrics` crate. The head/tailer take the topic as a parameter so they stay agnostic; the binary (Task 6) can override it from a flag.
 
 - [ ] **Step 3: Wire `lib.rs`**
 
@@ -249,14 +249,14 @@ mod tests {
 
 - [ ] **Step 5: Build + test**
 
-Run: `cargo test -p crabka-metrics --lib querier::tests`
+Run: `cargo test -p krabka-metrics --lib querier::tests`
 Expected: compiles (first build pulls promql/blockstore/datafusion — slow, normal), `default_config_has_sane_retention` PASSES.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/ Cargo.toml Cargo.lock
 git commit -m "feat(metrics): querier module scaffold + QuerierConfig + deps"
 ```
@@ -294,7 +294,7 @@ mod tests {
     use std::time::Duration;
 
     use assert2::assert;
-    use crabka_blockstore::{Labels, LabelMatcher, MatchOp};
+    use krabka_blockstore::{Labels, LabelMatcher, MatchOp};
 
     use super::*;
 
@@ -401,7 +401,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib querier::head`
+Run: `cargo test -p krabka-metrics --lib querier::head`
 Expected: FAIL — `cannot find type WalHead`.
 
 - [ ] **Step 3: Implement `head.rs`**
@@ -418,7 +418,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::time::Duration;
 
 use arrow::record_batch::RecordBatch;
-use crabka_blockstore::{Labels, LabelMatcher, MatchOp, SeriesFingerprint};
+use krabka_blockstore::{Labels, LabelMatcher, MatchOp, SeriesFingerprint};
 
 use crate::histogram::NativeHistogram;
 use crate::{encode_float_samples, encode_native_histograms};
@@ -730,14 +730,14 @@ impl TenantHead {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib querier::head`
+Run: `cargo test -p krabka-metrics --lib querier::head`
 Expected: PASS (6 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): WalHead — in-memory WAL-tail ring + retention + Arrow projection"
 ```
@@ -750,7 +750,7 @@ git commit -m "feat(metrics): WalHead — in-memory WAL-tail ring + retention + 
 - Create: `crates/metrics/src/querier/tailer.rs`
 
 **Interfaces:**
-- Consumes: `crabka-client-consumer::{Consumer, ConsumerRecord, AutoOffsetReset}`, Slice 4 `WalRecord` (decode), `WalHead`, `HeadSample`.
+- Consumes: `krabka-client-consumer::{Consumer, ConsumerRecord, AutoOffsetReset}`, Slice 4 `WalRecord` (decode), `WalHead`, `HeadSample`.
 - Produces:
   - `struct SharedHead(Arc<RwLock<WalHead>>)` (tokio `RwLock`) with `new(retention)`, `read()`, and `apply_record(&self, &WalRecord, partition, offset)`.
   - `struct HeadTailer` with `spawn(config: &QuerierConfig, head: SharedHead, shutdown: CancellationToken) -> JoinHandle<()>` — builds a `Consumer` from `Earliest`, polls, decodes each `ConsumerRecord.value` via `WalRecord::decode`, applies into the head, periodically prunes.
@@ -769,7 +769,7 @@ mod tests {
     use std::time::Duration;
 
     use assert2::assert;
-    use crabka_blockstore::Labels;
+    use krabka_blockstore::Labels;
 
     use super::*;
     use crate::querier::head::{HeadSample, WalHead};
@@ -813,7 +813,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib querier::tailer`
+Run: `cargo test -p krabka-metrics --lib querier::tailer`
 Expected: FAIL — `cannot find function apply_wal_record` (compile error), then `unimplemented!` once the fn exists. Resolve by wiring the real `WalRecord` constructor in the test helper.
 
 - [ ] **Step 3: Implement `tailer.rs`**
@@ -826,8 +826,8 @@ Expected: FAIL — `cannot find function apply_wal_record` (compile error), then
 use std::sync::Arc;
 use std::time::Duration;
 
-use crabka_blockstore::Labels;
-use crabka_client_consumer::{AutoOffsetReset, Consumer, ConsumerRecord};
+use krabka_blockstore::Labels;
+use krabka_client_consumer::{AutoOffsetReset, Consumer, ConsumerRecord};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -962,14 +962,14 @@ fn now_ms() -> i64 {
 
 - [ ] **Step 4: Make the pure-mapping test pass**
 
-Wire `wal_float_record` to Slice 4's constructor; run `cargo test -p crabka-metrics --lib querier::tailer`.
+Wire `wal_float_record` to Slice 4's constructor; run `cargo test -p krabka-metrics --lib querier::tailer`.
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): HeadTailer — WAL-tail consumer loop + pure record mapping"
 ```
@@ -982,8 +982,8 @@ git commit -m "feat(metrics): HeadTailer — WAL-tail consumer loop + pure recor
 - Create: `crates/metrics/src/querier/store.rs`
 
 **Interfaces:**
-- Consumes: `crabka-promql::{MetricStore, ScanResult, PromqlError}`, `crabka-blockstore::{BlockStore, Labels, LabelMatcher}`, `SharedHead`, Slice 1 schemas.
-- **Prerequisite (land first):** `crabka-blockstore::Index::series_labels(tenant, fp) -> Option<Labels>` — the `Index` already stores `series: HashMap<fp, Labels>` but exposes no accessor for it; `series` (cold side) needs it to reconstruct cold series labels. Add it to blockstore (trivial lookup) before this task; do not reconstruct from postings.
+- Consumes: `krabka-promql::{MetricStore, ScanResult, PromqlError}`, `krabka-blockstore::{BlockStore, Labels, LabelMatcher}`, `SharedHead`, Slice 1 schemas.
+- **Prerequisite (land first):** `krabka-blockstore::Index::series_labels(tenant, fp) -> Option<Labels>` — the `Index` already stores `series: HashMap<fp, Labels>` but exposes no accessor for it; `series` (cold side) needs it to reconstruct cold series labels. Add it to blockstore (trivial lookup) before this task; do not reconstruct from postings.
 - Produces:
   - `struct CrabkaMetricStore { blockstore: Arc<BlockStore>, head: SharedHead, frontier: Arc<dyn Fn(&str) -> i64 + Send + Sync> }` (the `frontier` closure returns the per-tenant compaction-frontier timestamp in ms — samples with `ts < frontier` are read from cold blocks; `ts >= frontier` from the head — preventing double-count).
   - `CrabkaMetricStore::new(blockstore, head, frontier) -> Self`
@@ -1002,8 +1002,8 @@ mod tests {
     use std::time::Duration;
 
     use assert2::assert;
-    use crabka_blockstore::{BlockStore, Labels, LabelMatcher, MatchOp};
-    use crabka_promql::MetricStore;
+    use krabka_blockstore::{BlockStore, Labels, LabelMatcher, MatchOp};
+    use krabka_promql::MetricStore;
     use object_store::memory::InMemory;
     use object_store::ObjectStore;
 
@@ -1094,7 +1094,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib querier::store`
+Run: `cargo test -p krabka-metrics --lib querier::store`
 Expected: FAIL — `cannot find type CrabkaMetricStore` (then `unimplemented!` in the seed helper).
 
 - [ ] **Step 3: Implement `store.rs`**
@@ -1110,8 +1110,8 @@ use std::sync::Arc;
 
 use arrow::datatypes::SchemaRef;
 use async_trait::async_trait;
-use crabka_blockstore::{BlockStore, Labels, LabelMatcher};
-use crabka_promql::{MetricStore, PromqlError, ScanResult};
+use krabka_blockstore::{BlockStore, Labels, LabelMatcher};
+use krabka_promql::{MetricStore, PromqlError, ScanResult};
 use datafusion::catalog::MemTable;
 use datafusion::prelude::SessionContext;
 
@@ -1335,14 +1335,14 @@ async fn register_union(
 
 - [ ] **Step 4: Make the test pass**
 
-Wire `blockstore_with_one_cold_sample` (mirror blockstore plan Task 7's write+index calls) and the `SharedHead` test accessor. Run `cargo test -p crabka-metrics --lib querier::store`.
+Wire `blockstore_with_one_cold_sample` (mirror blockstore plan Task 7's write+index calls) and the `SharedHead` test accessor. Run `cargo test -p krabka-metrics --lib querier::store`.
 Expected: PASS (the no-double-count assertion is the headline — `c == 2`, not 3).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): CrabkaMetricStore — cold+hot UNION MetricStore with frontier split"
 ```
@@ -1356,7 +1356,7 @@ git commit -m "feat(metrics): CrabkaMetricStore — cold+hot UNION MetricStore w
 - Create: `crates/metrics/src/querier/http/json.rs`
 
 **Interfaces:**
-- Consumes: `crabka-promql::{QueryResult, InstantSample, RangeSeries, SampleValue, Labels}`.
+- Consumes: `krabka-promql::{QueryResult, InstantSample, RangeSeries, SampleValue, Labels}`.
 - Produces:
   - `fn format_sample_value(v: f64) -> String` — Prometheus `MarshalFloat` semantics (`'f'` default, `'e'` for `abs<1e-6`/`abs>=1e21`); `+Inf`/`-Inf`/`NaN` literals.
   - `fn query_result_to_json(r: &QueryResult) -> serde_json::Value` — the full Prometheus `data` object (`resultType` + `result`).
@@ -1371,8 +1371,8 @@ Create `crates/metrics/src/querier/http/json.rs` with tests first. **These are t
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_blockstore::Labels;
-    use crabka_promql::{InstantSample, QueryResult, RangeSeries, SampleValue};
+    use krabka_blockstore::Labels;
+    use krabka_promql::{InstantSample, QueryResult, RangeSeries, SampleValue};
     use serde_json::json;
 
     use super::*;
@@ -1505,7 +1505,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib querier::http::json`
+Run: `cargo test -p krabka-metrics --lib querier::http::json`
 Expected: FAIL — `cannot find function query_result_to_json`.
 
 - [ ] **Step 3: Implement `json.rs`**
@@ -1517,8 +1517,8 @@ Expected: FAIL — `cannot find function query_result_to_json`.
 //! a 3-digit fraction only when the ms remainder is non-zero); sample values
 //! port `jsonutil.MarshalFloat` (`'f'` default, `'e'` for `abs<1e-6`/`>=1e21`).
 
-use crabka_blockstore::Labels;
-use crabka_promql::{InstantSample, QueryResult, RangeSeries, SampleValue};
+use krabka_blockstore::Labels;
+use krabka_promql::{InstantSample, QueryResult, RangeSeries, SampleValue};
 use serde_json::{Value, json};
 
 /// Wrap a `data` object in the success envelope.
@@ -1716,7 +1716,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::http::HeaderMap;
-use crabka_promql::PromqlEngine;
+use krabka_promql::PromqlEngine;
 
 use crate::querier::store::CrabkaMetricStore;
 
@@ -1773,14 +1773,14 @@ fn api_v1_router(state: AppState) -> Router<AppState> {
 
 - [ ] **Step 5: Run to verify json tests pass**
 
-Run: `cargo test -p crabka-metrics --lib querier::http::json`
+Run: `cargo test -p krabka-metrics --lib querier::http::json`
 Expected: PASS (6 tests). (`http/mod.rs` won't fully compile until Task 6 adds the handlers; if you split commits, stub `query`/`meta` with `todo!()`-free empty handlers first — see Task 6.)
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): Prometheus query-API JSON shapes (vector/matrix/scalar/error)"
 ```
@@ -1794,7 +1794,7 @@ git commit -m "feat(metrics): Prometheus query-API JSON shapes (vector/matrix/sc
 - Create: `crates/metrics/src/querier/http/meta.rs`
 
 **Interfaces:**
-- Consumes: `AppState`, `tenant_of`, `json::*`, `crabka-promql::PromqlEngine`.
+- Consumes: `AppState`, `tenant_of`, `json::*`, `krabka-promql::PromqlEngine`.
 - Produces axum handlers:
   - `query.rs`: `query` (instant), `query_range`.
   - `meta.rs`: `series`, `labels`, `label_values`, `metadata`, `query_exemplars`, `buildinfo`.
@@ -1813,8 +1813,8 @@ mod tests {
     use assert2::assert;
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
-    use crabka_blockstore::Labels;
-    use crabka_promql::{EngineOpts, PromqlEngine};
+    use krabka_blockstore::Labels;
+    use krabka_promql::{EngineOpts, PromqlEngine};
     use http_body_util::BodyExt;
     use serde_json::{Value, json};
     use tower::ServiceExt;
@@ -1906,7 +1906,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib querier::http::query`
+Run: `cargo test -p krabka-metrics --lib querier::http::query`
 Expected: FAIL — handlers don't exist yet.
 
 - [ ] **Step 3: Implement `query.rs`**
@@ -1919,14 +1919,14 @@ use std::collections::HashMap;
 use axum::extract::{Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Json};
-use crabka_promql::{PromqlError, QueryResult};
+use krabka_promql::{PromqlError, QueryResult};
 
 use crate::querier::http::json::{error_envelope, query_result_to_json, success};
 use crate::querier::http::{AppState, tenant_of};
 
 /// Map a `PromqlError` to `(HTTP status, errorType)` per Prometheus conventions.
 /// Slice 2's frozen variant set is `Parse`/`Plan`/`Exec`/`Store`/`Unsupported`
-/// (see `crabka_promql::PromqlError`).
+/// (see `krabka_promql::PromqlError`).
 fn classify(e: &PromqlError) -> (StatusCode, &'static str) {
     match e {
         PromqlError::Parse(_) | PromqlError::Plan(_) => (StatusCode::BAD_REQUEST, "bad_data"),
@@ -2059,7 +2059,7 @@ use crate::querier::http::{AppState, tenant_of};
 // exposed selector parser. VERIFY. (Prometheus accepts repeated `match[]`; this
 // slice handles the single-selector case Grafana sends — extend to union
 // multiple selector sets at the handler if needed.)
-fn parse_matchers(_params: &HashMap<String, String>) -> Vec<crabka_blockstore::LabelMatcher> {
+fn parse_matchers(_params: &HashMap<String, String>) -> Vec<krabka_blockstore::LabelMatcher> {
     Vec::new() // wire to promql's selector parser for `match[]`
 }
 
@@ -2154,28 +2154,28 @@ pub async fn buildinfo() -> impl IntoResponse {
 
 - [ ] **Step 5: Run to verify handler tests pass**
 
-Run: `cargo test -p crabka-metrics --lib querier::http`
+Run: `cargo test -p krabka-metrics --lib querier::http`
 Expected: PASS (json + query handler tests). `AppState` carries both `engine` and `store` (see the store-handle note above).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): Prometheus HTTP query API handlers + dual-mount router"
 ```
 
 ---
 
-### Task 7: Role binary `crabka-metrics --target querier` + end-to-end `#[ignore]` integration
+### Task 7: Role binary `krabka-metrics --target querier` + end-to-end `#[ignore]` integration
 
 **Files:**
-- Create: `crates/metrics/src/bin/crabka-metrics.rs`
+- Create: `crates/metrics/src/bin/krabka-metrics.rs`
 - Create: `crates/metrics/tests/querier_e2e.rs`
 
 **Interfaces:**
-- Consumes: `QuerierConfig`, `SharedHead`, `HeadTailer`, `CrabkaMetricStore`, `PromqlEngine`, `http::router`, `crabka-grpc-gateway`/broker `serve` pattern (plaintext axum serve).
+- Consumes: `QuerierConfig`, `SharedHead`, `HeadTailer`, `CrabkaMetricStore`, `PromqlEngine`, `http::router`, `krabka-grpc-gateway`/broker `serve` pattern (plaintext axum serve).
 - Produces: a binary that, for `--target querier`, builds the head + tailer + store + engine + router and serves the Prometheus API on `config.listen_addr`.
 
 - [ ] **Step 1: Implement the binary**
@@ -2187,8 +2187,8 @@ git commit -m "feat(metrics): Prometheus HTTP query API handlers + dual-mount ro
 
 use std::sync::Arc;
 
-use crabka_metrics::querier::{QuerierConfig, http, store::CrabkaMetricStore, tailer::{HeadTailer, SharedHead}};
-use crabka_promql::{EngineOpts, PromqlEngine};
+use krabka_metrics::querier::{QuerierConfig, http, store::CrabkaMetricStore, tailer::{HeadTailer, SharedHead}};
+use krabka_promql::{EngineOpts, PromqlEngine};
 use tokio_util::sync::CancellationToken;
 
 #[tokio::main]
@@ -2209,7 +2209,7 @@ fn querier_config_from_env() -> QuerierConfig {
     // partitions (the head must be complete).
     let nonce = std::process::id();
     QuerierConfig {
-        group_id: format!("crabka-querier-head-{nonce}"),
+        group_id: format!("krabka-querier-head-{nonce}"),
         ..QuerierConfig::default()
     }
 }
@@ -2242,13 +2242,13 @@ async fn run_querier(config: QuerierConfig) -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
-async fn build_blockstore_from_env() -> Result<crabka_blockstore::BlockStore, Box<dyn std::error::Error>> {
+async fn build_blockstore_from_env() -> Result<krabka_blockstore::BlockStore, Box<dyn std::error::Error>> {
     // VERIFY: construct object_store + base URL from env; load the Index
     // snapshot. Mirrors the compactor's store construction (Slice 4).
     todo!("construct BlockStore + load Index from env-configured object store")
 }
 
-fn make_frontier(_bs: Arc<crabka_blockstore::BlockStore>) -> crate::CrabkaMetricStore /* FrontierFn */ {
+fn make_frontier(_bs: Arc<krabka_blockstore::BlockStore>) -> crate::CrabkaMetricStore /* FrontierFn */ {
     todo!("per-tenant frontier from sealed-block max_ts / compactor offset")
 }
 ```
@@ -2257,7 +2257,7 @@ fn make_frontier(_bs: Arc<crabka_blockstore::BlockStore>) -> crate::CrabkaMetric
 
 - [ ] **Step 2: Write the `#[ignore]` end-to-end test**
 
-Create `crates/metrics/tests/querier_e2e.rs`. Boots an in-process broker (`crabka-broker` test-support), produces a handful of `WalRecord`s to the WAL topic, starts a `HeadTailer`, waits for the head to catch up, then drives the router and asserts `up` returns the produced sample. Gated `#[ignore]` because it needs a broker.
+Create `crates/metrics/tests/querier_e2e.rs`. Boots an in-process broker (`krabka-broker` test-support), produces a handful of `WalRecord`s to the WAL topic, starts a `HeadTailer`, waits for the head to catch up, then drives the router and asserts `up` returns the produced sample. Gated `#[ignore]` because it needs a broker.
 
 ```rust
 //! End-to-end: produce WAL records → tailer fills head → Prometheus /query
@@ -2281,9 +2281,9 @@ use tower::ServiceExt;
 #[tokio::test]
 #[ignore = "requires an in-process broker + Slice 4 WalRecord produce"]
 async fn produce_then_query_round_trips_through_head() {
-    // 1. start in-process broker (crabka-broker test-support::start()).
+    // 1. start in-process broker (krabka-broker test-support::start()).
     // 2. create the WAL topic; produce WalRecord(up{job=api}=1 @ now) via
-    //    crabka-client-producer.
+    //    krabka-client-producer.
     // 3. SharedHead + HeadTailer::spawn pointed at the broker bootstrap+topic.
     // 4. poll until head.high_water_offset(0) >= produced offset (bounded wait).
     // 5. build CrabkaMetricStore (empty cold) + PromqlEngine + router.
@@ -2298,18 +2298,18 @@ async fn produce_then_query_round_trips_through_head() {
 
 - [ ] **Step 3: Build the binary + run non-ignored tests**
 
-Run: `cargo build -p crabka-metrics --bin crabka-metrics`
+Run: `cargo build -p krabka-metrics --bin krabka-metrics`
 Expected: compiles (the two `todo!()` wiring fns compile; `--target querier` would panic at runtime until Slice 4 wiring — acceptable for this slice).
-Run: `cargo test -p crabka-metrics`
+Run: `cargo test -p krabka-metrics`
 Expected: all non-`#[ignore]` tests PASS.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
-git commit -m "feat(metrics): crabka-metrics --target querier binary + e2e skeleton"
+git commit -m "feat(metrics): krabka-metrics --target querier binary + e2e skeleton"
 ```
 
 ---
@@ -2336,12 +2336,12 @@ use std::time::Duration;
 use assert2::assert;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use crabka_blockstore::Labels;
-use crabka_metrics::querier::head::HeadSample;
-use crabka_metrics::querier::http::{router, AppState};
-use crabka_metrics::querier::store::CrabkaMetricStore;
-use crabka_metrics::querier::tailer::SharedHead;
-use crabka_promql::{EngineOpts, PromqlEngine};
+use krabka_blockstore::Labels;
+use krabka_metrics::querier::head::HeadSample;
+use krabka_metrics::querier::http::{router, AppState};
+use krabka_metrics::querier::store::CrabkaMetricStore;
+use krabka_metrics::querier::tailer::SharedHead;
+use krabka_promql::{EngineOpts, PromqlEngine};
 use http_body_util::BodyExt;
 use serde_json::Value;
 use tower::ServiceExt;
@@ -2361,7 +2361,7 @@ async fn range_query_returns_matrix_shape() {
         }
     }
     let store = Arc::new(CrabkaMetricStore::new(
-        crabka_metrics::querier::store::tests_support::empty_blockstore(),
+        krabka_metrics::querier::store::tests_support::empty_blockstore(),
         head,
         Arc::new(|_| 0),
     ));
@@ -2397,12 +2397,12 @@ async fn range_query_returns_matrix_shape() {
 
 - [ ] **Step 2: Run it**
 
-Run: `cargo test -p crabka-metrics --test querier_range`
+Run: `cargo test -p krabka-metrics --test querier_range`
 Expected: PASS.
 
 - [ ] **Step 3: Final whole-crate gate**
 
-Run: `cargo test -p crabka-metrics && cargo clippy -p crabka-metrics --all-targets && cargo fmt -p crabka-metrics --check`
+Run: `cargo test -p krabka-metrics && cargo clippy -p krabka-metrics --all-targets && cargo fmt -p krabka-metrics --check`
 Expected: all PASS (excluding `#[ignore]`d e2e), no warnings, formatting clean.
 
 - [ ] **Step 4: Commit**
@@ -2435,7 +2435,7 @@ git commit -m "test(metrics): range query over head returns exact matrix shape"
 **Churn-prone surfaces — structured + behavior-pinned, not fabricated (per CLAUDE.md):**
 - **DataFusion UNION of hot+cold** (Task 4 `register_union`/`register_memtable`/`table_provider`) — pinned by the `c == 2` no-double-count test; `CREATE VIEW … UNION ALL` vs `DataFrame::union(...).into_view()` fallback both flagged with a verify-checklist.
 - **Consumer client API** (Task 3) — built from the real `Consumer::builder()…subscribe(vec).auto_offset_reset(Earliest).build()` + `poll(Duration) -> Result<Vec<ConsumerRecord>>` shape read from the crate; the `WalRecord` decode is isolated in `apply_wal_record` with a pure unit test and verify-notes.
-- **`crabka-promql` contract** (`MetricStore`/`ScanResult`/`PromqlEngine`/`QueryResult`/`SampleValue`) — consumed verbatim from the shared contract; every spot where a field name might differ (`ts_ms`, `Scalar` ts, `PromqlError` variants, `EngineOpts::default`) carries an explicit "adapt the Rust, keep the JSON" verify-note. (Slice 2's `PromqlEngine` has no `store()` accessor — its `store` field is private — so `AppState` carries an `Arc<CrabkaMetricStore>` directly for the metadata handlers.)
+- **`krabka-promql` contract** (`MetricStore`/`ScanResult`/`PromqlEngine`/`QueryResult`/`SampleValue`) — consumed verbatim from the shared contract; every spot where a field name might differ (`ts_ms`, `Scalar` ts, `PromqlError` variants, `EngineOpts::default`) carries an explicit "adapt the Rust, keep the JSON" verify-note. (Slice 2's `PromqlEngine` has no `store()` accessor — its `store` field is private — so `AppState` carries an `Arc<CrabkaMetricStore>` directly for the metadata handlers.)
 
 **Type consistency:** `WalHead`/`SharedHead`/`HeadSample` consistent across Tasks 2/3/4/6/8. `CrabkaMetricStore::new(blockstore, head, frontier)` signature stable Tasks 4/6/7/8. `AppState`/`router`/`tenant_of` stable Tasks 5/6/7/8. `format_sample_value`/`query_result_to_json`/`success`/`error_envelope` defined once (Task 5), used by handlers (Task 6) and pinned by the JSON tests. `QuerierConfig` fields stable Tasks 1/3/7.
 

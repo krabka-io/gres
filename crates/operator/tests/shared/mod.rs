@@ -22,7 +22,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crabka_operator::{
+use krabka_operator::{
     config::OperatorConfig,
     context::Context,
     crd::{KafkaNodePool, KafkaNodePoolSpec, NodeRole},
@@ -169,7 +169,7 @@ pub fn fake_converged_sts_body(
     statefulset["metadata"]["generation"] = serde_json::json!(2);
     statefulset["metadata"]["labels"] = serde_json::json!({
         "app.kubernetes.io/instance": cluster,
-        "app.kubernetes.io/name": "crabka-broker",
+        "app.kubernetes.io/name": "krabka-broker",
         "crabka.io/pool": pool,
     });
     statefulset["spec"]["template"]["metadata"]["annotations"] =
@@ -445,8 +445,8 @@ pub fn op_config(namespace: &str) -> OperatorConfig {
         pod_name: "p".into(),
         health_addr: "0.0.0.0:0".parse().unwrap(),
         client_dispatch_queue_capacity:
-            crabka_client_core::DEFAULT_CONNECTION_DISPATCH_QUEUE_CAPACITY,
-        client_frame_max: crabka_units::mebibytes(100),
+            krabka_client_core::DEFAULT_CONNECTION_DISPATCH_QUEUE_CAPACITY,
+        client_frame_max: krabka_units::mebibytes(100),
         log_filter: "info".into(),
         default_broker_image: None,
         default_gateway_image: None,
@@ -456,26 +456,26 @@ pub fn op_config(namespace: &str) -> OperatorConfig {
         default_pgdog_image: None,
         default_gres_activator_image: None,
         pgdog_reload_attempts: "3".parse().unwrap(),
-        pgdog_reload_backoff: crabka_units::millis(100),
-        pgdog_reload_requeue: crabka_units::secs(15),
-        pgdog_admin_timeout: crabka_units::secs(20),
-        pgdog_transition_poll: crabka_units::minutes(1),
-        controller_error_requeue: crabka_units::secs(15),
-        controller_dependency_requeue: crabka_units::secs(30),
-        controller_drift_requeue: crabka_units::minutes(1),
-        controller_invalid_requeue: crabka_units::minutes(5),
-        controller_certificate_requeue: crabka_units::secs(10),
-        user_tls_drift_requeue: crabka_units::hours(6),
-        leader_lease_duration: crabka_units::secs(15),
-        leader_retry_interval: crabka_units::secs(2),
-        topic_mutation_timeout: crabka_units::secs(30),
-        rebalancer_request_timeout: crabka_units::secs(30),
-        rebalancer_poll_interval: crabka_units::secs(10),
-        rebalancer_idle_interval: crabka_units::minutes(5),
-        delegation_token_invalid_requeue: crabka_units::hours(1),
-        delegation_token_transient_backoff: crabka_units::minutes(5),
-        delegation_token_min_requeue: crabka_units::minutes(1),
-        delegation_token_max_requeue: crabka_units::hours(24),
+        pgdog_reload_backoff: krabka_units::millis(100),
+        pgdog_reload_requeue: krabka_units::secs(15),
+        pgdog_admin_timeout: krabka_units::secs(20),
+        pgdog_transition_poll: krabka_units::minutes(1),
+        controller_error_requeue: krabka_units::secs(15),
+        controller_dependency_requeue: krabka_units::secs(30),
+        controller_drift_requeue: krabka_units::minutes(1),
+        controller_invalid_requeue: krabka_units::minutes(5),
+        controller_certificate_requeue: krabka_units::secs(10),
+        user_tls_drift_requeue: krabka_units::hours(6),
+        leader_lease_duration: krabka_units::secs(15),
+        leader_retry_interval: krabka_units::secs(2),
+        topic_mutation_timeout: krabka_units::secs(30),
+        rebalancer_request_timeout: krabka_units::secs(30),
+        rebalancer_poll_interval: krabka_units::secs(10),
+        rebalancer_idle_interval: krabka_units::minutes(5),
+        delegation_token_invalid_requeue: krabka_units::hours(1),
+        delegation_token_transient_backoff: krabka_units::minutes(5),
+        delegation_token_min_requeue: krabka_units::minutes(1),
+        delegation_token_max_requeue: krabka_units::hours(24),
         gres_checkpoint_store: None,
         gres_checkpoint_bucket: None,
         gres_checkpoint_region: None,
@@ -704,7 +704,7 @@ pub fn happy_path_rules(
 pub fn build_ctx(
     namespace: &str,
     rules: Vec<MockRule>,
-) -> (Arc<crabka_operator::context::Context>, Arc<MockState>) {
+) -> (Arc<krabka_operator::context::Context>, Arc<MockState>) {
     build_ctx_with_config(namespace, rules, op_config(namespace))
 }
 
@@ -712,7 +712,7 @@ pub fn build_ctx_with_config(
     namespace: &str,
     rules: Vec<MockRule>,
     config: OperatorConfig,
-) -> (Arc<crabka_operator::context::Context>, Arc<MockState>) {
+) -> (Arc<krabka_operator::context::Context>, Arc<MockState>) {
     let state = MockState::new(rules);
     let client = mock_client(&state, namespace);
     let (registry, metrics) = new_registry_with_metrics();

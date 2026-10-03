@@ -1,5 +1,5 @@
 [package]
-name = "crabka-gres-control"
+name = "krabka-gres-control"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -9,7 +9,7 @@ rust-version.workspace = true
 description = "Control-plane tenant registry for Crabka Gres"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-gres-control"
+documentation = "https://docs.rs/krabka-gres-control"
 readme = "README.md"
 keywords = ["postgres", "control-plane", "kafka", "crabka", "gres"]
 categories = ["database-implementations"]
@@ -19,11 +19,11 @@ workspace = true
 
 [dependencies]
 bytes = { workspace = true }
-crabka-client-admin = { version = "0.4.2", path = "../client-admin" }
-crabka-client-core = { version = "0.4.2", path = "../client-core" }
-crabka-client-producer = { version = "0.4.2", path = "../client-producer" }
-crabka-protocol = { version = "0.4.2", path = "../protocol", default-features = false }
-crabka-units = { workspace = true }
+krabka-client-admin = { version = "0.4.2", path = "../client-admin" }
+krabka-client-core = { version = "0.4.2", path = "../client-core" }
+krabka-client-producer = { version = "0.4.2", path = "../client-producer" }
+krabka-protocol = { version = "0.4.2", path = "../protocol", default-features = false }
+krabka-units = { workspace = true }
 refined_type = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -36,7 +36,7 @@ uuid = { workspace = true }
 [dev-dependencies]
 static_assertions = "1"
 assert2 = { workspace = true }
-crabka-broker = { version = "0.4.2", path = "../broker", features = ["test-helpers"] }
+krabka-broker = { version = "0.4.2", path = "../broker", features = ["test-helpers"] }
 proptest = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

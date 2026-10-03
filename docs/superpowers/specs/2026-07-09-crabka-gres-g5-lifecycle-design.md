@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-09
 **Status:** Approved
-**Type:** Slice design. The fifth slice of [Chapter Gres](2026-07-09-crabka-gres-chapter-design.md): serverless behavior — idle tenants scale to zero and wake on the first connection, with a measured cold-start SLO as the gate.
+**Type:** Slice design. The fifth slice of [Chapter Gres](2026-07-09-krabka-gres-chapter-design.md): serverless behavior — idle tenants scale to zero and wake on the first connection, with a measured cold-start SLO as the gate.
 
 ## Context — the one constraint that shapes everything
 
@@ -34,7 +34,7 @@ suspend (idle window elapsed, zero open sessions):
 
 resume (first connection arrives):
   PgDog → activator (always accepting)
-    activator: peek pg StartupMessage (crabka-pgwire decode) → tenant name
+    activator: peek pg StartupMessage (krabka-pgwire decode) → tenant name
                write idempotent resume-request to registry
                hold the connection; bounded condition-driven wait for readiness
   GresTenant controller: recreate the WAL topic (current generation); scale → 1
@@ -50,11 +50,11 @@ resume (first connection arrives):
 
 ### Suspend is compute-initiated, controller-executed
 
-The compute is the only component that knows session truth, so it owns the decision: after the configured idle window with zero open sessions (window per tenant in the registry; `0` disables), it takes a final checkpoint, writes `suspended`, and exits cleanly. The `GresTenant` controller — which already tails the registry through `crabka-gres-control`'s reader (surfaced into the controller as a watch-channel requeue trigger) — executes the Kubernetes half: Deployment to zero replicas, and *(added after the scaling review)* **parks the WAL topic**: behind the final checkpoint the topic is empty, so the controller deletes it and bumps the registry's `wal_generation`, eliminating the suspended tenant's standing broker cost (follower fetch loops, connections, metadata weight — the review measured idle topics as decidedly not free). Resume recreates the topic; recovery already distinguishes a fresh topic from a truncated one via the manifest's `wal_generation` (schema landed in G-3), replaying the tail from offset 0 — which is exactly the empty tail. Fencing survives parking untouched: the producer epoch lives in `__transaction_state` under the tenant's transactional id, not in the topic. Suspend is also **size-gated as policy**: a tenant whose checkpoint exceeds a configured threshold stays warm rather than suspending (its cold start would blow the SLO); the threshold is a fleet default with a per-tenant override, and the idle metric plus checkpoint size make the tradeoff visible. Computes never hold kube credentials; every signal is a registry record. A crash *during* suspend is just a crash — the successor path is identical whether the compute exited cleanly or not, because correctness never depended on clean shutdown (G-2's disposability gate).
+The compute is the only component that knows session truth, so it owns the decision: after the configured idle window with zero open sessions (window per tenant in the registry; `0` disables), it takes a final checkpoint, writes `suspended`, and exits cleanly. The `GresTenant` controller — which already tails the registry through `krabka-gres-control`'s reader (surfaced into the controller as a watch-channel requeue trigger) — executes the Kubernetes half: Deployment to zero replicas, and *(added after the scaling review)* **parks the WAL topic**: behind the final checkpoint the topic is empty, so the controller deletes it and bumps the registry's `wal_generation`, eliminating the suspended tenant's standing broker cost (follower fetch loops, connections, metadata weight — the review measured idle topics as decidedly not free). Resume recreates the topic; recovery already distinguishes a fresh topic from a truncated one via the manifest's `wal_generation` (schema landed in G-3), replaying the tail from offset 0 — which is exactly the empty tail. Fencing survives parking untouched: the producer epoch lives in `__transaction_state` under the tenant's transactional id, not in the topic. Suspend is also **size-gated as policy**: a tenant whose checkpoint exceeds a configured threshold stays warm rather than suspending (its cold start would blow the SLO); the threshold is a fleet default with a per-tenant override, and the idle metric plus checkpoint size make the tradeoff visible. Computes never hold kube credentials; every signal is a registry record. A crash *during* suspend is just a crash — the successor path is identical whether the compute exited cleanly or not, because correctness never depended on clean shutdown (G-2's disposability gate).
 
 ### The activator converts down into slow
 
-`crabka-gres-activator` is a small, stateless, always-on fleet service (replicable; part of the `Gres` controller's rendered workloads). Per connection: accept immediately; answer an `SSLRequest` with `'N'` — the PgDog→activator leg is in-cluster plaintext, the chapter's stated v1 posture for internal legs, while client-side TLS terminates at PgDog — then read the `StartupMessage` using `crabka-pgwire`'s frontend decoding to learn the target database → tenant; write an idempotent resume-request record; hold the socket while waiting — a bounded, condition-driven wait on the registry flipping to `active` plus a TCP readiness probe of the compute, never a blind sleep — then open the backend connection, replay the held startup bytes, and pipe bytes both ways until either side closes. It terminates nothing else of the protocol: auth and everything after the startup pass through untouched. Wait bounds surface as ordinary Postgres error responses so a stuck wake fails loudly within the client's own timeout budget — a budget G-4's renderer guarantees exceeds the cold-start ceiling.
+`krabka-gres-activator` is a small, stateless, always-on fleet service (replicable; part of the `Gres` controller's rendered workloads). Per connection: accept immediately; answer an `SSLRequest` with `'N'` — the PgDog→activator leg is in-cluster plaintext, the chapter's stated v1 posture for internal legs, while client-side TLS terminates at PgDog — then read the `StartupMessage` using `krabka-pgwire`'s frontend decoding to learn the target database → tenant; write an idempotent resume-request record; hold the socket while waiting — a bounded, condition-driven wait on the registry flipping to `active` plus a TCP readiness probe of the compute, never a blind sleep — then open the backend connection, replay the held startup bytes, and pipe bytes both ways until either side closes. It terminates nothing else of the protocol: auth and everything after the startup pass through untouched. Wait bounds surface as ordinary Postgres error responses so a stuck wake fails loudly within the client's own timeout budget — a budget G-4's renderer guarantees exceeds the cold-start ceiling.
 
 ### The wake path contains no render and no RELOAD
 
@@ -71,7 +71,7 @@ The gate harness provisions a small tenant, drives it to suspension, then measur
 ## Integration
 
 - **`crates/gres`:** idle tracking (sessions + last-statement clock), suspend sequence (checkpoint → registry write → exit), readiness signal on `active`.
-- **New crate `crates/gres-activator`** (`crabka-gres-activator`, `publish = false`): the accept/peek/request/hold/pipe loop over `crabka-pgwire` message decoding + `crabka-gres-control` registry access.
+- **New crate `crates/gres-activator`** (`krabka-gres-activator`, `publish = false`): the accept/peek/request/hold/pipe loop over `krabka-pgwire` message decoding + `krabka-gres-control` registry access.
 - **`crates/gres-control`:** the `suspended`/`ResumeRequested` state transitions, resume-request records, idle-window field, and `wal_generation` — the record schema G-4 seeded is *extended* here by this slice's own plan (Task 1), not merely activated *(corrected after the PR panel review: G-4 seeds the record; G-5's plan adds the lifecycle fields — execution is unblocked either way, but the provenance was wrong)*.
 - **`crates/operator`:** `GresTenant` controller gains scale-to-zero/one on registry state; `Gres` controller gains activator workload rendering + suspended-tenant routing in the config render.
 - **`crates/cli`:** `crabka gres suspend|resume` become immediate (they write the same records the automation writes).
@@ -82,7 +82,7 @@ Nothing new on the Kafka wire (registry records as in G-4). On the Postgres wire
 
 ## Testing
 
-- **Activator units:** prelude parsing over `crabka-pgwire` decode (golden startup traces incl. SSLRequest path), hold-then-pipe with a mock backend, bounded-wait timeout surfacing as a proper Postgres error frame.
+- **Activator units:** prelude parsing over `krabka-pgwire` decode (golden startup traces incl. SSLRequest path), hold-then-pipe with a mock backend, bounded-wait timeout surfacing as a proper Postgres error frame.
 - **Suspend/resume integration (in-process broker + bucket, deterministic):** drive tenant → idle → assert final checkpoint + `suspended` record + clean exit; connect through a real activator instance → assert resume-request, recovery, first query succeeds; assert no acked loss across the full cycle (the G-2 disposability suite re-run across a suspend/resume boundary).
 - **Race coverage:** connect during suspension-in-progress; duplicate simultaneous first-connections through two activator replicas; suspend racing an in-flight commit (must be blocked by the zero-open-sessions rule); scale-up racing a zombie (settled by fencing — assert the loser exits).
 - **Operator:** mock-harness reconcile tests for state-driven scaling and routing re-render.
@@ -99,6 +99,6 @@ Nothing new on the Kafka wire (registry records as in G-4). On the Postgres wire
 ## Resolved decisions
 
 - Suspend: compute-initiated (idle window, zero sessions, checkpoint-size gate) with a final checkpoint; controller executes scale-to-zero and **parks the WAL topic** (delete + `wal_generation` bump; fencing survives in `__transaction_state`); all signaling via registry records.
-- Wake: always-accepting activator; `SSLRequest → 'N'` then startup peek via `crabka-pgwire`; idempotent resume-request records; bounded condition-driven hold; transparent byte piping **directly to the recovered compute — no render or RELOAD on the wake path**.
+- Wake: always-accepting activator; `SSLRequest → 'N'` then startup peek via `krabka-pgwire`; idempotent resume-request records; bounded condition-driven hold; transparent byte piping **directly to the recovered compute — no render or RELOAD on the wake path**.
 - Routing: asymmetric config-layer flips — suspend-side re-render lands lazily before the next wake; resume-side flip back to direct routing is lazy and batched; no permanent hop.
 - Gate: measured cold-start pipeline with an environment-qualified CI ceiling and published distributions (including wake rates, so churn saturation is visible).

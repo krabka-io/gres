@@ -43,9 +43,9 @@ Other changes:
 ```
 crates/rebalancer/src/api/mod.rs            # MODIFIED — GoalRegistry::default_registry adds three new Goal instances
 crates/rebalancer/src/bin/rebalancer.rs     # MODIFIED — new CLI flag --min-topic-leaders-per-broker, threaded into GoalContext
-charts/crabka-rebalancer/values.yaml         # MODIFIED — minTopicLeadersPerBroker: 0
-charts/crabka-rebalancer/templates/deployment.yaml  # MODIFIED — CRABKA_MIN_TOPIC_LEADERS_PER_BROKER env var
-charts/crabka-rebalancer/tests/deployment_test.yaml # MODIFIED — one new `contains` assertion
+charts/krabka-rebalancer/values.yaml         # MODIFIED — minTopicLeadersPerBroker: 0
+charts/krabka-rebalancer/templates/deployment.yaml  # MODIFIED — KRABKA_MIN_TOPIC_LEADERS_PER_BROKER env var
+charts/krabka-rebalancer/tests/deployment_test.yaml # MODIFIED — one new `contains` assertion
 README.md                                    # unchanged
 STATUS.md                                    # MODIFIED — slice 43c entry
 ```
@@ -98,13 +98,13 @@ The binary entry's `GoalContext` literal sets it from the new CLI flag.
 CLI flag (in `bin/rebalancer.rs`):
 
 ```rust
-#[arg(long, env = "CRABKA_MIN_TOPIC_LEADERS_PER_BROKER", default_value_t = 0)]
+#[arg(long, env = "KRABKA_MIN_TOPIC_LEADERS_PER_BROKER", default_value_t = 0)]
 min_topic_leaders_per_broker: u32,
 ```
 
 Helm chart additions:
 - `values.yaml`: `minTopicLeadersPerBroker: 0`
-- `templates/deployment.yaml`: `- name: CRABKA_MIN_TOPIC_LEADERS_PER_BROKER` env entry, value `{{ .Values.minTopicLeadersPerBroker | quote }}`
+- `templates/deployment.yaml`: `- name: KRABKA_MIN_TOPIC_LEADERS_PER_BROKER` env entry, value `{{ .Values.minTopicLeadersPerBroker | quote }}`
 - `tests/deployment_test.yaml`: one new `contains` assertion in the existing "passes env vars" test for the new env var name.
 
 ## Testing
@@ -144,10 +144,10 @@ No new `connect_smoke.rs` test — no new RPC surface.
 
 ## Acceptance criteria
 
-1. `cargo test -p crabka-rebalancer` — 81+ lib tests (68 from 43b + 13 new) + 6 e2e tests (5 from 43b + 1 new) + 2 Connect smoke tests, all green.
+1. `cargo test -p krabka-rebalancer` — 81+ lib tests (68 from 43b + 13 new) + 6 e2e tests (5 from 43b + 1 new) + 2 Connect smoke tests, all green.
 2. `cargo fmt --check` and `cargo clippy --workspace --all-targets -- -D warnings` clean.
-3. `helm lint charts/crabka-rebalancer --set bootstrapServers=test:9092` clean.
-4. `helm unittest charts/crabka-rebalancer` clean (5 existing suites pass with the updated `deployment_test.yaml`).
+3. `helm lint charts/krabka-rebalancer --set bootstrapServers=test:9092` clean.
+4. `helm unittest charts/krabka-rebalancer` clean (5 existing suites pass with the updated `deployment_test.yaml`).
 5. `STATUS.md` gains a slice-43c entry listing the three new goals + the new CLI flag.
 
 ## File layout (summary)
@@ -163,9 +163,9 @@ crates/rebalancer/
 │   ├── api/mod.rs                                # MODIFIED — GoalRegistry::default_registry adds three new goals
 │   └── bin/rebalancer.rs                         # MODIFIED — new CLI flag + threading
 └── tests/end_to_end.rs                           # MODIFIED — one new integration test
-charts/crabka-rebalancer/
+charts/krabka-rebalancer/
 ├── values.yaml                                    # MODIFIED — minTopicLeadersPerBroker: 0
-├── templates/deployment.yaml                      # MODIFIED — CRABKA_MIN_TOPIC_LEADERS_PER_BROKER env
+├── templates/deployment.yaml                      # MODIFIED — KRABKA_MIN_TOPIC_LEADERS_PER_BROKER env
 └── tests/deployment_test.yaml                     # MODIFIED — one new contains assertion
 STATUS.md                                          # MODIFIED — slice 43c entry
 ```

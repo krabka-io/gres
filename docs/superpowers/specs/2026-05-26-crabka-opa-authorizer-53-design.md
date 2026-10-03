@@ -407,7 +407,7 @@ HTTP responder.
 - `cargo fmt --all --check`
 - `cargo clippy --all-targets -- -D warnings`
 - `cargo test --workspace`
-- `cargo test -p crabka-broker --test opa_authorizer`
-- `cargo test -p crabka-operator --test reconcile_kafka_authorization` (new file)
+- `cargo test -p krabka-broker --test opa_authorizer`
+- `cargo test -p krabka-operator --test reconcile_kafka_authorization` (new file)
 - CRD drift gate (`tools/regen-crds.sh`)
 - `kind-opa-authorization` e2e green on slice branch

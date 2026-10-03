@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crabka_pgwire::{
+use krabka_pgwire::{
     session::{AuthMode, SessionConfig},
     stub::StubEngine,
 };
@@ -16,7 +16,7 @@ fn wrong_fixture_password() -> String {
 }
 
 fn scram_config() -> SessionConfig {
-    use crabka_pgwire::scram::ScramVerifier;
+    use krabka_pgwire::scram::ScramVerifier;
     let mut verifiers = std::collections::HashMap::new();
     verifiers.insert(
         "crab".to_string(),
@@ -26,7 +26,7 @@ fn scram_config() -> SessionConfig {
         auth: AuthMode::ScramSha256 {
             verifiers,
             mock_secret: [42u8; 32],
-            mock_iterations: crabka_pgwire::scram::DEFAULT_ITERATIONS,
+            mock_iterations: krabka_pgwire::scram::DEFAULT_ITERATIONS,
         },
         ..SessionConfig::trust()
     }
@@ -36,7 +36,7 @@ async fn spawn_scram_server() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
     let config = scram_config();
-    tokio::spawn(crabka_pgwire::server::serve(
+    tokio::spawn(krabka_pgwire::server::serve(
         listener,
         Arc::new(StubEngine::new()),
         Arc::new(config),

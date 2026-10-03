@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** The language-agnostic SDK contract made executable: a Rust conformance harness (`crabka-sdk-conformance`) driving per-language adapter CLIs over JSON-stdio against an in-process broker+gateway, contract vectors v1, and the Go reference SDK (module layout, error taxonomy, stubs with `Unimplemented{module, gated_on}`, the adapter) passing the suite in CI.
+**Goal:** The language-agnostic SDK contract made executable: a Rust conformance harness (`krabka-sdk-conformance`) driving per-language adapter CLIs over JSON-stdio against an in-process broker+gateway, contract vectors v1, and the Go reference SDK (module layout, error taxonomy, stubs with `Unimplemented{module, gated_on}`, the adapter) passing the suite in CI.
 
 **Architecture:** The harness boots broker+gateway in-process (existing test pattern — no containers), spawns an adapter subprocess, and exchanges JSON lines (`{"cmd": …}` → `{"ok": …}|{"error": …}`). A built-in mock adapter self-tests the harness before any SDK exists. The Go SDK extends MSG-5's `sdks/go` with the app-SDK module layout and ships `conformance-adapter`.
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0, harness: `serde_json`, `tokio::process`, the in-process `Broker::start` + gateway router), Go 1.2x + connect-go (per MSG-5), `assert2`/`nextest`, `cargo +nightly fmt`, `clippy::pedantic`, `gofmt`/`go vet`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-app-sdk-umbrella-design.md`](../specs/2026-07-06-crabka-app-sdk-umbrella-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-app-sdk-umbrella-design.md`](../specs/2026-07-06-krabka-app-sdk-umbrella-design.md).
 
 **PREREQUISITES (unlanded):** **MSG-5 executed** (the Go messaging core: buf stubs, `publish`/`publishEvent`/`subscribe`, and the gateway h2c listener — this plan's Go tasks build on those). The harness tasks (1–3) have no unbuilt prerequisites.
 
@@ -20,7 +20,7 @@
 2. **Stubs are vector-pinned:** every unbuilt module's call returns exactly `Unimplemented{module, gated_on: <design-doc slug>}` — asserted, not documented-only.
 3. **The suite version is the contract version** — vectors additive within a major; the harness refuses an adapter declaring a different major.
 4. **In-process substrate:** the harness boots broker+gateway itself; CI needs no Docker and no new toolchains (Go is already present).
-5. **New-crate hygiene:** `crabka-sdk-conformance` is `publish = false` + release-plz private entry.
+5. **New-crate hygiene:** `krabka-sdk-conformance` is `publish = false` + release-plz private entry.
 6. **Every task ends green** before its commit.
 
 ## Scope boundary
@@ -32,7 +32,7 @@
 
 ## File Structure
 
-- **`crates/sdk-conformance/`** (new crate `crabka-sdk-conformance`): `src/{lib.rs, protocol.rs, harness.rs, mock_adapter.rs}`, `src/bin/conformance.rs`, `vectors/v1/*.json`, `tests/self_test.rs`.
+- **`crates/sdk-conformance/`** (new crate `krabka-sdk-conformance`): `src/{lib.rs, protocol.rs, harness.rs, mock_adapter.rs}`, `src/bin/conformance.rs`, `vectors/v1/*.json`, `tests/self_test.rs`.
 - **`sdks/go/`** (extends MSG-5): `crabka/{client.go, errors.go, queues.go, database.go, auth.go, blob.go}` (+ MSG-5's messaging files), `cmd/conformance-adapter/main.go`.
 - **`release-plz.toml`** — the private entry.
 - **`.github/workflows/`** — the SDK conformance job.
@@ -77,7 +77,7 @@
 
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-sdk-conformance` → PASS; `./tools/check-publish-allowlist.sh` → 0.
+Run: `cargo test -p krabka-sdk-conformance` → PASS; `./tools/check-publish-allowlist.sh` → 0.
 
 ```bash
 git add crates/sdk-conformance release-plz.toml
@@ -101,7 +101,7 @@ Boot the harness with the **mock adapter as a subprocess** (`cargo run --bin con
 
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-sdk-conformance --test self_test` → PASS.
+Run: `cargo test -p krabka-sdk-conformance --test self_test` → PASS.
 
 ```bash
 git add crates/sdk-conformance
@@ -169,7 +169,7 @@ git commit -m "feat(sdk-go): app-SDK module layout, error taxonomy, gated stubs"
 - Create: `sdks/go/cmd/conformance-adapter/main.go`
 
 - [ ] **Step 1:** Implement the adapter: JSON-lines stdio loop translating `Command`s onto the Go SDK (`Hello` reports `contract_major: 1, language: "go"`; `Subscribe`/`NextMessage` bridge the stream to pull semantics with a buffered channel; every SDK error maps to the wire taxonomy).
-- [ ] **Step 2:** Run the real suite: `cargo run -p crabka-sdk-conformance --bin conformance -- --adapter sdks/go/bin/conformance-adapter --vectors crates/sdk-conformance/vectors/v1` → **all vectors PASS**. Any mismatch: fix the SDK (or a genuinely ambiguous vector — then fix the vector *and* re-run the mock).
+- [ ] **Step 2:** Run the real suite: `cargo run -p krabka-sdk-conformance --bin conformance -- --adapter sdks/go/bin/conformance-adapter --vectors crates/sdk-conformance/vectors/v1` → **all vectors PASS**. Any mismatch: fix the SDK (or a genuinely ambiguous vector — then fix the vector *and* re-run the mock).
 - [ ] **Step 3: Commit**
 
 ```bash
@@ -182,7 +182,7 @@ git commit -m "feat(sdk-go): conformance adapter; suite green (contract v1)"
 ## Task 6: CI + final gate
 
 - [ ] **Step 1:** A workflow job (reuses `setup-go`; no Docker): build the harness + the Go adapter, run the suite, fail on any vector. Wire the buf drift check from MSG-5's plan if not yet present.
-- [ ] **Step 2:** `cargo +nightly fmt --check`; `cargo clippy -p crabka-sdk-conformance --all-targets -- -D warnings`; `cargo nextest run -p crabka-sdk-conformance`; `cd sdks/go && gofmt -l . && go vet ./... && go test ./...`; `./tools/check-publish-allowlist.sh` — all green. Commit.
+- [ ] **Step 2:** `cargo +nightly fmt --check`; `cargo clippy -p krabka-sdk-conformance --all-targets -- -D warnings`; `cargo nextest run -p krabka-sdk-conformance`; `cd sdks/go && gofmt -l . && go vet ./... && go test ./...`; `./tools/check-publish-allowlist.sh` — all green. Commit.
 
 ```bash
 git add .github/workflows

@@ -58,7 +58,7 @@ BENCH_SAMPLE_INTERVAL_MS=11
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-bench-driver sample_interval --locked
+  cargo test -p krabka-bench-driver sample_interval --locked
 ```
 
 - [ ] Replace `SAMPLE_INTERVAL_MS` with:
@@ -101,7 +101,7 @@ let interval_ms = cfg.sample_interval.milliseconds();
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-bench-driver sample_interval --locked
+  cargo test -p krabka-bench-driver sample_interval --locked
 test "$(rg -o 'cfg\\.sample_interval\\.milliseconds\\(\\)' \
   crates/bench-driver/src/workload.rs | wc -l)" -eq 1
 if rg -n '^const SAMPLE_INTERVAL_MS' crates/bench-driver/src/workload.rs; then
@@ -113,12 +113,12 @@ fi
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-bench-driver --all-targets --locked
+  cargo test -p krabka-bench-driver --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-bench-driver --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-bench-driver --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -p crabka-bench-driver --bin crabka-bench-driver --locked -- --help
-test "$(target/debug/crabka-bench-driver --help | rg -c -- '--sample-interval-ms')" -eq 1
+  cargo run -p krabka-bench-driver --bin krabka-bench-driver --locked -- --help
+test "$(target/debug/krabka-bench-driver --help | rg -c -- '--sample-interval-ms')" -eq 1
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 git diff --check
 git diff -- Cargo.lock

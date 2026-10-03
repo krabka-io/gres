@@ -13,8 +13,8 @@ only ~100 flip to pass without the planner).
   cascade "relation overview does not exist"); subselect 1344-1353 (10) +
   1359-1364 (6). Total 67.
 - Origin: pgparser parser.rs:612 `parse_type_name` resolves a schema-qualified
-  type through `crabka_pgtypes::usertype::column_type_for_name_in(schema,name)`
-  (process-wide registry hydrated from `crabka_pgcatalog::list_user_types`,
+  type through `krabka_pgtypes::usertype::column_type_for_name_in(schema,name)`
+  (process-wide registry hydrated from `krabka_pgcatalog::list_user_types`,
   pgcatalog/src/lib.rs:6220). Nothing seeds the five information_schema
   domains. Fix: seed them at catalog bootstrap (pgcatalog lib.rs bootstrap +
   usertype registry), not catalog_fn.rs/catalog_rel.rs.
@@ -53,7 +53,7 @@ only ~100 flip to pass without the planner).
   is oid-only with no catalog; caller is exec.rs:19566
   `build_table_expr_schema_with_ctes` (Derived table schema path) which
   round-trips through FieldDescription. Fix: add BIT/VARBIT arms and use
-  `crabka_pgtypes::usertype::column_type_for_oid` fallback (registry) for
+  `krabka_pgtypes::usertype::column_type_for_oid` fallback (registry) for
   user types.
 - Fail longer: 3 EXPLAIN blocks want `Unique -> Sort -> Append -> Values Scan on
   "*VALUES*_1"` (planner: sort-based dedupe for non-hashable type; Gres prints

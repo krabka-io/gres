@@ -62,7 +62,7 @@ crate root.
 The demo Stream role exposes:
 
 - CLI: `--streams-leave-heartbeat-timeout-ms`
-- environment: `CRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS`
+- environment: `KRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS`
 
 Precedence is CLI over environment over the typed five-second default. Clap
 parses `NonZeroU64`; the resolver constructs
@@ -74,7 +74,7 @@ early role-specific error. `run_stream` receives the typed value and passes it
 to `StreamsApp`.
 
 Only the `demo-stream` Compose service receives
-`CRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS`, with `${...:-5000}` as its
+`KRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS`, with `${...:-5000}` as its
 deployment default.
 
 There is no CRD field because the operator does not own or render a Client

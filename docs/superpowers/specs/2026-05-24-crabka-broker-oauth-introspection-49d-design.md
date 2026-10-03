@@ -4,7 +4,7 @@ Status: Draft
 Date: 2026-05-24
 Slice: 49d
 Pairs with operator slice(s): 50c (deferred; will land separately)
-Umbrella: [OAUTHBEARER full-parity roadmap](2026-05-23-crabka-oauth-parity-roadmap-design.md)
+Umbrella: [OAUTHBEARER full-parity roadmap](2026-05-23-krabka-oauth-parity-roadmap-design.md)
 
 ## Goal
 
@@ -270,7 +270,7 @@ use std::sync::Arc;
 use std::path::Path;
 use std::time::Duration;
 use async_trait::async_trait;
-use crabka_security::oauthbearer::{IntrospectionClient, IntrospectionError};
+use krabka_security::oauthbearer::{IntrospectionClient, IntrospectionError};
 
 #[derive(Debug)]
 pub struct ReqwestIntrospectionClient {
@@ -292,7 +292,7 @@ impl ReqwestIntrospectionClient {
     ) -> Result<Arc<dyn IntrospectionClient>, BuildError> {
         let mut builder = reqwest::Client::builder().timeout(timeout);
         if let Some(path) = tls_trust {
-            let cfg = crabka_security::build_client_config_from_pem(path)
+            let cfg = krabka_security::build_client_config_from_pem(path)
                 .map_err(BuildError::Tls)?;
             builder = builder.use_preconfigured_tls((*cfg).clone());
         }
@@ -338,7 +338,7 @@ impl IntrospectionClient for ReqwestIntrospectionClient {
 #[derive(Debug, thiserror::Error)]
 pub enum BuildError {
     #[error("tls trust: {0}")]
-    Tls(#[from] crabka_security::JwksTrustError),
+    Tls(#[from] krabka_security::JwksTrustError),
     #[error("reqwest: {0}")]
     Reqwest(String),
 }
@@ -440,7 +440,7 @@ The slice-50b TOML-render tests (`render_broker_toml_emits_jwks_tls_trust_when_t
 
 ## Acceptance criteria
 
-1. `cargo build -p crabka-security -p crabka-broker -p crabka-operator` clean.
+1. `cargo build -p krabka-security -p krabka-broker -p krabka-operator` clean.
 2. `cargo test --workspace` passes — including existing OAUTHBEARER tests, new 49d tests, and the slice-50b operator tests that flip from `jwks_tls_trust` to `idp_tls_trust`.
 3. `cargo fmt --check` + `cargo clippy --workspace --all-targets -- -D warnings` clean.
 4. CRD-drift gate clean (no operator CRD shape change — just the TOML rendered value).

@@ -8,7 +8,7 @@ updated while the cluster is live, the voter set is persisted in the
 `@metadata` log as control records, and new controllers auto-join.
 
 Supersedes the manual `change_membership` API from
-`2026-05-14-crabka-raft-membership-design.md`, which that spec explicitly
+`2026-05-14-krabka-raft-membership-design.md`, which that spec explicitly
 called out KIP-853 as the future direction for. The manual API stays as
 the low-level primitive the reconfiguration coordinator drives.
 

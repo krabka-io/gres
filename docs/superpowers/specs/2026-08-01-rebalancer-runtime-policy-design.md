@@ -8,9 +8,9 @@ configuration while preserving existing behavior.
 
 ## Configuration boundary
 
-Add one `RebalancerRuntimePolicy` in `crabka-rebalancer` and flatten matching
+Add one `RebalancerRuntimePolicy` in `krabka-rebalancer` and flatten matching
 options into the existing binary CLI. Every option has a
-`CRABKA_REBALANCER_*` environment variable and a matching Helm value because
+`KRABKA_REBALANCER_*` environment variable and a matching Helm value because
 the rebalancer is deployed by its standalone chart, not by a workload CRD.
 
 | Setting | Default |

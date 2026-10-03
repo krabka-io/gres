@@ -4,9 +4,9 @@
 
 **Goal:** Expose the topic-backed internal metadata client's operational transport and snapshot policy through validated UOM-backed TOML and Kafka CRD fields while preserving every existing default.
 
-**Architecture:** `crabka-remote-storage-topic` owns the validated transport policy and applies it at the Kafka client boundary. `crabka-broker` overlays standalone TOML values onto those defaults and shares the resulting policy between the RLMM and diskless WAL-index logs. `crabka-operator` validates CRD input by constructing the effective broker config, then renders parseable human-unit TOML.
+**Architecture:** `krabka-remote-storage-topic` owns the validated transport policy and applies it at the Kafka client boundary. `krabka-broker` overlays standalone TOML values onto those defaults and shares the resulting policy between the RLMM and diskless WAL-index logs. `krabka-operator` validates CRD input by constructing the effective broker config, then renders parseable human-unit TOML.
 
-**Tech Stack:** Rust, Tokio, `crabka-units`, `refined_type`, Serde/TOML, Kube `JsonSchema`, generated CRDs.
+**Tech Stack:** Rust, Tokio, `krabka-units`, `refined_type`, Serde/TOML, Kube `JsonSchema`, generated CRDs.
 
 ## Global Constraints
 
@@ -25,7 +25,7 @@
 
 ---
 
-### Task 1: Add validated transport policy to `crabka-remote-storage-topic`
+### Task 1: Add validated transport policy to `krabka-remote-storage-topic`
 
 **Files:**
 - Modify: `crates/remote-storage-topic/Cargo.toml`
@@ -120,7 +120,7 @@ before any network operation.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-remote-storage-topic config_ --locked
+  cargo test -p krabka-remote-storage-topic config_ --locked
 ```
 
 Expected: compilation fails because the new constants, fields, type, and
@@ -176,7 +176,7 @@ log. Then:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-remote-storage-topic --all-targets --locked
+  cargo test -p krabka-remote-storage-topic --all-targets --locked
 ```
 
 Expected: all 60 baseline tests plus the new policy tests pass.
@@ -184,7 +184,7 @@ Expected: all 60 baseline tests plus the new policy tests pass.
 - [x] **Step 8: Commit only this task**
 
 Inspect `git diff` and stage only this task's source files plus the
-`crabka-remote-storage-topic` dependency hunk in `Cargo.lock`.
+`krabka-remote-storage-topic` dependency hunk in `Cargo.lock`.
 
 ```bash
 git commit -m "feat(tiered): configure metadata transport"
@@ -207,7 +207,7 @@ git commit -m "feat(tiered): configure metadata transport"
 - Extends: `KafkaRlmmConfig`
 - Extends: `FileKafkaRlmmConfig`
 - Produces: `KafkaRlmmConfig::validate(&self) -> Result<(), BrokerError>`
-- Consumes: all five `crabka_remote_storage_topic` defaults
+- Consumes: all five `krabka_remote_storage_topic` defaults
 
 - [x] **Step 1: Write failing broker-default and validation tests**
 
@@ -260,9 +260,9 @@ non-finite time, zero queue capacity, and zero snapshot interval.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-broker kafka_rlmm --lib --locked
+  cargo test -p krabka-broker kafka_rlmm --lib --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-broker kafka_metadata_section --lib --locked
+  cargo test -p krabka-broker kafka_metadata_section --lib --locked
 ```
 
 Expected: compilation fails on missing config fields.
@@ -270,7 +270,7 @@ Expected: compilation fails on missing config fields.
 - [x] **Step 4: Extend broker configuration and reuse authoritative validation**
 
 Add the five transport fields to `KafkaRlmmConfig`, defaulting directly from
-the public `crabka_remote_storage_topic` constants. Implement
+the public `krabka_remote_storage_topic` constants. Implement
 `KafkaRlmmConfig::validate` by constructing a `KafkaMetadataLogConfig` with its
 transport values, calling its `validate`, mapping the error to
 `BrokerError::InvalidRuntimeConfig`, and then validating the snapshot interval
@@ -288,19 +288,19 @@ fields in policy tests.
 Add optional fields to `FileKafkaRlmmConfig`:
 
 ```rust
-#[serde(default, with = "crabka_units::serde_units::human::option_time")]
+#[serde(default, with = "krabka_units::serde_units::human::option_time")]
 #[schemars(with = "Option<String>")]
 pub topic_create_timeout: Option<Time>,
 
-#[serde(default, with = "crabka_units::serde_units::human::option_time")]
+#[serde(default, with = "krabka_units::serde_units::human::option_time")]
 #[schemars(with = "Option<String>")]
 pub fetch_max_wait: Option<Time>,
 
-#[serde(default, with = "crabka_units::serde_units::human::option_byte_size")]
+#[serde(default, with = "krabka_units::serde_units::human::option_byte_size")]
 #[schemars(with = "Option<String>")]
 pub fetch_max_bytes: Option<ByteSize>,
 
-#[serde(default, with = "crabka_units::serde_units::human::option_time")]
+#[serde(default, with = "krabka_units::serde_units::human::option_time")]
 #[schemars(with = "Option<String>")]
 pub fetch_retry_backoff: Option<Time>,
 
@@ -308,7 +308,7 @@ pub fetch_retry_backoff: Option<Time>,
 #[schemars(range(min = 1))]
 pub event_queue_capacity: Option<usize>,
 
-#[serde(default, with = "crabka_units::serde_units::human::option_time")]
+#[serde(default, with = "krabka_units::serde_units::human::option_time")]
 #[schemars(with = "Option<String>")]
 pub snapshot_interval: Option<Time>,
 ```
@@ -324,11 +324,11 @@ call `validate()` before assigning `RlmmKind::TopicBacked`.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-broker kafka_rlmm --lib --locked
+  cargo test -p krabka-broker kafka_rlmm --lib --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-broker kafka_metadata_section --lib --locked
+  cargo test -p krabka-broker kafka_metadata_section --lib --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-broker config --lib --locked
+  cargo test -p krabka-broker config --lib --locked
 ```
 
 - [x] **Step 7: Commit only this task**
@@ -367,7 +367,7 @@ Add a unit test next to the existing RLMM bootstrap tests. Create one custom
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-broker metadata_log_config --lib --locked
+  cargo test -p krabka-broker metadata_log_config --lib --locked
 ```
 
 Expected: compilation fails because the helper does not exist.
@@ -381,7 +381,7 @@ fn metadata_log_config(
     config: &KafkaRlmmConfig,
     topic: String,
     client_id: String,
-) -> crabka_remote_storage_topic::KafkaMetadataLogConfig
+) -> krabka_remote_storage_topic::KafkaMetadataLogConfig
 ```
 
 Copy bootstrap, topic identity, partitions, replication, client ID, security,
@@ -396,11 +396,11 @@ value; do not duplicate the policy mapping.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-broker metadata_log_config --lib --locked
+  cargo test -p krabka-broker metadata_log_config --lib --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-broker rlmm --lib --locked
+  cargo test -p krabka-broker rlmm --lib --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-broker diskless_index --lib --locked
+  cargo test -p krabka-broker diskless_index --lib --locked
 ```
 
 - [x] **Step 5: Commit only the runtime propagation**
@@ -461,7 +461,7 @@ event_queue_capacity = 2048
 snapshot_interval = "90s"
 ```
 
-Parse the rendered output through `crabka_broker::FileConfig`, apply it to a
+Parse the rendered output through `krabka_broker::FileConfig`, apply it to a
 default `BrokerConfig`, and assert all six effective values. This is the
 behavioral proof that the CRD surface reaches broker runtime configuration.
 
@@ -469,9 +469,9 @@ behavioral proof that the CRD surface reaches broker runtime configuration.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator topic_metadata --lib --locked
+  cargo test -p krabka-operator topic_metadata --lib --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator render_broker_toml_emits_kafka_metadata --lib --locked
+  cargo test -p krabka-operator render_broker_toml_emits_kafka_metadata --lib --locked
 ```
 
 Expected: compilation fails on missing CRD fields.
@@ -500,7 +500,7 @@ Migrate unrelated `TopicMetadataManagerSpec` literals with
 
 - [x] **Step 6: Render parseable human-unit TOML**
 
-Import `crabka_units::fmt::Human as _`. For each present dimensioned value,
+Import `krabka_units::fmt::Human as _`. For each present dimensioned value,
 render the human adapter inside TOML quotes:
 
 ```rust
@@ -521,9 +521,9 @@ needed.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator topic_metadata --lib --locked
+  cargo test -p krabka-operator topic_metadata --lib --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator render_broker_toml_emits_kafka_metadata --lib --locked
+  cargo test -p krabka-operator render_broker_toml_emits_kafka_metadata --lib --locked
 ```
 
 - [x] **Step 8: Regenerate only the Kafka CRD safely**
@@ -533,12 +533,12 @@ repository script directly over every deployed CRD. Generate twice into
 separate temporary directories:
 
 ```bash
-crd_tmp_a="$(mktemp -d /var/tmp/crabka-crd-a.XXXXXX)"
-crd_tmp_b="$(mktemp -d /var/tmp/crabka-crd-b.XXXXXX)"
+crd_tmp_a="$(mktemp -d /var/tmp/krabka-crd-a.XXXXXX)"
+crd_tmp_b="$(mktemp -d /var/tmp/krabka-crd-b.XXXXXX)"
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -p crabka-operator --locked -- gen-crds "$crd_tmp_a"
+  cargo run -p krabka-operator --locked -- gen-crds "$crd_tmp_a"
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -p crabka-operator --locked -- gen-crds "$crd_tmp_b"
+  cargo run -p krabka-operator --locked -- gen-crds "$crd_tmp_b"
 diff -u "$crd_tmp_a/crabka.io_kafkas.yaml" "$crd_tmp_b/crabka.io_kafkas.yaml"
 ```
 
@@ -546,13 +546,13 @@ After deterministic output is proven, mechanically replace only
 `deploy/crds/crabka.io_kafkas.yaml` with the generated Kafka file. Verify its
 diff contains only the six new schema properties and descriptions. Remove
 only the two exact temporary directories after checking their resolved
-`/var/tmp/crabka-crd-` prefixes.
+`/var/tmp/krabka-crd-` prefixes.
 
 - [x] **Step 9: Run operator all-targets**
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator --all-targets --locked
+  cargo test -p krabka-operator --all-targets --locked
 ```
 
 - [x] **Step 10: Commit only the operator and Kafka CRD changes**
@@ -586,11 +586,11 @@ Do not describe fixed semantic constants as tunables.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-remote-storage-topic --all-targets --locked
+  cargo test -p krabka-remote-storage-topic --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-broker --all-targets --locked
+  cargo test -p krabka-broker --all-targets --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator --all-targets --locked
+  cargo test -p krabka-operator --all-targets --locked
 ```
 
 - [x] **Step 3: Format and run strict workspace Clippy**
@@ -611,9 +611,9 @@ with no policy literal left in runtime paths. Record the exact commands and
 counts in `docs/configuration-audit.md`.
 
 ```bash
-crd_verify_tmp="$(mktemp -d /var/tmp/crabka-crd-verify.XXXXXX)"
+crd_verify_tmp="$(mktemp -d /var/tmp/krabka-crd-verify.XXXXXX)"
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -p crabka-operator --locked -- gen-crds "$crd_verify_tmp"
+  cargo run -p krabka-operator --locked -- gen-crds "$crd_verify_tmp"
 diff -u \
   deploy/crds/crabka.io_kafkas.yaml \
   "$crd_verify_tmp/crabka.io_kafkas.yaml"
@@ -640,7 +640,7 @@ rg -n \
 ```
 
 Remove only the exact `crd_verify_tmp` directory after confirming it resolves
-under `/var/tmp/crabka-crd-verify.`.
+under `/var/tmp/krabka-crd-verify.`.
 
 - [x] **Step 5: Review scope and plan completeness**
 

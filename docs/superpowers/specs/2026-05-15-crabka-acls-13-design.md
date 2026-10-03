@@ -33,7 +33,7 @@ host, resource, operation) -> Allow | Deny`.
 
 This slice ports that behavior to Crabka: one `MetadataRecord`
 variant per ACL entry (additive), one delete-by-filter variant, and a
-pure-logic `crabka_broker::authorizer::authorize` function that every
+pure-logic `krabka_broker::authorizer::authorize` function that every
 gated handler consults before doing real work.
 
 The slice also surfaces three new wire api_keys for `kafka-acls.sh`
@@ -47,10 +47,10 @@ The schemas for these messages already exist in
 
 | Crate | Change |
 |-------|--------|
-| `crabka-metadata` | New `AclEntry` + `AclEntryFilter`; new enums (`ResourceType`, `PatternType`, `AclOperation`, `PermissionType`); two new `MetadataRecord` variants; image storage + accessors. |
-| `crabka-broker` | New `authorizer.rs` (pure-logic decision algorithm); 3 new wire handlers (`CreateAcls`, `DeleteAcls`, `DescribeAcls`); handler wiring across ~16 existing handlers. |
-| `crabka-cli` | Optional `--add-acl` flag on `format` to seed ACLs at bootstrap. |
-| `crabka-protocol` | No code change — the 3 ACL message types are already generated. |
+| `krabka-metadata` | New `AclEntry` + `AclEntryFilter`; new enums (`ResourceType`, `PatternType`, `AclOperation`, `PermissionType`); two new `MetadataRecord` variants; image storage + accessors. |
+| `krabka-broker` | New `authorizer.rs` (pure-logic decision algorithm); 3 new wire handlers (`CreateAcls`, `DeleteAcls`, `DescribeAcls`); handler wiring across ~16 existing handlers. |
+| `krabka-cli` | Optional `--add-acl` flag on `format` to seed ACLs at bootstrap. |
+| `krabka-protocol` | No code change — the 3 ACL message types are already generated. |
 
 ### ACL entry shape
 
@@ -177,7 +177,7 @@ Returns LITERAL entries at `(rt, rn)` plus PREFIXED entries whose
 
 ## Components
 
-### `crabka-metadata`
+### `krabka-metadata`
 
 - `src/acl.rs` (new) — enums + `AclEntry` + `AclEntryFilter`.
 - `src/records.rs` — append:
@@ -190,7 +190,7 @@ Returns LITERAL entries at `(rt, rn)` plus PREFIXED entries whose
   - `validate` returns `Ok(())` for both (no pre-conditions; idempotent under last-write semantics).
   - Accessors: `matching_acls(rt, rn)`, `all_acls()`.
 
-### `crabka-broker::authorizer` (new file, ~150 lines)
+### `krabka-broker::authorizer` (new file, ~150 lines)
 
 ```rust
 pub struct AuthorizationRequest<'a> {
@@ -221,7 +221,7 @@ pub fn authorize_topics<'a>(
 ) -> HashMap<&'a str, AuthorizationResult>;
 ```
 
-### `crabka-broker` handlers
+### `krabka-broker` handlers
 
 Three new handlers:
 
@@ -237,7 +237,7 @@ Dispatch table additions: `network/dispatch.rs::handler_body_flexible`
 gains 29/30/31 entries (all flexible from v2+). `api_versions.rs`
 `supported_apis()` adds the three api_keys.
 
-### `crabka-cli`
+### `krabka-cli`
 
 `format` subcommand gains a `--add-acl` flag, parseable as:
 
@@ -338,7 +338,7 @@ reads and submits them on first start (slice 12b T8).
 | No matching ACL + no super-user + ACL store non-empty | DENY (default) — same wire shape as explicit DENY |
 
 Logged at `debug` level — auth-denies are normal traffic. Operators
-wanting an audit trail filter for `crabka_broker::authorizer=debug`.
+wanting an audit trail filter for `krabka_broker::authorizer=debug`.
 
 ### `CreateAcls` validation
 
@@ -378,7 +378,7 @@ sets `super_user_name`, deny-by-default kicks in.
 
 ## Testing
 
-### Unit tests (`crabka-broker::authorizer`)
+### Unit tests (`krabka-broker::authorizer`)
 
 The matrix lives here — pure-logic, no I/O:
 
@@ -396,7 +396,7 @@ The matrix lives here — pure-logic, no I/O:
 - `mixed_pattern_types_independent`
 - `authorize_topics_batch_returns_per_topic_decisions`
 
-### Unit tests (`crabka-metadata::acl` + `image`)
+### Unit tests (`krabka-metadata::acl` + `image`)
 
 - `acl_entry_round_trip` for each enum variant.
 - `acl_entry_filter_round_trip`.

@@ -1,6 +1,6 @@
 # Investigation: why range 0 costs ~3.5× less CPU per write than data ranges
 
-*Follow-up to the `crabka-gres` scalability harness (`crates/gres-loadtest`, PR #896).*
+*Follow-up to the `krabka-gres` scalability harness (`crates/gres-loadtest`, PR #896).*
 
 ## Summary
 
@@ -84,7 +84,7 @@ self.ensure_global_readable().await?;         // range 0 caught up before the gs
 (`crates/gres-ranges/src/barrier.rs`):
 
 1. `sample_end_after_call_begins()` →
-   `crabka_gres_substrate::recovery::live_committed_end()`, which
+   `krabka_gres_substrate::recovery::live_committed_end()`, which
    **`AdminClient::connect_secured` (a new broker TLS connection) + `resolve_topic_uuid`
    + opens a reader connection + fetches range 0's committed tail** to find the end
    offset, and
@@ -204,7 +204,7 @@ stable-end exclusion, pruning) plus an end-to-end barrier test in
 
 ## Tooling used
 
-- `crates/gres-loadtest`: added `CRABKA_GRES_LOADTEST_CHECKPOINT_NODES`
+- `crates/gres-loadtest`: added `KRABKA_GRES_LOADTEST_CHECKPOINT_NODES`
   (`all` | `none`, default = node0-only) to A/B the checkpoint config without
   rebuilding — this produced E1 and ruled checkpointing out.
 - A `eu-stack`-based running-thread sampler (no `perf` on this kernel) to diff the

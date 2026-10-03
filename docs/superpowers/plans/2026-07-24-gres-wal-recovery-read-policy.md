@@ -13,8 +13,8 @@
 limits, and consecutive empty-fetch retries through CLI/environment and the
 fleet CRD.
 
-**Architecture:** `crabka-client-core::IsolatedFetch` carries the whole-response
-limit instead of hiding 50 MiB. `crabka-gres-substrate` owns a validated
+**Architecture:** `krabka-client-core::IsolatedFetch` carries the whole-response
+limit instead of hiding 50 MiB. `krabka-gres-substrate` owns a validated
 `RecoveryReadPolicy` and the recovery defaults. Gres resolves optional parser
 values once and applies the policy through one recovery-config constructor
 helper. The operator validates four optional `spec.compute` fields and always
@@ -58,7 +58,7 @@ generated Kubernetes CRDs.
 **Interfaces:**
 
 - Produces:
-  `crabka_client_core::DEFAULT_FETCH_RESPONSE_MAX_BYTES: i32`
+  `krabka_client_core::DEFAULT_FETCH_RESPONSE_MAX_BYTES: i32`
 - Produces: `IsolatedFetch::max_bytes: i32`
 - Produces:
   - `DEFAULT_WAL_RECOVERY_FETCH_MAX_WAIT_MS`
@@ -77,7 +77,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core build_fetch_request_preserves_single_partition_settings --lib
+  cargo test -p krabka-client-core build_fetch_request_preserves_single_partition_settings --lib
 ```
 
 Expected: compile failure because `IsolatedFetch` has no `max_bytes`.
@@ -96,10 +96,10 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core --lib
+  cargo test -p krabka-client-core --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo check -p crabka-client-streams -p crabka-gres-control \
-    -p crabka-gres-fdw -p crabka-gres
+  cargo check -p krabka-client-streams -p krabka-gres-control \
+    -p krabka-gres-fdw -p krabka-gres
 ```
 
 - [ ] **Step 3: Add RED substrate policy tests**
@@ -119,7 +119,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-substrate recovery_read_policy --lib
+  cargo test -p krabka-gres-substrate recovery_read_policy --lib
 ```
 
 Expected: compile failure because the policy does not exist.
@@ -146,11 +146,11 @@ introduce overflow. Keep `END_SAMPLE_MAX_WAIT_MS = 0`.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core -p crabka-gres-substrate --no-fail-fast
+  cargo test -p krabka-client-core -p krabka-gres-substrate --no-fail-fast
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-client-core -p crabka-gres-substrate \
-    -p crabka-client-streams -p crabka-gres-control -p crabka-gres-fdw \
-    -p crabka-gres --all-targets --all-features -- -D warnings
+  cargo clippy -p krabka-client-core -p krabka-gres-substrate \
+    -p krabka-client-streams -p krabka-gres-control -p krabka-gres-fdw \
+    -p krabka-gres --all-targets --all-features -- -D warnings
 cargo fmt --all -- --check
 git diff --check
 ```
@@ -200,7 +200,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres wal_recovery_read_policy --lib
+  cargo test -p krabka-gres wal_recovery_read_policy --lib
 ```
 
 Expected: compile failure because the parser fields do not exist.
@@ -248,13 +248,13 @@ endpoint, checkpoint, staging, and replay-seed builders.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres wal_recovery --lib
+  cargo test -p krabka-gres wal_recovery --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres --no-fail-fast
+  cargo test -p krabka-gres --no-fail-fast
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-gres --all-targets --all-features -- -D warnings
+  cargo clippy -p krabka-gres --all-targets --all-features -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-gres -- --help
+  cargo run -q -p krabka-gres -- --help
 cargo fmt --all -- --check
 git diff --check
 ```
@@ -301,7 +301,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator compute_wal_recovery --lib
+  cargo test -p krabka-operator compute_wal_recovery --lib
 ```
 
 Expected: compile failure because the CRD fields do not exist.
@@ -332,10 +332,10 @@ multi-range mode.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-operator -- gen-crds deploy/crds
+  cargo run -q -p krabka-operator -- gen-crds deploy/crds
 crd_verify_dir="$(mktemp -d)"
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-operator -- gen-crds "$crd_verify_dir"
+  cargo run -q -p krabka-operator -- gen-crds "$crd_verify_dir"
 diff -ru deploy/crds "$crd_verify_dir"
 ```
 
@@ -343,9 +343,9 @@ diff -ru deploy/crds "$crd_verify_dir"
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator --no-fail-fast
+  cargo test -p krabka-operator --no-fail-fast
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-operator --all-targets --all-features -- -D warnings
+  cargo clippy -p krabka-operator --all-targets --all-features -- -D warnings
 cargo fmt --all -- --check
 git diff --check
 ```
@@ -399,18 +399,18 @@ Require:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-core -p crabka-gres-substrate \
-    -p crabka-gres-control -p crabka-gres-fdw -p crabka-gres \
-    -p crabka-operator --no-fail-fast
+  cargo test -p krabka-client-core -p krabka-gres-substrate \
+    -p krabka-gres-control -p krabka-gres-fdw -p krabka-gres \
+    -p krabka-operator --no-fail-fast
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-client-core -p crabka-gres-substrate \
-    -p crabka-gres-control -p crabka-gres-fdw -p crabka-gres \
-    -p crabka-operator --all-targets --all-features -- -D warnings
+  cargo clippy -p krabka-client-core -p krabka-gres-substrate \
+    -p krabka-gres-control -p krabka-gres-fdw -p krabka-gres \
+    -p krabka-operator --all-targets --all-features -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-gres -- --help
+  cargo run -q -p krabka-gres -- --help
 crd_audit_dir="$(mktemp -d)"
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-operator -- gen-crds "$crd_audit_dir"
+  cargo run -q -p krabka-operator -- gen-crds "$crd_audit_dir"
 diff -ru deploy/crds "$crd_audit_dir"
 cargo fmt --all -- --check
 git diff --check

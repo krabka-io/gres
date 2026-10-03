@@ -19,10 +19,10 @@
 - `NetworkPolicyPeer`: Crabka-defined subset of `networking.k8s.io/v1.NetworkPolicyPeer` carrying `pod_selector` + `namespace_selector` (both `Option<LabelSelector>`). `ipBlock` is omitted; a future slice can add it.
 - Generated `NetworkPolicy` (one per cluster, named `<cluster>-broker-policy`):
   - `policyTypes: ["Ingress"]`.
-  - `podSelector` matches every cluster pod (broker/controller/combined) via `app.kubernetes.io/name=crabka-broker` + `app.kubernetes.io/instance=<name>`.
+  - `podSelector` matches every cluster pod (broker/controller/combined) via `app.kubernetes.io/name=krabka-broker` + `app.kubernetes.io/instance=<name>`.
   - Ingress rules, in stable order:
     1. **Inter-broker traffic** — pod-to-pod from the same selector on the inter-broker listener port. Always allowed.
-    2. **Operator auto-allow** — pods labeled `app.kubernetes.io/name=crabka-operator` on every listener port. One rule per listener.
+    2. **Operator auto-allow** — pods labeled `app.kubernetes.io/name=krabka-operator` on every listener port. One rule per listener.
     3. **Per-listener peer rules** — one rule per listener whose `network_policy_peers` is not `Some([])`; allow-all when `None`, restricted when `Some(peers)`.
     4. **Metrics port (9404)** — allow-all rule when `spec.metricsConfig` is set.
 - New status condition `NetworkPolicyReady` on `KafkaStatus.conditions`:
@@ -152,7 +152,7 @@ pub(crate) fn render_network_policy(
     let labels = common_labels(&name, &owner.spec.kafka_version, None);
 
     // Pod selector: every cluster pod (broker/controller/combined) gets
-    // app.kubernetes.io/name=crabka-broker and instance=<name>. A single
+    // app.kubernetes.io/name=krabka-broker and instance=<name>. A single
     // selector covers all node-pool roles.
     let mut pod_match = BTreeMap::new();
     pod_match.insert("app.kubernetes.io/name".into(), APP_LABEL.into());
@@ -363,7 +363,7 @@ Append `np_condition` to the existing `conditions` vector before `patch_status`.
 
 ## 5. Helm chart RBAC
 
-`charts/crabka-operator/templates/clusterrole.yaml` gains:
+`charts/krabka-operator/templates/clusterrole.yaml` gains:
 
 ```yaml
   - apiGroups: ["networking.k8s.io"]
@@ -399,13 +399,13 @@ In `crd/listener.rs::tests`:
 In `controller/network_policy.rs::tests` (renderer-pure):
 
 - `render_emits_inter_broker_rule` — even with zero listeners (synthesized default only), assert one rule with `from: self_peer` on `BROKER_PORT`.
-- `render_emits_operator_allow_rule_per_listener` — given two listeners on ports 9092 + 9094, assert two operator-allow rules (one each port) with `from: [{pod_selector: {app.kubernetes.io/name: crabka-operator}}]`.
+- `render_emits_operator_allow_rule_per_listener` — given two listeners on ports 9092 + 9094, assert two operator-allow rules (one each port) with `from: [{pod_selector: {app.kubernetes.io/name: krabka-operator}}]`.
 - `render_unset_peers_listener_emits_allow_all` — listener with `network_policy_peers=None` → rule with `from: vec![]` on that port.
 - `render_empty_peers_listener_skips_port_rule` — listener with `network_policy_peers=Some(vec![])` → no per-listener rule for that port (only operator-allow + inter-broker if applicable).
 - `render_non_empty_peers_listener_restricts` — listener with `Some(vec![peer])` → rule with `from: vec![converted_peer]`.
 - `render_metrics_enabled_emits_metrics_port_rule` — `metrics_enabled=true` → rule for `:9404` with `from: vec![]`.
 - `render_metrics_disabled_no_metrics_port_rule` — `metrics_enabled=false` → no `:9404` rule.
-- `render_pod_selector_matches_pool_pods` — `spec.podSelector.matchLabels == {app.kubernetes.io/name: crabka-broker, app.kubernetes.io/instance: <name>}`.
+- `render_pod_selector_matches_pool_pods` — `spec.podSelector.matchLabels == {app.kubernetes.io/name: krabka-broker, app.kubernetes.io/instance: <name>}`.
 - `render_policy_types_ingress_only` — `policy_types == ["Ingress"]`, `egress` is `None`.
 - `render_owner_ref_set` — owner-ref to the parent Kafka, `controller=true`.
 - `render_name_and_namespace` — `<cluster>-broker-policy` in the parent's namespace.
@@ -415,7 +415,7 @@ In `controller/network_policy.rs::tests` (renderer-pure):
 Five new cases using the existing mock kube-client harness:
 
 - `network_policy_disabled_path_no_apply` — `spec.network_policy=None`, no prior `NetworkPolicyReady=Available` condition; assert zero PATCH and zero DELETE on `…/networkpolicies/<name>-broker-policy`; status condition `NetworkPolicyReady=False reason=Disabled`.
-- `network_policy_enabled_path_applies_one_resource` — `Some(NetworkPolicySpec::default())`; assert exactly one Patch::Apply on `…/networkpolicies/<name>-broker-policy` with `field_manager=crabka-operator, force=true`; status condition `NetworkPolicyReady=True reason=Available`.
+- `network_policy_enabled_path_applies_one_resource` — `Some(NetworkPolicySpec::default())`; assert exactly one Patch::Apply on `…/networkpolicies/<name>-broker-policy` with `field_manager=krabka-operator, force=true`; status condition `NetworkPolicyReady=True reason=Available`.
 - `network_policy_transition_deletes_on_disable` — fixture Kafka has `status.conditions[NetworkPolicyReady].reason=Available` + `spec.network_policy=None`; assert one DELETE call on `…/networkpolicies/<name>-broker-policy`.
 - `cold_disabled_no_delete_attempt` — no prior `Available` condition, `spec.network_policy=None`; assert zero DELETE calls.
 - `network_policy_listener_deny_all_skips_port_rule` — listener with `network_policy_peers=Some(vec![])`; the rendered NetworkPolicy body in the apply payload does NOT contain a per-listener rule for that listener's port (but DOES contain the operator-allow rule for it).
@@ -480,7 +480,7 @@ crates/operator/src/controller/
 crates/operator/tests/
 ├── reconcile_kafka.rs             # MODIFIED — 5 new reconcile tests
 
-charts/crabka-operator/templates/
+charts/krabka-operator/templates/
 ├── clusterrole.yaml               # MODIFIED — networking.k8s.io/networkpolicies rules
 
 deploy/crds/
@@ -521,11 +521,11 @@ Roughly: T1 ‖ T4 → T2 → T3 → T5 ‖ T6.
 
 ## 9. Acceptance criteria
 
-1. `cargo build -p crabka-operator` clean.
-2. `cargo test -p crabka-operator` green (existing + ~16 new unit / reconcile tests).
+1. `cargo build -p krabka-operator` clean.
+2. `cargo test -p krabka-operator` green (existing + ~16 new unit / reconcile tests).
 3. `cargo clippy --workspace --all-targets -- -D warnings` clean.
 4. `cargo xtask gen-crds` produces no diff.
-5. `helm lint charts/crabka-operator` passes.
+5. `helm lint charts/krabka-operator` passes.
 6. operator-e2e (kind + Calico): a peer-restricted listener blocks unlabeled clients (nc timeout) and allows labeled clients (nc exit 0); `kubectl get networkpolicy demo-broker-policy` shows the rendered rules.
 7. Upgrade smoke: pre-existing `Kafka` without `networkPolicy` does NOT roll any broker pods on chart upgrade; `NetworkPolicyReady=False reason=Disabled` is set.
 
@@ -539,7 +539,7 @@ Roughly: T1 ‖ T4 → T2 → T3 → T5 ‖ T6.
 - **Unset peers vs empty-list peers semantics?** Mirrors Strimzi: unset = allow-all (no restriction), empty list = deny-all.
 - **Operator auto-allow rule?** Yes. Without it, a user who sets restrictive peers on every listener silently locks the operator out of slice-22 controlled-shutdown and any future admin-client work.
 - **Metrics port (9404) handling?** Allow-all when `metricsConfig` is set. A future field `spec.networkPolicy.metricsPeers` can tighten if needed.
-- **Pod selector scope: broker-only vs broker+controller?** Both. The shared `app.kubernetes.io/name=crabka-broker` label (set in `common_labels`) covers all node-pool roles with one selector; per-role split adds nothing today.
+- **Pod selector scope: broker-only vs broker+controller?** Both. The shared `app.kubernetes.io/name=krabka-broker` label (set in `common_labels`) covers all node-pool roles with one selector; per-role split adds nothing today.
 - **`ipBlock` peer support?** Out. The two `LabelSelector` fields are sufficient for the in-cluster case; external clients reach brokers via NodePort/LoadBalancer Services and `NetworkPolicy` only governs pod-network ingress anyway.
 - **Egress NetworkPolicy?** Out. Crabka brokers' egress is currently unrestricted in all examples; restricting it is a separate slice.
 - **Owner-ref delete cascade vs explicit cleanup?** Both. Owner-ref handles parent-delete (no leaks on `kubectl delete kafka demo`); the annotation-gated cleanup handles the `networkPolicy: Some(…) → None` transition where the parent is alive.

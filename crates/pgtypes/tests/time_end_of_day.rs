@@ -10,7 +10,7 @@
 //! `DateStyle = 'ISO, MDY'` and `TimeZone = 'Etc/UTC'`.
 
 use assert2::assert;
-use crabka_pgtypes::{
+use krabka_pgtypes::{
     TypeError,
     datetime::{
         Interval, PgTime, combine_date_time, make_time, parse_time, parse_timestamp, parse_timetz,

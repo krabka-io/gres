@@ -73,7 +73,7 @@ use std::{
 };
 
 use anyhow::Context as _;
-use crabka_units::{fmt::Human as _, prelude::*};
+use krabka_units::{fmt::Human as _, prelude::*};
 use futures::future;
 use hdrhistogram::Histogram;
 use rand::{RngExt, SeedableRng, rngs::SmallRng};

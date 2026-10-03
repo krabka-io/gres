@@ -21,7 +21,7 @@
 - Retain `Duration` inputs on public `KafkaStreams` and `StreamsMembership` builders.
 - Validate `KafkaStreams` before broker construction and `StreamsMembership` before schema prewarm or broker construction.
 - Retry only `COORDINATOR_LOAD_IN_PROGRESS`; add no jitter, exponential backoff, retry limit, or new retryable response.
-- Use `--streams-join-retry-backoff-ms` and `CRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS`.
+- Use `--streams-join-retry-backoff-ms` and `KRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS`.
 - Preserve CLI over environment over typed-default precedence.
 - Resolve and validate demo configuration before telemetry or external I/O.
 - Expose the deployment variable only on `demo-stream`, defaulting to `200`.
@@ -196,7 +196,7 @@ fn join_retry_backoff_uses_typed_default_and_override() {
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams join_retry_backoff --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams join_retry_backoff --locked
 ```
 
 Expected: compilation fails because `StreamsJoinRetryBackoff`,
@@ -322,10 +322,10 @@ Re-export `DEFAULT_STREAMS_JOIN_RETRY_BACKOFF` and
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams join_retry --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams low_level_runtime_validation_names_the_invalid_field --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-client-streams --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams join_retry --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams low_level_runtime_validation_names_the_invalid_field --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-client-streams --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all -- --check
 git diff --check
 git diff -- Cargo.lock
@@ -361,7 +361,7 @@ git commit -m "feat(streams): configure join retry backoff"
 **Interfaces:**
 - Consumes: `StreamsJoinRetryBackoff`
 - Produces: `--streams-join-retry-backoff-ms`
-- Produces: `CRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS`
+- Produces: `KRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS`
 - Produces: typed `StreamsJoinRetryBackoff` passed to `StreamsApp`
 
 - [ ] **Step 1: Add failing hermetic subprocess tests**
@@ -381,7 +381,7 @@ fn demo() -> Command {
 fn environment_is_used_and_cli_wins_before_external_io() {
     let environment = demo()
         .args(["--role", "produce"])
-        .env("CRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS", "37")
+        .env("KRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS", "37")
         .output()
         .expect("run demo");
     assert!(!environment.status.success());
@@ -398,7 +398,7 @@ fn environment_is_used_and_cli_wins_before_external_io() {
             "--streams-join-retry-backoff-ms",
             "41",
         ])
-        .env("CRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS", "37")
+        .env("KRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS", "37")
         .output()
         .expect("run demo");
     assert!(!cli.status.success());
@@ -413,7 +413,7 @@ fn environment_is_used_and_cli_wins_before_external_io() {
 fn zero_fails_early_and_help_lists_the_flag_once() {
     let zero = demo()
         .args(["--role", "stream"])
-        .env("CRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS", "0")
+        .env("KRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS", "0")
         .output()
         .expect("run demo");
     assert!(!zero.status.success());
@@ -437,12 +437,12 @@ In `streams_runtime_policy_is_configurable_only_on_the_stream_role`, require:
 
 ```rust
 assert2::assert!(stream.contains(
-    "CRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS: \"${CRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS:-200}\""
+    "KRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS: \"${KRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS:-200}\""
 ));
 ```
 
 Also assert Produce and Consume service blocks do not contain
-`CRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS`.
+`KRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS`.
 
 - [ ] **Step 3: Run Task 2 tests and record RED**
 
@@ -465,7 +465,7 @@ In `main.rs`:
 
 ```rust
 /// Client Streams initial join retry backoff in milliseconds.
-#[arg(long, env = "CRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS")]
+#[arg(long, env = "KRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS")]
 streams_join_retry_backoff_ms: Option<NonZeroU64>,
 ```
 
@@ -551,7 +551,7 @@ fn streams_join_retry_backoff_uses_default_and_cli_override() {
 In the `demo-stream` environment block, add:
 
 ```yaml
-CRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS: "${CRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS:-200}"
+KRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS: "${KRABKA_DEMO_STREAMS_JOIN_RETRY_BACKOFF_MS:-200}"
 ```
 
 Do not add it to anchors or any other service.
@@ -667,8 +667,8 @@ Append `## Client Streams Join Retry Backoff` to
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams -p observability-demo-app --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-client-streams -p observability-demo-app --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams -p observability-demo-app --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-client-streams -p observability-demo-app --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all -- --check
 git diff --check
 git diff -- Cargo.lock

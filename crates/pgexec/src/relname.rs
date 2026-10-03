@@ -13,9 +13,9 @@
 
 use std::sync::LazyLock;
 
-use crabka_pgcatalog::{CatalogError, RelationName};
-use crabka_pgkv::Kv;
-use crabka_pgparser::ast::RelationRef;
+use krabka_pgcatalog::{CatalogError, RelationName};
+use krabka_pgkv::Kv;
+use krabka_pgparser::ast::RelationRef;
 
 use crate::{error::ExecError, search_path::SearchPath};
 
@@ -136,7 +136,7 @@ impl ResolutionScope {
     /// This session's temporary namespace, whether or not it exists yet.
     #[must_use]
     pub fn temp_schema(&self) -> String {
-        crabka_pgcatalog::temp_schema_name(self.backend_id)
+        krabka_pgcatalog::temp_schema_name(self.backend_id)
     }
 
     /// The schemas an unqualified name is looked for in, in order.
@@ -180,7 +180,7 @@ impl ResolutionScope {
         let mut schemas = Vec::with_capacity(explicit.len() + 2);
         // A session that has created no temporary relation has no temporary
         // namespace, and nothing shadows.
-        if !self.search_path.names_temp_schema(&temp) && crabka_pgcatalog::schema_exists(kv, &temp)?
+        if !self.search_path.names_temp_schema(&temp) && krabka_pgcatalog::schema_exists(kv, &temp)?
         {
             schemas.push(temp);
         }
@@ -220,11 +220,11 @@ impl ResolutionScope {
         // name in every statement, and every row of a `\d` listing. Asking the
         // catalog per entry for the role that already holds everything would put
         // a role-catalog scan there for no answer it can change.
-        let unrestricted = role == crabka_pgcatalog::BOOTSTRAP_ROLE;
+        let unrestricted = role == krabka_pgcatalog::BOOTSTRAP_ROLE;
         let temp = self.temp_schema();
         let mut schemas = Vec::new();
         for name in self.search_path.expanded(&self.user, &temp) {
-            if !crabka_pgcatalog::schema_exists(kv, &name)? {
+            if !krabka_pgcatalog::schema_exists(kv, &name)? {
                 continue;
             }
             // The session's own temporary namespace is searched however it was
@@ -236,7 +236,7 @@ impl ResolutionScope {
             // it — verified against `postgres:18.4`.
             if unrestricted
                 || name == temp
-                || crabka_pgcatalog::has_schema_privilege(kv, &name, &role, "USAGE")?
+                || krabka_pgcatalog::has_schema_privilege(kv, &name, &role, "USAGE")?
             {
                 schemas.push(name);
             }
@@ -290,12 +290,12 @@ pub fn resolve_relation(
     if let Some(written) = &reference.schema {
         // `pg_temp` is an alias for whichever namespace is this session's, not
         // a schema in its own right.
-        let schema = if written == crabka_pgcatalog::PG_TEMP_ALIAS {
+        let schema = if written == krabka_pgcatalog::PG_TEMP_ALIAS {
             temp.clone()
         } else {
             written.clone()
         };
-        if creating && crabka_pgcatalog::is_temp_schema(&schema) && schema != temp {
+        if creating && krabka_pgcatalog::is_temp_schema(&schema) && schema != temp {
             return Err(ExecError::InvalidTableDefinition(
                 "cannot create relations in temporary schemas of other sessions".into(),
             ));
@@ -312,7 +312,7 @@ pub fn resolve_relation(
             disposition == SchemaDisposition::TemporaryCreation && schema == temp;
         if disposition != SchemaDisposition::Reference
             && !creates_the_namespace
-            && !crabka_pgcatalog::schema_exists(kv, &schema)?
+            && !krabka_pgcatalog::schema_exists(kv, &schema)?
         {
             // The report names the qualifier as written, so `pg_temp` is
             // reported as `pg_temp`.
@@ -324,8 +324,8 @@ pub fn resolve_relation(
         // `SELECT * FROM pg_temp.nothere` is `relation "pg_temp.nothere" does
         // not exist`, never the expanded namespace's name.
         if !creating
-            && written == crabka_pgcatalog::PG_TEMP_ALIAS
-            && !crabka_pgcatalog::relation_exists(kv, &resolved)?
+            && written == krabka_pgcatalog::PG_TEMP_ALIAS
+            && !krabka_pgcatalog::relation_exists(kv, &resolved)?
         {
             return Ok(RelationName::new(written.clone(), reference.name.clone()));
         }
@@ -347,8 +347,8 @@ pub fn resolve_relation(
         // name in `public` does — which the oracle confirms is what
         // `PostgreSQL` does.
         if crate::exec::is_virtual_relation(&candidate)
-            || crabka_pgcatalog::relation_exists(kv, &candidate)?
-            || crabka_pgcatalog::get_user_type(kv, &candidate)?
+            || krabka_pgcatalog::relation_exists(kv, &candidate)?
+            || krabka_pgcatalog::get_user_type(kv, &candidate)?
                 .is_some_and(|ty| ty.fields().is_some())
         {
             return Ok(candidate);
@@ -562,9 +562,9 @@ pub fn is_missing_schema(error: &ExecError) -> bool {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgcatalog::RelationName;
-    use crabka_pgkv::{Kv as _, MemKv};
-    use crabka_pgparser::ast::RelationRef;
+    use krabka_pgcatalog::RelationName;
+    use krabka_pgkv::{Kv as _, MemKv};
+    use krabka_pgparser::ast::RelationRef;
 
     use super::{
         ResolutionScope, SchemaDisposition, WrittenRelation, is_missing_schema,
@@ -710,19 +710,19 @@ mod tests {
     fn with_schemas(names: &[&str]) -> MemKv {
         let kv = MemKv::default();
         for name in names {
-            let ops = crabka_pgcatalog::create_schema_ops(&kv, name, "postgres").expect("schema");
+            let ops = krabka_pgcatalog::create_schema_ops(&kv, name, "postgres").expect("schema");
             kv.write_batch(&ops).expect("write");
         }
         kv
     }
 
     fn create(kv: &MemKv, name: &RelationName) {
-        let (_, ops) = crabka_pgcatalog::create_table_ops(
+        let (_, ops) = krabka_pgcatalog::create_table_ops(
             kv,
             name,
-            vec![crabka_pgcatalog::Column::new(
+            vec![krabka_pgcatalog::Column::new(
                 "x",
-                crabka_pgtypes::ColumnType::Int4,
+                krabka_pgtypes::ColumnType::Int4,
             )],
         )
         .expect("create table");
@@ -743,16 +743,16 @@ mod tests {
     }
 
     fn create_role(kv: &MemKv, name: &str) {
-        crabka_pgcatalog::create_role(kv, name, true).expect("role");
+        krabka_pgcatalog::create_role(kv, name, true).expect("role");
     }
 
     fn create_schema(kv: &MemKv, name: &str, owner: &str) {
-        let ops = crabka_pgcatalog::create_schema_ops(kv, name, owner).expect("schema");
+        let ops = krabka_pgcatalog::create_schema_ops(kv, name, owner).expect("schema");
         kv.write_batch(&ops).expect("write");
     }
 
     fn grant_usage(kv: &MemKv, schema: &str, grantee: &str) {
-        let ops = crabka_pgcatalog::grant_schema_privileges_ops(
+        let ops = krabka_pgcatalog::grant_schema_privileges_ops(
             kv,
             &[schema.to_string()],
             &[grantee.to_string()],
@@ -1019,7 +1019,7 @@ mod tests {
     /// Bring a session's temporary namespace into being, as the first statement
     /// that creates something in it does.
     fn with_temp_schema(kv: &MemKv, name: &str) {
-        kv.write_batch(&[crabka_pgcatalog::create_temp_schema_op(name)])
+        kv.write_batch(&[krabka_pgcatalog::create_temp_schema_op(name)])
             .expect("write");
     }
 

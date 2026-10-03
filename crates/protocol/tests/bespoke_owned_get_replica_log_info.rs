@@ -1,11 +1,11 @@
 // Bespoke tests for the owned GetReplicaLogInfo wrappers. GetReplicaLogInfo is
-// a crabka-internal RPC (api_key 93) excluded from the JVM differential sweep,
+// a krabka-internal RPC (api_key 93) excluded from the JVM differential sweep,
 // so its generated codecs need direct populated round-trip coverage here. The
 // generated min/max wrapper tests only exercise default (empty) messages, which
 // skip the nested-element encode/decode loops and the nullable-string path.
 
 use bytes::BytesMut;
-use crabka_protocol::{
+use krabka_protocol::{
     Decode, Encode,
     owned::{
         get_replica_log_info_request::{

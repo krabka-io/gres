@@ -6,7 +6,7 @@
 //! is what the corpus actually asks the parser to accept.
 
 use assert2::assert;
-use crabka_pgparser::{
+use krabka_pgparser::{
     ParseError,
     ast::{
         AggregateArgs, AggregateOption, AggregateSignature, AlterRoutineAction,
@@ -15,7 +15,7 @@ use crabka_pgparser::{
     command::CommandIdentity,
     parse, parse_with_command_identities,
 };
-use crabka_pgtypes::{ColumnType, ElemType};
+use krabka_pgtypes::{ColumnType, ElemType};
 
 fn one(sql: &str) -> Statement {
     let mut statements = parse(sql).unwrap_or_else(|e| panic!("{sql}: {}", e.message));
@@ -679,7 +679,7 @@ fn parses_ordered_and_hypothetical_set_signatures() {
 
 #[test]
 fn parses_within_group_as_an_ordered_set_call() {
-    let Expr::Func(call) = crabka_pgparser::parser::parse_expression(
+    let Expr::Func(call) = krabka_pgparser::parser::parse_expression(
         "n16_ordered(0.5) WITHIN GROUP (ORDER BY value DESC)",
     )
     .expect("parses") else {

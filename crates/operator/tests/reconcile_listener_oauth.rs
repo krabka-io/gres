@@ -18,7 +18,7 @@
 use std::sync::Arc;
 
 use assert2::{assert, check};
-use crabka_operator::{
+use krabka_operator::{
     controller::kafka::reconcile,
     crd::{
         Kafka, KafkaSpec, Listener, ListenerAuthentication, ListenerAuthenticationOAuth,
@@ -201,13 +201,13 @@ fn fake_event_body(namespace: &str) -> serde_json::Value {
     serde_json::json!({
         "apiVersion": "v1",
         "kind": "Event",
-        "metadata": { "name": "crabka-listener-auth-abc", "namespace": namespace, "uid": "event-uid" },
+        "metadata": { "name": "krabka-listener-auth-abc", "namespace": namespace, "uid": "event-uid" },
         "involvedObject": {},
         "message": "test event",
         "reason": "WeakAuth",
         "type": "Warning",
-        "reportingComponent": "crabka-operator/listener-auth-check",
-        "reportingInstance": "crabka-operator-renewal",
+        "reportingComponent": "krabka-operator/listener-auth-check",
+        "reportingInstance": "krabka-operator-renewal",
         "eventTime": null,
     })
 }

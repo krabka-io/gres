@@ -25,8 +25,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crabka_pgparser::ast::{Expr, FuncArgs, FuncCall};
-use crabka_pgtypes::{
+use krabka_pgparser::ast::{Expr, FuncArgs, FuncCall};
+use krabka_pgtypes::{
     ColumnType, Datum, ElemType, ops,
     usertype::{MultirangeRef, RangeRef},
 };
@@ -257,17 +257,17 @@ enum ScalarFunc {
 
 static UUID_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
-fn uuid_v4() -> crabka_pgtypes::uuid::UuidBytes {
+fn uuid_v4() -> krabka_pgtypes::uuid::UuidBytes {
     let mut bytes = UUID_SEQUENCE
         .fetch_add(1, AtomicOrdering::Relaxed)
         .to_be_bytes()
         .repeat(2);
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    crabka_pgtypes::uuid::UuidBytes(bytes.try_into().expect("16 UUID bytes"))
+    krabka_pgtypes::uuid::UuidBytes(bytes.try_into().expect("16 UUID bytes"))
 }
 
-fn uuid_v7(timestamp: jiff::Timestamp) -> crabka_pgtypes::uuid::UuidBytes {
+fn uuid_v7(timestamp: jiff::Timestamp) -> krabka_pgtypes::uuid::UuidBytes {
     let millis = timestamp.as_millisecond();
     let mut bytes = [0; 16];
     bytes[..6].copy_from_slice(&(millis as u64).to_be_bytes()[2..]);
@@ -278,18 +278,18 @@ fn uuid_v7(timestamp: jiff::Timestamp) -> crabka_pgtypes::uuid::UuidBytes {
     );
     bytes[6] = 0x70;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    crabka_pgtypes::uuid::UuidBytes(bytes)
+    krabka_pgtypes::uuid::UuidBytes(bytes)
 }
 
-fn uuid_bytes(value: &Datum) -> Result<crabka_pgtypes::uuid::UuidBytes, ExecError> {
+fn uuid_bytes(value: &Datum) -> Result<krabka_pgtypes::uuid::UuidBytes, ExecError> {
     match value {
-        Datum::Text(value) => Ok(crabka_pgtypes::uuid::UuidBytes::parse(value)?),
+        Datum::Text(value) => Ok(krabka_pgtypes::uuid::UuidBytes::parse(value)?),
         other => Err(type_error("uuid", other)),
     }
 }
 
 fn uuid_timestamp(
-    value: crabka_pgtypes::uuid::UuidBytes,
+    value: krabka_pgtypes::uuid::UuidBytes,
 ) -> Result<Option<jiff::Timestamp>, ExecError> {
     let bytes = value.0;
     if bytes[8] & 0xc0 != 0x80 {
@@ -2475,7 +2475,7 @@ fn builtin_eval_scalar(
 /// This is one place, not one per function, because it is one cast:
 /// `PostgreSQL` declares almost every string function over `text` and reaches it
 /// from `character` through the implicit `text(bpchar)` coercion described on
-/// [`crabka_pgtypes::string::bpchar_to_text`]. `lower`, `replace`, `lpad`,
+/// [`krabka_pgtypes::string::bpchar_to_text`]. `lower`, `replace`, `lpad`,
 /// `substr`, `quote_literal`, `to_tsvector` and `length` (whose `bpcharlen`
 /// overload measures with `bcTruelen`) therefore all agree with the trimmed
 /// value, and each one that did not was a divergence.
@@ -2613,7 +2613,7 @@ fn coerce_unknown_args(
         } else {
             target
         };
-        *v = crabka_pgtypes::cast::cast(v, to, &ctx.time_zone)?;
+        *v = krabka_pgtypes::cast::cast(v, to, &ctx.time_zone)?;
     }
     Ok(())
 }
@@ -2652,7 +2652,7 @@ fn eval_eager(
                 .count(),
         )
         .map(Datum::Int4)
-        .map_err(|_| ExecError::Type(crabka_pgtypes::TypeError::Overflow));
+        .map_err(|_| ExecError::Type(krabka_pgtypes::TypeError::Overflow));
     }
     if let ScalarFunc::RangeConstructor(range) = f {
         return eval_range_constructor(range, fc, vals, ctx);
@@ -2662,19 +2662,19 @@ fn eval_eager(
             .iter()
             .map(|value| {
                 let Datum::Range(range) = value else {
-                    return Err(crabka_pgtypes::TypeError::TypeMismatch {
+                    return Err(krabka_pgtypes::TypeError::TypeMismatch {
                         message: "multirange constructor requires ranges".into(),
                     });
                 };
                 if range.ty != multirange.range {
-                    return Err(crabka_pgtypes::TypeError::TypeMismatch {
+                    return Err(krabka_pgtypes::TypeError::TypeMismatch {
                         message: "multirange component type does not match".into(),
                     });
                 }
                 Ok(range.clone())
             })
             .collect::<Result<Vec<_>, _>>()?;
-        return crabka_pgtypes::multirange::from_ranges(multirange, ranges)
+        return krabka_pgtypes::multirange::from_ranges(multirange, ranges)
             .map(Datum::Multirange)
             .map_err(ExecError::from);
     }
@@ -2687,7 +2687,7 @@ fn eval_eager(
         else {
             unreachable!()
         };
-        return crabka_pgtypes::multirange::from_ranges(ty, vec![range.clone()])
+        return krabka_pgtypes::multirange::from_ranges(ty, vec![range.clone()])
             .map(Datum::Multirange)
             .map_err(ExecError::from);
     }
@@ -2699,8 +2699,8 @@ fn eval_eager(
     if let (ScalarFunc::RangeMerge, [Datum::Multirange(multirange)]) = (f, vals) {
         return Ok(Datum::Range(
             match (multirange.ranges.first(), multirange.ranges.last()) {
-                (Some(first), Some(last)) => crabka_pgtypes::range::merge(first, last)?,
-                _ => crabka_pgtypes::RangeValue {
+                (Some(first), Some(last)) => krabka_pgtypes::range::merge(first, last)?,
+                _ => krabka_pgtypes::RangeValue {
                     ty: multirange.ty.range,
                     lower: None,
                     upper: None,
@@ -2736,7 +2736,7 @@ fn eval_eager(
             };
             i32::try_from(n)
                 .map(Datum::Int4)
-                .map_err(|_| ExecError::Type(crabka_pgtypes::TypeError::Overflow))
+                .map_err(|_| ExecError::Type(krabka_pgtypes::TypeError::Overflow))
         }
         ScalarFunc::Upper => {
             require_arity(fc, vals.len() == 1)?;
@@ -2825,21 +2825,21 @@ fn eval_eager(
             };
             Ok(match f {
                 ScalarFunc::RangeContains => {
-                    Datum::Bool(crabka_pgtypes::range::contains_range(left, right)?)
+                    Datum::Bool(krabka_pgtypes::range::contains_range(left, right)?)
                 }
                 ScalarFunc::RangeContainedBy => {
-                    Datum::Bool(crabka_pgtypes::range::contains_range(right, left)?)
+                    Datum::Bool(krabka_pgtypes::range::contains_range(right, left)?)
                 }
                 ScalarFunc::RangeOverlaps => {
-                    Datum::Bool(crabka_pgtypes::range::overlaps(left, right)?)
+                    Datum::Bool(krabka_pgtypes::range::overlaps(left, right)?)
                 }
                 ScalarFunc::RangeAdjacent => {
-                    Datum::Bool(crabka_pgtypes::range::adjacent(left, right)?)
+                    Datum::Bool(krabka_pgtypes::range::adjacent(left, right)?)
                 }
                 ScalarFunc::RangeMinus => {
-                    Datum::Range(crabka_pgtypes::range::difference(left, right)?)
+                    Datum::Range(krabka_pgtypes::range::difference(left, right)?)
                 }
-                ScalarFunc::RangeMerge => Datum::Range(crabka_pgtypes::range::merge(left, right)?),
+                ScalarFunc::RangeMerge => Datum::Range(krabka_pgtypes::range::merge(left, right)?),
                 _ => unreachable!(),
             })
         }
@@ -2957,23 +2957,23 @@ fn eval_eager(
             match &vals[0] {
                 // `abs((-32768)::int2)` has no int2 result — 22003, like PostgreSQL.
                 Datum::Int2(n) => n.checked_abs().map(Datum::Int2).ok_or_else(|| {
-                    ExecError::Type(crabka_pgtypes::TypeError::out_of_range_for("smallint"))
+                    ExecError::Type(krabka_pgtypes::TypeError::out_of_range_for("smallint"))
                 }),
                 Datum::Int4(n) => n
                     .checked_abs()
                     .map(Datum::Int4)
-                    .ok_or(ExecError::Type(crabka_pgtypes::TypeError::Overflow)),
+                    .ok_or(ExecError::Type(krabka_pgtypes::TypeError::Overflow)),
                 // `TypeError::Overflow` says "integer out of range", which is
                 // `int4`'s wording and not this overload's: `int8abs` reports
                 // the type it could not represent the result in.
                 Datum::Int8(n) => n.checked_abs().map(Datum::Int8).ok_or_else(|| {
-                    ExecError::Type(crabka_pgtypes::TypeError::out_of_range_for("bigint"))
+                    ExecError::Type(krabka_pgtypes::TypeError::out_of_range_for("bigint"))
                 }),
                 // SP30: abs over float8 (always representable, no overflow trap).
                 Datum::Float4(f) => Ok(Datum::Float4(f.abs())),
                 Datum::Float8(f) => Ok(Datum::Float8(f.abs())),
                 // SP32: abs over numeric.
-                Datum::Numeric(d) => Ok(Datum::Numeric(crabka_pgtypes::numeric::abs(d))),
+                Datum::Numeric(d) => Ok(Datum::Numeric(krabka_pgtypes::numeric::abs(d))),
                 other => Err(type_error("abs", other)),
             }
         }
@@ -3075,7 +3075,7 @@ fn eval_eager(
             let [Datum::Int8(count), Datum::Int8(sum)] = state.elems.as_slice() else {
                 unreachable!("validated int4 average state");
             };
-            Ok(Datum::Array(crabka_pgtypes::ArrayValue::new(
+            Ok(Datum::Array(krabka_pgtypes::ArrayValue::new(
                 ElemType::Int8,
                 vec![Datum::Int8(count + 1), Datum::Int8(sum + i64::from(value))],
             )))
@@ -3101,8 +3101,8 @@ fn eval_eager(
                 Ok(Datum::Null)
             } else {
                 Ok(ops::div(
-                    &Datum::Numeric(crabka_pgtypes::numeric::NumericValue::from(*sum)),
-                    &Datum::Numeric(crabka_pgtypes::numeric::NumericValue::from(*count)),
+                    &Datum::Numeric(krabka_pgtypes::numeric::NumericValue::from(*sum)),
+                    &Datum::Numeric(krabka_pgtypes::numeric::NumericValue::from(*count)),
                 )?)
             }
         }
@@ -3131,7 +3131,7 @@ fn eval_eager(
             else {
                 unreachable!("validated float8 accumulator state");
             };
-            Ok(Datum::Array(crabka_pgtypes::ArrayValue::new(
+            Ok(Datum::Array(krabka_pgtypes::ArrayValue::new(
                 ElemType::Float8,
                 vec![
                     Datum::Float8(count + 1.0),
@@ -3187,7 +3187,7 @@ fn eval_eager(
         ScalarFunc::Sqrt => {
             require_arity(fc, vals.len() == 1)?;
             if let Datum::Numeric(d) = &vals[0] {
-                return crabka_pgtypes::numeric::num_sqrt(d)
+                return krabka_pgtypes::numeric::num_sqrt(d)
                     .map(Datum::Numeric)
                     .map_err(ExecError::Type);
             }
@@ -3203,7 +3203,7 @@ fn eval_eager(
         ScalarFunc::Exp => {
             require_arity(fc, vals.len() == 1)?;
             if let Datum::Numeric(d) = &vals[0] {
-                return crabka_pgtypes::numeric::num_exp(d)
+                return krabka_pgtypes::numeric::num_exp(d)
                     .map(Datum::Numeric)
                     .map_err(ExecError::Type);
             }
@@ -3228,7 +3228,7 @@ fn eval_eager(
         ScalarFunc::Ln => {
             require_arity(fc, vals.len() == 1)?;
             if let Datum::Numeric(d) = &vals[0] {
-                return crabka_pgtypes::numeric::num_ln(d)
+                return krabka_pgtypes::numeric::num_ln(d)
                     .map(Datum::Numeric)
                     .map_err(ExecError::Type);
             }
@@ -3247,12 +3247,12 @@ fn eval_eager(
         ScalarFunc::Log => {
             require_arity(fc, vals.len() == 1 || vals.len() == 2)?;
             if let [base, num] = vals {
-                return crabka_pgtypes::numeric::num_log(&to_numeric(base)?, &to_numeric(num)?)
+                return krabka_pgtypes::numeric::num_log(&to_numeric(base)?, &to_numeric(num)?)
                     .map(Datum::Numeric)
                     .map_err(ExecError::Type);
             }
             if let Datum::Numeric(d) = &vals[0] {
-                return crabka_pgtypes::numeric::num_log10(d)
+                return krabka_pgtypes::numeric::num_log10(d)
                     .map(Datum::Numeric)
                     .map_err(ExecError::Type);
             }
@@ -3277,7 +3277,7 @@ fn eval_eager(
             if any_num && !any_f64 {
                 let b = to_numeric(&vals[0])?;
                 let e = to_numeric(&vals[1])?;
-                return crabka_pgtypes::numeric::num_power(&b, &e)
+                return krabka_pgtypes::numeric::num_power(&b, &e)
                     .map(Datum::Numeric)
                     .map_err(ExecError::Type);
             }
@@ -3300,7 +3300,7 @@ fn eval_eager(
             require_arity(fc, vals.len() <= 1)?;
             let timestamp = match vals {
                 [] => ctx.stmt_now,
-                [Datum::Interval(interval)] => crabka_pgtypes::datetime::timestamptz_plus_interval(
+                [Datum::Interval(interval)] => krabka_pgtypes::datetime::timestamptz_plus_interval(
                     ctx.stmt_now,
                     *interval,
                     &ctx.time_zone,
@@ -3339,22 +3339,22 @@ fn eval_eager(
         ScalarFunc::Float4Send => {
             require_arity(fc, vals.len() == 1)?;
             let Datum::Float4(value) =
-                crabka_pgtypes::cast::cast(&vals[0], ColumnType::Float4, &ctx.time_zone)?
+                krabka_pgtypes::cast::cast(&vals[0], ColumnType::Float4, &ctx.time_zone)?
             else {
                 return Err(type_error("float4send", &vals[0]));
             };
-            Ok(Datum::Bytea(crabka_pgtypes::encoding::encode_binary(
+            Ok(Datum::Bytea(krabka_pgtypes::encoding::encode_binary(
                 &Datum::Float4(value),
             )))
         }
         ScalarFunc::Float8Send => {
             require_arity(fc, vals.len() == 1)?;
             let Datum::Float8(value) =
-                crabka_pgtypes::cast::cast(&vals[0], ColumnType::Float8, &ctx.time_zone)?
+                krabka_pgtypes::cast::cast(&vals[0], ColumnType::Float8, &ctx.time_zone)?
             else {
                 return Err(type_error("float8send", &vals[0]));
             };
-            Ok(Datum::Bytea(crabka_pgtypes::encoding::encode_binary(
+            Ok(Datum::Bytea(krabka_pgtypes::encoding::encode_binary(
                 &Datum::Float8(value),
             )))
         }
@@ -3807,7 +3807,7 @@ fn eval_eager(
         }
         ScalarFunc::Version => {
             require_arity(fc, vals.is_empty())?;
-            Ok(Datum::Text(crabka_pgcatalog::server_version_string()))
+            Ok(Datum::Text(krabka_pgcatalog::server_version_string()))
         }
         ScalarFunc::PgInputIsValid => {
             require_arity(fc, vals.len() == 2)?;
@@ -3849,24 +3849,24 @@ fn eval_eager(
                 }
                 (ColumnType::Time, Datum::Time(value)) => {
                     crate::partition::hash::hash_int64_extended(
-                        i64::from_be_bytes(crabka_pgtypes::datetime::time_to_binary(*value)),
+                        i64::from_be_bytes(krabka_pgtypes::datetime::time_to_binary(*value)),
                         seed,
                     )
                 }
                 (ColumnType::Timestamp, Datum::Timestamp(value)) => {
                     crate::partition::hash::hash_int64_extended(
-                        i64::from_be_bytes(crabka_pgtypes::datetime::timestamp_to_binary(*value)),
+                        i64::from_be_bytes(krabka_pgtypes::datetime::timestamp_to_binary(*value)),
                         seed,
                     )
                 }
                 (ColumnType::Timestamptz, Datum::Timestamptz(value)) => {
                     crate::partition::hash::hash_int64_extended(
-                        i64::from_be_bytes(crabka_pgtypes::datetime::timestamptz_to_binary(*value)),
+                        i64::from_be_bytes(krabka_pgtypes::datetime::timestamptz_to_binary(*value)),
                         seed,
                     )
                 }
                 (ColumnType::Timetz, Datum::Timetz(value)) => {
-                    let binary = crabka_pgtypes::datetime::timetz_to_binary(*value);
+                    let binary = krabka_pgtypes::datetime::timetz_to_binary(*value);
                     crate::partition::hash::hash_int64_extended(
                         i64::from_be_bytes(binary[..8].try_into().expect("eight bytes")),
                         seed,
@@ -3942,7 +3942,7 @@ fn eval_eager(
             } else {
                 0
             };
-            let value = match crabka_pgtypes::cast::cast(&vals[0], ty, &ctx.time_zone)? {
+            let value = match krabka_pgtypes::cast::cast(&vals[0], ty, &ctx.time_zone)? {
                 Datum::Float4(value) => f64::from(value),
                 Datum::Float8(value) => value,
                 other => return Err(type_error(&fc.name, &other)),
@@ -4020,7 +4020,7 @@ fn eval_eager(
             } else {
                 0
             };
-            let value = crabka_pgtypes::string::bpchar_to_text(text_arg(&vals[0])?);
+            let value = krabka_pgtypes::string::bpchar_to_text(text_arg(&vals[0])?);
             let hash = crate::partition::hash::hash_bytes_extended(value.as_bytes(), seed)?;
             Ok(if extended {
                 Datum::Int8(i64::from_ne_bytes(hash.to_ne_bytes()))
@@ -4035,7 +4035,7 @@ fn eval_eager(
             } else {
                 0
             };
-            let uuid = crabka_pgtypes::uuid::UuidBytes::parse(text_arg(&vals[0])?)?;
+            let uuid = krabka_pgtypes::uuid::UuidBytes::parse(text_arg(&vals[0])?)?;
             let hash = crate::partition::hash::hash_bytes_extended(&uuid.0, seed)?;
             Ok(if extended {
                 Datum::Int8(i64::from_ne_bytes(hash.to_ne_bytes()))
@@ -4207,7 +4207,7 @@ fn eval_eager(
         ScalarFunc::NumericHash { extended } => {
             require_arity(fc, vals.len() == if extended { 2 } else { 1 })?;
             let value =
-                crabka_pgtypes::cast::cast(&vals[0], ColumnType::Numeric(None), &ctx.time_zone)?;
+                krabka_pgtypes::cast::cast(&vals[0], ColumnType::Numeric(None), &ctx.time_zone)?;
             let Datum::Numeric(value) = &value else {
                 return Err(type_error(&fc.name, &vals[0]));
             };
@@ -4231,7 +4231,7 @@ fn enum_arg_type(
     fc: &FuncCall,
     args: &[Expr],
     scope: &Scope,
-) -> Result<crabka_pgtypes::usertype::UserTypeRef, ExecError> {
+) -> Result<krabka_pgtypes::usertype::UserTypeRef, ExecError> {
     let mut ty = None;
     for arg in args {
         if crate::eval::is_unknown_literal(arg) {
@@ -4251,7 +4251,7 @@ fn enum_arg_type(
 }
 
 fn hash_range(
-    range: &crabka_pgtypes::RangeValue,
+    range: &krabka_pgtypes::RangeValue,
     seed: u64,
     extended: bool,
 ) -> Result<Datum, ExecError> {
@@ -4262,7 +4262,7 @@ fn hash_range(
 }
 
 fn hash_range_value(
-    range: &crabka_pgtypes::RangeValue,
+    range: &krabka_pgtypes::RangeValue,
     seed: u64,
     extended: bool,
 ) -> Result<u64, ExecError> {
@@ -4329,7 +4329,7 @@ fn aclitem_hash_sum(value: &str, ctx: &EvalCtx) -> Result<u32, ExecError> {
         if role.is_empty() {
             return Ok(0);
         }
-        if role == crabka_pgcatalog::BOOTSTRAP_ROLE {
+        if role == krabka_pgcatalog::BOOTSTRAP_ROLE {
             return Ok(crate::catalog_fn::BOOTSTRAP_ROLE_OID.cast_unsigned());
         }
         if let Some(catalog) = &ctx.catalog {
@@ -4356,14 +4356,14 @@ fn aclitem_hash_sum(value: &str, ctx: &EvalCtx) -> Result<u32, ExecError> {
         .wrapping_add(role_oid(grantor)?))
 }
 
-fn numeric_hash(value: &crabka_pgtypes::numeric::NumericValue, seed: u64) -> u64 {
+fn numeric_hash(value: &krabka_pgtypes::numeric::NumericValue, seed: u64) -> u64 {
     if value.is_special() {
         return seed;
     }
     if value.is_zero() {
         return seed.wrapping_sub(1);
     }
-    let binary = crabka_pgtypes::numeric::binary(value);
+    let binary = krabka_pgtypes::numeric::binary(value);
     let weight = i16::from_be_bytes(binary[2..4].try_into().expect("weight"));
     let digits = binary[8..]
         .chunks_exact(2)
@@ -4375,12 +4375,12 @@ fn numeric_hash(value: &crabka_pgtypes::numeric::NumericValue, seed: u64) -> u64
 }
 
 fn jsonb_hash(
-    value: &crabka_pgtypes::JsonbValue,
+    value: &krabka_pgtypes::JsonbValue,
     seed: u64,
     extended: bool,
     root: bool,
 ) -> Result<u64, ExecError> {
-    use crabka_pgtypes::JsonbValue;
+    use krabka_pgtypes::JsonbValue;
     if root && matches!(value, JsonbValue::Array(items) if items.is_empty())
         || root && matches!(value, JsonbValue::Object(items) if items.is_empty())
     {
@@ -4409,7 +4409,7 @@ fn jsonb_hash(
                 crate::partition::hash::hash_bytes_extended(value.as_bytes(), seed)?
             }
             JsonbValue::Number(value) => numeric_hash(
-                &crabka_pgtypes::numeric::NumericValue::Finite(value.clone()),
+                &krabka_pgtypes::numeric::NumericValue::Finite(value.clone()),
                 seed,
             ),
             JsonbValue::Array(_) | JsonbValue::Object(_) => unreachable!("jsonb scalar"),
@@ -4464,15 +4464,15 @@ fn jsonb_hash(
 fn eval_enum_support(
     f: ScalarFunc,
     fc: &FuncCall,
-    ty: crabka_pgtypes::usertype::UserTypeRef,
+    ty: krabka_pgtypes::usertype::UserTypeRef,
     vals: &[Datum],
     ctx: &EvalCtx,
 ) -> Result<Datum, ExecError> {
-    let labels = crabka_pgtypes::usertype::lookup_oid(ty.oid)
+    let labels = krabka_pgtypes::usertype::lookup_oid(ty.oid)
         .and_then(|user| user.labels().map(ToOwned::to_owned))
         .ok_or_else(|| undefined_function(&fc.name))?;
     let value = |label: &str| {
-        Datum::Enum(crabka_pgtypes::datum::EnumValue {
+        Datum::Enum(krabka_pgtypes::datum::EnumValue {
             ty,
             label: label.to_string(),
         })
@@ -4520,7 +4520,7 @@ fn eval_enum_support(
                         .collect()
                 })
                 .unwrap_or_default();
-            let result = Datum::Array(crabka_pgtypes::ArrayValue::new(ElemType::User(ty), elems));
+            let result = Datum::Array(krabka_pgtypes::ArrayValue::new(ElemType::User(ty), elems));
             crate::eval::ensure_enum_datum_safe(ctx, &result)?;
             Ok(result)
         }
@@ -4535,27 +4535,27 @@ fn eval_multirange_predicate(name: &str, vals: &[Datum]) -> Result<Datum, ExecEr
     let result = match (name, &vals[0], &vals[1]) {
         ("range_overlaps_multirange", Datum::Range(range), Datum::Multirange(multirange))
         | ("multirange_overlaps_range", Datum::Multirange(multirange), Datum::Range(range)) => {
-            crabka_pgtypes::multirange::overlaps_range(multirange, range)?
+            krabka_pgtypes::multirange::overlaps_range(multirange, range)?
         }
         ("multirange_overlaps_multirange", Datum::Multirange(left), Datum::Multirange(right)) => {
-            crabka_pgtypes::multirange::overlaps(left, right)?
+            krabka_pgtypes::multirange::overlaps(left, right)?
         }
         ("multirange_contains_elem", Datum::Multirange(multirange), element)
         | ("elem_contained_by_multirange", element, Datum::Multirange(multirange)) => {
-            crabka_pgtypes::multirange::contains_element(multirange, element)?
+            krabka_pgtypes::multirange::contains_element(multirange, element)?
         }
         ("multirange_contains_range", Datum::Multirange(multirange), Datum::Range(range))
         | ("range_contained_by_multirange", Datum::Range(range), Datum::Multirange(multirange)) => {
-            crabka_pgtypes::multirange::contains_range(multirange, range)?
+            krabka_pgtypes::multirange::contains_range(multirange, range)?
         }
         ("multirange_contains_multirange", Datum::Multirange(left), Datum::Multirange(right)) => {
-            crabka_pgtypes::multirange::contains(left, right)?
+            krabka_pgtypes::multirange::contains(left, right)?
         }
         (
             "multirange_contained_by_multirange",
             Datum::Multirange(left),
             Datum::Multirange(right),
-        ) => crabka_pgtypes::multirange::contains(right, left)?,
+        ) => krabka_pgtypes::multirange::contains(right, left)?,
         _ => return Err(type_error(name, &vals[0])),
     };
     Ok(Datum::Bool(result))
@@ -4565,7 +4565,7 @@ pub(crate) fn input_error(
     input: &str,
     type_name: &str,
     ctx: &EvalCtx,
-) -> Result<Option<crabka_pgwire::error::PgError>, ExecError> {
+) -> Result<Option<krabka_pgwire::error::PgError>, ExecError> {
     let time_zone = &ctx.time_zone;
     let ty = input_type(type_name).ok_or_else(|| ExecError::FunctionError {
         sqlstate: "42704",
@@ -4594,7 +4594,7 @@ pub(crate) fn input_error(
     if let ColumnType::Bit(len) | ColumnType::VarBit(len) = ty {
         let varying = matches!(ty, ColumnType::VarBit(_));
         return Ok(
-            crabka_pgtypes::BitString::parse_with_typmod(input, len, varying)
+            krabka_pgtypes::BitString::parse_with_typmod(input, len, varying)
                 .err()
                 .map(|error| ExecError::from(error).into_pg()),
         );
@@ -4605,7 +4605,7 @@ pub(crate) fn input_error(
         return Ok(None);
     }
     let result = if matches!(ty, ColumnType::Varchar(Some(_)) | ColumnType::Char(Some(_))) {
-        crabka_pgtypes::cast::cast_assign(&value, ty, time_zone).map_err(ExecError::from)
+        krabka_pgtypes::cast::cast_assign(&value, ty, time_zone).map_err(ExecError::from)
     } else {
         crate::eval::cast_value(&value, ty, time_zone)
     };
@@ -4615,8 +4615,8 @@ pub(crate) fn input_error(
 fn user_base_input_type(ty: ColumnType) -> bool {
     matches!(ty, ColumnType::Base(_))
         || matches!(ty, ColumnType::Array(ElemType::User(reference))
-            if crabka_pgtypes::usertype::lookup_oid(reference.oid)
-                .is_some_and(|ty| matches!(ty.body, crabka_pgtypes::usertype::UserTypeBody::Base(_))))
+            if krabka_pgtypes::usertype::lookup_oid(reference.oid)
+                .is_some_and(|ty| matches!(ty.body, krabka_pgtypes::usertype::UserTypeBody::Base(_))))
 }
 
 /// Resolve the typmod spelling accepted by `regtype` arguments to PostgreSQL's
@@ -4639,13 +4639,13 @@ fn input_type(type_name: &str) -> Option<ColumnType> {
             ("bit", [len]) => Some(ColumnType::Bit(Some(len.parse().ok()?))),
             ("varbit" | "bit varying", [len]) => Some(ColumnType::VarBit(Some(len.parse().ok()?))),
             ("numeric" | "decimal", [precision]) => {
-                Some(ColumnType::Numeric(Some(crabka_pgtypes::numeric::Typmod {
+                Some(ColumnType::Numeric(Some(krabka_pgtypes::numeric::Typmod {
                     precision: precision.parse().ok()?,
                     scale: 0,
                 })))
             }
             ("numeric" | "decimal", [precision, scale]) => {
-                Some(ColumnType::Numeric(Some(crabka_pgtypes::numeric::Typmod {
+                Some(ColumnType::Numeric(Some(krabka_pgtypes::numeric::Typmod {
                     precision: precision.parse().ok()?,
                     scale: scale.parse().ok()?,
                 })))
@@ -4945,8 +4945,8 @@ fn format_type_extended(oid: i64, typmod: i64, given: bool) -> String {
     let Ok(oid) = u32::try_from(oid) else {
         return "-".to_string();
     };
-    if let Some(user_type) = crabka_pgtypes::usertype::lookup_oid(oid)
-        && let crabka_pgtypes::usertype::UserTypeBody::Base(base) = &user_type.body
+    if let Some(user_type) = krabka_pgtypes::usertype::lookup_oid(oid)
+        && let krabka_pgtypes::usertype::UserTypeBody::Base(base) = &user_type.body
     {
         let modifier = if typmod < 0 || !given {
             String::new()
@@ -5045,7 +5045,7 @@ fn type_modifier(kind: TypmodKind, typmod: i64) -> String {
             format!("({},{})", (packed >> 16) & 0xffff, packed & 0xffff)
         }
         TypmodKind::Seconds | TypmodKind::Bits | TypmodKind::Verbatim => format!("({typmod})"),
-        TypmodKind::Interval => crabka_pgtypes::IntervalTypmod::from_typmod(typmod as i32)
+        TypmodKind::Interval => krabka_pgtypes::IntervalTypmod::from_typmod(typmod as i32)
             .map_or_else(
                 || format!("({})", typmod & 0xffff),
                 |typmod| typmod.suffix(),
@@ -5063,13 +5063,13 @@ fn builtin_format_type(oid: u32) -> Option<(&'static str, TypmodKind)> {
         // only reached through a direct `format_type(600, 4)` call; the reason
         // they are here at all is that psql's `\d` renders every column through
         // `format_type`, and without these arms it printed `-` for the type.
-        crabka_pgtypes::oids::POINT => ("point", Verbatim),
-        crabka_pgtypes::oids::LSEG => ("lseg", Verbatim),
-        crabka_pgtypes::oids::PATH => ("path", Verbatim),
-        crabka_pgtypes::oids::BOX => ("box", Verbatim),
-        crabka_pgtypes::oids::POLYGON => ("polygon", Verbatim),
-        crabka_pgtypes::oids::LINE => ("line", Verbatim),
-        crabka_pgtypes::oids::CIRCLE => ("circle", Verbatim),
+        krabka_pgtypes::oids::POINT => ("point", Verbatim),
+        krabka_pgtypes::oids::LSEG => ("lseg", Verbatim),
+        krabka_pgtypes::oids::PATH => ("path", Verbatim),
+        krabka_pgtypes::oids::BOX => ("box", Verbatim),
+        krabka_pgtypes::oids::POLYGON => ("polygon", Verbatim),
+        krabka_pgtypes::oids::LINE => ("line", Verbatim),
+        krabka_pgtypes::oids::CIRCLE => ("circle", Verbatim),
         790 => ("money", NoMod),
         791 => ("money[]", NoMod),
         1560 => ("bit", Bits),
@@ -5327,7 +5327,7 @@ fn text_arg(d: &Datum) -> Result<&str, ExecError> {
 fn bytea_arg<'a>(d: &'a Datum, ctx: &EvalCtx) -> Result<std::borrow::Cow<'a, [u8]>, ExecError> {
     match d {
         Datum::Bytea(bytes) => Ok(std::borrow::Cow::Borrowed(bytes)),
-        Datum::Text(_) => match crabka_pgtypes::cast::cast(d, ColumnType::Bytea, &ctx.time_zone)? {
+        Datum::Text(_) => match krabka_pgtypes::cast::cast(d, ColumnType::Bytea, &ctx.time_zone)? {
             Datum::Bytea(bytes) => Ok(std::borrow::Cow::Owned(bytes)),
             _ => unreachable!("a cast to bytea yields bytea"),
         },
@@ -5361,7 +5361,7 @@ fn bit_index(d: &Datum) -> Result<i32, ExecError> {
         Datum::Int2(n) => Ok(i32::from(*n)),
         Datum::Int4(n) => Ok(*n),
         Datum::Int8(n) => {
-            i32::try_from(*n).map_err(|_| ExecError::Type(crabka_pgtypes::TypeError::Overflow))
+            i32::try_from(*n).map_err(|_| ExecError::Type(krabka_pgtypes::TypeError::Overflow))
         }
         other => Err(type_error("function", other)),
     }
@@ -5408,7 +5408,7 @@ pub(crate) fn type_error(what: &str, got: &Datum) -> ExecError {
 /// encoding. So `concat` agrees with the DataRow output and with the `||`
 /// operator.
 pub(crate) fn text_render(d: &Datum, tz: &jiff::tz::TimeZone) -> String {
-    String::from_utf8(crabka_pgtypes::encoding::encode_text(d, tz))
+    String::from_utf8(krabka_pgtypes::encoding::encode_text(d, tz))
         .expect("a Datum's text encoding is always valid UTF-8")
 }
 
@@ -5418,9 +5418,9 @@ pub(crate) fn text_render(d: &Datum, tz: &jiff::tz::TimeZone) -> String {
 /// does, so `DateStyle` and `IntervalStyle` reach it.
 pub(crate) fn text_render_in(
     d: &Datum,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> String {
-    String::from_utf8(crabka_pgtypes::encoding::encode_text_in(d, style))
+    String::from_utf8(krabka_pgtypes::encoding::encode_text_in(d, style))
         .expect("a Datum's text encoding is always valid UTF-8")
 }
 
@@ -5430,7 +5430,7 @@ pub(crate) fn text_render_in(
 /// `round`/`trunc` form, which always yields numeric and promotes an int first
 /// argument to numeric. The one-arg form preserves the input numeric type.
 fn round_family(f: ScalarFunc, v: &Datum, scale: Option<i64>) -> Result<Datum, ExecError> {
-    use crabka_pgtypes::numeric as num;
+    use krabka_pgtypes::numeric as num;
     if let Some(n) = scale {
         let bd = match v {
             Datum::Int2(i) => num::from_i64(i64::from(*i)),
@@ -5494,7 +5494,7 @@ fn as_f64(d: &Datum) -> Result<f64, ExecError> {
         Datum::Int8(n) => *n as f64,
         Datum::Float4(x) => f64::from(*x),
         Datum::Float8(x) => *x,
-        Datum::Numeric(d) => crabka_pgtypes::numeric::to_f64(d),
+        Datum::Numeric(d) => krabka_pgtypes::numeric::to_f64(d),
         other => return Err(type_error("function", other)),
     })
 }
@@ -5515,15 +5515,15 @@ fn sleep_for(seconds: f64) -> Result<(), ExecError> {
 
 /// Build a domain error carrying its PostgreSQL SQLSTATE.
 pub(crate) fn domain(sqlstate: &'static str, message: &'static str) -> ExecError {
-    ExecError::Type(crabka_pgtypes::TypeError::Domain { sqlstate, message })
+    ExecError::Type(krabka_pgtypes::TypeError::Domain { sqlstate, message })
 }
 
 fn exp(x: f64) -> Result<Datum, ExecError> {
     let value = x.exp();
     if value.is_infinite() && x.is_finite() {
-        Err(ExecError::Type(crabka_pgtypes::TypeError::float_overflow()))
+        Err(ExecError::Type(krabka_pgtypes::TypeError::float_overflow()))
     } else if value == 0.0 && x.is_finite() {
-        Err(ExecError::Type(crabka_pgtypes::TypeError::float_underflow()))
+        Err(ExecError::Type(krabka_pgtypes::TypeError::float_underflow()))
     } else {
         Ok(Datum::Float8(value))
     }
@@ -5531,13 +5531,13 @@ fn exp(x: f64) -> Result<Datum, ExecError> {
 
 fn gamma(x: f64) -> Result<Datum, ExecError> {
     if x == f64::NEG_INFINITY || (x.is_finite() && x <= 0.0 && x.fract() == 0.0) {
-        return Err(ExecError::Type(crabka_pgtypes::TypeError::float_overflow()));
+        return Err(ExecError::Type(krabka_pgtypes::TypeError::float_overflow()));
     }
     let value = libm::tgamma(x);
     if value.is_infinite() && x.is_finite() {
-        Err(ExecError::Type(crabka_pgtypes::TypeError::float_overflow()))
+        Err(ExecError::Type(krabka_pgtypes::TypeError::float_overflow()))
     } else if value == 0.0 && x.is_finite() {
-        Err(ExecError::Type(crabka_pgtypes::TypeError::float_underflow()))
+        Err(ExecError::Type(krabka_pgtypes::TypeError::float_underflow()))
     } else {
         Ok(Datum::Float8(value))
     }
@@ -5545,11 +5545,11 @@ fn gamma(x: f64) -> Result<Datum, ExecError> {
 
 fn lgamma(x: f64) -> Result<Datum, ExecError> {
     if x.is_finite() && x <= 0.0 && x.fract() == 0.0 {
-        return Err(ExecError::Type(crabka_pgtypes::TypeError::float_overflow()));
+        return Err(ExecError::Type(krabka_pgtypes::TypeError::float_overflow()));
     }
     let value = libm::lgamma(x);
     if value.is_infinite() && x.is_finite() {
-        Err(ExecError::Type(crabka_pgtypes::TypeError::float_overflow()))
+        Err(ExecError::Type(krabka_pgtypes::TypeError::float_overflow()))
     } else {
         Ok(Datum::Float8(value))
     }
@@ -5587,11 +5587,11 @@ fn power_result_type(a: ColumnType, b: ColumnType) -> ColumnType {
 
 /// Promote an int4/int8/numeric Datum to a [`NumericValue`] (for the numeric
 /// power path, where one operand may be an integer).
-pub(crate) fn to_numeric(d: &Datum) -> Result<crabka_pgtypes::numeric::NumericValue, ExecError> {
+pub(crate) fn to_numeric(d: &Datum) -> Result<krabka_pgtypes::numeric::NumericValue, ExecError> {
     match d {
-        Datum::Int2(n) => Ok(crabka_pgtypes::numeric::from_i64(i64::from(*n))),
-        Datum::Int4(n) => Ok(crabka_pgtypes::numeric::from_i64(i64::from(*n))),
-        Datum::Int8(n) => Ok(crabka_pgtypes::numeric::from_i64(*n)),
+        Datum::Int2(n) => Ok(krabka_pgtypes::numeric::from_i64(i64::from(*n))),
+        Datum::Int4(n) => Ok(krabka_pgtypes::numeric::from_i64(i64::from(*n))),
+        Datum::Int8(n) => Ok(krabka_pgtypes::numeric::from_i64(*n)),
         Datum::Numeric(d) => Ok(d.clone()),
         other => Err(type_error("power", other)),
     }
@@ -5613,7 +5613,7 @@ fn power(base: f64, exp: f64) -> Result<Datum, ExecError> {
     }
     let result = base.powf(exp);
     if result.is_infinite() && base.is_finite() && exp.is_finite() {
-        return Err(ExecError::Type(crabka_pgtypes::TypeError::Overflow));
+        return Err(ExecError::Type(krabka_pgtypes::TypeError::Overflow));
     }
     Ok(Datum::Float8(result))
 }
@@ -5639,7 +5639,7 @@ fn eval_range_constructor(
 ) -> Result<Datum, ExecError> {
     require_arity(fc, (1..=3).contains(&vals.len()))?;
     if vals.len() == 1 {
-        return crabka_pgtypes::cast::cast(&vals[0], ColumnType::Range(ty), &ctx.time_zone)
+        return krabka_pgtypes::cast::cast(&vals[0], ColumnType::Range(ty), &ctx.time_zone)
             .map_err(ExecError::from);
     }
     if vals.get(2).is_some_and(Datum::is_null) {
@@ -5647,13 +5647,13 @@ fn eval_range_constructor(
     }
     let bounds = vals.get(2).map_or(Ok("[)"), text_arg)?;
     let [left, right] = bounds.as_bytes() else {
-        return Err(ExecError::Type(crabka_pgtypes::TypeError::Coded {
+        return Err(ExecError::Type(krabka_pgtypes::TypeError::Coded {
             sqlstate: "22023",
             message: "range constructor flags argument must be two characters".into(),
         }));
     };
     if !matches!(left, b'[' | b'(') || !matches!(right, b']' | b')') {
-        return Err(ExecError::Type(crabka_pgtypes::TypeError::Coded {
+        return Err(ExecError::Type(krabka_pgtypes::TypeError::Coded {
             sqlstate: "22023",
             message: "range constructor flags argument must contain one of '(', '[' followed by one of ')', ']'".into(),
         }));
@@ -5662,14 +5662,14 @@ fn eval_range_constructor(
         if value.is_null() {
             Ok(None)
         } else {
-            Ok(Some(Box::new(crabka_pgtypes::cast::cast(
+            Ok(Some(Box::new(krabka_pgtypes::cast::cast(
                 value,
                 *ty.subtype,
                 &ctx.time_zone,
             )?)))
         }
     };
-    let value = crabka_pgtypes::RangeValue {
+    let value = krabka_pgtypes::RangeValue {
         ty,
         lower: cast_bound(&vals[0])?,
         upper: cast_bound(&vals[1])?,
@@ -5677,14 +5677,14 @@ fn eval_range_constructor(
         upper_inclusive: *right == b']',
         empty: false,
     };
-    let literal = crabka_pgtypes::range::to_text(&value, |bound| {
-        String::from_utf8(crabka_pgtypes::encoding::encode_text_in(
+    let literal = krabka_pgtypes::range::to_text(&value, |bound| {
+        String::from_utf8(krabka_pgtypes::encoding::encode_text_in(
             bound,
             ctx.output_style(),
         ))
         .expect("a Datum's text encoding is always valid UTF-8")
     });
-    Ok(Datum::Range(crabka_pgtypes::range::parse(
+    Ok(Datum::Range(krabka_pgtypes::range::parse(
         &literal,
         ty,
         &ctx.time_zone,
@@ -5719,7 +5719,7 @@ fn trim_set(f: ScalarFunc, s: &str, set: &[char]) -> String {
 /// pattern does not match at all.
 fn posix_substring(s: &str, pattern: &str) -> Result<Datum, ExecError> {
     let regex = regex::Regex::new(pattern).map_err(|_| {
-        ExecError::Type(crabka_pgtypes::TypeError::Domain {
+        ExecError::Type(krabka_pgtypes::TypeError::Domain {
             sqlstate: "2201B",
             message: "invalid regular expression",
         })
@@ -5894,15 +5894,15 @@ fn chr(n: i64) -> Result<Datum, ExecError> {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgcatalog::{Column, RelationName, Table};
-    use crabka_pgparser::parser::parse_expr_for_test as pexpr;
+    use krabka_pgcatalog::{Column, RelationName, Table};
+    use krabka_pgparser::parser::parse_expr_for_test as pexpr;
 
     use super::*;
 
     fn table() -> Table {
         Table {
             id: 1,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public("t"),
             columns: vec![
                 Column::new("s", ColumnType::Text),
@@ -5921,7 +5921,7 @@ mod tests {
     fn table_n() -> Table {
         Table {
             id: 1,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public("t"),
             columns: vec![Column::new("qn", ColumnType::Numeric(None))],
             sharded: false,
@@ -6084,7 +6084,7 @@ mod tests {
         let v4 = ev("uuidv4()");
         let v7 = ev("uuidv7()");
         let bytes = |value: &Datum| match value {
-            Datum::Text(text) => crabka_pgtypes::uuid::UuidBytes::parse(text).expect("uuid"),
+            Datum::Text(text) => krabka_pgtypes::uuid::UuidBytes::parse(text).expect("uuid"),
             other => panic!("expected UUID text, got {other:?}"),
         };
         assert_eq!(bytes(&v4).0[6] >> 4, 4);
@@ -6263,7 +6263,7 @@ mod tests {
     #[test]
     fn range_constructors_and_accessors_keep_typed_bounds() {
         let text = |sql: &str| {
-            String::from_utf8(crabka_pgtypes::encoding::encode_text(
+            String::from_utf8(krabka_pgtypes::encoding::encode_text(
                 &ev(sql),
                 &jiff::tz::TimeZone::UTC,
             ))
@@ -6377,13 +6377,13 @@ mod tests {
         // A user-defined range type is usable as a constructor function. The
         // oid is chosen here rather than allocated: the catalog that persists a
         // type owns its oid, and this test never builds one.
-        crabka_pgtypes::usertype::replace(&crabka_pgtypes::usertype::UserType {
+        krabka_pgtypes::usertype::replace(&krabka_pgtypes::usertype::UserType {
             oid: 300_700,
-            array_oid: crabka_pgtypes::usertype::user_array_oid(300_700),
-            schema: crabka_pgtypes::usertype::USER_TYPE_DEFAULT_SCHEMA.to_string(),
+            array_oid: krabka_pgtypes::usertype::user_array_oid(300_700),
+            schema: krabka_pgtypes::usertype::USER_TYPE_DEFAULT_SCHEMA.to_string(),
             name: "range_constructor_test".to_string(),
-            body: crabka_pgtypes::usertype::UserTypeBody::Range(
-                crabka_pgtypes::usertype::RangeBody {
+            body: krabka_pgtypes::usertype::UserTypeBody::Range(
+                krabka_pgtypes::usertype::RangeBody {
                     subtype: ColumnType::Text,
                     collation: None,
                     multirange_schema: None,
@@ -6392,7 +6392,7 @@ mod tests {
             ),
         });
         assert!(text("range_constructor_test('a', 'z')") == "[a,z)");
-        crabka_pgtypes::usertype::unregister("range_constructor_test");
+        krabka_pgtypes::usertype::unregister("range_constructor_test");
     }
 
     #[test]
@@ -6442,7 +6442,7 @@ mod tests {
     #[test]
     fn abs_and_mod() {
         let ctx = crate::clock::EvalCtx::test_default();
-        let num = |s: &str| Datum::Numeric(crabka_pgtypes::numeric::parse(s).expect("n"));
+        let num = |s: &str| Datum::Numeric(krabka_pgtypes::numeric::parse(s).expect("n"));
         assert_eq!(ev("abs(-5)"), Datum::Int4(5));
         assert_eq!(ev("abs(7)"), Datum::Int4(7));
         // SP32: a bare decimal is numeric, so abs over it is numeric (float8 abs
@@ -6477,7 +6477,7 @@ mod tests {
     fn float8_accumulator_keeps_count_sum_and_sum_of_squares() {
         assert!(
             ev("float8_accum(ARRAY[0::float8, 0::float8, 0::float8], 2::float8)")
-                == Datum::Array(crabka_pgtypes::ArrayValue::new(
+                == Datum::Array(krabka_pgtypes::ArrayValue::new(
                     ElemType::Float8,
                     vec![Datum::Float8(1.0), Datum::Float8(2.0), Datum::Float8(4.0)],
                 ))
@@ -6488,14 +6488,14 @@ mod tests {
         assert!(ev("float8_avg(NULL::float8[])") == Datum::Null);
         assert!(
             ev("int4_avg_accum(ARRAY[0::int8, 0::int8], 2)")
-                == Datum::Array(crabka_pgtypes::ArrayValue::new(
+                == Datum::Array(krabka_pgtypes::ArrayValue::new(
                     ElemType::Int8,
                     vec![Datum::Int8(1), Datum::Int8(2)],
                 ))
         );
         assert!(
             ev("int8_avg(ARRAY[3::int8, 6::int8])")
-                == Datum::Numeric(crabka_pgtypes::numeric::parse("2").expect("numeric"))
+                == Datum::Numeric(krabka_pgtypes::numeric::parse("2").expect("numeric"))
         );
         assert!(ev("int4_avg_accum(NULL::int8[], 2)") == Datum::Null);
         assert!(ev("int8_avg(NULL::int8[])") == Datum::Null);
@@ -6570,14 +6570,14 @@ mod tests {
         );
         assert!(
             ev("array_larger(ARRAY[1, 2], ARRAY[1, 3])")
-                == Datum::Array(crabka_pgtypes::ArrayValue::new(
+                == Datum::Array(krabka_pgtypes::ArrayValue::new(
                     ElemType::Int4,
                     vec![Datum::Int4(1), Datum::Int4(3)],
                 ))
         );
         assert!(
             ev("array_larger(ARRAY[1, 2], ARRAY[1, 2])")
-                == Datum::Array(crabka_pgtypes::ArrayValue::new(
+                == Datum::Array(krabka_pgtypes::ArrayValue::new(
                     ElemType::Int4,
                     vec![Datum::Int4(1), Datum::Int4(2)],
                 ))
@@ -6733,7 +6733,7 @@ mod tests {
 
     #[test]
     fn rounding_family_preserves_type() {
-        let num = |s: &str| Datum::Numeric(crabka_pgtypes::numeric::parse(s).expect("n"));
+        let num = |s: &str| Datum::Numeric(krabka_pgtypes::numeric::parse(s).expect("n"));
         // int in → int out (unchanged)
         assert_eq!(ev("floor(5)"), Datum::Int4(5));
         assert_eq!(ev("ceil(5)"), Datum::Int4(5));
@@ -6922,7 +6922,7 @@ mod tests {
 
     #[test]
     fn transcendentals_are_numeric_for_numeric_input() {
-        let num = |s: &str| Datum::Numeric(crabka_pgtypes::numeric::parse(s).expect("n"));
+        let num = |s: &str| Datum::Numeric(krabka_pgtypes::numeric::parse(s).expect("n"));
         // numeric in -> numeric out (oracle-validated exact values from pgtypes unit tests)
         assert_eq!(ev("sqrt(2.0)"), num("1.414213562373095"));
         assert_eq!(ev("exp(1.0)"), num("2.7182818284590452"));
@@ -6965,7 +6965,7 @@ mod tests {
     fn geometric_name_table() -> Table {
         Table {
             id: 1,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public("t"),
             columns: vec![
                 Column::new("area", ColumnType::Int4),
@@ -7375,7 +7375,7 @@ mod tests {
                     crate::partition::hash::hash_int64_extended(-42, 1).to_ne_bytes(),
                 ))
         );
-        let uuid = crabka_pgtypes::uuid::UuidBytes::parse("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11")
+        let uuid = krabka_pgtypes::uuid::UuidBytes::parse("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11")
             .expect("uuid");
         assert!(
             ev("uuid_hash_extended('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 1::int8)")
@@ -7405,7 +7405,7 @@ mod tests {
             ev("hash_multirange_extended('{[1,2)}'::int4multirange, 0)"),
             Datum::Int8(_)
         ));
-        let inet = crabka_pgtypes::Inet::parse("192.168.100.128/25", false).expect("inet");
+        let inet = krabka_pgtypes::Inet::parse("192.168.100.128/25", false).expect("inet");
         let mut inet_bytes = vec![inet.family.wire_code(), inet.bits];
         inet_bytes.extend(&inet.addr[..inet.family.addr_len()]);
         assert!(

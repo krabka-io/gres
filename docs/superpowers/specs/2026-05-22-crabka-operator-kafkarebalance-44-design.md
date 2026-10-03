@@ -6,7 +6,7 @@
 
 ## Goal
 
-Surface the standalone `crabka-rebalancer` service (slices 43a–43g) through
+Surface the standalone `krabka-rebalancer` service (slices 43a–43g) through
 a Kubernetes CRD so operators drive rebalances declaratively instead of by
 hand-poking the Connect-RPC API. This closes Phase 7 of the operator
 roadmap: the rebalancer service was fully built (advisor + executor +

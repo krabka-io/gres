@@ -96,7 +96,7 @@ empirically when the test runs:
   quorum and asserts election + leader→follower replication (the done bar).
   Docker-gated (`#[ignore]` like the other JVM tests, run explicitly /
   in the JVM CI lane), not in the default `cargo test` lane.
-- **Regression:** full `crabka-raft` + the broker controller-path suites
+- **Regression:** full `krabka-raft` + the broker controller-path suites
   (quorum / leader_election / controlled_shutdown / role_separation_observer)
   stay green — the ApiVersions + Fetch-topic_id changes are on the shared
   controller wire, so Crabka↔Crabka must be byte-compatible. The 3d-2 JVM

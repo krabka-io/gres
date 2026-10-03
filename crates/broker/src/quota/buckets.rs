@@ -5,7 +5,7 @@ use std::{
     time::Instant,
 };
 
-use crabka_metadata::EntityKey;
+use krabka_metadata::EntityKey;
 use dashmap::DashMap;
 
 use crate::throttle::TokenBucket;

@@ -138,7 +138,7 @@ that returns the required arguments:
 ```rust
 fn required_args() -> Vec<&'static str> {
     vec![
-        "crabka-bench-driver",
+        "krabka-bench-driver",
         "--scenario",
         "scenario.yaml",
         "--bootstrap",
@@ -154,7 +154,7 @@ Add a child-process test so environment mutation is isolated:
 ```rust
 #[test]
 fn prometheus_request_timeout_environment_and_cli_precedence() {
-    const CHILD: &str = "CRABKA_BENCH_PROMETHEUS_TIMEOUT_CHILD";
+    const CHILD: &str = "KRABKA_BENCH_PROMETHEUS_TIMEOUT_CHILD";
 
     if std::env::var_os(CHILD).is_none() {
         let status = std::process::Command::new(
@@ -195,7 +195,7 @@ Import `clap::Parser` and `std::time::Duration` in the test module as needed.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-bench-driver prometheus_request_timeout --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-bench-driver prometheus_request_timeout --locked
 ```
 
 Expected: compilation fails because the timeout type, CLI field, and new
@@ -212,17 +212,17 @@ refined_type = { workspace = true }
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo check -p crabka-bench-driver --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo check -p krabka-bench-driver --locked
 ```
 
 If `--locked` reports that the lockfile needs an update, run exactly:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo check -p crabka-bench-driver
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo check -p krabka-bench-driver
 ```
 
 Then inspect `Cargo.lock`. The only allowed lock change is the addition of
-`"refined_type"` to the existing `crabka-bench-driver` dependency list.
+`"refined_type"` to the existing `krabka-bench-driver` dependency list.
 
 - [ ] **Step 5: Implement the minimal validated type**
 
@@ -321,7 +321,7 @@ In `capture_resources`, pass
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-bench-driver prometheus_request_timeout --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-bench-driver prometheus_request_timeout --locked
 ```
 
 Expected: all focused timeout tests pass.
@@ -349,10 +349,10 @@ typed timeout.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-bench-driver --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-bench-driver --all-targets --locked -- -D warnings
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo run -p crabka-bench-driver --bin crabka-bench-driver --locked -- --help
-target/debug/crabka-bench-driver --help | rg -c -- '--prometheus-request-timeout-seconds'
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-bench-driver --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-bench-driver --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo run -p krabka-bench-driver --bin krabka-bench-driver --locked -- --help
+target/debug/krabka-bench-driver --help | rg -c -- '--prometheus-request-timeout-seconds'
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 git diff --check
 git diff -- Cargo.lock
@@ -519,15 +519,15 @@ Append `## Bench Driver Prometheus Request Timeout` to
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-bench-driver --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-bench-driver --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-bench-driver --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-bench-driver --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 bash -n bench/scripts/run-scenario.sh
 BENCH_PROMETHEUS_REQUEST_TIMEOUT_SECONDS=7 \
   envsubst '$BENCH_PROMETHEUS_REQUEST_TIMEOUT_SECONDS' \
   < bench/manifests/driver/job-template.yaml \
   | rg -n -A1 'name: BENCH_PROMETHEUS_REQUEST_TIMEOUT_SECONDS'
-target/debug/crabka-bench-driver --help | rg -c -- '--prometheus-request-timeout-seconds'
+target/debug/krabka-bench-driver --help | rg -c -- '--prometheus-request-timeout-seconds'
 git diff --check
 git diff -- Cargo.lock
 tools/audit-runtime-values.sh

@@ -1,7 +1,7 @@
 //! Record-batch v2 header types: `RecordBatchHeader` (zerocopy),
 //! `Attributes`, `TimestampType`.
 
-use crabka_compression::CompressionType;
+use krabka_compression::CompressionType;
 
 /// Timestamp-type bit in the attributes word.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -173,7 +173,7 @@ pub fn patch_base_offset_and_leader_epoch(buf: &mut [u8], base_offset: i64, lead
 #[cfg(test)]
 mod tests {
     use assert2::check;
-    use crabka_compression::CompressionType;
+    use krabka_compression::CompressionType;
 
     use super::*;
 

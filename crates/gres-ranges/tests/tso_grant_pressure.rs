@@ -2,7 +2,7 @@
 //!
 //! This test is ignored by default, because it is timing-sensitive and takes
 //! seconds. Run it explicitly with
-//! `cargo test -p crabka-gres-ranges --test tso_grant_pressure -- --ignored
+//! `cargo test -p krabka-gres-ranges --test tso_grant_pressure -- --ignored
 //! --nocapture`. It drives the real serialized grant conveyor over a
 //! [`TsoOracle`] whose durable committer models a range-0 WAL commit latency. It
 //! compares `logical-tso` against `hlc`, which shows the cost of the persist
@@ -15,11 +15,11 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crabka_gres_ranges::{
+use krabka_gres_ranges::{
     BatchedTsoClient, EpochHeartbeat, GrantLease, MemoryTsoHorizon, TsoError, TsoHorizonCommitter,
     TsoOracle, TsoOracleStats, TsoOracleStatsSnapshot, TsoRpc, TsoTimestamp, hlc_wall_clock,
 };
-use crabka_pgkv::MemKv;
+use krabka_pgkv::MemKv;
 
 /// Concurrent grant loops that load the single serialized oracle.
 const CONCURRENCY: u64 = 64;

@@ -23,7 +23,7 @@ These four choices (settled during brainstorming) frame everything below:
 | Decision | Choice | Consequence |
 |---|---|---|
 | **Goal** | A Confluent Schema Registry-compatible **REST service**. The broker stays schema-agnostic. | No produce-path schema enforcement in the broker (that would be a separate "broker-side validation" feature, explicitly not in scope here). |
-| **Deployment** | A **standalone** `crabka-schema-registry` crate + binary that is a Kafka **client** of Crabka. | Architecturally identical to Confluent SR. Near-zero broker changes — `_schemas` is just a compacted topic the broker serves. Could even front a real Kafka. |
+| **Deployment** | A **standalone** `krabka-schema-registry` crate + binary that is a Kafka **client** of Crabka. | Architecturally identical to Confluent SR. Near-zero broker changes — `_schemas` is just a compacted topic the broker serves. Could even front a real Kafka. |
 | **Storage** | The **`_schemas` compacted topic** is the source of truth (Confluent's model). | Byte-shape exactness of `_schemas` records becomes a compatibility surface (interop with a real Confluent SR). |
 | **Formats** | **Avro + Protobuf + JSON Schema** up front; compatibility checking starts shallow. | Slice 1 carries three parsers + three canonical-form implementations, but only `NONE` compatibility. |
 | **Fidelity** | **Confluent-exact**: `_schemas` record format, REST JSON shapes, numeric error codes, content-types, id-assignment semantics. | Validated in CI against a **real Confluent SR image + real serdes** (the project's Docker/`testcontainers` golden-capture pattern). |
@@ -38,7 +38,7 @@ validation**.
 ## Architecture
 
 A new workspace crate `crates/schema-registry/` producing the
-`crabka-schema-registry` binary (`src/bin/schema-registry.rs`, matching the
+`krabka-schema-registry` binary (`src/bin/schema-registry.rs`, matching the
 `broker.rs` / `rebalancer.rs` convention). The broker is **untouched**; the
 registry reaches Crabka purely through the existing `client-*` crates.
 
@@ -48,7 +48,7 @@ registry reaches Crabka purely through the existing `client-*` crates.
             │  HTTP (application/vnd.schemaregistry.v1+json)
             ▼                                         ▼
  ┌────────────────────────────────────────────────────────┐
- │             crabka-schema-registry  (binary)            │
+ │             krabka-schema-registry  (binary)            │
  │   ┌───────────┐   ┌───────────────┐   ┌─────────────┐   │
  │   │ axum REST │ → │ in-mem store  │ ← │ compat eng  │   │
  │   │  handlers │   │ subjects/ids/ │   │ (per-format)│   │
@@ -73,11 +73,11 @@ registry reaches Crabka purely through the existing `client-*` crates.
 |---|---|---|
 | `rest/` | axum router + handlers; Confluent content-types and error model. | `axum` (already a broker dep) |
 | `store` | In-memory authoritative state: `subject → versions`, `id → schema`, `config`. Rebuilt by replaying `_schemas`; the only thing REST reads from. | — |
-| `kafkastore/producer` | **Primary-only** writer. Serializes a key/value record and `send`s it to `_schemas`. | `crabka-client-producer` (`Producer::send` / `flush`) |
-| `kafkastore/reader` | **Group-less** `StoreReader`: discover the `_schemas` leader, fetch partition 0 from offset 0, apply each record to `store`, then tail. Tracks last-applied offset. | `crabka-client-core` (`Client::refresh_metadata`, `fetch::fetch_partition`) |
-| `kafkastore/topic` | Auto-create `_schemas` (1 partition, `cleanup.policy=compact`, configurable RF) if absent. | `crabka-client-admin` (`create_topics` / `metadata`) |
+| `kafkastore/producer` | **Primary-only** writer. Serializes a key/value record and `send`s it to `_schemas`. | `krabka-client-producer` (`Producer::send` / `flush`) |
+| `kafkastore/reader` | **Group-less** `StoreReader`: discover the `_schemas` leader, fetch partition 0 from offset 0, apply each record to `store`, then tail. Tracks last-applied offset. | `krabka-client-core` (`Client::refresh_metadata`, `fetch::fetch_partition`) |
+| `kafkastore/topic` | Auto-create `_schemas` (1 partition, `cleanup.policy=compact`, configurable RF) if absent. | `krabka-client-admin` (`create_topics` / `metadata`) |
 | `format/{avro,protobuf,json}` | Parse, well-formedness check, canonical form (for id dedup), and (slice 2+) compatibility. | `apache-avro`, `protox`+`prost-reflect`, `serde_json` |
-| `primary` | Slice 1: always-primary. Later: Kafka-group leader election + write-forwarding. | (later) `crabka-client-consumer` group plumbing |
+| `primary` | Slice 1: always-primary. Later: Kafka-group leader election + write-forwarding. | (later) `krabka-client-consumer` group plumbing |
 | `config.rs` | CLI/file config: bootstrap servers, listen addr, `kafkastore.topic` name, RF, client security. | `clap` |
 
 ### Why a group-less reader (not `client-consumer`)
@@ -227,7 +227,7 @@ Each slice is an independently shippable plan with its own spec.
 
 **Deliverables**
 
-1. `crates/schema-registry/` crate + `crabka-schema-registry` binary. Clap
+1. `crates/schema-registry/` crate + `krabka-schema-registry` binary. Clap
    config: bootstrap servers, REST listen addr, `_schemas` topic name + RF,
    client security (TLS / SASL passthrough to `client-*`).
 2. `kafkastore/topic`: auto-create `_schemas` (1 partition, `compact`, RF) if

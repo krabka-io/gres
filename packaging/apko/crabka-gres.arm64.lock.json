@@ -1,7 +1,7 @@
 {
   "version": "v1",
   "config": {
-    "name": "packaging/apko/crabka-gres.arm64.yaml",
+    "name": "packaging/apko/krabka-gres.arm64.yaml",
     "checksum": "sha256-lJlH9zIrvhaU6dSZLovlkIIm9/5U1xY3gXo6hcqLTlI="
   },
   "contents": {

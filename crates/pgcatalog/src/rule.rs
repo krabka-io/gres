@@ -2,7 +2,7 @@
 
 #![allow(clippy::missing_errors_doc)]
 
-use crabka_pgkv::{Kv, KvError, WriteOp};
+use krabka_pgkv::{Kv, KvError, WriteOp};
 
 use crate::{
     CatalogError, RelationName, TableId,
@@ -242,7 +242,7 @@ pub fn deserialize_rule(bytes: &[u8]) -> Result<Rule, KvError> {
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_pgkv::{Kv, MemKv};
 
     use super::*;
 

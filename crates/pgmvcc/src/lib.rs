@@ -5,7 +5,7 @@
 //! Concurrent writers (row locks, block-and-retry, `EvalPlanQual`) arrive in
 //! SP6. Deadlock detection arrives in SP7.
 
-#![doc(html_root_url = "https://docs.rs/crabka-pgmvcc/0.4.2")]
+#![doc(html_root_url = "https://docs.rs/krabka-pgmvcc/0.4.2")]
 
 pub mod clog;
 pub mod gc;

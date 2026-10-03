@@ -1,7 +1,7 @@
 # Crabka Schema Registry — Slice 7: Operator CRD + Packaging (design)
 
 - **Status:** Approved (brainstorm); ready for an implementation plan.
-- **Scope:** Make the standalone `crabka-schema-registry` service deployable on
+- **Scope:** Make the standalone `krabka-schema-registry` service deployable on
   Kubernetes: a `SchemaRegistry` operator CRD + reconciler, a melange/apko
   container image, a Helm chart + generated CRD manifest, docs, and the README
   capability flip (`❌ → ✅`). This is the final slice of the 7-slice roadmap.
@@ -17,7 +17,7 @@
 
 ## 1. Background
 
-`crabka-schema-registry` is a standalone Confluent-compatible registry: a Kafka
+`krabka-schema-registry` is a standalone Confluent-compatible registry: a Kafka
 *client* of the Crabka broker whose state lives in the `_schemas` topic. Slices
 1–6 made it functional (3-format registry + compat, deletes/modes/lookups,
 references, HA via the broker's `"sr"` Kafka-group election + write-forwarding,
@@ -40,7 +40,7 @@ chart, so this slice is the first new service to receive the full treatment.
 - A reconciler that renders a `Deployment` + `Service` + `ConfigMap` + `Secret`
   from a `SchemaRegistry` CR, associated with a managed `Kafka` via the
   `crabka.io/cluster` label (operator-native), gated on the Kafka being Ready.
-- A melange/apko image for `crabka-schema-registry`, built in CI.
+- A melange/apko image for `krabka-schema-registry`, built in CI.
 - A standalone Helm chart + generated CRD manifest + operator RBAC.
 - Docs + README capability flip.
 - Validation: mock-client reconcile unit tests + a kind e2e round-trip.
@@ -48,7 +48,7 @@ chart, so this slice is the first new service to receive the full treatment.
 **Non-goals (YAGNI / deferred)**
 - **JWKS-backed Bearer auth.** SR's `--bearer` supports `off|unsecured` only
   today. The CRD models `bearer.mode: unsecured` (+ `principalClaim`); a
-  production JWKS mode needs the (already-present) `crabka-security` JWKS
+  production JWKS mode needs the (already-present) `krabka-security` JWKS
   validator wired into SR's CLI — a small follow-up, deliberately **out of scope**
   to keep this slice "operator + packaging." (Flagged for review — see §11.)
 - **Operator-minted serving certificates.** Slice 7 references a user/cert-manager
@@ -65,8 +65,8 @@ Five units, each independently reviewable:
 |---|---|---|
 | CRD | `crates/operator/src/crd/schema_registry.rs` (+ `crd/mod.rs` re-exports, `gen_crds.rs` registration) | The `SchemaRegistry` Spec/Status types + generated CRD YAML. |
 | Reconciler | `crates/operator/src/controller/schema_registry.rs` (+ `controller/mod.rs`; child-resource renderers near `controller/common.rs`) | Watch `SchemaRegistry`+`Kafka`; render+SSA the child resources; patch status. |
-| Packaging | `packaging/melange/crabka-schema-registry.yaml`, `packaging/apko/crabka-schema-registry.yaml`, `.github/workflows/operator-e2e.yml` (build-images loop) | Build the OCI image in CI. |
-| Helm + manifests | `charts/crabka-schema-registry/**`, `deploy/crds/crabka.io_schemaregistries.yaml`, `charts/crabka-operator/templates/clusterrole.yaml` (RBAC) | Non-operator install path + CRD manifest + operator RBAC. |
+| Packaging | `packaging/melange/krabka-schema-registry.yaml`, `packaging/apko/krabka-schema-registry.yaml`, `.github/workflows/operator-e2e.yml` (build-images loop) | Build the OCI image in CI. |
+| Helm + manifests | `charts/krabka-schema-registry/**`, `deploy/crds/crabka.io_schemaregistries.yaml`, `charts/krabka-operator/templates/clusterrole.yaml` (RBAC) | Non-operator install path + CRD manifest + operator RBAC. |
 | Docs | `website/` (or `docs/`) deploy page, `README.md` capability table | Document deployment; flip `❌ → ✅`. |
 
 **Workload = `Deployment` (not `StatefulSet`).** SR is stateless — all registry
@@ -192,7 +192,7 @@ internal listener — not a CRD field (see §5).
   `admin_client_for` / the broker internal listener authenticate; for a
   PLAINTEXT internal listener this is a no-op.)
 - **Children (all `OwnerReference`'d to the CR, SSA-applied via `apply_object`
-  with `field_manager = crabka-operator`):**
+  with `field_manager = krabka-operator`):**
   - **`ConfigMap`** — non-secret config rendered to container **args/env**:
     bootstrap, schemas topic + RF, group id, TLS client-auth mode, authz
     enabled/super-users/refresh, bearer mode + principal-claim, require-auth,
@@ -218,24 +218,24 @@ internal listener — not a CRD field (see §5).
 ## 6. Packaging
 
 Clone the broker recipes:
-- `packaging/melange/crabka-schema-registry.yaml` — pinned Rust toolchain,
-  `cargo build --release --bin crabka-schema-registry -p crabka-schema-registry`,
-  install to `/usr/bin/crabka-schema-registry`.
-- `packaging/apko/crabka-schema-registry.yaml` — Wolfi base + ca-certificates +
-  tzdata, `entrypoint: /usr/bin/crabka-schema-registry`, run-as nonroot 65532,
+- `packaging/melange/krabka-schema-registry.yaml` — pinned Rust toolchain,
+  `cargo build --release --bin krabka-schema-registry -p krabka-schema-registry`,
+  install to `/usr/bin/krabka-schema-registry`.
+- `packaging/apko/krabka-schema-registry.yaml` — Wolfi base + ca-certificates +
+  tzdata, `entrypoint: /usr/bin/krabka-schema-registry`, run-as nonroot 65532,
   `cmd: run`, x86_64.
-- `.github/workflows/operator-e2e.yml` — add `crabka-schema-registry` to the
+- `.github/workflows/operator-e2e.yml` — add `krabka-schema-registry` to the
   `build-images` recipe loop (apk + OCI tarball uploaded for the e2e job).
 
 ## 7. Helm chart + manifests
 
-- `charts/crabka-schema-registry/` — standalone chart for non-operator installs
+- `charts/krabka-schema-registry/` — standalone chart for non-operator installs
   pointing at an external/managed bootstrap: `Chart.yaml`, `values.yaml`
   (image, replicas, resources, bootstrap, tls/auth secret refs, securityContext),
   `templates/{deployment.yaml,service.yaml,serviceaccount.yaml,_helpers.tpl}`.
 - `deploy/crds/crabka.io_schemaregistries.yaml` — generated by `gen_crds`
   (applied before the chart, matching the operator's CRD-apply step).
-- `charts/crabka-operator/templates/clusterrole.yaml` — add
+- `charts/krabka-operator/templates/clusterrole.yaml` — add
   `schemaregistries` (+ `/status`, `/finalizers`) to the operator ClusterRole.
 - Operator CLI: add `--default-schema-registry-image` (mirroring
   `--default-broker-image`) so the reconciler has a default image.
@@ -245,7 +245,7 @@ Clone the broker recipes:
 - A deploy page (under `website/`/docs, following the docs-site pattern) with a
   `SchemaRegistry` CR example + the Helm install path.
 - Flip the README capability table `| Schema Registry | ❌ |` → `✅`.
-- The `crabka-docgen` CRD reference auto-generates the SchemaRegistry CRD docs if
+- The `krabka-docgen` CRD reference auto-generates the SchemaRegistry CRD docs if
   it enumerates CRDs (verify in the plan; extend if needed).
 
 ## 9. Testing
@@ -274,7 +274,7 @@ Clone the broker recipes:
 | 1 | Packaging | `packaging/melange/*`, `packaging/apko/*`, `operator-e2e.yml` build-images |
 | 2 | CRD + gen + schema test | `crd/schema_registry.rs`, `crd/mod.rs`, `gen_crds.rs`, generated `deploy/crds/*.yaml`, CRD schema test |
 | 3 | Reconciler + unit tests | `controller/schema_registry.rs`, `controller/mod.rs`, `controller/common.rs` (renderers), `tests/reconcile_schema_registry.rs`, operator `--default-schema-registry-image` flag |
-| 4 | Helm + RBAC | `charts/crabka-schema-registry/**`, `charts/crabka-operator/templates/clusterrole.yaml` |
+| 4 | Helm + RBAC | `charts/krabka-schema-registry/**`, `charts/krabka-operator/templates/clusterrole.yaml` |
 | 5 | e2e + docs + README | `operator-e2e.yml` e2e steps, docs page, `README.md` |
 
 Batches 1 and 2 don't touch overlapping files → parallelizable. Batch 3 depends
@@ -284,7 +284,7 @@ on 2 (the CRD types). Batches 4–5 depend on 3.
 
 1. **JWKS Bearer** — modeled as deferred (CRD has `bearer.mode: unsecured` only,
    since that's all SR's CLI supports). Option to pull a small JWKS-wiring task
-   into slice 7 (the validator already exists in `crabka-security`) if you want
+   into slice 7 (the validator already exists in `krabka-security`) if you want
    the CRD's bearer to be production-grade now. **Default: defer.**
 2. **TLS serving cert** — referenced Secret (cert-manager/user-supplied), not
    operator-minted. **Default: Secret ref.**

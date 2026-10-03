@@ -8,10 +8,10 @@ pub(super) fn stored_default_value(written: Datum, coerced: Datum) -> Datum {
 }
 
 pub(super) fn column_from_ast(
-    table_name: &crabka_pgcatalog::RelationName,
-    column: &crabka_pgparser::ast::ColumnDef,
+    table_name: &krabka_pgcatalog::RelationName,
+    column: &krabka_pgparser::ast::ColumnDef,
     ctx: &crate::clock::EvalCtx,
-    serial_sequences: &mut Vec<(crabka_pgcatalog::RelationName, Sequence)>,
+    serial_sequences: &mut Vec<(krabka_pgcatalog::RelationName, Sequence)>,
     primary_key_columns: &HashSet<&str>,
 ) -> Result<Column, ExecError> {
     let mut catalog_column = Column::new(column.name.clone(), column.ty);
@@ -41,15 +41,15 @@ pub(super) fn column_from_ast(
     }
     for constraint in &column.constraints {
         match &constraint.kind {
-            crabka_pgparser::ast::ColumnConstraintKind::NotNull => catalog_column.not_null = true,
-            crabka_pgparser::ast::ColumnConstraintKind::Null => catalog_column.not_null = false,
-            crabka_pgparser::ast::ColumnConstraintKind::Default(expr) => {
+            krabka_pgparser::ast::ColumnConstraintKind::NotNull => catalog_column.not_null = true,
+            krabka_pgparser::ast::ColumnConstraintKind::Null => catalog_column.not_null = false,
+            krabka_pgparser::ast::ColumnConstraintKind::Default(expr) => {
                 catalog_column.default = Some(default_from_expr(expr, column.ty, ctx)?);
             }
-            crabka_pgparser::ast::ColumnConstraintKind::PrimaryKey => {
+            krabka_pgparser::ast::ColumnConstraintKind::PrimaryKey => {
                 catalog_column.not_null = true;
             }
-            crabka_pgparser::ast::ColumnConstraintKind::Unique { nulls_not_distinct } => {
+            krabka_pgparser::ast::ColumnConstraintKind::Unique { nulls_not_distinct } => {
                 if *nulls_not_distinct {
                     return Err(ExecError::Unsupported(
                         "UNIQUE NULLS NOT DISTINCT is not supported: unique indexes use \
@@ -58,46 +58,46 @@ pub(super) fn column_from_ast(
                     ));
                 }
             }
-            crabka_pgparser::ast::ColumnConstraintKind::Identity(spec) => {
+            krabka_pgparser::ast::ColumnConstraintKind::Identity(spec) => {
                 let sequence_name =
                     table_name.sibling(format!("{}_{}_seq", table_name.name, column.name));
                 catalog_column.not_null = true;
                 catalog_column.identity = Some(if spec.always {
-                    crabka_pgcatalog::IdentityKind::Always
+                    krabka_pgcatalog::IdentityKind::Always
                 } else {
-                    crabka_pgcatalog::IdentityKind::ByDefault
+                    krabka_pgcatalog::IdentityKind::ByDefault
                 });
                 catalog_column.default = Some(ColumnDefault::NextVal(sequence_name.to_string()));
                 serial_sequences.push((sequence_name, sequence_from_options(&spec.options)));
             }
-            crabka_pgparser::ast::ColumnConstraintKind::Generated(spec) => {
+            krabka_pgparser::ast::ColumnConstraintKind::Generated(spec) => {
                 if catalog_column.generated.is_some() {
                     return Err(ExecError::Syntax(format!(
                         "multiple generation clauses specified for column \"{}\" of table \"{}\"",
                         column.name, table_name.name
                     )));
                 }
-                catalog_column.generated = Some(crabka_pgcatalog::GeneratedColumn {
+                catalog_column.generated = Some(krabka_pgcatalog::GeneratedColumn {
                     expr: spec.predicate.text.clone(),
                     kind: match spec.kind {
-                        crabka_pgparser::ast::GeneratedKind::Stored => {
-                            crabka_pgcatalog::GeneratedKind::Stored
+                        krabka_pgparser::ast::GeneratedKind::Stored => {
+                            krabka_pgcatalog::GeneratedKind::Stored
                         }
-                        crabka_pgparser::ast::GeneratedKind::Virtual => {
-                            crabka_pgcatalog::GeneratedKind::Virtual
+                        krabka_pgparser::ast::GeneratedKind::Virtual => {
+                            krabka_pgcatalog::GeneratedKind::Virtual
                         }
                     },
                 });
             }
-            crabka_pgparser::ast::ColumnConstraintKind::Check(_)
-            | crabka_pgparser::ast::ColumnConstraintKind::References(_) => {}
+            krabka_pgparser::ast::ColumnConstraintKind::Check(_)
+            | krabka_pgparser::ast::ColumnConstraintKind::References(_) => {}
         }
     }
     if catalog_column.default.is_none()
         && catalog_column.generated.is_none()
         && let Some((source, representation)) = base_type_default(column.ty)
     {
-        let expr = crabka_pgparser::parser::parse_expression(&source)?;
+        let expr = krabka_pgparser::parser::parse_expression(&source)?;
         catalog_column.default = Some(default_from_expr(&expr, representation, ctx)?);
     }
     if catalog_column.generated.is_some() {
@@ -123,8 +123,8 @@ fn base_type_default(ty: ColumnType) -> Option<(String, ColumnType)> {
     let ColumnType::Base(base) = ty else {
         return None;
     };
-    let user_type = crabka_pgtypes::usertype::lookup_oid(base.oid)?;
-    let crabka_pgtypes::usertype::UserTypeBody::Base(body) = &user_type.body else {
+    let user_type = krabka_pgtypes::usertype::lookup_oid(base.oid)?;
+    let krabka_pgtypes::usertype::UserTypeBody::Base(body) = &user_type.body else {
         return None;
     };
     body.default

@@ -64,11 +64,11 @@ generated Kubernetes CRDs.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-substrate recovery_read_policy --lib
+  cargo test -p krabka-gres-substrate recovery_read_policy --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-substrate --no-fail-fast
+  cargo test -p krabka-gres-substrate --no-fail-fast
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-gres-substrate --all-targets --all-features -- -D warnings
+  cargo clippy -p krabka-gres-substrate --all-targets --all-features -- -D warnings
 cargo fmt --all -- --check
 git diff --check
 ```
@@ -94,9 +94,9 @@ git commit -m "feat(gres): configure recovery connection timeouts"
 **Produces:**
 
 - `--wal-recovery-connect-timeout-ms`
-  / `CRABKA_GRES_WAL_RECOVERY_CONNECT_TIMEOUT_MS`
+  / `KRABKA_GRES_WAL_RECOVERY_CONNECT_TIMEOUT_MS`
 - `--wal-recovery-request-timeout-ms`
-  / `CRABKA_GRES_WAL_RECOVERY_REQUEST_TIMEOUT_MS`
+  / `KRABKA_GRES_WAL_RECOVERY_REQUEST_TIMEOUT_MS`
 
 - [ ] Extend the existing child-process recovery-policy test from four
   environment variables/values to six. Require defaults, environment values,
@@ -116,13 +116,13 @@ git commit -m "feat(gres): configure recovery connection timeouts"
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres wal_recovery --lib
+  cargo test -p krabka-gres wal_recovery --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres --no-fail-fast
+  cargo test -p krabka-gres --no-fail-fast
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-gres --all-targets --all-features -- -D warnings
+  cargo clippy -p krabka-gres --all-targets --all-features -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-gres -- --help
+  cargo run -q -p krabka-gres -- --help
 cargo fmt --all -- --check
 git diff --check
 ```

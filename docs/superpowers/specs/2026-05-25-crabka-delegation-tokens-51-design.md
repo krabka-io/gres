@@ -260,7 +260,7 @@ pub struct DelegationTokenRecord {
 
 ### 3.3 Image accessor
 
-`crabka_raft::Image` gains:
+`krabka_raft::Image` gains:
 
 ```rust
 pub struct Image {
@@ -310,7 +310,7 @@ representation.
 Required; loaded once at broker startup. Two sources, precedence
 order:
 
-1. Env var `CRABKA_DELEGATION_TOKEN_SECRET_KEY` (Kafka's
+1. Env var `KRABKA_DELEGATION_TOKEN_SECRET_KEY` (Kafka's
    `KAFKA_DELEGATION_TOKEN_SECRET_KEY` convention — namespaced).
 2. Broker config TOML: `[delegation_token] secret_key = "..."`.
 
@@ -434,7 +434,7 @@ Eight tasks, grouped into batches by file-set independence:
 
 **Batch 1 — record + image + helper** (parallel: T1, T2, T3)
 - **T1**: `DelegationTokenRecord` in `crates/protocol/src/records.rs`
-  + bincode encode/decode + image apply branch in `crabka_raft`.
+  + bincode encode/decode + image apply branch in `krabka_raft`.
 - **T2**: `DelegationToken` image type + accessors (`delegation_token_by_id`,
   `delegation_tokens_by_owner`, `delegation_tokens_visible_to`,
   `all_delegation_tokens`).
@@ -485,7 +485,7 @@ Eight tasks, grouped into batches by file-set independence:
 |-------------------------------------------------------|----------:|------------------------------------------------------------------------|
 | `crates/security/src/delegation_token.rs`             |         3 | HMAC determinism, key sensitivity, SecretBytes Debug redaction         |
 | `crates/protocol/src/records.rs` (or wherever record encoding lives) | 2 | record round-trip encode/decode, tombstone flag round-trip   |
-| `crabka_raft` image apply tests                       |         3 | apply insert / apply replace / apply tombstone                         |
+| `krabka_raft` image apply tests                       |         3 | apply insert / apply replace / apply tombstone                         |
 | `crates/broker/src/handlers/create_delegation_token.rs` | 4       | success, auth-disabled, token-creates-token rejected, max-lifetime clamping |
 | `crates/broker/src/handlers/renew_delegation_token.rs` | 3        | success-as-owner, success-as-renewer, owner-mismatch                    |
 | `crates/broker/src/handlers/expire_delegation_token.rs`| 3        | future-expiry, immediate-delete (negative period), owner-mismatch       |
@@ -549,6 +549,6 @@ Eight tasks, grouped into batches by file-set independence:
 - `cargo fmt --all --check`
 - `cargo clippy --all-targets -- -D warnings`
 - `cargo test --workspace`
-- `cargo test -p crabka-broker --test delegation_tokens`
-- `cargo test -p crabka-broker --test jvm_acceptance -- --ignored jvm_kafka_delegation_tokens_end_to_end` (WSL; not run in CI)
+- `cargo test -p krabka-broker --test delegation_tokens`
+- `cargo test -p krabka-broker --test jvm_acceptance -- --ignored jvm_kafka_delegation_tokens_end_to_end` (WSL; not run in CI)
 - CRD drift check stays green (no CRD changes in this slice).

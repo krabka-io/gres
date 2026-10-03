@@ -158,21 +158,21 @@ pub use topic::{KafkaTopic, KafkaTopicSpec, KafkaTopicStatus};
 
 ```toml
 [package]
-name = "crabka-client-admin"
+name = "krabka-client-admin"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-crabka-client-core = { workspace = true }
-crabka-protocol    = { workspace = true }
+krabka-client-core = { workspace = true }
+krabka-protocol    = { workspace = true }
 bytes              = { workspace = true }
 thiserror          = { workspace = true }
 tokio              = { workspace = true, features = ["sync"] }
 tracing            = { workspace = true }
 
 [dev-dependencies]
-crabka-broker      = { workspace = true }
+krabka-broker      = { workspace = true }
 tempfile           = { workspace = true }
 tokio              = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
 ```
@@ -184,13 +184,13 @@ Add to workspace `Cargo.toml`:
 "crates/client-admin",
 
 [workspace.dependencies]
-crabka-client-admin = { path = "crates/client-admin", version = "0.1.1" }
+krabka-client-admin = { path = "crates/client-admin", version = "0.1.1" }
 ```
 
 ### Public API
 
 ```rust
-use crabka_client_core::Connection;
+use krabka_client_core::Connection;
 
 /// Short-lived admin client targeting one cluster's controller.
 /// Plaintext only (TLS / SASL are slice 36 work).
@@ -208,7 +208,7 @@ pub enum AdminError {
             detail = .message.as_deref().map(|m| format!(" {m:?}")).unwrap_or_default())]
     Broker { api: &'static str, code: i16, name: &'static str, message: Option<String> },
     #[error("client-core: {0}")]
-    Transport(#[from] crabka_client_core::ClientError),
+    Transport(#[from] krabka_client_core::ClientError),
     #[error("protocol: {0}")]
     Protocol(String),
 }
@@ -605,7 +605,7 @@ const FINALIZER: &str = "crabka.io/topic-finalizer";
 
 ## 5. Helm chart RBAC additions
 
-`charts/crabka-operator/templates/clusterrole.yaml` gains:
+`charts/krabka-operator/templates/clusterrole.yaml` gains:
 
 ```yaml
   - apiGroups: ["crabka.io"]
@@ -749,7 +749,7 @@ crates/operator/src/
 crates/operator/tests/
 ├── reconcile_topic.rs                            # NEW
 
-charts/crabka-operator/templates/
+charts/krabka-operator/templates/
 ├── clusterrole.yaml                              # MODIFIED — kafkatopics + finalizers + status verbs
 
 deploy/crds/
@@ -775,7 +775,7 @@ Cargo.toml (workspace)                            # MODIFIED — new member + wo
 | `crates/operator/src/run.rs` | T3 |
 | `crates/operator/src/gen_crds.rs` | T3 (or T4 if regen is split) |
 | `crates/operator/tests/reconcile_topic.rs` | T3 |
-| `charts/crabka-operator/templates/clusterrole.yaml` | T4 |
+| `charts/krabka-operator/templates/clusterrole.yaml` | T4 |
 | `deploy/crds/crabka.io_kafkatopics.yaml` | T5 |
 | `Cargo.toml` (workspace) | T1 |
 | `.github/workflows/operator-e2e.yml` | T6 |
@@ -793,11 +793,11 @@ Roughly: T1 ‖ T2 ‖ T4 → T3 → T5 ‖ T6.
 ## 9. Acceptance criteria
 
 1. `cargo build` (workspace) clean.
-2. `cargo test -p crabka-client-admin` green (~6 unit + 1 integration).
-3. `cargo test -p crabka-operator` green (existing + ~12 new tests).
+2. `cargo test -p krabka-client-admin` green (~6 unit + 1 integration).
+3. `cargo test -p krabka-operator` green (existing + ~12 new tests).
 4. `cargo clippy --workspace --all-targets -- -D warnings` clean.
 5. `./tools/regen-crds.sh` produces no diff after first run; `deploy/crds/crabka.io_kafkatopics.yaml` is generated.
-6. `helm lint charts/crabka-operator` 0 errors.
+6. `helm lint charts/krabka-operator` 0 errors.
 7. `kind-kafkatopic` e2e job passes: CRD create → partition increase → immutable-change rejected → delete cascade, all assertions through JVM `kafka-topics` / `kafka-configs`.
 
 ---

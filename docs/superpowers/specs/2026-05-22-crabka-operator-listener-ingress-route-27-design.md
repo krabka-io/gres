@@ -160,7 +160,7 @@ ClusterRole gains:
 
 ## Acceptance criteria
 
-1. `cargo build -p crabka-operator` clean; `cargo test -p crabka-operator`
+1. `cargo build -p krabka-operator` clean; `cargo test -p krabka-operator`
    passes the new unit + integration tests.
 2. Validation: ingress/route without `tls` → `ListenersValid=False reason=
    ListenerIngressRequiresTls`; ingress/route without bootstrap host →
@@ -168,5 +168,5 @@ ClusterRole gains:
 3. An ingress listener renders ClusterIP backends + Ingress objects, a
    ConfigMap whose `advertised` is `<host>:443`, and `ListenersReady=True`.
 4. A route listener renders the dynamic `route.openshift.io/v1` objects.
-5. CRD-drift: `cargo run -p crabka-operator -- gen-crds deploy/crds` produces
-   only the `class` addition; `helm lint charts/crabka-operator` passes.
+5. CRD-drift: `cargo run -p krabka-operator -- gen-crds deploy/crds` produces
+   only the `class` addition; `helm lint charts/krabka-operator` passes.

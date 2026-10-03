@@ -2,8 +2,8 @@
 
 use std::collections::BTreeMap;
 
-use crabka_pgkv::{Kv, MemKv, WriteOp};
-use crabka_units::{ByteSize, convert::ByteSizeExt as _, fmt::Human as _, mebibytes};
+use krabka_pgkv::{Kv, MemKv, WriteOp};
+use krabka_units::{ByteSize, convert::ByteSizeExt as _, fmt::Human as _, mebibytes};
 
 use crate::{
     SubstrateError, WalFrame,
@@ -18,7 +18,7 @@ pub const DEFAULT_DURABLE_INSPECTION_FOLD_MAX_RECORDS: usize = 1_000_000;
 /// Default byte ceiling for a durable inspection fold.
 pub const DEFAULT_DURABLE_INSPECTION_FOLD_MAX_SIZE: ByteSize = mebibytes(256);
 /// Default deadline for one durable inspection.
-pub const DEFAULT_DURABLE_INSPECTION_TIMEOUT: crabka_units::Time = crabka_units::secs(4);
+pub const DEFAULT_DURABLE_INSPECTION_TIMEOUT: krabka_units::Time = krabka_units::secs(4);
 
 /// Read-only witness for the range WAL generation.
 #[async_trait::async_trait]
@@ -435,7 +435,7 @@ fn enforce_limits(
 mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    use crabka_pgkv::{Kv, MemKv, WriteOp};
+    use krabka_pgkv::{Kv, MemKv, WriteOp};
 
     use super::*;
     use crate::{
@@ -487,7 +487,7 @@ mod tests {
                 wal_generation: 0,
                 garbage_horizon_xid: 0,
             },
-            crabka_units::kibibytes(1),
+            krabka_units::kibibytes(1),
         )
         .await
         .expect("checkpoint");
@@ -561,7 +561,7 @@ mod tests {
         append(&log, 0, b"gone", b"history").await;
         crate::checkpoint::CheckpointWalPruner::delete_records(
             log.as_ref(),
-            &[crabka_client_admin::DeleteRecordsOp {
+            &[krabka_client_admin::DeleteRecordsOp {
                 topic: "ignored".into(),
                 partition: 0,
                 offset: 1,
@@ -611,7 +611,7 @@ mod tests {
                     wal_generation: 0,
                     garbage_horizon_xid: 0,
                 },
-                crabka_units::kibibytes(1),
+                krabka_units::kibibytes(1),
             )
             .await
             .expect("checkpoint");
@@ -683,7 +683,7 @@ mod tests {
             projection: FoldProjection::All,
             limits: FoldLimits {
                 max_records: 1,
-                max_size: crabka_units::bytes(100),
+                max_size: krabka_units::bytes(100),
             },
         })
         .await

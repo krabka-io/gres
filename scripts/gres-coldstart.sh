@@ -13,15 +13,15 @@ legacy local scripted-controller harness remains available only as an explicitly
 named non-gating component diagnostic.
 
 Environment:
-  CRABKA_GRES_SKIP_BUILD=1                  Reuse existing target/debug binaries.
-  CRABKA_GRES_COLDSTART_ITERATIONS=<n>      Iterations to measure (default: 10).
-  CRABKA_GRES_COLDSTART_MODE=operator-kind  Real operator/Kind gate (default).
-  CRABKA_GRES_COLDSTART_MODE=component-non-gating
+  KRABKA_GRES_SKIP_BUILD=1                  Reuse existing target/debug binaries.
+  KRABKA_GRES_COLDSTART_ITERATIONS=<n>      Iterations to measure (default: 10).
+  KRABKA_GRES_COLDSTART_MODE=operator-kind  Real operator/Kind gate (default).
+  KRABKA_GRES_COLDSTART_MODE=component-non-gating
                                               Local component diagnostic only.
-  CRABKA_GRES_COLDSTART_ARTIFACT_DIR=<dir>  Artifact directory (default: target/gres-coldstart-artifacts).
-  CRABKA_GRES_COLDSTART_KEEP_ARTIFACTS=1    Keep artifacts after a successful run.
-  CRABKA_GRES_COLDSTART_P95_CEILING_MS=<ms> CI backstop ceiling for p95 (default: 30000).
-  CRABKA_GRES_PGDOG_IMAGE=<image>           Override the pinned PgDog image.
+  KRABKA_GRES_COLDSTART_ARTIFACT_DIR=<dir>  Artifact directory (default: target/gres-coldstart-artifacts).
+  KRABKA_GRES_COLDSTART_KEEP_ARTIFACTS=1    Keep artifacts after a successful run.
+  KRABKA_GRES_COLDSTART_P95_CEILING_MS=<ms> CI backstop ceiling for p95 (default: 30000).
+  KRABKA_GRES_PGDOG_IMAGE=<image>           Override the pinned PgDog image.
 EOF
 }
 
@@ -31,12 +31,12 @@ case "${1:-}" in
     *) echo "FAIL: unknown argument $1" >&2; usage >&2; exit 2 ;;
 esac
 
-readonly COLDSTART_MODE="${CRABKA_GRES_COLDSTART_MODE:-operator-kind}"
+readonly COLDSTART_MODE="${KRABKA_GRES_COLDSTART_MODE:-operator-kind}"
 if [ "$COLDSTART_MODE" = "operator-kind" ]; then
     exec ./scripts/gres-kind-lifecycle.sh
 fi
 if [ "$COLDSTART_MODE" != "component-non-gating" ]; then
-    echo "FAIL: CRABKA_GRES_COLDSTART_MODE must be operator-kind or component-non-gating" >&2
+    echo "FAIL: KRABKA_GRES_COLDSTART_MODE must be operator-kind or component-non-gating" >&2
     exit 2
 fi
 echo "WARNING: component-non-gating uses a local scripted controller and is not G-5 evidence" >&2
@@ -47,11 +47,11 @@ readonly SQL_PASSWORD="cold-secret"
 readonly COMPUTE_HOST="127.0.0.2"
 readonly COMPUTE_PORT="5432"
 readonly CLUSTER_ID="00000000-0000-0000-0000-000000000001"
-readonly PGDOG_IMAGE="${CRABKA_GRES_PGDOG_IMAGE:-ghcr.io/pgdogdev/pgdog:0.1.47}"
-readonly ARTIFACT_DIR="${CRABKA_GRES_COLDSTART_ARTIFACT_DIR:-target/gres-coldstart-artifacts}"
-readonly ITERATIONS="${CRABKA_GRES_COLDSTART_ITERATIONS:-10}"
+readonly PGDOG_IMAGE="${KRABKA_GRES_PGDOG_IMAGE:-ghcr.io/pgdogdev/pgdog:0.1.47}"
+readonly ARTIFACT_DIR="${KRABKA_GRES_COLDSTART_ARTIFACT_DIR:-target/gres-coldstart-artifacts}"
+readonly ITERATIONS="${KRABKA_GRES_COLDSTART_ITERATIONS:-10}"
 # This is a deliberately generous CI-environment backstop, not the product SLO.
-readonly P95_CEILING_MS="${CRABKA_GRES_COLDSTART_P95_CEILING_MS:-30000}"
+readonly P95_CEILING_MS="${KRABKA_GRES_COLDSTART_P95_CEILING_MS:-30000}"
 
 BROKER_PID=""
 ACTIVATOR_PID=""
@@ -88,7 +88,7 @@ cleanup() {
     if [ "$status" -ne 0 ]; then
         dump_diagnostics
     fi
-    if [ "${CRABKA_GRES_COLDSTART_KEEP_ARTIFACTS:-0}" != "1" ] && [ "$status" -eq 0 ]; then
+    if [ "${KRABKA_GRES_COLDSTART_KEEP_ARTIFACTS:-0}" != "1" ] && [ "$status" -eq 0 ]; then
         rm -rf "$ARTIFACT_DIR"
     else
         log "kept artifacts in ${ARTIFACT_DIR}"
@@ -233,7 +233,7 @@ type = "simple"
 super_users = ["ANONYMOUS"]
 EOF
 
-    ./target/debug/crabka-broker \
+    ./target/debug/krabka-broker \
         --log-dir "${ARTIFACT_DIR}/broker-data" \
         --cluster-id "$CLUSTER_ID" \
         --broker-id 1 \
@@ -255,7 +255,7 @@ create_tenant() {
 
 start_compute() {
     GRES_KAFKA_USERNAME="gres-${TENANT}" GRES_KAFKA_PASSWORD="$SQL_PASSWORD" \
-        ./target/debug/crabka-gres \
+        ./target/debug/krabka-gres \
             --listen "${COMPUTE_HOST}:${COMPUTE_PORT}" \
             --substrate-bootstrap "127.0.0.1:${SASL_PORT}" \
             --tenant "$TENANT" \
@@ -306,7 +306,7 @@ EOF
 }
 
 start_activator() {
-    ./target/debug/crabka-gres-activator \
+    ./target/debug/krabka-gres-activator \
         --listen "127.0.0.1:${ACTIVATOR_PORT}" \
         --bootstrap "127.0.0.1:${BROKER_PORT}" \
         --registry-poll-ms 100 \
@@ -321,7 +321,7 @@ start_pgdog() {
     timeout 120s docker pull "$PGDOG_IMAGE" >"${ARTIFACT_DIR}/pull-pgdog.log" 2>&1 ||
         fail "PgDog image pull failed or timed out"
     PGDOG_CONTAINER=$(docker run -d --network host \
-        --name "crabka-gres-coldstart-pgdog-${PGDOG_PORT}" \
+        --name "krabka-gres-coldstart-pgdog-${PGDOG_PORT}" \
         -v "${PWD}/${ARTIFACT_DIR}/pgdog:/etc/pgdog:ro" \
         "$PGDOG_IMAGE" \
         /usr/local/bin/pgdog --config /etc/pgdog/pgdog.toml --users /etc/pgdog/users.toml run)
@@ -466,8 +466,8 @@ with open(sys.argv[2], "a", encoding="utf-8") as handle:
 PY
 }
 
-require_positive_integer CRABKA_GRES_COLDSTART_ITERATIONS "$ITERATIONS"
-require_positive_integer CRABKA_GRES_COLDSTART_P95_CEILING_MS "$P95_CEILING_MS"
+require_positive_integer KRABKA_GRES_COLDSTART_ITERATIONS "$ITERATIONS"
+require_positive_integer KRABKA_GRES_COLDSTART_P95_CEILING_MS "$P95_CEILING_MS"
 require_command python3
 require_command psql
 docker_is_available || fail "Docker/PgDog runtime unavailable"
@@ -477,14 +477,14 @@ BROKER_PORT="${PORTS[0]}"
 CONTROLLER_PORT="${PORTS[1]}"
 SASL_PORT="${PORTS[2]}"
 ACTIVATOR_PORT="${PORTS[3]}"
-PGDOG_PORT="${CRABKA_GRES_PGDOG_PORT:-6432}"
+PGDOG_PORT="${KRABKA_GRES_PGDOG_PORT:-6432}"
 
 rm -rf "$ARTIFACT_DIR"
 mkdir -p "${ARTIFACT_DIR}/pgdog"
 : >"${ARTIFACT_DIR}/iteration-timings.tsv"
 
-if [ "${CRABKA_GRES_SKIP_BUILD:-}" != "1" ]; then
-    cargo build --locked -p crabka-cli -p crabka-broker -p crabka-gres -p crabka-gres-activator
+if [ "${KRABKA_GRES_SKIP_BUILD:-}" != "1" ]; then
+    cargo build --locked -p krabka-cli -p krabka-broker -p krabka-gres -p krabka-gres-activator
 fi
 
 start_broker

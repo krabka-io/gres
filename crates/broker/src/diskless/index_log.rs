@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crabka_remote_storage_topic::{MetadataEventLog, PartitionStart};
+use krabka_remote_storage_topic::{MetadataEventLog, PartitionStart};
 use futures_util::StreamExt;
 use tokio::sync::Mutex;
 
@@ -80,7 +80,7 @@ fn index_partition(key: &str, partitions: i32) -> i32 {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_remote_storage_topic::InProcessMetadataEventLog;
+    use krabka_remote_storage_topic::InProcessMetadataEventLog;
     use tokio::time::{Duration, timeout};
     use uuid::Uuid;
 

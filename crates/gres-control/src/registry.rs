@@ -10,20 +10,20 @@ use std::{
 };
 
 use bytes::Bytes;
-use crabka_client_admin::{AdminClient, CreateTopicSpec};
-use crabka_client_core::{
+use krabka_client_admin::{AdminClient, CreateTopicSpec};
+use krabka_client_core::{
     ClientDnsTimeout, ClientFrameMax, Connection, ConnectionDispatchQueueCapacity,
     ConnectionOptions, DEFAULT_FETCH_RESPONSE_MAX, FetchMinBytes, IsolatedFetch,
     fetch_partition_with_isolation_progress,
 };
-use crabka_client_producer::{Acks, Producer, ProducerError, ProducerRecord, Transaction};
-use crabka_protocol::primitives::uuid::Uuid as WireUuid;
-use crabka_units::{
+use krabka_client_producer::{Acks, Producer, ProducerError, ProducerRecord, Transaction};
+use krabka_protocol::primitives::uuid::Uuid as WireUuid;
+use krabka_units::{
     ByteSize, Time,
     convert::{ByteSizeExt as _, TimeExt as _},
 };
 #[cfg(test)]
-use crabka_units::{bytes, millis};
+use krabka_units::{bytes, millis};
 use refined_type::rule::{GreaterU64, MinMaxI32};
 use tokio::sync::{Mutex, watch};
 
@@ -288,10 +288,10 @@ impl Default for RegistryPolicy {
     fn default() -> Self {
         Self::new(
             1,
-            crabka_units::secs(15),
-            crabka_units::millis(250),
-            crabka_units::millis(500),
-            crabka_units::mebibytes(1),
+            krabka_units::secs(15),
+            krabka_units::millis(250),
+            krabka_units::millis(500),
+            krabka_units::mebibytes(1),
         )
         .expect("default registry policy is valid")
     }
@@ -796,7 +796,7 @@ impl Registry {
     ) -> Result<Self, ControlError> {
         let producer = Producer::builder()
             .bootstrap(bootstrap.to_string())
-            .client_id("crabka-gres-control-writer")
+            .client_id("krabka-gres-control-writer")
             .dns_timeout(policy.producer_dns_timeout().time())
             .dispatch_queue_capacity(policy.dispatch_queue_capacity.get())
             .frame_max(policy.frame_max.size())
@@ -1375,7 +1375,7 @@ impl Registry {
         };
         let opts = ConnectionOptions {
             dns_timeout: self.policy.reader_admin_dns_timeout(),
-            client_id: "crabka-gres-control-refresh".to_string(),
+            client_id: "krabka-gres-control-refresh".to_string(),
             dispatch_queue_capacity: self.policy.dispatch_queue_capacity,
             frame_max: self.policy.frame_max,
             ..Default::default()
@@ -1703,7 +1703,7 @@ async fn ensure_compacted_single_partition_topic(
     topic: &str,
     replicas: i32,
     policy: &RegistryPolicy,
-) -> Result<crabka_client_admin::TopicMetadataEntry, ControlError> {
+) -> Result<krabka_client_admin::TopicMetadataEntry, ControlError> {
     let bootstrap_addrs = split_bootstrap(bootstrap);
     let mut admin =
         AdminClient::connect_with_options(&bootstrap_addrs, registry_admin_options(policy)).await?;
@@ -1813,7 +1813,7 @@ fn spawn_reader(
             };
             let opts = ConnectionOptions {
                 dns_timeout: policy.reader_admin_dns_timeout(),
-                client_id: "crabka-gres-control-reader".to_string(),
+                client_id: "krabka-gres-control-reader".to_string(),
                 dispatch_queue_capacity: policy.dispatch_queue_capacity,
                 frame_max: policy.frame_max,
                 ..Default::default()
@@ -1889,9 +1889,9 @@ fn split_bootstrap(bootstrap: &str) -> Vec<String> {
 fn registry_admin_options(policy: &RegistryPolicy) -> ConnectionOptions {
     ConnectionOptions {
         dns_timeout: policy.reader_admin_dns_timeout(),
-        connect_timeout: crabka_units::secs(5),
-        request_timeout: crabka_units::secs(30),
-        client_id: "crabka-operator".to_string(),
+        connect_timeout: krabka_units::secs(5),
+        request_timeout: krabka_units::secs(30),
+        client_id: "krabka-operator".to_string(),
         dispatch_queue_capacity: policy.dispatch_queue_capacity,
         frame_max: policy.frame_max,
         security: None,
@@ -1962,7 +1962,7 @@ fn write_split_operations(
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_broker::{Broker, BrokerConfig};
+    use krabka_broker::{Broker, BrokerConfig};
     use proptest::prelude::*;
     use tempfile::TempDir;
 
@@ -1977,10 +1977,10 @@ mod tests {
         let policy = RegistryPolicy::default();
 
         assert!(policy.replication_factor == 1);
-        assert!(policy.topic_create_timeout == crabka_units::secs(15));
-        assert!(policy.reader_retry_backoff == crabka_units::millis(250));
-        assert!(policy.fetch_max_wait == crabka_units::millis(500));
-        assert!(policy.fetch_partition_max == crabka_units::mebibytes(1));
+        assert!(policy.topic_create_timeout == krabka_units::secs(15));
+        assert!(policy.reader_retry_backoff == krabka_units::millis(250));
+        assert!(policy.fetch_max_wait == krabka_units::millis(500));
+        assert!(policy.fetch_partition_max == krabka_units::mebibytes(1));
         assert!("1".parse::<RegistryReplicationFactor>().is_ok());
         assert!("32767".parse::<RegistryReplicationFactor>().is_ok());
         assert!("0".parse::<RegistryReplicationFactor>().is_err());
@@ -1994,7 +1994,7 @@ mod tests {
                 millis(15_000),
                 millis(250),
                 millis(500),
-                crabka_units::mebibytes(1),
+                krabka_units::mebibytes(1),
             )
             .is_err()
         );
@@ -2004,7 +2004,7 @@ mod tests {
                 millis(15_000),
                 millis(250),
                 millis(500),
-                crabka_units::mebibytes(1),
+                krabka_units::mebibytes(1),
             )
             .is_err()
         );
@@ -2014,7 +2014,7 @@ mod tests {
                 millis(0),
                 millis(250),
                 millis(500),
-                crabka_units::mebibytes(1),
+                krabka_units::mebibytes(1),
             )
             .is_err()
         );
@@ -2024,7 +2024,7 @@ mod tests {
                 millis(15_000),
                 millis(0),
                 millis(500),
-                crabka_units::mebibytes(1),
+                krabka_units::mebibytes(1),
             )
             .is_err()
         );
@@ -2034,7 +2034,7 @@ mod tests {
                 millis(15_000),
                 millis(250),
                 millis(0),
-                crabka_units::mebibytes(1),
+                krabka_units::mebibytes(1),
             )
             .is_err()
         );
@@ -2066,7 +2066,7 @@ mod tests {
     #[test]
     fn registry_policy_dns_timeout_defaults_and_replaces_exactly() {
         let defaults = RegistryPolicy::default();
-        assert!(defaults.producer_dns_timeout() == crabka_client_core::ClientDnsTimeout::default());
+        assert!(defaults.producer_dns_timeout() == krabka_client_core::ClientDnsTimeout::default());
 
         let policy = defaults
             .with_producer_dns_timeout(millis(37))
@@ -2082,7 +2082,7 @@ mod tests {
     #[test]
     fn registry_client_resource_policy_defaults_and_replaces_exactly() {
         let dispatch = ConnectionDispatchQueueCapacity::new(7).unwrap();
-        let frame_max = ClientFrameMax::try_from(crabka_units::kibibytes(32)).unwrap();
+        let frame_max = ClientFrameMax::try_from(krabka_units::kibibytes(32)).unwrap();
         let fetch_min = FetchMinBytes::try_from(bytes(9)).unwrap();
         let policy =
             RegistryPolicy::default().with_client_resource_policy(dispatch, frame_max, fetch_min);
@@ -2100,7 +2100,7 @@ mod tests {
     fn registry_reader_admin_dns_defaults_and_replaces_exactly() {
         let defaults = RegistryPolicy::default();
         assert!(
-            defaults.reader_admin_dns_timeout() == crabka_client_core::ClientDnsTimeout::default()
+            defaults.reader_admin_dns_timeout() == krabka_client_core::ClientDnsTimeout::default()
         );
 
         let policy = defaults
@@ -2144,12 +2144,12 @@ mod tests {
         let (tenant_spec, tenant_timeout) = compacted_topic_request("tenant-config", 3, &policy);
         assert!(registry_spec.replicas == 7);
         assert!(tenant_spec.replicas == 3);
-        assert!(timeout == crabka_units::millis(12_345));
-        assert!(tenant_timeout == crabka_units::millis(12_345));
+        assert!(timeout == krabka_units::millis(12_345));
+        assert!(tenant_timeout == krabka_units::millis(12_345));
         let fetch = registry_fetch(42, WireUuid::ZERO, &policy);
-        assert!(fetch.max_wait == crabka_units::millis(901));
-        assert!(fetch.partition_max == crabka_units::bytes(234_567));
-        assert!(policy.reader_retry_backoff == crabka_units::millis(678));
+        assert!(fetch.max_wait == krabka_units::millis(901));
+        assert!(fetch.partition_max == krabka_units::bytes(234_567));
+        assert!(policy.reader_retry_backoff == krabka_units::millis(678));
     }
 
     #[test]
@@ -2159,7 +2159,7 @@ mod tests {
             millis(15_000),
             millis(678),
             millis(500),
-            crabka_units::mebibytes(1),
+            krabka_units::mebibytes(1),
         )
         .unwrap();
 
@@ -2168,7 +2168,7 @@ mod tests {
             ReaderFailure::Connect,
             ReaderFailure::Fetch,
         ] {
-            assert!(reader_retry_delay(&policy, failure) == crabka_units::millis(678));
+            assert!(reader_retry_delay(&policy, failure) == krabka_units::millis(678));
         }
     }
 

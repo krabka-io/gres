@@ -1,5 +1,5 @@
 use clap::Parser;
-use crabka_gres_conformance::driver_goldens::{parse_and_validate, replay_startup};
+use krabka_gres_conformance::driver_goldens::{parse_and_validate, replay_startup};
 use tokio_postgres::NoTls;
 
 #[derive(Debug, Parser)]

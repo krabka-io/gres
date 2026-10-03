@@ -1,4 +1,4 @@
-use crabka_ids::{Offset, PartitionIndex};
+use krabka_ids::{Offset, PartitionIndex};
 
 #[test]
 fn offset_serialises_as_bare_integer() {

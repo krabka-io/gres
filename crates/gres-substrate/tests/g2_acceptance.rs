@@ -3,11 +3,11 @@
 use std::sync::Arc;
 
 use assert2::assert;
-use crabka_gres_substrate::{
+use krabka_gres_substrate::{
     InMemoryWalLog, SubstrateCommitter, WalFrame, WriterGeneration, recover_after_barrier,
 };
-use crabka_pgexec::Committer;
-use crabka_pgkv::{Kv, MemKv, WriteOp};
+use krabka_pgexec::Committer;
+use krabka_pgkv::{Kv, MemKv, WriteOp};
 
 #[tokio::test]
 async fn disposability_rebuilds_cache_from_committed_wal() {
@@ -64,7 +64,7 @@ async fn stale_writer_cannot_commit_after_newer_generation_fences_it() {
         .await
         .expect_err("stale compute fenced");
 
-    assert!(matches!(stale_error, crabka_pgexec::ExecError::NotLeader));
+    assert!(matches!(stale_error, krabka_pgexec::ExecError::NotLeader));
     assert!(stale_cache.get(b"table/row/3").expect("get").is_none());
     assert!(successor.get(b"table/row/1").expect("get") == Some(b"before-fence".to_vec()));
     assert!(successor.get(b"table/row/2").expect("get") == Some(b"after-fence".to_vec()));
@@ -89,10 +89,10 @@ async fn oversized_batch_chunks_and_recovers_atomically() {
             value: b"small".to_vec(),
         },
     ];
-    let frames = crabka_gres_substrate::chunk_wal_batch(ops.clone(), 0, crabka_units::bytes(48))
+    let frames = krabka_gres_substrate::chunk_wal_batch(ops.clone(), 0, krabka_units::bytes(48))
         .expect("chunk batch");
     let compute = substrate_committer(first_cache, log.clone(), WriterGeneration(0), 0)
-        .with_max_frame_size(crabka_units::bytes(48));
+        .with_max_frame_size(krabka_units::bytes(48));
 
     compute.commit(ops).await.expect("commit chunked group");
     drop(compute);

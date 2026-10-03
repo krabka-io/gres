@@ -7,7 +7,7 @@
 ## Problem & motivation
 
 Tiered storage is marked ⚠️ *partial* in the README, with the prose
-"the `crabka-remote-storage-topic` (KIP-405 production RLMM) crate is in
+"the `krabka-remote-storage-topic` (KIP-405 production RLMM) crate is in
 tree but not yet wired into the broker." **That prose is stale.** PR #227
 wired `TopicBasedRemoteLogMetadataManager` into `Broker::start`, and PR
 #313 ("Finish Tiered Storage: slices 48m–48r") closed the remaining

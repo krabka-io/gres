@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use assert2::assert;
-use crabka_broker::{Broker, BrokerConfig};
-use crabka_client_admin::{AdminClient, DeleteRecordsOp, DeleteRecordsOutcome};
-use crabka_client_producer::{Acks, Producer};
-use crabka_gres_ranges::{RangeId, TenantName};
-use crabka_gres_substrate::{
+use krabka_broker::{Broker, BrokerConfig};
+use krabka_client_admin::{AdminClient, DeleteRecordsOp, DeleteRecordsOutcome};
+use krabka_client_producer::{Acks, Producer};
+use krabka_gres_ranges::{RangeId, TenantName};
+use krabka_gres_substrate::{
     CommittedWalReader, FenceLease, GroupCommitRequest, InMemoryWalLog, ProducerWalWriter,
     SubstrateError, TransactionalWalWriter, WalFrame, WriterGeneration, apply_frame,
     checkpoint::{
@@ -16,8 +16,8 @@ use crabka_gres_substrate::{
     },
     ensure_wal_topic_for_range, recover_live_for_range_with_restore, transactional_id_for_range,
 };
-use crabka_object_store::{ObjectOps, ObjectStoreClient, ObjectStoreConfig, build_object_store};
-use crabka_pgkv::{Kv, MemKv, SnapshotKv, WriteOp};
+use krabka_object_store::{ObjectOps, ObjectStoreClient, ObjectStoreConfig, build_object_store};
+use krabka_pgkv::{Kv, MemKv, SnapshotKv, WriteOp};
 use tokio::sync::Mutex;
 
 #[tokio::test]
@@ -157,7 +157,7 @@ async fn live_broker_checkpoint_delete_records_and_recovery_replays_retained_tai
     let checkpoints = local_checkpoint_store(checkpoint_dir.path().to_path_buf());
     let stats = Arc::new(CheckpointStats::default());
     let pruner = Arc::new(AdminDeleteRecordsPruner::connect(&bootstrap).await);
-    let recovery = crabka_gres_substrate::LiveRecoveryConfig::new(
+    let recovery = krabka_gres_substrate::LiveRecoveryConfig::new(
         bootstrap.clone(),
         tenant.clone(),
         range,
@@ -168,7 +168,7 @@ async fn live_broker_checkpoint_delete_records_and_recovery_replays_retained_tai
             recovery.checkpoint_namespace(),
             topic.clone(),
             2,
-            crabka_units::bytes(0),
+            krabka_units::bytes(0),
             DEFAULT_PART_MAX_SIZE,
             DEFAULT_CHECKPOINT_RETAIN,
             std::time::Duration::from_secs(1),
@@ -282,7 +282,7 @@ impl CheckpointWalPruner for AdminDeleteRecordsPruner {
             .admin
             .lock()
             .await
-            .delete_records(ops, crabka_units::secs(5))
+            .delete_records(ops, krabka_units::secs(5))
             .await
             .map_err(|error| SubstrateError::Checkpoint(format!("delete records: {error}")))?;
         if let Some(failed) = outcomes.iter().find(|outcome| outcome.error_code != 0) {
@@ -296,7 +296,7 @@ impl CheckpointWalPruner for AdminDeleteRecordsPruner {
     }
 }
 
-async fn boot_broker() -> (crabka_broker::BrokerHandle, String, tempfile::TempDir) {
+async fn boot_broker() -> (krabka_broker::BrokerHandle, String, tempfile::TempDir) {
     let dir = tempfile::TempDir::new().expect("broker tempdir");
     let broker = Broker::start(BrokerConfig::for_tests(dir.path().to_path_buf()))
         .await
@@ -380,7 +380,7 @@ fn checkpoint_config() -> CheckpointConfig {
         "tenant-a".to_string(),
         "__gres_wal.tenant-a.r0".to_string(),
         2,
-        crabka_units::bytes(0),
+        krabka_units::bytes(0),
         DEFAULT_PART_MAX_SIZE,
         DEFAULT_CHECKPOINT_RETAIN,
         std::time::Duration::from_secs(1),

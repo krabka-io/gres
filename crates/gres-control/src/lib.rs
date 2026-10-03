@@ -7,13 +7,13 @@ pub mod record;
 pub mod registry;
 
 /// Default periodic range-0 follower refresh cadence.
-pub const DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL: crabka_units::Time = crabka_units::millis(100);
+pub const DEFAULT_RANGE0_FOLLOWER_POLL_INTERVAL: krabka_units::Time = krabka_units::millis(100);
 /// Default delay before retrying consecutive range-0 follower rebuilds.
-pub const DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR: crabka_units::Time =
-    crabka_units::millis(250);
+pub const DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_FLOOR: krabka_units::Time =
+    krabka_units::millis(250);
 /// Default ceiling for consecutive range-0 follower rebuild backoff.
-pub const DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING: crabka_units::Time =
-    crabka_units::secs(30);
+pub const DEFAULT_RANGE0_FOLLOWER_REBUILD_BACKOFF_CEILING: krabka_units::Time =
+    krabka_units::secs(30);
 
 pub use checkpoint::{
     CheckpointPartBytes, DEFAULT_CHECKPOINT_BYTES, DEFAULT_CHECKPOINT_DELETE_RECORDS_TIMEOUT,

@@ -20,8 +20,8 @@ request, and transaction behavior remain unchanged when the setting is absent.
 
 ## Architecture
 
-`crabka-client-producer` adds one `dns_timeout: Duration` builder input,
-defaulting to `crabka_client_core::DEFAULT_CLIENT_DNS_TIMEOUT`. The producer
+`krabka-client-producer` adds one `dns_timeout: Duration` builder input,
+defaulting to `krabka_client_core::DEFAULT_CLIENT_DNS_TIMEOUT`. The producer
 validates it with the existing `ClientDnsTimeout` refined type before starting
 network I/O and forwards its duration to `Client::builder().dns_timeout(...)`.
 No producer-specific DNS type or resolver abstraction is added.
@@ -34,7 +34,7 @@ producer builder.
 The standalone surface adds:
 
 - `--wal-producer-dns-timeout-ms`
-- `CRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT_MS`
+- `KRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT_MS`
 
 The Gres CRD adds optional
 `spec.compute.walProducerDnsTimeoutMs`. The operator resolves the CRD value to

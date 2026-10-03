@@ -10,13 +10,13 @@
 //! When a timestamp transaction resolves a row to a committed or deleted
 //! version, the same commit batch deletes the row's versions that are dead
 //! below the reclaim floor. See
-//! [`crabka_pgmvcc::gc::ts_dead_version_indices`]. The deletes ride the
+//! [`krabka_pgmvcc::gc::ts_dead_version_indices`]. The deletes ride the
 //! ordinary [`crate::commit::Committer`] batch, so they replicate through the
 //! WAL and replay deterministically. Recovery and followers apply exactly the
 //! leader's reclamation.
 //!
 //! The reclaim floor is the timestamp-domain sibling of the xid path's
-//! [`crabka_pgmvcc::gc::GcHorizon`] snapshot pins. It reuses that machinery
+//! [`krabka_pgmvcc::gc::GcHorizon`] snapshot pins. It reuses that machinery
 //! directly, as a second `GcHorizon` instance whose pinned values are read
 //! timestamps:
 //!
@@ -38,8 +38,8 @@ use std::{
     time::Instant,
 };
 
-use crabka_pgkv::{Kv, WriteOp};
-use crabka_units::{
+use krabka_pgkv::{Kv, WriteOp};
+use krabka_units::{
     Time,
     convert::{StdDurationExt as _, TimeExt as _},
     secs,
@@ -96,7 +96,7 @@ struct EngagementLog {
 pub struct TsVersionGc {
     /// Timestamp-domain pin registry and reclaim floor. Values pinned here
     /// are read timestamps, not xids.
-    floor: Arc<crabka_pgmvcc::gc::GcHorizon>,
+    floor: Arc<krabka_pgmvcc::gc::GcHorizon>,
     /// The range's local sequence. Its published closed timestamp is the
     /// reclaim-floor candidate.
     local_sequence: Arc<LocalSequence>,
@@ -129,7 +129,7 @@ impl TsVersionGc {
         floor_lag: Time,
     ) -> Self {
         Self {
-            floor: Arc::new(crabka_pgmvcc::gc::GcHorizon::new()),
+            floor: Arc::new(krabka_pgmvcc::gc::GcHorizon::new()),
             local_sequence,
             closed_samples: Mutex::new(VecDeque::new()),
             floor_lag_millis: std::sync::atomic::AtomicU64::new(floor_lag_millis(floor_lag)),
@@ -219,7 +219,7 @@ impl TsVersionGc {
         &self,
         kv: &dyn Kv,
         read_ts: crate::timestamp_txn::ReadTimestamp,
-    ) -> Result<crabka_pgmvcc::gc::SnapshotPin, ExecError> {
+    ) -> Result<krabka_pgmvcc::gc::SnapshotPin, ExecError> {
         self.observed_floor(kv)?;
         self.floor
             .pin_above(read_ts.get())
@@ -234,7 +234,7 @@ impl TsVersionGc {
     /// the same batch. [`TS_PRUNE_ROW_VERSION_CAP`] bounds the work per row.
     ///
     /// The floor is the closed timestamp bounded by every active read pin. See
-    /// [`crabka_pgmvcc::gc::GcHorizon::raise_reclaim_floor`]. No read served
+    /// [`krabka_pgmvcc::gc::GcHorizon::raise_reclaim_floor`]. No read served
     /// on this engine can miss a pruned version, and no read admitted later
     /// against the published floor can miss one either. The decisions read the
     /// durable pre-batch state. The batch's own resolution target is still an
@@ -256,20 +256,20 @@ impl TsVersionGc {
         let mut ops = Vec::new();
         for write in writes {
             let prefix = match write.bucket {
-                Some(bucket) => crabka_pgkv::key::hash_row_key(write.table_id, bucket, write.rowid),
-                None => crabka_pgkv::key::row_key(write.table_id, write.rowid),
+                Some(bucket) => krabka_pgkv::key::hash_row_key(write.table_id, bucket, write.rowid),
+                None => krabka_pgkv::key::row_key(write.table_id, write.rowid),
             };
             let mut keys = Vec::new();
             let mut states = Vec::new();
             for (key, value) in kv.scan_prefix(&prefix)? {
                 // Only decodable timestamp tuples participate; anything else
                 // under the prefix is left untouched.
-                if let Ok(version) = crabka_pgmvcc::version::decode_ts_tuple(&value) {
+                if let Ok(version) = krabka_pgmvcc::version::decode_ts_tuple(&value) {
                     keys.push(key);
                     states.push(version.state);
                 }
             }
-            for index in crabka_pgmvcc::gc::ts_dead_version_indices(
+            for index in krabka_pgmvcc::gc::ts_dead_version_indices(
                 &states,
                 floor,
                 self.prune_row_version_cap,
@@ -332,7 +332,7 @@ impl TsVersionGc {
 /// # Errors
 ///
 /// Returns a store error when the floor key cannot be read.
-pub(crate) fn durable_reclaim_floor(kv: &dyn Kv) -> Result<u64, crabka_pgkv::KvError> {
+pub(crate) fn durable_reclaim_floor(kv: &dyn Kv) -> Result<u64, krabka_pgkv::KvError> {
     Ok(kv
         .get(TS_GC_FLOOR_KEY)?
         .and_then(|bytes| <[u8; 8]>::try_from(bytes).ok())

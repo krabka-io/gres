@@ -1,6 +1,6 @@
 # Substrate-backed engine baseline
 
-The `gres-conformance` CI job runs the primary corpus twice: once against an in-process `crabka-gres` and once against a substrate-backed one (`--substrate-bootstrap`, whose WAL is a Kafka tenant topic on a live Crabka broker). This file explains why the second leg gates on `substrate-baseline.json` (6191/6198) rather than on the primary `baseline.json` (6192/6198), and enumerates every statement behind the difference. The number is a floor for one specific engine assembly, not a claim of parity with the in-process leg.
+The `gres-conformance` CI job runs the primary corpus twice: once against an in-process `krabka-gres` and once against a substrate-backed one (`--substrate-bootstrap`, whose WAL is a Kafka tenant topic on a live Crabka broker). This file explains why the second leg gates on `substrate-baseline.json` (6191/6198) rather than on the primary `baseline.json` (6192/6198), and enumerates every statement behind the difference. The number is a floor for one specific engine assembly, not a claim of parity with the in-process leg.
 
 Seven statements mismatch here, and the set is now exactly the primary leg's own mismatch set plus one. Six of them are the primary leg's slack — the same six statements `baseline.json`'s 6192 already accounts for — and belong to that file, not this one. The seventh is a harness artifact of this leg's fresh oracle database. Nothing mismatches here for a reason intrinsic to the replicated engine.
 

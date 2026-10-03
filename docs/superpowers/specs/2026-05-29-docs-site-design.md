@@ -68,17 +68,17 @@ at build time and git-ignored**.
 
 ## Components
 
-### 1. `crabka-docgen` tool
+### 1. `krabka-docgen` tool
 
 A workspace member at `crates/docgen` (a CLI, mirroring the existing
 `operator gen-crds` pattern). One subcommand per generated artifact, plus an
 `all` that writes the full `content/reference/` tree.
 
 ```
-crabka-docgen all --out website/content/reference
+krabka-docgen all --out website/content/reference
 ```
 
-It depends on `crabka-operator` and `crabka-broker` so it can pull the
+It depends on `krabka-operator` and `krabka-broker` so it can pull the
 in-process source-of-truth data structures (no shelling out, no parsing Rust
 text). Responsibilities:
 
@@ -139,7 +139,7 @@ Trigger: `push` to `main` (paths: `website/**`, the generating crates,
 Steps:
 1. Checkout.
 2. Rust toolchain (pinned via `rust-toolchain.toml`).
-3. `cargo run -p crabka-docgen -- all --out website/content/reference`.
+3. `cargo run -p krabka-docgen -- all --out website/content/reference`.
 4. `cargo doc --no-deps --workspace` → copy `target/doc` to
    `website/static/api/rust/`.
 5. Copy `docs/*.png` branding into `website/static/images/`.
@@ -157,7 +157,7 @@ Pages → "GitHub Actions" source in repo settings.
 ```
 deploy/crds builders ─┐
 FileConfig (schemars) ─┤
-config_keys table     ├─► crabka-docgen ─► website/content/reference/*.md ─┐
+config_keys table     ├─► krabka-docgen ─► website/content/reference/*.md ─┐
 api_versions table   ─┘                                                     │
                                                                             ├─► zola build ─► public/ ─► deploy-pages
 cargo doc ─► target/doc ─► website/static/api/rust/ ───────────────────────┤
@@ -189,7 +189,7 @@ hand-written content/ (committed) ───────────────�
 ## Local preview
 
 ```
-cargo run -p crabka-docgen -- all --out website/content/reference
+cargo run -p krabka-docgen -- all --out website/content/reference
 cargo doc --no-deps --workspace && cp -r target/doc website/static/api/rust
 cd website && zola serve
 ```

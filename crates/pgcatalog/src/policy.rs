@@ -1,9 +1,9 @@
 //! Durable row-level-security policy records — the storage behind `pg_policy`.
 //!
 //! Storage only: `CREATE`/`ALTER`/`DROP POLICY` reach this through
-//! `crabka_pgexec::policy_ddl`, which owns the ownership test and the
+//! `krabka_pgexec::policy_ddl`, which owns the ownership test and the
 //! qual validation, and enforcement reads it back through
-//! `crabka_pgexec::rls`.
+//! `krabka_pgexec::rls`.
 //!
 //! A policy's `USING` and `WITH CHECK` quals are stored as **source text**, not
 //! as a parsed expression — the same choice [`crate::CheckConstraint::expr`]
@@ -20,7 +20,7 @@
 //! silently stops protecting its relation, so the fix is to make the situation
 //! unrepresentable rather than to remember to move keys.
 
-use crabka_pgkv::{Kv, KvError, WriteOp};
+use krabka_pgkv::{Kv, KvError, WriteOp};
 use zerocopy::{FromBytes, IntoBytes, byteorder::big_endian::U32};
 
 use crate::{
@@ -496,7 +496,7 @@ pub fn deserialize_policy(bytes: &[u8]) -> Result<Policy, KvError> {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgkv::MemKv;
+    use krabka_pgkv::MemKv;
 
     use super::*;
 

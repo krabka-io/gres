@@ -3,7 +3,7 @@
 **Date:** 2026-05-29
 **Status:** Slice design. Closes a 48d follow-up. Part of the KIP-405
 umbrella
-(`docs/superpowers/specs/2026-05-25-crabka-tiered-storage-roadmap-design.md`).
+(`docs/superpowers/specs/2026-05-25-krabka-tiered-storage-roadmap-design.md`).
 First of the "finish KIP-405" slices (48m–48r).
 
 ## Goal
@@ -161,6 +161,6 @@ files).
 
 - `cargo fmt --all --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test -p crabka-broker`
+- `cargo test -p krabka-broker`
 - `cargo test --workspace` (no regressions)
 - KIP-98/KIP-405 read-committed semantics preserved; no CRD drift.

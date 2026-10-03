@@ -1,8 +1,8 @@
 //! User-defined types: `CREATE`/`ALTER`/`DROP` of `TYPE` and `DOMAIN`, and the
 //! value-level operations over the types they create.
 //!
-//! The durable definition lives in the catalog (`crabka_pgcatalog`). The
-//! process-wide registry in `crabka_pgtypes::usertype` is what makes a type
+//! The durable definition lives in the catalog (`krabka_pgcatalog`). The
+//! process-wide registry in `krabka_pgtypes::usertype` is what makes a type
 //! *name* resolvable from the parser, which holds no catalog handle. Every DDL
 //! successful DDL publishes the catalog delta through the session boundary, and
 //! [`hydrate`] restores the registry from the catalog when a session opens so a
@@ -10,20 +10,20 @@
 
 use std::collections::HashSet;
 
-use crabka_pgcatalog::RelationName;
-use crabka_pgkv::{Kv, WriteOp};
-use crabka_pgparser::ast::{
+use krabka_pgcatalog::RelationName;
+use krabka_pgkv::{Kv, WriteOp};
+use krabka_pgparser::ast::{
     AlterDomainAction, AlterTypeAction, BaseTypeOption, BaseTypeOptionValue, CompositeFieldDef,
     CreateTypeDefinition, DomainConstraint, EnumValuePosition, Expr, FuncArgs, FuncCall,
 };
-use crabka_pgtypes::{
+use krabka_pgtypes::{
     ColumnType, Datum, TypeError,
     usertype::{
         self, BaseBody, BaseRef, CompositeField, DomainBody, DomainCheck, RangeBody, UserType,
         UserTypeBody,
     },
 };
-use crabka_pgwire::engine::QueryResult;
+use krabka_pgwire::engine::QueryResult;
 
 use crate::{
     error::ExecError,
@@ -40,7 +40,7 @@ use crate::{
 /// Propagates catalog read errors.
 pub fn hydrate(kv: &dyn Kv) -> Result<(), ExecError> {
     crate::catalog_rel::sync_relation_rowtypes(kv)?;
-    crabka_pgcatalog::hydrate_user_types_with(kv, &|oid| {
+    krabka_pgcatalog::hydrate_user_types_with(kv, &|oid| {
         crate::catalog_rel::relation_rowtype_by_oid(kv, oid)
             .ok()
             .flatten()
@@ -150,7 +150,7 @@ fn validate_range_subtype_diff(subtype: ColumnType, name: &str) -> Result<(), Ex
     };
     let result = match crate::func::scalar_result_type(&call, &crate::scope::Scope::empty()) {
         Err(ExecError::UndefinedFunction(_)) => {
-            return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+            return Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
                 "42883",
                 format!(
                     "function {name}({}, {}) does not exist",
@@ -353,7 +353,7 @@ fn carrier_for(layout: Layout, input: &str, output: &str) -> Option<ColumnType> 
 }
 
 /// The layout a base type declares to PostgreSQL catalogs and the wire protocol.
-pub(crate) fn declared_base_layout(ty: ColumnType) -> Option<crabka_pgtypes::usertype::BaseLayout> {
+pub(crate) fn declared_base_layout(ty: ColumnType) -> Option<krabka_pgtypes::usertype::BaseLayout> {
     let ColumnType::Base(base) = ty else {
         return None;
     };
@@ -387,9 +387,9 @@ pub(crate) fn normalize_base_input(base: BaseRef, value: Datum) -> Result<Datum,
             let (x, y, radius) = widget_parts(base.name, text)?;
             Ok(Datum::Text(format!(
                 "({},{},{})",
-                crabka_pgtypes::shortest_dec::float8_shortest(x),
-                crabka_pgtypes::shortest_dec::float8_shortest(y),
-                crabka_pgtypes::shortest_dec::float8_shortest(radius),
+                krabka_pgtypes::shortest_dec::float8_shortest(x),
+                krabka_pgtypes::shortest_dec::float8_shortest(y),
+                krabka_pgtypes::shortest_dec::float8_shortest(radius),
             )))
         }
         ("int44in", "int44out", 16, false, 'i') => Ok(Datum::Text(city_budget_input(text))),
@@ -399,7 +399,7 @@ pub(crate) fn normalize_base_input(base: BaseRef, value: Datum) -> Result<Datum,
 
 /// The regression extension's `pt_in_widget(point, widget)` predicate.
 pub(crate) fn regression_widget_contains(
-    point: crabka_pgtypes::Point,
+    point: krabka_pgtypes::Point,
     widget: &str,
 ) -> Result<bool, ExecError> {
     let (x, y, radius) = widget_parts("widget", widget)?;
@@ -525,7 +525,7 @@ fn create_base_type(
         }
         (Some(like), false) => (
             like,
-            crabka_pgtypes::usertype::BaseLayout::from_representation(like),
+            krabka_pgtypes::usertype::BaseLayout::from_representation(like),
         ),
         (None, _) => {
             layout.validate()?;
@@ -538,7 +538,7 @@ fn create_base_type(
             })?;
             (
                 representation,
-                crabka_pgtypes::usertype::BaseLayout {
+                krabka_pgtypes::usertype::BaseLayout {
                     length: i16::try_from(layout.length)
                         .expect("validated base type length fits i16"),
                     by_value: layout.by_value,
@@ -582,7 +582,7 @@ fn create_base_type(
     });
     // A shell of this name is the two-phase definition closing: keep the oid,
     // because the I/O functions created in between already name it.
-    let shell = crabka_pgcatalog::list_user_types(kv)?
+    let shell = krabka_pgcatalog::list_user_types(kv)?
         .into_iter()
         .find(|ty| ty.schema == name.schema && ty.name == name.name && ty.is_shell());
     let Some(shell) = shell else {
@@ -593,7 +593,7 @@ fn create_base_type(
         QueryResult::Command {
             tag: "CREATE TYPE".to_string(),
         },
-        crabka_pgcatalog::put_user_type_ops(kv, &completed)?,
+        krabka_pgcatalog::put_user_type_ops(kv, &completed)?,
     ))
 }
 
@@ -777,7 +777,7 @@ fn check_label_length(label: &str) -> Result<(), ExecError> {
     const NAMEDATALEN: usize = 63;
     if label.len() > NAMEDATALEN {
         return Err(ExecError::Remote(
-            crabka_pgwire::error::PgError::error(
+            krabka_pgwire::error::PgError::error(
                 "22023",
                 format!("invalid enum label \"{label}\""),
             )
@@ -795,8 +795,8 @@ fn register(
     body: UserTypeBody,
     tag: &str,
 ) -> Result<(QueryResult, Vec<WriteOp>), ExecError> {
-    if matches!(&body, UserTypeBody::Composite(_)) && crabka_pgcatalog::relation_exists(kv, name)? {
-        return Err(crabka_pgcatalog::CatalogError::DuplicateTable(name.to_string()).into());
+    if matches!(&body, UserTypeBody::Composite(_)) && krabka_pgcatalog::relation_exists(kv, name)? {
+        return Err(krabka_pgcatalog::CatalogError::DuplicateTable(name.to_string()).into());
     }
     ensure_type_name_available(kv, name, None)?;
     if let UserTypeBody::Range(range) = &body {
@@ -815,7 +815,7 @@ fn register(
         }
         ensure_type_name_available(kv, &companion, None)?;
     }
-    let (_, ops) = crabka_pgcatalog::create_user_type_ops(kv, name, body)?;
+    let (_, ops) = krabka_pgcatalog::create_user_type_ops(kv, name, body)?;
     Ok((
         QueryResult::Command {
             tag: tag.to_string(),
@@ -837,7 +837,7 @@ fn ensure_type_name_available(
     name: &RelationName,
     exclude: Option<TypeNameExclusion>,
 ) -> Result<(), ExecError> {
-    let types = crabka_pgcatalog::list_user_types(kv)?;
+    let types = krabka_pgcatalog::list_user_types(kv)?;
     let primary_taken = types.iter().any(|ty| {
         ty.schema == name.schema
             && ty.name == name.name
@@ -848,10 +848,10 @@ fn ensure_type_name_available(
         ty.multirange_identity() == Some(identity.clone())
             && !matches!(exclude, Some(TypeNameExclusion::Multirange(oid)) if oid == ty.oid)
     });
-    let row_type_taken = crabka_pgcatalog::list_tables(kv)?
+    let row_type_taken = krabka_pgcatalog::list_tables(kv)?
         .iter()
         .any(|table| table.name == *name)
-        || crabka_pgcatalog::list_views(kv)?
+        || krabka_pgcatalog::list_views(kv)?
             .iter()
             .any(|view| view.name == *name);
     let builtin_taken =
@@ -871,13 +871,13 @@ pub(crate) fn ensure_relation_type_name_available(
     name: &RelationName,
 ) -> Result<(), ExecError> {
     let identity = (name.schema.clone(), name.name.clone());
-    let types = crabka_pgcatalog::list_user_types(kv)?;
+    let types = krabka_pgcatalog::list_user_types(kv)?;
     if let Some(ty) = types
         .iter()
         .find(|ty| ty.schema == name.schema && ty.name == name.name)
     {
         if ty.fields().is_some() {
-            return Err(crabka_pgcatalog::CatalogError::DuplicateTable(name.to_string()).into());
+            return Err(krabka_pgcatalog::CatalogError::DuplicateTable(name.to_string()).into());
         }
         return Err(ExecError::DuplicateObject(format!(
             "type \"{name}\" already exists"
@@ -900,11 +900,11 @@ pub(crate) fn ensure_index_name_available(
     kv: &dyn Kv,
     name: &RelationName,
 ) -> Result<(), ExecError> {
-    if crabka_pgcatalog::list_user_types(kv)?
+    if krabka_pgcatalog::list_user_types(kv)?
         .iter()
         .any(|ty| ty.schema == name.schema && ty.name == name.name && ty.fields().is_some())
     {
-        return Err(crabka_pgcatalog::CatalogError::DuplicateTable(name.to_string()).into());
+        return Err(krabka_pgcatalog::CatalogError::DuplicateTable(name.to_string()).into());
     }
     Ok(())
 }
@@ -912,7 +912,7 @@ pub(crate) fn ensure_index_name_available(
 fn companion_identity(
     kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
-    companion: &crabka_pgparser::ast::RelationRef,
+    companion: &krabka_pgparser::ast::RelationRef,
 ) -> Result<(String, String), ExecError> {
     let companion = resolve_relation(kv, resolution, companion, SchemaDisposition::Creation)?;
     Ok((companion.schema, companion.name))
@@ -968,7 +968,7 @@ fn alter_type_inner(
     match action {
         AlterTypeAction::AddAttribute { field, cascade } => {
             if column_type_contains_oid(field.ty, ty.oid, &mut HashSet::new()) {
-                return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+                return Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
                     "42P16",
                     format!("composite type {lookup_name} cannot be made a member of itself"),
                 )));
@@ -990,7 +990,7 @@ fn alter_type_inner(
             let tables = typed_tables_using_type(kv, ty.oid)?;
             if !tables.is_empty() && !cascade {
                 return Err(ExecError::Remote(
-                    crabka_pgwire::error::PgError::error(
+                    krabka_pgwire::error::PgError::error(
                         "2BP01",
                         format!(
                             "cannot alter type \"{lookup_name}\" because it is the type of a typed table"
@@ -1005,9 +1005,9 @@ fn alter_type_inner(
                         "ALTER TYPE ADD ATTRIBUTE needs a session context for typed tables".into(),
                     ));
                 };
-                let action = crabka_pgparser::ast::AlterTableAction::AddColumn {
+                let action = krabka_pgparser::ast::AlterTableAction::AddColumn {
                     if_not_exists: false,
-                    column: crabka_pgparser::ast::ColumnDef {
+                    column: krabka_pgparser::ast::ColumnDef {
                         name: field.name.clone(),
                         ty: field.ty,
                         typmod: None,
@@ -1017,7 +1017,7 @@ fn alter_type_inner(
                     },
                     options: Vec::new(),
                 };
-                let mut ops = crabka_pgcatalog::put_user_type_ops(kv, &ty)?;
+                let mut ops = krabka_pgcatalog::put_user_type_ops(kv, &ty)?;
                 for table in tables {
                     let mut state =
                         crate::exec::ddl_alter::AlterTableState::new(table, fctx.own_xid);
@@ -1055,7 +1055,7 @@ fn alter_type_inner(
             if !tables.is_empty() {
                 if !cascade {
                     return Err(ExecError::Remote(
-                        crabka_pgwire::error::PgError::error(
+                        krabka_pgwire::error::PgError::error(
                             "2BP01",
                             format!(
                                 "cannot alter type \"{lookup_name}\" because it is the type of a typed table"
@@ -1074,12 +1074,12 @@ fn alter_type_inner(
                         "ALTER TYPE DROP ATTRIBUTE needs a session context for typed tables".into(),
                     ));
                 };
-                let action = crabka_pgparser::ast::AlterTableAction::DropColumn {
+                let action = krabka_pgparser::ast::AlterTableAction::DropColumn {
                     column: attribute.clone(),
                     if_exists: false,
                     cascade: true,
                 };
-                let mut ops = crabka_pgcatalog::put_user_type_ops(kv, &ty)?;
+                let mut ops = krabka_pgcatalog::put_user_type_ops(kv, &ty)?;
                 for table in tables {
                     let mut state =
                         crate::exec::ddl_alter::AlterTableState::new(table, fctx.own_xid);
@@ -1190,7 +1190,7 @@ fn alter_type_inner(
             fields[index].name = to.clone();
             let tables = typed_tables_using_type(kv, ty.oid)?;
             if !tables.is_empty() && !cascade {
-                return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+                return Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
                     "2BP01",
                     format!(
                         "cannot alter type \"{lookup_name}\" because it is the type of a typed table"
@@ -1207,14 +1207,14 @@ fn alter_type_inner(
                 }
                 return Ok((
                     command("ALTER TYPE"),
-                    crabka_pgcatalog::put_user_type_ops(kv, &ty)?,
+                    krabka_pgcatalog::put_user_type_ops(kv, &ty)?,
                 ));
             };
-            let action = crabka_pgparser::ast::AlterTableAction::RenameColumn {
+            let action = krabka_pgparser::ast::AlterTableAction::RenameColumn {
                 column: from.clone(),
                 new_name: to.clone(),
             };
-            let mut ops = crabka_pgcatalog::put_user_type_ops(kv, &ty)?;
+            let mut ops = krabka_pgcatalog::put_user_type_ops(kv, &ty)?;
             for table in tables {
                 let mut state = crate::exec::ddl_alter::AlterTableState::new(table, fctx.own_xid);
                 crate::exec::ddl_alter::alter_table_action_ops(kv, &mut state, &action, fctx)?;
@@ -1234,7 +1234,7 @@ fn alter_type_inner(
     }
     Ok((
         command("ALTER TYPE"),
-        crabka_pgcatalog::put_user_type_ops(kv, &ty)?,
+        krabka_pgcatalog::put_user_type_ops(kv, &ty)?,
     ))
 }
 
@@ -1269,7 +1269,7 @@ fn rename_multirange(
     range.multirange_name = Some(renamed.name);
     Ok((
         command("ALTER TYPE"),
-        crabka_pgcatalog::put_user_type_ops(kv, &range_type)?,
+        krabka_pgcatalog::put_user_type_ops(kv, &range_type)?,
     ))
 }
 
@@ -1368,7 +1368,7 @@ pub fn alter_domain(
                 domain.not_null_name = None;
                 return Ok((
                     command("ALTER DOMAIN"),
-                    crabka_pgcatalog::put_user_type_ops(kv, &ty)?,
+                    krabka_pgcatalog::put_user_type_ops(kv, &ty)?,
                 ));
             }
             let before = domain.checks.len();
@@ -1403,7 +1403,7 @@ pub fn alter_domain(
                 domain.not_null_name = Some(to.clone());
                 return Ok((
                     command("ALTER DOMAIN"),
-                    crabka_pgcatalog::put_user_type_ops(kv, &ty)?,
+                    krabka_pgcatalog::put_user_type_ops(kv, &ty)?,
                 ));
             }
             let Some(check) = domain.checks.iter_mut().find(|check| check.name == *from) else {
@@ -1419,7 +1419,7 @@ pub fn alter_domain(
     }
     Ok((
         command("ALTER DOMAIN"),
-        crabka_pgcatalog::put_user_type_ops(kv, &ty)?,
+        krabka_pgcatalog::put_user_type_ops(kv, &ty)?,
     ))
 }
 
@@ -1430,9 +1430,9 @@ fn rename(
     tag: &str,
 ) -> Result<(QueryResult, Vec<WriteOp>), ExecError> {
     let renamed_identity = RelationName::new(ty.schema.clone(), new_name);
-    if ty.fields().is_some() && crabka_pgcatalog::relation_exists(kv, &renamed_identity)? {
+    if ty.fields().is_some() && krabka_pgcatalog::relation_exists(kv, &renamed_identity)? {
         return Err(
-            crabka_pgcatalog::CatalogError::DuplicateTable(renamed_identity.to_string()).into(),
+            krabka_pgcatalog::CatalogError::DuplicateTable(renamed_identity.to_string()).into(),
         );
     }
     ensure_type_name_available(
@@ -1453,7 +1453,7 @@ fn rename(
         QueryResult::Command {
             tag: tag.to_string(),
         },
-        crabka_pgcatalog::rename_user_type_ops(kv, &old, &ty)?,
+        krabka_pgcatalog::rename_user_type_ops(kv, &old, &ty)?,
     ))
 }
 
@@ -1480,14 +1480,14 @@ pub fn drop_types(
     };
     let mut ops = Vec::new();
     for name in names {
-        let Some(ty) = crabka_pgcatalog::get_user_type(kv, name)? else {
+        let Some(ty) = krabka_pgcatalog::get_user_type(kv, name)? else {
             if name.schema == "pg_catalog" && crate::exec::is_builtin_catalog_type_name(&name.name)
             {
                 return Err(ExecError::DependentObjectsStillExist(format!(
                     "cannot drop type {name} because it is required by the database system"
                 )));
             }
-            if crabka_pgcatalog::list_user_types(kv)?.iter().any(|ty| {
+            if krabka_pgcatalog::list_user_types(kv)?.iter().any(|ty| {
                 ty.multirange_identity() == Some((name.schema.clone(), name.name.clone()))
             }) {
                 return Err(ExecError::DependentObjectsStillExist(format!(
@@ -1505,7 +1505,7 @@ pub fn drop_types(
             return Err(wrong_kind(name, "a domain"));
         }
         if !domain_only && ty.domain().is_some() {
-            return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+            return Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
                 "42809",
                 format!("\"{name}\" is a domain\nHINT:  Use DROP DOMAIN to remove a domain."),
             )));
@@ -1514,7 +1514,7 @@ pub fn drop_types(
         let typed_tables = typed_tables_using_type(kv, ty.oid)?;
         if !cascade && let Some(dependent) = dependents.first() {
             return Err(ExecError::Remote(
-                crabka_pgwire::error::PgError::error(
+                krabka_pgwire::error::PgError::error(
                     "2BP01",
                     format!("cannot drop type {name} because other objects depend on it"),
                 )
@@ -1556,20 +1556,20 @@ pub fn drop_types(
         }
         ops.extend(crate::inheritance::drop_metadata_ops(kv, &dropping)?);
         for dependent in dependents.into_iter().rev() {
-            ops.extend(crabka_pgcatalog::drop_user_type_ops(kv, &dependent)?);
+            ops.extend(krabka_pgcatalog::drop_user_type_ops(kv, &dependent)?);
         }
         for routine in &routines {
-            ops.extend(crabka_pgcatalog::routine::drop_routine_ops(
+            ops.extend(krabka_pgcatalog::routine::drop_routine_ops(
                 &routine.identity(),
             ));
         }
         for cast in &casts {
-            ops.extend(crabka_pgcatalog::drop_user_cast_ops(
+            ops.extend(krabka_pgcatalog::drop_user_cast_ops(
                 cast.source,
                 cast.target,
             ));
         }
-        ops.extend(crabka_pgcatalog::drop_user_type_ops(kv, &ty)?);
+        ops.extend(krabka_pgcatalog::drop_user_type_ops(kv, &ty)?);
     }
     Ok((
         QueryResult::Command {
@@ -1592,12 +1592,12 @@ pub fn drop_types(
 pub(crate) fn type_cascade_lines(
     kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
-    reference: &crabka_pgparser::ast::RelationRef,
+    reference: &krabka_pgparser::ast::RelationRef,
 ) -> Result<Vec<String>, ExecError> {
     let Ok(name) = resolve_relation(kv, resolution, reference, SchemaDisposition::Reference) else {
         return Ok(Vec::new());
     };
-    let Some(ty) = crabka_pgcatalog::get_user_type(kv, &name)? else {
+    let Some(ty) = krabka_pgcatalog::get_user_type(kv, &name)? else {
         return Ok(Vec::new());
     };
     let mut lines: Vec<String> = dependent_user_types(kv, ty.oid)?
@@ -1619,7 +1619,7 @@ pub(crate) fn type_cascade_lines(
 /// dependency it names first.
 fn dependency_refusal(name: &RelationName, details: &[String]) -> ExecError {
     ExecError::Remote(
-        crabka_pgwire::error::PgError::error(
+        krabka_pgwire::error::PgError::error(
             "2BP01",
             format!(
                 "cannot drop type {name} because other objects depend on it\nDETAIL:  {}",
@@ -1631,8 +1631,8 @@ fn dependency_refusal(name: &RelationName, details: &[String]) -> ExecError {
 }
 
 fn typed_table_dependency_lines(
-    tables: &[crabka_pgcatalog::Table],
-    routines: &[crabka_pgcatalog::routine::Routine],
+    tables: &[krabka_pgcatalog::Table],
+    routines: &[krabka_pgcatalog::routine::Routine],
     name: &RelationName,
 ) -> Vec<String> {
     typed_table_cascade_lines(tables, routines)
@@ -1645,8 +1645,8 @@ fn typed_table_dependency_lines(
 }
 
 fn typed_table_cascade_lines(
-    tables: &[crabka_pgcatalog::Table],
-    routines: &[crabka_pgcatalog::routine::Routine],
+    tables: &[krabka_pgcatalog::Table],
+    routines: &[krabka_pgcatalog::routine::Routine],
 ) -> Vec<String> {
     let (first, rest) = tables
         .split_first()
@@ -1677,10 +1677,10 @@ fn typed_table_cascade_lines(
 pub(crate) fn dependent_routines(
     kv: &dyn Kv,
     ty: &UserType,
-) -> Result<Vec<crabka_pgcatalog::routine::Routine>, ExecError> {
+) -> Result<Vec<krabka_pgcatalog::routine::Routine>, ExecError> {
     let wanted = ty.qualified_name();
-    let mut found: Vec<crabka_pgcatalog::routine::Routine> =
-        crabka_pgcatalog::routine::list_routines(kv)?
+    let mut found: Vec<krabka_pgcatalog::routine::Routine> =
+        krabka_pgcatalog::routine::list_routines(kv)?
             .into_iter()
             .filter(|routine| routine_names_type(routine, &wanted))
             .collect();
@@ -1688,30 +1688,30 @@ pub(crate) fn dependent_routines(
     Ok(found)
 }
 
-fn routine_names_type(routine: &crabka_pgcatalog::routine::Routine, wanted: &str) -> bool {
-    let names = |ty: &crabka_pgcatalog::routine::RoutineType| ty.name == wanted;
+fn routine_names_type(routine: &krabka_pgcatalog::routine::Routine, wanted: &str) -> bool {
+    let names = |ty: &krabka_pgcatalog::routine::RoutineType| ty.name == wanted;
     routine.params.iter().any(|param| names(&param.ty))
         || match &routine.result {
-            crabka_pgcatalog::routine::RoutineResult::Type { ty, .. } => names(ty),
-            crabka_pgcatalog::routine::RoutineResult::Table(columns) => {
+            krabka_pgcatalog::routine::RoutineResult::Type { ty, .. } => names(ty),
+            krabka_pgcatalog::routine::RoutineResult::Table(columns) => {
                 columns.iter().any(|(_, ty)| names(ty))
             }
-            crabka_pgcatalog::routine::RoutineResult::Unspecified => false,
+            krabka_pgcatalog::routine::RoutineResult::Unspecified => false,
         }
 }
 
 /// Every declared cast with `oid` at either end, in the order they were
 /// recorded — which the `(source, target)` key gives for free only by pair, so
 /// the catalog scan order is what PostgreSQL's oid order approximates.
-fn dependent_casts(kv: &dyn Kv, oid: u32) -> Result<Vec<crabka_pgcatalog::UserCast>, ExecError> {
-    Ok(crabka_pgcatalog::list_user_casts(kv)?
+fn dependent_casts(kv: &dyn Kv, oid: u32) -> Result<Vec<krabka_pgcatalog::UserCast>, ExecError> {
+    Ok(krabka_pgcatalog::list_user_casts(kv)?
         .into_iter()
         .filter(|cast| cast.source == oid || cast.target == oid)
         .collect())
 }
 
 /// `cast from xfloat4 to real`, the way `getObjectDescription` spells a cast.
-pub(crate) fn cast_dependency_line(cast: &crabka_pgcatalog::UserCast) -> String {
+pub(crate) fn cast_dependency_line(cast: &krabka_pgcatalog::UserCast) -> String {
     format!(
         "cast from {} to {}",
         type_name_for_oid(cast.source),
@@ -1731,7 +1731,7 @@ fn type_name_for_oid(oid: u32) -> String {
 }
 
 fn dependent_user_types(kv: &dyn Kv, root_oid: u32) -> Result<Vec<UserType>, ExecError> {
-    let types = crabka_pgcatalog::list_user_types(kv)?;
+    let types = krabka_pgcatalog::list_user_types(kv)?;
     let mut dropped = HashSet::from([root_oid]);
     let mut dependents = Vec::new();
     while let Some(dependent) = types
@@ -1747,10 +1747,10 @@ fn dependent_user_types(kv: &dyn Kv, root_oid: u32) -> Result<Vec<UserType>, Exe
 fn typed_tables_using_type(
     kv: &dyn Kv,
     oid: u32,
-) -> Result<Vec<crabka_pgcatalog::Table>, ExecError> {
+) -> Result<Vec<krabka_pgcatalog::Table>, ExecError> {
     let mut tables = Vec::new();
-    for table in crabka_pgcatalog::list_tables(kv)? {
-        if crabka_pgcatalog::typed_table_type(kv, &table.name)? == Some(oid) {
+    for table in krabka_pgcatalog::list_tables(kv)? {
+        if krabka_pgcatalog::typed_table_type(kv, &table.name)? == Some(oid) {
             tables.push(table);
         }
     }
@@ -1798,7 +1798,7 @@ fn column_type_references_any(ty: ColumnType, oids: &HashSet<u32>) -> bool {
 /// Returns catalog storage/corruption errors, or an invalid-state error for a
 /// cyclic user-type dependency graph.
 pub(crate) fn drop_schema_types_ops(kv: &dyn Kv, schema: &str) -> Result<Vec<WriteOp>, ExecError> {
-    let types = crabka_pgcatalog::list_user_types(kv)?;
+    let types = krabka_pgcatalog::list_user_types(kv)?;
     let mut dropping: HashSet<u32> = types
         .iter()
         .filter(|ty| {
@@ -1837,7 +1837,7 @@ pub(crate) fn drop_schema_types_ops(kv: &dyn Kv, schema: &str) -> Result<Vec<Wri
 
     let mut ops = Vec::new();
     for ty in &ordered {
-        ops.extend(crabka_pgcatalog::drop_user_type_ops(kv, ty)?);
+        ops.extend(krabka_pgcatalog::drop_user_type_ops(kv, ty)?);
     }
     Ok(ops)
 }
@@ -1846,8 +1846,8 @@ pub(crate) fn drop_schema_types_ops(kv: &dyn Kv, schema: &str) -> Result<Vec<Wri
 pub(crate) fn column_using_type(
     kv: &dyn Kv,
     oid: u32,
-) -> Result<Option<(crabka_pgcatalog::RelationName, String)>, ExecError> {
-    for table in crabka_pgcatalog::list_tables(kv)? {
+) -> Result<Option<(krabka_pgcatalog::RelationName, String)>, ExecError> {
+    for table in krabka_pgcatalog::list_tables(kv)? {
         for column in &table.columns {
             if column.ty.oid() == oid {
                 return Ok(Some((table.name, column.name.clone())));
@@ -1862,7 +1862,7 @@ fn label_position(labels: &[String], label: &str) -> Result<usize, ExecError> {
         .iter()
         .position(|existing| existing == label)
         .ok_or_else(|| {
-            ExecError::Remote(crabka_pgwire::error::PgError::error(
+            ExecError::Remote(krabka_pgwire::error::PgError::error(
                 "22P02",
                 format!("\"{label}\" is not an existing enum label"),
             ))
@@ -1913,7 +1913,7 @@ fn enum_insert_sort_order(sort_orders: &mut [u32], index: usize) -> u32 {
 }
 
 fn require_type(kv: &dyn Kv, name: &RelationName) -> Result<UserType, ExecError> {
-    crabka_pgcatalog::get_user_type(kv, name)?
+    krabka_pgcatalog::get_user_type(kv, name)?
         .ok_or_else(|| ExecError::UndefinedObject(format!("type \"{name}\" does not exist")))
 }
 
@@ -1921,7 +1921,7 @@ fn require_type_or_multirange(
     kv: &dyn Kv,
     name: &RelationName,
 ) -> Result<(UserType, bool), ExecError> {
-    if let Some(ty) = crabka_pgcatalog::get_user_type(kv, name)? {
+    if let Some(ty) = krabka_pgcatalog::get_user_type(kv, name)? {
         return Ok((ty, false));
     }
     if name.schema == "pg_catalog" && crate::exec::is_builtin_catalog_type_name(&name.name) {
@@ -1930,7 +1930,7 @@ fn require_type_or_multirange(
         )));
     }
     let identity = (name.schema.clone(), name.name.clone());
-    crabka_pgcatalog::list_user_types(kv)?
+    krabka_pgcatalog::list_user_types(kv)?
         .into_iter()
         .find(|ty| ty.multirange_identity() == Some(identity.clone()))
         .map(|ty| (ty, true))
@@ -1938,7 +1938,7 @@ fn require_type_or_multirange(
 }
 
 fn wrong_kind(name: &RelationName, wanted: &str) -> ExecError {
-    ExecError::Remote(crabka_pgwire::error::PgError::error(
+    ExecError::Remote(krabka_pgwire::error::PgError::error(
         "42809",
         format!("\"{name}\" is not {wanted}"),
     ))
@@ -1995,7 +1995,7 @@ pub fn check_domain(
         return Ok(());
     };
     if value.is_null() && domain.not_null {
-        return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+        return Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
             "23502",
             format!("domain {} does not allow null values", registered.name),
         )));
@@ -2012,10 +2012,10 @@ pub fn check_domain(
     let scope = value_scope(*domain_ref.base);
     let row = [value.clone()];
     for check in &domain.checks {
-        let expr = crabka_pgparser::parser::parse_expression(&check.expr)?;
+        let expr = krabka_pgparser::parser::parse_expression(&check.expr)?;
         let result = crate::eval::eval(&expr, &scope, &row, ctx)?;
         if matches!(result, Datum::Bool(false)) {
-            return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+            return Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
                 "23514",
                 format!(
                     "value for domain {} violates check constraint \"{}\"",
@@ -2043,8 +2043,8 @@ fn value_scope(base: ColumnType) -> crate::scope::Scope {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgkv::MemKv;
-    use crabka_pgparser::ast::{RelationRef, Statement};
+    use krabka_pgkv::MemKv;
+    use krabka_pgparser::ast::{RelationRef, Statement};
 
     use super::*;
 
@@ -2125,7 +2125,7 @@ mod tests {
 
     #[test]
     fn range_subtype_diff_requires_the_subtype_signature() {
-        let statements = crabka_pgparser::parse(
+        let statements = krabka_pgparser::parse(
             "CREATE TYPE bogus_float8range AS RANGE (subtype = float8, subtype_diff = float4mi)",
         )
         .expect("parse");
@@ -2208,7 +2208,7 @@ mod tests {
     fn enum_alter_reports_the_missing_source_or_neighbor_first() {
         let kv = MemKv::default();
         let name = RelationName::public("enum_alter_errors");
-        let (_, ops) = crabka_pgcatalog::create_user_type_ops(
+        let (_, ops) = krabka_pgcatalog::create_user_type_ops(
             &kv,
             &name,
             UserTypeBody::Enum(vec!["a".into(), "b".into()]),
@@ -2291,7 +2291,7 @@ mod tests {
         let (_, ops) = alter_type(&kv, &name, &AlterTypeAction::Set(vec![storage("extended")]))
             .expect("set storage");
         kv.write_batch(&ops).expect("store storage");
-        let ty = crabka_pgcatalog::get_user_type(&kv, &name)
+        let ty = krabka_pgcatalog::get_user_type(&kv, &name)
             .expect("read base type")
             .expect("base type exists");
         let UserTypeBody::Base(base) = ty.body else {
@@ -2323,7 +2323,7 @@ mod tests {
         .expect("explicit companion");
         kv.write_batch(&ops).expect("store explicit companion");
         let stored =
-            crabka_pgcatalog::get_user_type(&kv, &RelationName::public("named_range_test"))
+            krabka_pgcatalog::get_user_type(&kv, &RelationName::public("named_range_test"))
                 .expect("read explicit companion")
                 .expect("stored range");
         assert!(
@@ -2365,7 +2365,7 @@ mod tests {
     #[test]
     fn drop_composite_cascade_removes_dependent_range() {
         let kv = MemKv::default();
-        let (composite, composite_ops) = crabka_pgcatalog::create_user_type_ops(
+        let (composite, composite_ops) = krabka_pgcatalog::create_user_type_ops(
             &kv,
             &RelationName::public("cascade_composite_test"),
             UserTypeBody::Composite(vec![CompositeField {
@@ -2377,7 +2377,7 @@ mod tests {
         .expect("composite");
         kv.write_batch(&composite_ops).expect("store composite");
         hydrate(&kv).expect("publish composite");
-        let (_range, range_ops) = crabka_pgcatalog::create_user_type_ops(
+        let (_range, range_ops) = krabka_pgcatalog::create_user_type_ops(
             &kv,
             &RelationName::public("cascade_composite_range_test"),
             UserTypeBody::Range(RangeBody {
@@ -2418,7 +2418,7 @@ mod tests {
                 .and_then(|fields| fields.hint.as_deref())
                 == Some("Use DROP ... CASCADE to drop the dependent objects too.")
         );
-        let before = crabka_pgcatalog::list_user_types(&kv).expect("types before drop");
+        let before = krabka_pgcatalog::list_user_types(&kv).expect("types before drop");
         let (_, drop_ops) = drop_types(
             &kv,
             std::slice::from_ref(&composite_name),
@@ -2428,11 +2428,11 @@ mod tests {
         )
         .expect("cascade");
         kv.write_batch(&drop_ops).expect("drop types");
-        let after = crabka_pgcatalog::list_user_types(&kv).expect("types after drop");
+        let after = krabka_pgcatalog::list_user_types(&kv).expect("types after drop");
         usertype::publish_catalog_delta(&before, &after);
 
         assert!(
-            crabka_pgcatalog::list_user_types(&kv)
+            krabka_pgcatalog::list_user_types(&kv)
                 .expect("types")
                 .is_empty()
         );
@@ -2441,14 +2441,14 @@ mod tests {
     #[test]
     fn composite_attribute_rejects_indirect_self_inclusion() {
         let kv = MemKv::default();
-        let (composite, composite_ops) = crabka_pgcatalog::create_user_type_ops(
+        let (composite, composite_ops) = krabka_pgcatalog::create_user_type_ops(
             &kv,
             &RelationName::public("recursive_composite_test"),
             UserTypeBody::Composite(vec![]),
         )
         .expect("composite");
         kv.write_batch(&composite_ops).expect("store composite");
-        let (range, range_ops) = crabka_pgcatalog::create_user_type_ops(
+        let (range, range_ops) = krabka_pgcatalog::create_user_type_ops(
             &kv,
             &RelationName::public("recursive_composite_range_test"),
             UserTypeBody::Range(RangeBody {

@@ -13,7 +13,7 @@
 - Crabka is greenfield and undeployed; do not add backwards-compatibility shims.
 - Preserve Kafka wire-protocol byte exactness and behavior JVM Kafka tools rely on.
 - Do not move Rust code in this first pass; only publication policy, release configuration, docs, and CI enforcement change.
-- Public allowlist: `crabka-client-admin`, `crabka-client-consumer`, `crabka-client-core`, `crabka-client-producer`, `crabka-client-streams`, `crabka-compression`, `crabka-connect`, `crabka-connect-derive`, `crabka-log`, `crabka-protocol`, `crabka-schema-serde`, `crabka-security`.
+- Public allowlist: `krabka-client-admin`, `krabka-client-consumer`, `krabka-client-core`, `krabka-client-producer`, `krabka-client-streams`, `krabka-compression`, `krabka-connect`, `krabka-connect-derive`, `krabka-log`, `krabka-protocol`, `krabka-schema-serde`, `krabka-security`.
 - Every workspace package outside the public allowlist must have `publish = false` in its package manifest.
 - `release-plz.toml` must explicitly prevent private packages from being released or published.
 - CI must fail when `cargo metadata` finds a publishable workspace package outside the allowlist.

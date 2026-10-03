@@ -28,7 +28,7 @@ fractional milliseconds, and durations above `u64::MAX` milliseconds are
 rejected. Zero does not disable either leave attempt.
 
 The type derives `Clone`, `Copy`, `Debug`, `Eq`, and `PartialEq`.
-`crabka-client-consumer` adds the existing workspace `refined_type`
+`krabka-client-consumer` adds the existing workspace `refined_type`
 dependency; no new external dependency or generic timeout abstraction is
 introduced.
 
@@ -69,7 +69,7 @@ builder setter changes type or meaning.
 The demo Consume role exposes:
 
 - CLI: `--consumer-leave-group-timeout-ms`
-- environment: `CRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS`
+- environment: `KRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS`
 
 Precedence is CLI over environment over the typed five-second default. Clap
 parses `NonZeroU64`; the resolver constructs `ConsumerLeaveGroupTimeout`
@@ -80,7 +80,7 @@ early role-specific error. `run_consume` receives the typed value and passes
 its duration to the raw `Consumer` builder setter.
 
 Only the `demo-consume` Compose service receives
-`CRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS`, with `${...:-5000}` as its
+`KRABKA_DEMO_CONSUMER_LEAVE_GROUP_TIMEOUT_MS`, with `${...:-5000}` as its
 deployment default.
 
 There is no CRD field because the operator does not own or render this

@@ -2,10 +2,10 @@
 
 use std::collections::BTreeSet;
 
-use crabka_pgcatalog::{RelationName, statistics::Statistics};
-use crabka_pgkv::{Kv, WriteOp};
-use crabka_pgparser::ast::{self, BinaryOp, Expr, TableExpr};
-use crabka_pgwire::engine::QueryResult;
+use krabka_pgcatalog::{RelationName, statistics::Statistics};
+use krabka_pgkv::{Kv, WriteOp};
+use krabka_pgparser::ast::{self, BinaryOp, Expr, TableExpr};
+use krabka_pgwire::engine::QueryResult;
 
 use crate::{
     error::ExecError,
@@ -61,9 +61,9 @@ fn unsupported_source_relation(
     }) {
         return Ok(Some(error));
     }
-    if crabka_pgcatalog::get_user_type(kv, source)?.is_some_and(|ty| ty.fields().is_some()) {
+    if krabka_pgcatalog::get_user_type(kv, source)?.is_some_and(|ty| ty.fields().is_some()) {
         return Ok(Some(ExecError::Remote(
-            crabka_pgwire::error::PgError::error("42809", message())
+            krabka_pgwire::error::PgError::error("42809", message())
                 .with_detail("This operation is not supported for composite types."),
         )));
     }
@@ -92,7 +92,7 @@ fn generated_name(
                 format!("{base}{suffix}")
             },
         );
-        if crabka_pgcatalog::statistics::get(kv, &name)?.is_none() {
+        if krabka_pgcatalog::statistics::get(kv, &name)?.is_none() {
             return Ok(name);
         }
     }
@@ -138,12 +138,12 @@ fn kinds(kinds: &[String], keys: &[i16]) -> Result<Vec<String>, ExecError> {
 
 pub(crate) fn expression_text(
     expr: &Expr,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
 ) -> Result<String, ExecError> {
     let expr = normalize_expression(expr, &Scope::single(table, &table.name.name))?;
     let text = crate::viewdef::expression_text_pretty(
         &expr,
-        crabka_pgtypes::encoding::OutputStyle::with_zone(&jiff::tz::TimeZone::UTC),
+        krabka_pgtypes::encoding::OutputStyle::with_zone(&jiff::tz::TimeZone::UTC),
     );
     Ok(if matches!(expr, Expr::Binary { .. }) {
         format!("({text})")
@@ -191,22 +191,22 @@ fn normalize_expression(expr: &Expr, scope: &Scope) -> Result<Expr, ExecError> {
 
 fn arithmetic_literal_cast(
     expr: &Expr,
-    sibling: crabka_pgtypes::ColumnType,
-) -> Option<crabka_pgtypes::ColumnType> {
+    sibling: krabka_pgtypes::ColumnType,
+) -> Option<krabka_pgtypes::ColumnType> {
     match (expr, sibling) {
         (Expr::IntLiteral(_), ty) if ty.is_numeric() => {
-            Some(crabka_pgtypes::ColumnType::Numeric(None))
+            Some(krabka_pgtypes::ColumnType::Numeric(None))
         }
         (
             Expr::IntLiteral(_) | Expr::NumericLiteral(_),
-            crabka_pgtypes::ColumnType::Float4 | crabka_pgtypes::ColumnType::Float8,
-        ) => Some(crabka_pgtypes::ColumnType::Float8),
+            krabka_pgtypes::ColumnType::Float4 | krabka_pgtypes::ColumnType::Float8,
+        ) => Some(krabka_pgtypes::ColumnType::Float8),
         _ => None,
     }
 }
 
 fn statistic_column_ordinal(
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     name: &str,
 ) -> Result<usize, ExecError> {
     if matches!(
@@ -223,7 +223,7 @@ fn statistic_column_ordinal(
     if table.columns[ordinal]
         .generated
         .as_ref()
-        .is_some_and(|generated| generated.kind == crabka_pgcatalog::GeneratedKind::Virtual)
+        .is_some_and(|generated| generated.kind == krabka_pgcatalog::GeneratedKind::Virtual)
     {
         return Err(ExecError::Unsupported(
             "statistics creation on virtual generated columns is not supported".into(),
@@ -240,7 +240,7 @@ fn statistic_column_ordinal(
 
 fn validate_expression_columns(
     expr: &Expr,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
 ) -> Result<(), ExecError> {
     let mut error = None;
     crate::grouping::visit_expr(expr, &mut |node| {
@@ -256,7 +256,7 @@ fn validate_expression_columns(
 
 fn definition(
     stats: &ast::CreateStatistics,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
 ) -> Result<(Vec<i16>, Vec<String>), ExecError> {
     if stats.expressions.len() > MAX_KEYS {
         return Err(ExecError::Unsupported(format!(
@@ -271,7 +271,7 @@ fn definition(
         let text = expression_text(expr, table)?;
         if !seen.insert(text.clone()) {
             return Err(if matches!(expr, Expr::Column { table: None, .. }) {
-                ExecError::Remote(crabka_pgwire::error::PgError::error(
+                ExecError::Remote(krabka_pgwire::error::PgError::error(
                     "42701",
                     "duplicate column name in statistics definition",
                 ))
@@ -311,7 +311,7 @@ pub(crate) fn create(
         source_table(stats)?,
         SchemaDisposition::Utility,
     )?;
-    let table = match crabka_pgcatalog::get_table(kv, &source) {
+    let table = match krabka_pgcatalog::get_table(kv, &source) {
         Ok(table) => table,
         Err(error) => {
             if let Some(error) = unsupported_source_relation(kv, &source)? {
@@ -331,7 +331,7 @@ pub(crate) fn create(
         .name
         .schema
         .as_deref()
-        .is_some_and(|schema| schema == crabka_pgcatalog::PG_TEMP_ALIAS);
+        .is_some_and(|schema| schema == krabka_pgcatalog::PG_TEMP_ALIAS);
     let name = if stats.name.name.is_empty() {
         generated_name(kv, &source, &stats.expressions)?
     } else {
@@ -347,22 +347,22 @@ pub(crate) fn create(
         )?
     };
     if !temporary
-        && !crabka_pgcatalog::has_schema_privilege(
+        && !krabka_pgcatalog::has_schema_privilege(
             kv,
             &name.schema,
             fctx.effective_role(),
             "CREATE",
         )?
     {
-        return Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+        return Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
             "42501",
             format!("permission denied for schema {}", name.schema),
         )));
     }
-    if stats.if_not_exists && crabka_pgcatalog::statistics::get(kv, &name)?.is_some() {
+    if stats.if_not_exists && krabka_pgcatalog::statistics::get(kv, &name)?.is_some() {
         return Ok((command("CREATE STATISTICS"), Vec::new()));
     }
-    let temp_schema = (temporary && !crabka_pgcatalog::schema_exists(kv, &name.schema)?)
+    let temp_schema = (temporary && !krabka_pgcatalog::schema_exists(kv, &name.schema)?)
         .then(|| name.schema.clone());
     let (keys, expressions) = definition(stats, &table)?;
     let kinds = kinds(&stats.kinds, &keys)?;
@@ -380,9 +380,9 @@ pub(crate) fn create(
     };
     let mut ops = Vec::new();
     if let Some(schema) = temp_schema {
-        ops.push(crabka_pgcatalog::create_temp_schema_op(&schema));
+        ops.push(krabka_pgcatalog::create_temp_schema_op(&schema));
     }
-    ops.extend(crabka_pgcatalog::statistics::create_ops(kv, &record)?);
+    ops.extend(krabka_pgcatalog::statistics::create_ops(kv, &record)?);
     Ok((command("CREATE STATISTICS"), ops))
 }
 
@@ -391,12 +391,12 @@ pub(crate) fn require_statistics_owner(
     object: &Statistics,
     role: &str,
 ) -> Result<(), ExecError> {
-    if crabka_pgcatalog::role_has_privs_of(kv, role, &object.owner)?
+    if krabka_pgcatalog::role_has_privs_of(kv, role, &object.owner)?
         || crate::rls::role_is_superuser(kv, role)?
     {
         return Ok(());
     }
-    Err(ExecError::Remote(crabka_pgwire::error::PgError::error(
+    Err(ExecError::Remote(krabka_pgwire::error::PgError::error(
         "42501",
         format!("must be owner of statistics object {}", object.name.name),
     )))
@@ -409,7 +409,7 @@ pub(crate) fn alter(
     action: &ast::AlterStatisticsAction,
     fctx: ForeignCtx<'_>,
 ) -> DdlResult {
-    let Some(mut object) = crabka_pgcatalog::statistics::get(kv, &name)? else {
+    let Some(mut object) = krabka_pgcatalog::statistics::get(kv, &name)? else {
         if if_exists {
             return Ok((command("ALTER STATISTICS"), Vec::new()));
         }
@@ -418,21 +418,21 @@ pub(crate) fn alter(
     require_statistics_owner(kv, &object, fctx.effective_role())?;
     let ops = match action {
         ast::AlterStatisticsAction::RenameTo(new_name) => {
-            crabka_pgcatalog::statistics::rename_ops(kv, &name, &name.sibling(new_name))?
+            krabka_pgcatalog::statistics::rename_ops(kv, &name, &name.sibling(new_name))?
         }
-        ast::AlterStatisticsAction::SetSchema(schema) => crabka_pgcatalog::statistics::rename_ops(
+        ast::AlterStatisticsAction::SetSchema(schema) => krabka_pgcatalog::statistics::rename_ops(
             kv,
             &name,
             &RelationName::new(schema, name.name.clone()),
         )?,
         ast::AlterStatisticsAction::OwnerTo(owner) => {
-            if !crabka_pgcatalog::role_exists(kv, owner)? {
+            if !krabka_pgcatalog::role_exists(kv, owner)? {
                 return Err(ExecError::UndefinedObject(format!(
                     "role \"{owner}\" does not exist"
                 )));
             }
             object.owner.clone_from(owner);
-            vec![crabka_pgcatalog::statistics::put_op(&object)]
+            vec![krabka_pgcatalog::statistics::put_op(&object)]
         }
         ast::AlterStatisticsAction::SetStatistics(target) => {
             let target = target.unwrap_or(-1);
@@ -444,7 +444,7 @@ pub(crate) fn alter(
                     "statistics target must be between -1 and 10000".into(),
                 ));
             }
-            vec![crabka_pgcatalog::statistics::put_op(&object)]
+            vec![krabka_pgcatalog::statistics::put_op(&object)]
         }
     };
     Ok((command("ALTER STATISTICS"), ops))
@@ -458,15 +458,15 @@ pub(crate) fn drop(
 ) -> DdlResult {
     let mut ops = Vec::new();
     for written in names {
-        let name = if written.schema.as_deref() == Some(crabka_pgcatalog::PG_TEMP_ALIAS) {
+        let name = if written.schema.as_deref() == Some(krabka_pgcatalog::PG_TEMP_ALIAS) {
             RelationName::new(fctx.resolution.temp_schema(), written.name.clone())
         } else {
             resolve_relation(kv, fctx.resolution, written, SchemaDisposition::Utility)?
         };
-        match crabka_pgcatalog::statistics::get(kv, &name)? {
+        match krabka_pgcatalog::statistics::get(kv, &name)? {
             Some(object) => {
                 require_statistics_owner(kv, &object, fctx.effective_role())?;
-                ops.extend(crabka_pgcatalog::statistics::drop_ops(kv, &name)?);
+                ops.extend(krabka_pgcatalog::statistics::drop_ops(kv, &name)?);
             }
             None if if_exists => {}
             None => return Err(missing(&name)),
@@ -478,16 +478,16 @@ pub(crate) fn drop(
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgcatalog::{Column, GeneratedColumn, GeneratedKind, RelationName, Table};
-    use crabka_pgparser::ast::{CreateStatistics, Expr, RelationRef, TableExpr};
-    use crabka_pgtypes::ColumnType;
+    use krabka_pgcatalog::{Column, GeneratedColumn, GeneratedKind, RelationName, Table};
+    use krabka_pgparser::ast::{CreateStatistics, Expr, RelationRef, TableExpr};
+    use krabka_pgtypes::ColumnType;
 
     use super::{definition, kinds};
 
     fn table() -> Table {
         Table {
             id: 42,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             name: RelationName::public("t"),
             columns: vec![
                 Column::new("a", ColumnType::Int4),
@@ -524,8 +524,8 @@ mod tests {
     #[test]
     fn definition_keeps_attribute_numbers_and_expression_slots() {
         let parsed =
-            crabka_pgparser::parse("CREATE STATISTICS s ON a, (b + 1) FROM t").expect("parse");
-        let [crabka_pgparser::ast::Statement::CreateStatistics(parsed_stats)] = parsed.as_slice()
+            krabka_pgparser::parse("CREATE STATISTICS s ON a, (b + 1) FROM t").expect("parse");
+        let [krabka_pgparser::ast::Statement::CreateStatistics(parsed_stats)] = parsed.as_slice()
         else {
             panic!("stats");
         };
@@ -549,9 +549,9 @@ mod tests {
     #[test]
     fn definition_keeps_implicit_arithmetic_literal_casts() {
         let parsed =
-            crabka_pgparser::parse("CREATE STATISTICS s ON (n + 1), (1 + n), (r + 1.5) FROM t")
+            krabka_pgparser::parse("CREATE STATISTICS s ON (n + 1), (1 + n), (r + 1.5) FROM t")
                 .expect("parse");
-        let [crabka_pgparser::ast::Statement::CreateStatistics(parsed_stats)] = parsed.as_slice()
+        let [krabka_pgparser::ast::Statement::CreateStatistics(parsed_stats)] = parsed.as_slice()
         else {
             panic!("stats");
         };
@@ -591,9 +591,9 @@ mod tests {
             )
             .is_err()
         );
-        let parsed = crabka_pgparser::parse("CREATE STATISTICS s ON a, (b + 1) FROM t")
+        let parsed = krabka_pgparser::parse("CREATE STATISTICS s ON a, (b + 1) FROM t")
             .expect("parse expression statistics");
-        let [crabka_pgparser::ast::Statement::CreateStatistics(parsed_stats)] = parsed.as_slice()
+        let [krabka_pgparser::ast::Statement::CreateStatistics(parsed_stats)] = parsed.as_slice()
         else {
             panic!("stats");
         };

@@ -1,6 +1,6 @@
 # G7 multi-range live evidence — 2026-07-11
 
-Cluster: `kind-crabka-g7-clean`. Tenant: `tenant-g7c`. The operator created
+Cluster: `kind-krabka-g7-clean`. Tenant: `tenant-g7c`. The operator created
 separate `tenant-g7c-gres` (r0) and `tenant-g7c-gres-r1` deployments and an
 operator-owned `kubernetes.io/tls` range identity Secret.
 
@@ -63,7 +63,7 @@ See `tls-server-rejections.log`, `tls-plaintext.txt`,
 
 ## Real-process system suites
 
-- The test harness starts an in-process broker and two actual `crabka-gres`
+- The test harness starts an in-process broker and two actual `krabka-gres`
   child processes with stable cache directories and a generated tenant mTLS
   identity. Readiness is connection-driven; no fixed startup sleeps are used.
 - Kill and respawn tests assert replacement OS PIDs and recover forwarded rows,
@@ -89,18 +89,18 @@ zero skipped, in 39.261 seconds (run id
 ## Verification
 
 ```text
-cargo test -p crabka-pgexec primary_prewrite_waits_for_range0_replica_barrier --lib
+cargo test -p krabka-pgexec primary_prewrite_waits_for_range0_replica_barrier --lib
   1 passed
-cargo test -p crabka-gres-ranges --lib
+cargo test -p krabka-gres-ranges --lib
   105 passed
-cargo nextest run -p crabka-gres-ranges --test multiprocess --test jepsen_bank \
+cargo nextest run -p krabka-gres-ranges --test multiprocess --test jepsen_bank \
   --test participant_kill_bank --test range0_cascade_kill_bank \
   --test range0_leader_kill_drain --test crossrange_2pc_nemesis \
   --test jepsen_elle
   17 passed, 0 skipped
-cargo test -p crabka-gres-ranges --test multirange --test crossrange_2pc
+cargo test -p krabka-gres-ranges --test multirange --test crossrange_2pc
   23 + 21 passed before the rejected explicit-transaction prototype was removed
-cargo check -p crabka-gres -p crabka-gres-ranges --all-targets
+cargo check -p krabka-gres -p krabka-gres-ranges --all-targets
   passed
 cargo fmt --all -- --check
   passed

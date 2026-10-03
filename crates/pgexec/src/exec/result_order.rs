@@ -36,11 +36,11 @@ pub(crate) fn project_rows_ordered_with_memory(
     };
     // Only plain DISTINCT restricts ORDER BY to the select-list output; DISTINCT
     // ON sorts the source rows, so its keys may name source-only columns.
-    let require_output = matches!(s.distinct, crabka_pgparser::ast::DistinctClause::Distinct);
+    let require_output = matches!(s.distinct, krabka_pgparser::ast::DistinctClause::Distinct);
     let order_keys =
         resolve_select_order_keys(&s.order_by, scope, fields, out_exprs, require_output)?;
 
-    if matches!(s.distinct, crabka_pgparser::ast::DistinctClause::Distinct) {
+    if matches!(s.distinct, krabka_pgparser::ast::DistinctClause::Distinct) {
         for expr in out_exprs {
             crate::eval::require_equality_operator(crate::eval::infer_type(expr, scope)?)?;
         }
@@ -62,7 +62,7 @@ pub(crate) fn project_rows_ordered_with_memory(
     // SP39: SELECT DISTINCT projects FIRST, dedups output rows, then ORDER BY
     // sorts the deduped output. PostgreSQL requires every sort key to refer to
     // the select-list output (ordinal, alias/name, or the exact select expression).
-    if matches!(s.distinct, crabka_pgparser::ast::DistinctClause::Distinct) {
+    if matches!(s.distinct, krabka_pgparser::ast::DistinctClause::Distinct) {
         let mut projected = project_rows(out_exprs, scope, &kept, ctx)?;
         ensure_blocking_rows_fit(&projected, statement_memory)?;
         let mut seen: std::collections::HashSet<Vec<Datum>> = std::collections::HashSet::new();
@@ -171,7 +171,7 @@ pub(crate) struct DistinctOnPlan {
     pub(crate) group: Vec<Expr>,
     /// The order the rows must be in before that grouping, which is what decides
     /// which row of each group survives.
-    pub(crate) sort: Vec<crabka_pgparser::ast::OrderItem>,
+    pub(crate) sort: Vec<krabka_pgparser::ast::OrderItem>,
 }
 
 /// Resolve `DISTINCT ON` against the query's `ORDER BY`, or `None` when the
@@ -205,7 +205,7 @@ pub(crate) fn distinct_on_plan(
         .iter()
         .map(|expr| resolve_sql92_expr(expr, scope, fields, out_exprs, SQL92_DISTINCT_ON))
         .collect::<Result<Vec<_>, ExecError>>()?;
-    let ordered: Vec<(&Expr, &crabka_pgparser::ast::OrderItem)> = order_keys
+    let ordered: Vec<(&Expr, &krabka_pgparser::ast::OrderItem)> = order_keys
         .iter()
         .zip(&s.order_by)
         .map(|(key, item)| match key {
@@ -214,7 +214,7 @@ pub(crate) fn distinct_on_plan(
         })
         .collect();
 
-    let mut sort: Vec<crabka_pgparser::ast::OrderItem> = Vec::new();
+    let mut sort: Vec<krabka_pgparser::ast::OrderItem> = Vec::new();
     let mut skipped = false;
     for (expr, item) in &ordered {
         if !group
@@ -229,7 +229,7 @@ pub(crate) fn distinct_on_plan(
                 "SELECT DISTINCT ON expressions must match initial ORDER BY expressions".into(),
             ));
         }
-        sort.push(crabka_pgparser::ast::OrderItem {
+        sort.push(krabka_pgparser::ast::OrderItem {
             expr: (*expr).clone(),
             asc: item.asc,
             nulls_first: item.nulls_first,
@@ -251,7 +251,7 @@ pub(crate) fn distinct_on_plan(
                 "SELECT DISTINCT ON expressions must match initial ORDER BY expressions".into(),
             ));
         }
-        sort.push(crabka_pgparser::ast::OrderItem {
+        sort.push(krabka_pgparser::ast::OrderItem {
             expr: key.clone(),
             asc: true,
             nulls_first: false,
@@ -260,7 +260,7 @@ pub(crate) fn distinct_on_plan(
     if sort.len() < ordered.len() {
         sort = ordered
             .iter()
-            .map(|(expr, item)| crabka_pgparser::ast::OrderItem {
+            .map(|(expr, item)| krabka_pgparser::ast::OrderItem {
                 expr: (*expr).clone(),
                 asc: item.asc,
                 nulls_first: item.nulls_first,
@@ -423,7 +423,7 @@ pub(crate) fn project_rows(
 pub(crate) fn rows_result(
     fields: Vec<FieldDescription>,
     projected: &[Vec<Datum>],
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> QueryResult {
     rows_result_with_tag(
         fields,
@@ -436,7 +436,7 @@ pub(crate) fn rows_result(
 pub(crate) fn rows_result_with_tag(
     fields: Vec<FieldDescription>,
     projected: &[Vec<Datum>],
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
     tag: String,
 ) -> QueryResult {
     let rows: Vec<Vec<Option<Cell>>> = projected

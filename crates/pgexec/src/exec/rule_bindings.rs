@@ -3,7 +3,7 @@
 use super::{rule_images::*, *};
 
 fn bind_rule_query(
-    query: &mut crabka_pgparser::ast::QueryExpr,
+    query: &mut krabka_pgparser::ast::QueryExpr,
     table: &Table,
     old: Option<&[Datum]>,
     new: Option<&[Datum]>,
@@ -27,33 +27,33 @@ fn bind_rule_query(
 }
 
 fn bind_rule_query_values(
-    query: &mut crabka_pgparser::ast::QueryExpr,
+    query: &mut krabka_pgparser::ast::QueryExpr,
     table: &Table,
     old: Option<&[Datum]>,
     new: Option<&[Datum]>,
 ) -> Result<(), ExecError> {
     fn bind_set_expr(
-        body: &mut crabka_pgparser::ast::SetExpr,
+        body: &mut krabka_pgparser::ast::SetExpr,
         table: &Table,
         old: Option<&[Datum]>,
         new: Option<&[Datum]>,
     ) -> Result<(), ExecError> {
         match body {
-            crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Values(
+            krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Values(
                 values,
             )) => {
                 for row in &mut values.rows {
                     bind_rule_values(row, table, old, new)?;
                 }
             }
-            crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Nested(
+            krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Nested(
                 query,
             )) => bind_rule_query_values(query, table, old, new)?,
-            crabka_pgparser::ast::SetExpr::SetOp { left, right, .. } => {
+            krabka_pgparser::ast::SetExpr::SetOp { left, right, .. } => {
                 bind_set_expr(left, table, old, new)?;
                 bind_set_expr(right, table, old, new)?;
             }
-            crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Select(_)) => {}
+            krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Select(_)) => {}
         }
         Ok(())
     }
@@ -61,24 +61,24 @@ fn bind_rule_query_values(
 }
 
 fn bind_rule_query_wildcards(
-    query: &mut crabka_pgparser::ast::QueryExpr,
+    query: &mut krabka_pgparser::ast::QueryExpr,
     table: &Table,
     old: Option<&[Datum]>,
     new: Option<&[Datum]>,
 ) -> Result<(), ExecError> {
     fn bind_set_expr(
-        body: &mut crabka_pgparser::ast::SetExpr,
+        body: &mut krabka_pgparser::ast::SetExpr,
         table: &Table,
         old: Option<&[Datum]>,
         new: Option<&[Datum]>,
     ) -> Result<(), ExecError> {
         match body {
-            crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Select(
+            krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Select(
                 select,
             )) => {
                 let mut projection = Vec::with_capacity(select.projection.len());
                 for item in std::mem::take(&mut select.projection) {
-                    let crabka_pgparser::ast::SelectItem::QualifiedWildcard(qualifier) = &item
+                    let krabka_pgparser::ast::SelectItem::QualifiedWildcard(qualifier) = &item
                     else {
                         projection.push(item);
                         continue;
@@ -108,20 +108,20 @@ fn bind_rule_query_wildcards(
                 }
                 select.projection = projection;
             }
-            crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Nested(
+            krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Nested(
                 query,
             )) => bind_rule_query_wildcards(query, table, old, new)?,
-            crabka_pgparser::ast::SetExpr::SetOp { left, right, .. } => {
+            krabka_pgparser::ast::SetExpr::SetOp { left, right, .. } => {
                 bind_set_expr(left, table, old, new)?;
                 bind_set_expr(right, table, old, new)?;
             }
-            crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Values(_)) => {}
+            krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Values(_)) => {}
         }
         Ok(())
     }
     if let Some(with) = &mut query.with {
         for cte in &mut with.ctes {
-            if let crabka_pgparser::ast::CteBody::Query(query) = &mut cte.body {
+            if let krabka_pgparser::ast::CteBody::Query(query) = &mut cte.body {
                 bind_rule_query_wildcards(query, table, old, new)?;
             }
         }
@@ -177,7 +177,7 @@ fn bind_rule_values(
 }
 
 fn bind_rule_returning(
-    returning: &mut crabka_pgparser::ast::Returning,
+    returning: &mut krabka_pgparser::ast::Returning,
     table: &Table,
     old: Option<&[Datum]>,
     new: Option<&[Datum]>,
@@ -226,12 +226,12 @@ fn bind_rule_returning(
 }
 
 fn bind_rule_table_expr(
-    item: &mut crabka_pgparser::ast::TableExpr,
+    item: &mut krabka_pgparser::ast::TableExpr,
     table: &Table,
     old: Option<&[Datum]>,
     new: Option<&[Datum]>,
 ) -> Result<(), ExecError> {
-    use crabka_pgparser::ast::TableExpr;
+    use krabka_pgparser::ast::TableExpr;
     match item {
         TableExpr::Derived { subquery, .. } => bind_rule_query(subquery, table, old, new),
         TableExpr::Function { functions, .. } => {
@@ -262,7 +262,7 @@ fn bind_rule_table_expr(
         } => {
             bind_rule_table_expr(left, table, old, new)?;
             bind_rule_table_expr(right, table, old, new)?;
-            if let crabka_pgparser::ast::JoinConstraint::On(expr) = constraint {
+            if let krabka_pgparser::ast::JoinConstraint::On(expr) = constraint {
                 *expr = bind_rule_expr(expr, table, old, new)?;
             }
             Ok(())
@@ -280,7 +280,7 @@ pub(super) fn bind_rule_action(
 ) -> Result<(), ExecError> {
     match action {
         Statement::Insert {
-            source: crabka_pgparser::ast::InsertSource::Values(rows),
+            source: krabka_pgparser::ast::InsertSource::Values(rows),
             returning,
             ..
         } => {
@@ -292,7 +292,7 @@ pub(super) fn bind_rule_action(
             }
         }
         Statement::Insert {
-            source: crabka_pgparser::ast::InsertSource::Query(query),
+            source: krabka_pgparser::ast::InsertSource::Query(query),
             returning,
             ..
         } => {
@@ -313,15 +313,15 @@ pub(super) fn bind_rule_action(
             }
             for assignment in assignments {
                 match &mut assignment.value {
-                    crabka_pgparser::ast::AssignmentValue::Expr(expr) => {
+                    krabka_pgparser::ast::AssignmentValue::Expr(expr) => {
                         *expr = bind_rule_expr(expr, table, old, new)?
                     }
-                    crabka_pgparser::ast::AssignmentValue::Row(exprs) => {
+                    krabka_pgparser::ast::AssignmentValue::Row(exprs) => {
                         for expr in exprs {
                             *expr = bind_rule_expr(expr, table, old, new)?;
                         }
                     }
-                    crabka_pgparser::ast::AssignmentValue::Subquery(query) => {
+                    krabka_pgparser::ast::AssignmentValue::Subquery(query) => {
                         bind_rule_query(query, table, old, new)?
                     }
                 }

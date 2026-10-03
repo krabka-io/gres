@@ -42,11 +42,11 @@ slice-8 follow-ups ship.
 
 | Crate | Status | Responsibility |
 |---|---|---|
-| `crabka-broker` | modified + new modules | Transaction coordinator, `__transaction_state` bootstrap, 6 new wire handlers + extensions, control markers, LSO tracking, per-segment aborted-txn index, Fetch `isolation_level=read_committed` filtering. |
-| `crabka-client-producer` | modified | bon-builder gains `transactional_id` + `transaction_timeout`. `Producer` gains `init_transactions` / `begin_transaction` / `commit_transaction` / `abort_transaction` / `send_offsets_to_transaction`. Tags transactional records and drives the v2 protocol. |
-| `crabka-client-consumer` | modified, minor | bon-builder gains `isolation_level: IsolationLevel`. Threads it into Fetch requests. Default is `ReadUncommitted` (preserves slice-5 behavior). |
-| `crabka-log` | modified, minor | Per-segment `.txnindex` reader + writer. `Log::append` reads `is_transactional`/`is_control` attribute bits on incoming batches and updates the index + LSO. |
-| `crabka-metadata` | unchanged | Coordinator state lives in `__transaction_state` (a regular replicated topic), NOT in the openraft metadata image — same pattern as slice-5's `__consumer_offsets`. |
+| `krabka-broker` | modified + new modules | Transaction coordinator, `__transaction_state` bootstrap, 6 new wire handlers + extensions, control markers, LSO tracking, per-segment aborted-txn index, Fetch `isolation_level=read_committed` filtering. |
+| `krabka-client-producer` | modified | bon-builder gains `transactional_id` + `transaction_timeout`. `Producer` gains `init_transactions` / `begin_transaction` / `commit_transaction` / `abort_transaction` / `send_offsets_to_transaction`. Tags transactional records and drives the v2 protocol. |
+| `krabka-client-consumer` | modified, minor | bon-builder gains `isolation_level: IsolationLevel`. Threads it into Fetch requests. Default is `ReadUncommitted` (preserves slice-5 behavior). |
+| `krabka-log` | modified, minor | Per-segment `.txnindex` reader + writer. `Log::append` reads `is_transactional`/`is_control` attribute bits on incoming batches and updates the index + LSO. |
+| `krabka-metadata` | unchanged | Coordinator state lives in `__transaction_state` (a regular replicated topic), NOT in the openraft metadata image — same pattern as slice-5's `__consumer_offsets`. |
 
 ## Architecture
 

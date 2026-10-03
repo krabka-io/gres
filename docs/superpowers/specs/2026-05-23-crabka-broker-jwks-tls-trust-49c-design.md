@@ -4,7 +4,7 @@ Status: Draft
 Date: 2026-05-23
 Slice: 49c
 Pairs with operator slice(s): 50b (deferred; will land separately)
-Umbrella: [OAUTHBEARER full-parity roadmap](2026-05-23-crabka-oauth-parity-roadmap-design.md)
+Umbrella: [OAUTHBEARER full-parity roadmap](2026-05-23-krabka-oauth-parity-roadmap-design.md)
 
 ## Goal
 
@@ -175,7 +175,7 @@ impl JwksRefresher {
     pub(crate) async fn run(self) {
         let mut builder = reqwest::Client::builder().timeout(Duration::from_secs(10));
         if let Some(path) = &self.tls_trust {
-            match crabka_security::build_client_config_from_pem(path) {
+            match krabka_security::build_client_config_from_pem(path) {
                 Ok(cfg) => {
                     builder = builder.use_preconfigured_tls((*cfg).clone());
                 }
@@ -262,8 +262,8 @@ If `axum-server` or the equivalent rustls-on-axum harness isn't already a dev-de
 
 ## Acceptance criteria
 
-1. `cargo build -p crabka-security -p crabka-broker` succeeds.
-2. `cargo test -p crabka-security -p crabka-broker` passes.
+1. `cargo build -p krabka-security -p krabka-broker` succeeds.
+2. `cargo test -p krabka-security -p krabka-broker` passes.
 3. `cargo fmt --check` and `cargo clippy --workspace --all-targets -- -D warnings` pass.
 4. New unit tests in `crates/security` and `crates/broker/src/file_config.rs` all pass.
 5. New HTTPS integration tests in `crates/broker/src/oauth_jwks.rs` pass.

@@ -27,9 +27,9 @@ use std::{
     time::Duration,
 };
 
-use crabka_pgexec::{HybridLogicalClock, WallClock};
-use crabka_pgkv::{Kv, WriteOp};
-use crabka_units::{Time, convert::TimeExt as _, millis};
+use krabka_pgexec::{HybridLogicalClock, WallClock};
+use krabka_pgkv::{Kv, WriteOp};
+use krabka_units::{Time, convert::TimeExt as _, millis};
 use tokio::{sync::Mutex, time::Instant};
 
 use crate::tso::stats::TsoOracleStats;
@@ -777,7 +777,7 @@ pub enum TsoError {
     FencedEpoch { epoch: i16 },
     /// Range-0 durable storage failed.
     #[error(transparent)]
-    Kv(#[from] crabka_pgkv::KvError),
+    Kv(#[from] krabka_pgkv::KvError),
     /// The range-0 horizon bytes were malformed.
     #[error("malformed timestamp horizon: {0}")]
     CorruptHorizon(String),
@@ -816,8 +816,8 @@ mod tests {
     };
 
     use assert2::assert;
-    use crabka_pgkv::MemKv;
-    use crabka_units::secs;
+    use krabka_pgkv::MemKv;
+    use krabka_units::secs;
 
     use super::*;
 
@@ -1237,7 +1237,7 @@ mod tests {
     async fn persist_stride_leaves_the_wall_anchored_stride_fixed() {
         let store = Arc::new(MemKv::default());
         let horizon = MemoryTsoHorizon::new(store, 1);
-        let wall = Arc::new(crabka_pgexec::ManualWallClock::new(1_000));
+        let wall = Arc::new(krabka_pgexec::ManualWallClock::new(1_000));
         let clock = Arc::new(ManualClock(AtomicU64::new(0)));
         let oracle = TsoOracle::recover_hlc_with_clock(
             horizon.clone(),
@@ -1246,7 +1246,7 @@ mod tests {
             Arc::clone(&wall) as Arc<dyn WallClock>,
             clock,
         );
-        let fixed = crabka_pgexec::hlc::pack(128, 0);
+        let fixed = krabka_pgexec::hlc::pack(128, 0);
 
         let mut slow = oracle.slow.lock().await;
         // The wall-anchored arm's packed stride is already whole milliseconds
@@ -1345,7 +1345,7 @@ mod tests {
     fn hlc_settings(epoch: i16, stride_ms: u64, persisted_max_ts: u64) -> RecoverySettings {
         RecoverySettings {
             epoch,
-            stride: nonzero(crabka_pgexec::hlc::pack(stride_ms, 0)),
+            stride: nonzero(krabka_pgexec::hlc::pack(stride_ms, 0)),
             persisted_max_ts,
             heartbeat_interval: millis(10),
             logical_min_persist_interval: LOGICAL_MIN_PERSIST_INTERVAL,
@@ -1355,7 +1355,7 @@ mod tests {
 
     #[tokio::test]
     async fn hlc_grants_are_wall_anchored_and_persist_packed_strides() {
-        use crabka_pgexec::hlc::pack;
+        use krabka_pgexec::hlc::pack;
 
         let store = Arc::new(MemKv::default());
         let horizon = MemoryTsoHorizon::new(store, 3);
@@ -1364,7 +1364,7 @@ mod tests {
             inner: horizon.clone(),
             persists: Arc::clone(&persists),
         };
-        let wall = Arc::new(crabka_pgexec::ManualWallClock::new(1_000));
+        let wall = Arc::new(krabka_pgexec::ManualWallClock::new(1_000));
         let clock = Arc::new(ManualClock(AtomicU64::new(1)));
         let oracle = TsoOracle::recover_hlc_with_clock(
             committer,
@@ -1404,11 +1404,11 @@ mod tests {
 
     #[tokio::test]
     async fn hlc_restart_dominates_predecessor_grants_despite_wall_regression() {
-        use crabka_pgexec::hlc::unpack;
+        use krabka_pgexec::hlc::unpack;
 
         let store = Arc::new(MemKv::default());
         let horizon = MemoryTsoHorizon::new(store, 5);
-        let predecessor_wall = Arc::new(crabka_pgexec::ManualWallClock::new(2_000));
+        let predecessor_wall = Arc::new(krabka_pgexec::ManualWallClock::new(2_000));
         let predecessor_clock = Arc::new(ManualClock(AtomicU64::new(1)));
         let predecessor = TsoOracle::recover_hlc_with_clock(
             horizon.clone(),
@@ -1426,7 +1426,7 @@ mod tests {
         // The successor's wall clock reads far BEHIND the predecessor's, so
         // only horizon seeding — not wall luck — can provide monotonicity.
         let persisted = horizon.load_max_ts().expect("horizon");
-        let successor_wall = Arc::new(crabka_pgexec::ManualWallClock::new(10));
+        let successor_wall = Arc::new(krabka_pgexec::ManualWallClock::new(10));
         let successor_clock = Arc::new(ManualClock(AtomicU64::new(1)));
         let successor = TsoOracle::recover_hlc_with_clock(
             horizon.clone(),
@@ -1451,12 +1451,12 @@ mod tests {
     async fn hlc_oracle_refuses_grants_once_fenced() {
         let store = Arc::new(MemKv::default());
         let horizon = MemoryTsoHorizon::new(store, 7);
-        let wall = Arc::new(crabka_pgexec::ManualWallClock::new(500));
+        let wall = Arc::new(krabka_pgexec::ManualWallClock::new(500));
         let oracle = TsoOracle::recover_hlc(
             horizon.clone(),
             horizon.clone(),
             7,
-            nonzero(crabka_pgexec::hlc::pack(128, 0)),
+            nonzero(krabka_pgexec::hlc::pack(128, 0)),
             0,
             wall as Arc<dyn WallClock>,
         )

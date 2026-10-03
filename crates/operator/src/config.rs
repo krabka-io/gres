@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, str::FromStr};
 
 use clap::{Args, ValueEnum};
-use crabka_units::{ByteSize, Time, convert::TimeExt as _, parse};
+use krabka_units::{ByteSize, Time, convert::TimeExt as _, parse};
 use refined_type::rule::GreaterU64;
 use serde::{Deserialize, Serialize};
 
@@ -61,15 +61,15 @@ pub struct OperatorConfig {
     pub watch_namespaces: Vec<String>,
 
     /// Namespace the operator runs in. The leader-election Lease uses it.
-    #[arg(long, env = "OPERATOR_NAMESPACE", default_value = "crabka-operator")]
+    #[arg(long, env = "OPERATOR_NAMESPACE", default_value = "krabka-operator")]
     pub operator_namespace: String,
 
     /// Lease name for leader election.
-    #[arg(long, env = "LEASE_NAME", default_value = "crabka-operator-leader")]
+    #[arg(long, env = "LEASE_NAME", default_value = "krabka-operator-leader")]
     pub lease_name: String,
 
     /// Identity advertised in the Lease. This is usually the pod name.
-    #[arg(long, env = "POD_NAME", default_value = "crabka-operator-local")]
+    #[arg(long, env = "POD_NAME", default_value = "krabka-operator-local")]
     pub pod_name: String,
 
     /// Address for `/healthz`, `/readyz`, `/metrics`.
@@ -80,7 +80,7 @@ pub struct OperatorConfig {
     #[arg(
         long,
         env = "OPERATOR_CLIENT_DISPATCH_QUEUE_CAPACITY",
-        default_value_t = crabka_client_core::DEFAULT_CONNECTION_DISPATCH_QUEUE_CAPACITY,
+        default_value_t = krabka_client_core::DEFAULT_CONNECTION_DISPATCH_QUEUE_CAPACITY,
         value_parser = parse_client_dispatch_queue_capacity
     )]
     pub client_dispatch_queue_capacity: usize,
@@ -327,14 +327,14 @@ pub struct OperatorConfig {
 
 fn parse_client_dispatch_queue_capacity(value: &str) -> Result<usize, String> {
     let value = value.parse::<usize>().map_err(|error| error.to_string())?;
-    crabka_client_core::ConnectionDispatchQueueCapacity::new(value)
-        .map(crabka_client_core::ConnectionDispatchQueueCapacity::get)
+    krabka_client_core::ConnectionDispatchQueueCapacity::new(value)
+        .map(krabka_client_core::ConnectionDispatchQueueCapacity::get)
 }
 
 fn parse_client_frame_max(value: &str) -> Result<ByteSize, String> {
     let value = parse::positive_byte_size(value).map_err(|error| error.to_string())?;
-    crabka_client_core::ClientFrameMax::try_from(value)
-        .map(crabka_client_core::ClientFrameMax::size)
+    krabka_client_core::ClientFrameMax::try_from(value)
+        .map(krabka_client_core::ClientFrameMax::size)
 }
 
 /// Supported durable checkpoint object-store providers for tenant WAL parking.
@@ -364,10 +364,10 @@ impl OperatorConfig {
     ///
     /// Returns the invalid relationship before any external I/O begins.
     pub fn validate(&self) -> Result<(), String> {
-        crabka_client_core::ConnectionDispatchQueueCapacity::new(
+        krabka_client_core::ConnectionDispatchQueueCapacity::new(
             self.client_dispatch_queue_capacity,
         )?;
-        crabka_client_core::ClientFrameMax::try_from(self.client_frame_max)?;
+        krabka_client_core::ClientFrameMax::try_from(self.client_frame_max)?;
         let lease_seconds_f64 = self.leader_lease_duration.secs_f64();
         if !lease_seconds_f64.is_finite() || lease_seconds_f64.fract() != 0.0 {
             return Err("leader lease duration must be a whole number of seconds".to_owned());
@@ -376,10 +376,10 @@ impl OperatorConfig {
         if i32::try_from(lease_seconds).is_err() {
             return Err("leader lease duration exceeds Kubernetes i32 seconds".to_owned());
         }
-        if self.leader_lease_duration <= crabka_units::Time::ZERO {
+        if self.leader_lease_duration <= krabka_units::Time::ZERO {
             return Err("leader lease duration must be positive".to_owned());
         }
-        if self.leader_retry_interval <= crabka_units::Time::ZERO {
+        if self.leader_retry_interval <= krabka_units::Time::ZERO {
             return Err("leader retry interval must be positive".to_owned());
         }
         if self.leader_retry_interval >= self.leader_lease_duration {
@@ -401,7 +401,7 @@ mod tests {
 
     use assert2::assert;
     use clap::{CommandFactory as _, Parser};
-    use crabka_units::{hours, millis, minutes, secs};
+    use krabka_units::{hours, millis, minutes, secs};
 
     use super::*;
 
@@ -415,9 +415,9 @@ mod tests {
     fn cli_defaults_compute_cluster_scope() {
         let parsed = Wrap::parse_from(["bin"]);
         assert!(parsed.cfg.watched().is_none());
-        assert!(parsed.cfg.operator_namespace == "crabka-operator");
+        assert!(parsed.cfg.operator_namespace == "krabka-operator");
         assert!(parsed.cfg.client_dispatch_queue_capacity == 64);
-        assert!(parsed.cfg.client_frame_max == crabka_units::mebibytes(100));
+        assert!(parsed.cfg.client_frame_max == krabka_units::mebibytes(100));
         assert!(parsed.cfg.pgdog_reload_attempts.into_value() == 3);
         assert!(parsed.cfg.pgdog_reload_backoff == millis(100));
         assert!(parsed.cfg.pgdog_reload_requeue == secs(15));
@@ -435,7 +435,7 @@ mod tests {
         ])
         .cfg;
         assert!(configured.client_dispatch_queue_capacity == 7);
-        assert!(configured.client_frame_max == crabka_units::kibibytes(32));
+        assert!(configured.client_frame_max == krabka_units::kibibytes(32));
 
         for option in [
             "--client-dispatch-queue-capacity=0",
@@ -563,7 +563,7 @@ mod tests {
         let error = inverted.validate().unwrap_err();
         assert!(error.contains("whole number of seconds"), "got: {error}");
         inverted = Wrap::parse_from(["bin"]).cfg;
-        inverted.leader_lease_duration = crabka_units::days(365 * 100);
+        inverted.leader_lease_duration = krabka_units::days(365 * 100);
         assert!(inverted.validate().unwrap_err().contains("i32 seconds"));
     }
 
@@ -576,7 +576,7 @@ mod tests {
 
     #[test]
     fn environment_values_parse_and_cli_wins() {
-        const CHILD: &str = "CRABKA_OPERATOR_CONFIG_ENV_TEST_CHILD";
+        const CHILD: &str = "KRABKA_OPERATOR_CONFIG_ENV_TEST_CHILD";
         if std::env::var_os(CHILD).is_none() {
             let output = Command::new(std::env::current_exe().expect("current test executable"))
                 .args([
@@ -610,7 +610,7 @@ mod tests {
         assert!(environment.cfg.pgdog_transition_poll == millis(8));
         assert!(environment.cfg.controller_error_requeue == millis(9));
         assert!(environment.cfg.client_dispatch_queue_capacity == 7);
-        assert!(environment.cfg.client_frame_max == crabka_units::kibibytes(32));
+        assert!(environment.cfg.client_frame_max == krabka_units::kibibytes(32));
 
         let parsed = Wrap::parse_from([
             "bin",
@@ -638,7 +638,7 @@ mod tests {
         assert!(parsed.cfg.pgdog_transition_poll == millis(14));
         assert!(parsed.cfg.controller_error_requeue == millis(15));
         assert!(parsed.cfg.client_dispatch_queue_capacity == 9);
-        assert!(parsed.cfg.client_frame_max == crabka_units::kibibytes(64));
+        assert!(parsed.cfg.client_frame_max == krabka_units::kibibytes(64));
     }
 
     #[test]

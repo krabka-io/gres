@@ -23,7 +23,7 @@
 //!     whitespace;
 //!   * a `json` function works on the stored text, so `'{"a":{"b":  1}}'::json
 //!     -> 'a'` is the byte-identical sub-document `{"b":  1}` and `json_each`
-//!     yields duplicate keys in input order. [`crabka_pgtypes::json`] owns the
+//!     yields duplicate keys in input order. [`krabka_pgtypes::json`] owns the
 //!     text-level reader those functions are written against.
 //!
 //! The constructors differ again, in spacing rather than in structure:
@@ -49,8 +49,8 @@
 use std::borrow::Cow;
 
 use bigdecimal::BigDecimal;
-use crabka_pgparser::ast::{Expr, FuncArgs, FuncCall, SqlJsonExpr};
-use crabka_pgtypes::{
+use krabka_pgparser::ast::{Expr, FuncArgs, FuncCall, SqlJsonExpr};
+use krabka_pgtypes::{
     ArrayValue, ColumnType, Datum, ElemType, JsonbValue, TypeError,
     json::{self, Kind, Layout},
     jsonb, numeric,
@@ -310,7 +310,7 @@ fn populate_record_value(
         .iter()
         .map(|(field, _)| field.clone())
         .collect();
-    Ok(Datum::Record(crabka_pgtypes::RecordValue::named(
+    Ok(Datum::Record(krabka_pgtypes::RecordValue::named(
         named,
         fields.into(),
         values,
@@ -1046,7 +1046,7 @@ fn eval_json_object(name: &str, flavour: Flavour, vals: &[Datum]) -> Result<Datu
             Datum::Null => None,
             Datum::Text(s) => Some(s.clone()),
             other => Some(
-                String::from_utf8(crabka_pgtypes::encoding::encode_text(
+                String::from_utf8(krabka_pgtypes::encoding::encode_text(
                     other,
                     &jiff::tz::TimeZone::UTC,
                 ))
@@ -1232,7 +1232,7 @@ pub(crate) fn eval_sql_json(
                 other => json_document(other)?.to_text(),
             });
             match returning {
-                Some(ty) => Ok(crabka_pgtypes::cast::cast(&text, *ty, &ctx.time_zone)?),
+                Some(ty) => Ok(krabka_pgtypes::cast::cast(&text, *ty, &ctx.time_zone)?),
                 None => Ok(text),
             }
         }
@@ -1287,7 +1287,7 @@ fn returning_json(
     match returning {
         None | Some(ColumnType::Json) => Ok(Datum::Json(text)),
         Some(ty) if ty.storage_type() == ColumnType::Bytea => Ok(Datum::Bytea(text.into_bytes())),
-        Some(ty) => Ok(crabka_pgtypes::cast::cast(
+        Some(ty) => Ok(krabka_pgtypes::cast::cast(
             &Datum::Json(text),
             ty,
             &ctx.time_zone,
@@ -1300,10 +1300,10 @@ fn returning_json(
 /// reading at all; every other type is 42804, as in `PostgreSQL`.
 fn is_json(
     value: &Datum,
-    item: crabka_pgparser::ast::JsonItemType,
+    item: krabka_pgparser::ast::JsonItemType,
     unique_keys: bool,
 ) -> Result<bool, ExecError> {
-    use crabka_pgparser::ast::JsonItemType;
+    use krabka_pgparser::ast::JsonItemType;
 
     let (document, duplicate) = match value {
         Datum::Jsonb(j) => (j.clone(), false),
@@ -1379,11 +1379,11 @@ pub(crate) fn json_document(value: &Datum) -> Result<Cow<'_, JsonbValue>, ExecEr
 
 /// `JSON_EXISTS` / `JSON_VALUE` / `JSON_QUERY`.
 fn eval_json_query(
-    q: &crabka_pgparser::ast::JsonQuery,
+    q: &krabka_pgparser::ast::JsonQuery,
     ctx: &EvalCtx,
     mut eval_child: impl FnMut(&Expr) -> Result<Datum, ExecError>,
 ) -> Result<Datum, ExecError> {
-    use crabka_pgparser::ast::{JsonQueryOp, JsonWrapper};
+    use krabka_pgparser::ast::{JsonQueryOp, JsonWrapper};
 
     let context = eval_child(&q.context)?;
     let path_text = eval_child(&q.path)?;
@@ -1462,7 +1462,7 @@ fn eval_json_query(
                 JsonQueryOp::Exists => Datum::Bool(false),
                 _ => Datum::Null,
             }),
-            Some(crabka_pgparser::ast::JsonBehavior::Error) => Err(error),
+            Some(krabka_pgparser::ast::JsonBehavior::Error) => Err(error),
             Some(behavior) => apply_behavior(behavior, q, ctx, eval_child, false),
         },
     }
@@ -1470,13 +1470,13 @@ fn eval_json_query(
 
 /// What an `ON EMPTY` / `ON ERROR` clause produces.
 fn apply_behavior(
-    behavior: &crabka_pgparser::ast::JsonBehavior,
-    q: &crabka_pgparser::ast::JsonQuery,
+    behavior: &krabka_pgparser::ast::JsonBehavior,
+    q: &krabka_pgparser::ast::JsonQuery,
     ctx: &EvalCtx,
     mut eval_child: impl FnMut(&Expr) -> Result<Datum, ExecError>,
     on_empty: bool,
 ) -> Result<Datum, ExecError> {
-    use crabka_pgparser::ast::JsonBehavior;
+    use krabka_pgparser::ast::JsonBehavior;
 
     Ok(match behavior {
         JsonBehavior::Error => {
@@ -1498,11 +1498,11 @@ fn apply_behavior(
         JsonBehavior::Default(expr) => {
             let value = eval_child(expr)?;
             let target = q.returning.unwrap_or(match q.op {
-                crabka_pgparser::ast::JsonQueryOp::Exists => ColumnType::Bool,
-                crabka_pgparser::ast::JsonQueryOp::Value => ColumnType::Text,
-                crabka_pgparser::ast::JsonQueryOp::Query => ColumnType::Jsonb,
+                krabka_pgparser::ast::JsonQueryOp::Exists => ColumnType::Bool,
+                krabka_pgparser::ast::JsonQueryOp::Value => ColumnType::Text,
+                krabka_pgparser::ast::JsonQueryOp::Query => ColumnType::Jsonb,
             });
-            crabka_pgtypes::cast::cast(&value, target, &ctx.time_zone)?
+            krabka_pgtypes::cast::cast(&value, target, &ctx.time_zone)?
         }
     })
 }
@@ -1528,7 +1528,7 @@ fn sql_json_value(
     let datum = Datum::Text(text);
     match returning {
         None | Some(ColumnType::Text) => Ok(datum),
-        Some(ty) => Ok(crabka_pgtypes::cast::cast(&datum, ty, &ctx.time_zone)?),
+        Some(ty) => Ok(krabka_pgtypes::cast::cast(&datum, ty, &ctx.time_zone)?),
     }
 }
 
@@ -1540,7 +1540,7 @@ fn sql_json_text(
     ctx: &EvalCtx,
 ) -> Result<Datum, ExecError> {
     let target = returning.unwrap_or(ColumnType::Jsonb);
-    crabka_pgtypes::cast::cast(&Datum::Text(text.to_string()), target, &ctx.time_zone)
+    krabka_pgtypes::cast::cast(&Datum::Text(text.to_string()), target, &ctx.time_zone)
         .map_err(ExecError::Type)
 }
 
@@ -2133,12 +2133,12 @@ pub(crate) fn to_jsonb(d: &Datum, ctx: &EvalCtx) -> Result<JsonbValue, ExecError
         // function keeps.
         Datum::Float4(_) => JsonbValue::Number(
             numeric::parse_finite(&datum_text(d, ctx))
-                .ok_or(ExecError::Type(crabka_pgtypes::TypeError::Overflow))?,
+                .ok_or(ExecError::Type(krabka_pgtypes::TypeError::Overflow))?,
         ),
         Datum::Float8(f) if !f.is_finite() => JsonbValue::String(datum_text(d, ctx)),
         Datum::Float8(_) => JsonbValue::Number(
             numeric::parse_finite(&datum_text(d, ctx))
-                .ok_or(ExecError::Type(crabka_pgtypes::TypeError::Overflow))?,
+                .ok_or(ExecError::Type(krabka_pgtypes::TypeError::Overflow))?,
         ),
         Datum::Jsonb(j) => j.clone(),
         // `to_jsonb(json)` is the `json → jsonb` cast: parse the stored text,
@@ -2216,7 +2216,7 @@ pub(crate) fn to_jsonb(d: &Datum, ctx: &EvalCtx) -> Result<JsonbValue, ExecError
 /// de-duplicate a `json` value. `jsonb` keeps only the last, which is what
 /// [`JsonbValue::Object`] does on construction.
 pub(crate) fn record_pairs(
-    r: &crabka_pgtypes::RecordValue,
+    r: &krabka_pgtypes::RecordValue,
     ctx: &EvalCtx,
 ) -> Result<Vec<(String, JsonbValue)>, ExecError> {
     r.visible_field_values()
@@ -2302,7 +2302,7 @@ impl Punct {
 /// keeps the two spaces, where the `jsonb` route would re-render the document.
 pub(crate) fn to_json_text(
     d: &Datum,
-    layout: crabka_pgtypes::json::Layout,
+    layout: krabka_pgtypes::json::Layout,
     ctx: &EvalCtx,
 ) -> Result<String, ExecError> {
     let mut out = String::new();
@@ -2374,7 +2374,7 @@ fn write_json_array(
 ) -> Result<(), ExecError> {
     fn write_level(
         elems: &mut std::slice::Iter<'_, Datum>,
-        dims: &[crabka_pgtypes::ArrayDim],
+        dims: &[krabka_pgtypes::ArrayDim],
         punct: Punct,
         ctx: &EvalCtx,
         out: &mut String,
@@ -3533,9 +3533,9 @@ fn jsonpath_arg<'a>(d: &'a Datum, name: &str) -> Result<&'a str, ExecError> {
 /// `interval` inside JSON *does* follow `IntervalStyle`, so
 /// `to_json(interval '1 day')` is `"@ 1 day"` under `postgres_verbose`.
 fn datum_text(d: &Datum, ctx: &EvalCtx) -> String {
-    let style = crabka_pgtypes::encoding::OutputStyle {
+    let style = krabka_pgtypes::encoding::OutputStyle {
         time_zone: &ctx.time_zone,
-        date_style: crabka_pgtypes::datetime::DateStyle::Iso,
+        date_style: krabka_pgtypes::datetime::DateStyle::Iso,
         date_order: ctx.date_order,
         interval_style: ctx.interval_style,
         extra_float_digits: ctx.extra_float_digits,
@@ -3543,7 +3543,7 @@ fn datum_text(d: &Datum, ctx: &EvalCtx) -> String {
         // follows `bytea_output` even though the date spelling is pinned above.
         bytea_output: ctx.bytea_output,
     };
-    String::from_utf8(crabka_pgtypes::encoding::encode_text_in(d, style))
+    String::from_utf8(krabka_pgtypes::encoding::encode_text_in(d, style))
         .expect("a Datum's text encoding is always valid UTF-8")
 }
 
@@ -3569,7 +3569,7 @@ mod tests {
     /// measured against PostgreSQL 18.4.
     #[test]
     fn object_keys_use_the_json_spelling_not_the_sql_one() {
-        let stamp = crabka_pgtypes::datetime::parse_timestamp("2020-01-02 03:04:05")
+        let stamp = krabka_pgtypes::datetime::parse_timestamp("2020-01-02 03:04:05")
             .expect("timestamp literal");
         for (key, want) in [
             (Datum::Bool(true), r#"{"true": "a"}"#),
@@ -3611,8 +3611,8 @@ mod tests {
                 Datum::Int4(100),
             ],
             vec![
-                crabka_pgtypes::ArrayDim::from_len(2),
-                crabka_pgtypes::ArrayDim::from_len(2),
+                krabka_pgtypes::ArrayDim::from_len(2),
+                krabka_pgtypes::ArrayDim::from_len(2),
             ],
         ));
         assert!(
@@ -3630,8 +3630,8 @@ mod tests {
                     .map(|i| Datum::Text(i.to_string()))
                     .collect(),
                 vec![
-                    crabka_pgtypes::ArrayDim::from_len(2),
-                    crabka_pgtypes::ArrayDim::from_len(columns),
+                    krabka_pgtypes::ArrayDim::from_len(2),
+                    krabka_pgtypes::ArrayDim::from_len(columns),
                 ],
             ))
         };
@@ -3648,9 +3648,9 @@ mod tests {
                 ElemType::Text,
                 (0..8).map(|i| Datum::Text(i.to_string())).collect(),
                 vec![
-                    crabka_pgtypes::ArrayDim::from_len(2),
-                    crabka_pgtypes::ArrayDim::from_len(2),
-                    crabka_pgtypes::ArrayDim::from_len(2),
+                    krabka_pgtypes::ArrayDim::from_len(2),
+                    krabka_pgtypes::ArrayDim::from_len(2),
+                    krabka_pgtypes::ArrayDim::from_len(2),
                 ],
             ))]) == "wrong number of array subscripts"
         );
@@ -4931,7 +4931,7 @@ mod tests {
         }
         // The same rule stated against the helper `srf.rs` and `agg.rs` share:
         // `layout` punctuates the outermost container only.
-        let record = Datum::Record(crabka_pgtypes::RecordValue::anonymous(vec![
+        let record = Datum::Record(krabka_pgtypes::RecordValue::anonymous(vec![
             Datum::Int4(1),
             Datum::Array(ArrayValue::new(
                 ElemType::Int4,
@@ -5586,7 +5586,7 @@ mod tests {
     /// The SQL/JSON constructors produce `json`, honouring `RETURNING`.
     #[test]
     fn the_sql_json_constructors_produce_json() {
-        use crabka_pgparser::ast::JsonItemType;
+        use krabka_pgparser::ast::JsonItemType;
 
         let nested = r#"{"b":1,  "a":2}"#;
         let entries = vec![(u("a"), Expr::IntLiteral("1".to_string()))];

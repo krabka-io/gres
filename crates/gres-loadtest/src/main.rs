@@ -1,12 +1,12 @@
-//! CLI for the crabka-gres scalability and fault-injection harness.
+//! CLI for the krabka-gres scalability and fault-injection harness.
 
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
 use clap::{Args, Parser, Subcommand};
-use crabka_client_core::{ClientFrameMax, ConnectionDispatchQueueCapacity, FetchMinBytes};
-use crabka_gres_control::{RegistryPolicy, RegistryReplicationFactor};
-use crabka_gres_loadtest::{
+use krabka_client_core::{ClientFrameMax, ConnectionDispatchQueueCapacity, FetchMinBytes};
+use krabka_gres_control::{RegistryPolicy, RegistryReplicationFactor};
+use krabka_gres_loadtest::{
     cluster::Binaries,
     config::{LoadtestRuntimePolicy, NonNegativeUsize, PositiveUsize},
     external::{self, ExternalTarget},
@@ -14,13 +14,13 @@ use crabka_gres_loadtest::{
     runner::{self, ExternalRunConfig, RunConfig},
     scenario::{ModeSpec, Scenario},
 };
-use crabka_units::{fmt::Human as _, prelude::*};
+use krabka_units::{fmt::Human as _, prelude::*};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
 #[command(
-    name = "crabka-gres-loadtest",
-    about = "Scenario-driven scalability and fault-injection harness for crabka-gres"
+    name = "krabka-gres-loadtest",
+    about = "Scenario-driven scalability and fault-injection harness for krabka-gres"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -84,85 +84,85 @@ enum CliCommand {
 
 #[derive(Args)]
 struct RuntimeOptions {
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_LAUNCH_TIMEOUT", default_value = "2m", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_LAUNCH_TIMEOUT", default_value = "2m", value_parser = krabka_units::parse::positive_time)]
     launch_timeout: Time,
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_KILL_TIMEOUT", default_value = "10s", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_KILL_TIMEOUT", default_value = "10s", value_parser = krabka_units::parse::positive_time)]
     kill_timeout: Time,
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_LOG_DRAIN_TIMEOUT", default_value = "5s", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_LOG_DRAIN_TIMEOUT", default_value = "5s", value_parser = krabka_units::parse::positive_time)]
     log_drain_timeout: Time,
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_BROKER_POLL_INTERVAL", default_value = "100ms", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_BROKER_POLL_INTERVAL", default_value = "100ms", value_parser = krabka_units::parse::positive_time)]
     broker_poll_interval: Time,
-    #[arg(long = "topic-create-timeout", env = "CRABKA_GRES_LOADTEST_TOPIC_CREATE_TIMEOUT", default_value = "30s", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long = "topic-create-timeout", env = "KRABKA_GRES_LOADTEST_TOPIC_CREATE_TIMEOUT", default_value = "30s", value_parser = krabka_units::parse::positive_time)]
     loadtest_topic_create_timeout: Time,
     #[arg(
         long,
-        env = "CRABKA_GRES_LOADTEST_LOG_TAIL_LINES",
+        env = "KRABKA_GRES_LOADTEST_LOG_TAIL_LINES",
         default_value = "40"
     )]
     log_tail_lines: PositiveUsize,
     #[arg(
         long,
-        env = "CRABKA_GRES_LOADTEST_MAX_SERIALIZATION_RETRIES",
+        env = "KRABKA_GRES_LOADTEST_MAX_SERIALIZATION_RETRIES",
         default_value = "5"
     )]
     max_serialization_retries: NonNegativeUsize,
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_OPERATION_TIMEOUT", default_value = "30s", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_OPERATION_TIMEOUT", default_value = "30s", value_parser = krabka_units::parse::positive_time)]
     operation_timeout: Time,
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_CONNECT_TIMEOUT", default_value = "5s", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_CONNECT_TIMEOUT", default_value = "5s", value_parser = krabka_units::parse::positive_time)]
     connect_timeout: Time,
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_STARTUP_DEADLINE", default_value = "30s", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_STARTUP_DEADLINE", default_value = "30s", value_parser = krabka_units::parse::positive_time)]
     startup_deadline: Time,
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_STARTUP_RETRY_DELAY", default_value = "250ms", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_STARTUP_RETRY_DELAY", default_value = "250ms", value_parser = krabka_units::parse::positive_time)]
     startup_retry_delay: Time,
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_SHUTDOWN_GRACE", default_value = "5s", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_SHUTDOWN_GRACE", default_value = "5s", value_parser = krabka_units::parse::positive_time)]
     shutdown_grace: Time,
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_RECONNECT_BACKOFF_MIN", default_value = "100ms", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_RECONNECT_BACKOFF_MIN", default_value = "100ms", value_parser = krabka_units::parse::positive_time)]
     reconnect_backoff_min: Time,
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_RECONNECT_BACKOFF_MAX", default_value = "2s", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_RECONNECT_BACKOFF_MAX", default_value = "2s", value_parser = krabka_units::parse::positive_time)]
     reconnect_backoff_max: Time,
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_HISTOGRAM_MIN", default_value = "1us", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_HISTOGRAM_MIN", default_value = "1us", value_parser = krabka_units::parse::positive_time)]
     histogram_min: Time,
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_HISTOGRAM_MAX", default_value = "60s", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_HISTOGRAM_MAX", default_value = "60s", value_parser = krabka_units::parse::positive_time)]
     histogram_max: Time,
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_MIN_PACING_WAIT", default_value = "500us", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_MIN_PACING_WAIT", default_value = "500us", value_parser = krabka_units::parse::positive_time)]
     min_pacing_wait: Time,
     #[arg(
         long,
-        env = "CRABKA_GRES_LOADTEST_READ_SLICE_ROWS",
+        env = "KRABKA_GRES_LOADTEST_READ_SLICE_ROWS",
         default_value = "1024"
     )]
     read_slice_rows: PositiveUsize,
     #[arg(
         long,
-        env = "CRABKA_GRES_LOADTEST_SEED_BATCH_ROWS",
+        env = "KRABKA_GRES_LOADTEST_SEED_BATCH_ROWS",
         default_value = "500"
     )]
     seed_batch_rows: PositiveUsize,
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_PROXY_MIN_BURST", default_value = "64KiB", value_parser = crabka_units::parse::positive_byte_size)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_PROXY_MIN_BURST", default_value = "64KiB", value_parser = krabka_units::parse::positive_byte_size)]
     proxy_min_burst: ByteSize,
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_PROXY_BURST_WINDOW", default_value = "100ms", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_PROXY_BURST_WINDOW", default_value = "100ms", value_parser = krabka_units::parse::positive_time)]
     proxy_burst_window: Time,
     #[arg(
         long,
-        env = "CRABKA_GRES_LOADTEST_PROXY_DELAY_QUEUE_DEPTH",
+        env = "KRABKA_GRES_LOADTEST_PROXY_DELAY_QUEUE_DEPTH",
         default_value = "256"
     )]
     proxy_delay_queue_depth: PositiveUsize,
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_SAMPLE_INTERVAL", default_value = "1s", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_SAMPLE_INTERVAL", default_value = "1s", value_parser = krabka_units::parse::positive_time)]
     sample_interval: Time,
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_FAULT_WINDOW", default_value = "5s", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_FAULT_WINDOW", default_value = "5s", value_parser = krabka_units::parse::positive_time)]
     fault_window: Time,
     #[arg(
         long,
-        env = "CRABKA_GRES_LOADTEST_TIMELINE_ROW_CAP",
+        env = "KRABKA_GRES_LOADTEST_TIMELINE_ROW_CAP",
         default_value = "60"
     )]
     timeline_row_cap: PositiveUsize,
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_DEVIATION_THRESHOLD", default_value = "30%", value_parser = crabka_units::parse::unit_ratio)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_DEVIATION_THRESHOLD", default_value = "30%", value_parser = krabka_units::parse::unit_ratio)]
     deviation_threshold: Ratio,
-    #[arg(long, env = "CRABKA_GRES_LOADTEST_MIN_FLAP_PERIOD", default_value = "1s", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long, env = "KRABKA_GRES_LOADTEST_MIN_FLAP_PERIOD", default_value = "1s", value_parser = krabka_units::parse::positive_time)]
     min_flap_period: Time,
-    #[arg(long = "hlc-max-offset", env = "CRABKA_GRES_LOADTEST_HLC_MAX_OFFSET", default_value = "250ms", value_parser = crabka_units::parse::positive_time)]
+    #[arg(long = "hlc-max-offset", env = "KRABKA_GRES_LOADTEST_HLC_MAX_OFFSET", default_value = "250ms", value_parser = krabka_units::parse::positive_time)]
     compare_hlc_max_offset: Time,
 }
 
@@ -207,69 +207,69 @@ impl RuntimeOptions {
 struct RegistryOptions {
     #[arg(
         long = "client-dispatch-queue-capacity",
-        env = "CRABKA_GRES_CLIENT_DISPATCH_QUEUE_CAPACITY",
-        default_value_t = crabka_client_core::DEFAULT_CONNECTION_DISPATCH_QUEUE_CAPACITY,
+        env = "KRABKA_GRES_CLIENT_DISPATCH_QUEUE_CAPACITY",
+        default_value_t = krabka_client_core::DEFAULT_CONNECTION_DISPATCH_QUEUE_CAPACITY,
         value_parser = parse_client_dispatch_queue_capacity
     )]
     client_dispatch_queue_capacity: usize,
     #[arg(
         long = "client-frame-max",
-        env = "CRABKA_GRES_CLIENT_FRAME_MAX",
+        env = "KRABKA_GRES_CLIENT_FRAME_MAX",
         default_value = "100MiB",
         value_parser = parse_client_frame_max
     )]
     client_frame_max: ByteSize,
     #[arg(
         long = "registry-reader-fetch-min",
-        env = "CRABKA_GRES_REGISTRY_READER_FETCH_MIN",
+        env = "KRABKA_GRES_REGISTRY_READER_FETCH_MIN",
         default_value = "1B",
         value_parser = parse_fetch_min
     )]
     registry_reader_fetch_min: ByteSize,
     #[arg(
         long = "registry-replication-factor",
-        env = "CRABKA_GRES_REGISTRY_REPLICATION_FACTOR",
+        env = "KRABKA_GRES_REGISTRY_REPLICATION_FACTOR",
         default_value = "1"
     )]
     replication_factor: RegistryReplicationFactor,
     #[arg(
         long = "registry-topic-create-timeout",
-        env = "CRABKA_GRES_REGISTRY_TOPIC_CREATE_TIMEOUT",
+        env = "KRABKA_GRES_REGISTRY_TOPIC_CREATE_TIMEOUT",
         default_value = "15s",
-        value_parser = crabka_units::parse::positive_time
+        value_parser = krabka_units::parse::positive_time
     )]
     topic_create_timeout: Time,
     #[arg(
         long = "registry-reader-retry-backoff",
-        env = "CRABKA_GRES_REGISTRY_READER_RETRY_BACKOFF",
+        env = "KRABKA_GRES_REGISTRY_READER_RETRY_BACKOFF",
         default_value = "250ms",
-        value_parser = crabka_units::parse::positive_time
+        value_parser = krabka_units::parse::positive_time
     )]
     reader_retry_backoff: Time,
     #[arg(
         long = "registry-fetch-max-wait",
-        env = "CRABKA_GRES_REGISTRY_FETCH_MAX_WAIT",
+        env = "KRABKA_GRES_REGISTRY_FETCH_MAX_WAIT",
         default_value = "500ms",
-        value_parser = crabka_units::parse::positive_time
+        value_parser = krabka_units::parse::positive_time
     )]
     fetch_max_wait: Time,
     #[arg(
         long = "registry-fetch-partition-max",
-        env = "CRABKA_GRES_REGISTRY_FETCH_PARTITION_MAX",
+        env = "KRABKA_GRES_REGISTRY_FETCH_PARTITION_MAX",
         default_value = "1MiB",
-        value_parser = crabka_units::parse::positive_byte_size
+        value_parser = krabka_units::parse::positive_byte_size
     )]
     fetch_partition_max: ByteSize,
     #[arg(
         long = "registry-producer-dns-timeout",
-        env = "CRABKA_GRES_REGISTRY_PRODUCER_DNS_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time
+        env = "KRABKA_GRES_REGISTRY_PRODUCER_DNS_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time
     )]
     producer_dns_timeout: Option<Time>,
     #[arg(
         long = "registry-reader-admin-dns-timeout",
-        env = "CRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT",
-        value_parser = crabka_units::parse::positive_time
+        env = "KRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT",
+        value_parser = krabka_units::parse::positive_time
     )]
     reader_admin_dns_timeout: Option<Time>,
 }
@@ -314,13 +314,13 @@ fn parse_client_dispatch_queue_capacity(value: &str) -> Result<usize, String> {
 
 fn parse_client_frame_max(value: &str) -> Result<ByteSize, String> {
     let value =
-        crabka_units::parse::positive_byte_size(value).map_err(|error| error.to_string())?;
+        krabka_units::parse::positive_byte_size(value).map_err(|error| error.to_string())?;
     ClientFrameMax::try_from(value).map(ClientFrameMax::size)
 }
 
 fn parse_fetch_min(value: &str) -> Result<ByteSize, String> {
     let value =
-        crabka_units::parse::positive_byte_size(value).map_err(|error| error.to_string())?;
+        krabka_units::parse::positive_byte_size(value).map_err(|error| error.to_string())?;
     FetchMinBytes::try_from(value).map(FetchMinBytes::size)
 }
 
@@ -615,7 +615,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use assert2::assert;
-    use crabka_gres_loadtest::report::{
+    use krabka_gres_loadtest::report::{
         EfficiencySummary, ErrorSummary, ThroughputSummary, TopologySummary,
     };
 
@@ -631,7 +631,7 @@ mod tests {
         else {
             panic!("run");
         };
-        assert!(registry.policy() == crabka_gres_control::RegistryPolicy::default());
+        assert!(registry.policy() == krabka_gres_control::RegistryPolicy::default());
         assert!(runtime.policy().expect("runtime defaults") == LoadtestRuntimePolicy::default());
         for option in [
             "--registry-replication-factor=0",
@@ -666,18 +666,18 @@ mod tests {
 
     #[test]
     fn registry_policy_options_read_environment_and_prefer_cli() {
-        const CHILD: &str = "CRABKA_TEST_LOADTEST_REGISTRY_ENV_CHILD";
+        const CHILD: &str = "KRABKA_TEST_LOADTEST_REGISTRY_ENV_CHILD";
         let vars = [
-            ("CRABKA_GRES_REGISTRY_REPLICATION_FACTOR", "2"),
-            ("CRABKA_GRES_REGISTRY_TOPIC_CREATE_TIMEOUT", "15001ms"),
-            ("CRABKA_GRES_REGISTRY_READER_RETRY_BACKOFF", "251ms"),
-            ("CRABKA_GRES_REGISTRY_FETCH_MAX_WAIT", "501ms"),
-            ("CRABKA_GRES_REGISTRY_FETCH_PARTITION_MAX", "1048577B"),
-            ("CRABKA_GRES_REGISTRY_PRODUCER_DNS_TIMEOUT", "37ms"),
-            ("CRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT", "37ms"),
-            ("CRABKA_GRES_CLIENT_DISPATCH_QUEUE_CAPACITY", "7"),
-            ("CRABKA_GRES_CLIENT_FRAME_MAX", "32KiB"),
-            ("CRABKA_GRES_REGISTRY_READER_FETCH_MIN", "3B"),
+            ("KRABKA_GRES_REGISTRY_REPLICATION_FACTOR", "2"),
+            ("KRABKA_GRES_REGISTRY_TOPIC_CREATE_TIMEOUT", "15001ms"),
+            ("KRABKA_GRES_REGISTRY_READER_RETRY_BACKOFF", "251ms"),
+            ("KRABKA_GRES_REGISTRY_FETCH_MAX_WAIT", "501ms"),
+            ("KRABKA_GRES_REGISTRY_FETCH_PARTITION_MAX", "1048577B"),
+            ("KRABKA_GRES_REGISTRY_PRODUCER_DNS_TIMEOUT", "37ms"),
+            ("KRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT", "37ms"),
+            ("KRABKA_GRES_CLIENT_DISPATCH_QUEUE_CAPACITY", "7"),
+            ("KRABKA_GRES_CLIENT_FRAME_MAX", "32KiB"),
+            ("KRABKA_GRES_REGISTRY_READER_FETCH_MIN", "3B"),
         ];
         if std::env::var_os(CHILD).is_none() {
             let status = std::process::Command::new(std::env::current_exe().expect("test exe"))
@@ -699,15 +699,15 @@ mod tests {
         };
         let environment_policy = RegistryPolicy::new(
             2,
-            crabka_units::millis(15_001),
-            crabka_units::millis(251),
-            crabka_units::millis(501),
+            krabka_units::millis(15_001),
+            krabka_units::millis(251),
+            krabka_units::millis(501),
             bytes(1_048_577),
         )
         .expect("policy")
-        .with_producer_dns_timeout(crabka_units::millis(37))
+        .with_producer_dns_timeout(krabka_units::millis(37))
         .expect("environment DNS timeout")
-        .with_reader_admin_dns_timeout(crabka_units::millis(37))
+        .with_reader_admin_dns_timeout(krabka_units::millis(37))
         .expect("environment reader/admin DNS timeout")
         .with_client_resource_policy(
             ConnectionDispatchQueueCapacity::new(7).unwrap(),
@@ -736,15 +736,15 @@ mod tests {
         };
         let cli_policy = RegistryPolicy::new(
             3,
-            crabka_units::millis(15_002),
-            crabka_units::millis(252),
-            crabka_units::millis(502),
+            krabka_units::millis(15_002),
+            krabka_units::millis(252),
+            krabka_units::millis(502),
             bytes(1_048_578),
         )
         .expect("policy")
-        .with_producer_dns_timeout(crabka_units::millis(47))
+        .with_producer_dns_timeout(krabka_units::millis(47))
         .expect("CLI DNS timeout")
-        .with_reader_admin_dns_timeout(crabka_units::millis(47))
+        .with_reader_admin_dns_timeout(krabka_units::millis(47))
         .expect("CLI reader/admin DNS timeout")
         .with_client_resource_policy(
             ConnectionDispatchQueueCapacity::new(9).unwrap(),
@@ -848,7 +848,7 @@ mod tests {
 
     #[test]
     fn external_target_requires_user_and_database_and_defaults_password() {
-        use crabka_gres_loadtest::{cluster::ProcessInfo, external::HostPort};
+        use krabka_gres_loadtest::{cluster::ProcessInfo, external::HostPort};
 
         /// One flag-combination case. It holds
         /// `(external, user, password, database, pids)` and whether the build
@@ -984,7 +984,7 @@ mod tests {
 
     #[test]
     fn cli_couples_external_flags_to_external_and_conflicts_with_mode() {
-        let base = ["crabka-gres-loadtest", "run", "--scenario", "s.yaml"];
+        let base = ["krabka-gres-loadtest", "run", "--scenario", "s.yaml"];
         // (extra args, parse must succeed)
         let cases: [(&[&str], bool); 6] = [
             (&[], true),

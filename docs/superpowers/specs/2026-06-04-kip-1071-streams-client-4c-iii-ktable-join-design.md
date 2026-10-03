@@ -130,7 +130,7 @@ changelog**. The **7 prior golden frames stay byte-identical**.
   tombstone) and the join topology byte-matches captured JVM 4.1 output (incl.
   copartition + both source changelogs, no result changelog).
 - The 7 prior golden frames unchanged.
-- `cargo test -p crabka-client-streams` green; `cargo clippy --workspace
+- `cargo test -p krabka-client-streams` green; `cargo clippy --workspace
   --all-targets -- -D warnings` + `cargo fmt --check` clean; `cargo build
   --workspace`.
 - A documented KTable-KTable join example/note in `lib.rs`.

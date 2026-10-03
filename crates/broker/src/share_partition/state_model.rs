@@ -7,7 +7,7 @@
 //! interleaving of consumer operations, time advance, and, in the failover
 //! config, leader-reload. It asserts that the share-group delivery-safety
 //! invariants never break. Design:
-//! `docs/superpowers/specs/2026-06-13-crabka-share-group-model-design.md`.
+//! `docs/superpowers/specs/2026-06-13-krabka-share-group-model-design.md`.
 //!
 //! Memory safety: stateright BFS keeps every visited unique state resident, so
 //! each run is fenced with `within_boundary`, `target_state_count`, and
@@ -17,7 +17,7 @@
 
 use std::time::{Duration, Instant};
 
-use crabka_log::Offset;
+use krabka_log::Offset;
 use stateright::{Checker, Model, Property};
 
 use super::{AckType, AcquisitionState, RecordState};

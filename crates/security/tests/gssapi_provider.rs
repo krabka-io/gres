@@ -13,7 +13,7 @@
 //!
 //! ```text
 //! KRB5_CONFIG=crates/security/tests/fixtures/kdc/krb5.conf SSPI_KDC_URL=tcp://localhost:88 \
-//!   cargo test -p crabka-security --test gssapi_provider -- --ignored
+//!   cargo test -p krabka-security --test gssapi_provider -- --ignored
 //! ```
 //!
 //! The test drives the full GSSAPI loop against the fixture. `alice@CRABKA.TEST`
@@ -23,11 +23,11 @@
 //! RFC 4752 security-layer message. This drives the released sspi
 //! keytab-client-auth path end-to-end against a real KDC.
 
-use crabka_security::gssapi::{
+use krabka_security::gssapi::{
     AcceptStep, DEFAULT_GSSAPI_MAX_TIME_SKEW, GssAcceptor, GssInitiator, InitStep,
     provider::{SspiAcceptor, SspiInitiator},
 };
-use crabka_units::secs;
+use krabka_units::secs;
 
 const KEYTAB_PATH: &str = "tests/fixtures/kdc/kafka.keytab";
 const SERVICE_NAME: &str = "kafka";

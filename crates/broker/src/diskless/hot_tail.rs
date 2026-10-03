@@ -3,8 +3,8 @@
 use std::{collections::BTreeMap, sync::Mutex};
 
 use bytes::Bytes;
-use crabka_ids::PartitionIndex;
-use crabka_protocol::records::RecordBatch;
+use krabka_ids::PartitionIndex;
+use krabka_protocol::records::RecordBatch;
 use dashmap::DashMap;
 use uuid::Uuid;
 
@@ -105,7 +105,7 @@ struct HotTailEntry {
 #[cfg(test)]
 mod tests {
     use bytes::BytesMut;
-    use crabka_protocol::records::Record;
+    use krabka_protocol::records::Record;
 
     use super::*;
 

@@ -35,7 +35,7 @@ Add a focused test that starts all ranges on zero, obtains two non-equal r2/r3 e
 
 - [ ] **Step 2: Verify RED**
 
-Run: `cargo test -p crabka-gres --test topology_process_nemesis split_successor_proxies_are_distinct_and_retargeted -- --nocapture`
+Run: `cargo test -p krabka-gres --test topology_process_nemesis split_successor_proxies_are_distinct_and_retargeted -- --nocapture`
 
 Expected: compile failure because `split_successor_endpoints` and r2/r3 proxy storage do not exist.
 
@@ -45,7 +45,7 @@ Add harness-owned `r2_proxy` and `r3_proxy`, start them in both harness construc
 
 - [ ] **Step 4: Verify GREEN and regressions**
 
-Run the focused test and `cargo test -p crabka-gres --test topology_process_nemesis retirement_restart_uses_authoritative_target_ranges -- --nocapture`.
+Run the focused test and `cargo test -p krabka-gres --test topology_process_nemesis retirement_restart_uses_authoritative_target_ranges -- --nocapture`.
 
 Expected: both pass.
 
@@ -64,7 +64,7 @@ Commit message: `test(gres): add stable split successor proxies`
 
 - [ ] **Step 1: Write the failing real-process foundation test**
 
-Add `real_process_split_two_successor_foundation` behind `CRABKA_G8_SPLIT_FOUNDATION=1`. Use a unique `g8-split-<hex timestamp>-p<hex pid>` identity, assert no prior operation, create the unrelated sentinel, and invoke actual CLI arguments `gres split --left-range-id 2 --successor-range-id 3 --left-endpoint <r2> --successor-endpoint <r3> --successor-wal-generation 1` at a fixed table/row boundary.
+Add `real_process_split_two_successor_foundation` behind `KRABKA_G8_SPLIT_FOUNDATION=1`. Use a unique `g8-split-<hex timestamp>-p<hex pid>` identity, assert no prior operation, create the unrelated sentinel, and invoke actual CLI arguments `gres split --left-range-id 2 --successor-range-id 3 --left-endpoint <r2> --successor-endpoint <r3> --successor-wal-generation 1` at a fixed table/row boundary.
 
 - [ ] **Step 2: Verify RED**
 
@@ -140,11 +140,11 @@ Run the validator against incomplete evidence and require nonzero exit.
 
 - [ ] **Step 3: Emit complete evidence and run the shard**
 
-Build `crabka-cli` and `crabka-gres`, run the gated foundation under `timeout 180s`, and validate the JSON with Python.
+Build `krabka-cli` and `krabka-gres`, run the gated foundation under `timeout 180s`, and validate the JSON with Python.
 
 - [ ] **Step 4: Run final verification**
 
-Run `git diff --check`, focused harness tests, Split foundation CI, existing Move foundation CI, and `cargo check -p crabka-operator`.
+Run `git diff --check`, focused harness tests, Split foundation CI, existing Move foundation CI, and `cargo check -p krabka-operator`.
 
 Expected: all exit zero.
 

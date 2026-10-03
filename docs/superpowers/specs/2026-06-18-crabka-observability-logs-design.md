@@ -88,17 +88,17 @@ a Kafka consumer on a Crabka topic.
 
 ### 3.3 Crate layout
 
-- `crabka-blockstore` — signal-agnostic columnar blocks + two-level index +
+- `krabka-blockstore` — signal-agnostic columnar blocks + two-level index +
   `object_store` IO + DataFusion `TableProvider` with pushdown. The shared half.
-- `crabka-logql` — LogQL parser + planner (lowers to DataFusion). The
+- `krabka-logql` — LogQL parser + planner (lowers to DataFusion). The
   signal-specific front-end.
-- `crabka-observability` — the role-selectable service binary
+- `krabka-observability` — the role-selectable service binary
   (`-target distributor|compactor|querier`), wiring blockstore + logql + a
   Kafka client.
 
-The split is deliberate: adding metrics later means `crabka-promql` + a
-Prometheus-API surface drop in beside `crabka-logql` on the *same*
-`crabka-blockstore` and the *same* service skeleton.
+The split is deliberate: adding metrics later means `krabka-promql` + a
+Prometheus-API surface drop in beside `krabka-logql` on the *same*
+`krabka-blockstore` and the *same* service skeleton.
 
 ## 4. Data model
 
@@ -171,7 +171,7 @@ LogQL has two shapes, both lowering onto DataFusion:
 
 ```
 LogQL string
-   │  crabka-logql parser → AST
+   │  krabka-logql parser → AST
    ▼
 Stream selector matchers ─► label index ─► series fingerprints ─► block index ─► candidate blocks
    │                                                                                   │ (pruning)
@@ -291,10 +291,10 @@ multi-tenancy, object-store IO — is built once in the logs wedge and reused.
 
 | Signal | Front-end crate | API emulated | Block payload | Index key | Existing Crabka reuse |
 |---|---|---|---|---|---|
-| **Logs** (wedge) | `crabka-logql` | Loki HTTP | `line`, metadata | series fingerprint | produce, quotas, `object_store` |
-| **Metrics** | `crabka-promql` | Prometheus HTTP | `value:f64` | series fingerprint | **KIP-714 OTLP ingest + `prometheus_sink` already exist** |
-| **Traces** | `crabka-traceql` | Tempo HTTP | span fields | `trace_id` + span index | OTLP ingest path |
-| **Profiles** | `crabka-pprof` | Pyroscope HTTP | sample/stack | profile-type + symbol index | OTLP/pprof |
+| **Logs** (wedge) | `krabka-logql` | Loki HTTP | `line`, metadata | series fingerprint | produce, quotas, `object_store` |
+| **Metrics** | `krabka-promql` | Prometheus HTTP | `value:f64` | series fingerprint | **KIP-714 OTLP ingest + `prometheus_sink` already exist** |
+| **Traces** | `krabka-traceql` | Tempo HTTP | span fields | `trace_id` + span index | OTLP ingest path |
+| **Profiles** | `krabka-pprof` | Pyroscope HTTP | sample/stack | profile-type + symbol index | OTLP/pprof |
 
 Each later signal is **one front-end crate + one API-surface module + one block
 schema**. LogQL's metric-query aggregation is a literal down-payment on PromQL.

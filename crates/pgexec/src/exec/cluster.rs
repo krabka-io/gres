@@ -4,13 +4,13 @@ use super::*;
 
 struct ClusterUnit {
     table: Table,
-    index: crabka_pgcatalog::Index,
+    index: krabka_pgcatalog::Index,
 }
 
 /// `there is no previously clustered index for table "…"` (42704) — what
 /// `PostgreSQL` raises for `CLUSTER <table>` with no `USING` and no recorded
 /// index.
-pub(crate) fn no_clustered_index(name: &crabka_pgcatalog::RelationName) -> ExecError {
+pub(crate) fn no_clustered_index(name: &krabka_pgcatalog::RelationName) -> ExecError {
     ExecError::UndefinedObject(format!(
         "there is no previously clustered index for table \"{}\"",
         name.name
@@ -46,9 +46,9 @@ pub(crate) fn no_clustered_index(name: &crabka_pgcatalog::RelationName) -> ExecE
 /// there is no ascending block to move rows into.
 pub(super) async fn execute_cluster(
     write_ctx: &WriteContext<'_>,
-    target: Option<&crabka_pgparser::ast::ClusterTarget>,
+    target: Option<&krabka_pgparser::ast::ClusterTarget>,
     writes: &mut StatementWrites,
-    ops: &mut Vec<crabka_pgkv::WriteOp>,
+    ops: &mut Vec<krabka_pgkv::WriteOp>,
 ) -> Result<(), ExecError> {
     let units = match target {
         Some(target) => cluster_units_for_target(write_ctx, target)?,
@@ -74,8 +74,8 @@ pub(super) async fn execute_cluster(
 pub(crate) fn cluster_mark_ops(
     catalog_kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
-    target: &crabka_pgparser::ast::ClusterTarget,
-) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
+    target: &krabka_pgparser::ast::ClusterTarget,
+) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
     let Some(index_name) = target.index.as_deref() else {
         return Ok(Vec::new());
     };
@@ -88,7 +88,7 @@ pub(crate) fn cluster_mark_ops(
     if crate::partition::is_partitioned(catalog_kv, &name)? {
         return Ok(Vec::new());
     }
-    let table = crabka_pgcatalog::get_table(catalog_kv, &name)?;
+    let table = krabka_pgcatalog::get_table(catalog_kv, &name)?;
     let index = cluster_index_named(catalog_kv, &table, index_name)?;
     record_clustered_index_ops(catalog_kv, &table, Some(&index.name))
 }
@@ -103,15 +103,15 @@ pub(crate) fn record_clustered_index_ops(
     catalog_kv: &dyn Kv,
     table: &Table,
     index: Option<&str>,
-) -> Result<Vec<crabka_pgkv::WriteOp>, ExecError> {
+) -> Result<Vec<krabka_pgkv::WriteOp>, ExecError> {
     let mut ops = Vec::new();
-    for mut candidate in crabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)? {
+    for mut candidate in krabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)? {
         let wanted = index.is_some_and(|name| name == candidate.name);
         if candidate.clustered == wanted {
             continue;
         }
         candidate.clustered = wanted;
-        ops.extend(crabka_pgcatalog::put_index_ops(&candidate));
+        ops.extend(krabka_pgcatalog::put_index_ops(&candidate));
     }
     Ok(ops)
 }
@@ -119,7 +119,7 @@ pub(crate) fn record_clustered_index_ops(
 /// Resolve, authorize and expand the relation one `CLUSTER <table> …` names.
 fn cluster_units_for_target(
     write_ctx: &WriteContext<'_>,
-    target: &crabka_pgparser::ast::ClusterTarget,
+    target: &krabka_pgparser::ast::ClusterTarget,
 ) -> Result<Vec<ClusterUnit>, ExecError> {
     let catalog_kv = write_ctx.catalog_kv;
     let name = crate::relname::resolve_relation(
@@ -128,7 +128,7 @@ fn cluster_units_for_target(
         &target.table,
         crate::relname::SchemaDisposition::Utility,
     )?;
-    let table = crabka_pgcatalog::get_table(catalog_kv, &name)?;
+    let table = krabka_pgcatalog::get_table(catalog_kv, &name)?;
     require_cluster_privilege(write_ctx, &table)?;
     if crate::partition::is_partitioned(catalog_kv, &name)? {
         // A partitioned parent holds no rows: `PostgreSQL` reorders each leaf by
@@ -141,10 +141,10 @@ fn cluster_units_for_target(
         let parent_index = cluster_index_named(catalog_kv, &table, index_name)?;
         let mut units = Vec::new();
         for leaf in crate::partition::leaves_of(catalog_kv, &name)? {
-            let leaf_table = crabka_pgcatalog::get_table(catalog_kv, &leaf)?;
+            let leaf_table = krabka_pgcatalog::get_table(catalog_kv, &leaf)?;
             // The leaf's copy is matched by key, not by name: a partition's
             // index carries its own generated name.
-            let Some(index) = crabka_pgcatalog::list_table_indexes(catalog_kv, &leaf)?
+            let Some(index) = krabka_pgcatalog::list_table_indexes(catalog_kv, &leaf)?
                 .into_iter()
                 .find(|index| index.columns == parent_index.columns)
             else {
@@ -159,7 +159,7 @@ fn cluster_units_for_target(
     }
     let index = match target.index.as_deref() {
         Some(index_name) => cluster_index_named(catalog_kv, &table, index_name)?,
-        None => crabka_pgcatalog::list_table_indexes(catalog_kv, &name)?
+        None => krabka_pgcatalog::list_table_indexes(catalog_kv, &name)?
             .into_iter()
             .find(|index| index.clustered)
             .ok_or_else(|| no_clustered_index(&name))?,
@@ -178,7 +178,7 @@ fn cluster_units_for_role(write_ctx: &WriteContext<'_>) -> Result<Vec<ClusterUni
     let catalog_kv = write_ctx.catalog_kv;
     let mut units = Vec::new();
     for index in marked_clustered_indexes(catalog_kv)? {
-        let table = crabka_pgcatalog::get_table(catalog_kv, &index.table)?;
+        let table = krabka_pgcatalog::get_table(catalog_kv, &index.table)?;
         if require_cluster_privilege(write_ctx, &table).is_err() {
             continue;
         }
@@ -195,8 +195,8 @@ fn cluster_units_for_role(write_ctx: &WriteContext<'_>) -> Result<Vec<ClusterUni
 /// which is why both come from here.
 pub(crate) fn marked_clustered_indexes(
     catalog_kv: &dyn Kv,
-) -> Result<Vec<crabka_pgcatalog::Index>, ExecError> {
-    Ok(crabka_pgcatalog::list_indexes(catalog_kv)?
+) -> Result<Vec<krabka_pgcatalog::Index>, ExecError> {
+    Ok(krabka_pgcatalog::list_indexes(catalog_kv)?
         .into_iter()
         .filter(|index| index.clustered)
         .collect())
@@ -207,7 +207,7 @@ pub(crate) fn marked_clustered_indexes(
 /// as `permission denied for table <name>` rather than `must be owner of`.
 fn require_cluster_privilege(write_ctx: &WriteContext<'_>, table: &Table) -> Result<(), ExecError> {
     let role = write_ctx.fctx.effective_role();
-    if crabka_pgcatalog::role_has_privs_of(write_ctx.catalog_kv, role, &table.owner)?
+    if krabka_pgcatalog::role_has_privs_of(write_ctx.catalog_kv, role, &table.owner)?
         || crate::rls::role_is_superuser(write_ctx.catalog_kv, role)?
     {
         return Ok(());
@@ -224,8 +224,8 @@ pub(crate) fn cluster_index_named(
     catalog_kv: &dyn Kv,
     table: &Table,
     index_name: &str,
-) -> Result<crabka_pgcatalog::Index, ExecError> {
-    let index = crabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)?
+) -> Result<krabka_pgcatalog::Index, ExecError> {
+    let index = krabka_pgcatalog::list_table_indexes(catalog_kv, &table.name)?
         .into_iter()
         .find(|index| index.name == index_name)
         .ok_or_else(|| {
@@ -234,7 +234,7 @@ pub(crate) fn cluster_index_named(
                 table.name.name
             ))
         })?;
-    if index.method != crabka_pgcatalog::IndexMethod::Btree {
+    if index.method != krabka_pgcatalog::IndexMethod::Btree {
         return Err(ExecError::Unsupported(format!(
             "cannot cluster on index \"{index_name}\" because access method does not support \
              clustering"
@@ -248,7 +248,7 @@ async fn cluster_one_relation(
     write_ctx: &WriteContext<'_>,
     unit: &ClusterUnit,
     writes: &mut StatementWrites,
-    ops: &mut Vec<crabka_pgkv::WriteOp>,
+    ops: &mut Vec<krabka_pgkv::WriteOp>,
 ) -> Result<(), ExecError> {
     let table = &unit.table;
     if table_uses_global_visibility(table) {
@@ -346,12 +346,12 @@ async fn cluster_one_relation(
             writes,
             ops,
         )?;
-        ops.push(crabka_pgkv::WriteOp::Put {
-            key: crabka_pgmvcc::version::version_key_xid(table.id, new_rowid, write_ctx.xid),
+        ops.push(krabka_pgkv::WriteOp::Put {
+            key: krabka_pgmvcc::version::version_key_xid(table.id, new_rowid, write_ctx.xid),
             value: encode_table_tuple(
                 table,
                 write_ctx.xid,
-                crabka_pgmvcc::xid::INVALID_XID,
+                krabka_pgmvcc::xid::INVALID_XID,
                 write_ctx.command_id,
                 0,
                 cur_row,
@@ -397,7 +397,7 @@ fn reject_cluster_with_pending_checks(
 /// unqualified scan reads the heap — is already in `index`'s order.
 fn cluster_scan_is_ordered(
     table: &Table,
-    index: &crabka_pgcatalog::Index,
+    index: &krabka_pgcatalog::Index,
     scanned: &[(u64, u64, Vec<Datum>)],
     ctx: &crate::clock::EvalCtx,
 ) -> Result<bool, ExecError> {
@@ -420,14 +420,14 @@ fn cluster_scan_is_ordered(
 /// expression is; a plain key is the stored column value.
 fn cluster_sort_key(
     table: &Table,
-    index: &crabka_pgcatalog::Index,
+    index: &krabka_pgcatalog::Index,
     row: &[Datum],
     ctx: &crate::clock::EvalCtx,
 ) -> Result<Vec<Datum>, ExecError> {
     let mut key = Vec::with_capacity(index.columns.len());
     for column in &index.columns {
-        if let Some(source) = crabka_pgcatalog::index_key_expression(column) {
-            let expr = crabka_pgparser::parser::parse_expression(source)?;
+        if let Some(source) = krabka_pgcatalog::index_key_expression(column) {
+            let expr = krabka_pgparser::parser::parse_expression(source)?;
             let scope = Scope::single(table, &table.name.name);
             key.push(crate::eval::eval(&expr, &scope, row, ctx)?);
             continue;
@@ -452,7 +452,7 @@ fn compare_cluster_key(a: &[Datum], b: &[Datum]) -> std::cmp::Ordering {
             (true, true) => Ordering::Equal,
             (true, false) => Ordering::Greater,
             (false, true) => Ordering::Less,
-            (false, false) => crabka_pgtypes::ops::compare(x, y)
+            (false, false) => krabka_pgtypes::ops::compare(x, y)
                 .ok()
                 .flatten()
                 .unwrap_or(Ordering::Equal),

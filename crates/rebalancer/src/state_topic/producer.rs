@@ -1,11 +1,11 @@
 //! Single-key produce path for the state topic. It is built directly on
-//! `crabka_client_core::Client`, to match the rebalancer's
+//! `krabka_client_core::Client`, to match the rebalancer's
 //! `ingest::admin_client` pattern. A one-key-per-write workload does not need
-//! the high-level `crabka-client-producer`.
+//! the high-level `krabka-client-producer`.
 
 use bytes::Bytes;
-use crabka_client_core::Client;
-use crabka_protocol::{
+use krabka_client_core::Client;
+use krabka_protocol::{
     owned::{
         metadata_request::{MetadataRequest, MetadataRequestTopic},
         metadata_response::MetadataResponse,
@@ -15,7 +15,7 @@ use crabka_protocol::{
     primitives::uuid::Uuid,
     records::{Record, RecordBatch},
 };
-use crabka_units::convert::TimeExt as _;
+use krabka_units::convert::TimeExt as _;
 use tracing::debug;
 
 use crate::{
@@ -116,7 +116,7 @@ async fn send_once(
     topic_id: Uuid,
     key: &Bytes,
     value: Option<Bytes>,
-    produce_timeout: crabka_units::Time,
+    produce_timeout: krabka_units::Time,
 ) -> Result<(), StateTopicError> {
     let req = produce_request(topic, topic_id, key, value, produce_timeout);
     let resp = client.send(req).await?;
@@ -131,7 +131,7 @@ fn produce_request(
     topic_id: Uuid,
     key: &Bytes,
     value: Option<Bytes>,
-    produce_timeout: crabka_units::Time,
+    produce_timeout: krabka_units::Time,
 ) -> ProduceRequest {
     let record = Record {
         key: Some(key.clone()),
@@ -187,14 +187,14 @@ fn classify_send_result(
 #[cfg(test)]
 mod tests {
     use assert2::check;
-    use crabka_protocol::{
+    use krabka_protocol::{
         owned::{
             metadata_response::{MetadataResponse, MetadataResponseTopic},
             produce_response::{PartitionProduceResponse, ProduceResponse, TopicProduceResponse},
         },
         records::RecordsPayload,
     };
-    use crabka_units::{Time, millis, secs};
+    use krabka_units::{Time, millis, secs};
 
     use super::*;
 
@@ -360,7 +360,7 @@ mod tests {
         assert2::assert!(
             produce_state(
                 &client,
-                "__crabka_state",
+                "__krabka_state",
                 "in_flight",
                 Some(Bytes::from_static(b"{}")),
                 &RebalancerRuntimePolicy::default(),
@@ -374,7 +374,7 @@ mod tests {
     async fn resolve_topic_id_propagates_metadata_send_errors() {
         let client = unreachable_client("resolve-topic-id").await;
 
-        assert2::assert!(resolve_topic_id(&client, "__crabka_state").await.is_err());
+        assert2::assert!(resolve_topic_id(&client, "__krabka_state").await.is_err());
     }
 
     #[tokio::test]
@@ -385,7 +385,7 @@ mod tests {
         assert2::assert!(
             send_once(
                 &client,
-                "__crabka_state",
+                "__krabka_state",
                 Uuid([7; 16]),
                 &key,
                 Some(Bytes::from_static(b"{}")),

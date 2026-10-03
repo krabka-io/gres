@@ -194,7 +194,7 @@ Capture via the Docker Kafka-Streams 4.1 harness → `testdata/golden/dsl/{strea
   `retainDuplicates` changelog records use byte-exact `WindowKeySchema` (incrementing
   seqnum) + raw values.
 - The 9 prior golden frames unchanged.
-- `cargo test -p crabka-client-streams` green; `cargo clippy --workspace
+- `cargo test -p krabka-client-streams` green; `cargo clippy --workspace
   --all-targets -- -D warnings` + `cargo fmt --check` clean; `cargo build
   --workspace`.
 - A documented stream-stream-join note in `lib.rs`.

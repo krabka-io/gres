@@ -1,5 +1,5 @@
 [package]
-name = "crabka-verified"
+name = "krabka-verified"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,7 +8,7 @@ rust-version.workspace = true
 description = "Formally verified pure kernels (Creusot) shared by Crabka's consensus and log crates"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-verified"
+documentation = "https://docs.rs/krabka-verified"
 keywords = ["kafka", "verification", "creusot", "crabka"]
 categories = ["algorithms"]
 

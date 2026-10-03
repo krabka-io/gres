@@ -1,7 +1,7 @@
 //! Rule-based rewrites that are sound before cost-based planning.
 
-use crabka_pgcatalog::Table;
-use crabka_pgparser::ast::{BinaryOp, Expr, ValuesStmt};
+use krabka_pgcatalog::Table;
+use krabka_pgparser::ast::{BinaryOp, Expr, ValuesStmt};
 
 use crate::scope::Scope;
 
@@ -89,19 +89,19 @@ fn rewrite_self_equality_expr(filter: &Expr, scope: &Scope) -> Expr {
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgparser::ast::BinaryOp;
-    use crabka_pgtypes::ColumnType;
+    use krabka_pgparser::ast::BinaryOp;
+    use krabka_pgtypes::ColumnType;
 
     use super::*;
     use crate::scope::{ColumnBinding, Exposure};
 
     fn not_null_table() -> Table {
-        let mut column = crabka_pgcatalog::Column::new("a", ColumnType::Int4);
+        let mut column = krabka_pgcatalog::Column::new("a", ColumnType::Int4);
         column.not_null = true;
         Table {
             id: 1,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
-            name: crabka_pgcatalog::RelationName::public("t"),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            name: krabka_pgcatalog::RelationName::public("t"),
             columns: vec![column],
             sharded: false,
             row_security: false,

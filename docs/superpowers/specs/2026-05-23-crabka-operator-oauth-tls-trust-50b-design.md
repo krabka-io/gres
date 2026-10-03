@@ -4,7 +4,7 @@ Status: Draft
 Date: 2026-05-23
 Slice: 50b
 Pairs with broker slice(s): 49c (already shipped)
-Umbrella: [OAUTHBEARER full-parity roadmap](2026-05-23-crabka-oauth-parity-roadmap-design.md)
+Umbrella: [OAUTHBEARER full-parity roadmap](2026-05-23-krabka-oauth-parity-roadmap-design.md)
 
 ## Goal
 
@@ -293,7 +293,7 @@ off and points the broker + producer at HTTP. The upgrade:
 
 ## Acceptance criteria
 
-1. `cargo build -p crabka-operator` + `cargo test -p crabka-operator` pass.
+1. `cargo build -p krabka-operator` + `cargo test -p krabka-operator` pass.
 2. `cargo fmt --check` + `cargo clippy --workspace --all-targets -- -D warnings` pass.
 3. CRD-drift gate (`tools/regen-crds.sh` + `git diff --exit-code -- deploy/crds/`) clean.
 4. New unit + integration tests above all pass.

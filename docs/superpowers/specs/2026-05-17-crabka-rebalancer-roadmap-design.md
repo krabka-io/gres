@@ -6,13 +6,13 @@
 
 ## Goal
 
-Deliver a Rust standalone service (`crabka-rebalancer`) that brings Crabka to feature parity with [Cruise Control](https://github.com/linkedin/cruise-control) for cluster-wide partition placement. The service ingests cluster state, runs a goal-seeking optimizer, and (on operator request) executes reassignments through Crabka's existing KIP-455 + KIP-73 plumbing.
+Deliver a Rust standalone service (`krabka-rebalancer`) that brings Crabka to feature parity with [Cruise Control](https://github.com/linkedin/cruise-control) for cluster-wide partition placement. The service ingests cluster state, runs a goal-seeking optimizer, and (on operator request) executes reassignments through Crabka's existing KIP-455 + KIP-73 plumbing.
 
 This document is the long-form roadmap; each slice below is a single PR sized comparably to slices 1–67 in the existing Crabka history.
 
 ## Decisions captured during brainstorm
 
-1. **Topology:** standalone `crabka-rebalancer` binary that talks to the cluster as a regular Kafka admin client. Mirrors Cruise Control's deployment model (separate process). Lets the rebalancer crash / upgrade independently of brokers.
+1. **Topology:** standalone `krabka-rebalancer` binary that talks to the cluster as a regular Kafka admin client. Mirrors Cruise Control's deployment model (separate process). Lets the rebalancer crash / upgrade independently of brokers.
 2. **Goal coverage:** full Cruise-Control parity is the long-term target, decomposed into multiple sub-slices. Each goal family lands as its own slice.
 3. **First cut (slice 43a):** MVP — REST API skeleton, periodic cluster-state ingest, two soft goals (replica count, leader count) + one hard goal (preferred-leader idempotency). No execute path yet; proposals are JSON.
 4. **REST API base path:** `/api/v1/...` (versioned from day one so the operator can pin against a stable contract).
@@ -23,11 +23,11 @@ This document is the long-form roadmap; each slice below is a single PR sized co
 
 ### Process shape
 
-One binary, `crabka-rebalancer`. Single-replica by default; the operator can deploy multiple replicas behind a `Lease`-based leader election once persistent state is moved off local disk (deferred). Cruise Control's split into "kafkacruisecontrol" + "metric reporter" is not mirrored — we use Crabka's slice-39 Prometheus endpoint as the metric source instead of shipping a separate JMX reporter.
+One binary, `krabka-rebalancer`. Single-replica by default; the operator can deploy multiple replicas behind a `Lease`-based leader election once persistent state is moved off local disk (deferred). Cruise Control's split into "kafkacruisecontrol" + "metric reporter" is not mirrored — we use Crabka's slice-39 Prometheus endpoint as the metric source instead of shipping a separate JMX reporter.
 
 ### Crate layout
 
-- New workspace member `crates/rebalancer/` producing the `crabka-rebalancer` binary and a small library surface for tests.
+- New workspace member `crates/rebalancer/` producing the `krabka-rebalancer` binary and a small library surface for tests.
 - Internal modules:
   - `ingest` — admin-client wrapper + periodic cluster-state snapshot (`Metadata`, `DescribeCluster`, `ListPartitionReassignments`).
   - `model` — pure-logic structs: `ClusterState`, `BrokerCapacity`, `MetricsWindow`, `Proposal`, `ReplicaMovement`.
@@ -41,8 +41,8 @@ One binary, `crabka-rebalancer`. Single-replica by default; the operator can dep
 
 ### Naming & API surface
 
-- Crate / binary / container image: `crabka-rebalancer`.
-- Helm chart: `charts/crabka-rebalancer/`.
+- Crate / binary / container image: `krabka-rebalancer`.
+- Helm chart: `charts/krabka-rebalancer/`.
 - REST API base: `/api/v1/`.
 - Endpoints (full set across the roadmap):
   - `GET  /api/v1/state` — current cluster snapshot (broker list, partition placement, in-flight reassignments)
@@ -56,7 +56,7 @@ One binary, `crabka-rebalancer`. Single-replica by default; the operator can dep
 
 ### Deployment artifacts
 
-- Helm chart at `charts/crabka-rebalancer/` for the service itself.
+- Helm chart at `charts/krabka-rebalancer/` for the service itself.
 - `KafkaRebalance` CRD lands in the operator (slice 44); operator translates CRD specs into REST calls.
 
 ### Configuration
@@ -151,7 +151,7 @@ The implementation plan that follows this design covers slice 43a only.
 
 ### Goal
 
-Land a standalone `crabka-rebalancer` binary that:
+Land a standalone `krabka-rebalancer` binary that:
 - Connects to a Crabka cluster as an admin client.
 - Periodically snapshots cluster state.
 - Exposes a versioned REST API for "what should I do to balance this cluster?" — but **does not execute anything**.
@@ -159,7 +159,7 @@ Land a standalone `crabka-rebalancer` binary that:
 
 ### Deliverables
 
-- New workspace member `crates/rebalancer/` producing the `crabka-rebalancer` binary.
+- New workspace member `crates/rebalancer/` producing the `krabka-rebalancer` binary.
 - Library modules: `ingest`, `model`, `goals` (`replica_distribution`, `leader_distribution`, `preferred_leader_idempotency`), `optimizer`, `api`.
 - REST endpoints:
   - `GET /api/v1/state`
@@ -170,7 +170,7 @@ Land a standalone `crabka-rebalancer` binary that:
   - `GET /healthz`, `GET /readyz`, `GET /metrics`
 - Pure-logic unit tests for each goal + the optimizer.
 - 1 integration test: spin up a single-broker Crabka, point the rebalancer at it, request a proposal, assert sane JSON shape.
-- A minimal Helm chart at `charts/crabka-rebalancer/` (placeholder — slice 43b fleshes it out).
+- A minimal Helm chart at `charts/krabka-rebalancer/` (placeholder — slice 43b fleshes it out).
 
 ### Explicit non-goals for 43a
 
@@ -182,6 +182,6 @@ Land a standalone `crabka-rebalancer` binary that:
 
 ### Risks called out at this stage
 
-- **Admin-client wire surface:** Crabka's `crabka-client-core` doesn't currently expose `ListPartitionReassignments` or `DescribeCluster` as typed methods. 43a may need to add thin wrappers in the client crate before the rebalancer can ingest state. Confirm during 43a brainstorm whether to extend `crabka-client-core` or hand-roll the wire calls inside `crates/rebalancer/`.
+- **Admin-client wire surface:** Crabka's `krabka-client-core` doesn't currently expose `ListPartitionReassignments` or `DescribeCluster` as typed methods. 43a may need to add thin wrappers in the client crate before the rebalancer can ingest state. Confirm during 43a brainstorm whether to extend `krabka-client-core` or hand-roll the wire calls inside `crates/rebalancer/`.
 - **REST framework:** axum is already in the workspace (operator slice 17 + broker slice 39). Reuse it.
 - **Default REST port:** `9300` (not yet used elsewhere in Crabka).

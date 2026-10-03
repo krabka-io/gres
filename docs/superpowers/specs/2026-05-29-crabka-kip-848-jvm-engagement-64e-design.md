@@ -169,7 +169,7 @@ and asserts the response echoes it and carries an assignment.
 ## Acceptance gates
 
 1. `cargo test --workspace` green.
-2. `cargo test -p crabka-broker --test jvm_consumer_group_next_gen -- --ignored`
+2. `cargo test -p krabka-broker --test jvm_consumer_group_next_gen -- --ignored`
    — all four pass against `mirror.gcr.io/apache/kafka:4.0.0`.
 3. `cargo clippy --workspace --all-targets -- -D warnings` clean.
 4. `cargo fmt --check` clean.

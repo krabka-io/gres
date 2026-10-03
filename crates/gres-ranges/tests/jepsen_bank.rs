@@ -2,8 +2,8 @@ mod harness;
 
 use std::{num::NonZeroU64, sync::Arc};
 
-use crabka_gres_ranges::{MemoryTsoHorizon, TsoError, TsoOracle};
-use crabka_pgkv::MemKv;
+use krabka_gres_ranges::{MemoryTsoHorizon, TsoError, TsoOracle};
+use krabka_pgkv::MemKv;
 use harness::{SystemHarness, TableAccount, process::ProcessHarness};
 
 #[tokio::test]

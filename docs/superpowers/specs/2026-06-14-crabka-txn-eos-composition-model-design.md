@@ -126,8 +126,8 @@ the model + document (as the data-path composition's three refinements did).
 
 ## Verification discipline
 
-- `stateright` wrap-real; watchdog-guarded. `cargo +nightly fmt -p crabka-broker`; `cargo clippy
-  -p crabka-broker --all-targets -- -D warnings` clean. Likely **no production change** (the cores are already
+- `stateright` wrap-real; watchdog-guarded. `cargo +nightly fmt -p krabka-broker`; `cargo clippy
+  -p krabka-broker --all-targets -- -D warnings` clean. Likely **no production change** (the cores are already
   extracted; the LSO/aborted bookkeeping is modeled, not driven from file-backed `TxnIndex`/`Log`).
 
 ## Success criteria

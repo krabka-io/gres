@@ -11,10 +11,10 @@
 //! subquery's scope comes solely from its own FROM, so an outer-column reference
 //! fails name resolution (42703).
 
-use crabka_pgparser::ast::{
+use krabka_pgparser::ast::{
     BinaryOp, Expr, FuncArgs, FuncCall, OrderItem, QueryExpr, SelectItem, SelectStmt, ValuesStmt,
 };
-use crabka_pgtypes::{ColumnType, Datum, ElemType};
+use krabka_pgtypes::{ColumnType, Datum, ElemType};
 
 use crate::error::ExecError;
 
@@ -23,11 +23,11 @@ use crate::error::ExecError;
 /// each nested subquery reads under the outer query's snapshot.
 #[derive(Clone)]
 pub(crate) struct SubCtx<'a> {
-    pub catalog_kv: &'a dyn crabka_pgkv::Kv,
-    pub kv: &'a dyn crabka_pgkv::Kv,
-    pub global: &'a dyn crabka_pgkv::Kv,
-    pub gsnap: &'a crabka_pgmvcc::visibility::Snapshot,
-    pub snapshot: &'a crabka_pgmvcc::visibility::Snapshot,
+    pub catalog_kv: &'a dyn krabka_pgkv::Kv,
+    pub kv: &'a dyn krabka_pgkv::Kv,
+    pub global: &'a dyn krabka_pgkv::Kv,
+    pub gsnap: &'a krabka_pgmvcc::visibility::Snapshot,
+    pub snapshot: &'a krabka_pgmvcc::visibility::Snapshot,
     pub own: Option<u64>,
     /// Command counter for own-xid tuple visibility. `None` preserves the
     /// legacy all-own-writes view used by write-side conflict checks.
@@ -44,7 +44,7 @@ pub(crate) struct SubCtx<'a> {
     /// G-8: ordinary table scanner seam forwarded through nested subqueries.
     pub range_scanner: &'a dyn crate::scanner::RangeScanner,
     /// Memory retained by one blocking query operator.
-    pub blocking_query_memory: crabka_units::ByteSize,
+    pub blocking_query_memory: krabka_units::ByteSize,
     /// Shared blocking-memory charge for this statement and all nested reads.
     pub statement_memory: crate::scanner::StatementMemory,
     /// The role whose row-security policies this read is subject to.
@@ -242,7 +242,7 @@ pub(crate) fn resolve_in_select(ctx: &SubCtx, s: &SelectStmt) -> Result<SelectSt
     for o in &mut out.order_by {
         o.expr = resolve_expr(ctx, &o.expr)?;
     }
-    if let crabka_pgparser::ast::DistinctClause::On(on) = &mut out.distinct {
+    if let krabka_pgparser::ast::DistinctClause::On(on) = &mut out.distinct {
         for expr in on {
             *expr = resolve_expr(ctx, expr)?;
         }
@@ -255,7 +255,7 @@ pub(crate) fn resolve_in_select(ctx: &SubCtx, s: &SelectStmt) -> Result<SelectSt
     // A window call's arguments, FILTER and window specification live beside the
     // expression tree rather than in it, so they need resolving too.
     for call in &mut out.window_calls {
-        if let crabka_pgparser::ast::FuncArgs::Exprs(args) = &mut call.args {
+        if let krabka_pgparser::ast::FuncArgs::Exprs(args) = &mut call.args {
             for arg in args {
                 *arg = resolve_expr(ctx, arg)?;
             }
@@ -263,7 +263,7 @@ pub(crate) fn resolve_in_select(ctx: &SubCtx, s: &SelectStmt) -> Result<SelectSt
         if let Some(filter) = &mut call.filter {
             *filter = resolve_expr(ctx, filter)?;
         }
-        if let crabka_pgparser::ast::WindowRef::Spec(spec) = &mut call.over {
+        if let krabka_pgparser::ast::WindowRef::Spec(spec) = &mut call.over {
             resolve_window_spec(ctx, spec)?;
         }
     }
@@ -281,9 +281,9 @@ pub(crate) fn resolve_in_select(ctx: &SubCtx, s: &SelectStmt) -> Result<SelectSt
 /// raw subquery node for the scalar evaluator to refuse.
 fn resolve_window_spec(
     ctx: &SubCtx,
-    spec: &mut crabka_pgparser::ast::WindowSpec,
+    spec: &mut krabka_pgparser::ast::WindowSpec,
 ) -> Result<(), ExecError> {
-    use crabka_pgparser::ast::FrameBound;
+    use krabka_pgparser::ast::FrameBound;
 
     for expr in &mut spec.partition_by {
         *expr = resolve_expr(ctx, expr)?;
@@ -350,10 +350,10 @@ pub(crate) fn resolve_in_values(ctx: &SubCtx, v: &ValuesStmt) -> Result<ValuesSt
 /// [`resolve_expr`] over one subscript-chain entry's bound expressions.
 fn resolve_subscript(
     ctx: &SubCtx,
-    subscript: &crabka_pgparser::ast::ArraySubscript,
+    subscript: &krabka_pgparser::ast::ArraySubscript,
     should_skip: &mut dyn FnMut(&Expr) -> bool,
-) -> Result<crabka_pgparser::ast::ArraySubscript, ExecError> {
-    use crabka_pgparser::ast::ArraySubscript;
+) -> Result<krabka_pgparser::ast::ArraySubscript, ExecError> {
+    use krabka_pgparser::ast::ArraySubscript;
 
     Ok(match subscript {
         ArraySubscript::Index(index) => {
@@ -479,7 +479,7 @@ pub(crate) fn resolve_expr_skipping(
                     .order_by
                     .iter()
                     .map(|item| {
-                        Ok(crabka_pgparser::ast::OrderItem {
+                        Ok(krabka_pgparser::ast::OrderItem {
                             expr: resolve_expr_skipping(ctx, &item.expr, should_skip)?,
                             asc: item.asc,
                             nulls_first: item.nulls_first,
@@ -834,7 +834,7 @@ fn lower_quantified(lhs: &Expr, op: BinaryOp, all: bool, values: Vec<Expr>) -> E
 /// still schema-only, but scalar subqueries can resolve FROM entries against the
 /// supplied CTE context instead of catalog tables only.
 pub(crate) fn resolve_types_in_projection_with_ctes(
-    catalog_kv: &dyn crabka_pgkv::Kv,
+    catalog_kv: &dyn krabka_pgkv::Kv,
     resolution: &crate::relname::ResolutionScope,
     items: &[SelectItem],
     ctes: &crate::cte::CteContext,
@@ -861,7 +861,7 @@ pub(crate) fn resolve_types_in_projection_with_ctes(
 }
 
 pub(crate) fn resolve_types_in_values_with_ctes(
-    catalog_kv: &dyn crabka_pgkv::Kv,
+    catalog_kv: &dyn krabka_pgkv::Kv,
     resolution: &crate::relname::ResolutionScope,
     v: &ValuesStmt,
     ctes: &crate::cte::CteContext,
@@ -894,7 +894,7 @@ pub(crate) fn resolve_types_in_values_with_ctes(
 /// without substitution, and the shared walk already leaves their inner queries
 /// (separate scopes) alone while still descending into their outer operands.
 pub(crate) fn resolve_types_in_expr(
-    catalog_kv: &dyn crabka_pgkv::Kv,
+    catalog_kv: &dyn krabka_pgkv::Kv,
     resolution: &crate::relname::ResolutionScope,
     e: &Expr,
     ctes: &crate::cte::CteContext,
@@ -935,7 +935,7 @@ pub(crate) fn resolve_types_in_expr(
 /// P2: the describe path inlines a user-defined SQL function's body the same way
 /// execution does, so a `Describe` reports the type the rows will carry.
 fn resolve_types_in_call(
-    catalog_kv: &dyn crabka_pgkv::Kv,
+    catalog_kv: &dyn krabka_pgkv::Kv,
     resolution: &crate::relname::ResolutionScope,
     fc: &FuncCall,
     ctes: &crate::cte::CteContext,
@@ -978,7 +978,7 @@ fn resolve_types_in_call(
             .order_by
             .iter()
             .map(|item| {
-                Ok(crabka_pgparser::ast::OrderItem {
+                Ok(krabka_pgparser::ast::OrderItem {
                     expr: resolve_types_in_expr(catalog_kv, resolution, &item.expr, ctes)?,
                     asc: item.asc,
                     nulls_first: item.nulls_first,
@@ -1012,7 +1012,7 @@ fn resolve_types_in_call(
 
 /// The static type of a scalar subquery's single projection column (catalog only).
 fn scalar_subquery_type(
-    catalog_kv: &dyn crabka_pgkv::Kv,
+    catalog_kv: &dyn krabka_pgkv::Kv,
     resolution: &crate::relname::ResolutionScope,
     q: &QueryExpr,
     ctes: &crate::cte::CteContext,
@@ -1026,10 +1026,10 @@ fn scalar_subquery_type(
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgkv::MemKv;
-    use crabka_pgmvcc::visibility::Snapshot;
-    use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
-    use crabka_units::convert::ByteSizeExt as _;
+    use krabka_pgkv::MemKv;
+    use krabka_pgmvcc::visibility::Snapshot;
+    use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+    use krabka_units::convert::ByteSizeExt as _;
 
     use crate::SqlEngine;
 
@@ -1085,9 +1085,9 @@ mod tests {
             eval_ctx: &eval_ctx,
             fctx: crate::exec::ForeignCtx::none(),
             range_scanner: &scanner,
-            blocking_query_memory: crabka_units::ByteSize::from_bytes(1),
+            blocking_query_memory: krabka_units::ByteSize::from_bytes(1),
             statement_memory: crate::scanner::StatementMemory::new(
-                crabka_units::ByteSize::from_bytes(1),
+                krabka_units::ByteSize::from_bytes(1),
             ),
             security_role: "owner",
             policy_stack: &policy_stack,
@@ -1266,6 +1266,6 @@ mod tests {
         let fields = crate::describe_fields(&*e.kv, "SELECT (SELECT max(v) FROM t) FROM t")
             .expect("describe");
         assert_eq!(fields.len(), 1);
-        assert_eq!(fields[0].type_oid, crabka_pgtypes::oids::INT4); // max(int4) → int4
+        assert_eq!(fields[0].type_oid, krabka_pgtypes::oids::INT4); // max(int4) → int4
     }
 }

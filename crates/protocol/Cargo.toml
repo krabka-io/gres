@@ -1,5 +1,5 @@
 [package]
-name = "crabka-protocol"
+name = "krabka-protocol"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +8,7 @@ authors = ["The Crabka Authors"]
 description = "Apache Kafka wire-protocol codec (4.3.0), with typed RecordBatch and zero-copy borrowed decode"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-protocol"
+documentation = "https://docs.rs/krabka-protocol"
 readme = "README.md"
 keywords = ["kafka", "wire-protocol", "codec", "serialization", "decoder"]
 categories = ["encoding", "parser-implementations"]
@@ -34,10 +34,10 @@ workspace = true
 [features]
 default = ["arbitrary", "gzip", "snappy", "lz4", "zstd"]
 arbitrary = ["dep:arbitrary"]
-gzip   = ["crabka-compression/gzip"]
-snappy = ["crabka-compression/snappy"]
-lz4    = ["crabka-compression/lz4"]
-zstd   = ["crabka-compression/zstd"]
+gzip   = ["krabka-compression/gzip"]
+snappy = ["krabka-compression/snappy"]
+lz4    = ["krabka-compression/lz4"]
+zstd   = ["krabka-compression/zstd"]
 
 [dependencies]
 assert2 = { workspace = true }
@@ -46,8 +46,8 @@ thiserror = { workspace = true }
 arbitrary = { workspace = true, optional = true }
 zerocopy = { workspace = true }
 crc32c = { workspace = true }
-crabka-compression = { version = "0.4.2", path = "../compression", default-features = false }
-crabka-units = { workspace = true }
+krabka-compression = { version = "0.4.2", path = "../compression", default-features = false }
+krabka-units = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
 
@@ -64,7 +64,7 @@ serde_json = { workspace = true }
 tempfile = { workspace = true }
 toml = { workspace = true }
 criterion = { version = "5.0.1", package = "codspeed-criterion-compat" }
-crabka-kafka-tap = { path = "../kafka-tap" }
+krabka-kafka-tap = { path = "../kafka-tap" }
 
 [[bench]]
 name = "codec"

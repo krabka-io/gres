@@ -14,7 +14,7 @@ use std::{
     sync::Mutex as StdMutex,
 };
 
-use crabka_client_admin::{
+use krabka_client_admin::{
     AclEntry, AclEntryFilter, AdminClientLike, AdminError, AlterConfigsOutcome, CreateAclOutcome,
     CreatePartitionsOp, CreatePartitionsOutcome, CreateTopicOutcome, CreateTopicSpec,
     DeleteAclFilterOutcome, DeleteRecordsOp, DeleteRecordsOutcome, DeleteTopicOutcome,
@@ -22,10 +22,10 @@ use crabka_client_admin::{
     ScramUpsertion, ScramUserOutcome, TopicConfigOverrides, TopicMetadata, TopicMetadataEntry,
     TopicReplicationStatus, UserQuotaConfig,
 };
-use crabka_client_core::ClientError;
-use crabka_metadata::DelegationToken;
-use crabka_security::KafkaPrincipal;
-use crabka_units::{Time, convert::TimeExt as _, days};
+use krabka_client_core::ClientError;
+use krabka_metadata::DelegationToken;
+use krabka_security::KafkaPrincipal;
+use krabka_units::{Time, convert::TimeExt as _, days};
 
 /// Per-RPC error to inject. `Broker` surfaces as a per-outcome error
 /// (matches how Kafka reports per-topic errors); `Transport` surfaces as

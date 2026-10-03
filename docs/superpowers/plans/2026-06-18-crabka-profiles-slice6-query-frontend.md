@@ -1,19 +1,19 @@
-# crabka-profiles Slice 6 — Query-frontend (split/shard merge + select-series + partial-tree merge) Implementation Plan
+# krabka-profiles Slice 6 — Query-frontend (split/shard merge + select-series + partial-tree merge) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the `query-frontend` role for `crabka-profiles` — an axum/Connect server that sits in front of N queriers (Slice 5) and (1) **splits** a `SelectMergeStacktraces` / `SelectSeries` request by time window and/or by block/series shard into bounded jobs, (2) **fans** those jobs across queriers in parallel through a trait-abstracted `QuerierBackend` with bounded concurrency, and (3) **merges** the partial results correctly. For flamegraph this is the load-bearing invariant from spec §6.4: **raw `stacktrace_id`s never cross a block boundary**, so each block/querier resolves locally to a **partial symbolized `Tree`** and the frontend `Tree::merge`s the partials *then* re-encodes one `FlameGraph` honoring `max_nodes` (with the synthetic `"other"` truncation). For `SelectSeries` the frontend concatenates/sums per-series points by `(group_by labels, timestamp)`. The role binary is `crabka-profiles --target query-frontend`.
+**Goal:** Build the `query-frontend` role for `krabka-profiles` — an axum/Connect server that sits in front of N queriers (Slice 5) and (1) **splits** a `SelectMergeStacktraces` / `SelectSeries` request by time window and/or by block/series shard into bounded jobs, (2) **fans** those jobs across queriers in parallel through a trait-abstracted `QuerierBackend` with bounded concurrency, and (3) **merges** the partial results correctly. For flamegraph this is the load-bearing invariant from spec §6.4: **raw `stacktrace_id`s never cross a block boundary**, so each block/querier resolves locally to a **partial symbolized `Tree`** and the frontend `Tree::merge`s the partials *then* re-encodes one `FlameGraph` honoring `max_nodes` (with the synthetic `"other"` truncation). For `SelectSeries` the frontend concatenates/sums per-series points by `(group_by labels, timestamp)`. The role binary is `krabka-profiles --target query-frontend`.
 
-**Architecture:** A new `frontend` module tree inside `crabka-profiles`. The querier backend is a `QuerierBackend` **trait** (`async fn merge_stacktraces_job` / `async fn select_series_job`) so tests drive a `MockQuerier` returning canned per-job partials and real deployments use an `HttpQuerier` pool (reqwest, the grpc-gateway `forward.rs`/`serve.rs` pattern). The shardable unit is a `JobShard` = `Live` (the hot WAL tail) or `Block { block_id }` (one cold block). **The merge unit is the `crabka-pprof` `Tree`, not raw flamegraph `Level`s** — because a `stacktrace_id` is only meaningful inside its own block's symbol DB, queriers must return a *symbolized* `Tree` partial (resolve-locally), which the frontend merges with `Tree::merge` and only *then* folds to a `FlameGraph` via `Tree::to_flamegraph(max_nodes)`. A `crabka-pprof` `Series` partial carries `SelectSeries` points. The pipeline composes as `plan jobs → queue (bounded fan-out) → per-job query → merge (Tree::merge | series-sum) → encode (FlameGraph | Series) → render`. A result cache is **optional** for profiles and is *not* built here — see the "Result cache (deferred — rationale)" note.
+**Architecture:** A new `frontend` module tree inside `krabka-profiles`. The querier backend is a `QuerierBackend` **trait** (`async fn merge_stacktraces_job` / `async fn select_series_job`) so tests drive a `MockQuerier` returning canned per-job partials and real deployments use an `HttpQuerier` pool (reqwest, the grpc-gateway `forward.rs`/`serve.rs` pattern). The shardable unit is a `JobShard` = `Live` (the hot WAL tail) or `Block { block_id }` (one cold block). **The merge unit is the `krabka-pprof` `Tree`, not raw flamegraph `Level`s** — because a `stacktrace_id` is only meaningful inside its own block's symbol DB, queriers must return a *symbolized* `Tree` partial (resolve-locally), which the frontend merges with `Tree::merge` and only *then* folds to a `FlameGraph` via `Tree::to_flamegraph(max_nodes)`. A `krabka-pprof` `Series` partial carries `SelectSeries` points. The pipeline composes as `plan jobs → queue (bounded fan-out) → per-job query → merge (Tree::merge | series-sum) → encode (FlameGraph | Series) → render`. A result cache is **optional** for profiles and is *not* built here — see the "Result cache (deferred — rationale)" note.
 
-**Tech Stack:** Rust 2024 · `axum` 0.8 (`http1`, `tokio`) · `reqwest` 0.13 (`json`, `rustls`) · `serde`/`serde_json` (the Tree/Series partial wire + flamebearer) · `prost` 0.14 (the `querier.v1` partial protos) · `connectrpc-axum` + `connectrpc-axum-build` (build.rs codegen, the grpc-gateway pattern) · `tokio` (`rt-multi-thread`, `macros`, `time`, `sync`) · `futures` (bounded `buffer_unordered` fan-out) · `thiserror` · `async-trait` · `crabka-pprof` (engine types: `Tree`/`FlameGraph`/`Level`/`Series`/`SeriesAgg`/`Frame`/`ProfileError`) · `crabka-blockstore` (`LabelMatcher`). Tests: `assert2`, `tokio` (`test`, `macros`).
+**Tech Stack:** Rust 2024 · `axum` 0.8 (`http1`, `tokio`) · `reqwest` 0.13 (`json`, `rustls`) · `serde`/`serde_json` (the Tree/Series partial wire + flamebearer) · `prost` 0.14 (the `querier.v1` partial protos) · `connectrpc-axum` + `connectrpc-axum-build` (build.rs codegen, the grpc-gateway pattern) · `tokio` (`rt-multi-thread`, `macros`, `time`, `sync`) · `futures` (bounded `buffer_unordered` fan-out) · `thiserror` · `async-trait` · `krabka-pprof` (engine types: `Tree`/`FlameGraph`/`Level`/`Series`/`SeriesAgg`/`Frame`/`ProfileError`) · `krabka-blockstore` (`LabelMatcher`). Tests: `assert2`, `tokio` (`test`, `macros`).
 
 ## Global Constraints
 
 - **No backwards compatibility.** Greenfield/undeployed. Change schemas/enums/wire shapes freely; no shims, no migration code, no default-off feature gates.
 - **`unsafe_code = "forbid"`** workspace-wide. No `unsafe`.
-- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p crabka-profiles --all-targets` before each commit.
-- **Formatting:** `cargo fmt -p crabka-profiles` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
+- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p krabka-profiles --all-targets` before each commit.
+- **Formatting:** `cargo fmt -p krabka-profiles` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
 - **Assertions:** `assert2::assert!`/`assert2::check!` in tests.
 - **Raw ids never cross a block boundary (the load-bearing invariant, spec §6.4).** A `stacktrace_id` is meaningful only within its own block's symbol DB. The frontend MUST merge **partial symbolized `Tree`s** (`Tree::merge`), never raw ids and never partial `FlameGraph` `Level`s. `to_flamegraph(max_nodes)` is applied **once, after the full merge** — applying it per-shard then merging levels would double-truncate and corrupt `xOffsetDelta`.
 - **Sharded == unsharded (the correctness centerpiece).** Splitting only ever *partitions then re-unions* the same sample set; a sharded `SelectMergeStacktraces` MUST equal the unsharded one over identical data (same merged `Tree` → same `FlameGraph`), and a split/sharded `SelectSeries` MUST equal the single-range query (same per-series points). Tasks 4–5, 8.
@@ -24,7 +24,7 @@
 
 ## Dependency & slice roadmap
 
-**Depends on:** Slice 2 (`crabka-pprof` — pinned engine result types: `Tree`/`FlameGraph`/`Level`/`Frame`/`ProfileError`), Slice 3 (`Series`/`SeriesAgg`, the 4-ints-per-bar `FlameGraph` + the `max_nodes`/`"other"` truncation in `Tree::to_flamegraph`), and Slice 5 (Querier + Connect `querier.v1` API + legacy `/pyroscope/render`). The frontend consumes the querier's surface but **sharded at the job grain** rather than for the whole query:
+**Depends on:** Slice 2 (`krabka-pprof` — pinned engine result types: `Tree`/`FlameGraph`/`Level`/`Frame`/`ProfileError`), Slice 3 (`Series`/`SeriesAgg`, the 4-ints-per-bar `FlameGraph` + the `max_nodes`/`"other"` truncation in `Tree::to_flamegraph`), and Slice 5 (Querier + Connect `querier.v1` API + legacy `/pyroscope/render`). The frontend consumes the querier's surface but **sharded at the job grain** rather than for the whole query:
 
 - `POST /querier.v1.QuerierService/SelectMergeStacktraces` `{profile_typeID, label_selector, start, end, max_nodes, format}` → `{ flamegraph, tree, dot }`. The frontend issues this per **job** with an added `blockID`/`shard` restriction (Slice-5 contract below) **and `format=TREE`** so the querier returns a resolve-locally **partial `Tree`** (bytes) rather than a per-shard flamegraph; the frontend `Tree::merge`s and folds once.
 - `POST /querier.v1.QuerierService/SelectSeries` `{profile_typeID, label_selector, start, end, group_by[], step (SECONDS, f64), aggregation}` → `{ series[] }`. The frontend issues this per job and sums per `(group_by labels, timestamp)`.
@@ -33,12 +33,12 @@
 
 **The querier's job-restriction support is assumed (Slice 5 contract):** the querier honors a `blockID=<id>` request field (restrict the scan to that one block) and a `shard=live` field (restrict to the hot WAL tail) on `SelectMergeStacktraces` / `SelectSeries`, and — critically — when `format=TREE` it returns the **full untruncated partial `Tree`** (serialized) for that shard, leaf-resolved against *that block's* symbol DB. The frontend's job is to *enumerate* blocks/shards into jobs, *queue+fan* them, and *merge partial Trees / sum partial Series*; the querier's job is to *honor* the restriction and *resolve locally*. **This slice does not implement querier-side block/shard filtering or symbol resolution** — it injects the restriction and merges the partials. The block-enumeration source is the querier's block-metadata door (Slice-5 contract: `GET /api/blocks?tenant=&start=&end=` → `{ blocks:[ { blockID, startMillis, endMillis, profileTypes[], sizeBytes } ] }`); absent at authoring time it is modeled here behind the `BlockCatalog` trait so tests drive a `MockCatalog`.
 
-**Slices 2/3 & 5 absent at authoring time** — the engine types this slice merges (`Tree`/`FlameGraph`/`Level`/`Series`/`SeriesAgg`/`Frame`) are **imported from `crabka-pprof`** (Slices 2–3 define them as the pinned crate contract; do not redefine). The Connect-RPC projection (`querier.v1` request/response protos) and the flamebearer JSON are (re)stated here in `frontend/wire.rs`/`frontend/proto` as the slice's own HTTP-edge model; when Slice 5 lands its querier serializes to the same shapes. If Slice 5 already exposes a shared proto/`wire` module, import it instead.
+**Slices 2/3 & 5 absent at authoring time** — the engine types this slice merges (`Tree`/`FlameGraph`/`Level`/`Series`/`SeriesAgg`/`Frame`) are **imported from `krabka-pprof`** (Slices 2–3 define them as the pinned crate contract; do not redefine). The Connect-RPC projection (`querier.v1` request/response protos) and the flamebearer JSON are (re)stated here in `frontend/wire.rs`/`frontend/proto` as the slice's own HTTP-edge model; when Slice 5 lands its querier serializes to the same shapes. If Slice 5 already exposes a shared proto/`wire` module, import it instead.
 
 **The 8 profiles slices** (this plan = Slice 6):
 
-1. Blockstore `ProfileIndex` + profile samples schema + symbol-DB artifact. *(`crabka-blockstore`)*
-2. `crabka-pprof` core — pprof model + codec, `SymbolDb` (parent-pointer tree + dedup + `SymbolSource`), `ProfileType` parser, `ProfileStore` trait + result types, MERGE → flamegraph engine (`Tree`, 4-ints-per-bar `FlameGraph`).
+1. Blockstore `ProfileIndex` + profile samples schema + symbol-DB artifact. *(`krabka-blockstore`)*
+2. `krabka-pprof` core — pprof model + codec, `SymbolDb` (parent-pointer tree + dedup + `SymbolSource`), `ProfileType` parser, `ProfileStore` trait + result types, MERGE → flamegraph engine (`Tree`, 4-ints-per-bar `FlameGraph`).
 3. Engine completeness — `SelectSeries`, `Diff` (7-ints-per-bar), `max_nodes` truncation + synthetic `"other"`, raw-pprof output, span-profile + heatmap.
 4. Ingest service — `distributor` → `(tenant, series_fingerprint)`-partitioned WAL; `block-builder` consumer group → samples fact table + dedup symbol DB + `ProfileIndex`.
 5. Querier + Connect `querier.v1` API + legacy render — `ProfileStore` as hot/cold UNION; serve `querier.v1` (incl. `ProfileTypes` as the health probe) + `/pyroscope/render` + `/pyroscope/render-diff`.
@@ -54,7 +54,7 @@
 |---|---|
 | `src/lib.rs` | add `pub mod frontend;` |
 | `src/frontend/mod.rs` | module decls + public re-exports + `QueryFrontend` orchestrator |
-| `src/frontend/wire.rs` | `TreePartialWire` / `SeriesWire` / the flamebearer `"single"` JSON projection + `From<crabka_pprof::*>` codecs (the partial-Tree and Series wire model) |
+| `src/frontend/wire.rs` | `TreePartialWire` / `SeriesWire` / the flamebearer `"single"` JSON projection + `From<krabka_pprof::*>` codecs (the partial-Tree and Series wire model) |
 | `src/frontend/job.rs` | `JobShard` / `BlockMetaInfo` / `BlockCatalog` trait + `MockCatalog` + the **job planner** (time-window → live/block shards) + the `label_selector`-aware profile-type prefilter |
 | `src/frontend/backend.rs` | `QuerierBackend` trait + `MergeStacktracesJob`/`SelectSeriesJob` requests + `StacktracesPartial`/`SeriesPartial` + `BackendError` + `MockQuerier` (test fixture) |
 | `src/frontend/http_backend.rs` | `HttpQuerier` — reqwest/Connect pool over configurable querier addrs (fan-out target) + `HttpCatalog` |
@@ -64,7 +64,7 @@
 | `src/frontend/config.rs` | `FrontendConfig` (backend addrs, max concurrency, default/clamp `max_nodes`, hot-frontier millis, timeouts, listen addr) |
 | `build.rs` | (modify) add the `querier.v1` partial proto compile (connectrpc-axum-build) |
 | `proto/querier/v1/querier.proto` | (create/extend) the `SelectMergeStacktraces`/`SelectSeries` request+`TREE`-partial message shapes the frontend speaks |
-| `src/bin/crabka-profiles.rs` | (modify) `--target query-frontend` role dispatch |
+| `src/bin/krabka-profiles.rs` | (modify) `--target query-frontend` role dispatch |
 | `tests/frontend_shard_equivalence.rs` | integration: sharded merge == unsharded over canned partial trees; split select-series == single-range |
 | `tests/frontend_http_backend.rs` | integration: `HttpQuerier` request shape (`blockID`/`shard`/`format=TREE`, `X-Scope-OrgID`) + partial-Tree parse |
 | `tests/frontend_server.rs` | integration: Connect `SelectMergeStacktraces` + legacy `/pyroscope/render` round-trip with tenant |
@@ -80,12 +80,12 @@
 - Create: `crates/profiles/src/frontend/wire.rs`
 
 **Interfaces:**
-- Consumes (from `crabka-pprof`, Slices 2–3): `Tree` (`add_stack(&[Frame], i64)`, `merge(Tree)`, `to_flamegraph(max_nodes) -> FlameGraph`), `Frame { function:String, file:String, line:i32 }`, `FlameGraph { names:Vec<String>, levels:Vec<Level>, total:i64, max_self:i64 }`, `Level { values:Vec<i64> }`, `Series { labels:Vec<(String,String)>, points:Vec<(i64,f64)> }`.
+- Consumes (from `krabka-pprof`, Slices 2–3): `Tree` (`add_stack(&[Frame], i64)`, `merge(Tree)`, `to_flamegraph(max_nodes) -> FlameGraph`), `Frame { function:String, file:String, line:i32 }`, `FlameGraph { names:Vec<String>, levels:Vec<Level>, total:i64, max_self:i64 }`, `Level { values:Vec<i64> }`, `Series { labels:Vec<(String,String)>, points:Vec<(i64,f64)> }`.
 - Produces:
-  - `struct TreePartialWire { stacks: Vec<StackSampleWire> }` where `struct StackSampleWire { frames: Vec<FrameWire>, value: i64 }` and `struct FrameWire { function:String, file:String, line:i32 }` — the serde wire form of a resolve-locally partial tree, carried as **fully-symbolized stacks** so it survives a block boundary (no raw ids on the wire). `fn to_tree(&self) -> crabka_pprof::Tree` (replays each `(frames, value)` via `Tree::add_stack`) and `fn from_tree(...)` round-trip — verify-noted against the Slice-2 `Tree` surface.
-  - `struct SeriesWire { labels: Vec<(String,String)>, points: Vec<(i64,f64)> }` with `From<&crabka_pprof::Series>` / `into_series()`.
+  - `struct TreePartialWire { stacks: Vec<StackSampleWire> }` where `struct StackSampleWire { frames: Vec<FrameWire>, value: i64 }` and `struct FrameWire { function:String, file:String, line:i32 }` — the serde wire form of a resolve-locally partial tree, carried as **fully-symbolized stacks** so it survives a block boundary (no raw ids on the wire). `fn to_tree(&self) -> krabka_pprof::Tree` (replays each `(frames, value)` via `Tree::add_stack`) and `fn from_tree(...)` round-trip — verify-noted against the Slice-2 `Tree` surface.
+  - `struct SeriesWire { labels: Vec<(String,String)>, points: Vec<(i64,f64)> }` with `From<&krabka_pprof::Series>` / `into_series()`.
   - `struct Flamebearer { names: Vec<String>, levels: Vec<Vec<i64>>, num_ticks: i64, max_self: i64 }` + `struct FlamebearerEnvelope { flamebearer: Flamebearer, metadata: FlamebearerMeta }` + `struct FlamebearerMeta { format: String /*"single"*/, units: String, name: String }` — the legacy `/pyroscope/render` projection (camelCase: `numTicks`/`maxSelf`).
-  - `fn flamegraph_to_flamebearer(fg: &crabka_pprof::FlameGraph, units:&str, name:&str) -> FlamebearerEnvelope` — the `"single"` (4-ints-per-bar) projection.
+  - `fn flamegraph_to_flamebearer(fg: &krabka_pprof::FlameGraph, units:&str, name:&str) -> FlamebearerEnvelope` — the `"single"` (4-ints-per-bar) projection.
 
 - [ ] **Step 1: Add dependencies to `crates/profiles/Cargo.toml`**
 
@@ -105,8 +105,8 @@ async-trait = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 clap = { workspace = true }
-crabka-pprof = { path = "../pprof" }
-crabka-blockstore = { path = "../blockstore" }
+krabka-pprof = { path = "../pprof" }
+krabka-blockstore = { path = "../blockstore" }
 ```
 
 Add to `[build-dependencies]` (for Task 9's proto compile; harmless to add now):
@@ -122,7 +122,7 @@ assert2 = { workspace = true }
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "sync"] }
 ```
 
-> **Workspace-dep verify-note:** `futures`, `async-trait`, `thiserror`, `clap`, `tracing`, `serde_json`, `prost`, `connectrpc-axum`, `connectrpc-axum-build`, `assert2` are workspace members (see root `Cargo.toml`; the metrics/traces slice-6 plans and `crates/grpc-gateway/Cargo.toml` use the same set). If `futures` is named `futures-util` only, use `futures-util` and import `stream::{self, StreamExt}` from `futures_util`. If a `workspace = true` line errors with "not a workspace dependency", add the pin to root `[workspace.dependencies]` first (a manifest fix, not a design change). `crabka-pprof`/`crabka-blockstore` paths are Slices 1–3; adjust the `path` if they differ.
+> **Workspace-dep verify-note:** `futures`, `async-trait`, `thiserror`, `clap`, `tracing`, `serde_json`, `prost`, `connectrpc-axum`, `connectrpc-axum-build`, `assert2` are workspace members (see root `Cargo.toml`; the metrics/traces slice-6 plans and `crates/grpc-gateway/Cargo.toml` use the same set). If `futures` is named `futures-util` only, use `futures-util` and import `stream::{self, StreamExt}` from `futures_util`. If a `workspace = true` line errors with "not a workspace dependency", add the pin to root `[workspace.dependencies]` first (a manifest fix, not a design change). `krabka-pprof`/`krabka-blockstore` paths are Slices 1–3; adjust the `path` if they differ.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -132,7 +132,7 @@ Create `crates/profiles/src/frontend/wire.rs` with only the test module first:
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pprof::{Frame, Tree};
+    use krabka_pprof::{Frame, Tree};
 
     use super::*;
 
@@ -161,7 +161,7 @@ mod tests {
 
     #[test]
     fn series_wire_round_trips() {
-        let s = crabka_pprof::Series {
+        let s = krabka_pprof::Series {
             labels: vec![("service".to_string(), "checkout".to_string())],
             points: vec![(1000, 1.5), (2000, 2.5)],
         };
@@ -174,11 +174,11 @@ mod tests {
 
     #[test]
     fn flamebearer_single_projection_camelcases() {
-        let fg = crabka_pprof::FlameGraph {
+        let fg = krabka_pprof::FlameGraph {
             names: vec!["total".to_string(), "main".to_string()],
             levels: vec![
-                crabka_pprof::Level { values: vec![0, 10, 0, 0] },
-                crabka_pprof::Level { values: vec![0, 10, 10, 1] },
+                krabka_pprof::Level { values: vec![0, 10, 0, 0] },
+                krabka_pprof::Level { values: vec![0, 10, 10, 1] },
             ],
             total: 10,
             max_self: 10,
@@ -197,7 +197,7 @@ mod tests {
 
 - [ ] **Step 3: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --lib frontend::wire`
+Run: `cargo test -p krabka-profiles --lib frontend::wire`
 Expected: FAIL — `cannot find type TreePartialWire` / unresolved module `frontend`.
 
 - [ ] **Step 4: Implement `wire.rs`**
@@ -210,13 +210,13 @@ Prepend above the `tests` module. The load-bearing decision: a partial tree cros
 //! series partial, and the legacy `/pyroscope/render` flamebearer projection.
 //!
 //! The values these carry (`Tree`/`FlameGraph`/`Series`/`Frame`) are the pinned
-//! `crabka-pprof` (Slices 2-3) types; this module is only their HTTP/serde edge.
+//! `krabka-pprof` (Slices 2-3) types; this module is only their HTTP/serde edge.
 
 use serde::{Deserialize, Serialize};
 
-use crabka_pprof::{FlameGraph, Frame, Series, Tree};
+use krabka_pprof::{FlameGraph, Frame, Series, Tree};
 
-/// A symbolized frame on the wire (mirrors `crabka_pprof::Frame`).
+/// A symbolized frame on the wire (mirrors `krabka_pprof::Frame`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FrameWire {
     pub function: String,
@@ -243,7 +243,7 @@ pub struct TreePartialWire {
 }
 
 impl TreePartialWire {
-    /// Project a `crabka_pprof::Tree` into the wire form (root→leaf paths +
+    /// Project a `krabka_pprof::Tree` into the wire form (root→leaf paths +
     /// per-leaf self value, fully symbolized).
     ///
     /// VERIFY against the Slice-2 `Tree` surface: this assumes `Tree` exposes an
@@ -264,7 +264,7 @@ impl TreePartialWire {
         Self { stacks }
     }
 
-    /// Replay the wire into a `crabka_pprof::Tree` (the frontend's global merge
+    /// Replay the wire into a `krabka_pprof::Tree` (the frontend's global merge
     /// target). Uses only `Tree::add_stack` from the pinned contract.
     #[must_use]
     pub fn to_tree(&self) -> Tree {
@@ -357,7 +357,7 @@ pub fn flamegraph_to_flamebearer(fg: &FlameGraph, units: &str, name: &str) -> Fl
 }
 ```
 
-> **`Tree` accessor verify-note (the dependency edge):** `TreePartialWire::from_tree` calls `Tree::leaf_stacks()` (leaf-first frames + self value per leaf). The Slice-2 contract pins `Tree::add_stack`/`merge`/`to_flamegraph` but leaves the *read* surface unstated. **Verify the real `Tree` surface in `crabka-pprof` before implementing.** If a leaf-stack iterator is absent, add it to `crabka-pprof` as a small companion change (the introspection belongs with the type; do not re-walk a private parent/children layout from here). `to_tree`/`to_flamegraph`/`merge`/`add_stack` are all in the pinned contract, so the *merge* path (Task 4) is unblocked even if `from_tree` is briefly gated — the querier (Slice 5) is the real producer of `TreePartialWire`; tests build trees directly and only need `from_tree` for the round-trip assertion.
+> **`Tree` accessor verify-note (the dependency edge):** `TreePartialWire::from_tree` calls `Tree::leaf_stacks()` (leaf-first frames + self value per leaf). The Slice-2 contract pins `Tree::add_stack`/`merge`/`to_flamegraph` but leaves the *read* surface unstated. **Verify the real `Tree` surface in `krabka-pprof` before implementing.** If a leaf-stack iterator is absent, add it to `krabka-pprof` as a small companion change (the introspection belongs with the type; do not re-walk a private parent/children layout from here). `to_tree`/`to_flamegraph`/`merge`/`add_stack` are all in the pinned contract, so the *merge* path (Task 4) is unblocked even if `from_tree` is briefly gated — the querier (Slice 5) is the real producer of `TreePartialWire`; tests build trees directly and only need `from_tree` for the round-trip assertion.
 
 > **Serde verify-note (flamebearer shape):** Pyroscope's flamebearer is `{ flamebearer: { names[], levels[][], numTicks, maxSelf }, metadata: { format, units, name } }` with `levels` as flat 4-int rows for `"single"`. Pinned by `flamebearer_single_projection_camelcases`. The `(i64,f64)` / `(String,String)` tuples serialize to JSON arrays — that is the internal partial-wire form between frontend and querier, not a Pyroscope-public shape, so we are free to choose it.
 
@@ -385,14 +385,14 @@ pub mod frontend;
 
 - [ ] **Step 6: Run to verify it passes**
 
-Run: `cargo test -p crabka-profiles --lib frontend::wire`
+Run: `cargo test -p krabka-profiles --lib frontend::wire`
 Expected: PASS (3 tests).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): query-frontend partial-Tree/Series wire + flamebearer projection"
 ```
@@ -406,7 +406,7 @@ git commit -m "feat(profiles): query-frontend partial-Tree/Series wire + flamebe
 - Modify: `crates/profiles/src/frontend/mod.rs`
 
 **Interfaces:**
-- Consumes: `crabka_pprof::{Tree, Series, SeriesAgg}`, `wire::{TreePartialWire, SeriesWire}`, `job::JobShard` (Task 3).
+- Consumes: `krabka_pprof::{Tree, Series, SeriesAgg}`, `wire::{TreePartialWire, SeriesWire}`, `job::JobShard` (Task 3).
 - Produces:
   - `struct MergeStacktracesJob { tenant:String, profile_type:String, label_selector:String, start_ms:i64, end_ms:i64, shard:JobShard }` — note: **no `max_nodes`** (the frontend truncates; the job returns the full partial).
   - `struct SelectSeriesJob { tenant:String, profile_type:String, label_selector:String, group_by:Vec<String>, step_secs:f64, agg:SeriesAgg, start_ms:i64, end_ms:i64, shard:JobShard }`.
@@ -426,7 +426,7 @@ Append a test module to `backend.rs`:
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pprof::{Frame, SeriesAgg, Tree};
+    use krabka_pprof::{Frame, SeriesAgg, Tree};
 
     use super::*;
     use crate::frontend::job::JobShard;
@@ -461,7 +461,7 @@ mod tests {
     async fn mock_records_series_job() {
         let mock = MockQuerier::new();
         mock.stub_series(SeriesPartial {
-            series: vec![crabka_pprof::Series {
+            series: vec![krabka_pprof::Series {
                 labels: vec![],
                 points: vec![(1000, 1.0)],
             }],
@@ -487,7 +487,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --lib frontend::backend`
+Run: `cargo test -p krabka-profiles --lib frontend::backend`
 Expected: FAIL — `cannot find type QuerierBackend` / `MockQuerier` / `StacktracesPartial`.
 
 - [ ] **Step 3: Implement `backend.rs`**
@@ -501,7 +501,7 @@ use std::sync::Mutex;
 
 use async_trait::async_trait;
 
-use crabka_pprof::{Series, SeriesAgg, Tree};
+use krabka_pprof::{Series, SeriesAgg, Tree};
 
 use crate::frontend::job::JobShard;
 
@@ -661,7 +661,7 @@ impl QuerierBackend for MockQuerier {
 }
 ```
 
-> **`Tree: Clone` verify-note:** `StacktracesPartial` derives `Clone`, so the merge tests can stub-and-compare. The Slice-2 contract does not pin `Tree: Clone` explicitly, but the round-trip test in Task 1 (`t.clone().to_flamegraph(..)`) already assumes it; if `Tree` is not `Clone`, add the derive in `crabka-pprof` (a parent-pointer tree is trivially `Clone`) — flagged here, a one-line companion change. `Series: Clone` is implied by its `Vec`/`String` fields.
+> **`Tree: Clone` verify-note:** `StacktracesPartial` derives `Clone`, so the merge tests can stub-and-compare. The Slice-2 contract does not pin `Tree: Clone` explicitly, but the round-trip test in Task 1 (`t.clone().to_flamegraph(..)`) already assumes it; if `Tree` is not `Clone`, add the derive in `krabka-pprof` (a parent-pointer tree is trivially `Clone`) — flagged here, a one-line companion change. `Series: Clone` is implied by its `Vec`/`String` fields.
 
 - [ ] **Step 4: Re-export from `mod.rs`**
 
@@ -676,14 +676,14 @@ pub use backend::{
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-profiles --lib frontend::backend`
+Run: `cargo test -p krabka-profiles --lib frontend::backend`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): QuerierBackend trait + per-job request/partial types + MockQuerier"
 ```
@@ -697,7 +697,7 @@ git commit -m "feat(profiles): QuerierBackend trait + per-job request/partial ty
 - Modify: `crates/profiles/src/frontend/mod.rs`
 
 **Interfaces:**
-- Consumes: `crabka_blockstore::LabelMatcher` (for the optional profile-type/label prefilter — verify-noted).
+- Consumes: `krabka_blockstore::LabelMatcher` (for the optional profile-type/label prefilter — verify-noted).
 - Produces:
   - `enum JobShard { Live, Block { block_id:String } }` (profiles need no row-group split — the per-block fold is already cheap; one job per block).
   - `struct BlockMetaInfo { block_id:String, start_ms:i64, end_ms:i64, profile_types:Vec<String>, size_bytes:u64 }`.
@@ -775,7 +775,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --lib frontend::job`
+Run: `cargo test -p krabka-profiles --lib frontend::job`
 Expected: FAIL — `cannot find type JobShard` / `plan_jobs`.
 
 - [ ] **Step 3: Implement `job.rs`**
@@ -896,7 +896,7 @@ pub fn plan_jobs(blocks: &[BlockMetaInfo], profile_type: &str, hot_frontier_ms: 
 
 > **Frontier semantics note:** `hot_frontier_ms` is the *cold-edge* millis — data at/after it is in the live WAL tail, data before it is in committed blocks. The planner probes `Live` whenever the window could reach hot data and emits a job per candidate cold block carrying the requested type. A profile that straddles the frontier (recent samples in live + flushed samples in a fresh block) is covered by *both* the Live job and a block job; the merge (Task 4) sums values across partials so no sample is lost — the hot/cold-merge correctness the spec §10 calls out. **Profiles do not need a row-group split** (unlike traces): the per-block `GROUP BY (stacktrace_partition, stacktrace_id) → SUM` fold is already cheap and set-shrinking, so one job per block is the right grain. If a future block grows large enough to warrant intra-block parallelism, add a `row_group` field to `JobShard::Block` mirroring the traces planner — flagged, not built.
 
-> **`LabelMatcher` prefilter verify-note:** the planner prefilters on `profile_type` (the `__profile_type__` label) only; the *full* `label_selector` match happens at the querier (it has the `ProfileIndex` postings). If Slice-5's block catalog returns per-block label-postings summaries cheap enough to prefilter further here (skip a block whose postings cannot match the selector), parse `label_selector` with the `crabka-pprof` matcher helper and intersect — a pure optimization, not required for correctness; the querier already returns an empty partial for a non-matching block.
+> **`LabelMatcher` prefilter verify-note:** the planner prefilters on `profile_type` (the `__profile_type__` label) only; the *full* `label_selector` match happens at the querier (it has the `ProfileIndex` postings). If Slice-5's block catalog returns per-block label-postings summaries cheap enough to prefilter further here (skip a block whose postings cannot match the selector), parse `label_selector` with the `krabka-pprof` matcher helper and intersect — a pure optimization, not required for correctness; the querier already returns an empty partial for a non-matching block.
 
 - [ ] **Step 4: Re-export from `mod.rs`**
 
@@ -908,14 +908,14 @@ pub use job::{BlockCatalog, BlockMetaInfo, CatalogError, JobPlan, JobShard, Mock
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-profiles --lib frontend::job`
+Run: `cargo test -p krabka-profiles --lib frontend::job`
 Expected: PASS (4 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): job planner — live/block shards + profile-type prefilter + block catalog"
 ```
@@ -929,7 +929,7 @@ git commit -m "feat(profiles): job planner — live/block shards + profile-type 
 - Modify: `crates/profiles/src/frontend/mod.rs`
 
 **Interfaces:**
-- Consumes: `crabka_pprof::{Tree, FlameGraph}`, `backend::StacktracesPartial`.
+- Consumes: `krabka_pprof::{Tree, FlameGraph}`, `backend::StacktracesPartial`.
 - Produces:
   - `fn merge_stacktraces(partials: Vec<StacktracesPartial>, max_nodes: i64) -> FlameGraph` — `Tree::merge` all partial trees into one global `Tree`, then `to_flamegraph(max_nodes)` **once** (truncation + synthetic `"other"` applied exactly once on the merged tree). An empty partial set yields an empty flamegraph (`to_flamegraph` of a default `Tree`).
   - `fn merge_trees(partials: Vec<StacktracesPartial>) -> Tree` — the merge step alone (folds every partial into one `Tree`), exposed so the orchestrator/tests can inspect the pre-encode tree.
@@ -942,7 +942,7 @@ Create `crates/profiles/src/frontend/merge.rs` with the test module:
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pprof::{Frame, Tree};
+    use krabka_pprof::{Frame, Tree};
 
     use super::*;
     use crate::frontend::backend::StacktracesPartial;
@@ -1011,7 +1011,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --lib frontend::merge`
+Run: `cargo test -p krabka-profiles --lib frontend::merge`
 Expected: FAIL — `cannot find function merge_stacktraces`.
 
 - [ ] **Step 3: Implement `merge.rs`**
@@ -1023,7 +1023,7 @@ Expected: FAIL — `cannot find function merge_stacktraces`.
 //! `Tree::merge`s them into one global tree, and folds to a `FlameGraph` exactly
 //! once — `max_nodes` truncation applied to the merged tree, never per-shard.
 
-use crabka_pprof::{FlameGraph, Tree};
+use krabka_pprof::{FlameGraph, Tree};
 
 use crate::frontend::backend::StacktracesPartial;
 
@@ -1061,14 +1061,14 @@ pub use merge::{merge_stacktraces, merge_trees};
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-profiles --lib frontend::merge`
+Run: `cargo test -p krabka-profiles --lib frontend::merge`
 Expected: PASS (3 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): partial-Tree merge → single flamegraph fold (sharded == unsharded)"
 ```
@@ -1081,7 +1081,7 @@ git commit -m "feat(profiles): partial-Tree merge → single flamegraph fold (sh
 - Modify: `crates/profiles/src/frontend/merge.rs` (add `merge_series`)
 
 **Interfaces:**
-- Consumes: `crabka_pprof::{Series, SeriesAgg}`, `backend::SeriesPartial`.
+- Consumes: `krabka_pprof::{Series, SeriesAgg}`, `backend::SeriesPartial`.
 - Produces:
   - `fn merge_series(partials: Vec<SeriesPartial>, agg: SeriesAgg) -> Vec<Series>` — union per-job series by `series_key(labels)`, and within each series combine partials per `timestamp_ms`: `SeriesAgg::Sum` adds values at the same `(labels, ts)`; `SeriesAgg::Average` accumulates `(sum, count)` per `(labels, ts)` then divides (so a split/sharded average equals the single-range average, never an average-of-averages). Points sorted by ascending timestamp; empty result for empty input.
   - `fn series_key(labels: &[(String, String)]) -> String` — stable, label-order-independent identity (sorted `k=v`).
@@ -1093,7 +1093,7 @@ git commit -m "feat(profiles): partial-Tree merge → single flamegraph fold (sh
 Append to the `merge.rs` test module:
 
 ```rust
-    use crabka_pprof::{Series, SeriesAgg};
+    use krabka_pprof::{Series, SeriesAgg};
 
     use crate::frontend::backend::SeriesPartial;
 
@@ -1147,7 +1147,7 @@ Append to the `merge.rs` test module:
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --lib frontend::merge`
+Run: `cargo test -p krabka-profiles --lib frontend::merge`
 Expected: FAIL — `cannot find function merge_series`.
 
 - [ ] **Step 3: Implement the additions to `merge.rs`**
@@ -1157,7 +1157,7 @@ Add above the `tests` module:
 ```rust
 use std::collections::BTreeMap;
 
-use crabka_pprof::{Series, SeriesAgg};
+use krabka_pprof::{Series, SeriesAgg};
 
 use crate::frontend::backend::SeriesPartial;
 
@@ -1230,14 +1230,14 @@ Extend the merge re-export: `pub use merge::{merge_series, merge_stacktraces, me
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-profiles --lib frontend::merge`
+Run: `cargo test -p krabka-profiles --lib frontend::merge`
 Expected: PASS (the series tests + the Task-4 tree tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): SelectSeries shard-merge (sum/average) — split == single-range"
 ```
@@ -1305,7 +1305,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --lib frontend::queue`
+Run: `cargo test -p krabka-profiles --lib frontend::queue`
 Expected: FAIL — `cannot find function run_jobs`.
 
 - [ ] **Step 3: Implement `queue.rs`**
@@ -1347,14 +1347,14 @@ pub use queue::run_jobs;
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-profiles --lib frontend::queue`
+Run: `cargo test -p krabka-profiles --lib frontend::queue`
 Expected: PASS (2 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): bounded-concurrency job fan-out queue"
 ```
@@ -1386,7 +1386,7 @@ mod orch_tests {
     use std::sync::Arc;
 
     use assert2::assert;
-    use crabka_pprof::{Frame, SeriesAgg, Tree};
+    use krabka_pprof::{Frame, SeriesAgg, Tree};
 
     use super::*;
     use crate::frontend::backend::{MockQuerier, SeriesPartial, StacktracesPartial};
@@ -1459,10 +1459,10 @@ mod orch_tests {
         let catalog = MockCatalog::new(vec![block("b1", 0, 100)]);
         let backend = MockQuerier::new();
         backend.stub_series(SeriesPartial {
-            series: vec![crabka_pprof::Series { labels: vec![], points: vec![(1000, 3.0)] }],
+            series: vec![krabka_pprof::Series { labels: vec![], points: vec![(1000, 3.0)] }],
         });
         backend.stub_series(SeriesPartial {
-            series: vec![crabka_pprof::Series { labels: vec![], points: vec![(1000, 4.0)] }],
+            series: vec![krabka_pprof::Series { labels: vec![], points: vec![(1000, 4.0)] }],
         });
         let cfg = FrontendConfig { hot_frontier_ms: 50, ..FrontendConfig::default() };
         let qf = QueryFrontend::new(Arc::new(backend), Arc::new(catalog), cfg);
@@ -1477,7 +1477,7 @@ mod orch_tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --lib frontend::orch_tests`
+Run: `cargo test -p krabka-profiles --lib frontend::orch_tests`
 Expected: FAIL — `cannot find type FrontendConfig` / `QueryFrontend`.
 
 - [ ] **Step 3: Implement `config.rs`**
@@ -1533,7 +1533,7 @@ pub use config::FrontendConfig;
 
 use std::sync::Arc;
 
-use crabka_pprof::{FlameGraph, Series, SeriesAgg};
+use krabka_pprof::{FlameGraph, Series, SeriesAgg};
 
 use crate::frontend::backend::{
     MergeStacktracesJob, QuerierBackend, SelectSeriesJob, SeriesPartial, StacktracesPartial,
@@ -1608,7 +1608,7 @@ impl<B: QuerierBackend + 'static, C: BlockCatalog + 'static> QueryFrontend<B, C>
                 backend
                     .merge_stacktraces_job(&req)
                     .await
-                    .unwrap_or_else(|_| StacktracesPartial { tree: crabka_pprof::Tree::default() })
+                    .unwrap_or_else(|_| StacktracesPartial { tree: krabka_pprof::Tree::default() })
             }
         })
         .await;
@@ -1673,14 +1673,14 @@ use crate::frontend::{job, merge, queue};
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-profiles --lib frontend::orch_tests`
+Run: `cargo test -p krabka-profiles --lib frontend::orch_tests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): QueryFrontend orchestrator (plan+queue+fan-out+merge, max_nodes clamp)"
 ```
@@ -1703,11 +1703,11 @@ The first-class correctness concern (spec §6.4, §10): a query sharded across N
 use std::sync::Arc;
 
 use assert2::assert;
-use crabka_pprof::{Frame, SeriesAgg, Series, Tree};
-use crabka_profiles::frontend::QueryFrontend;
-use crabka_profiles::frontend::backend::{MockQuerier, SeriesPartial, StacktracesPartial};
-use crabka_profiles::frontend::config::FrontendConfig;
-use crabka_profiles::frontend::job::{BlockMetaInfo, MockCatalog};
+use krabka_pprof::{Frame, SeriesAgg, Series, Tree};
+use krabka_profiles::frontend::QueryFrontend;
+use krabka_profiles::frontend::backend::{MockQuerier, SeriesPartial, StacktracesPartial};
+use krabka_profiles::frontend::config::FrontendConfig;
+use krabka_profiles::frontend::job::{BlockMetaInfo, MockCatalog};
 
 const PT: &str = "process_cpu:cpu:nanoseconds:cpu:nanoseconds";
 
@@ -1799,14 +1799,14 @@ async fn split_select_series_equals_single_range() {
 
 - [ ] **Step 2: Run to verify they pass**
 
-Run: `cargo test -p crabka-profiles --test frontend_shard_equivalence`
+Run: `cargo test -p krabka-profiles --test frontend_shard_equivalence`
 Expected: PASS (2 tests).
 
 - [ ] **Step 3: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "test(profiles): frontend shard-equivalence (merge == unsharded, split-series == single-range)"
 ```
@@ -1913,9 +1913,9 @@ use assert2::assert;
 use axum::Router;
 use axum::extract::State;
 use axum::routing::post;
-use crabka_profiles::frontend::backend::{MergeStacktracesJob, QuerierBackend};
-use crabka_profiles::frontend::http_backend::HttpQuerier;
-use crabka_profiles::frontend::job::JobShard;
+use krabka_profiles::frontend::backend::{MergeStacktracesJob, QuerierBackend};
+use krabka_profiles::frontend::http_backend::HttpQuerier;
+use krabka_profiles::frontend::job::JobShard;
 
 #[tokio::test]
 async fn http_querier_merge_job_posts_tree_format_and_parses() {
@@ -1971,7 +1971,7 @@ async fn http_querier_merge_job_posts_tree_format_and_parses() {
 
 - [ ] **Step 2b: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --test frontend_http_backend`
+Run: `cargo test -p krabka-profiles --test frontend_http_backend`
 Expected: FAIL — `cannot find type HttpQuerier`.
 
 - [ ] **Step 3: Implement `http_backend.rs`**
@@ -2090,8 +2090,8 @@ impl QuerierBackend for HttpQuerier {
     ) -> Result<SeriesPartial, BackendError> {
         let url = format!("http://{}/querier.v1.QuerierService/SelectSeries", self.pick_addr());
         let agg = match req.agg {
-            crabka_pprof::SeriesAgg::Sum => 0,
-            crabka_pprof::SeriesAgg::Average => 1,
+            krabka_pprof::SeriesAgg::Sum => 0,
+            krabka_pprof::SeriesAgg::Average => 1,
         };
         let mut body = serde_json::Map::new();
         body.insert("profile_typeID".to_string(), req.profile_type.clone().into());
@@ -2212,14 +2212,14 @@ pub use http_backend::{HttpCatalog, HttpQuerier};
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-profiles --test frontend_http_backend`
+Run: `cargo test -p krabka-profiles --test frontend_http_backend`
 Expected: PASS (the merge-job loopback test).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): HttpQuerier Connect fan-out backend + HttpCatalog + querier.v1 partial proto"
 ```
@@ -2231,7 +2231,7 @@ git commit -m "feat(profiles): HttpQuerier Connect fan-out backend + HttpCatalog
 **Files:**
 - Create: `crates/profiles/src/frontend/server.rs`
 - Create: `crates/profiles/tests/frontend_server.rs`
-- Modify: `crates/profiles/src/bin/crabka-profiles.rs`
+- Modify: `crates/profiles/src/bin/krabka-profiles.rs`
 - Modify: `crates/profiles/src/frontend/mod.rs`
 
 **Interfaces:**
@@ -2249,12 +2249,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use assert2::assert;
-use crabka_pprof::{Frame, Tree};
-use crabka_profiles::frontend::QueryFrontend;
-use crabka_profiles::frontend::backend::{MockQuerier, StacktracesPartial};
-use crabka_profiles::frontend::config::FrontendConfig;
-use crabka_profiles::frontend::job::{BlockMetaInfo, MockCatalog};
-use crabka_profiles::frontend::server::router_with_backend;
+use krabka_pprof::{Frame, Tree};
+use krabka_profiles::frontend::QueryFrontend;
+use krabka_profiles::frontend::backend::{MockQuerier, StacktracesPartial};
+use krabka_profiles::frontend::config::FrontendConfig;
+use krabka_profiles::frontend::job::{BlockMetaInfo, MockCatalog};
+use krabka_profiles::frontend::server::router_with_backend;
 
 const PT: &str = "process_cpu:cpu:nanoseconds:cpu:nanoseconds";
 
@@ -2307,7 +2307,7 @@ async fn server_round_trips_legacy_render() {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --test frontend_server`
+Run: `cargo test -p krabka-profiles --test frontend_server`
 Expected: FAIL — `cannot find function router_with_backend`.
 
 - [ ] **Step 3: Implement `server.rs`**
@@ -2443,12 +2443,12 @@ use Duration as _DurationUsed;
 
 - [ ] **Step 4: Wire the role binary**
 
-Extend the existing role binary `crates/profiles/src/bin/crabka-profiles.rs` (Slices 4–5 created it with `distributor`/`block-builder`/`querier` arms) with the `query-frontend` arm:
+Extend the existing role binary `crates/profiles/src/bin/krabka-profiles.rs` (Slices 4–5 created it with `distributor`/`block-builder`/`querier` arms) with the `query-frontend` arm:
 
 ```rust
         Target::QueryFrontend => {
-            use crabka_profiles::frontend::config::FrontendConfig;
-            use crabka_profiles::frontend::server::run_query_frontend;
+            use krabka_profiles::frontend::config::FrontendConfig;
+            use krabka_profiles::frontend::server::run_query_frontend;
             use tokio_util::sync::CancellationToken;
 
             // Real config wiring (backend addrs / listen addr / hot frontier from
@@ -2466,9 +2466,9 @@ Ensure `Target` (the `clap::ValueEnum`) has a `QueryFrontend` variant; add it if
 
 - [ ] **Step 5: Run to verify it passes + whole-crate gate**
 
-Run: `cargo test -p crabka-profiles --test frontend_server`
-Then the full gate: `cargo test -p crabka-profiles && cargo clippy -p crabka-profiles --all-targets && cargo fmt -p crabka-profiles --check`
-Expected: all PASS, no warnings, formatting clean. Also confirm the binary builds: `cargo build -p crabka-profiles --bin crabka-profiles`.
+Run: `cargo test -p krabka-profiles --test frontend_server`
+Then the full gate: `cargo test -p krabka-profiles && cargo clippy -p krabka-profiles --all-targets && cargo fmt -p krabka-profiles --check`
+Expected: all PASS, no warnings, formatting clean. Also confirm the binary builds: `cargo build -p krabka-profiles --bin krabka-profiles`.
 
 - [ ] **Step 6: Commit**
 
@@ -2498,13 +2498,13 @@ A result cache is **optional** for profiles and intentionally **not** built in t
 - **SelectSeries shard-merge** (per-`(labels, ts)` sum / sum+count average; split == single-range) → Tasks 5, 7, 8.
 - **Queueing + fan-out** (bounded-concurrency `buffer_unordered` across queriers, trait-abstracted backend, per-job dispatch with timeouts; commutative merge ⇒ order-independent) → Tasks 2 (trait), 6 (queue), 7 (orchestrator), 9 (`HttpQuerier`).
 - **API surface** (Connect `querier.v1` `SelectMergeStacktraces`/`SelectSeries` + `ProfileTypes` health probe; legacy `/pyroscope/render` flamebearer `"single"` projection; `X-Scope-OrgID`; start/end millis) → Tasks 1 (flamebearer), 9 (proto/client), 10 (server).
-- **Role binary** `crabka-profiles --target query-frontend` → Task 10.
+- **Role binary** `krabka-profiles --target query-frontend` → Task 10.
 - **First-class correctness** (sharded merge == unsharded over identical data; split select-series == single-range) → Tasks 4, 5, 8.
 
-**Contract fidelity:** consumes the Slice-2/3 `crabka-pprof` engine types (`Tree`/`FlameGraph`/`Level`/`Series`/`SeriesAgg`/`Frame`/`ProfileError`) **by import, not redefinition**, and the Slice-5 querier surface (Connect `querier.v1` at the per-job grain with the `blockID`/`shard`/`format=TREE` restriction + `/api/blocks`). The `TreePartialWire`/`SeriesWire`/`Flamebearer` model (Task 1) is the HTTP/serde edge and is pinned by serde + round-trip tests. **The load-bearing invariant — merge `Tree`s, never raw ids or partial `FlameGraph` levels (spec §6.4) — is encoded in the type system:** the `QuerierBackend` returns a `StacktracesPartial { tree }` (a symbolized `Tree`), there is no path that crosses a block boundary with a raw `stacktrace_id`, and `to_flamegraph(max_nodes)` is reachable only after `merge_trees`.
+**Contract fidelity:** consumes the Slice-2/3 `krabka-pprof` engine types (`Tree`/`FlameGraph`/`Level`/`Series`/`SeriesAgg`/`Frame`/`ProfileError`) **by import, not redefinition**, and the Slice-5 querier surface (Connect `querier.v1` at the per-job grain with the `blockID`/`shard`/`format=TREE` restriction + `/api/blocks`). The `TreePartialWire`/`SeriesWire`/`Flamebearer` model (Task 1) is the HTTP/serde edge and is pinned by serde + round-trip tests. **The load-bearing invariant — merge `Tree`s, never raw ids or partial `FlameGraph` levels (spec §6.4) — is encoded in the type system:** the `QuerierBackend` returns a `StacktracesPartial { tree }` (a symbolized `Tree`), there is no path that crosses a block boundary with a raw `stacktrace_id`, and `to_flamegraph(max_nodes)` is reachable only after `merge_trees`.
 
 **Churn-prone surfaces — structured + behavior-pinned + verify-noted:**
-- `crabka-pprof` `Tree` read surface (`wire.rs` `from_tree` ← `Tree::leaf_stacks`) — flagged as *not* in the pinned Slice-2 contract, with a "verify the real `Tree`; add a leaf-stack iterator as a companion `crabka-pprof` change if absent" note; the merge path (Task 4) uses only pinned `merge`/`to_flamegraph`/`add_stack`, so it is unblocked even if `from_tree` is briefly gated. **Not fabricated.**
+- `krabka-pprof` `Tree` read surface (`wire.rs` `from_tree` ← `Tree::leaf_stacks`) — flagged as *not* in the pinned Slice-2 contract, with a "verify the real `Tree`; add a leaf-stack iterator as a companion `krabka-pprof` change if absent" note; the merge path (Task 4) uses only pinned `merge`/`to_flamegraph`/`add_stack`, so it is unblocked even if `from_tree` is briefly gated. **Not fabricated.**
 - `Tree::merge`/`to_flamegraph` consume-vs-borrow signatures (`merge.rs`) — verify-noted; tests pin behavior (sharded==unsharded, truncation-preserves-total, synthetic `"other"`), so drift is a compile error.
 - `reqwest` 0.13 + Connect content-type (`http_backend.rs`) — pinned by a loopback axum-stub test (TREE format, `blockID`/`shard`, `X-Scope-OrgID`, `max_nodes=0`, `to_tree()` reconstruction); the Connect-JSON-vs-proto transport choice is explicitly flagged with a "verify Slice-5 content-type; switch to prost codec if proto-only" note.
 - `prost` 0.14 + `connectrpc-axum-build` proto (`querier.proto`, `build.rs`) — the field numbers carry an explicit "verify against the real Pyroscope `querier.proto`; the `100`/`101` shard fields are a Crabka extension" note; the proto is pinned by the build.rs compile, **not fabricated** — if Slice 5 vendored the proto, import it.

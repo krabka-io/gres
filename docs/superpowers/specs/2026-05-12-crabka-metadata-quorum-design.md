@@ -23,18 +23,18 @@ compatible KRaft is explicitly out of scope and gets its own future slice.
   restarted in slice 7. A future slice 7-followup wires the real path.
 - Dynamic voter membership changes (add/remove voter RPCs).
 - Authentication on the controller listener.
-- `crabka-cli` quorum inspection tooling (slice 10).
+- `krabka-cli` quorum inspection tooling (slice 10).
 
 ## Crate layout
 
-Two new crates plus targeted changes to `crabka-broker`:
+Two new crates plus targeted changes to `krabka-broker`:
 
 | Crate              | Status   | Responsibility                                                                                          |
 |--------------------|----------|---------------------------------------------------------------------------------------------------------|
-| `crabka-raft`      | **new**  | openraft adapters (`RaftLogStorage`, `RaftStateMachine`, `RaftNetworkFactory`) + the `Controller` type. |
-| `crabka-metadata`  | **new**  | Versioned metadata record types + `MetadataImage` read snapshot.                                        |
-| `crabka-broker`    | changed  | Quorum-backed metadata. Two listeners (client + controller). `CreateTopics`/`DeleteTopics` route through `Controller`. |
-| `crabka-protocol`  | unchanged| Controller-private wire types live in `crabka-raft::wire`, not in the codegen schemas.                  |
+| `krabka-raft`      | **new**  | openraft adapters (`RaftLogStorage`, `RaftStateMachine`, `RaftNetworkFactory`) + the `Controller` type. |
+| `krabka-metadata`  | **new**  | Versioned metadata record types + `MetadataImage` read snapshot.                                        |
+| `krabka-broker`    | changed  | Quorum-backed metadata. Two listeners (client + controller). `CreateTopics`/`DeleteTopics` route through `Controller`. |
+| `krabka-protocol`  | unchanged| Controller-private wire types live in `krabka-raft::wire`, not in the codegen schemas.                  |
 
 ## Architecture
 
@@ -42,7 +42,7 @@ Two new crates plus targeted changes to `crabka-broker`:
                        client port (9092)              controller port (9093)
                             │                                │
               ┌─────────────┴───────────────┐    ┌───────────┴────────────┐
-              │  slice-1..6 framing +       │    │  crabka-raft           │
+              │  slice-1..6 framing +       │    │  krabka-raft           │
               │  dispatch                   │    │  openraft RPCs         │
               │  → Produce/Fetch/Metadata   │    │  (api_keys 1000+)      │
               │    /InitProducerId/         │    │  AppendEntries/Vote/…  │
@@ -63,20 +63,20 @@ Two new crates plus targeted changes to `crabka-broker`:
 
 **Two listeners per broker.** The client listener keeps the slice-1..6
 dispatch shape unchanged. The new controller listener owns its own
-dispatcher in `crabka-broker::network::controller_dispatch`; it accepts
+dispatcher in `krabka-broker::network::controller_dispatch`; it accepts
 only api_keys in `[1000, 1002]` and rejects everything else with
 `INVALID_REQUEST`. Separation mirrors KRaft's
 `controller.listener.names`/`inter.broker.listener.name` split and leaves
 room for future auth/ACL divergence.
 
-**Why `crabka-log` for the Raft log?** It's already the most battle-
+**Why `krabka-log` for the Raft log?** It's already the most battle-
 tested code in the repo and uses the byte-format the JVM expects for the
 metadata partition (`@metadata-0`). It positions us to switch to KRaft-
 wire later without rewriting the log layer — only the RPC bodies change.
 
 ## Components
 
-### `crabka-raft::Controller`
+### `krabka-raft::Controller`
 
 ```rust
 pub struct ControllerConfig {
@@ -110,11 +110,11 @@ impl Controller {
 }
 ```
 
-`start` opens/recovers `@metadata-0` via `crabka-log`, replays existing
+`start` opens/recovers `@metadata-0` via `krabka-log`, replays existing
 entries into a fresh `MetadataImage`, spawns the openraft node with the
 static voter set, opens the controller listener, and returns the handle.
 
-### `crabka-metadata::MetadataImage`
+### `krabka-metadata::MetadataImage`
 
 ```rust
 pub struct MetadataImage {
@@ -146,7 +146,7 @@ swapped on each apply. Readers always see a consistent image.
 without breaking older Raft logs because `bincode` skips unknown
 discriminants gracefully if we encode each variant length-prefixed.
 
-### `crabka-broker` changes
+### `krabka-broker` changes
 
 - New `BrokerConfig` fields:
   ```rust
@@ -172,7 +172,7 @@ discriminants gracefully if we encode each variant length-prefixed.
 ## Wire protocol
 
 Three new Crabka-private api keys, all v0, framed identically to existing
-Kafka requests (`crabka-protocol`'s `length_prefixed` + `RequestHeader` v2,
+Kafka requests (`krabka-protocol`'s `length_prefixed` + `RequestHeader` v2,
 flexible):
 
 | api_key | Name                    | Notes                                              |
@@ -181,8 +181,8 @@ flexible):
 | 1001    | `CrabkaVote`            | openraft `Vote`                                    |
 | 1002    | `CrabkaInstallSnapshot` | Stub: returns `NotImplemented`. Reserves the slot. |
 
-These do not flow through `crabka-protocol`'s codegen — they are hand-
-written `Encode`/`Decode` impls in `crabka-raft::wire`.
+These do not flow through `krabka-protocol`'s codegen — they are hand-
+written `Encode`/`Decode` impls in `krabka-raft::wire`.
 
 ### `CrabkaAppendEntriesRequest` v0
 
@@ -264,13 +264,13 @@ which Kafka clients understand and use to re-bootstrap.
 
 ### Error types
 
-`crabka_raft::RaftError`:
+`krabka_raft::RaftError`:
 
 ```rust
 #[non_exhaustive]
 pub enum RaftError {
-    Storage(crabka_log::LogError),
-    Network(crabka_client_core::ClientError),
+    Storage(krabka_log::LogError),
+    Network(krabka_client_core::ClientError),
     Openraft(openraft::error::Fatal<NodeId>),
     NotLeader { current_leader: Option<NodeId> },
     LeaderUnknown,
@@ -281,7 +281,7 @@ pub enum RaftError {
 }
 ```
 
-`crabka_metadata::MetadataError`:
+`krabka_metadata::MetadataError`:
 
 ```rust
 #[non_exhaustive]
@@ -331,14 +331,14 @@ which existed before slice 7.
 
 ### Layer 1 — unit tests
 
-- `crabka-raft`:
+- `krabka-raft`:
   - `RaftLogStore` round-trips (append, get-by-index, truncate-to,
     recover-from-empty).
   - Wire encode → decode → Eq with proptest generators.
   - `Controller::submit_change` pre-validation rejection paths via an
     in-process single-voter cluster.
   - Leader-forwarding via a mock `RaftNetwork`.
-- `crabka-metadata`:
+- `krabka-metadata`:
   - `MetadataRecord::V1*` bincode round-trips (proptest).
   - `MetadataImage::apply` invariants per record type.
   - DeleteTopic clears all matching partition entries.
@@ -402,8 +402,8 @@ Slice 7 is shippable when:
 
 ## Risks
 
-- **openraft + `crabka-log` impedance mismatch.** openraft's
-  `RaftLogStorage` wants O(1) random reads by index; `crabka-log` is
+- **openraft + `krabka-log` impedance mismatch.** openraft's
+  `RaftLogStorage` wants O(1) random reads by index; `krabka-log` is
   segment-based with offset indexes. Mitigation: openraft's hot path is
   sequential (follower replication); the random-read case is bounded to
   the log tip for conflict resolution, where the latest segment is

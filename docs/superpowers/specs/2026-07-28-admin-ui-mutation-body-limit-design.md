@@ -14,7 +14,7 @@ authentication order, and HTTP error behavior.
 ## Scope
 
 This slice changes only the mutation JSON body limit owned by the standalone
-`crabka-admin-ui` binary.
+`krabka-admin-ui` binary.
 
 It does not migrate the admin UI's existing environment-only settings to
 command-line arguments, add an operator deployment, or add a CRD field. No
@@ -27,7 +27,7 @@ The compiled default remains exactly 1,048,576 bytes.
 The binary accepts:
 
 - `--mutation-json-body-limit-bytes`
-- `CRABKA_ADMIN_UI_MUTATION_JSON_BODY_LIMIT_BYTES`
+- `KRABKA_ADMIN_UI_MUTATION_JSON_BODY_LIMIT_BYTES`
 
 The command-line value wins when both sources are present. When neither is
 present, the compiled default is used.
@@ -87,7 +87,7 @@ Test-first coverage will prove:
 
 The crate's all-target tests, strict Clippy, nightly formatting, and diff
 hygiene remain required completion gates. `Cargo.lock` may change only to add
-the already-locked `refined_type` package to `crabka-admin-ui`'s direct
+the already-locked `refined_type` package to `krabka-admin-ui`'s direct
 dependency list; package versions and transitive dependencies must not change.
 
 ## Audit Closure

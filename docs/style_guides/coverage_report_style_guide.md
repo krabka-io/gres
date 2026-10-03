@@ -41,7 +41,7 @@ Every coverage report should follow this structure. You may omit a section that 
 
 | Document Info | Details |
 | :--- | :--- |
-| **Crate** | `crabka-<name>` |
+| **Crate** | `krabka-<name>` |
 | **Kafka surface** | <wire APIs / KIPs this crate owns> |
 | **Date** | <YYYY-MM-DD of last update> |
 ```
@@ -63,7 +63,7 @@ Include a table that maps each KIP or wire behaviour the crate owns to its verif
 - **Result values**: `Pass` (test exists and passes), `Fail` (test exists and fails), `N/A` (not applicable to this crate), `Not tested` (no test exists).
 - **Test column**: cite specific test function names (`file::function`), not just file paths. For differential coverage, name the differential suite or scenario.
 - **Matrix Ref column**: link to the row in the [KIP matrix](../KIP_MATRIX.md) or the README compatibility matrix that this row traces to.
-- **Cross-crate or differential coverage**: when tests elsewhere verify the behaviour, say `Pass (differential)` or `Pass (crabka-broker)` and cite the specific test.
+- **Cross-crate or differential coverage**: when tests elsewhere verify the behaviour, say `Pass (differential)` or `Pass (krabka-broker)` and cite the specific test.
 
 ### Section 2: Test Inventory
 

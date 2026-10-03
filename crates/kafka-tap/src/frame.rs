@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use crabka_ids::{ApiKey, ApiVersion};
+use krabka_ids::{ApiKey, ApiVersion};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct RequestPrefix {

@@ -2,15 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A new standalone crate `crabka-safekeeper` that streams physical WAL from a stock Postgres 17 primary (`START_REPLICATION … PHYSICAL`, physical slot, standby feedback) into an internal Crabka topic `__pg_wal.<cluster>` as contiguity-guarded `PGW1`-framed records produced with `acks=all` — gated by consuming the stored stream back through `crabka-postgres-wal`'s decoder (CRC-valid, LSN-contiguous across every chunk and restart boundary).
+**Goal:** A new standalone crate `krabka-safekeeper` that streams physical WAL from a stock Postgres 17 primary (`START_REPLICATION … PHYSICAL`, physical slot, standby feedback) into an internal Crabka topic `__pg_wal.<cluster>` as contiguity-guarded `PGW1`-framed records produced with `acks=all` — gated by consuming the stored stream back through `krabka-postgres-wal`'s decoder (CRC-valid, LSN-contiguous across every chunk and restart boundary).
 
 **Architecture:** Zero broker changes — the safekeeper is an ordinary Kafka-wire client (`client-producer`/`client-consumer`/`client-admin`). Replication connection via `tokio-postgres` if the workspace version supports the `replication=true` startup parameter (verify-first), else a minimal in-crate CopyBoth session over `postgres-protocol` primitives. `flushed_lsn` = highest **acked** end-LSN (tier-qualified). Restart resumes from the topic tail.
 
-**Tech Stack:** Rust 2024 (pinned stable 1.96.0), `tokio`, `tokio-postgres 0.7`/`postgres-protocol`, `crabka-client-{producer,consumer,admin}`, `bytes`, `thiserror`, `testcontainers` + `testcontainers-modules` (`postgres` feature) for integration, `assert2`/`nextest`, `cargo +nightly fmt`, `clippy::pedantic`.
+**Tech Stack:** Rust 2024 (pinned stable 1.96.0), `tokio`, `tokio-postgres 0.7`/`postgres-protocol`, `krabka-client-{producer,consumer,admin}`, `bytes`, `thiserror`, `testcontainers` + `testcontainers-modules` (`postgres` feature) for integration, `assert2`/`nextest`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-pg1-safekeeper-design.md`](../specs/2026-07-06-crabka-pg1-safekeeper-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-pg1-safekeeper-design.md`](../specs/2026-07-06-krabka-pg1-safekeeper-design.md).
 
-**PREREQUISITES (unlanded):** **PG-2** (`crabka-postgres-wal`) as a **dev-dependency** for the decode gate only. The runtime path needs nothing unbuilt (durability tier inherited from the topic; upgrades with diskless slices 1/6a, no code change here).
+**PREREQUISITES (unlanded):** **PG-2** (`krabka-postgres-wal`) as a **dev-dependency** for the decode gate only. The runtime path needs nothing unbuilt (durability tier inherited from the topic; upgrades with diskless slices 1/6a, no code change here).
 
 ---
 
@@ -32,7 +32,7 @@
 
 ## File Structure
 
-- **`crates/safekeeper/`** (new crate `crabka-safekeeper`):
+- **`crates/safekeeper/`** (new crate `krabka-safekeeper`):
   - `Cargo.toml` (`publish = false`), `src/lib.rs`
   - `src/frame.rs` — the `PGW1` record frame + chunker
   - `src/protocol.rs` — `XLogData`/keepalive parse, standby-status-update encode
@@ -83,11 +83,11 @@
 
 - [ ] **Step 2: Implement**
 
-`WalFrame { start_lsn, bytes }` (`encode`: `b"PGW1" | start_lsn u64 LE | bytes`; `end_lsn = start + len`); `Chunker` accumulates XLogData payloads (contiguity-checked), emitting frames at the size target on message boundaries. `Lsn` re-used from `crabka-postgres-wal`? — **no**: that's a dev-dependency only; define a local `Lsn(u64)` newtype (tiny, avoids a runtime dep on the decoder crate) with a `From` conversion in tests. `Cargo.toml` `publish = false`; release-plz private entry.
+`WalFrame { start_lsn, bytes }` (`encode`: `b"PGW1" | start_lsn u64 LE | bytes`; `end_lsn = start + len`); `Chunker` accumulates XLogData payloads (contiguity-checked), emitting frames at the size target on message boundaries. `Lsn` re-used from `krabka-postgres-wal`? — **no**: that's a dev-dependency only; define a local `Lsn(u64)` newtype (tiny, avoids a runtime dep on the decoder crate) with a `From` conversion in tests. `Cargo.toml` `publish = false`; release-plz private entry.
 
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-safekeeper --lib frame` → PASS; `./tools/check-publish-allowlist.sh` → 0.
+Run: `cargo test -p krabka-safekeeper --lib frame` → PASS; `./tools/check-publish-allowlist.sh` → 0.
 
 ```bash
 git add crates/safekeeper release-plz.toml
@@ -148,7 +148,7 @@ git commit -m "feat(safekeeper): CopyBoth message codecs (XLogData, keepalive, s
 
 - [ ] **Step 1: VERIFY** whether workspace `tokio-postgres 0.7` exposes the `replication=true` startup parameter (look for a `replication` option on `Config` / a `replication_mode` API in the pinned version's docs). Record the finding in a module comment.
 - [ ] **Step 2: Implement accordingly.**
-  - **If supported:** `Config` with `replication=true` + `copy_both_simple("START_REPLICATION SLOT crabka_sk_<cluster> PHYSICAL X/Y TIMELINE n")`; `IDENTIFY_SYSTEM` and `CREATE_REPLICATION_SLOT … PHYSICAL` (idempotent: tolerate "already exists") as simple_query calls on the same connection.
+  - **If supported:** `Config` with `replication=true` + `copy_both_simple("START_REPLICATION SLOT krabka_sk_<cluster> PHYSICAL X/Y TIMELINE n")`; `IDENTIFY_SYSTEM` and `CREATE_REPLICATION_SLOT … PHYSICAL` (idempotent: tolerate "already exists") as simple_query calls on the same connection.
   - **Fallback:** a minimal session in-crate: TCP + `postgres-protocol`'s startup/auth (password/trust for fixtures), then the simple-query + CopyBoth framing (`CopyBothResponse`, `CopyData` wrapping Task 2's submessages, `CopyDone`). Scope strictly to what the safekeeper needs.
   - Either way expose: `ReplicationSession::connect(url, cluster) -> Self`, `identify() -> (sysid, timeline, flush_lsn)`, `ensure_slot()`, `start(resume: Lsn) -> impl Stream<Item = CopyBothMsg>`, `send_status(StandbyStatus)`. A timeline value different from `identify()`'s → `SafekeeperError::TimelineSwitch` (halt).
 - [ ] **Step 3: Smoke test** (first containerized test, `testcontainers-modules` `postgres` at tag `17`, `wal_level=replica`, `max_wal_senders>0`): connect, identify, ensure slot twice (idempotent), start streaming, receive at least one `XLogData` after an insert. Commit.
@@ -184,7 +184,7 @@ Written = last enqueued end-LSN; flushed advances only in the ack completion. Pr
 
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-safekeeper --test integration ingest` → PASS.
+Run: `cargo test -p krabka-safekeeper --test integration ingest` → PASS.
 
 ```bash
 git add crates/safekeeper/src/ingest.rs crates/safekeeper/tests
@@ -212,14 +212,14 @@ git commit -m "feat(safekeeper): tail-read resume with cross-restart contiguity"
 ## Task 6: The decode gate (PG-2 as oracle)
 
 **Files:**
-- Modify: `crates/safekeeper/tests/integration.rs` (+ dev-dep `crabka-postgres-wal`)
+- Modify: `crates/safekeeper/tests/integration.rs` (+ dev-dep `krabka-postgres-wal`)
 
-- [ ] **Step 1: Write the gate test** — after the Task 4/5 runs (including the restart seam): consume **all** of `__pg_wal.<cluster>`, decode every `PGW1` frame, feed the byte runs in order into `crabka_postgres_wal::WalStreamDecoder` (`feed(start_lsn, bytes)`), and poll to exhaustion: every record CRC-valid, LSNs monotone, zero framing errors — across every chunk boundary and the restart seam. Cross-check the record count is > 0 and the last decoded LSN ≥ the last produced frame's start.
+- [ ] **Step 1: Write the gate test** — after the Task 4/5 runs (including the restart seam): consume **all** of `__pg_wal.<cluster>`, decode every `PGW1` frame, feed the byte runs in order into `krabka_postgres_wal::WalStreamDecoder` (`feed(start_lsn, bytes)`), and poll to exhaustion: every record CRC-valid, LSNs monotone, zero framing errors — across every chunk boundary and the restart seam. Cross-check the record count is > 0 and the last decoded LSN ≥ the last produced frame's start.
 - [ ] **Step 2: Run to verify it passes** — a failure here is a safekeeper framing/contiguity bug or a PG-2 decoder bug; the two crates arbitrate each other. Commit.
 
 ```bash
 git add crates/safekeeper/tests crates/safekeeper/Cargo.toml
-git commit -m "test(safekeeper): stored-stream decode gate via crabka-postgres-wal"
+git commit -m "test(safekeeper): stored-stream decode gate via krabka-postgres-wal"
 ```
 
 ---
@@ -227,8 +227,8 @@ git commit -m "test(safekeeper): stored-stream decode gate via crabka-postgres-w
 ## Task 7: Final gate
 
 - [ ] **Step 1:** `cargo +nightly fmt --check` — no diff.
-- [ ] **Step 2:** `cargo clippy -p crabka-safekeeper --all-targets -- -D warnings` — no warnings.
-- [ ] **Step 3:** `cargo nextest run -p crabka-safekeeper` — PASS (units always; container tests under the integration profile/job like the other testcontainers crates).
+- [ ] **Step 2:** `cargo clippy -p krabka-safekeeper --all-targets -- -D warnings` — no warnings.
+- [ ] **Step 3:** `cargo nextest run -p krabka-safekeeper` — PASS (units always; container tests under the integration profile/job like the other testcontainers crates).
 - [ ] **Step 4:** `./tools/check-publish-allowlist.sh` — exit 0. Commit any formatting.
 
 ---

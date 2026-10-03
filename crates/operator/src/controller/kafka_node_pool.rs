@@ -16,7 +16,7 @@ use std::{
     sync::Arc,
 };
 
-use crabka_units::fmt::Human as _;
+use krabka_units::fmt::Human as _;
 use futures::StreamExt as _;
 use k8s_openapi::{
     api::{
@@ -315,7 +315,7 @@ fn role_mask_from_pod_spec(spec: Option<&PodSpec>) -> Option<u8> {
         .containers
         .iter()
         .flat_map(|container| container.env.as_deref().unwrap_or_default())
-        .find(|env| env.name == "CRABKA_PROCESS_ROLES")
+        .find(|env| env.name == "KRABKA_PROCESS_ROLES")
         .and_then(|env| env.value.as_deref());
     match configured {
         Some(value) => parse_role_mask(value),
@@ -523,7 +523,7 @@ fn jbod_mount(volume_id: i32, is_primary: bool) -> (String, String) {
 
 /// `(name, mount_path)` for every non-primary JBOD disk, sorted by id.
 /// Empty for non-JBOD storage. These become the broker container's extra
-/// `volumeMounts` and the `CRABKA_EXTRA_LOG_DIRS` env value.
+/// `volumeMounts` and the `KRABKA_EXTRA_LOG_DIRS` env value.
 fn jbod_extra_mounts(storage: Option<&Storage>) -> Vec<(String, String)> {
     jbod_volumes_sorted(storage)
         .iter()
@@ -546,14 +546,14 @@ fn jbod_extra_mounts(storage: Option<&Storage>) -> Vec<(String, String)> {
 const INIT_SCRIPT: &str = "set -eu\n\
 ORDINAL=\"${HOSTNAME##*-}\"\n\
 NODE_ID=$((NODE_ID_START + ORDINAL))\n\
-CRABKA_DIRECTORY_ID=\"$(cat \"/etc/crabka/cluster-id/quorumDirectoryId-${NODE_ID}\")\"\n\
+KRABKA_DIRECTORY_ID=\"$(cat \"/etc/crabka/cluster-id/quorumDirectoryId-${NODE_ID}\")\"\n\
 mkdir -p /var/lib/crabka/data\n\
 rm -rf /var/lib/crabka/data/lost+found\n\
 if [ ! -f /var/lib/crabka/data/.formatted ]; then\n\
-  if [ \"$CRABKA_QUORUM_BOOTSTRAP_INITIALIZED\" != \"true\" ] && [ \"$NODE_ID\" = \"$CRABKA_QUORUM_BOOTSTRAP_NODE_ID\" ] && [ \"$CRABKA_POOL_NAME\" = \"$CRABKA_QUORUM_BOOTSTRAP_POOL\" ]; then\n\
-    /usr/bin/crabka format --log-dir /var/lib/crabka/data --cluster-id \"$CRABKA_CLUSTER_ID\" --release-version \"$CRABKA_METADATA_VERSION\" --directory-id \"$CRABKA_DIRECTORY_ID\" --standalone --node-id \"$NODE_ID\" --controller-listener \"${HOSTNAME}.${CRABKA_HEADLESS_SERVICE}.${POD_NAMESPACE}.svc.cluster.local:9093\"\n\
+  if [ \"$KRABKA_QUORUM_BOOTSTRAP_INITIALIZED\" != \"true\" ] && [ \"$NODE_ID\" = \"$KRABKA_QUORUM_BOOTSTRAP_NODE_ID\" ] && [ \"$KRABKA_POOL_NAME\" = \"$KRABKA_QUORUM_BOOTSTRAP_POOL\" ]; then\n\
+    /usr/bin/crabka format --log-dir /var/lib/crabka/data --cluster-id \"$KRABKA_CLUSTER_ID\" --release-version \"$KRABKA_METADATA_VERSION\" --directory-id \"$KRABKA_DIRECTORY_ID\" --standalone --node-id \"$NODE_ID\" --controller-listener \"${HOSTNAME}.${KRABKA_HEADLESS_SERVICE}.${POD_NAMESPACE}.svc.cluster.local:9093\"\n\
   else\n\
-    /usr/bin/crabka format --log-dir /var/lib/crabka/data --cluster-id \"$CRABKA_CLUSTER_ID\" --release-version \"$CRABKA_METADATA_VERSION\" --directory-id \"$CRABKA_DIRECTORY_ID\" --no-initial-controllers\n\
+    /usr/bin/crabka format --log-dir /var/lib/crabka/data --cluster-id \"$KRABKA_CLUSTER_ID\" --release-version \"$KRABKA_METADATA_VERSION\" --directory-id \"$KRABKA_DIRECTORY_ID\" --no-initial-controllers\n\
   fi\n\
   touch /var/lib/crabka/data/.formatted\n\
 fi\n\
@@ -572,7 +572,7 @@ printf '%s' \"$NODE_ID\" > /var/lib/crabka/data/.node-id\n";
 const MAIN_SCRIPT: &str = "set -eu\n\
 NODE_ID=\"$(cat /var/lib/crabka/data/.node-id)\"\n\
 cp /etc/crabka/config/broker-${NODE_ID}.toml /run/crabka/broker.toml\n\
-exec /usr/bin/crabka-broker \\\n  --config-file=/run/crabka/broker.toml \\\n  --broker-id=\"${NODE_ID}\"\n";
+exec /usr/bin/krabka-broker \\\n  --config-file=/run/crabka/broker.toml \\\n  --broker-id=\"${NODE_ID}\"\n";
 
 /// Build the broker container's main shell script. The disabled variant
 /// returns `MAIN_SCRIPT` byte-for-byte so a cluster with
@@ -586,8 +586,8 @@ exec /usr/bin/crabka-broker \\\n  --config-file=/run/crabka/broker.toml \\\n  --
 /// templated fragment.
 fn build_main_script(
     metrics_enabled: bool,
-    client_dispatch_queue_capacity: Option<crabka_client_core::ConnectionDispatchQueueCapacity>,
-    client_frame_max: Option<crabka_client_core::ClientFrameMax>,
+    client_dispatch_queue_capacity: Option<krabka_client_core::ConnectionDispatchQueueCapacity>,
+    client_frame_max: Option<krabka_client_core::ClientFrameMax>,
 ) -> String {
     if !metrics_enabled && client_dispatch_queue_capacity.is_none() && client_frame_max.is_none() {
         return MAIN_SCRIPT.to_string();
@@ -600,7 +600,7 @@ fn build_main_script(
         "set -eu\n\
      NODE_ID=\"$(cat /var/lib/crabka/data/.node-id)\"\n\
      cp /etc/crabka/config/broker-${NODE_ID}.toml /run/crabka/broker.toml\n\
-     exec /usr/bin/crabka-broker \\\n  \
+     exec /usr/bin/krabka-broker \\\n  \
        --config-file=/run/crabka/broker.toml \\\n  \
        --broker-id=\"${NODE_ID}\" \\\n  \
        --metrics-listen-addr=0.0.0.0:9404\n"
@@ -644,13 +644,13 @@ fn render_init_container(
         "env": [
             { "name": "NODE_ID_START", "value": node_id_start.to_string() },
             { "name": "POD_NAMESPACE", "valueFrom": { "fieldRef": { "fieldPath": "metadata.namespace" } } },
-            { "name": "CRABKA_POOL_NAME", "value": pool_name },
-            { "name": "CRABKA_HEADLESS_SERVICE", "value": headless_service_name },
-            { "name": "CRABKA_CLUSTER_ID", "valueFrom": { "secretKeyRef": { "name": secret_name, "key": "clusterId" } } },
-            { "name": "CRABKA_QUORUM_BOOTSTRAP_NODE_ID", "valueFrom": { "secretKeyRef": { "name": secret_name, "key": common::QUORUM_BOOTSTRAP_NODE_ID_KEY } } },
-            { "name": "CRABKA_QUORUM_BOOTSTRAP_POOL", "valueFrom": { "secretKeyRef": { "name": secret_name, "key": common::QUORUM_BOOTSTRAP_POOL_KEY } } },
-            { "name": "CRABKA_QUORUM_BOOTSTRAP_INITIALIZED", "valueFrom": { "secretKeyRef": { "name": secret_name, "key": common::QUORUM_BOOTSTRAP_INITIALIZED_KEY } } },
-            { "name": "CRABKA_METADATA_VERSION", "value": metadata_version.to_string() }
+            { "name": "KRABKA_POOL_NAME", "value": pool_name },
+            { "name": "KRABKA_HEADLESS_SERVICE", "value": headless_service_name },
+            { "name": "KRABKA_CLUSTER_ID", "valueFrom": { "secretKeyRef": { "name": secret_name, "key": "clusterId" } } },
+            { "name": "KRABKA_QUORUM_BOOTSTRAP_NODE_ID", "valueFrom": { "secretKeyRef": { "name": secret_name, "key": common::QUORUM_BOOTSTRAP_NODE_ID_KEY } } },
+            { "name": "KRABKA_QUORUM_BOOTSTRAP_POOL", "valueFrom": { "secretKeyRef": { "name": secret_name, "key": common::QUORUM_BOOTSTRAP_POOL_KEY } } },
+            { "name": "KRABKA_QUORUM_BOOTSTRAP_INITIALIZED", "valueFrom": { "secretKeyRef": { "name": secret_name, "key": common::QUORUM_BOOTSTRAP_INITIALIZED_KEY } } },
+            { "name": "KRABKA_METADATA_VERSION", "value": metadata_version.to_string() }
         ],
         "volumeMounts": [
             { "name": "data", "mountPath": "/var/lib/crabka/data" },
@@ -679,8 +679,8 @@ struct BrokerContainerSpec<'a> {
     tracing: Option<&'a crate::crd::kafka::Tracing>,
     process_roles: Option<&'a str>,
     client_resource_policy: (
-        Option<crabka_client_core::ConnectionDispatchQueueCapacity>,
-        Option<crabka_client_core::ClientFrameMax>,
+        Option<krabka_client_core::ConnectionDispatchQueueCapacity>,
+        Option<krabka_client_core::ClientFrameMax>,
     ),
 }
 
@@ -720,10 +720,10 @@ fn render_broker_container(spec: BrokerContainerSpec<'_>) -> serde_json::Value {
     let mut env = vec![
         json!({ "name": "POD_NAME", "valueFrom": { "fieldRef": { "fieldPath": "metadata.name" } } }),
         json!({ "name": "POD_NAMESPACE", "valueFrom": { "fieldRef": { "fieldPath": "metadata.namespace" } } }),
-        json!({ "name": "CRABKA_CLUSTER_ID", "valueFrom": { "secretKeyRef": { "name": secret_name, "key": "clusterId" } } }),
+        json!({ "name": "KRABKA_CLUSTER_ID", "valueFrom": { "secretKeyRef": { "name": secret_name, "key": "clusterId" } } }),
     ];
     if let Some(roles) = process_roles {
-        env.push(json!({ "name": "CRABKA_PROCESS_ROLES", "value": roles }));
+        env.push(json!({ "name": "KRABKA_PROCESS_ROLES", "value": roles }));
     }
     append_logging_env(&mut env, logging_enabled, cm_name);
     append_jbod_env(&mut env, jbod_extra_mounts);
@@ -733,14 +733,14 @@ fn render_broker_container(spec: BrokerContainerSpec<'_>) -> serde_json::Value {
     // operator-rendered pod template removes the
     // `kubectl set env` race: every SSA reconcile re-asserts the env
     // entry, so it can't drift from beneath the broker. The broker's
-    // config layer reads `CRABKA_DELEGATION_TOKEN_SECRET_KEY`
+    // config layer reads `KRABKA_DELEGATION_TOKEN_SECRET_KEY`
     // (env wins over TOML) and flips the four delegation-token RPCs
     // from `DELEGATION_TOKEN_AUTH_DISABLED` (err 61) to live. Omitted
     // entirely when `delegation_token` is `None`.
     if let Some(dt) = delegation_token {
         let key = dt.secret_key_ref.key.as_deref().unwrap_or("secret-key");
         env.push(json!({
-            "name": "CRABKA_DELEGATION_TOKEN_SECRET_KEY",
+            "name": "KRABKA_DELEGATION_TOKEN_SECRET_KEY",
             "valueFrom": {
                 "secretKeyRef": {
                     "name": dt.secret_key_ref.name,
@@ -801,17 +801,17 @@ fn render_broker_container(spec: BrokerContainerSpec<'_>) -> serde_json::Value {
         && let crate::crd::kafka::TracingType::Otlp = t.kind
         && let Some(otlp) = t.otlp.as_ref()
     {
-        env.push(json!({ "name": "CRABKA_OTLP_ENABLED", "value": "true" }));
-        env.push(json!({ "name": "CRABKA_OTLP_ENDPOINT", "value": otlp.endpoint }));
+        env.push(json!({ "name": "KRABKA_OTLP_ENABLED", "value": "true" }));
+        env.push(json!({ "name": "KRABKA_OTLP_ENDPOINT", "value": otlp.endpoint }));
         if let Some(p) = otlp.protocol {
             env.push(json!({
-                "name": "CRABKA_OTLP_PROTOCOL",
+                "name": "KRABKA_OTLP_PROTOCOL",
                 "value": p.as_env_value(),
             }));
         }
         if let Some(r) = otlp.sample_ratio {
             env.push(json!({
-                "name": "CRABKA_OTLP_SAMPLE_RATIO",
+                "name": "KRABKA_OTLP_SAMPLE_RATIO",
                 "value": r.to_string(),
             }));
         }
@@ -820,7 +820,7 @@ fn render_broker_container(spec: BrokerContainerSpec<'_>) -> serde_json::Value {
         }
         if let Some(t) = otlp.timeout {
             env.push(json!({
-                "name": "CRABKA_OTLP_TIMEOUT",
+                "name": "KRABKA_OTLP_TIMEOUT",
                 "value": t.human().to_string(),
             }));
         }
@@ -977,7 +977,7 @@ fn append_jbod_env(env: &mut Vec<serde_json::Value>, mounts: &[(String, String)]
         .map(|(_, path)| path.as_str())
         .collect::<Vec<_>>()
         .join(",");
-    env.push(json!({ "name": "CRABKA_EXTRA_LOG_DIRS", "value": value }));
+    env.push(json!({ "name": "KRABKA_EXTRA_LOG_DIRS", "value": value }));
 }
 
 /// Build one `volumeClaimTemplate` for a single PVC: `accessModes`,
@@ -1303,11 +1303,11 @@ fn resolved_metadata_version(parent: &Kafka) -> String {
         .unwrap_or(&parent.spec.kafka_version);
     let normalized = crate::version::KafkaVersion::parse(chosen)
         .map_or_else(|_| chosen.to_string(), |version| version.short());
-    if crabka_metadata::metadata_version::from_version_string(&normalized).is_some() {
+    if krabka_metadata::metadata_version::from_version_string(&normalized).is_some() {
         normalized
     } else {
-        crabka_metadata::metadata_version::from_feature_level(
-            crabka_metadata::metadata_version::METADATA_VERSION_MAX,
+        krabka_metadata::metadata_version::from_feature_level(
+            krabka_metadata::metadata_version::METADATA_VERSION_MAX,
         )
         .expect("MAX level is in the table")
         .short()
@@ -2724,18 +2724,18 @@ mod tests {
         assert!(script.contains("--standalone --node-id \"$NODE_ID\""));
         assert!(script.contains("--no-initial-controllers"));
         assert!(script.contains("quorumDirectoryId-${NODE_ID}"));
-        assert!(script.contains("CRABKA_QUORUM_BOOTSTRAP_INITIALIZED"));
+        assert!(script.contains("KRABKA_QUORUM_BOOTSTRAP_INITIALIZED"));
         assert!(script.contains(
-            "${HOSTNAME}.${CRABKA_HEADLESS_SERVICE}.${POD_NAMESPACE}.svc.cluster.local:9093"
+            "${HOSTNAME}.${KRABKA_HEADLESS_SERVICE}.${POD_NAMESPACE}.svc.cluster.local:9093"
         ));
 
         let env = init["env"].as_array().expect("init env");
         for required in [
-            "CRABKA_POOL_NAME",
-            "CRABKA_HEADLESS_SERVICE",
-            "CRABKA_QUORUM_BOOTSTRAP_NODE_ID",
-            "CRABKA_QUORUM_BOOTSTRAP_POOL",
-            "CRABKA_QUORUM_BOOTSTRAP_INITIALIZED",
+            "KRABKA_POOL_NAME",
+            "KRABKA_HEADLESS_SERVICE",
+            "KRABKA_QUORUM_BOOTSTRAP_NODE_ID",
+            "KRABKA_QUORUM_BOOTSTRAP_POOL",
+            "KRABKA_QUORUM_BOOTSTRAP_INITIALIZED",
         ] {
             assert!(
                 env.iter().any(|entry| entry["name"] == required),
@@ -2780,7 +2780,7 @@ mod tests {
             .as_ref()
             .expect("env")
             .iter()
-            .find(|env| env.name == "CRABKA_PROCESS_ROLES")
+            .find(|env| env.name == "KRABKA_PROCESS_ROLES")
             .expect("separated role env");
         assert!(roles.value.as_deref() == Some("controller"));
     }
@@ -2807,7 +2807,7 @@ mod tests {
             broker
                 .env
                 .as_ref()
-                .is_none_or(|env| env.iter().all(|entry| entry.name != "CRABKA_PROCESS_ROLES"))
+                .is_none_or(|env| env.iter().all(|entry| entry.name != "KRABKA_PROCESS_ROLES"))
         );
     }
 
@@ -2910,7 +2910,7 @@ mod tests {
     #[test]
     fn init_script_passes_release_version() {
         assert!(
-            INIT_SCRIPT.contains("--release-version \"$CRABKA_METADATA_VERSION\""),
+            INIT_SCRIPT.contains("--release-version \"$KRABKA_METADATA_VERSION\""),
             "init script must pass the resolved metadata.version to crabka format"
         );
     }
@@ -2921,8 +2921,8 @@ mod tests {
         let env = c["env"].as_array().expect("env array");
         let mv = env
             .iter()
-            .find(|e| e["name"] == "CRABKA_METADATA_VERSION")
-            .expect("CRABKA_METADATA_VERSION env present");
+            .find(|e| e["name"] == "KRABKA_METADATA_VERSION")
+            .expect("KRABKA_METADATA_VERSION env present");
         assert!(mv["value"] == "4.0");
     }
 
@@ -2940,8 +2940,8 @@ mod tests {
         let env = init.env.as_ref().expect("init env");
         let mv = env
             .iter()
-            .find(|e| e.name == "CRABKA_METADATA_VERSION")
-            .expect("CRABKA_METADATA_VERSION env present");
+            .find(|e| e.name == "KRABKA_METADATA_VERSION")
+            .expect("KRABKA_METADATA_VERSION env present");
         assert!(
             mv.value.as_deref() == Some("3.7"),
             "init container must receive short major.minor form, not the 3-part kafka_version"
@@ -2965,10 +2965,10 @@ mod tests {
         let env = init.env.as_ref().expect("init env");
         let mv = env
             .iter()
-            .find(|e| e.name == "CRABKA_METADATA_VERSION")
-            .expect("CRABKA_METADATA_VERSION env present");
-        let max_short = crabka_metadata::metadata_version::from_feature_level(
-            crabka_metadata::metadata_version::METADATA_VERSION_MAX,
+            .find(|e| e.name == "KRABKA_METADATA_VERSION")
+            .expect("KRABKA_METADATA_VERSION env present");
+        let max_short = krabka_metadata::metadata_version::from_feature_level(
+            krabka_metadata::metadata_version::METADATA_VERSION_MAX,
         )
         .unwrap()
         .short();
@@ -3709,8 +3709,8 @@ mod tests {
             .unwrap();
         let extra = env
             .iter()
-            .find(|e| e.name == "CRABKA_EXTRA_LOG_DIRS")
-            .expect("CRABKA_EXTRA_LOG_DIRS env present for JBOD");
+            .find(|e| e.name == "KRABKA_EXTRA_LOG_DIRS")
+            .expect("KRABKA_EXTRA_LOG_DIRS env present for JBOD");
         // Primary (`/var/lib/crabka/data`) excluded; extras sorted by id.
         assert!(extra.value.as_deref() == Some("/var/lib/crabka/data-1,/var/lib/crabka/data-2"));
     }
@@ -3748,7 +3748,7 @@ mod tests {
             .env
             .clone()
             .unwrap();
-        assert!(env.iter().all(|e| e.name != "CRABKA_EXTRA_LOG_DIRS"));
+        assert!(env.iter().all(|e| e.name != "KRABKA_EXTRA_LOG_DIRS"));
     }
 
     #[test]
@@ -3889,9 +3889,9 @@ mod tests {
 
     #[test]
     fn build_main_script_appends_configured_client_policy_once() {
-        let queue = crabka_client_core::ConnectionDispatchQueueCapacity::new(7).unwrap();
+        let queue = krabka_client_core::ConnectionDispatchQueueCapacity::new(7).unwrap();
         let frame =
-            crabka_client_core::ClientFrameMax::try_from(crabka_units::kibibytes(32)).unwrap();
+            krabka_client_core::ClientFrameMax::try_from(krabka_units::kibibytes(32)).unwrap();
         let s = build_main_script(false, Some(queue), Some(frame));
         check!(s.matches("--client-dispatch-queue-capacity=7").count() == 1);
         check!(s.matches("--client-frame-max=32768B").count() == 1);
@@ -3918,7 +3918,7 @@ mod tests {
         let parent = parent_fixture("demo");
         let mut pool = pool_fixture("brokers", "demo", 1);
         pool.spec.client_dispatch_queue_capacity = Some(7);
-        pool.spec.client_frame_max = Some(crabka_units::kibibytes(32));
+        pool.spec.client_frame_max = Some(krabka_units::kibibytes(32));
 
         let sts = render_statefulset(&parent, &pool, DEFAULT_BROKER_IMAGE).expect("render");
         let pod_spec = sts.spec.unwrap().template.spec.unwrap();
@@ -4150,7 +4150,7 @@ mod tests {
     }
 
     /// Without `spec.delegationToken`, the broker container's
-    /// env list must NOT carry `CRABKA_DELEGATION_TOKEN_SECRET_KEY` —
+    /// env list must NOT carry `KRABKA_DELEGATION_TOKEN_SECRET_KEY` —
     /// keeps the pod template byte-identical for clusters without it
     /// (no spurious roll).
     #[test]
@@ -4164,13 +4164,13 @@ mod tests {
             .unwrap();
         assert!(
             env.iter()
-                .all(|e| e.name != "CRABKA_DELEGATION_TOKEN_SECRET_KEY"),
+                .all(|e| e.name != "KRABKA_DELEGATION_TOKEN_SECRET_KEY"),
             "env: {env:#?}"
         );
     }
 
     /// With `spec.delegationToken.secretKeyRef`, the operator
-    /// must wire `CRABKA_DELEGATION_TOKEN_SECRET_KEY` via
+    /// must wire `KRABKA_DELEGATION_TOKEN_SECRET_KEY` via
     /// `valueFrom.secretKeyRef` (NOT a literal value — otherwise the
     /// Secret value leaks into the `StatefulSet` manifest). With the key
     /// unset, it defaults to `secret-key`.
@@ -4192,7 +4192,7 @@ mod tests {
             .unwrap();
         let dt_env = env
             .iter()
-            .find(|e| e.name == "CRABKA_DELEGATION_TOKEN_SECRET_KEY")
+            .find(|e| e.name == "KRABKA_DELEGATION_TOKEN_SECRET_KEY")
             .expect("dt env present when spec.delegationToken set");
         assert!(
             dt_env.value.is_none(),
@@ -4226,7 +4226,7 @@ mod tests {
             .unwrap();
         let secret_ref = env
             .iter()
-            .find(|e| e.name == "CRABKA_DELEGATION_TOKEN_SECRET_KEY")
+            .find(|e| e.name == "KRABKA_DELEGATION_TOKEN_SECRET_KEY")
             .and_then(|e| e.value_from.as_ref())
             .and_then(|vf| vf.secret_key_ref.as_ref())
             .expect("secretKeyRef present");
@@ -4585,18 +4585,18 @@ mod tests {
         let mut k = parent_fixture(name);
         let credentials = with_creds.then(|| crate::crd::kafka::S3Credentials {
             access_key_id: crate::crd::kafka::SecretKeyRef {
-                name: "crabka-s3-creds".into(),
+                name: "krabka-s3-creds".into(),
                 key: Some("access-key-id".into()),
             },
             secret_access_key: crate::crd::kafka::SecretKeyRef {
-                name: "crabka-s3-creds".into(),
+                name: "krabka-s3-creds".into(),
                 key: Some("secret-access-key".into()),
             },
         });
         k.spec.tiered_storage = Some(crate::crd::kafka::TieredStorage {
             kind: crate::crd::kafka::TieredStorageType::S3,
             s3: Some(crate::crd::kafka::S3StorageSpec {
-                bucket: "crabka-tier".into(),
+                bucket: "krabka-tier".into(),
                 region: "us-east-1".into(),
                 credentials,
                 ..Default::default()
@@ -4679,7 +4679,7 @@ mod tests {
             .as_ref()
             .and_then(|v| v.secret_key_ref.as_ref())
             .expect("secretKeyRef present");
-        assert!(ak_ref.name == "crabka-s3-creds");
+        assert!(ak_ref.name == "krabka-s3-creds");
         assert!(ak_ref.key == "access-key-id");
 
         let sk = env
@@ -4692,7 +4692,7 @@ mod tests {
             .as_ref()
             .and_then(|v| v.secret_key_ref.as_ref())
             .expect("secretKeyRef present");
-        assert!(sk_ref.name == "crabka-s3-creds");
+        assert!(sk_ref.name == "krabka-s3-creds");
         assert!(sk_ref.key == "secret-access-key");
     }
 
@@ -4787,7 +4787,7 @@ mod tests {
         let mut k = parent_fixture(name);
         let credentials = with_creds.then(|| crate::crd::kafka::GcsCredentials {
             service_account_key: crate::crd::kafka::SecretKeyRef {
-                name: "crabka-gcs-creds".into(),
+                name: "krabka-gcs-creds".into(),
                 key: Some("key.json".into()),
             },
         });
@@ -4795,7 +4795,7 @@ mod tests {
             kind: crate::crd::kafka::TieredStorageType::Gcs,
             s3: None,
             gcs: Some(crate::crd::kafka::GcsStorageSpec {
-                bucket: "crabka-tier".into(),
+                bucket: "krabka-tier".into(),
                 credentials,
                 ..Default::default()
             }),
@@ -4827,7 +4827,7 @@ mod tests {
             .secret
             .as_ref()
             .expect("gcs-credentials is a Secret volume");
-        assert!(secret.secret_name.as_deref() == Some("crabka-gcs-creds"));
+        assert!(secret.secret_name.as_deref() == Some("krabka-gcs-creds"));
         let items = secret.items.as_ref().expect("projected items");
         assert!(
             *items
@@ -5152,7 +5152,7 @@ mod tests {
                 protocol: Some(crate::crd::kafka::OtlpProtocol::HttpProtobuf),
                 sample_ratio: Some(0.25),
                 service_name: Some("svc".into()),
-                timeout: Some(crabka_units::prelude::secs(7)),
+                timeout: Some(krabka_units::prelude::secs(7)),
             },
         );
         let pool = pool_fixture("brokers", "demo", 1);
@@ -5183,12 +5183,12 @@ mod tests {
                 .unwrap_or_default()
         };
         for (name, want) in [
-            ("CRABKA_OTLP_ENABLED", "true"),
-            ("CRABKA_OTLP_ENDPOINT", "http://otel:4317"),
-            ("CRABKA_OTLP_PROTOCOL", "http/protobuf"),
-            ("CRABKA_OTLP_SAMPLE_RATIO", "0.25"),
+            ("KRABKA_OTLP_ENABLED", "true"),
+            ("KRABKA_OTLP_ENDPOINT", "http://otel:4317"),
+            ("KRABKA_OTLP_PROTOCOL", "http/protobuf"),
+            ("KRABKA_OTLP_SAMPLE_RATIO", "0.25"),
             ("OTEL_SERVICE_NAME", "svc"),
-            ("CRABKA_OTLP_TIMEOUT", "7s"),
+            ("KRABKA_OTLP_TIMEOUT", "7s"),
         ] {
             assert!(by_name(name) == want, "case {name}");
         }
@@ -5225,14 +5225,14 @@ mod tests {
             .expect("env present")
             .clone();
         // Required pair is present.
-        assert!(env.iter().any(|e| e.name == "CRABKA_OTLP_ENABLED"));
-        assert!(env.iter().any(|e| e.name == "CRABKA_OTLP_ENDPOINT"));
+        assert!(env.iter().any(|e| e.name == "KRABKA_OTLP_ENABLED"));
+        assert!(env.iter().any(|e| e.name == "KRABKA_OTLP_ENDPOINT"));
         // Optional knobs are absent.
         for unset in [
-            "CRABKA_OTLP_PROTOCOL",
-            "CRABKA_OTLP_SAMPLE_RATIO",
+            "KRABKA_OTLP_PROTOCOL",
+            "KRABKA_OTLP_SAMPLE_RATIO",
             "OTEL_SERVICE_NAME",
-            "CRABKA_OTLP_TIMEOUT",
+            "KRABKA_OTLP_TIMEOUT",
         ] {
             assert!(
                 env.iter().all(|e| e.name != unset),
@@ -5263,12 +5263,12 @@ mod tests {
             .expect("env present")
             .clone();
         for never in [
-            "CRABKA_OTLP_ENABLED",
-            "CRABKA_OTLP_ENDPOINT",
-            "CRABKA_OTLP_PROTOCOL",
-            "CRABKA_OTLP_SAMPLE_RATIO",
+            "KRABKA_OTLP_ENABLED",
+            "KRABKA_OTLP_ENDPOINT",
+            "KRABKA_OTLP_PROTOCOL",
+            "KRABKA_OTLP_SAMPLE_RATIO",
             "OTEL_SERVICE_NAME",
-            "CRABKA_OTLP_TIMEOUT",
+            "KRABKA_OTLP_TIMEOUT",
         ] {
             assert!(
                 env.iter().all(|e| e.name != never),

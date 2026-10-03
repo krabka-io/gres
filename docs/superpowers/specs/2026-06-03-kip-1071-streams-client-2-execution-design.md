@@ -7,7 +7,7 @@
 
 ## 1. Context
 
-Sub-project #1 (merged: PRs #373, #377) delivered the `crabka-client-streams`
+Sub-project #1 (merged: PRs #373, #377) delivered the `krabka-client-streams`
 crate — a `StreamsGroupHeartbeat` membership client + a byte-exact topology
 builder. In #1, processors are **structural placeholders**: `NodeKind::Processor
 { predecessors }` carries no executable logic, and the topology only feeds the
@@ -29,7 +29,7 @@ on.
 
 ### Goal
 
-Extend `crabka-client-streams` so a Rust application can:
+Extend `krabka-client-streams` so a Rust application can:
 
 1. **Attach executable logic** to a topology via a typed Processor API
    (`Processor<KIn,VIn,KOut,VOut>`, `ProcessorContext::forward`, serdes at topic
@@ -189,7 +189,7 @@ partition, and pending source offsets to commit.
 ### 5.2 `StreamThread` (`thread.rs`)
 
 A single tokio task (num.stream.threads = 1 for #2) owning the active-task set.
-Loop: round-robin `crabka_client_core::fetch_partition` each task's source
+Loop: round-robin `krabka_client_core::fetch_partition` each task's source
 partitions at the tracked offset → `process` → every `commit.interval.ms`,
 `commit()` all tasks. On task creation, seek to the committed offset
 (`OffsetFetch`) or `auto.offset.reset` (earliest/latest) if none. Uses its own
@@ -249,7 +249,7 @@ topologies are testable end-to-end in one driver (as the JVM
    adapters, multi-child child-order, source/sink (de)serialization, the
    build-time `TypeId` validation.
 3. **In-process broker integration** — a `KafkaStreams` app against a real
-   `crabka-broker` (reuse #1's harness + `streams.version` enablement): produce
+   `krabka-broker` (reuse #1's harness + `streams.version` enablement): produce
    input to the source topic, run the app, assert the transformed records land on
    the sink topic and committed offsets advance, then clean `close()`. The only
    end-to-end (fetch→process→produce→commit) gate; runs under the existing
@@ -278,7 +278,7 @@ topologies are testable end-to-end in one driver (as the JVM
 
 ## 9. Success criteria
 
-- `cargo test -p crabka-client-streams` green: TopologyTestDriver unit tests +
+- `cargo test -p krabka-client-streams` green: TopologyTestDriver unit tests +
   erased-graph unit tests + the in-process broker integration test + the doctest.
 - `cargo clippy --workspace --all-targets -- -D warnings` and
   `cargo fmt --check` clean.

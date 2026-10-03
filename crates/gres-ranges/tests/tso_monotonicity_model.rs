@@ -2,7 +2,7 @@
 //!
 //! The model keeps the protocol vocabulary deliberately close to the production
 //! seams. A request becomes a [`GrantLease`] reply, `durable_max_ts` represents
-//! [`crabka_gres_ranges::tso::oracle::MAX_TS_KEY`], and the model admits an
+//! [`krabka_gres_ranges::tso::oracle::MAX_TS_KEY`], and the model admits an
 //! oracle epoch only by the same liveness decision as [`HeartbeatVerdict`]. It
 //! explores two clients, variable grant sizes, delayed requests and replies,
 //! crash recovery, and a live fenced oracle that still has a client connection.
@@ -21,7 +21,7 @@
 use std::num::NonZeroU64;
 
 use assert2::assert;
-use crabka_gres_ranges::{GrantLease, HeartbeatVerdict, TsoTimestamp};
+use krabka_gres_ranges::{GrantLease, HeartbeatVerdict, TsoTimestamp};
 use stateright::{Checker, Model, Property};
 
 const CLIENTS: u8 = 2;

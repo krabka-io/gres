@@ -96,7 +96,7 @@ epoch), so the fingerprint is stable and finite.
 memory watchdog. If the clock × `last_heartbeat` dimension explodes, project `last_heartbeat` to a
 small ordinal and/or shrink the clock window (the share-group/compaction tuning techniques).
 
-## proptest fuzz (`proptest` already a `crabka-broker` dev-dep)
+## proptest fuzz (`proptest` already a `krabka-broker` dev-dep)
 
 Generate large-N random op sequences (the same actions, small alphabets, interleaved heartbeats +
 expiry ticks) driving a real `Group`, asserting the same invariants after every step (index

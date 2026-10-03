@@ -9,7 +9,7 @@ contents:
     - wolfi-baselayout
     - glibc
     - ld-linux
-    - crabka-gres-activator
+    - krabka-gres-activator
 
 accounts:
   groups:
@@ -22,7 +22,7 @@ accounts:
   run-as: 65532
 
 entrypoint:
-  command: /usr/bin/crabka-gres-activator
+  command: /usr/bin/krabka-gres-activator
 
 archs:
   - x86_64

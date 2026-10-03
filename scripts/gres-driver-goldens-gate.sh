@@ -4,7 +4,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-port="${CRABKA_GRES_DRIVER_GOLDEN_PORT:-$(python3 - <<'PY'
+port="${KRABKA_GRES_DRIVER_GOLDEN_PORT:-$(python3 - <<'PY'
 import socket
 with socket.socket() as sock:
     sock.bind(("127.0.0.1", 0))
@@ -21,12 +21,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if [ "${CRABKA_GRES_SKIP_BUILD:-}" != "1" ]; then
-    cargo build --locked -p crabka-gres -p crabka-gres-conformance \
-        --bin crabka-gres-driver-golden-replay
+if [ "${KRABKA_GRES_SKIP_BUILD:-}" != "1" ]; then
+    cargo build --locked -p krabka-gres -p krabka-gres-conformance \
+        --bin krabka-gres-driver-golden-replay
 fi
 
-./target/debug/crabka-gres --listen "127.0.0.1:${port}" \
+./target/debug/krabka-gres --listen "127.0.0.1:${port}" \
     --data-dir "${data_root}/gres" >"${data_root}/gres.log" 2>&1 &
 server_pid=$!
 
@@ -37,4 +37,4 @@ for _ in $(seq 40); do
     sleep 0.2
 done
 
-./target/debug/crabka-gres-driver-golden-replay --port "$port"
+./target/debug/krabka-gres-driver-golden-replay --port "$port"

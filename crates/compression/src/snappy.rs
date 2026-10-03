@@ -16,7 +16,7 @@
 //! the oracle gets a `compress` op.
 
 use bytes::{BufMut, Bytes, BytesMut};
-use crabka_units::prelude::{ByteSize, ByteSizeExt as _, kibibytes};
+use krabka_units::prelude::{ByteSize, ByteSizeExt as _, kibibytes};
 
 use crate::CompressionError;
 

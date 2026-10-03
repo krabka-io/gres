@@ -371,7 +371,7 @@ all the slice 51 broker plumbing.
 - `cargo fmt --all --check`
 - `cargo clippy --all-targets -- -D warnings`
 - `cargo test --workspace`
-- `cargo test -p crabka-broker --test delegation_tokens`
-- `cargo test -p crabka-operator --test reconcile_kafkauser_delegation_token`
+- `cargo test -p krabka-broker --test delegation_tokens`
+- `cargo test -p krabka-operator --test reconcile_kafkauser_delegation_token`
 - New kind-kafkauser-delegation-token e2e job green on the slice branch.
 - CRD drift check stays green (`deploy/crds/crabka.io_kafkausers.yaml` regenerated).

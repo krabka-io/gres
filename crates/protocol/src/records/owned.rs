@@ -1,8 +1,8 @@
 //! Owned `RecordBatch`, `Record`, and `RecordHeader` types.
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use crabka_compression::RecordDecompressionPolicy;
-use crabka_units::{ByteSize, convert::ByteSizeExt as _};
+use krabka_compression::RecordDecompressionPolicy;
+use krabka_units::{ByteSize, convert::ByteSizeExt as _};
 use zerocopy::FromBytes as _;
 
 use crate::{
@@ -532,10 +532,10 @@ impl RecordBatch {
         let codec = attributes.compression();
 
         // Decompress body if needed.
-        let body_for_records: Bytes = if codec == crabka_compression::CompressionType::None {
+        let body_for_records: Bytes = if codec == krabka_compression::CompressionType::None {
             Bytes::from(body)
         } else {
-            crabka_compression::decompress(
+            krabka_compression::decompress(
                 codec,
                 &body,
                 policy.output_limit(ByteSize::from_bytes(body.len() as u64)),
@@ -621,10 +621,10 @@ impl RecordBatch {
 
         // 2. Compress if needed.
         let codec = self.attributes.compression();
-        let body: Bytes = if codec == crabka_compression::CompressionType::None {
+        let body: Bytes = if codec == krabka_compression::CompressionType::None {
             raw_body
         } else {
-            crabka_compression::compress(codec, &raw_body)?
+            krabka_compression::compress(codec, &raw_body)?
         };
 
         // 3. batch_length = HEADER_TAIL_LEN + body_len
@@ -674,8 +674,8 @@ impl RecordBatch {
 #[cfg(test)]
 mod batch_tests {
     use assert2::check;
-    use crabka_compression::{CompressionError, CompressionType, RecordDecompressionPolicy};
-    use crabka_units::{bytes, fraction};
+    use krabka_compression::{CompressionError, CompressionType, RecordDecompressionPolicy};
+    use krabka_units::{bytes, fraction};
 
     use super::*;
 

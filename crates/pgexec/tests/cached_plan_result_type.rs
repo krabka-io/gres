@@ -16,8 +16,8 @@
 //! own `RowDescription` promised, carrying the earlier relation's type oids.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Engine, ExecuteOutcome, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Engine, ExecuteOutcome, QueryResult, Session};
 
 /// What the prepared statement produced under the second search path: the
 /// column names it answered with, or the SQLSTATE and message that refused
@@ -97,7 +97,7 @@ async fn two_schemas(session: &mut SqlSession, case: &Case) {
     .await;
 }
 
-fn refusal(error: &crabka_pgwire::error::PgError) -> (String, String) {
+fn refusal(error: &krabka_pgwire::error::PgError) -> (String, String) {
     (error.code.clone(), error.message.clone())
 }
 

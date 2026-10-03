@@ -6,9 +6,9 @@
 
 **Architecture:** 6d builds **no new data-path code** — it composes and adversarially verifies 6a–6c. Three verification legs: stateright (exhaustive tiny-model interleavings with partial-durability + `NodeLoss(minority)` in-scope), linearizability (concurrent `AppendVia` appenders, linearize at WAL-quorum-durable), and Jepsen (a real in-process 3-broker cluster under a fault nemesis, with a no-acked-loss ledger checker + a JVM byte-exact differential leg).
 
-**Tech Stack:** Rust 2024 (pinned stable 1.96.0), `stateright`, Creusot (replay), the in-process `Broker::start` harness, `crabka-client-producer`/`consumer`, `assert2`, `cargo +nightly fmt`, `clippy::pedantic`.
+**Tech Stack:** Rust 2024 (pinned stable 1.96.0), `stateright`, Creusot (replay), the in-process `Broker::start` harness, `krabka-client-producer`/`consumer`, `assert2`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-05-crabka-diskless-wal-slice6d-design.md`](../specs/2026-07-05-crabka-diskless-wal-slice6d-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-05-krabka-diskless-wal-slice6d-design.md`](../specs/2026-07-05-krabka-diskless-wal-slice6d-design.md).
 
 **PREREQUISITES (unlanded):** Slices 1–5 + 6a + 6b + 6c. The model extends the Slice-5 diskless crash model + the 6a quorum-frontier delta; the harness runs a 6a–6c cluster.
 
@@ -51,7 +51,7 @@ Extend the Slice-5 model: **(1)** WAL frontier = majority presence across N node
 
 - [ ] **Step 2: Run the checker**
 
-Run: `cargo test -p crabka-broker diskless_crash_model -- --nocapture`
+Run: `cargo test -p krabka-broker diskless_crash_model -- --nocapture`
 Expected: PASS — all three always-properties hold; all `sometimes` witnesses reached. A counterexample = a real composed loss window; reconcile with 6a–6c, do NOT weaken. Watch the state space (tiny bounds).
 
 - [ ] **Step 3: Commit**
@@ -74,7 +74,7 @@ Replace the single-leader-gated `ClientAppend` (`:172`, emits only when `leaders
 
 - [ ] **Step 2: Run + commit**
 
-Run: `cargo test -p crabka-raft --test kraft_model two_voters_append_via_linearizable -- --nocapture` → PASS (complete tiny config: 2 voters, 2 exchangeable appenders, 2 appends, 230,591 unique / 938,679 generated / depth 32).
+Run: `cargo test -p krabka-raft --test kraft_model two_voters_append_via_linearizable -- --nocapture` → PASS (complete tiny config: 2 voters, 2 exchangeable appenders, 2 appends, 230,591 unique / 938,679 generated / depth 32).
 
 ```bash
 git add crates/raft/tests/model/mod.rs
@@ -90,7 +90,7 @@ git commit -m "test(raft): linearizability model for concurrent stateless WAL ap
 
 - [ ] **Step 1: Substrate + generator (failing test)**
 
-Stand up a 3× `Broker::start(BrokerConfig::for_tests)` + quorum-WAL diskless cluster (extend the `BrokerHandle`/`listen_addr()` pattern from `producer_integration.rs`). A real `crabka-client-producer` produces `acks=all` and records an **acked-record ledger**; a `crabka-client-consumer` reads back.
+Stand up a 3× `Broker::start(BrokerConfig::for_tests)` + quorum-WAL diskless cluster (extend the `BrokerHandle`/`listen_addr()` pattern from `producer_integration.rs`). A real `krabka-client-producer` produces `acks=all` and records an **acked-record ledger**; a `krabka-client-consumer` reads back.
 
 - [ ] **Step 2: Nemesis (implement)**
 
@@ -98,7 +98,7 @@ Fault injectors matching the model actions, on a **seeded** schedule (no `Math.r
 
 - [ ] **Step 3: Checker (implement)**
 
-After the fault schedule: use public `crabka-client-core` direct partition Fetch (not a classic consumer group whose coordinator may have been killed) to assert **every acked offset in the ledger is still consumable**; feed the acknowledged invocation/return history into `LinearizabilityTester`/`KafkaLogSpec`; run the Dockerized JVM console consumer against that same partition for a byte-exact comparison.
+After the fault schedule: use public `krabka-client-core` direct partition Fetch (not a classic consumer group whose coordinator may have been killed) to assert **every acked offset in the ledger is still consumable**; feed the acknowledged invocation/return history into `LinearizabilityTester`/`KafkaLogSpec`; run the Dockerized JVM console consumer against that same partition for a byte-exact comparison.
 
 - [ ] **Step 4: Run + commit**
 
@@ -108,7 +108,7 @@ Run:
 
 ```bash
 ulimit -n 65536
-CARGO_INCREMENTAL=0 cargo test -p crabka-integration-tests \
+CARGO_INCREMENTAL=0 cargo test -p krabka-integration-tests \
   --test diskless_jepsen \
   three_broker_fault_schedule_preserves_the_acked_ledger \
   -- --ignored --nocapture
@@ -151,7 +151,7 @@ git commit -m "feat(verified): handoff-monotonicity lemma for the WAL-durability
 - [x] **Step 1:** Wire the three legs as **required** CI checks: the re-composed stateright model, the Creusot replay (incl. the 6c kernel + the handoff lemma), and the diskless Jepsen harness. The named live gate raises `nofile` to 65,536 before nextest. Document "diskless does not ship until these are green."
 - [ ] **Step 2:** `cargo +nightly fmt --check` — no diff.
 - [ ] **Step 3:** `cargo clippy --workspace --all-targets -- -D warnings` — no warnings.
-- [ ] **Step 4:** `cargo nextest run -p crabka-broker -p crabka-raft -p crabka-integration-tests` + `cargo creusot` — PASS across all three legs.
+- [ ] **Step 4:** `cargo nextest run -p krabka-broker -p krabka-raft -p krabka-integration-tests` + `cargo creusot` — PASS across all three legs.
 - [ ] **Step 5:** Commit.
 
 ```bash

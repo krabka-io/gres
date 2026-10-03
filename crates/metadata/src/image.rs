@@ -4,8 +4,8 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use crabka_security::{KafkaPrincipal, SaslMechanism, ScramCredential};
-use crabka_units::{ByteRate, convert::ByteRateExt};
+use krabka_security::{KafkaPrincipal, SaslMechanism, ScramCredential};
+use krabka_units::{ByteRate, convert::ByteRateExt};
 use uuid::Uuid;
 
 use crate::{
@@ -1163,7 +1163,7 @@ impl MetadataImage {
 
 #[cfg(test)]
 mod tests {
-    use crabka_units::bytes_per_sec;
+    use krabka_units::bytes_per_sec;
 
     use super::*;
 
@@ -1325,7 +1325,7 @@ mod tests {
                     name: "EXTERNAL".into(),
                     host: "ext".into(),
                     port: 9093,
-                    protocol: crabka_security::ListenerProtocol::SaslSsl,
+                    protocol: krabka_security::ListenerProtocol::SaslSsl,
                 }],
                 features: std::collections::BTreeMap::new(),
             }),
@@ -1370,7 +1370,7 @@ mod tests {
     #[test]
     // exhaustive fixture over every stored variant
     fn to_records_round_trips_all_variants() {
-        use crabka_security::{KafkaPrincipal, SaslMechanism};
+        use krabka_security::{KafkaPrincipal, SaslMechanism};
 
         let cid = Uuid::new_v4();
         let mut image = MetadataImage::new(cid);
@@ -1732,7 +1732,7 @@ mod tests {
                 leader: NodeId(1),
                 replicas: vec![NodeId(1), NodeId(2), NodeId(3)],
                 isr: vec![NodeId(1), NodeId(2)],
-                leader_epoch: crabka_ids::LeaderEpoch(0),
+                leader_epoch: krabka_ids::LeaderEpoch(0),
                 adding_replicas: vec![NodeId(3)],
                 removing_replicas: vec![],
                 directories: vec![uuid::Uuid::nil(), dir, uuid::Uuid::nil()],
@@ -1963,20 +1963,20 @@ mod tests {
         let mut m = img();
         m.apply(&MetadataRecord::V1ScramCredential(ScramCredentialRecord {
             user: "alice".into(),
-            mechanism: crabka_security::SaslMechanism::ScramSha512,
+            mechanism: krabka_security::SaslMechanism::ScramSha512,
             salt: vec![1; 16],
             stored_key: vec![2; 64],
             server_key: vec![3; 64],
             iterations: 4096,
         }));
-        let got = m.scram_credential("alice", crabka_security::SaslMechanism::ScramSha512);
+        let got = m.scram_credential("alice", krabka_security::SaslMechanism::ScramSha512);
         assert2::assert!(got.map(|credential| credential.iterations) == Some(4096));
     }
 
     #[test]
     fn apply_scram_credential_last_write_wins() {
         let mut m = img();
-        let mech = crabka_security::SaslMechanism::ScramSha512;
+        let mech = krabka_security::SaslMechanism::ScramSha512;
         m.apply(&MetadataRecord::V1ScramCredential(ScramCredentialRecord {
             user: "alice".into(),
             mechanism: mech,
@@ -2000,7 +2000,7 @@ mod tests {
     #[test]
     fn delete_scram_credential_removes() {
         let mut m = img();
-        let mech = crabka_security::SaslMechanism::ScramSha512;
+        let mech = krabka_security::SaslMechanism::ScramSha512;
         m.apply(&MetadataRecord::V1ScramCredential(ScramCredentialRecord {
             user: "alice".into(),
             mechanism: mech,
@@ -2914,7 +2914,7 @@ mod tests {
 
     #[test]
     fn min_required_metadata_version_rises_with_scram_and_tokens() {
-        use crabka_security::{KafkaPrincipal, SaslMechanism};
+        use krabka_security::{KafkaPrincipal, SaslMechanism};
 
         use crate::metadata_version::{DELEGATION_TOKEN_MIN_LEVEL, SCRAM_MIN_LEVEL};
         let mut m = img();
@@ -2948,7 +2948,7 @@ mod tests {
 
     #[test]
     fn downgrade_projection_removes_scram_and_tokens_below_their_record_gates() {
-        use crabka_security::{KafkaPrincipal, SaslMechanism};
+        use krabka_security::{KafkaPrincipal, SaslMechanism};
 
         use crate::{
             metadata_version::{METADATA_VERSION_MIN, SCRAM_MIN_LEVEL},

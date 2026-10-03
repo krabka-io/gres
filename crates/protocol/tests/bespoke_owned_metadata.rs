@@ -3,7 +3,7 @@
 // hand-written wrappers.
 
 use bytes::BytesMut;
-use crabka_protocol::{
+use krabka_protocol::{
     Decode, Encode, UnknownTaggedFields,
     owned::{
         metadata_request::{MAX_VERSION, MIN_VERSION, MetadataRequest},

@@ -112,7 +112,7 @@ range, encode through the legacy response type.
 
 ```rust
 RecordsPayload::Legacy(bytes) => {
-    let batch = crabka_records_legacy::legacy_to_v2(&bytes)?;
+    let batch = krabka_records_legacy::legacy_to_v2(&bytes)?;
     // producer_id, producer_epoch, base_sequence default to -1;
     // is_transactional = false. The bridge sets these.
     // Fall through to the existing v2 storage path with `batch`.
@@ -122,7 +122,7 @@ RecordsPayload::Legacy(bytes) => {
 The match arm is dispatch-by-bytes, not by request version: a v3+
 client may still send a legacy-format payload inside the request, and
 this arm handles both that and the v0-2 path the wire router routed
-through us. `legacy_to_v2` already exists in `crabka-records-legacy`.
+through us. `legacy_to_v2` already exists in `krabka-records-legacy`.
 
 ### Down-conversion (Fetch path)
 
@@ -142,19 +142,19 @@ fn down_convert_for_fetch(batch: &RecordBatch, request_version: i16)
         batch.clone()
     };
     // Drop control records; all other records flow through.
-    let bytes = crabka_records_legacy::v2_to_legacy(&working,
+    let bytes = krabka_records_legacy::v2_to_legacy(&working,
         /* drop_control_records */ true)?;
     Ok(RecordsPayload::Legacy(bytes))
 }
 ```
 
-`v2_to_legacy` is already in `crabka-records-legacy`. Its current
+`v2_to_legacy` is already in `krabka-records-legacy`. Its current
 signature is verified against the crate before plan execution; if it
 does not already filter control records, this slice adds a
 `drop_control_records: bool` parameter (call sites in the broker pass
 `true`; existing call sites elsewhere, if any, pass `false`).
 
-`recompress_zstd_as_snappy` reuses `crabka-compression` codecs: decompress
+`recompress_zstd_as_snappy` reuses `krabka-compression` codecs: decompress
 to the inner v2 record stream, re-emit as a new `RecordBatch` with
 snappy compression set. The records themselves don't change.
 

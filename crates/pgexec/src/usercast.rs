@@ -1,6 +1,6 @@
 //! `CREATE CAST` / `DROP CAST`, and the conversion a recorded cast performs.
 //!
-//! gres decides most cast legality in `crabka_pgtypes::cast`, in hand-written
+//! gres decides most cast legality in `krabka_pgtypes::cast`, in hand-written
 //! match arms over [`ColumnType`] pairs. Those arms have no catalog handle and
 //! cannot, so a cast the *user* declared is resolved a rung up: the executor
 //! consults this module first and only falls through to the built-in rules when
@@ -15,11 +15,11 @@
 //! type's I/O that renders and reads them. Where the declared input function
 //! would have read a form the representation type does not, the conversion
 //! fails loudly rather than producing some other value.
-use crabka_pgcatalog::UserCast;
-use crabka_pgkv::{Kv, WriteOp};
-use crabka_pgparser::ast::{CastContext, CastMethod, Expr, FuncArgs, FuncCall};
-use crabka_pgtypes::{ColumnType, Datum, encoding::encode_binary};
-use crabka_pgwire::engine::QueryResult;
+use krabka_pgcatalog::UserCast;
+use krabka_pgkv::{Kv, WriteOp};
+use krabka_pgparser::ast::{CastContext, CastMethod, Expr, FuncArgs, FuncCall};
+use krabka_pgtypes::{ColumnType, Datum, encoding::encode_binary};
+use krabka_pgwire::engine::QueryResult;
 
 use crate::{clock::EvalCtx, error::ExecError, scope::Scope};
 
@@ -43,7 +43,7 @@ pub(crate) fn hydrate(kv: &dyn Kv) -> Result<(), ExecError> {
 /// Propagates catalog read errors.
 pub(crate) fn publish(kv: &dyn Kv) -> Result<(), ExecError> {
     let declared = declared_casts(kv)?;
-    crabka_pgtypes::usercast::publish(declared);
+    krabka_pgtypes::usercast::publish(declared);
     Ok(())
 }
 
@@ -53,31 +53,31 @@ pub(crate) fn publish(kv: &dyn Kv) -> Result<(), ExecError> {
 ///
 /// Propagates catalog read errors.
 pub(crate) fn publish_delta(
-    before: &[crabka_pgcatalog::UserCast],
+    before: &[krabka_pgcatalog::UserCast],
     kv: &dyn Kv,
 ) -> Result<(), ExecError> {
     let before = declared_from(before);
     let after = declared_casts(kv)?;
-    crabka_pgtypes::usercast::publish_catalog_delta(&before, &after);
+    krabka_pgtypes::usercast::publish_catalog_delta(&before, &after);
     Ok(())
 }
 
-fn declared_casts(kv: &dyn Kv) -> Result<Vec<crabka_pgtypes::usercast::DeclaredCast>, ExecError> {
-    Ok(declared_from(&crabka_pgcatalog::list_user_casts(kv)?))
+fn declared_casts(kv: &dyn Kv) -> Result<Vec<krabka_pgtypes::usercast::DeclaredCast>, ExecError> {
+    Ok(declared_from(&krabka_pgcatalog::list_user_casts(kv)?))
 }
 
 fn declared_from(
-    casts: &[crabka_pgcatalog::UserCast],
-) -> Vec<crabka_pgtypes::usercast::DeclaredCast> {
+    casts: &[krabka_pgcatalog::UserCast],
+) -> Vec<krabka_pgtypes::usercast::DeclaredCast> {
     casts
         .iter()
-        .map(|cast| crabka_pgtypes::usercast::DeclaredCast {
+        .map(|cast| krabka_pgtypes::usercast::DeclaredCast {
             source: cast.source,
             target: cast.target,
             method: match cast.method {
-                'i' => crabka_pgtypes::usercast::CastMethod::InOut,
-                'f' => crabka_pgtypes::usercast::CastMethod::Function,
-                _ => crabka_pgtypes::usercast::CastMethod::Binary,
+                'i' => krabka_pgtypes::usercast::CastMethod::InOut,
+                'f' => krabka_pgtypes::usercast::CastMethod::Function,
+                _ => krabka_pgtypes::usercast::CastMethod::Binary,
             },
         })
         .collect()
@@ -149,9 +149,9 @@ pub(crate) fn coerce_inout(
     if value.is_null() {
         return Ok(Datum::Null);
     }
-    let rendered = crabka_pgtypes::encoding::encode_text_in(value, ctx.output_style());
+    let rendered = krabka_pgtypes::encoding::encode_text_in(value, ctx.output_style());
     let rendered = String::from_utf8(rendered).map_err(|_| {
-        ExecError::Remote(crabka_pgwire::error::PgError::error(
+        ExecError::Remote(krabka_pgwire::error::PgError::error(
             "22021",
             "cast source value has no valid text form".to_string(),
         ))
@@ -174,7 +174,7 @@ pub(crate) fn coerce_inout(
 /// The source type has to be *inferred* rather than read off the value: a base
 /// type's `Datum` is its representation type's, so `Datum::Float4` alone cannot
 /// say whether it came from a `float4` or from an `xfloat4`. Callers gate this
-/// on [`crabka_pgtypes::usercast::any_declared`], so a server with no declared
+/// on [`krabka_pgtypes::usercast::any_declared`], so a server with no declared
 /// cast never pays the inference.
 ///
 /// # Errors
@@ -192,15 +192,15 @@ pub(crate) fn coerce_declared(
     let Ok(source) = crate::eval::infer_type(expr, scope) else {
         return Ok(None);
     };
-    let Some(method) = crabka_pgtypes::usercast::declared_method(source.oid(), target.oid()) else {
+    let Some(method) = krabka_pgtypes::usercast::declared_method(source.oid(), target.oid()) else {
         return Ok(None);
     };
     match method {
-        crabka_pgtypes::usercast::CastMethod::Binary => {
+        krabka_pgtypes::usercast::CastMethod::Binary => {
             coerce_binary(value, source, target, &ctx.time_zone).map(Some)
         }
-        crabka_pgtypes::usercast::CastMethod::InOut => coerce_inout(value, target, ctx).map(Some),
-        crabka_pgtypes::usercast::CastMethod::Function => {
+        krabka_pgtypes::usercast::CastMethod::InOut => coerce_inout(value, target, ctx).map(Some),
+        krabka_pgtypes::usercast::CastMethod::Function => {
             coerce_function(expr, value, source, target, ctx).map(Some)
         }
     }
@@ -216,7 +216,7 @@ fn coerce_function(
     let catalog = crate::routine::scalar_runtime_catalog().ok_or_else(|| {
         ExecError::Unsupported("function-backed casts require a statement runtime".into())
     })?;
-    let cast = crabka_pgcatalog::get_user_cast(catalog.as_ref(), source.oid(), target.oid())?
+    let cast = krabka_pgcatalog::get_user_cast(catalog.as_ref(), source.oid(), target.oid())?
         .ok_or_else(|| ExecError::UndefinedObject("function-backed cast disappeared".into()))?;
     let oid = cast.function.parse::<i32>().map_err(|_| {
         ExecError::InvalidObjectDefinition("function-backed cast has an invalid routine oid".into())
@@ -253,7 +253,7 @@ fn coerce_implicit_result(
     if source == target {
         return Ok(value);
     }
-    if let Some(cast) = crabka_pgcatalog::get_user_cast(kv, source.oid(), target.oid())?
+    if let Some(cast) = krabka_pgcatalog::get_user_cast(kv, source.oid(), target.oid())?
         && cast.context == 'i'
     {
         return match cast.method {
@@ -316,7 +316,7 @@ pub(crate) fn create_cast(
     if recorded == 'b' {
         reject_non_coercible(source, target)?;
     }
-    if crabka_pgcatalog::get_user_cast(kv, source.oid(), target.oid())?.is_some() {
+    if krabka_pgcatalog::get_user_cast(kv, source.oid(), target.oid())?.is_some() {
         return Err(ExecError::DuplicateObject(format!(
             "cast from type {} to type {} already exists",
             source.name(),
@@ -340,7 +340,7 @@ pub(crate) fn create_cast(
         QueryResult::Command {
             tag: "CREATE CAST".to_string(),
         },
-        crabka_pgcatalog::create_user_cast_ops(kv, &cast)?,
+        krabka_pgcatalog::create_user_cast_ops(kv, &cast)?,
     ))
 }
 
@@ -349,7 +349,7 @@ fn resolve_cast_function(
     name: &str,
     source: ColumnType,
     target: ColumnType,
-) -> Result<crabka_pgcatalog::routine::Routine, ExecError> {
+) -> Result<krabka_pgcatalog::routine::Routine, ExecError> {
     let routine = crate::routine::resolve_call(kv, name, &[crate::eval::ArgType::Known(source)])?
         .ok_or_else(|| {
         ExecError::UndefinedFunction(format!("function {name}({}) does not exist", source.name()))
@@ -370,7 +370,7 @@ fn resolve_cast_function(
     })?;
     if returned != target
         && !crate::routine::implicitly_coercible(returned, target)
-        && !crabka_pgcatalog::get_user_cast(kv, returned.oid(), target.oid())?
+        && !krabka_pgcatalog::get_user_cast(kv, returned.oid(), target.oid())?
             .is_some_and(|cast| cast.context == 'i' && cast.method != 'f')
     {
         return Err(ExecError::InvalidObjectDefinition(format!(
@@ -397,7 +397,7 @@ pub(crate) fn drop_cast(
     let tag = QueryResult::Command {
         tag: "DROP CAST".to_string(),
     };
-    let Some(cast) = crabka_pgcatalog::get_user_cast(kv, source.oid(), target.oid())? else {
+    let Some(cast) = krabka_pgcatalog::get_user_cast(kv, source.oid(), target.oid())? else {
         if if_exists {
             return Ok((tag, Vec::new()));
         }
@@ -407,10 +407,10 @@ pub(crate) fn drop_cast(
             target.name()
         )));
     };
-    let mut ops = crabka_pgcatalog::drop_user_cast_ops(source.oid(), target.oid());
-    ops.push(crabka_pgcatalog::set_comment_op(
+    let mut ops = krabka_pgcatalog::drop_user_cast_ops(source.oid(), target.oid());
+    ops.push(krabka_pgcatalog::set_comment_op(
         "cast",
-        crabka_pgcatalog::CommentObject::Named(&cast.oid.to_string()),
+        krabka_pgcatalog::CommentObject::Named(&cast.oid.to_string()),
         None,
     ));
     Ok((tag, ops))

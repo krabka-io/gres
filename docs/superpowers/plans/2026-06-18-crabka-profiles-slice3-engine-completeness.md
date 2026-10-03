@@ -1,21 +1,21 @@
-# crabka-pprof Slice 3 — Engine completeness (`SelectSeries` + `Diff` + `max_nodes`/`"other"` + raw-pprof output + `SelectMergeSpanProfile`/`SelectHeatmap`)
+# krabka-pprof Slice 3 — Engine completeness (`SelectSeries` + `Diff` + `max_nodes`/`"other"` + raw-pprof output + `SelectMergeSpanProfile`/`SelectHeatmap`)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Take the `crabka-pprof` engine built in Slice 2 (the pprof model + codec, the `SymbolDb` parent-pointer stacktrace tree + dedup tables + `SymbolSource`, the `ProfileType` parser, the `ProfileStore` trait + the pinned result types, and the **MERGE → flamegraph** path — fold-before-symbolize, `Tree`, the 4-ints-per-bar `FlameGraph`) from "merge works" to "the engine is complete." This slice adds: **SelectSeries** (read the precomputed `PCOL_TOTAL_VALUE` per profile → DataFusion `GROUP BY group_by, floor(timestamp_ms / step_ms)` → `SUM`/`AVERAGE` → `Vec<Series>`, step in **seconds**); **`max_nodes` truncation** with a synthetic `"other"` node (a min-value heap threshold) made byte-exact in the `Tree::to_flamegraph` encoder; **Diff** (two independent MERGEs left/right, structurally aligned with zero-value placeholders so child sets match, encoded as a `FlameGraphDiff` whose levels are **groups of 7** + `left_ticks`/`right_ticks`); **SelectMergeProfile** (the merged raw **pprof bytes**, re-encoded via the Slice-2 `PprofProfile` codec); **SelectMergeSpanProfile** (a `span_selector` filtering MERGE on `PCOL_SPAN_ID`); and **SelectHeatmap** (a 2-D `(time-bucket × value-bucket)` count matrix). Plus the load-bearing distributed invariant: **cross-block partial-tree merge** — each block/scan resolves its raw ids **locally** to a partial symbolized `Tree`, and the engine merges partial trees (`Tree::merge`) — raw stacktrace ids never cross a block boundary.
+**Goal:** Take the `krabka-pprof` engine built in Slice 2 (the pprof model + codec, the `SymbolDb` parent-pointer stacktrace tree + dedup tables + `SymbolSource`, the `ProfileType` parser, the `ProfileStore` trait + the pinned result types, and the **MERGE → flamegraph** path — fold-before-symbolize, `Tree`, the 4-ints-per-bar `FlameGraph`) from "merge works" to "the engine is complete." This slice adds: **SelectSeries** (read the precomputed `PCOL_TOTAL_VALUE` per profile → DataFusion `GROUP BY group_by, floor(timestamp_ms / step_ms)` → `SUM`/`AVERAGE` → `Vec<Series>`, step in **seconds**); **`max_nodes` truncation** with a synthetic `"other"` node (a min-value heap threshold) made byte-exact in the `Tree::to_flamegraph` encoder; **Diff** (two independent MERGEs left/right, structurally aligned with zero-value placeholders so child sets match, encoded as a `FlameGraphDiff` whose levels are **groups of 7** + `left_ticks`/`right_ticks`); **SelectMergeProfile** (the merged raw **pprof bytes**, re-encoded via the Slice-2 `PprofProfile` codec); **SelectMergeSpanProfile** (a `span_selector` filtering MERGE on `PCOL_SPAN_ID`); and **SelectHeatmap** (a 2-D `(time-bucket × value-bucket)` count matrix). Plus the load-bearing distributed invariant: **cross-block partial-tree merge** — each block/scan resolves its raw ids **locally** to a partial symbolized `Tree`, and the engine merges partial trees (`Tree::merge`) — raw stacktrace ids never cross a block boundary.
 
-**Architecture:** This slice is pure `crabka-pprof` extension — **no new crate, no networking, no proto codegen** (the Connect `querier.v1` wire surface is slice 5; this slice produces the engine result types those handlers project). It adds, on top of Slice 2's `ProfileStore`/`ProfileScan`/`FlameEngine`/`Tree`/`SymbolSource` substrate: (1) a **DataFusion time-bucketing aggregation** for `SelectSeries` over the `PCOL_TOTAL_VALUE` column (no re-fold, no symbolization — series are pure float aggregations keyed by `group_by` labels); (2) a **`max_nodes` truncation kernel** folded into `Tree::to_flamegraph` (a min-value heap threshold collapsing the pruned tail into one synthetic `"other"` node per surviving parent, conserving totals); (3) a **diff aligner + 7-ints-per-bar encoder** building one `FlameGraphDiff` from two `Tree`s by walking both trees in lockstep with zero-value placeholders; (4) a **raw-pprof re-encoder** that turns the merged `(frames, value)` set back into a `PprofProfile` and `encode()`s it; (5) a **span-scoped MERGE** that pushes a `PCOL_SPAN_ID` predicate into the same scan path; (6) a **heatmap binning kernel** over `(timestamp_ms, total_value)`.
+**Architecture:** This slice is pure `krabka-pprof` extension — **no new crate, no networking, no proto codegen** (the Connect `querier.v1` wire surface is slice 5; this slice produces the engine result types those handlers project). It adds, on top of Slice 2's `ProfileStore`/`ProfileScan`/`FlameEngine`/`Tree`/`SymbolSource` substrate: (1) a **DataFusion time-bucketing aggregation** for `SelectSeries` over the `PCOL_TOTAL_VALUE` column (no re-fold, no symbolization — series are pure float aggregations keyed by `group_by` labels); (2) a **`max_nodes` truncation kernel** folded into `Tree::to_flamegraph` (a min-value heap threshold collapsing the pruned tail into one synthetic `"other"` node per surviving parent, conserving totals); (3) a **diff aligner + 7-ints-per-bar encoder** building one `FlameGraphDiff` from two `Tree`s by walking both trees in lockstep with zero-value placeholders; (4) a **raw-pprof re-encoder** that turns the merged `(frames, value)` set back into a `PprofProfile` and `encode()`s it; (5) a **span-scoped MERGE** that pushes a `PCOL_SPAN_ID` predicate into the same scan path; (6) a **heatmap binning kernel** over `(timestamp_ms, total_value)`.
 
 The load-bearing realization: **everything in this slice is "more aggregations and more encoders" on top of Slice 2's scan/`Tree`/`FlameGraph` substrate.** No new storage seam and no new `ProfileStore` method are required — `SelectSeries` and `SelectHeatmap` are DataFusion aggregations over the `ProfileScan.samples_table` the Slice-2 `store.select()` already hands back; `Diff` and `max_nodes` are pure encoders over the `Tree` the merge path already builds; `SelectMergeProfile` re-uses the Slice-2 `PprofProfile` codec; `SelectMergeSpanProfile` is `select_merge_stacktraces` with one extra predicate. So the slice is dominated by per-method bite-sized TDD, each pinned by a hand-written unit test encoding the exact Pyroscope contract (the 4-/7-ints-per-bar encodings, step-in-seconds, SUM vs AVERAGE, zero-value diff alignment, `"other"`-conserves-total), before any DataFusion plumbing.
 
-**Tech Stack:** Rust 2024 · `datafusion { git = "https://github.com/apache/datafusion", rev = "0838a4ddb902535b0e95a1c5a254be7e9c7fe9bf" }` · `arrow` 59 · `prost` 0.14 (pprof messages, via the Slice-2 codec) · `async-trait` 0.1 · `tokio` (`macros`, `rt-multi-thread`) · `futures` 0.3 · `thiserror` 2. Consumes Slice 2's `crabka-pprof` surface (the engine, `ProfileStore`, `ProfileScan`, `Tree`, `FlameGraph`, `SymbolSource`, the result types) and — only transitively, through the injected `ProfileStore` — `crabka-blockstore`'s `LabelMatcher`/`MatchOp` and the `PCOL_*` column constants. Tests: `assert2`, `proptest`. The `InMemoryProfileStore` test double (frozen by Slice 2) backs every test so the engine is independently testable without ingest/blockstore/querier.
+**Tech Stack:** Rust 2024 · `datafusion { git = "https://github.com/apache/datafusion", rev = "0838a4ddb902535b0e95a1c5a254be7e9c7fe9bf" }` · `arrow` 59 · `prost` 0.14 (pprof messages, via the Slice-2 codec) · `async-trait` 0.1 · `tokio` (`macros`, `rt-multi-thread`) · `futures` 0.3 · `thiserror` 2. Consumes Slice 2's `krabka-pprof` surface (the engine, `ProfileStore`, `ProfileScan`, `Tree`, `FlameGraph`, `SymbolSource`, the result types) and — only transitively, through the injected `ProfileStore` — `krabka-blockstore`'s `LabelMatcher`/`MatchOp` and the `PCOL_*` column constants. Tests: `assert2`, `proptest`. The `InMemoryProfileStore` test double (frozen by Slice 2) backs every test so the engine is independently testable without ingest/blockstore/querier.
 
 ## Global Constraints
 
 - **No backwards compatibility.** Greenfield/undeployed. Change signatures/enums/registry shapes freely; no shims, no migration code, no default-off feature flags. When a result type or encoder shape changes, change it in place.
 - **`unsafe_code = "forbid"`** workspace-wide. No `unsafe`.
-- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p crabka-pprof --all-targets` before each commit.
-- **Formatting:** `cargo fmt -p crabka-pprof` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
+- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p krabka-pprof --all-targets` before each commit.
+- **Formatting:** `cargo fmt -p krabka-pprof` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
 - **Assertions:** `assert2::assert!` in tests; `prop_assert*` inside `proptest!`.
 - **Async tests:** `#[tokio::test]`. The engine API (`select_series`/`diff`/`select_merge_profile`/`select_merge_stacktraces`) is async; the `InMemoryProfileStore` test double backs every test so the engine is independently testable without ingest/blockstore.
 - **DataFusion-internal API churn:** the `rev` is pinned. `SelectSeries`/`SelectHeatmap` are *ordinary* DataFusion `GROUP BY`/aggregation plans built through the `DataFrame`/`SessionContext`/SQL API on the `ProfileScan.samples_table` — **no** custom `UserDefinedLogicalNodeCore` or `ExecutionPlan` is introduced in this slice. Where a `DataFrame` aggregation method, `Expr` builder, or `ScalarValue` extraction signature is needed, give the **structure + behavior** and a behavior-pinning test, with a `// verify against rev 0838a4d` note rather than fabricating an exact upstream signature. The test (input rows → expected `Vec<Series>` / `FlameGraphDiff` / pprof) is the contract; the plumbing is whatever compiles against the pin.
@@ -26,7 +26,7 @@ The load-bearing realization: **everything in this slice is "more aggregations a
 
 ## Dependency & slice roadmap
 
-**Depends on:** **Slice 2 (`crabka-pprof` core)** — this slice consumes its public + crate-internal surface verbatim:
+**Depends on:** **Slice 2 (`krabka-pprof` core)** — this slice consumes its public + crate-internal surface verbatim:
 
 - `pub struct FlameEngine<S: ProfileStore>` with `new(store: Arc<S>, opts: EngineOpts)` and the **`select_merge_stacktraces(tenant, profile_type, label_selector, start_ms, end_ms, max_nodes) -> Result<FlameGraph, ProfileError>`** method (the MERGE path this slice extends with `Diff`/`SelectSeries`/`SelectMergeProfile`/`SelectMergeSpanProfile`).
 - `pub struct EngineOpts { pub default_max_nodes: i64 /* 2048 */ }`.
@@ -48,10 +48,10 @@ The samples fact-table columns (defined by Slice 1, surfaced through `ProfileSca
 
 **The 8 profiles slices** (this plan = Slice 3; each gets its own plan):
 
-1. Blockstore `ProfileIndex` + profile samples schema (`PCOL_*`) + symbol-DB artifact. *(slice 1 — `cargo test -p crabka-blockstore`)*
-2. `crabka-pprof` core — pprof model + codec, `SymbolDb` + `SymbolSource`, `ProfileType`, `ProfileStore` + result types, MERGE → flamegraph (fold-before-symbolize, `Tree`, 4-ints-per-bar). *(slice 2 — `cargo test -p crabka-pprof`)*
+1. Blockstore `ProfileIndex` + profile samples schema (`PCOL_*`) + symbol-DB artifact. *(slice 1 — `cargo test -p krabka-blockstore`)*
+2. `krabka-pprof` core — pprof model + codec, `SymbolDb` + `SymbolSource`, `ProfileType`, `ProfileStore` + result types, MERGE → flamegraph (fold-before-symbolize, `Tree`, 4-ints-per-bar). *(slice 2 — `cargo test -p krabka-pprof`)*
 3. **Engine completeness** *(this plan)* — `SelectSeries`, `Diff`, `max_nodes`/`"other"`, raw-pprof output, `SelectMergeSpanProfile`, `SelectHeatmap`, cross-block partial-tree merge.
-4. Ingest service — distributor (`push.v1` + `/ingest` + OTLP `v1development`) → `(tenant, series_fingerprint)`-WAL; block-builder. *(slices 4–8 — `cargo test -p crabka-profiles`)*
+4. Ingest service — distributor (`push.v1` + `/ingest` + OTLP `v1development`) → `(tenant, series_fingerprint)`-WAL; block-builder. *(slices 4–8 — `cargo test -p krabka-profiles`)*
 5. Querier + Connect `querier.v1` API + legacy `/pyroscope/render`.
 6. Query-frontend — split/shard + partial-tree merge + select-series shard-merge.
 7. Native symbolization — debuginfod + DWARF/ELF/`.gopclntab`.
@@ -128,7 +128,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-pprof --lib series`
+Run: `cargo test -p krabka-pprof --lib series`
 Expected: FAIL — `cannot find function step_ms_from_secs`.
 
 - [ ] **Step 3: Implement the kernel**
@@ -182,14 +182,14 @@ pub fn fold_bucket(agg: SeriesAgg, values: &[i64]) -> f64 {
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-pprof --lib series`
+Run: `cargo test -p krabka-pprof --lib series`
 Expected: PASS (3 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-pprof
-cargo clippy -p crabka-pprof --all-targets
+cargo fmt -p krabka-pprof
+cargo clippy -p krabka-pprof --all-targets
 git add crates/pprof/
 git commit -m "feat(pprof): Series/SeriesAgg + step-bucketing kernel (step in seconds)"
 ```
@@ -275,7 +275,7 @@ In `crates/pprof/src/series.rs` test module (or `engine.rs`'s), append — backe
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-pprof --lib series`
+Run: `cargo test -p krabka-pprof --lib series`
 Expected: FAIL — `no method named select_series`.
 
 - [ ] **Step 3: Implement `select_series`**
@@ -303,14 +303,14 @@ In `engine.rs`, add the method. Parse `label_selector` → matchers; call `store
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-pprof --lib series`
+Run: `cargo test -p krabka-pprof --lib series`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-pprof
-cargo clippy -p crabka-pprof --all-targets
+cargo fmt -p krabka-pprof
+cargo clippy -p krabka-pprof --all-targets
 git add crates/pprof/
 git commit -m "feat(pprof): FlameEngine::select_series — total_value time-series (step-in-seconds, SUM/AVERAGE)"
 ```
@@ -383,7 +383,7 @@ In `tree.rs`, append to the test module:
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-pprof --lib flamegraph`
+Run: `cargo test -p krabka-pprof --lib flamegraph`
 Expected: FAIL — truncation rolls nothing into `"other"` (Slice 2 left `max_nodes` as a stub / ignored).
 
 - [ ] **Step 3: Implement the truncation kernel + wire into the encoder**
@@ -409,14 +409,14 @@ Add the kernel: compute every node's `total`; if node count `> max_nodes` and `m
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-pprof --lib flamegraph`
+Run: `cargo test -p krabka-pprof --lib flamegraph`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-pprof
-cargo clippy -p crabka-pprof --all-targets
+cargo fmt -p krabka-pprof
+cargo clippy -p krabka-pprof --all-targets
 git add crates/pprof/
 git commit -m "feat(pprof): max_nodes flamegraph truncation with total-conserving synthetic \"other\""
 ```
@@ -494,7 +494,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-pprof --lib diff`
+Run: `cargo test -p krabka-pprof --lib diff`
 Expected: FAIL — `cannot find function diff_trees`.
 
 - [ ] **Step 3: Implement the aligner + encoder**
@@ -521,14 +521,14 @@ use crate::{FlameGraphDiff, Level};
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-pprof --lib diff`
+Run: `cargo test -p krabka-pprof --lib diff`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-pprof
-cargo clippy -p crabka-pprof --all-targets
+cargo fmt -p krabka-pprof
+cargo clippy -p krabka-pprof --all-targets
 git add crates/pprof/
 git commit -m "feat(pprof): diff_trees — zero-aligned 7-ints-per-bar FlameGraphDiff"
 ```
@@ -573,7 +573,7 @@ In `engine.rs` test module:
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-pprof --lib engine`
+Run: `cargo test -p krabka-pprof --lib engine`
 Expected: FAIL — `no method named diff`.
 
 - [ ] **Step 3: Implement `diff` + extract `merge_to_tree`**
@@ -582,14 +582,14 @@ Refactor the Slice-2 `select_merge_stacktraces` body so the symbolized-`Tree` co
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-pprof --lib engine`
+Run: `cargo test -p krabka-pprof --lib engine`
 Expected: PASS (and the Slice-2 MERGE tests still pass after the refactor).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-pprof
-cargo clippy -p crabka-pprof --all-targets
+cargo fmt -p krabka-pprof
+cargo clippy -p krabka-pprof --all-targets
 git add crates/pprof/
 git commit -m "feat(pprof): FlameEngine::diff via two independent MERGE-to-Tree + diff_trees"
 ```
@@ -645,7 +645,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-pprof --lib raw_profile`
+Run: `cargo test -p krabka-pprof --lib raw_profile`
 Expected: FAIL — `cannot find function tree_to_pprof`.
 
 - [ ] **Step 3: Implement `tree_to_pprof` + the engine method**
@@ -654,14 +654,14 @@ Expected: FAIL — `cannot find function tree_to_pprof`.
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-pprof --lib raw_profile engine`
+Run: `cargo test -p krabka-pprof --lib raw_profile engine`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-pprof
-cargo clippy -p crabka-pprof --all-targets
+cargo fmt -p krabka-pprof
+cargo clippy -p krabka-pprof --all-targets
 git add crates/pprof/
 git commit -m "feat(pprof): select_merge_profile — merged Tree -> raw pprof bytes"
 ```
@@ -703,7 +703,7 @@ git commit -m "feat(pprof): select_merge_profile — merged Tree -> raw pprof by
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-pprof --lib engine`
+Run: `cargo test -p krabka-pprof --lib engine`
 Expected: FAIL — `no method named select_merge_span_profile`.
 
 - [ ] **Step 3: Implement**
@@ -712,14 +712,14 @@ Thread `Option<&[u64]>` of span ids into the scan-predicate construction inside 
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-pprof --lib engine`
+Run: `cargo test -p krabka-pprof --lib engine`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-pprof
-cargo clippy -p crabka-pprof --all-targets
+cargo fmt -p krabka-pprof
+cargo clippy -p krabka-pprof --all-targets
 git add crates/pprof/
 git commit -m "feat(pprof): select_merge_span_profile — span-id-scoped MERGE"
 ```
@@ -769,7 +769,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-pprof --lib heatmap`
+Run: `cargo test -p krabka-pprof --lib heatmap`
 Expected: FAIL — `cannot find function bin_heatmap`.
 
 - [ ] **Step 3: Implement the binning kernel + engine method**
@@ -778,14 +778,14 @@ Expected: FAIL — `cannot find function bin_heatmap`.
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-pprof --lib heatmap engine`
+Run: `cargo test -p krabka-pprof --lib heatmap engine`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-pprof
-cargo clippy -p crabka-pprof --all-targets
+cargo fmt -p krabka-pprof
+cargo clippy -p krabka-pprof --all-targets
 git add crates/pprof/
 git commit -m "feat(pprof): select_heatmap — (time x value) count matrix binning"
 ```
@@ -824,7 +824,7 @@ git commit -m "feat(pprof): select_heatmap — (time x value) count matrix binni
 
 - [ ] **Step 2: Run to verify it fails (or passes — confirm behavior)**
 
-Run: `cargo test -p crabka-pprof --lib engine`
+Run: `cargo test -p krabka-pprof --lib engine`
 Expected: if Slice 2 already keyed resolution by `(partition, id)`, this PASSES and the task is a *pin* (commit the test, note in the message). If it FAILS (Slice 2 resolved by `id` only), fix `merge_to_tree` to key by `(partition, id)` — this is exactly the bug this task exists to prevent.
 
 - [ ] **Step 3: Implement / confirm**
@@ -833,14 +833,14 @@ Ensure the fold-then-resolve loop in `merge_to_tree` carries `stacktrace_partiti
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-pprof --lib engine`
+Run: `cargo test -p krabka-pprof --lib engine`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-pprof
-cargo clippy -p crabka-pprof --all-targets
+cargo fmt -p krabka-pprof
+cargo clippy -p krabka-pprof --all-targets
 git add crates/pprof/
 git commit -m "test(pprof): pin cross-partition resolve — raw stacktrace ids never cross a block boundary"
 ```
@@ -859,8 +859,8 @@ git commit -m "test(pprof): pin cross-partition resolve — raw stacktrace ids n
 - [ ] **Step 1: Write the property test**
 
 ```rust
-use crabka_pprof::test_support::{frame, random_stacks};
-use crabka_pprof::Tree;
+use krabka_pprof::test_support::{frame, random_stacks};
+use krabka_pprof::Tree;
 use proptest::prelude::*;
 
 proptest! {
@@ -888,16 +888,16 @@ proptest! {
 
 - [ ] **Step 2: Run the property test**
 
-Run: `cargo test -p crabka-pprof --test merge_associativity`
+Run: `cargo test -p krabka-pprof --test merge_associativity`
 Expected: PASS (128 cases). If it fails, the bug is in `Tree::merge` or the encoder's child ordering (the encoder must order children deterministically — e.g. by name — so two merge orders encode identically).
 
 - [ ] **Step 3: Full crate gate**
 
 Run:
 ```bash
-cargo test -p crabka-pprof
-cargo clippy -p crabka-pprof --all-targets
-cargo fmt -p crabka-pprof --check
+cargo test -p krabka-pprof
+cargo clippy -p krabka-pprof --all-targets
+cargo fmt -p krabka-pprof --check
 ```
 Expected: all PASS, no warnings, formatting clean.
 

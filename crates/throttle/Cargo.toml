@@ -1,5 +1,5 @@
 [package]
-name = "crabka-throttle"
+name = "krabka-throttle"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -9,7 +9,7 @@ rust-version.workspace = true
 description = "Shared token-bucket throttling primitives for Crabka"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-throttle"
+documentation = "https://docs.rs/krabka-throttle"
 keywords = ["throttle", "rate-limit", "crabka"]
 categories = ["concurrency"]
 
@@ -18,7 +18,7 @@ workspace = true
 
 [dependencies]
 assert2 = { workspace = true }
-crabka-units = { workspace = true }
+krabka-units = { workspace = true }
 creusot-std = "0.13.0"
 derive_more = { workspace = true }
 qubit-clock = { workspace = true }

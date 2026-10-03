@@ -76,7 +76,7 @@ and random probes (principal/client-id strings; IPv4 + IPv6 peers). Assert:
 
 ## Verification discipline
 
-- `cargo +nightly fmt -p crabka-broker`; `cargo clippy -p crabka-broker --all-targets -- -D warnings`
+- `cargo +nightly fmt -p krabka-broker`; `cargo clippy -p krabka-broker --all-targets -- -D warnings`
   clean. No watchdog needed (no stateright; the exhaustive loop + proptest are bounded and fast).
 
 ## Success criteria

@@ -629,7 +629,7 @@ spec:
                   Delegation-token master HMAC key source. When `None`, the broker
                   rejects all KIP-48 delegation-token RPCs with err 61
                   `DELEGATION_TOKEN_AUTH_DISABLED`. When `Some`, the operator injects
-                  `CRABKA_DELEGATION_TOKEN_SECRET_KEY` into each broker pod through a
+                  `KRABKA_DELEGATION_TOKEN_SECRET_KEY` into each broker pod through a
                   `valueFrom.secretKeyRef`. The key is then part of the rendered
                   `StatefulSet`, so the SSA reconcile does not race with out-of-band
                   `kubectl set env` patches.
@@ -1101,7 +1101,7 @@ spec:
                       Inline loggers, from tracing target to level. The key `root` is
                       case-insensitive and sets the global default level as a bare
                       env-filter directive. Any other key is a tracing target, that is, a
-                      Rust module path such as `crabka_broker`. The levels are
+                      Rust module path such as `krabka_broker`. The levels are
                       `trace|debug|info|warn|error|off`, and they are case-insensitive.
                       `fatal` is accepted as an alias for `error`.
                     type: object
@@ -1213,7 +1213,7 @@ spec:
                     description: |-
                       GCS-backend tuning. It is required when `kind == Gcs`, and it must be
                       absent in any other case. The struct has the same shape as
-                      `crabka_remote_storage::GcsConfig`. The operator renders the
+                      `krabka_remote_storage::GcsConfig`. The operator renders the
                       non-credential fields verbatim into the broker TOML's
                       `[remote_storage.gcs]` block. S3 uses env-var credentials, but GCS does
                       not. The operator mounts an explicit service-account JSON key as a FILE
@@ -1263,7 +1263,7 @@ spec:
                         description: |-
                           Override the per-part size for multipart uploads in bytes. When unset,
                           the broker uses
-                          `crabka_remote_storage::DEFAULT_MULTIPART_CHUNK_SIZE`, which is
+                          `krabka_remote_storage::DEFAULT_MULTIPART_CHUNK_SIZE`, which is
                           16 MiB.
                         format: uint64
                         minimum: 0.0
@@ -1272,7 +1272,7 @@ spec:
                       multipartThreshold:
                         description: |-
                           Override the single-PUT and multipart cutoff in bytes. When unset, the
-                          broker uses `crabka_remote_storage::DEFAULT_MULTIPART_THRESHOLD`, which
+                          broker uses `krabka_remote_storage::DEFAULT_MULTIPART_THRESHOLD`, which
                           is 100 MiB. Lower it in tests to exercise the multipart path on small
                           fixtures.
                         format: uint64
@@ -1293,7 +1293,7 @@ spec:
                       KIP-405: pick the `RemoteLogMetadataManager` that the broker pods run.
                       When the field is absent, or when it is `type: Topic`, the broker
                       activates the durable
-                      `crabka_remote_storage_topic::TopicBasedRemoteLogMetadataManager`
+                      `krabka_remote_storage_topic::TopicBasedRemoteLogMetadataManager`
                       against the internal `__remote_log_metadata` topic. Tier-segment
                       metadata then survives pod restarts and is consistent across the
                       brokers in the cluster. Only an explicit `type: InMemory` selects the
@@ -1407,7 +1407,7 @@ spec:
                     description: |-
                       S3-backend tuning. It is required when `kind == S3`, and it must be
                       absent in any other case. The struct has the same shape as
-                      `crabka_remote_storage::S3Config`. The operator renders the
+                      `krabka_remote_storage::S3Config`. The operator renders the
                       non-credential fields verbatim into the broker TOML's
                       `[remote_storage.s3]` block. The credentials come from Kubernetes
                       Secrets, and the operator injects them as the broker-pod env vars
@@ -1471,7 +1471,7 @@ spec:
                         description: |-
                           Override the per-part size for multipart uploads in bytes. When unset,
                           the broker uses
-                          `crabka_remote_storage::DEFAULT_MULTIPART_CHUNK_SIZE`, which is
+                          `krabka_remote_storage::DEFAULT_MULTIPART_CHUNK_SIZE`, which is
                           16 MiB.
                         format: uint64
                         minimum: 0.0
@@ -1480,7 +1480,7 @@ spec:
                       multipartThreshold:
                         description: |-
                           Override the single-PUT and multipart cutoff in bytes. When unset, the
-                          broker uses `crabka_remote_storage::DEFAULT_MULTIPART_THRESHOLD`, which
+                          broker uses `krabka_remote_storage::DEFAULT_MULTIPART_THRESHOLD`, which
                           is 100 MiB. Lower it in tests to exercise the multipart path on small
                           fixtures.
                         format: uint64
@@ -1516,7 +1516,7 @@ spec:
               tracing:
                 description: |-
                   Distributed-tracing wiring for the broker pods. When `Some`, the
-                  operator renders the matching `CRABKA_OTLP_*` env vars onto every
+                  operator renders the matching `KRABKA_OTLP_*` env vars onto every
                   broker pod. The broker's telemetry pipeline reads them with
                   `TelemetryConfig::from_env` and installs the OTLP tracer at startup.
                   When `None`, the operator emits no OTLP env vars, and the broker leaves
@@ -1530,8 +1530,8 @@ spec:
                       endpoint:
                         description: |-
                           Required. OTLP collector endpoint in the form `scheme://host:port`.
-                          The operator renders it as `CRABKA_OTLP_ENDPOINT`. A set field also
-                          sets `CRABKA_OTLP_ENABLED=true`.
+                          The operator renders it as `KRABKA_OTLP_ENDPOINT`. A set field also
+                          sets `KRABKA_OTLP_ENABLED=true`.
                         type: string
                       protocol:
                         description: |-
@@ -1546,7 +1546,7 @@ spec:
                       sampleRatio:
                         description: |-
                           Optional sampling ratio in `[0.0, 1.0]`. The operator renders it as
-                          `CRABKA_OTLP_SAMPLE_RATIO`. An unset field leaves the binary's own
+                          `KRABKA_OTLP_SAMPLE_RATIO`. An unset field leaves the binary's own
                           default of `1.0`, which samples every trace.
                         format: double
                         nullable: true
@@ -1555,13 +1555,13 @@ spec:
                         description: |-
                           Optional `service.name` resource attribute. The operator renders it as
                           `OTEL_SERVICE_NAME`. An unset field leaves the binary's own name, which
-                          is `"crabka-broker"` for `Kafka` and `"crabka-gres"` for `Gres`.
+                          is `"krabka-broker"` for `Kafka` and `"krabka-gres"` for `Gres`.
                         nullable: true
                         type: string
                       timeout:
                         description: |-
                           Optional export timeout. The operator renders it as
-                          `CRABKA_OTLP_TIMEOUT`. An unset field leaves the binary's own default
+                          `KRABKA_OTLP_TIMEOUT`. An unset field leaves the binary's own default
                           of `10s`.
                         nullable: true
                         type: string

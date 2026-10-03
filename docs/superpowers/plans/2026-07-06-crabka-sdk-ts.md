@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript (ESM, Node ≥ 20), `@connectrpc/connect` + `@connectrpc/connect-node`, `@bufbuild/protobuf`, vitest, buf.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-sdk-ts-design.md`](../specs/2026-07-06-crabka-sdk-ts-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-sdk-ts-design.md`](../specs/2026-07-06-krabka-sdk-ts-design.md).
 
 **PREREQUISITES (unlanded):** the umbrella executed (harness + vectors v1 + the Go reference having hardened them) and MSG-5's gateway h2c listener.
 
@@ -89,7 +89,7 @@ git commit -m "feat(sdk-ts): messaging module (publish, CloudEvents, subscribe)"
 ## Task 4: The conformance adapter + suite green
 
 - [ ] **Step 1:** `src/conformance-adapter.ts`: readline-over-stdin JSON loop → SDK calls → protocol responses (`Hello{contract_major: 1, language: "ts"}`; `Subscribe`/`NextMessage` bridged through a buffered queue; every error through the taxonomy→wire mapping). Build to `sdks/ts/bin/conformance-adapter` (a `#!/usr/bin/env node` entry).
-- [ ] **Step 2:** Run the real suite: `cargo run -p crabka-sdk-conformance --bin conformance -- --adapter sdks/ts/bin/conformance-adapter --vectors crates/sdk-conformance/vectors/v1` → **all vectors PASS**. Fix the SDK, never the vectors (ambiguity → mock + Go first).
+- [ ] **Step 2:** Run the real suite: `cargo run -p krabka-sdk-conformance --bin conformance -- --adapter sdks/ts/bin/conformance-adapter --vectors crates/sdk-conformance/vectors/v1` → **all vectors PASS**. Fix the SDK, never the vectors (ambiguity → mock + Go first).
 - [ ] **Step 3:** Commit.
 
 ```bash

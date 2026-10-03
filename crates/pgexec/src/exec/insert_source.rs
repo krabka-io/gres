@@ -8,9 +8,9 @@ pub(crate) fn insert_source_rows(
     table: &Table,
     columns: &Option<Vec<String>>,
     indirections: &Option<Vec<Vec<TargetIndirection>>>,
-    source: &crabka_pgparser::ast::InsertSource,
+    source: &krabka_pgparser::ast::InsertSource,
 ) -> Result<(Vec<usize>, Vec<Vec<Expr>>), ExecError> {
-    use crabka_pgparser::ast::InsertSource;
+    use krabka_pgparser::ast::InsertSource;
     match source {
         InsertSource::Values(rows) => {
             // Rows of differing width are PostgreSQL's own 42601, raised before
@@ -119,8 +119,8 @@ pub(crate) fn insert_source_rows(
 /// list holding a `*`: a wildcard stands for as many columns as the relation
 /// beneath it has, and no walk of the list alone can count them. A wildcard is
 /// never unknown, so declining the whole list there costs nothing.
-fn unknown_literal_columns(query: &crabka_pgparser::ast::QueryExpr) -> Vec<bool> {
-    use crabka_pgparser::ast::{QueryBody, SelectItem, SetExpr};
+fn unknown_literal_columns(query: &krabka_pgparser::ast::QueryExpr) -> Vec<bool> {
+    use krabka_pgparser::ast::{QueryBody, SelectItem, SetExpr};
     let SetExpr::Query(body) = &query.body else {
         return Vec::new();
     };

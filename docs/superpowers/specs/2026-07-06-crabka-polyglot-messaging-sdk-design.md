@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Subsystem design. The **packaging capstone** of the [serverless messaging cycle](2026-07-06-crabka-gateway-header-carrythrough-design.md) — an idiomatic client library over the gateway's Connect-RPC surface. Ships **Go first**; establishes the polyglot foundation the other languages reuse.
+**Type:** Subsystem design. The **packaging capstone** of the [serverless messaging cycle](2026-07-06-krabka-gateway-header-carrythrough-design.md) — an idiomatic client library over the gateway's Connect-RPC surface. Ships **Go first**; establishes the polyglot foundation the other languages reuse.
 
 ## Context — the thinnest face, positioned honestly
 
@@ -48,12 +48,12 @@ sdks/go  (thin ergonomic wrapper)
   config: endpoint URL + optional bearer token / mTLS cert   (anonymous fallback for dev)
         │
         ▼  Connect protocol — unary Send over HTTP/1.1; Subscribe over HTTP/2 (h2c)
-  crabka-gateway  (plaintext listener: axum::serve → hyper_util auto::Builder for h1+h2)  ──(Kafka wire)──►  broker
+  krabka-gateway  (plaintext listener: axum::serve → hyper_util auto::Builder for h1+h2)  ──(Kafka wire)──►  broker
         ▲
   buf generate (buf.yaml + buf.gen.yaml, rooted at crates/grpc-gateway/proto)
         → sdks/go/gen/…  (connect-go + protoc-gen-go stubs; drift-checked in CI)
 
-  test harness (new): packaging/apko/crabka-gateway.yaml (OCI image) + docker-compose
+  test harness (new): packaging/apko/krabka-gateway.yaml (OCI image) + docker-compose
         → Go CI job: docker run gateway+broker, `go test ./sdks/go/...` round-trip
 ```
 
@@ -76,7 +76,7 @@ Over the conventional TS-first instinct, for three grounded reasons: (1) CI alre
 
 ### The test harness is net-new and leads the plan
 
-There is **no** gateway OCI image (the `publish-images` matrix is broker/operator/schema-registry/bench-driver) and current gateway tests are **in-process Rust** (no network endpoint an external Go process can reach). So MSG-5 builds: (1) `packaging/apko/crabka-gateway.yaml` + a `publish-images` matrix entry (entrypoint `/usr/bin/gateway`); (2) a docker-compose/testcontainers harness launching gateway+broker; (3) a Go CI job (reusing `setup-go`) that runs a real `publish → subscribe(auto_commit) → assert` round-trip against `localhost`. Tests exercise behavior against the live gateway — never read SDK source text (CLAUDE.md).
+There is **no** gateway OCI image (the `publish-images` matrix is broker/operator/schema-registry/bench-driver) and current gateway tests are **in-process Rust** (no network endpoint an external Go process can reach). So MSG-5 builds: (1) `packaging/apko/krabka-gateway.yaml` + a `publish-images` matrix entry (entrypoint `/usr/bin/gateway`); (2) a docker-compose/testcontainers harness launching gateway+broker; (3) a Go CI job (reusing `setup-go`) that runs a real `publish → subscribe(auto_commit) → assert` round-trip against `localhost`. Tests exercise behavior against the live gateway — never read SDK source text (CLAUDE.md).
 
 ### Auth config
 
@@ -88,7 +88,7 @@ SDK config takes an endpoint URL + optional **bearer token** (`Authorization: Be
 - **`crates/grpc-gateway/src/serve.rs:81-86`** — swap the plaintext `axum::serve` (h1) for `hyper_util … auto::Builder` (h1+h2c) so connect-go can open the bidi `Subscribe` stream. The one gateway code change in MSG-5.
 - **`sdks/`** (new top-level, sibling to `crates/`) — out of the Cargo workspace + release-plz; `sdks/go` first.
 - **`buf.yaml` + `buf.gen.yaml`** (repo root, new) — Connect codegen.
-- **`packaging/apko/crabka-gateway.yaml`** (new) + `publish-images.yml` — the gateway OCI image.
+- **`packaging/apko/krabka-gateway.yaml`** (new) + `publish-images.yml` — the gateway OCI image.
 - **`.github/workflows/`** — a Go SDK job (reuses `setup-go`); a buf drift check.
 
 ## Kafka / wire compliance

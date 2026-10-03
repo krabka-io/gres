@@ -71,7 +71,7 @@ kind: ConfigMap
 metadata: { name: demo-broker-config, ... }
 data:
   broker.env: |
-    CRABKA_LISTEN_ADDR=0.0.0.0:9092
+    KRABKA_LISTEN_ADDR=0.0.0.0:9092
   broker.properties: |
     log.retention.hours=24
     num.partitions=3
@@ -125,7 +125,7 @@ pub(crate) fn config_hash(broker_properties: &str) -> String {
 }
 ```
 
-(Uses the workspace's existing `sha2` dep — already pulled in by `crabka-security`.)
+(Uses the workspace's existing `sha2` dep — already pulled in by `krabka-security`.)
 
 ---
 
@@ -269,9 +269,9 @@ Implementation plan: **~5 tasks across 3 batches**.
 
 ## 9. Acceptance criteria
 
-1. `cargo test -p crabka-operator` green (existing + new tests).
+1. `cargo test -p krabka-operator` green (existing + new tests).
 2. `cargo clippy --workspace --all-targets -- -D warnings` clean.
-3. `helm lint charts/crabka-operator` passes.
+3. `helm lint charts/krabka-operator` passes.
 4. CRD regen stable.
 5. operator-e2e: applying `spec.config` change observes pod UID change AND StatefulSet revision change within 90 s; new pod reaches Ready.
 

@@ -39,9 +39,9 @@ pub trait DecodeBorrow<'de>: Sized + 'de {
     fn decode_borrow(buf: &mut &'de [u8], version: i16) -> Result<Self, ProtocolError>;
 }
 
-/// Implemented by every generated Request struct in `crabka-protocol`.
+/// Implemented by every generated Request struct in `krabka-protocol`.
 ///
-/// The `crabka-protocol-codegen` crate emits this impl for every Request type.
+/// The `krabka-protocol-codegen` crate emits this impl for every Request type.
 /// The trait gives the client the dispatch information it needs: the api key, the
 /// version range, and the response type.
 pub trait ProtocolRequest: Encode {
@@ -55,6 +55,6 @@ pub trait ProtocolRequest: Encode {
     /// This is `i16::MAX` for never-flexible messages.
     const FLEXIBLE_MIN: i16;
 
-    /// Matching response type from `crabka-protocol`.
+    /// Matching response type from `krabka-protocol`.
     type Response: for<'de> Decode<'de>;
 }

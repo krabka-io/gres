@@ -6,7 +6,7 @@ metadata:
 type: Opaque
 stringData:
   # Replace this example value; do not commit production credentials.
-  url: postgresql://crabka_connect:change-me@postgres.streaming.svc:5432/orders
+  url: postgresql://krabka_connect:change-me@postgres.streaming.svc:5432/orders
 ---
 apiVersion: crabka.io/v1alpha1
 kind: KafkaConnector
@@ -23,7 +23,7 @@ spec:
     key: url
   schemaRegistryUrl: http://schema-registry.streaming.svc:8081
   slot: orders_crabka
-  publication: crabka_connect
+  publication: krabka_connect
   schema: public
   tables:
     - orders

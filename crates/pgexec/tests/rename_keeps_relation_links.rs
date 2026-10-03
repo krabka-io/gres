@@ -10,9 +10,9 @@
 use std::sync::Arc;
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgkv::{Kv, MemKv};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgkv::{Kv, MemKv};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 fn cell_text(cell: Option<&Cell>) -> Option<String> {
     cell.map(|cell| String::from_utf8(cell.text.to_vec()).expect("utf8"))

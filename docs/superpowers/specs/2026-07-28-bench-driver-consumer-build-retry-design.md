@@ -7,7 +7,7 @@
 
 ## Goal
 
-Replace the fixed consumer-build retry policy in `crabka-bench-driver` with
+Replace the fixed consumer-build retry policy in `krabka-bench-driver` with
 three validated runtime settings while preserving the existing retry behavior
 and defaults.
 

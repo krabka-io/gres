@@ -36,7 +36,7 @@ Kafka. Crabka mirrors the same boundaries:
 
 Crabka's existing storage layer that this builds on:
 
-- `crabka_log::Log` — per-partition segmented log (`crates/log/src/log.rs`).
+- `krabka_log::Log` — per-partition segmented log (`crates/log/src/log.rs`).
   `Log::tick()` already computes time/size retention; `Log::read()` walks
   sealed-then-active segments. `Segment` exposes `.log` / `.index` /
   `.timeindex` plus a per-partition `.leader-epoch-checkpoint` and per-segment
@@ -88,7 +88,7 @@ tiered-storage test suite.
 
 ### Goal
 
-Land a `crates/remote-storage` workspace member (`crabka-remote-storage`)
+Land a `crates/remote-storage` workspace member (`krabka-remote-storage`)
 that provides Kafka's `storage-api` surface, faithfully shaped, plus the
 two reference implementations — all pure logic with no dependency on the
 broker, the async runtime, or any config. Every type is a complete,
@@ -205,7 +205,7 @@ Pure-logic unit tests, no cluster:
 
 - `cargo fmt --all --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test -p crabka-remote-storage`
+- `cargo test -p krabka-remote-storage`
 - `cargo test --workspace` (no regressions)
 - No CRD drift (no CRDs touched).
 </content>

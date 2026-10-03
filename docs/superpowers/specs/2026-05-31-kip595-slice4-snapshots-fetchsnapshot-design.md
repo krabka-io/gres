@@ -23,7 +23,7 @@ log/snapshots genuinely KIP-631/KIP-630 framed. After 3d-2:
 - `KraftController::open()` already loads the latest checkpoint + replays the
   committed log on top. `trigger_snapshot()` writes a checkpoint but **nothing
   prunes the log or serves snapshots over the wire**.
-- `crabka_log::Log` exposes `set_log_start_offset` + `trim_to_offset` (segment
+- `krabka_log::Log` exposes `set_log_start_offset` + `trim_to_offset` (segment
   pruning); `KraftLog` exposes `log_start_offset` but no prune/install wrapper.
 
 **The gap:** a controller follower that has fallen behind the leader's pruned
@@ -89,11 +89,11 @@ the log may delete records below `end_offset`; `log_start_offset` advances to
   No-op if `end_offset <= log_start_offset()`.
 - `install_snapshot(&mut self, end_offset: i64) -> Result<(), RaftError>`: reset
   the log to an empty log whose `log_start_offset == log_end_offset ==
-  end_offset` and `hwm == end_offset`. Implemented via a `crabka_log::Log`
+  end_offset` and `hwm == end_offset`. Implemented via a `krabka_log::Log`
   reset helper (see below); the follower calls this when installing a fetched
   snapshot that is ahead of its current LEO.
 
-If `crabka_log::Log` lacks a reset-to-empty-at-offset primitive, add
+If `krabka_log::Log` lacks a reset-to-empty-at-offset primitive, add
 `reset_to(&mut self, offset: i64) -> Result<(), LogError>` (drop all segments,
 start a fresh segment at `offset`, set log_start = LEO = offset, truncate the
 leader-epoch checkpoint). Mirrors how `truncate_to`/`trim_to_offset` already

@@ -30,8 +30,8 @@
 //! statements it did not write.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Engine, QueryResult, Session};
 use tokio::sync::mpsc::Receiver;
 
 /// A trigger function that reports the tag it was handed, the way
@@ -67,7 +67,7 @@ async fn refusal(session: &mut SqlSession, sql: &str) -> (String, String, Option
 }
 
 /// Everything the session has been sent since the last drain.
-fn drained(notices: &mut Receiver<crabka_pgwire::error::PgError>) -> Vec<String> {
+fn drained(notices: &mut Receiver<krabka_pgwire::error::PgError>) -> Vec<String> {
     let mut seen = Vec::new();
     while let Ok(notice) = notices.try_recv() {
         seen.push(notice.message);
@@ -80,7 +80,7 @@ fn drained(notices: &mut Receiver<crabka_pgwire::error::PgError>) -> Vec<String>
 async fn engine() -> (
     SqlEngine,
     SqlSession,
-    Receiver<crabka_pgwire::error::PgError>,
+    Receiver<krabka_pgwire::error::PgError>,
 ) {
     let engine = SqlEngine::new();
     let mut session = engine.connect();

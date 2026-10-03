@@ -157,7 +157,7 @@ mod tests {
             },
             schema_registry_url: "http://schema-registry:8081".into(),
             slot: "orders_crabka".into(),
-            publication: "crabka_connect".into(),
+            publication: "krabka_connect".into(),
             schema: Some("public".into()),
             tables: vec!["orders".into()],
             topic_prefix: Some("db".into()),

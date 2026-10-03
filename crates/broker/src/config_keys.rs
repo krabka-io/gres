@@ -27,8 +27,8 @@
 
 use std::{collections::BTreeMap, time::Duration};
 
-use crabka_log::LogConfig;
-use crabka_units::{
+use krabka_log::LogConfig;
+use krabka_units::{
     ByteSize, Time,
     convert::{
         ByteSizeExt as _, TimeExt as _,
@@ -166,8 +166,8 @@ pub(crate) fn validate_topic_config(key: &str, value: &str) -> Result<(), String
 /// It returns `Err` for an unknown name.
 pub(crate) fn parse_compression_type(
     value: &str,
-) -> Result<Option<crabka_compression::CompressionType>, String> {
-    use crabka_compression::CompressionType;
+) -> Result<Option<krabka_compression::CompressionType>, String> {
+    use krabka_compression::CompressionType;
     match value {
         "producer" => Ok(None),
         "uncompressed" | "none" => Ok(Some(CompressionType::None)),
@@ -247,7 +247,7 @@ pub(crate) fn is_recognized(key: &str) -> bool {
 /// permissive runtime behavior of other Produce-side topic config reads.
 #[must_use]
 pub(crate) fn resolve_qos_tier<'a>(
-    image: &'a crabka_metadata::MetadataImage,
+    image: &'a krabka_metadata::MetadataImage,
     topic: &str,
 ) -> &'a str {
     image
@@ -258,7 +258,7 @@ pub(crate) fn resolve_qos_tier<'a>(
 }
 
 fn topic_or_cluster_default<'a>(
-    image: &'a crabka_metadata::MetadataImage,
+    image: &'a krabka_metadata::MetadataImage,
     topic: &str,
     key: &str,
 ) -> Option<&'a str> {
@@ -274,7 +274,7 @@ fn topic_or_cluster_default<'a>(
 /// [`RecoveryStrategy::None`] when neither value exists or the selected value
 /// is unparseable.
 pub(crate) fn resolve_recovery_strategy(
-    image: &crabka_metadata::MetadataImage,
+    image: &krabka_metadata::MetadataImage,
     topic: &str,
 ) -> RecoveryStrategy {
     topic_or_cluster_default(image, topic, UNCLEAN_RECOVERY_STRATEGY)
@@ -286,7 +286,7 @@ pub(crate) fn resolve_recovery_strategy(
 /// takes precedence over the cluster-wide default broker config. Missing or
 /// invalid values resolve to `false`.
 pub(crate) fn resolve_unclean_leader_election_enabled(
-    image: &crabka_metadata::MetadataImage,
+    image: &krabka_metadata::MetadataImage,
     topic: &str,
 ) -> bool {
     topic_or_cluster_default(image, topic, UNCLEAN_LEADER_ELECTION_ENABLE) == Some("true")
@@ -310,8 +310,8 @@ pub(crate) fn parse_remote_list_offsets_timeout(value: &str) -> Result<Duration,
 
 /// Resolve the per-broker KIP-1075 timeout over the cluster default.
 pub(crate) fn resolve_remote_list_offsets_timeout(
-    image: &crabka_metadata::MetadataImage,
-    node_id: crabka_metadata::NodeId,
+    image: &krabka_metadata::MetadataImage,
+    node_id: krabka_metadata::NodeId,
 ) -> Duration {
     image
         .broker_config(node_id)
@@ -368,9 +368,9 @@ pub(crate) fn apply_to_log_config(
             }
             CLEANUP_POLICY => {
                 out.cleanup_policy = if v == "compact" {
-                    crabka_log::CleanupPolicy::Compact
+                    krabka_log::CleanupPolicy::Compact
                 } else {
-                    crabka_log::CleanupPolicy::Delete
+                    krabka_log::CleanupPolicy::Delete
                 };
             }
             COMPRESSION_TYPE => {
@@ -573,7 +573,7 @@ mod doc_tests {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_units::{bytes, mebibytes, millis, minutes};
+    use krabka_units::{bytes, mebibytes, millis, minutes};
 
     use super::*;
 
@@ -646,7 +646,7 @@ mod tests {
 
     #[test]
     fn parse_compression_type_maps_codecs() {
-        use crabka_compression::CompressionType;
+        use krabka_compression::CompressionType;
         let cases = [
             ("gzip", CompressionType::Gzip),
             ("snappy", CompressionType::Snappy),
@@ -664,7 +664,7 @@ mod tests {
 
     #[test]
     fn apply_compression_type_zstd_propagates() {
-        use crabka_compression::CompressionType;
+        use krabka_compression::CompressionType;
         let mut o = BTreeMap::new();
         o.insert(COMPRESSION_TYPE.into(), "zstd".into());
         let out = apply_to_log_config(&o, &LogConfig::default());
@@ -673,7 +673,7 @@ mod tests {
 
     #[test]
     fn apply_compression_type_producer_resets_to_none() {
-        use crabka_compression::CompressionType;
+        use krabka_compression::CompressionType;
         let base = LogConfig {
             compression_type: Some(CompressionType::Lz4),
             ..LogConfig::default()
@@ -711,7 +711,7 @@ mod tests {
 
     #[test]
     fn resolve_qos_tier_defaults_when_unset() {
-        let image = crabka_metadata::MetadataImage::new(uuid::Uuid::nil());
+        let image = krabka_metadata::MetadataImage::new(uuid::Uuid::nil());
         assert!(resolve_qos_tier(&image, "t") == DEFAULT_QOS_TIER);
     }
 
@@ -854,20 +854,20 @@ mod tests {
     fn apply_cleanup_policy_compact_propagates() {
         let mut overrides = std::collections::BTreeMap::new();
         overrides.insert(CLEANUP_POLICY.to_string(), "compact".to_string());
-        let out = apply_to_log_config(&overrides, &crabka_log::LogConfig::default());
-        assert!(out.cleanup_policy == crabka_log::CleanupPolicy::Compact);
+        let out = apply_to_log_config(&overrides, &krabka_log::LogConfig::default());
+        assert!(out.cleanup_policy == krabka_log::CleanupPolicy::Compact);
     }
 
     #[test]
     fn apply_cleanup_policy_delete_propagates() {
         let mut overrides = std::collections::BTreeMap::new();
         overrides.insert(CLEANUP_POLICY.to_string(), "delete".to_string());
-        let base = crabka_log::LogConfig {
-            cleanup_policy: crabka_log::CleanupPolicy::Compact,
-            ..crabka_log::LogConfig::default()
+        let base = krabka_log::LogConfig {
+            cleanup_policy: krabka_log::CleanupPolicy::Compact,
+            ..krabka_log::LogConfig::default()
         };
         let out = apply_to_log_config(&overrides, &base);
-        assert!(out.cleanup_policy == crabka_log::CleanupPolicy::Delete);
+        assert!(out.cleanup_policy == krabka_log::CleanupPolicy::Delete);
     }
 
     #[test]
@@ -1005,7 +1005,7 @@ mod tests {
     fn recovery_settings_resolve_topic_over_cluster_default() {
         use std::collections::BTreeMap;
 
-        use crabka_metadata::{
+        use krabka_metadata::{
             BrokerConfigRecord, DEFAULT_BROKER_CONFIG_NODE_ID, MetadataImage, MetadataRecord,
             TopicConfigRecord,
         };
@@ -1042,7 +1042,7 @@ mod tests {
     fn invalid_topic_recovery_setting_does_not_expose_cluster_default() {
         use std::collections::BTreeMap;
 
-        use crabka_metadata::{
+        use krabka_metadata::{
             BrokerConfigRecord, DEFAULT_BROKER_CONFIG_NODE_ID, MetadataImage, MetadataRecord,
             TopicConfigRecord,
         };

@@ -4,7 +4,7 @@ Status: Draft
 Date: 2026-05-24
 Slice: 50c
 Pairs with broker slice(s): 49d (already shipped — broker introspection validator + `[oauthbearer]` TOML keys)
-Umbrella: [OAUTHBEARER full-parity roadmap](2026-05-23-crabka-oauth-parity-roadmap-design.md)
+Umbrella: [OAUTHBEARER full-parity roadmap](2026-05-23-krabka-oauth-parity-roadmap-design.md)
 
 ## Goal
 
@@ -376,7 +376,7 @@ Clones the existing `kind-oauth` job (slice 50b's Keycloak HTTPS setup). Changes
 
 ## Acceptance criteria
 
-1. `cargo build -p crabka-operator` clean.
+1. `cargo build -p krabka-operator` clean.
 2. `cargo test --workspace` passes (new + existing tests).
 3. `cargo fmt --check` + `cargo clippy --workspace --all-targets -- -D warnings` clean.
 4. CRD-drift gate clean.

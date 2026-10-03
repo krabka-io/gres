@@ -1,19 +1,19 @@
 //! SP38: UNION / INTERSECT / EXCEPT [ALL], end to end over the wire. These tests
 //! use the simple query protocol, so they exercise the engine's own execution
 //! and its text encoding. They complement the in-crate unit tests in
-//! `crabka_pgexec::setops`.
+//! `krabka_pgexec::setops`.
 
 use std::sync::Arc;
 
-use crabka_pgexec::SqlEngine;
-use crabka_pgwire::session::SessionConfig;
+use krabka_pgexec::SqlEngine;
+use krabka_pgwire::session::SessionConfig;
 use tokio::net::TcpListener;
 use tokio_postgres::NoTls;
 
 async fn spawn() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
-    tokio::spawn(crabka_pgwire::server::serve(
+    tokio::spawn(krabka_pgwire::server::serve(
         listener,
         Arc::new(SqlEngine::new()),
         Arc::new(SessionConfig::trust()),

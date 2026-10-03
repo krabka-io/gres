@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Subsystem design. First buildable slice of the [Chapter C roadmap](2026-07-06-crabka-postgres-chapter-roadmap-design.md) — the ingest half of the pageserver track, with **no unbuilt prerequisites**.
+**Type:** Subsystem design. First buildable slice of the [Chapter C roadmap](2026-07-06-krabka-postgres-chapter-roadmap-design.md) — the ingest half of the pageserver track, with **no unbuilt prerequisites**.
 
 ## Context — where this sits
 
@@ -28,7 +28,7 @@ PG-2 builds the parser every downstream slice consumes: a **sans-IO decoder** fo
 ## Architecture Overview
 
 ```
-crates/postgres-wal  (crabka-postgres-wal — new, sans-IO, no tokio)
+crates/postgres-wal  (krabka-postgres-wal — new, sans-IO, no tokio)
 │
 ├── Lsn                u64 newtype; segment/page arithmetic; Display "X/Y" form
 ├── WalStreamDecoder   sans-IO pull parser:
@@ -71,10 +71,10 @@ Fixtures are generated once by a script (stock `initdb --wal-segsize=1` + crafte
 
 ## Integration
 
-- **`crates/postgres-wal`** (new) — `crabka-postgres-wal`; **`publish = false` + a private release-plz entry** (the publication-allowlist gate applies to every new crate).
+- **`crates/postgres-wal`** (new) — `krabka-postgres-wal`; **`publish = false` + a private release-plz entry** (the publication-allowlist gate applies to every new crate).
 - **Consumes:** fixture segment files now; PG-1's verbatim LSN-framed record runs later (same `feed` seam).
 - **Produces for PG-3:** the `Sharded::Page`/`Meta` stream — the delta-layer ingest contract.
-- **Reuse check:** CRC-32C — reuse `crabka-protocol`'s Castagnoli implementation if exported; else the `crc32c` crate (workspace-pinned). No tokio dependency (sans-IO).
+- **Reuse check:** CRC-32C — reuse `krabka-protocol`'s Castagnoli implementation if exported; else the `crc32c` crate (workspace-pinned). No tokio dependency (sans-IO).
 
 ## Kafka / wire compliance
 

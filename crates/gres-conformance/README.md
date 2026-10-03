@@ -1,4 +1,4 @@
-# crabka-gres-conformance
+# krabka-gres-conformance
 
 Differential conformance harness diffing Crabka Gres against a real PostgreSQL
 oracle over the wire.
@@ -6,7 +6,7 @@ oracle over the wire.
 Part of [Crabka](https://github.com/robot-head/crabka)'s Chapter Gres — a pure-Rust
 Postgres-compatible engine vendored from
 [crabgresql](https://github.com/robot-head/crabgresql) at `93f3d17`; see the
-[chapter design](../../docs/superpowers/specs/2026-07-09-crabka-gres-chapter-design.md).
+[chapter design](../../docs/superpowers/specs/2026-07-09-krabka-gres-chapter-design.md).
 
 ## Overview
 
@@ -25,7 +25,7 @@ have a deliberately narrower mutation and query surface than ordinary tables,
 so their parity floor is ratcheted independently against the same corpus and
 PostgreSQL 18 oracle.
 
-The substrate-backed leg — the same corpus replayed against a `crabka-gres`
+The substrate-backed leg — the same corpus replayed against a `krabka-gres`
 whose WAL is a Kafka tenant topic — uses `substrate-baseline.json`, and
 [`substrate-baseline.md`](substrate-baseline.md) names every statement behind
 the difference. That leg runs against its own fresh oracle database, so
@@ -256,7 +256,7 @@ via `tokio-postgres` typed prepared statements instead of the simple query path.
 Run it with:
 
 ```sh
-cargo run -p crabka-gres-conformance -- \
+cargo run -p krabka-gres-conformance -- \
   --oracle-url "host=127.0.0.1 port=54320 user=postgres dbname=postgres" \
   --subject-url "host=127.0.0.1 port=5433 user=crab dbname=postgres" \
   --baseline crates/gres-conformance/baseline.json \
@@ -297,7 +297,7 @@ Install the pinned Python driver and run the complete gate with:
 ```sh
 python3 -m pip install --require-hashes --no-deps \
   -r crates/gres-conformance/requirements-driver-smoke.txt
-CRABKA_GRES_E2E_KEEP_ARTIFACTS=1 ./scripts/gres-e2e.sh
+KRABKA_GRES_E2E_KEEP_ARTIFACTS=1 ./scripts/gres-e2e.sh
 ```
 
 Docker/PgDog and `psycopg` are mandatory for the complete gate. For local

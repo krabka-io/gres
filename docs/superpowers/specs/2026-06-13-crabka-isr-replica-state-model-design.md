@@ -4,8 +4,8 @@
 **Status:** Approved (design); plan + implementation to follow
 **Workstream:** A (stateright correctness models) — partition-replication safety, complementing the merged raft consensus model
 **Predecessor specs:**
-- `2026-06-13-crabka-stateright-consensus-deflake-design.md` (raft model; merged #511)
-- `2026-06-13-crabka-share-group-model-design.md` (share-partition acquisition model; #514)
+- `2026-06-13-krabka-stateright-consensus-deflake-design.md` (raft model; merged #511)
+- `2026-06-13-krabka-share-group-model-design.md` (share-partition acquisition model; #514)
 
 ## Goal
 

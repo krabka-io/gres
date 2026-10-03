@@ -51,7 +51,7 @@
 //!   form.
 
 use bytes::Bytes;
-use crabka_protocol::{
+use krabka_protocol::{
     owned::{
         access_control_entry_record::AccessControlEntryRecord,
         client_quota_record::{ClientQuotaRecord as KClientQuotaRecord, EntityData},
@@ -79,7 +79,7 @@ use crabka_protocol::{
     primitives::uuid::Uuid as KUuid,
     records::metadata::KraftMetadataRecord,
 };
-use crabka_security::{KafkaPrincipal, ListenerProtocol, SaslMechanism};
+use krabka_security::{KafkaPrincipal, ListenerProtocol, SaslMechanism};
 use wincode::{Deserialize as _, Serialize as _};
 
 use crate::{
@@ -152,7 +152,7 @@ fn scram_mechanism_from_wire(b: i8) -> Result<SaslMechanism, TranslateError> {
 
 // ----- ACL enum <-> Kafka i8 wire discriminants -----
 //
-// These mirror the canonical mappings in crabka-broker's `acl_wire`
+// These mirror the canonical mappings in krabka-broker's `acl_wire`
 // (Kafka serializes ACL enums as `i8`). Replicated here so the metadata
 // crate does not depend on the broker.
 
@@ -697,7 +697,7 @@ fn to_kraft_iter(
         }
         MetadataRecord::V1DeleteDelegationToken(t) => {
             vec![KraftMetadataRecord::RemoveDelegationToken(
-            crabka_protocol::owned::remove_delegation_token_record::RemoveDelegationTokenRecord {
+            krabka_protocol::owned::remove_delegation_token_record::RemoveDelegationTokenRecord {
                 token_id: t.token_id.clone(),
                 ..Default::default()
             },
@@ -2191,7 +2191,7 @@ mod tests {
         let k = to_kraft(&rec, &img()).unwrap();
         assert2::assert!(matches!(
             k,
-            crabka_protocol::records::metadata::KraftMetadataRecord::Unknown { api_key, .. }
+            krabka_protocol::records::metadata::KraftMetadataRecord::Unknown { api_key, .. }
                 if api_key == PRIVATE_FEATURES_EPOCH_KEY
         ));
         round_trip(&rec, &img());
@@ -2619,25 +2619,25 @@ mod tests {
         for (record, want) in [
             (
                 KraftMetadataRecord::BrokerRegistrationChange(
-                    crabka_protocol::owned::broker_registration_change_record::BrokerRegistrationChangeRecord::default(),
+                    krabka_protocol::owned::broker_registration_change_record::BrokerRegistrationChangeRecord::default(),
                 ),
                 "BrokerRegistrationChange",
             ),
             (
                 KraftMetadataRecord::NoOp(
-                    crabka_protocol::owned::no_op_record::NoOpRecord::default(),
+                    krabka_protocol::owned::no_op_record::NoOpRecord::default(),
                 ),
                 "NoOp",
             ),
             (
                 KraftMetadataRecord::BeginTransaction(
-                    crabka_protocol::owned::begin_transaction_record::BeginTransactionRecord::default(),
+                    krabka_protocol::owned::begin_transaction_record::BeginTransactionRecord::default(),
                 ),
                 "BeginTransaction",
             ),
             (
                 KraftMetadataRecord::EndTransaction(
-                    crabka_protocol::owned::end_transaction_record::EndTransactionRecord::default(),
+                    krabka_protocol::owned::end_transaction_record::EndTransactionRecord::default(),
                 ),
                 "EndTransaction",
             ),

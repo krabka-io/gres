@@ -1,7 +1,7 @@
 //! `KafkaGrpcGateway` reconciler.
 //!
 //! This reconciler turns one `KafkaGrpcGateway` CR into the full runtime
-//! surface for a `crabka-grpc-gateway` Deployment:
+//! surface for a `krabka-grpc-gateway` Deployment:
 //!
 //! - a **Deployment** with the gateway pods. It carries the downward-API
 //!   env, the gateway CLI flags, and the five TLS and config volume mounts
@@ -36,8 +36,8 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use crabka_security::ca::{SubjectAltName, issue_broker_cert};
-use crabka_units::{
+use krabka_security::ca::{SubjectAltName, issue_broker_cert};
+use krabka_units::{
     ByteSize, Ratio, Time,
     convert::{ByteSizeExt, RatioExt as _, TimeExt},
     fmt::Human as _,
@@ -98,17 +98,17 @@ const DEFAULT_VALIDITY_DAYS: u32 = 365;
 /// Built-in gateway image. The operator uses it when neither `spec.image`
 /// nor `--default-gateway-image` is set.
 const DEFAULT_GATEWAY_IMAGE: &str = concat!(
-    "ghcr.io/robot-head/crabka-grpc-gateway:",
+    "ghcr.io/robot-head/krabka-grpc-gateway:",
     env!("CARGO_PKG_VERSION")
 );
 
 // In-pod mount paths (Design §"Deployment mount set"). The gateway CLI flags
 // point at these.
-const SERVING_DIR: &str = "/etc/crabka-gw/serving";
-const BROKER_CLIENT_DIR: &str = "/etc/crabka-gw/broker-client";
-const CLUSTER_CA_DIR: &str = "/etc/crabka-gw/cluster-ca";
-const CLIENTS_CA_DIR: &str = "/etc/crabka-gw/clients-ca";
-const CONFIG_DIR: &str = "/etc/crabka-gw/config";
+const SERVING_DIR: &str = "/etc/krabka-gw/serving";
+const BROKER_CLIENT_DIR: &str = "/etc/krabka-gw/broker-client";
+const CLUSTER_CA_DIR: &str = "/etc/krabka-gw/cluster-ca";
+const CLIENTS_CA_DIR: &str = "/etc/krabka-gw/clients-ca";
+const CONFIG_DIR: &str = "/etc/krabka-gw/config";
 
 // ---------------------------------------------------------------------------
 // Naming helpers
@@ -154,12 +154,12 @@ fn gateway_labels(parent_name: &str, gw_name: &str) -> BTreeMap<String, String> 
     let mut m = BTreeMap::new();
     m.insert(
         "app.kubernetes.io/name".into(),
-        "crabka-grpc-gateway".into(),
+        "krabka-grpc-gateway".into(),
     );
     m.insert("app.kubernetes.io/instance".into(), parent_name.into());
     m.insert(
         "app.kubernetes.io/managed-by".into(),
-        "crabka-operator".into(),
+        "krabka-operator".into(),
     );
     m.insert("crabka.io/gateway".into(), gw_name.into());
     m
@@ -187,7 +187,7 @@ fn value_env(name: &str, value: impl Into<String>) -> serde_json::Value {
 ///
 /// The pod template carries:
 /// - the gateway container. It holds the image and the
-///   `CRABKA_GATEWAY_*` env from Design §"Config rendering", with the
+///   `KRABKA_GATEWAY_*` env from Design §"Config rendering", with the
 ///   `$(POD_NAME)` and `$(POD_IP)` downward-API refs. It also holds the
 ///   broker-TLS and serving-TLS CLI flags that point at the mounted paths,
 ///   the webhook and outbound config paths, and the telemetry env.
@@ -215,21 +215,21 @@ fn deployment(
         field_ref_env("POD_IP", "status.podIP"),
         field_ref_env("POD_NAMESPACE", "metadata.namespace"),
         // `client.id` = the pod name (distinct per replica).
-        value_env("CRABKA_GATEWAY_CLIENT_ID", "$(POD_NAME)"),
+        value_env("KRABKA_GATEWAY_CLIENT_ID", "$(POD_NAME)"),
     ];
     if let Some(t) = gw.spec.telemetry.as_ref() {
         if let Some(ep) = t.otlp_endpoint.as_deref() {
-            env.push(value_env("CRABKA_OTLP_ENABLED", "true"));
-            env.push(value_env("CRABKA_OTLP_ENDPOINT", ep));
+            env.push(value_env("KRABKA_OTLP_ENABLED", "true"));
+            env.push(value_env("KRABKA_OTLP_ENDPOINT", ep));
         }
         if let Some(p) = t.otlp_protocol.as_deref() {
             // The gateway's telemetry reads `OTEL_EXPORTER_OTLP_PROTOCOL`-style
             // values; map the CRD's `grpc`/`http` onto them.
             let proto = if p == "http" { "http/protobuf" } else { "grpc" };
-            env.push(value_env("CRABKA_OTLP_PROTOCOL", proto));
+            env.push(value_env("KRABKA_OTLP_PROTOCOL", proto));
         }
         if let Some(r) = t.sample_ratio {
-            env.push(value_env("CRABKA_OTLP_SAMPLE_RATIO", r.to_string()));
+            env.push(value_env("KRABKA_OTLP_SAMPLE_RATIO", r.to_string()));
         }
     }
 
@@ -565,7 +565,7 @@ fn service(gw: &KafkaGrpcGateway, parent_name: &str) -> Result<Service, Reconcil
 /// so the operator never reads secret material from the CR.
 ///
 /// This function serializes the TOML into the **exact** gateway schemas
-/// `crabka_grpc_gateway::webhook_config::WebhooksFile` and
+/// `krabka_grpc_gateway::webhook_config::WebhooksFile` and
 /// `outbound_config::OutboundFile`, so the TOML round-trips through the
 /// loader of the gateway. `allowed_targets` is the union of the
 /// `targetUrl` host of each subscription and any explicit
@@ -842,7 +842,7 @@ async fn ensure_serving_cert(
     let now = OffsetDateTime::now_utc();
     if let Some(existing) = secret_api.get_opt(&secret_name).await?
         && let Some(cert_pem) = read_pem_key(&existing, "tls.crt")
-        && !renew_if_expiring(&cert_pem, crabka_units::days(30), now).unwrap_or(true)
+        && !renew_if_expiring(&cert_pem, krabka_units::days(30), now).unwrap_or(true)
     {
         return Ok(());
     }
@@ -1071,8 +1071,8 @@ fn resolve_broker_endpoint(parent: &Kafka, namespace: &str) -> Option<(String, S
 fn validate_internal_topic_dirty_ratio(value: Option<Ratio>) -> Result<(), String> {
     if value.is_some_and(|value| {
         !value.as_f64().is_finite()
-            || value < <Ratio as crabka_units::convert::RatioExt>::ZERO
-            || value > <Ratio as crabka_units::convert::RatioExt>::ONE
+            || value < <Ratio as krabka_units::convert::RatioExt>::ZERO
+            || value > <Ratio as krabka_units::convert::RatioExt>::ONE
     }) {
         return Err(
             "spec.tuning.internalTopicMinCleanableDirtyRatio: must be between 0% and 100%".into(),
@@ -1155,12 +1155,12 @@ fn validate_config(spec: &crate::crd::grpc_gateway::KafkaGrpcGatewaySpec) -> Res
     if let Some(tuning) = &spec.tuning {
         tuning
             .client_dispatch_queue_capacity
-            .map(crabka_client_core::ConnectionDispatchQueueCapacity::new)
+            .map(krabka_client_core::ConnectionDispatchQueueCapacity::new)
             .transpose()
             .map_err(|error| format!("spec.tuning.clientDispatchQueueCapacity: {error}"))?;
         tuning
             .client_frame_max
-            .map(crabka_client_core::ClientFrameMax::try_from)
+            .map(krabka_client_core::ClientFrameMax::try_from)
             .transpose()
             .map_err(|error| format!("spec.tuning.clientFrameMax: {error}"))?;
         validate!(
@@ -1767,7 +1767,7 @@ pub async fn run(ctx: Context) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use assert2::{assert, check};
-    use crabka_units::{millis, secs};
+    use krabka_units::{millis, secs};
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::OwnerReference;
 
     use super::*;
@@ -1889,14 +1889,14 @@ mod tests {
         let args = pod.containers[0].args.as_ref().expect("args");
         let joined = args.join(" ");
         for want in [
-            "--broker-tls-cert=/etc/crabka-gw/broker-client/user.crt",
-            "--broker-tls-key=/etc/crabka-gw/broker-client/user.key",
-            "--broker-tls-ca=/etc/crabka-gw/cluster-ca/ca.crt",
+            "--broker-tls-cert=/etc/krabka-gw/broker-client/user.crt",
+            "--broker-tls-key=/etc/krabka-gw/broker-client/user.key",
+            "--broker-tls-ca=/etc/krabka-gw/cluster-ca/ca.crt",
             "--broker-tls-server-name=demo-broker-headless.default.svc.cluster.local",
             // Serving-side flags reference the right CA bundles.
-            "--tls-client-ca=/etc/crabka-gw/clients-ca/ca.crt",
-            "--tls-trust-roots=/etc/crabka-gw/cluster-ca/ca.crt",
-            "--tls-cert=/etc/crabka-gw/serving/tls.crt",
+            "--tls-client-ca=/etc/krabka-gw/clients-ca/ca.crt",
+            "--tls-trust-roots=/etc/krabka-gw/cluster-ca/ca.crt",
+            "--tls-cert=/etc/krabka-gw/serving/tls.crt",
             "--bootstrap-servers=demo-broker-headless",
         ] {
             assert!(joined.contains(want), "missing {want}; args: {joined}");
@@ -1930,7 +1930,7 @@ mod tests {
         // client-id is the pod name.
         let client_id = env
             .iter()
-            .find(|e| e.name == "CRABKA_GATEWAY_CLIENT_ID")
+            .find(|e| e.name == "KRABKA_GATEWAY_CLIENT_ID")
             .expect("client id env");
         assert!(client_id.value.as_deref() == Some("$(POD_NAME)"));
     }
@@ -2024,10 +2024,10 @@ mod tests {
                 .and_then(|e| e.value.clone())
         };
         for (name, want) in [
-            ("CRABKA_OTLP_ENABLED", "true"),
-            ("CRABKA_OTLP_ENDPOINT", "http://otel:4317"),
-            ("CRABKA_OTLP_PROTOCOL", "http/protobuf"),
-            ("CRABKA_OTLP_SAMPLE_RATIO", "0.5"),
+            ("KRABKA_OTLP_ENABLED", "true"),
+            ("KRABKA_OTLP_ENDPOINT", "http://otel:4317"),
+            ("KRABKA_OTLP_PROTOCOL", "http/protobuf"),
+            ("KRABKA_OTLP_SAMPLE_RATIO", "0.5"),
         ] {
             assert!(by_name(name).as_deref() == Some(want), "env {name}");
         }
@@ -2415,12 +2415,12 @@ mod tests {
             internal_topic_allow_replication_fallback: Some(false),
             internal_topic_create_timeout: Some(millis(7_001)),
             internal_topic_segment: Some(millis(22_001)),
-            internal_topic_min_cleanable_dirty_ratio: Some(crabka_units::fraction(0.025)),
+            internal_topic_min_cleanable_dirty_ratio: Some(krabka_units::fraction(0.025)),
             consumer_poll_timeout: Some(millis(501)),
             ownership_warmup_empty_polls: Some(3),
             readiness_poll_interval: Some(millis(251)),
-            produce_max_body: Some(crabka_units::bytes(3_145_728)),
-            forward_max_body: Some(crabka_units::bytes(3_145_727)),
+            produce_max_body: Some(krabka_units::bytes(3_145_728)),
+            forward_max_body: Some(krabka_units::bytes(3_145_727)),
         });
         gw.spec.schema_registry = Some(GatewaySchemaRegistrySpec {
             url: Some("http://registry:8081".into()),
@@ -2527,11 +2527,11 @@ mod tests {
         gw.spec.tuning = Some(crate::crd::grpc_gateway::GatewayTuning {
             internal_topic_create_timeout: Some(secs(10)),
             internal_topic_segment: Some(minutes(1)),
-            internal_topic_min_cleanable_dirty_ratio: Some(crabka_units::percent(1)),
+            internal_topic_min_cleanable_dirty_ratio: Some(krabka_units::percent(1)),
             consumer_poll_timeout: Some(millis(500)),
             readiness_poll_interval: Some(millis(250)),
-            produce_max_body: Some(crabka_units::mebibytes(2)),
-            forward_max_body: Some(crabka_units::mebibytes(2)),
+            produce_max_body: Some(krabka_units::mebibytes(2)),
+            forward_max_body: Some(krabka_units::mebibytes(2)),
             ..Default::default()
         });
 
@@ -2552,23 +2552,23 @@ mod tests {
         ] {
             let raw = value_of(flag);
             check!(
-                crabka_units::parse::time(&raw) == Ok(want),
+                krabka_units::parse::time(&raw) == Ok(want),
                 "case {flag} = {raw}"
             );
         }
         for (flag, want) in [
-            ("--produce-max-body", crabka_units::mebibytes(2)),
-            ("--forward-max-body", crabka_units::mebibytes(2)),
+            ("--produce-max-body", krabka_units::mebibytes(2)),
+            ("--forward-max-body", krabka_units::mebibytes(2)),
         ] {
             let raw = value_of(flag);
             check!(
-                crabka_units::parse::byte_size(&raw) == Ok(want),
+                krabka_units::parse::byte_size(&raw) == Ok(want),
                 "case {flag} = {raw}"
             );
         }
         let raw = value_of("--internal-topic-min-cleanable-dirty-ratio");
         check!(
-            crabka_units::parse::ratio(&raw) == Ok(crabka_units::percent(1)),
+            krabka_units::parse::ratio(&raw) == Ok(krabka_units::percent(1)),
             "case dirty ratio = {raw}"
         );
     }

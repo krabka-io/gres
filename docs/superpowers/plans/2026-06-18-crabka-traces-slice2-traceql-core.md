@@ -1,4 +1,4 @@
-# crabka-traces Slice 2 — `crabka-traceql` core (lexer + parser + planner + nested-set structural self-join + `SpanStore` trait + result model)
+# krabka-traces Slice 2 — `krabka-traceql` core (lexer + parser + planner + nested-set structural self-join + `SpanStore` trait + result model)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -6,16 +6,16 @@
 
 **Goal:** Build the core of the TraceQL engine — a hand-written lexer + recursive-descent parser (grammar referenced from icegate's ANTLR `.g4`, with TraceQL's `=`-not-`==`, fully-anchored `=~`, and the dot-vs-colon scope quirks), an AST→DataFusion `LogicalPlan` planner that lowers spanset selectors (scopes/intrinsics/array semantics, honoring the single-span rule), non-structural columnar pushdown with the `&&` AND fast path, and — the **centerpiece** — the **`SpanStructuralJoin`** lowering of the core structural operators (`>>`/`<<`/`>`/`<`/`~`) to a partitioned-by-`trace_id` self-join over the nested-set columns. It defines the `SpanStore` trait + an `InMemorySpanStore` test impl (building span DataFusion tables incl. the nested-set columns), the pinned result model, and a `TraceqlEngine::search`/`trace_by_id` path assembling spanSets per trace. The negated/union structural forms, TraceQL metrics, and tag discovery are deferred to Slice 3.
 
-**Architecture:** A query crate `crabka-traceql` that depends on DataFusion (same git pin as blockstore) and no external TraceQL parser (none exists — we build our own). The engine is generic over a `SpanStore` trait that yields a DataFusion `SessionContext` with a span table registered for a (tenant, matchers, time-range) scan — production wires this to the querier's hot/cold UNION (Slice 5), but this slice ships an `InMemorySpanStore` test impl so the engine is independently testable. The span table carries the nested-set structural columns (`nested_set_left`/`nested_set_right`/`parent_id`, Int32, computed at block-build in Slice 1; this slice's in-memory store computes them from a hand-built span tree via the same DFS pre-order). Structural TraceQL operators have **no native DataFusion equivalent and are not a per-trace tree-walk**: we lower each to a self-join keyed by `trace_id` with nested-set range/equality predicates (descendant: `B.left>A.left && B.right<A.right`; child: `B.parent_id==A.left`; sibling: `B.parent_id==A.parent_id && B.span_id!=A.span_id`) — a DataFusion join plan, with a thin custom physical operator only if the per-trace partitioning needs it. The planner recurses the AST into a `LogicalPlan`; `search`/`trace_by_id` execute it and assemble Tempo-shaped result structs.
+**Architecture:** A query crate `krabka-traceql` that depends on DataFusion (same git pin as blockstore) and no external TraceQL parser (none exists — we build our own). The engine is generic over a `SpanStore` trait that yields a DataFusion `SessionContext` with a span table registered for a (tenant, matchers, time-range) scan — production wires this to the querier's hot/cold UNION (Slice 5), but this slice ships an `InMemorySpanStore` test impl so the engine is independently testable. The span table carries the nested-set structural columns (`nested_set_left`/`nested_set_right`/`parent_id`, Int32, computed at block-build in Slice 1; this slice's in-memory store computes them from a hand-built span tree via the same DFS pre-order). Structural TraceQL operators have **no native DataFusion equivalent and are not a per-trace tree-walk**: we lower each to a self-join keyed by `trace_id` with nested-set range/equality predicates (descendant: `B.left>A.left && B.right<A.right`; child: `B.parent_id==A.left`; sibling: `B.parent_id==A.parent_id && B.span_id!=A.span_id`) — a DataFusion join plan, with a thin custom physical operator only if the per-trace partitioning needs it. The planner recurses the AST into a `LogicalPlan`; `search`/`trace_by_id` execute it and assemble Tempo-shaped result structs.
 
-**Tech Stack:** Rust 2024 · `datafusion` (git `main`, pinned — see Global Constraints) · `arrow` 59 · `async-trait` · `tokio` · `futures` · `regex` · `thiserror`. Depends on `crabka-blockstore` (types: `LabelMatcher`, `MatchOp`, `Labels` — consumed only where useful; the trace path is matcher-native via `SpanMatcher`). Tests: `assert2`, `proptest`, `tokio` (`macros`, `rt-multi-thread`).
+**Tech Stack:** Rust 2024 · `datafusion` (git `main`, pinned — see Global Constraints) · `arrow` 59 · `async-trait` · `tokio` · `futures` · `regex` · `thiserror`. Depends on `krabka-blockstore` (types: `LabelMatcher`, `MatchOp`, `Labels` — consumed only where useful; the trace path is matcher-native via `SpanMatcher`). Tests: `assert2`, `proptest`, `tokio` (`macros`, `rt-multi-thread`).
 
 ## Global Constraints
 
 - **No backwards compatibility.** Crabka is greenfield/undeployed. No `#[serde(default)]` shims, no V2-alongside-V1 enum variants, no migration code, no default-off feature gates. Change schemas/enums/interfaces freely. (Only Kafka wire compat matters — and this crate touches none of it.)
 - **`unsafe_code = "forbid"`** workspace-wide. No `unsafe` — including in any custom physical operator (build on safe arrow/DataFusion APIs).
-- **Lints:** `clippy::pedantic` is `warn` workspace-wide (`module_name_repetitions`, `missing_errors_doc`, `missing_panics_doc` allowed). New code must be clippy-pedantic clean. Run `cargo clippy -p crabka-traceql --all-targets` before each commit.
-- **Formatting:** run `cargo fmt -p crabka-traceql` before every commit. **NEVER** run `cargo +nightly fmt --all` — it fails with OS error 206 / path-too-long in deep worktrees on Windows; always scope with `-p`.
+- **Lints:** `clippy::pedantic` is `warn` workspace-wide (`module_name_repetitions`, `missing_errors_doc`, `missing_panics_doc` allowed). New code must be clippy-pedantic clean. Run `cargo clippy -p krabka-traceql --all-targets` before each commit.
+- **Formatting:** run `cargo fmt -p krabka-traceql` before every commit. **NEVER** run `cargo +nightly fmt --all` — it fails with OS error 206 / path-too-long in deep worktrees on Windows; always scope with `-p`.
 - **Assertions:** use `assert2::assert!` / `assert2::check!` in tests, `prop_assert*` inside `proptest!`.
 - **Async tests:** `#[tokio::test]`. Crate dev-dep `tokio` features = `["macros", "rt-multi-thread"]`.
 - **Dependency pin (locked):** `datafusion = { git = "https://github.com/apache/datafusion", rev = "0838a4ddb902535b0e95a1c5a254be7e9c7fe9bf" }`. This `main` revision tracks arrow 59 / parquet 59 / object_store 0.13.2, which unify with the workspace pins (same major → cargo unifies to one crate instance, so arrow types cross the DataFusion boundary cleanly). Do **not** substitute a released `datafusion` (54.x is on arrow 58 and pulls a second, incompatible arrow major).
@@ -30,12 +30,12 @@
 ## Dependency & slice roadmap
 
 **Depends on:**
-- `crabka-blockstore` (generalized in traces Slice 1): the `BlockIndex` trait, `TraceIndex` (FNV-sharded `trace_id` bloom + per-block tag sets/blooms), and the **flattened span block schema** including the nested-set columns (`nested_set_left`/`nested_set_right`/`parent_id`, Int32) + the DFS pre-order computed at block-build. **This slice consumes only the *column-name contract and the nested-set semantics*** — the `BlockStore`-backed `SpanStore` impl lands in Slice 5; here we ship `InMemorySpanStore`, which computes the same nested-set columns from a hand-built span tree so the structural-join tests are trustworthy. Types `Labels`/`LabelMatcher`/`MatchOp` stay available from blockstore.
+- `krabka-blockstore` (generalized in traces Slice 1): the `BlockIndex` trait, `TraceIndex` (FNV-sharded `trace_id` bloom + per-block tag sets/blooms), and the **flattened span block schema** including the nested-set columns (`nested_set_left`/`nested_set_right`/`parent_id`, Int32) + the DFS pre-order computed at block-build. **This slice consumes only the *column-name contract and the nested-set semantics*** — the `BlockStore`-backed `SpanStore` impl lands in Slice 5; here we ship `InMemorySpanStore`, which computes the same nested-set columns from a hand-built span tree so the structural-join tests are trustworthy. Types `Labels`/`LabelMatcher`/`MatchOp` stay available from blockstore.
 
 **The 8 traces slices** (this plan = Slice 2; each later slice gets its own plan):
 
 1. **Blockstore generalization + span block schema + `TraceIndex`** — `BlockIndex` trait; span block (nested-set columns + DFS pre-order at block-build); `TraceIndex`. *(planned/built separately)*
-2. **`crabka-traceql` core** *(this plan)* — lexer + parser + planner + selectors (scopes/intrinsics/array semantics, single-span rule) + non-structural pushdown + the `&&` AND fast path + the **`SpanStructuralJoin`** lowering for the **core** structural operators (descendant/child/sibling/ancestor/parent) + pipeline aggregations + `search()`/`trace_by_id()`. Defines the `SpanStore` trait + the pinned result types.
+2. **`krabka-traceql` core** *(this plan)* — lexer + parser + planner + selectors (scopes/intrinsics/array semantics, single-span rule) + non-structural pushdown + the `&&` AND fast path + the **`SpanStructuralJoin`** lowering for the **core** structural operators (descendant/child/sibling/ancestor/parent) + pipeline aggregations + `search()`/`trace_by_id()`. Defines the `SpanStore` trait + the pinned result types.
 3. **TraceQL completeness** — full structural ops (the **negated** `!>>`/`!<<`/`!>`/`!<` and **union** `&>>`/`&<<`/`&>`/`&<`/`&~` forms), the remaining pipeline aggregations, **TraceQL metrics** (time-bucketed → Prometheus-shaped series + exemplars), and **tag discovery** (scoped tag names/values). **Reuses this slice's `SpanStore` trait, `SpanStructuralJoin` lowering, parser, and result model — those public names are frozen here.**
 4. **Ingest service** — `distributor` (OTLP/Jaeger/Zipkin/`/api/push`) → `trace_id`-partitioned WAL; `block-builder` consumer group → span blocks + `TraceIndex`; `live-store` consumer group (hot tier `MemTable`).
 5. **Querier + Tempo HTTP API** — implement `SpanStore` as the hot/cold UNION (live-store + blocks); serve `/api/echo`, `/api/v2/traces/{id}`, `/api/search`, `/api/v2/search/tags` + `tag/{tag}/values`, `/api/metrics/query_range` + `query`. **Replaces `InMemorySpanStore` with a `BlockStore`-backed `SpanStore` — the trait is frozen here.**
@@ -176,25 +176,25 @@ The `span_table` registered by `SpanStore::scan` has **one row per span**, sorte
 **Files:**
 - Create: `crates/traceql/Cargo.toml`
 - Create: `crates/traceql/src/lib.rs`
-- Modify: root `Cargo.toml` (add `crabka-traceql` to workspace members if member globbing is not used; `datafusion`/`arrow`/`regex` already in `[workspace.dependencies]`)
+- Modify: root `Cargo.toml` (add `krabka-traceql` to workspace members if member globbing is not used; `datafusion`/`arrow`/`regex` already in `[workspace.dependencies]`)
 
 **Interfaces:**
-- Produces: a compiling `crabka-traceql` crate with `pub fn crate_smoke() -> bool` (placeholder, removed in A2).
+- Produces: a compiling `krabka-traceql` crate with `pub fn crate_smoke() -> bool` (placeholder, removed in A2).
 
 - [x] **Step 1: Create `crates/traceql/Cargo.toml`**
 
 ```toml
 [package]
-name = "crabka-traceql"
+name = "krabka-traceql"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "TraceQL engine (lexer + parser + planner + nested-set structural self-join) for Crabka's Grafana-Tempo-equivalent traces backend"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-traceql"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-traceql"
 readme = "README.md"
 keywords = ["observability", "tempo", "traceql", "datafusion", "crabka"]
 categories = ["database-implementations"]
@@ -203,7 +203,7 @@ categories = ["database-implementations"]
 workspace = true
 
 [dependencies]
-crabka-blockstore = { path = "../blockstore", version = "0.3.7" }
+krabka-blockstore = { path = "../blockstore", version = "0.3.7" }
 arrow = { workspace = true }
 datafusion = { workspace = true }
 async-trait = { workspace = true }
@@ -219,7 +219,7 @@ proptest = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 ```
 
-> If `crabka-blockstore`/`datafusion`/`arrow`/`regex` are not yet present in `[workspace.dependencies]` (blockstore/Slice 1 not landed in this tree), add them exactly as the blockstore plan specifies. The first build fetches + compiles DataFusion from git — slow (several minutes), normal.
+> If `krabka-blockstore`/`datafusion`/`arrow`/`regex` are not yet present in `[workspace.dependencies]` (blockstore/Slice 1 not landed in this tree), add them exactly as the blockstore plan specifies. The first build fetches + compiles DataFusion from git — slow (several minutes), normal.
 
 - [x] **Step 2: Create `crates/traceql/src/lib.rs` with a placeholder**
 
@@ -251,16 +251,16 @@ mod tests {
 
 - [x] **Step 3: Build and test**
 
-Run: `cargo test -p crabka-traceql`
+Run: `cargo test -p krabka-traceql`
 Expected: compiles and `smoke` PASSES. If the build fails with an arrow major mismatch (`expected struct arrow::... found struct arrow::...`), the datafusion rev is wrong — re-confirm the pinned rev tracks arrow 59.
 
 - [x] **Step 4: Commit**
 
 ```bash
-cargo fmt -p crabka-traceql
-cargo clippy -p crabka-traceql --all-targets
+cargo fmt -p krabka-traceql
+cargo clippy -p krabka-traceql --all-targets
 git add Cargo.toml Cargo.lock crates/traceql/
-git commit -m "feat(traceql): scaffold crabka-traceql crate"
+git commit -m "feat(traceql): scaffold krabka-traceql crate"
 ```
 
 ---
@@ -304,7 +304,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traceql --lib error`
+Run: `cargo test -p krabka-traceql --lib error`
 Expected: FAIL — `cannot find type TraceqlError`.
 
 - [x] **Step 3: Implement `error.rs`**
@@ -358,14 +358,14 @@ pub(crate) use error::Result;
 
 - [x] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-traceql --lib error`
+Run: `cargo test -p krabka-traceql --lib error`
 Expected: PASS (2 tests).
 
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-traceql
-cargo clippy -p crabka-traceql --all-targets
+cargo fmt -p krabka-traceql
+cargo clippy -p krabka-traceql --all-targets
 git add crates/traceql/
 git commit -m "feat(traceql): TraceqlError type + DataFusion conversion"
 ```
@@ -443,7 +443,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traceql --lib result`
+Run: `cargo test -p krabka-traceql --lib result`
 Expected: FAIL — `cannot find type SpanRef`.
 
 - [x] **Step 3: Implement `result.rs`**
@@ -556,14 +556,14 @@ pub use result::{
 
 - [x] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-traceql --lib result`
+Run: `cargo test -p krabka-traceql --lib result`
 Expected: PASS (3 tests).
 
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-traceql
-cargo clippy -p crabka-traceql --all-targets
+cargo fmt -p krabka-traceql
+cargo clippy -p krabka-traceql --all-targets
 git add crates/traceql/
 git commit -m "feat(traceql): Tempo-shaped result model + tag-discovery types"
 ```
@@ -649,7 +649,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traceql --lib store`
+Run: `cargo test -p krabka-traceql --lib store`
 Expected: FAIL — `cannot find type SpanStore`.
 
 - [x] **Step 3: Implement `store.rs`**
@@ -777,14 +777,14 @@ Add `mod store;` and `pub use store::{MatchCmp, MatchScope, MatchValue, ScanResu
 
 - [x] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-traceql --lib store`
+Run: `cargo test -p krabka-traceql --lib store`
 Expected: PASS.
 
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-traceql
-cargo clippy -p crabka-traceql --all-targets
+cargo fmt -p krabka-traceql
+cargo clippy -p krabka-traceql --all-targets
 git add crates/traceql/
 git commit -m "feat(traceql): SpanStore trait + ScanResult + SpanMatcher"
 ```
@@ -856,7 +856,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traceql --lib span_columns`
+Run: `cargo test -p krabka-traceql --lib span_columns`
 Expected: FAIL — `cannot find function assign_nested_set`.
 
 - [x] **Step 3: Implement `span_columns.rs`**
@@ -1004,7 +1004,7 @@ pub fn assign_nested_set(spans: &[InputSpan]) -> Vec<NestedSet> {
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traceql --lib span_columns`
+Run: `cargo test -p krabka-traceql --lib span_columns`
 Expected: PASS.
 
 - [x] **Step 5: Wire `lib.rs` + commit**
@@ -1012,7 +1012,7 @@ Expected: PASS.
 Add `mod span_columns;` and `pub use span_columns::{InputSpan, NestedSet, assign_nested_set, span_schema};` (+ the `COL_*` constants the planner needs; re-export the full set).
 
 ```bash
-cargo fmt -p crabka-traceql && cargo clippy -p crabka-traceql --all-targets
+cargo fmt -p krabka-traceql && cargo clippy -p krabka-traceql --all-targets
 git add crates/traceql/
 git commit -m "feat(traceql): span-table column contract + nested-set DFS pre-order"
 ```
@@ -1114,7 +1114,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traceql --lib in_memory`
+Run: `cargo test -p krabka-traceql --lib in_memory`
 Expected: FAIL — `cannot find type InMemorySpanStore`.
 
 - [x] **Step 3: Implement `in_memory.rs`**
@@ -1411,13 +1411,13 @@ Add `mod in_memory;` and `pub use in_memory::InMemorySpanStore;`.
 
 - [x] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-traceql --lib in_memory`
+Run: `cargo test -p krabka-traceql --lib in_memory`
 Expected: PASS (2 tests).
 
 - [x] **Step 6: Phase A gate + commit**
 
 ```bash
-cargo test -p crabka-traceql && cargo clippy -p crabka-traceql --all-targets && cargo fmt -p crabka-traceql --check
+cargo test -p krabka-traceql && cargo clippy -p krabka-traceql --all-targets && cargo fmt -p krabka-traceql --check
 git add crates/traceql/ Cargo.toml
 git commit -m "feat(traceql): InMemorySpanStore building span DataFusion tables w/ nested-set columns"
 ```
@@ -1505,7 +1505,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traceql --lib lexer`
+Run: `cargo test -p krabka-traceql --lib lexer`
 Expected: FAIL — `cannot find type Token`.
 
 - [x] **Step 3: Implement `lexer.rs`** — a single-pass scanner over `char` indices. At each non-whitespace position, try the multi-char operators **longest-first** (`!>>`/`&>>`/`!<<`/`&<<` → `>>`/`<<`/`!>`/`!<`/`&>`/`&<`/`&~`/`&&`/`||`/`>=`/`<=`/`=~`/`!~` → single `=`/`<`/`>`/`~`/`!`/`&`-error/`+`/`-`/`*`/`/`/`%`/`^`/`.`/`:`/`,`/`(`/`)`/`{`/`}`/`|`), then string literals (`"..."` with `\"` escapes), then numbers (int/float), then identifiers/keywords (`nil`/`true`/`false` recognized as their own tokens; everything else an `Ident`, including duration literals like `100ms` and dotted attribute keys like `http.status` — actually emit `Dot`-separated `Ident`s and let the parser join, EXCEPT a leading bare-`.` scope which is its own `Dot`). Provide the full real scanner code (plain Rust — no churn surface). Map any unexpected char to `TraceqlError::Parse`.
@@ -1514,10 +1514,10 @@ Expected: FAIL — `cannot find type Token`.
 
 - [x] **Step 4: Run + wire + commit**
 
-`cargo test -p crabka-traceql --lib lexer` → PASS. Add `mod lexer;` + `pub use lexer::{Token, lex};`.
+`cargo test -p krabka-traceql --lib lexer` → PASS. Add `mod lexer;` + `pub use lexer::{Token, lex};`.
 
 ```bash
-cargo fmt -p crabka-traceql && cargo clippy -p crabka-traceql --all-targets
+cargo fmt -p krabka-traceql && cargo clippy -p krabka-traceql --all-targets
 git add crates/traceql/
 git commit -m "feat(traceql): TraceQL lexer (maximal-munch operators, single-=, colon-vs-dot scopes)"
 ```
@@ -1575,7 +1575,7 @@ mod tests {
 - [x] **Step 4: Run + wire + commit** — add `mod ast;` + `pub use ast::{Aggregate, ComparisonOp, Field, FieldExpr, Intrinsic, Pipeline, Query, Scope, SpansetExpr, StructuralOp, Value};`.
 
 ```bash
-cargo fmt -p crabka-traceql && cargo clippy -p crabka-traceql --all-targets
+cargo fmt -p krabka-traceql && cargo clippy -p krabka-traceql --all-targets
 git add crates/traceql/
 git commit -m "feat(traceql): TraceQL AST node types"
 ```
@@ -1667,7 +1667,7 @@ mod tests {
 - [x] **Step 4: Phase B gate + commit**
 
 ```bash
-cargo test -p crabka-traceql && cargo clippy -p crabka-traceql --all-targets && cargo fmt -p crabka-traceql --check
+cargo test -p krabka-traceql && cargo clippy -p krabka-traceql --all-targets && cargo fmt -p krabka-traceql --check
 git add crates/traceql/
 git commit -m "feat(traceql): recursive-descent parser (single-span rule, scopes, structural ops, pipeline)"
 ```
@@ -1748,7 +1748,7 @@ git commit -m "feat(traceql): recursive-descent parser (single-span rule, scopes
 - [x] **Step 4: Phase C gate + commit**
 
 ```bash
-cargo test -p crabka-traceql && cargo clippy -p crabka-traceql --all-targets && cargo fmt -p crabka-traceql --check
+cargo test -p krabka-traceql && cargo clippy -p krabka-traceql --all-targets && cargo fmt -p krabka-traceql --check
 git add crates/traceql/
 git commit -m "feat(traceql): conjunctive matcher extraction for store prefilter"
 ```
@@ -1930,7 +1930,7 @@ mod tests {
 - [x] **Step 4: Phase D gate + commit**
 
 ```bash
-cargo test -p crabka-traceql && cargo clippy -p crabka-traceql --all-targets && cargo fmt -p crabka-traceql --check
+cargo test -p krabka-traceql && cargo clippy -p krabka-traceql --all-targets && cargo fmt -p krabka-traceql --check
 git add crates/traceql/
 git commit -m "test(traceql): structural-operator behavioral suite (ancestor/parent + cross-trace isolation)"
 ```
@@ -2069,7 +2069,7 @@ mod tests {
 - [x] **Step 5: Phase E gate + commit**
 
 ```bash
-cargo test -p crabka-traceql && cargo clippy -p crabka-traceql --all-targets && cargo fmt -p crabka-traceql --check
+cargo test -p krabka-traceql && cargo clippy -p krabka-traceql --all-targets && cargo fmt -p krabka-traceql --check
 git add crates/traceql/
 git commit -m "feat(traceql): TraceqlEngine — search/trace_by_id + spanSet assembly"
 ```
@@ -2086,7 +2086,7 @@ git commit -m "feat(traceql): TraceqlEngine — search/trace_by_id + spanSet ass
 - Create: `crates/traceql/tests/golden_queries.rs`
 
 **Interfaces:**
-- Consumes: `crabka_traceql::{TraceqlEngine, EngineOpts, InMemorySpanStore}` + the public result model.
+- Consumes: `krabka_traceql::{TraceqlEngine, EngineOpts, InMemorySpanStore}` + the public result model.
 - Produces: an integration test asserting a curated set of TraceQL queries against a fixed fixture with hand-computed expected results.
 
 - [x] **Step 1: Write the suite** — build a fixed multi-trace, multi-service fixture (3–4 traces with known trees, services, durations, attributes), then assert each query's `SearchResponse` against the hand-computed expected traces/spans. Cover, at minimum:
@@ -2097,12 +2097,12 @@ git commit -m "feat(traceql): TraceqlEngine — search/trace_by_id + spanSet ass
   - cross-trace isolation (a structural query that must not bleed across traces).
   - `trace_by_id` for a known trace.
 
-- [x] **Step 2: Run** — `cargo test -p crabka-traceql --test golden_queries`. Each failure is a planner/lowering bug — fix it in the relevant Phase C/D/E file (the hand-computed expectations are ground truth; never weaken an expectation to pass). Iterate to green.
+- [x] **Step 2: Run** — `cargo test -p krabka-traceql --test golden_queries`. Each failure is a planner/lowering bug — fix it in the relevant Phase C/D/E file (the hand-computed expectations are ground truth; never weaken an expectation to pass). Iterate to green.
 
 - [x] **Step 3: Final whole-crate gate + commit**
 
 ```bash
-cargo test -p crabka-traceql && cargo clippy -p crabka-traceql --all-targets && cargo fmt -p crabka-traceql --check
+cargo test -p krabka-traceql && cargo clippy -p krabka-traceql --all-targets && cargo fmt -p krabka-traceql --check
 git add crates/traceql/
 git commit -m "test(traceql): curated golden-query suite (selectors/structural/single-span/pipeline)"
 ```

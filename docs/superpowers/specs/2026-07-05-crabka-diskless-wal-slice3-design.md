@@ -6,13 +6,13 @@
 
 ## Context — where this sits
 
-Third slice of the diskless-broker WAL milestone (see [Slice 1](2026-07-05-crabka-diskless-wal-slice1-design.md) for the decomposition). Slice 1 made diskless topics durable by local `fsync` with the `acks=all` gate on the WAL durable watermark; Slice 2 moved offset assignment to KRaft. Slice 3 is where diskless data first reaches **object storage**: a per-broker background worker batches acked WAL records from many partitions into shared object-storage objects and records an offset→object index.
+Third slice of the diskless-broker WAL milestone (see [Slice 1](2026-07-05-krabka-diskless-wal-slice1-design.md) for the decomposition). Slice 1 made diskless topics durable by local `fsync` with the `acks=all` gate on the WAL durable watermark; Slice 2 moved offset assignment to KRaft. Slice 3 is where diskless data first reaches **object storage**: a per-broker background worker batches acked WAL records from many partitions into shared object-storage objects and records an offset→object index.
 
 **Framing (roadmap tension #3, AutoMQ-shaped):** the flush is **async / background, *after* the ack**. The produce/ack path is unchanged — it still gates on Slice-1 local `fsync` durability. The flush moves data local-WAL → object storage to enable later read-serving (Slice 4) and local-WAL trimming; flush latency never touches produce latency.
 
 **Prerequisites (unlanded):** Slices 1 and 2 are spec-only. This slice consumes the Slice-1 `diskless` per-topic flag and the WAL-durable high watermark, and the per-broker leadership model. Land Slices 1–2 first.
 
-**Substrate note:** `crabka-object-store` as landed exposes only `build_object_store(cfg) -> Arc<dyn ObjectStore>` + config/error (`crates/object-store/src/lib.rs:14-19`); the `ObjectOps` trait is a separate, unlanded plan. Slice 3 builds directly on the raw `Arc<dyn ObjectStore>` and does **not** depend on `ObjectOps`.
+**Substrate note:** `krabka-object-store` as landed exposes only `build_object_store(cfg) -> Arc<dyn ObjectStore>` + config/error (`crates/object-store/src/lib.rs:14-19`); the `ObjectOps` trait is a separate, unlanded plan. Slice 3 builds directly on the raw `Arc<dyn ObjectStore>` and does **not** depend on `ObjectOps`.
 
 ## Design Goals
 
@@ -27,7 +27,7 @@ Third slice of the diskless-broker WAL milestone (see [Slice 1](2026-07-05-crabk
 - **No fetch-from-object.** Slice 3 *writes* objects and *projects* the index; it does not serve reads from object storage. Fetch still reads the local `Log`. (Slice 4.)
 - **No trimming enabled.** The trim seam is built and wired, but disabled by default — there is no object-read fallback yet, so trimming a still-needed offset would make it permanently unreadable. (Slice 4 enables it.)
 - **No crash-mid-flush atomicity.** The PUT→index→trim ordering is honored under clean shutdown; atomicity across a crash between those steps is **Slice 5**.
-- **No S3-PUT-primitive extraction.** The flusher uses the raw `object_store` PUT directly; extracting the private `S3RemoteStorage` PUT helpers into `crabka-object-store` (to share one engine with KIP-405) is deferred to avoid touching the landed tiered path.
+- **No S3-PUT-primitive extraction.** The flusher uses the raw `object_store` PUT directly; extracting the private `S3RemoteStorage` PUT helpers into `krabka-object-store` (to share one engine with KIP-405) is deferred to avoid touching the landed tiered path.
 - **No diskless+tiered coexistence** on one partition — a diskless topic is not also KIP-405-tiered, so there is one trim authority.
 
 ## Architecture Overview

@@ -1,6 +1,6 @@
 # Rust Code Style Guide
 
-This guide defines the general Rust coding conventions for Crabka crates. It adds to the more specialised guides: [rustdoc](rustdoc_style_guide.md) for doc comments, [design docs](design_doc_style_guide.md), [READMEs](readme_style_guide.md), and [coverage reports](coverage_report_style_guide.md). The rules come from the patterns already set in `crabka-protocol`, `crabka-raft`, `crabka-broker`, `crabka-log`, and `crabka-metadata`.
+This guide defines the general Rust coding conventions for Crabka crates. It adds to the more specialised guides: [rustdoc](rustdoc_style_guide.md) for doc comments, [design docs](design_doc_style_guide.md), [READMEs](readme_style_guide.md), and [coverage reports](coverage_report_style_guide.md). The rules come from the patterns already set in `krabka-protocol`, `krabka-raft`, `krabka-broker`, `krabka-log`, and `krabka-metadata`.
 
 Reviewers expect these conventions, and they keep a change consistent with the code around it. When in doubt, match the surrounding module and write idiomatic Rust.
 
@@ -61,7 +61,7 @@ Every warning is an error, across all targets. Fix the lint. Do not suppress it.
 
 The workspace sets lint levels **once**, in the `[workspace.lints]` table. Every crate inherits them through `[lints] workspace = true`. The current policy is:
 
-- `unsafe_code = "forbid"` — Crabka crates contain no `unsafe`. See [Wire-Format Safety](#wire-format-safety). The single documented exception is the `crabka-log-iobench` benchmark crate. It opts out of the workspace lints because `memmap2::Mmap::map` is `unsafe` by contract, and the opt-out keeps the project-wide forbid intact. Do not use that pattern in production crates.
+- `unsafe_code = "forbid"` — Crabka crates contain no `unsafe`. See [Wire-Format Safety](#wire-format-safety). The single documented exception is the `krabka-log-iobench` benchmark crate. It opts out of the workspace lints because `memmap2::Mmap::map` is `unsafe` by contract, and the opt-out keeps the project-wide forbid intact. Do not use that pattern in production crates.
 - `clippy::pedantic = "warn"` — the pedantic group is on, so expect Clippy to be stricter than its defaults.
 - A small set of pedantic lints stay relaxed on purpose while the public API is pre-1.0: `module_name_repetitions`, `missing_errors_doc`, and `missing_panics_doc`. The workspace `Cargo.toml` documents them. Do not add to the list without a discussion first.
 
@@ -74,7 +74,7 @@ Follow standard Rust naming. Clippy enforces most of these rules:
 - `snake_case` for functions, methods, variables, modules, and crate features.
 - `UpperCamelCase` for types, traits, and enum variants.
 - `SCREAMING_SNAKE_CASE` for constants and statics.
-- `Cargo.toml` names each crate `crabka-<name>`, and other crates import it as `crabka_<name>`. The directory under `crates/` is the bare `<name>`.
+- `Cargo.toml` names each crate `krabka-<name>`, and other crates import it as `krabka_<name>`. The directory under `crates/` is the bare `<name>`.
 - Prefer descriptive names over abbreviations, but keep the Kafka domain vocabulary intact: `kraft`, `isr`, `offset`, `epoch`, `produce`, `fetch`, `coordinator`, and `kip`. This is the vocabulary of the codebase and of the KIPs that Crabka implements. A field named to match the Kafka wire schema should keep that name.
 
 ## Imports and `use` Blocks
@@ -82,7 +82,7 @@ Follow standard Rust naming. Clippy enforces most of these rules:
 Organise `use` statements into up to three blocks in this order, with a single blank line between blocks:
 
 1. The standard library — `std::…`, `core::…`, and `alloc::…` all share this one block.
-2. Third-party crates — this block includes the sibling `crabka_<name>` workspace crates, because they are ordinary external dependencies of the crate that imports them: `crabka_log::…`, `crabka_protocol::…`, and `tokio::…`.
+2. Third-party crates — this block includes the sibling `krabka_<name>` workspace crates, because they are ordinary external dependencies of the crate that imports them: `krabka_log::…`, `krabka_protocol::…`, and `tokio::…`.
 3. Local imports — `crate::…`, `super::…`, and `self::…` share this one block.
 
 rustfmt enforces this layout. `rustfmt.toml` sets `group_imports = "StdExternalCrate"`, so `cargo +nightly fmt` produces exactly these three blocks in this order, and the CI format check keeps them that way. The option is nightly-gated, like `format_code_in_doc_comments`, and plain stable `cargo fmt` skips it without a message, so run `cargo +nightly fmt`. Omit any block that has no imports, which is why the count is "up to three". Never leave an empty block.
@@ -93,8 +93,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use tokio::sync::{Notify, mpsc, oneshot};
 
-use crabka_log::{Log, ReadOutput};
-use crabka_protocol::records::RecordBatch;
+use krabka_log::{Log, ReadOutput};
+use krabka_protocol::records::RecordBatch;
 
 use crate::error::BrokerError;
 use crate::replica_state::ReplicaState;
@@ -150,7 +150,7 @@ use thiserror::Error;
 #[non_exhaustive]
 pub enum RaftError {
     #[error("storage: {0}")]
-    Storage(#[from] crabka_log::LogError),
+    Storage(#[from] krabka_log::LogError),
 
     /// The node received a write but is not the current leader.
     #[error("not leader; current leader: {current_leader:?}")]
@@ -220,7 +220,7 @@ Guidance:
   pub struct ProducerId(pub i64);
   ```
 - **Use `#[serde(transparent)]`** on newtypes that are serialised, so the wire or JSON encoding is exactly the inner primitive and never a wrapper object.
-- **Comparison against the inner primitive is allowed. Nothing else is relaxed.** The shared `crabka-ids` identifiers hand-implement `PartialEq`/`PartialOrd` against their inner primitive in both directions. A value check such as `offset >= 0` or `epoch == LeaderEpoch::UNKNOWN` then reads without an explicit `.0`. This exception is deliberately narrow. It does **not** let you pass the newtype where its primitive is expected, and it does **not** let the newtype act as its primitive in a map key. It also does **not** let you compare it to a *different* newtype, so the swap-bug safety is intact. Expose the Kafka sentinels, `-1` for unknown or none and `0` for initial, as **named constants** such as `LeaderEpoch::UNKNOWN`, `ProducerId::NONE`, and `Offset::ZERO`. The comparison then reads as intent rather than a magic number.
+- **Comparison against the inner primitive is allowed. Nothing else is relaxed.** The shared `krabka-ids` identifiers hand-implement `PartialEq`/`PartialOrd` against their inner primitive in both directions. A value check such as `offset >= 0` or `epoch == LeaderEpoch::UNKNOWN` then reads without an explicit `.0`. This exception is deliberately narrow. It does **not** let you pass the newtype where its primitive is expected, and it does **not** let the newtype act as its primitive in a map key. It also does **not** let you compare it to a *different* newtype, so the swap-bug safety is intact. Expose the Kafka sentinels, `-1` for unknown or none and `0` for initial, as **named constants** such as `LeaderEpoch::UNKNOWN`, `ProducerId::NONE`, and `Offset::ZERO`. The comparison then reads as intent rather than a magic number.
 - **Validate in the constructor** for newtypes over `String` or other unconstrained inputs, such as `ClientId` or a validated principal. Expose `fn new(..) -> Result<Self, _>` and an `as_str` or other accessor. Do **not** also derive `From`, because an infallible `From` would bypass the validation. An instance should be proof that the value is well-formed. This is [parse, don't validate](https://github.com/leonardomso/rust-skills/blob/master/rules/api-parse-dont-validate.md).
 - **The newtype is zero-cost.** It has the same size and layout as the primitive, so there is no runtime reason to avoid one.
 
@@ -234,22 +234,22 @@ Guidance:
 
 A newtype separates two values that share a primitive. It does nothing about a value whose *unit* is wrong. `session_timeout_ms` and `retention_ms` are both durations, and a newtype for each still lets the code store seconds where it meant milliseconds.
 
-**A magnitude with a unit is a `crabka-units` quantity, not a bare number.** Sizes are `ByteSize`, throughputs are `ByteRate`, timeouts and intervals and retention windows are `Time`, event rates are `Frequency`, and fractions are `Ratio`. These are [`uom`](https://docs.rs/uom) quantities, so a unit conversion is a method call and not a hand-written `* 1024`. The compiler also checks arithmetic across dimensions: `ByteSize / Time` is a `ByteRate` and nothing else.
+**A magnitude with a unit is a `krabka-units` quantity, not a bare number.** Sizes are `ByteSize`, throughputs are `ByteRate`, timeouts and intervals and retention windows are `Time`, event rates are `Frequency`, and fractions are `Ratio`. These are [`uom`](https://docs.rs/uom) quantities, so a unit conversion is a method call and not a hand-written `* 1024`. The compiler also checks arithmetic across dimensions: `ByteSize / Time` is a `ByteRate` and nothing else.
 
 ```rust
-use crabka_units::prelude::*;
+use krabka_units::prelude::*;
 
 let quota: ByteRate = mebibytes_per_sec(10);
 let drain: Time = quota.time_to_transfer(mebibytes(50));
 ```
 
-The same two exceptions apply as for newtypes, plus one more. The **generated wire codec stays raw**. Convert at the hand-written boundary with the extension traits in `crabka_units::convert`. **Instants are not magnitudes.** An offset, an epoch, or an epoch-milliseconds timestamp is a coordinate and stays a `crabka-ids` newtype, and `Time` is always an *extent*. And **dimensionless counts stay integers**: a partition count or a retry budget has no unit to get wrong.
+The same two exceptions apply as for newtypes, plus one more. The **generated wire codec stays raw**. Convert at the hand-written boundary with the extension traits in `krabka_units::convert`. **Instants are not magnitudes.** An offset, an epoch, or an epoch-milliseconds timestamp is a coordinate and stays a `krabka-ids` newtype, and `Time` is always an *extent*. And **dimensionless counts stay integers**: a partition count or a retry budget has no unit to get wrong.
 
 Drop the unit from the name once the type carries it. `fetch_max_bytes: i32` becomes `fetch_max: ByteSize`. Keep the suffix only where the name matches a Kafka config key or a wire field that is still a raw integer. See [`docs/uom-adoption.md`](../uom-adoption.md).
 
 ## Feature Flags
 
-Crabka is not `no_std`. The broker and the services run on `std`, and the client crates target `std` hosts. Two portability constraints do exist and must be preserved. `crabka-voters` stays crypto-free so the consensus core compiles to WebAssembly, and the `crabka-playground` consensus demo built on it stays crypto-free for the same reason. Do not pull `std`-only or native-only dependencies into those crates.
+Crabka is not `no_std`. The broker and the services run on `std`, and the client crates target `std` hosts. Two portability constraints do exist and must be preserved. `krabka-voters` stays crypto-free so the consensus core compiles to WebAssembly, and the `krabka-playground` consensus demo built on it stays crypto-free for the same reason. Do not pull `std`-only or native-only dependencies into those crates.
 
 For feature flags generally:
 
@@ -276,7 +276,7 @@ Crabka is built on `tokio`, which `[workspace.dependencies]` pins.
 ## Logging and Observability
 
 - Use the `tracing` macros such as `tracing::debug!`, `error!`, and `instrument` for logs and spans. Do not use `println!` / `eprintln!` in library or server code.
-- Services install the shared JSON formatter from `crabka-logfmt`, so the log output is structured for downstream ingestion. Do not write a formatter by hand in a service.
+- Services install the shared JSON formatter from `krabka-logfmt`, so the log output is structured for downstream ingestion. Do not write a formatter by hand in a service.
 - Keep log levels meaningful: `error!` for faults that need attention, `warn!` for recoverable anomalies, and `debug!`/`trace!` for diagnostics. Do not log per record or per request at `info!` on the produce/fetch hot path.
 
 ## Cargo and Dependencies

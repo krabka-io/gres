@@ -233,7 +233,7 @@ case* needs add/remove-voter at runtime.
 
 - Test: `crates/broker/tests/jvm_static_quorum_spike.rs` (`#[ignore]`d; compiles,
   clippy-clean; asserts cross-impl election + flags the replication gap). Run:
-  `cargo test -p crabka-broker --test jvm_static_quorum_spike -- --ignored --nocapture`.
+  `cargo test -p krabka-broker --test jvm_static_quorum_spike -- --ignored --nocapture`.
 - Tweak: `crates/raft/src/server.rs::api_versions_response_body` (marked "SPIKE
   TWEAK … evaluate for promotion"). Kept in-tree because it is small, validated
   non-breaking for Crabka↔Crabka, and is item (1) of the recommendation.

@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use crabka_pgwire::{session::SessionConfig, stub::StubEngine};
+use krabka_pgwire::{session::SessionConfig, stub::StubEngine};
 use sqlx::Connection;
 use tokio::net::TcpListener;
 
 async fn connect_sqlx() -> sqlx::postgres::PgConnection {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
-    tokio::spawn(crabka_pgwire::server::serve(
+    tokio::spawn(krabka_pgwire::server::serve(
         listener,
         Arc::new(StubEngine::new()),
         Arc::new(SessionConfig::trust()),

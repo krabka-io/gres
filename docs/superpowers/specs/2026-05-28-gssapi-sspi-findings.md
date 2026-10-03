@@ -85,7 +85,7 @@ pinned RC, so it backtracks `picky-krb` to `0.12.0`, which then pins
 pbkdf2 = { version = "=0.13.0-rc.10", default-features = false, features = ["kdf", "hmac"] }
 ```
 
-Verified: with this bump the **full workspace builds** and `crabka-security`'s
+Verified: with this bump the **full workspace builds** and `krabka-security`'s
 137 existing tests (incl. SCRAM, which uses pbkdf2) all pass. The RC is API- and
 output-compatible for our PBKDF2-HMAC-SHA-256/512 usage.
 
@@ -172,7 +172,7 @@ let server_properties = ServerProperties::new(
     Some(Secret::new(service_key)),            // <-- the raw service key bytes
 )?;
 let mut server = Kerberos::new_server_from_config(
-    KerberosConfig::new("tcp://localhost:88", "crabka-broker".to_string()),
+    KerberosConfig::new("tcp://localhost:88", "krabka-broker".to_string()),
     server_properties,
 )?;
 ```
@@ -184,7 +184,7 @@ let mut server = Kerberos::new_server_from_config(
 
 ```rust
 let mut client =
-    Kerberos::new_client_from_config(KerberosConfig::new("tcp://localhost:88", "crabka-spike".to_string()))?;
+    Kerberos::new_client_from_config(KerberosConfig::new("tcp://localhost:88", "krabka-spike".to_string()))?;
 
 // Client principal + secret. The realm is derived from the UPN suffix
 // ("alice@CRABKA.TEST" -> realm CRABKA.TEST) via $KRB5_CONFIG lookup, so

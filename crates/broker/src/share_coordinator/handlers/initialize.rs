@@ -6,8 +6,8 @@
 use std::sync::Arc;
 
 use bytes::{Bytes, BytesMut};
-use crabka_log::Offset;
-use crabka_protocol::{
+use krabka_log::Offset;
+use krabka_protocol::{
     Decode, Encode,
     owned::{
         initialize_share_group_state_request::InitializeShareGroupStateRequest,
@@ -97,7 +97,7 @@ async fn handle_request(
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_protocol::{
+    use krabka_protocol::{
         UnknownTaggedFields,
         owned::{
             initialize_share_group_state_request::{InitializeStateData, PartitionData},

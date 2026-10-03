@@ -20,9 +20,9 @@ The demo exposes these exact CLI and environment pairs:
 
 | CLI | Environment |
 |---|---|
-| `--consumer-auto-offset-reset` | `CRABKA_DEMO_CONSUMER_AUTO_OFFSET_RESET` |
-| `--consumer-isolation-level` | `CRABKA_DEMO_CONSUMER_ISOLATION_LEVEL` |
-| `--consumer-assignor` | `CRABKA_DEMO_CONSUMER_ASSIGNOR` |
+| `--consumer-auto-offset-reset` | `KRABKA_DEMO_CONSUMER_AUTO_OFFSET_RESET` |
+| `--consumer-isolation-level` | `KRABKA_DEMO_CONSUMER_ISOLATION_LEVEL` |
+| `--consumer-assignor` | `KRABKA_DEMO_CONSUMER_ASSIGNOR` |
 
 CLI values override environment values. Omitting both preserves the current
 Consumer builder defaults. Explicit values on Produce or Stream roles fail
@@ -31,7 +31,7 @@ before telemetry initialization or external I/O.
 ## Implementation
 
 Implement `FromStr` for the existing `AutoOffsetReset`, `IsolationLevel`, and
-`Assignor` enums in `crabka-client-consumer`, using the accepted spellings
+`Assignor` enums in `krabka-client-consumer`, using the accepted spellings
 above. The demo CLI fields use those enums directly, so parsing remains owned
 by the domain types without a Clap dependency or demo-only mirror types.
 

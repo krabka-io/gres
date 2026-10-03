@@ -58,12 +58,12 @@ DEFAULT_PARSER_COMMAND = [
     "--quiet",
     "--locked",
     "-p",
-    "crabka-gres-conformance",
+    "krabka-gres-conformance",
     "--bin",
-    "crabka-gres-parser-commands",
+    "krabka-gres-parser-commands",
 ]
 DEFAULT_RUNTIME_COMMAND = [
-    "cargo", "test", "--quiet", "--locked", "-p", "crabka-gres-conformance",
+    "cargo", "test", "--quiet", "--locked", "-p", "krabka-gres-conformance",
     "--test", "compatibility_behavior",
 ]
 

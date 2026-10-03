@@ -1,9 +1,9 @@
 //! Integration tests for the `ca-renewal-check` `CronJob` entry
-//! (`crabka_operator::controller::cluster_ca::run_renewal_check`).
+//! (`krabka_operator::controller::cluster_ca::run_renewal_check`).
 //!
 //! Each test fills the mock client with canned CA Secrets and
 //! broker-keystore Secrets, which hold real PEM material from
-//! `crabka_security::ca`. It then calls `run_renewal_check` and asserts on
+//! `krabka_security::ca`. It then calls `run_renewal_check` and asserts on
 //! the observed request log.
 
 use assert2::{assert, check};
@@ -11,8 +11,8 @@ use assert2::{assert, check};
 mod shared;
 
 use base64::Engine as _;
-use crabka_operator::controller::cluster_ca::run_renewal_check;
-use crabka_security::ca::{
+use krabka_operator::controller::cluster_ca::run_renewal_check;
+use krabka_security::ca::{
     SubjectAltName, generate_clients_ca, generate_cluster_ca, issue_broker_cert,
 };
 use http::{Method, Response};
@@ -89,13 +89,13 @@ fn fake_event_body(namespace: &str) -> serde_json::Value {
     serde_json::json!({
         "apiVersion": "v1",
         "kind": "Event",
-        "metadata": { "name": "crabka-ca-renewal-abc", "namespace": namespace, "uid": "event-uid" },
+        "metadata": { "name": "krabka-ca-renewal-abc", "namespace": namespace, "uid": "event-uid" },
         "involvedObject": {},
         "message": "test event",
         "reason": "TestReason",
         "type": "Normal",
-        "reportingComponent": "crabka-operator/ca-renewal-check",
-        "reportingInstance": "crabka-operator-renewal",
+        "reportingComponent": "krabka-operator/ca-renewal-check",
+        "reportingInstance": "krabka-operator-renewal",
         "eventTime": null,
     })
 }

@@ -44,12 +44,12 @@ Cargo nextest.
 
 | Setting | Direct CLI/environment | Gres CRD | Default | Constraint |
 |---|---|---|---:|---|
-| listen | `--listen` / `CRABKA_GRES_ACTIVATOR_LISTEN` | derived | required | `SocketAddr` |
-| bootstrap | `--bootstrap` / `CRABKA_GRES_ACTIVATOR_BOOTSTRAP` | derived | required | non-empty |
-| registry replication | `--registry-replication-factor` / `CRABKA_GRES_ACTIVATOR_REGISTRY_REPLICATION_FACTOR` | `spec.activator.registryReplicationFactor` | 1 | `1..=32767` |
-| registry poll | `--registry-poll-ms` / `CRABKA_GRES_ACTIVATOR_REGISTRY_POLL_MS` | `spec.activator.registryPollMs` | 250 | `>= 1` |
-| cold-start timeout | `--cold-start-timeout-ms` / `CRABKA_GRES_ACTIVATOR_COLD_START_TIMEOUT_MS` | `spec.activator.coldStartTimeoutMs` | 30000 | `>= 1` |
-| backend template | `--backend-endpoint-template` / `CRABKA_GRES_ACTIVATOR_BACKEND_ENDPOINT_TEMPLATE` | derived | `{tenant}:5432` | non-empty |
+| listen | `--listen` / `KRABKA_GRES_ACTIVATOR_LISTEN` | derived | required | `SocketAddr` |
+| bootstrap | `--bootstrap` / `KRABKA_GRES_ACTIVATOR_BOOTSTRAP` | derived | required | non-empty |
+| registry replication | `--registry-replication-factor` / `KRABKA_GRES_ACTIVATOR_REGISTRY_REPLICATION_FACTOR` | `spec.activator.registryReplicationFactor` | 1 | `1..=32767` |
+| registry poll | `--registry-poll-ms` / `KRABKA_GRES_ACTIVATOR_REGISTRY_POLL_MS` | `spec.activator.registryPollMs` | 250 | `>= 1` |
+| cold-start timeout | `--cold-start-timeout-ms` / `KRABKA_GRES_ACTIVATOR_COLD_START_TIMEOUT_MS` | `spec.activator.coldStartTimeoutMs` | 30000 | `>= 1` |
+| backend template | `--backend-endpoint-template` / `KRABKA_GRES_ACTIVATOR_BACKEND_ENDPOINT_TEMPLATE` | derived | `{tenant}:5432` | non-empty |
 | image | n/a | `spec.activator.image` | operator `--default-gres-activator-image` | non-empty |
 | replicas | n/a | `spec.activator.replicas` | `max(pgdog.replicas, 1)` | `>= 1` |
 | readiness period | n/a | `spec.activator.readinessProbePeriodSeconds` | 5 | `>= 1` |
@@ -100,7 +100,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-activator validated_input --no-fail-fast
+  cargo test -p krabka-gres-activator validated_input --no-fail-fast
 ```
 
 Expected: RED until the types and environment declarations exist.
@@ -134,31 +134,31 @@ generic validation framework.
 Use:
 
 ```rust
-#[arg(long, env = "CRABKA_GRES_ACTIVATOR_LISTEN")]
+#[arg(long, env = "KRABKA_GRES_ACTIVATOR_LISTEN")]
 listen: SocketAddr,
-#[arg(long, env = "CRABKA_GRES_ACTIVATOR_BOOTSTRAP")]
+#[arg(long, env = "KRABKA_GRES_ACTIVATOR_BOOTSTRAP")]
 bootstrap: NonEmptyValue,
 #[arg(
     long,
-    env = "CRABKA_GRES_ACTIVATOR_REGISTRY_REPLICATION_FACTOR",
+    env = "KRABKA_GRES_ACTIVATOR_REGISTRY_REPLICATION_FACTOR",
     default_value = "1"
 )]
 registry_replication_factor: ReplicationFactor,
 #[arg(
     long,
-    env = "CRABKA_GRES_ACTIVATOR_REGISTRY_POLL_MS",
+    env = "KRABKA_GRES_ACTIVATOR_REGISTRY_POLL_MS",
     default_value = "250"
 )]
 registry_poll_ms: PositiveMillis,
 #[arg(
     long,
-    env = "CRABKA_GRES_ACTIVATOR_COLD_START_TIMEOUT_MS",
+    env = "KRABKA_GRES_ACTIVATOR_COLD_START_TIMEOUT_MS",
     default_value = "30000"
 )]
 cold_start_timeout_ms: PositiveMillis,
 #[arg(
     long,
-    env = "CRABKA_GRES_ACTIVATOR_BACKEND_ENDPOINT_TEMPLATE",
+    env = "KRABKA_GRES_ACTIVATOR_BACKEND_ENDPOINT_TEMPLATE",
     default_value = "{tenant}:5432"
 )]
 backend_endpoint_template: NonEmptyValue,
@@ -173,9 +173,9 @@ registry-ordering invariant and remains fixed.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo nextest run -p crabka-gres-activator --no-fail-fast
+  cargo nextest run -p krabka-gres-activator --no-fail-fast
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -p crabka-gres-activator -- --help
+  cargo run -p krabka-gres-activator -- --help
 ```
 
 Commit only Task 1 files.
@@ -262,7 +262,7 @@ attempt-count constant.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -p crabka-operator -- gen-crds deploy/crds
+  cargo run -p krabka-operator -- gen-crds deploy/crds
 ```
 
 Only `deploy/crds/crabka.io_greses.yaml` may change.
@@ -271,9 +271,9 @@ Only `deploy/crds/crabka.io_greses.yaml` may change.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo nextest run -p crabka-operator --test reconcile_gres --no-fail-fast
+  cargo nextest run -p krabka-operator --test reconcile_gres --no-fail-fast
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator crd::gres --lib
+  cargo test -p krabka-operator crd::gres --lib
 ```
 
 Commit only Task 2 files.
@@ -293,9 +293,9 @@ Commit only Task 2 files.
 - [x] **Step 1: Run the scanner and inspect every activator production hit**
 
 ```bash
-tools/audit-runtime-values.sh > /tmp/crabka-runtime-values-gres-activator.txt
+tools/audit-runtime-values.sh > /tmp/krabka-runtime-values-gres-activator.txt
 rg 'crates/gres-activator|controller/gres.rs|crd/gres.rs' \
-  /tmp/crabka-runtime-values-gres-activator.txt
+  /tmp/krabka-runtime-values-gres-activator.txt
 ```
 
 Classify every hit as configurable deployment policy, fixed
@@ -306,14 +306,14 @@ Fix any missed configurable production value before documenting closure.
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo nextest run -p crabka-gres-activator -p crabka-operator --no-fail-fast
+  cargo nextest run -p krabka-gres-activator -p krabka-operator --no-fail-fast
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-gres-activator -p crabka-operator \
+  cargo clippy -p krabka-gres-activator -p krabka-operator \
     --all-targets -- -D warnings
 cargo +nightly fmt --all -- --check
 tmp_dir="$(mktemp -d)"
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -p crabka-operator -- gen-crds "$tmp_dir"
+  cargo run -p krabka-operator -- gen-crds "$tmp_dir"
 diff -u deploy/crds/crabka.io_greses.yaml \
   "$tmp_dir/crabka.io_greses.yaml"
 git diff --check

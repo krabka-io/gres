@@ -1,10 +1,10 @@
-# crabka-profiles Slice 4 — Ingest service (push.v1 + /ingest + OTLP profiles + distributor + block-builder)
+# krabka-profiles Slice 4 — Ingest service (push.v1 + /ingest + OTLP profiles + distributor + block-builder)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the ingest half of the profiles backend — the three push doors (Connect `push.v1.PusherService/Push`, legacy HTTP `POST /ingest`, and OTLP `ProfilesService/Export` `v1development`) decoded to an internal profile, validated + relabeled + **multi-value-split into one series per pprof sample type**, sharded by `(tenant, series_fingerprint)` onto a Kafka WAL by the **distributor** role; and the **block-builder** consumer group that groups records over a flush window, builds the samples fact table + a dedup per-block `SymbolDb`, and writes Parquet blocks + the symbol-DB artifact + `ProfileIndex` updates to object storage (write-then-commit, idempotent keys). Ship a role-selectable `crabka-profiles --target distributor|block-builder` binary (later targets stubbed).
+**Goal:** Build the ingest half of the profiles backend — the three push doors (Connect `push.v1.PusherService/Push`, legacy HTTP `POST /ingest`, and OTLP `ProfilesService/Export` `v1development`) decoded to an internal profile, validated + relabeled + **multi-value-split into one series per pprof sample type**, sharded by `(tenant, series_fingerprint)` onto a Kafka WAL by the **distributor** role; and the **block-builder** consumer group that groups records over a flush window, builds the samples fact table + a dedup per-block `SymbolDb`, and writes Parquet blocks + the symbol-DB artifact + `ProfileIndex` updates to object storage (write-then-commit, idempotent keys). Ship a role-selectable `krabka-profiles --target distributor|block-builder` binary (later targets stubbed).
 
-**Architecture:** This slice creates the new `crabka-profiles` crate and adds the `wire`, `ingest`, `wal`, `distributor`, and `blockbuilder` modules. The `wire` module owns the prost/Connect codegen: `push.v1` (Alloy `pyroscope.write`), the OTLP `profiles/v1development` proto (**vendored + commit-pinned — churns hard**), and the `perftools.profiles` pprof proto — built via `connectrpc-axum-build` (the grpc-gateway/rebalancer pattern). The `ingest` module lowers each door into a `DecodedProfile` (one decoded pprof per series-stream) and performs the **multi-value split** (one `__profile_type__` per `sample_type[]`) + validation/relabel. The `wal` module defines `ProfileRecord` — the WAL topic record (serde + `serde-wincode`, the codebase convention) that **Slices 5/6/7 consume** — `PROFILES_WAL_TOPIC`, and `partition_key = hash(tenant, series_fingerprint)`. The `distributor` is an axum 0.8 server hosting the Connect `push.v1` + OTLP `Export` builders alongside a plain `/ingest` route. The `blockbuilder` is a Kafka consumer-group loop that interns each record's symbol set into a per-block `SymbolDb` (`crabka-pprof`) and writes the samples fact table (slice-1 `PCOL_*` schema) via `crabka-blockstore::BlockWriter`. A real Crabka broker is only needed for the produce/consume round-trip test, which uses the in-process broker test-support (no Docker).
+**Architecture:** This slice creates the new `krabka-profiles` crate and adds the `wire`, `ingest`, `wal`, `distributor`, and `blockbuilder` modules. The `wire` module owns the prost/Connect codegen: `push.v1` (Alloy `pyroscope.write`), the OTLP `profiles/v1development` proto (**vendored + commit-pinned — churns hard**), and the `perftools.profiles` pprof proto — built via `connectrpc-axum-build` (the grpc-gateway/rebalancer pattern). The `ingest` module lowers each door into a `DecodedProfile` (one decoded pprof per series-stream) and performs the **multi-value split** (one `__profile_type__` per `sample_type[]`) + validation/relabel. The `wal` module defines `ProfileRecord` — the WAL topic record (serde + `serde-wincode`, the codebase convention) that **Slices 5/6/7 consume** — `PROFILES_WAL_TOPIC`, and `partition_key = hash(tenant, series_fingerprint)`. The `distributor` is an axum 0.8 server hosting the Connect `push.v1` + OTLP `Export` builders alongside a plain `/ingest` route. The `blockbuilder` is a Kafka consumer-group loop that interns each record's symbol set into a per-block `SymbolDb` (`krabka-pprof`) and writes the samples fact table (slice-1 `PCOL_*` schema) via `krabka-blockstore::BlockWriter`. A real Crabka broker is only needed for the produce/consume round-trip test, which uses the in-process broker test-support (no Docker).
 
 ```
 Alloy push.v1 ─────────┐
@@ -15,7 +15,7 @@ OTLP /v1development ────┘     (Connect + OTLP builders + plain /ingest
                                                             + __session_id__ modulo-hash cap + label limits
                                                                                                      │ produce ProfileRecord
                                                                                                      ▼  key = hash(tenant, series_fp)
-                                                                                          __crabka_profiles_wal
+                                                                                          __krabka_profiles_wal
                                                                                                      │ (consumer group)
                                                                                                      ▼
                                                                                    block-builder
@@ -27,39 +27,39 @@ OTLP /v1development ────┘     (Connect + OTLP builders + plain /ingest
                                                                                    → commit offsets  (block+index FIRST, then commit)
 ```
 
-**Tech Stack:** Rust 2024 · `prost` 0.14 (workspace) · `connectrpc-axum` + `connectrpc-axum-build` (build.rs codegen — the grpc-gateway/rebalancer pattern) · `axum` 0.8 (`http1`, `tokio`) · `flate2` 1 (gunzip the `raw_profile`) · `multer` (multipart `/ingest`) · `serde_json` 1 (`sample_type_config`) · `bytes` 1 · `arrow` 59 · `crabka-blockstore` (slice-1: `BlockWriter`/`BlockMeta`/`ProfileIndex`/`PCOL_*` schema + symbol-DB artifact constants) · `crabka-pprof` (slices 2–3: `PprofProfile`, `SymbolDb`, `ProfileType`, `Frame`) · `crabka-client-producer` · `crabka-client-consumer` · `crabka-client-admin` · `serde` + `serde-wincode` (`wincode::Serialize`) · `clap` 4 · `tokio` · `thiserror` · `tracing`. Tests: `assert2`, `proptest`, `tempfile`, `object_store::memory::InMemory`; the broker round-trip test uses `crates/broker/tests/support` (in-process, no Docker).
+**Tech Stack:** Rust 2024 · `prost` 0.14 (workspace) · `connectrpc-axum` + `connectrpc-axum-build` (build.rs codegen — the grpc-gateway/rebalancer pattern) · `axum` 0.8 (`http1`, `tokio`) · `flate2` 1 (gunzip the `raw_profile`) · `multer` (multipart `/ingest`) · `serde_json` 1 (`sample_type_config`) · `bytes` 1 · `arrow` 59 · `krabka-blockstore` (slice-1: `BlockWriter`/`BlockMeta`/`ProfileIndex`/`PCOL_*` schema + symbol-DB artifact constants) · `krabka-pprof` (slices 2–3: `PprofProfile`, `SymbolDb`, `ProfileType`, `Frame`) · `krabka-client-producer` · `krabka-client-consumer` · `krabka-client-admin` · `serde` + `serde-wincode` (`wincode::Serialize`) · `clap` 4 · `tokio` · `thiserror` · `tracing`. Tests: `assert2`, `proptest`, `tempfile`, `object_store::memory::InMemory`; the broker round-trip test uses `crates/broker/tests/support` (in-process, no Docker).
 
 ## Global Constraints
 
 - **No backwards compatibility.** Greenfield/undeployed. Change `ProfileRecord`/`DecodedProfile`/enums/wire-internal types freely; no shims, no migration code, no `#[serde(default)]`. (Only Kafka **client** wire compat matters — and the `push.v1`/`/ingest`/OTLP byte-exactness on the HTTP edge.)
 - **`unsafe_code = "forbid"`** workspace-wide. No `unsafe`.
-- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p crabka-profiles --all-targets` before each commit.
-- **Formatting:** `cargo fmt -p crabka-profiles` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
+- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p krabka-profiles --all-targets` before each commit.
+- **Formatting:** `cargo fmt -p krabka-profiles` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
 - **Assertions:** `assert2::assert!` in tests; `prop_assert*` inside `proptest!`.
 - **Async tests:** `#[tokio::test]`. Crate dev-dep `tokio` features = `["macros", "rt-multi-thread"]`.
-- **Arrow version identity:** use `arrow` 59 directly. The samples-fact-table batches this slice builds are consumed by `crabka-blockstore::BlockWriter::write_block` without conversion.
+- **Arrow version identity:** use `arrow` 59 directly. The samples-fact-table batches this slice builds are consumed by `krabka-blockstore::BlockWriter::write_block` without conversion.
 - **prost/connect generated types are the source of truth.** The `push.v1`/OTLP/pprof field names this plan quotes (`RawProfileSeries.labels`, `RawSample.raw_profile`, `RawSample.id`, `ProfilesDictionary.string_table`, …) are pinned by behavior tests; if a generated field name differs, **align to the generated `OUT_DIR` type**, never fabricate.
 - **OTLP profiles `v1development` is experimental and churns hard.** Vendor the proto at a **commit-pinned** tag (comment at the top of the file) and behavior-pin it with a prost round-trip test. Do not fabricate field numbers — verify against the pinned rev.
 - **The `(tenant, series_fingerprint)` partition invariant is non-negotiable** (spec §5.3). All samples of one series in one tenant MUST land in one partition (per-series order). The producer MurmurHash2-partitions on `key`; set `key = partition_key(tenant, fp)` and leave `partition: None`. A test pins that two records sharing `(tenant, fp)` produce the same key.
-- **Kafka wire-protocol exactness** is preserved automatically by producing/consuming through the existing `crabka-client-producer`/`crabka-client-consumer` clients — do not hand-roll protocol frames.
+- **Kafka wire-protocol exactness** is preserved automatically by producing/consuming through the existing `krabka-client-producer`/`krabka-client-consumer` clients — do not hand-roll protocol frames.
 
 ---
 
 ## Dependency & slice roadmap
 
 **Depends on (consume exactly — do not re-implement):**
-- **`crabka-blockstore` (slice 1, profiles-generalized)** — `BlockStore`, `BlockWriter::new(store: Arc<dyn object_store::ObjectStore>)` + `BlockWriter::write_block(tenant:&str, object_key:&str, schema:SchemaRef, batches:&[RecordBatch]) -> Result<BlockMeta>`, `BlockMeta`, the **`ProfileIndex`** impl (`BlockIndex`) with the label-postings + `__profile_type__` index + stacktrace-partition-map update methods + `save`, the **samples fact-table schema builder** + the **`PCOL_*` column constants** (`PCOL_PROFILE_TYPE`, `PCOL_STACKTRACE_ID`, `PCOL_VALUE`, `PCOL_STACKTRACE_PARTITION`, `PCOL_TOTAL_VALUE`, `PCOL_SPAN_ID`, `PCOL_TRACE_ID`) plus the mandatory `COL_FINGERPRINT`/`COL_TIMESTAMP`, and the **symbol-DB on-block artifact** key/suffix constant. `Labels`/`LabelMatcher`/`MatchOp`/`SeriesFingerprint` remain available. **Verify the exact `ProfileIndex` + samples-schema + symdb-artifact API against the slice-1 plan before consuming; if a name differs, align to it.**
-- **`crabka-pprof` (slices 2–3)** — `PprofProfile` (`decode(&[u8]) -> Result<PprofProfile, ProfileError>` / `encode(&self) -> Vec<u8>`), the `perftools.profiles` wire model with `sample_type[]`/`sample[].value[]`/`location[]`/`function[]`/`mapping[]`/`string_table[]`; `SymbolDb` (`intern_stacktrace(partition:u64, location_refs:&[u32]) -> u32`, `resolve`, `encode()/decode()`); `ProfileType { name, sample_type, sample_unit, period_type, period_unit }` (`parse(&str)`/`Display` 5-part colon form); `Frame { function:String, file:String, line:i32 }`; `ProfileError`. **Verify against the slice-2 plan; align to generated names if they differ.**
-- **`crabka-client-producer`** — `Producer::builder().bootstrap(..).build().await? -> Result<Producer, ProducerError>`; `Producer::send(ProducerRecord) -> impl Future<Output = oneshot::Receiver<Result<RecordMetadata, ProducerError>>>` (the call is `async`; await it, then await the returned `oneshot::Receiver` for the ack: `producer.send(rec).await.await??`); `ProducerRecord { topic:String, partition:Option<i32>, key:Option<Bytes>, value:Option<Bytes>, headers:Vec<Header>, timestamp_ms:Option<i64> }` (`Default`); `Producer::flush()`. **The producer hashes `key` with MurmurHash2 to choose a partition** — set `key` = `partition_key(tenant, fp)` and leave `partition: None`. (Verify against `crates/client-producer/src/{record,producer}.rs`.)
-- **`crabka-client-consumer`** — `Consumer::builder().bootstrap(..).group_id(..).subscribe([..]).auto_offset_reset(AutoOffsetReset::Earliest).build().await?`; `Consumer::poll(Duration) -> Result<Vec<ConsumerRecord>, ConsumerError>`; `Consumer::commit_sync() -> Result<(), ConsumerError>`; `ConsumerRecord { topic, partition:i32, offset:i64, key:Option<Bytes>, value:Option<Bytes>, .. }`. (Verify against `crates/client-consumer/src/{consumer,poll,commit}.rs`.)
-- **`crabka-client-admin`** — `create_topics(&[CreateTopicSpec { name, partitions, replicas, configs }], timeout_ms) -> Result<Vec<CreateTopicOutcome>, AdminError>` (for tests + bootstrapping the WAL topic).
+- **`krabka-blockstore` (slice 1, profiles-generalized)** — `BlockStore`, `BlockWriter::new(store: Arc<dyn object_store::ObjectStore>)` + `BlockWriter::write_block(tenant:&str, object_key:&str, schema:SchemaRef, batches:&[RecordBatch]) -> Result<BlockMeta>`, `BlockMeta`, the **`ProfileIndex`** impl (`BlockIndex`) with the label-postings + `__profile_type__` index + stacktrace-partition-map update methods + `save`, the **samples fact-table schema builder** + the **`PCOL_*` column constants** (`PCOL_PROFILE_TYPE`, `PCOL_STACKTRACE_ID`, `PCOL_VALUE`, `PCOL_STACKTRACE_PARTITION`, `PCOL_TOTAL_VALUE`, `PCOL_SPAN_ID`, `PCOL_TRACE_ID`) plus the mandatory `COL_FINGERPRINT`/`COL_TIMESTAMP`, and the **symbol-DB on-block artifact** key/suffix constant. `Labels`/`LabelMatcher`/`MatchOp`/`SeriesFingerprint` remain available. **Verify the exact `ProfileIndex` + samples-schema + symdb-artifact API against the slice-1 plan before consuming; if a name differs, align to it.**
+- **`krabka-pprof` (slices 2–3)** — `PprofProfile` (`decode(&[u8]) -> Result<PprofProfile, ProfileError>` / `encode(&self) -> Vec<u8>`), the `perftools.profiles` wire model with `sample_type[]`/`sample[].value[]`/`location[]`/`function[]`/`mapping[]`/`string_table[]`; `SymbolDb` (`intern_stacktrace(partition:u64, location_refs:&[u32]) -> u32`, `resolve`, `encode()/decode()`); `ProfileType { name, sample_type, sample_unit, period_type, period_unit }` (`parse(&str)`/`Display` 5-part colon form); `Frame { function:String, file:String, line:i32 }`; `ProfileError`. **Verify against the slice-2 plan; align to generated names if they differ.**
+- **`krabka-client-producer`** — `Producer::builder().bootstrap(..).build().await? -> Result<Producer, ProducerError>`; `Producer::send(ProducerRecord) -> impl Future<Output = oneshot::Receiver<Result<RecordMetadata, ProducerError>>>` (the call is `async`; await it, then await the returned `oneshot::Receiver` for the ack: `producer.send(rec).await.await??`); `ProducerRecord { topic:String, partition:Option<i32>, key:Option<Bytes>, value:Option<Bytes>, headers:Vec<Header>, timestamp_ms:Option<i64> }` (`Default`); `Producer::flush()`. **The producer hashes `key` with MurmurHash2 to choose a partition** — set `key` = `partition_key(tenant, fp)` and leave `partition: None`. (Verify against `crates/client-producer/src/{record,producer}.rs`.)
+- **`krabka-client-consumer`** — `Consumer::builder().bootstrap(..).group_id(..).subscribe([..]).auto_offset_reset(AutoOffsetReset::Earliest).build().await?`; `Consumer::poll(Duration) -> Result<Vec<ConsumerRecord>, ConsumerError>`; `Consumer::commit_sync() -> Result<(), ConsumerError>`; `ConsumerRecord { topic, partition:i32, offset:i64, key:Option<Bytes>, value:Option<Bytes>, .. }`. (Verify against `crates/client-consumer/src/{consumer,poll,commit}.rs`.)
+- **`krabka-client-admin`** — `create_topics(&[CreateTopicSpec { name, partitions, replicas, configs }], timeout_ms) -> Result<Vec<CreateTopicOutcome>, AdminError>` (for tests + bootstrapping the WAL topic).
 - **`connectrpc-axum` / `connectrpc-axum-build`** — `compile_protos(&[proto], &[include]).fetch_protoc(None, None)?.compile()?` in `build.rs` (fall back to vendored protoc only when system `protoc` is absent — the grpc-gateway/rebalancer guard); generated `pb::<svc>_connect::<Svc>ServiceBuilder::<()>::new().<method>(handler).build() -> axum::Router`; handlers are `async fn(Extension<Arc<State>>, ConnectRequest<Req>) -> Result<ConnectResponse<Resp>, ConnectError>`. (Verified against `crates/grpc-gateway/{build.rs,src/lib.rs,src/handlers.rs}` + `crates/rebalancer/build.rs`.)
-- **`crabka-broker` (dev-dependency, tests only)** — `BrokerConfig::for_tests(PathBuf)`, `Broker::start(config).await -> Result<BrokerHandle, BrokerError>`, `BrokerHandle::listen_addr()` (public; verified in `crates/broker/tests/support/mod.rs`).
+- **`krabka-broker` (dev-dependency, tests only)** — `BrokerConfig::for_tests(PathBuf)`, `Broker::start(config).await -> Result<BrokerHandle, BrokerError>`, `BrokerHandle::listen_addr()` (public; verified in `crates/broker/tests/support/mod.rs`).
 
-**THIS slice defines (Slices 5/6/7 consume):** `ProfileRecord` (Task 5) — the WAL topic record (tenant + series `Labels` + `profile_type:String` + decoded payload `samples[(stacktrace_location_refs, value, span_id, trace_id)]` + the symbol set to merge into the block symdb). `PROFILES_WAL_TOPIC = "__crabka_profiles_wal"`. `partition_key(tenant:&str, fp:u64) -> Bytes`. `DecodedProfile` + the multi-value split (`split_sample_types`). The block-builder's `intern_record`/`samples_batch`/`object_key`.
+**THIS slice defines (Slices 5/6/7 consume):** `ProfileRecord` (Task 5) — the WAL topic record (tenant + series `Labels` + `profile_type:String` + decoded payload `samples[(stacktrace_location_refs, value, span_id, trace_id)]` + the symbol set to merge into the block symdb). `PROFILES_WAL_TOPIC = "__krabka_profiles_wal"`. `partition_key(tenant:&str, fp:u64) -> Bytes`. `DecodedProfile` + the multi-value split (`split_sample_types`). The block-builder's `intern_record`/`samples_batch`/`object_key`.
 
 **The 8 profiles slices** (this plan = Slice 4):
-1. Blockstore `ProfileIndex` + samples schema + symbol-DB artifact. 2. `crabka-pprof` core. 3. Engine completeness. **4. Ingest service *(this plan)*.** 5. Querier + Connect `querier.v1` + legacy render. 6. Query-frontend. 7. Native symbolization. 8. Hardening.
+1. Blockstore `ProfileIndex` + samples schema + symbol-DB artifact. 2. `krabka-pprof` core. 3. Engine completeness. **4. Ingest service *(this plan)*.** 5. Querier + Connect `querier.v1` + legacy render. 6. Query-frontend. 7. Native symbolization. 8. Hardening.
 
 ---
 
@@ -82,7 +82,7 @@ OTLP /v1development ────┘     (Connect + OTLP builders + plain /ingest
 | `src/wal.rs` | `ProfileRecord`, `PROFILES_WAL_TOPIC`, `partition_key`, encode/decode |
 | `src/distributor/mod.rs` | axum router (Connect `push.v1` + OTLP `Export` builders + plain `/ingest`), serve, limits, produce |
 | `src/blockbuilder.rs` | consumer-group loop → intern symdb → samples batch → block + symdb + `ProfileIndex` → commit |
-| `src/bin/crabka-profiles.rs` | `clap` role-selectable entrypoint (`--target`) |
+| `src/bin/krabka-profiles.rs` | `clap` role-selectable entrypoint (`--target`) |
 | `tests/ingest_roundtrip.rs` | end-to-end distributor → WAL → block-builder → block (in-process broker) |
 
 Each file has one responsibility; `blockbuilder.rs` is the only file that touches the blockstore writer + `SymbolDb` interning, isolating the churn-prone surface.
@@ -98,7 +98,7 @@ Each file has one responsibility; `blockbuilder.rs` is the only file that touche
 - Modify: root `Cargo.toml` (`[workspace] members` += `"crates/profiles"`; add `flate2`, `multer` to `[workspace.dependencies]` if absent)
 
 **Interfaces:**
-- Produces: a compiling `crabka-profiles` crate; `pub enum ProfilesError` (`thiserror`) with `fn status_code(&self) -> u16`; `pub fn crate_smoke() -> bool` (placeholder, removed in Task 3) so there is a test to run.
+- Produces: a compiling `krabka-profiles` crate; `pub enum ProfilesError` (`thiserror`) with `fn status_code(&self) -> u16`; `pub fn crate_smoke() -> bool` (placeholder, removed in Task 3) so there is a test to run.
 
 - [ ] **Step 1: Add the crate to the workspace + ingest deps**
 
@@ -115,16 +115,16 @@ multer = "3"
 
 ```toml
 [package]
-name = "crabka-profiles"
+name = "krabka-profiles"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "Crabka profiles ingest service (distributor + block-builder) — Grafana-Pyroscope replacement"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-profiles"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-profiles"
 readme = "README.md"
 keywords = ["observability", "profiling", "pyroscope", "pprof", "crabka"]
 categories = ["database-implementations"]
@@ -152,11 +152,11 @@ clap = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
-crabka-blockstore = { path = "../blockstore" }
-crabka-pprof = { path = "../pprof" }
-crabka-client-producer = { path = "../client-producer" }
-crabka-client-consumer = { path = "../client-consumer" }
-crabka-client-admin = { path = "../client-admin" }
+krabka-blockstore = { path = "../blockstore" }
+krabka-pprof = { path = "../pprof" }
+krabka-client-producer = { path = "../client-producer" }
+krabka-client-consumer = { path = "../client-consumer" }
+krabka-client-admin = { path = "../client-admin" }
 
 [build-dependencies]
 connectrpc-axum-build = { workspace = true }
@@ -166,11 +166,11 @@ assert2 = { workspace = true }
 proptest = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-crabka-broker = { path = "../broker" }
-crabka-client-core = { path = "../client-core" }
+krabka-broker = { path = "../broker" }
+krabka-client-core = { path = "../client-core" }
 ```
 
-> **Verify each `{ workspace = true }` resolves** against root `Cargo.toml`. `crabka-pprof` is the slice-2/3 crate; if its path differs (`../pprof`), align to the actual crate dir.
+> **Verify each `{ workspace = true }` resolves** against root `Cargo.toml`. `krabka-pprof` is the slice-2/3 crate; if its path differs (`../pprof`), align to the actual crate dir.
 
 - [ ] **Step 3: Create `src/error.rs`**
 
@@ -216,14 +216,14 @@ impl ProfilesError {
     }
 }
 
-impl From<crabka_pprof::ProfileError> for ProfilesError {
-    fn from(e: crabka_pprof::ProfileError) -> Self {
+impl From<krabka_pprof::ProfileError> for ProfilesError {
+    fn from(e: krabka_pprof::ProfileError) -> Self {
         ProfilesError::Pprof(e.to_string())
     }
 }
 ```
 
-> **Verify `crabka_pprof::ProfileError` is the slice-2 public name** before relying on the `From` impl; if it is re-exported under a different path, align the `use`/`From`.
+> **Verify `krabka_pprof::ProfileError` is the slice-2 public name** before relying on the `From` impl; if it is re-exported under a different path, align the `use`/`From`.
 
 - [ ] **Step 4: Create `src/lib.rs` + a smoke test**
 
@@ -264,16 +264,16 @@ mod tests {
 
 - [ ] **Step 5: Build + run**
 
-Run: `cargo test -p crabka-profiles`
+Run: `cargo test -p krabka-profiles`
 Expected: compiles; 2 tests PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add Cargo.toml Cargo.lock crates/profiles/
-git commit -m "feat(profiles): scaffold crabka-profiles crate + error type"
+git commit -m "feat(profiles): scaffold krabka-profiles crate + error type"
 ```
 
 ---
@@ -294,7 +294,7 @@ git commit -m "feat(profiles): scaffold crabka-profiles crate + error type"
 
 - [ ] **Step 1: Vendor the `push.v1` proto**
 
-The pprof proto itself is owned by `crabka-pprof` (slice 2 — `PprofProfile`); this crate does **not** re-generate `perftools.profiles`. We only need the `push.v1` envelope (the `raw_profile` is gzipped pprof bytes the envelope carries) and OTLP.
+The pprof proto itself is owned by `krabka-pprof` (slice 2 — `PprofProfile`); this crate does **not** re-generate `perftools.profiles`. We only need the `push.v1` envelope (the `raw_profile` is gzipped pprof bytes the envelope carries) and OTLP.
 
 Create `crates/profiles/proto/types/v1/types.proto`:
 
@@ -543,20 +543,20 @@ mod tests {
 }
 ```
 
-> **The `include!` module filenames are prost's package-name convention** (`/push.v1.rs`, `/opentelemetry.proto.collector.profiles.v1development.rs`, `/opentelemetry.proto.profiles.v1development.rs`, `/types.v1.rs`). If `cargo build` reports a missing file, list `OUT_DIR` (`cargo build -p crabka-profiles -v` prints it) and use the actual generated filenames — they are the source of truth. The `connect` submodule name (`pusher_service_connect` / `profiles_service_connect`) is the codegen's snake_case-of-the-service convention; confirm against the grpc-gateway generated module (`gateway_connect`).
+> **The `include!` module filenames are prost's package-name convention** (`/push.v1.rs`, `/opentelemetry.proto.collector.profiles.v1development.rs`, `/opentelemetry.proto.profiles.v1development.rs`, `/types.v1.rs`). If `cargo build` reports a missing file, list `OUT_DIR` (`cargo build -p krabka-profiles -v` prints it) and use the actual generated filenames — they are the source of truth. The `connect` submodule name (`pusher_service_connect` / `profiles_service_connect`) is the codegen's snake_case-of-the-service convention; confirm against the grpc-gateway generated module (`gateway_connect`).
 
 - [ ] **Step 5: Declare the module + build**
 
 In `lib.rs` add `pub mod wire;`.
 
-Run: `cargo test -p crabka-profiles --lib wire::tests`
+Run: `cargo test -p krabka-profiles --lib wire::tests`
 Expected: compiles (first build invokes `protoc`); both prost round-trip tests PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add Cargo.toml Cargo.lock crates/profiles/
 git commit -m "feat(profiles): vendor push.v1 + OTLP profiles protos + connect/prost codegen"
 ```
@@ -571,8 +571,8 @@ git commit -m "feat(profiles): vendor push.v1 + OTLP profiles protos + connect/p
 
 **Interfaces:**
 - Produces (consumed by every `ingest/*` door + the distributor):
-  - `struct RawProfile { pub labels: crabka_blockstore::Labels, pub profile: crabka_pprof::PprofProfile }` — one decoded pprof + its series labels, BEFORE the multi-value split.
-  - `struct DecodedProfile { pub labels: crabka_blockstore::Labels, pub profile_type: String, pub samples: Vec<DecodedSample> }` — AFTER the split (one per sample type).
+  - `struct RawProfile { pub labels: krabka_blockstore::Labels, pub profile: krabka_pprof::PprofProfile }` — one decoded pprof + its series labels, BEFORE the multi-value split.
+  - `struct DecodedProfile { pub labels: krabka_blockstore::Labels, pub profile_type: String, pub samples: Vec<DecodedSample> }` — AFTER the split (one per sample type).
   - `struct DecodedSample { pub stacktrace_location_refs: Vec<u32>, pub value: i64, pub timestamp_ns: i64, pub span_id: Option<u64>, pub trace_id: Option<Vec<u8>> }`.
   - `struct TenantLimits { pub max_label_names_per_series: usize, pub max_label_value_len: usize, pub session_id_buckets: u64 }` (`Default`).
   - `struct RelabelConfig { pub source_labels: Vec<String>, pub regex: String, pub target_label: String, pub replacement: String, pub action: RelabelAction }`; `enum RelabelAction { Replace, Keep, Drop }`.
@@ -590,7 +590,7 @@ Create `crates/profiles/src/ingest/mod.rs`:
 mod tests {
     use super::*;
     use assert2::assert;
-    use crabka_blockstore::Labels;
+    use krabka_blockstore::Labels;
 
     fn labels(pairs: &[(&str, &str)]) -> Labels {
         let mut l = Labels::new();
@@ -651,7 +651,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --lib ingest`
+Run: `cargo test -p krabka-profiles --lib ingest`
 Expected: FAIL — `cannot find function require_service_name`.
 
 - [ ] **Step 3: Implement `ingest/mod.rs`**
@@ -665,8 +665,8 @@ Prepend above the `tests` module. The `Labels` API is insert/get/iter (no `remov
 
 pub mod split;
 
-use crabka_blockstore::Labels;
-use crabka_pprof::PprofProfile;
+use krabka_blockstore::Labels;
+use krabka_pprof::PprofProfile;
 
 use crate::error::ProfilesError;
 
@@ -835,14 +835,14 @@ fn regex_anchored(pattern: &str) -> Result<regex::Regex, regex::Error> {
 
 `lib.rs`: `pub mod ingest;` and (after split.rs lands in Task 4) the re-exports. For now run:
 
-Run: `cargo test -p crabka-profiles --lib ingest`
+Run: `cargo test -p krabka-profiles --lib ingest`
 Expected: FAIL to compile until `pub mod split;` exists — create an empty `crates/profiles/src/ingest/split.rs` with `//! multi-value split (Task 4).` so the module resolves, then re-run. Expected: PASS (5 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): DecodedProfile + relabel/require-service_name/limits/session-cap"
 ```
@@ -856,7 +856,7 @@ git commit -m "feat(profiles): DecodedProfile + relabel/require-service_name/lim
 - Modify: `crates/profiles/src/ingest/mod.rs` (re-export)
 
 **Interfaces:**
-- Consumes: `RawProfile`, `crabka_pprof::{PprofProfile, ProfileType}`, `DecodedProfile`, `DecodedSample`.
+- Consumes: `RawProfile`, `krabka_pprof::{PprofProfile, ProfileType}`, `DecodedProfile`, `DecodedSample`.
 - Produces:
   - `fn split_sample_types(raw: &RawProfile) -> Result<Vec<DecodedProfile>, ProfilesError>` — for each `sample_type[i]` build one `DecodedProfile` whose `profile_type` is the 5-part `name:sample_type:sample_unit:period_type:period_unit` string and whose samples take `value[i]` from each pprof sample. Sets `__profile_type__` + `__period_type__`/`__period_unit__` labels.
 
@@ -875,11 +875,11 @@ mod tests {
     use super::*;
     use crate::ingest::RawProfile;
     use assert2::assert;
-    use crabka_blockstore::Labels;
-    use crabka_pprof::PprofProfile;
+    use krabka_blockstore::Labels;
+    use krabka_pprof::PprofProfile;
 
-    // Build a 2-sample-type pprof in-memory via crabka-pprof's builder/model.
-    // (Use whatever constructor crabka-pprof exposes; here we decode a fixture.)
+    // Build a 2-sample-type pprof in-memory via krabka-pprof's builder/model.
+    // (Use whatever constructor krabka-pprof exposes; here we decode a fixture.)
     fn two_type_profile() -> PprofProfile {
         // A pprof with sample_type=[alloc_objects:count, alloc_space:bytes],
         // one sample with value=[3, 4096], one location ref [7].
@@ -913,20 +913,20 @@ mod tests {
 }
 ```
 
-> **Verify `crabka-pprof`'s in-memory `PprofProfile` constructor.** If slice 2 exposes a builder, use it; otherwise decode a small committed `.pb.gz` fixture (`tests/fixtures/heap.pb.gz`) via `PprofProfile::decode`. Add a `pub(crate) mod test_fixtures` under `wire` (or `ingest`) returning the parsed fixture so multiple tests reuse it. Do not fabricate `PprofProfile` field access — read the slice-2 model and use its public getters.
+> **Verify `krabka-pprof`'s in-memory `PprofProfile` constructor.** If slice 2 exposes a builder, use it; otherwise decode a small committed `.pb.gz` fixture (`tests/fixtures/heap.pb.gz`) via `PprofProfile::decode`. Add a `pub(crate) mod test_fixtures` under `wire` (or `ingest`) returning the parsed fixture so multiple tests reuse it. Do not fabricate `PprofProfile` field access — read the slice-2 model and use its public getters.
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --lib ingest::split`
+Run: `cargo test -p krabka-profiles --lib ingest::split`
 Expected: FAIL — `cannot find function split_sample_types`.
 
 - [ ] **Step 3: Implement `split.rs`**
 
-Prepend above the `tests` module. Read the `crabka-pprof` `PprofProfile` accessors (`sample_type()`, `samples()`, each sample's `value[]` + `location_id[]`/`stacktrace location refs`, `string_table`, `period_type`) — align to the slice-2 public API.
+Prepend above the `tests` module. Read the `krabka-pprof` `PprofProfile` accessors (`sample_type()`, `samples()`, each sample's `value[]` + `location_id[]`/`stacktrace location refs`, `string_table`, `period_type`) — align to the slice-2 public API.
 
 ```rust
-use crabka_blockstore::Labels;
-use crabka_pprof::{ProfileType, PprofProfile};
+use krabka_blockstore::Labels;
+use krabka_pprof::{ProfileType, PprofProfile};
 
 use crate::error::ProfilesError;
 use crate::ingest::{DecodedProfile, DecodedSample, RawProfile};
@@ -979,20 +979,20 @@ pub fn split_sample_types(raw: &RawProfile) -> Result<Vec<DecodedProfile>, Profi
 }
 ```
 
-> **Pin the `crabka-pprof` accessor names.** Slice 2 (`PprofProfile`) defines `sample_types() -> Vec<(String, String)>` and `string(idx)` today; the rest of the accessors this split needs (`period_type_strings`, `samples`, `value_at`, `location_refs`, `timestamp_ns`, `span_id`, `trace_id`) are **NOT yet on the slice-2 `PprofProfile`** — they are a genuine producer-API gap, not a rename. Add them to slice 2 (greenfield) as part of this task. If slice 2 returns string-table indices instead of resolved strings, resolve them here against `profile.string(idx)`. The behavior the test pins (N series, value[i] alignment, 5-part type) is correct regardless; **never fabricate getters** — add the missing ones to slice 2's `PprofProfile` and note them.
+> **Pin the `krabka-pprof` accessor names.** Slice 2 (`PprofProfile`) defines `sample_types() -> Vec<(String, String)>` and `string(idx)` today; the rest of the accessors this split needs (`period_type_strings`, `samples`, `value_at`, `location_refs`, `timestamp_ns`, `span_id`, `trace_id`) are **NOT yet on the slice-2 `PprofProfile`** — they are a genuine producer-API gap, not a rename. Add them to slice 2 (greenfield) as part of this task. If slice 2 returns string-table indices instead of resolved strings, resolve them here against `profile.string(idx)`. The behavior the test pins (N series, value[i] alignment, 5-part type) is correct regardless; **never fabricate getters** — add the missing ones to slice 2's `PprofProfile` and note them.
 
 - [ ] **Step 4: Re-export + run**
 
 `ingest/mod.rs`: `pub use split::split_sample_types;`
 
-Run: `cargo test -p crabka-profiles --lib ingest::split`
+Run: `cargo test -p krabka-profiles --lib ingest::split`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): multi-value split — one series per pprof sample_type"
 ```
@@ -1007,7 +1007,7 @@ git commit -m "feat(profiles): multi-value split — one series per pprof sample
 
 **Interfaces:**
 - Produces (the SHARED CONTRACT this slice owns):
-  - `const PROFILES_WAL_TOPIC: &str = "__crabka_profiles_wal"`
+  - `const PROFILES_WAL_TOPIC: &str = "__krabka_profiles_wal"`
   - `struct ProfileRecord { pub tenant: String, pub labels: Vec<(String, String)>, pub profile_type: String, pub samples: Vec<WalSample>, pub symbols: WalSymbolSet }` (`serde`, `Clone`, `Debug`, `PartialEq`)
   - `struct WalSample { pub stacktrace_location_refs: Vec<u32>, pub value: i64, pub timestamp_ns: i64, pub span_id: Option<u64>, pub trace_id: Option<Vec<u8>> }`
   - `struct WalSymbolSet { pub strings: Vec<String>, pub functions: Vec<WalFunction>, pub locations: Vec<WalLocation>, pub mappings: Vec<WalMapping> }` — the profile's symbol tables (string-index encoded) the block-builder merges into the per-block `SymbolDb`.
@@ -1099,7 +1099,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --lib wal`
+Run: `cargo test -p krabka-profiles --lib wal`
 Expected: FAIL — `cannot find type ProfileRecord`.
 
 - [ ] **Step 3: Implement `wal.rs`**
@@ -1110,13 +1110,13 @@ Expected: FAIL — `cannot find type ProfileRecord`.
 //! `serde-wincode` (the codebase convention; see `crates/broker/src/bootstrap.rs`).
 
 use bytes::Bytes;
-use crabka_blockstore::Labels;
+use krabka_blockstore::Labels;
 use serde::{Deserialize, Serialize};
 
 use crate::error::ProfilesError;
 
 /// The profiles WAL topic name.
-pub const PROFILES_WAL_TOPIC: &str = "__crabka_profiles_wal";
+pub const PROFILES_WAL_TOPIC: &str = "__krabka_profiles_wal";
 
 /// One sample's raw payload (un-symbolized; resolved at query time).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1218,14 +1218,14 @@ pub fn partition_key(tenant: &str, fp: u64) -> Bytes {
 
 `lib.rs`: `mod wal; pub use wal::{partition_key, ProfileRecord, WalFunction, WalLocation, WalMapping, WalSample, WalSymbolSet, PROFILES_WAL_TOPIC};`
 
-Run: `cargo test -p crabka-profiles --lib wal`
+Run: `cargo test -p krabka-profiles --lib wal`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): ProfileRecord WAL topic record + serde-wincode codec (slice-4 contract)"
 ```
@@ -1239,7 +1239,7 @@ git commit -m "feat(profiles): ProfileRecord WAL topic record + serde-wincode co
 - Modify: `crates/profiles/src/ingest/mod.rs`
 
 **Interfaces:**
-- Consumes: `pb::push::v1::PushRequest`, `pb::types::v1::LabelPair`, `crabka_pprof::PprofProfile`.
+- Consumes: `pb::push::v1::PushRequest`, `pb::types::v1::LabelPair`, `krabka_pprof::PprofProfile`.
 - Produces:
   - `fn decode_push(req: &pb::push::v1::PushRequest, max_decompressed: usize) -> Result<Vec<RawProfile>, ProfilesError>` — for each `RawProfileSeries`, build `Labels` from `labels[]`, then for each `RawSample` gunzip `raw_profile` and `PprofProfile::decode` → one `RawProfile`.
   - `fn gunzip(body: &[u8], max_output: usize) -> Result<Vec<u8>, ProfilesError>` — `flate2::read::GzDecoder`, output-size-capped.
@@ -1295,7 +1295,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --lib ingest::push_v1`
+Run: `cargo test -p krabka-profiles --lib ingest::push_v1`
 Expected: FAIL — `cannot find function decode_push`.
 
 - [ ] **Step 3: Implement `push_v1.rs`**
@@ -1306,8 +1306,8 @@ Expected: FAIL — `cannot find function decode_push`.
 
 use std::io::Read;
 
-use crabka_blockstore::Labels;
-use crabka_pprof::PprofProfile;
+use krabka_blockstore::Labels;
+use krabka_pprof::PprofProfile;
 
 use crate::error::ProfilesError;
 use crate::ingest::RawProfile;
@@ -1360,14 +1360,14 @@ pub fn decode_push(
 
 `ingest/mod.rs`: `pub mod push_v1; pub use push_v1::{decode_push, gunzip};`
 
-Run: `cargo test -p crabka-profiles --lib ingest::push_v1`
+Run: `cargo test -p krabka-profiles --lib ingest::push_v1`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): push.v1 door — gunzip raw_profile + pprof decode"
 ```
@@ -1469,7 +1469,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify they fail**
 
-Run: `cargo test -p crabka-profiles --lib ingest::otlp ingest::legacy`
+Run: `cargo test -p krabka-profiles --lib ingest::otlp ingest::legacy`
 Expected: FAIL — `cannot find function decode_otlp`.
 
 - [ ] **Step 3: Implement `otlp.rs`**
@@ -1480,8 +1480,8 @@ Resolve the interned dictionary into a `PprofProfile` via slice-2's `PprofProfil
 //! OTLP `v1development` profiles → `Vec<RawProfile>`. Resolves the interned
 //! `ProfilesDictionary` into a pprof-equivalent profile per OTLP `Profile`.
 
-use crabka_blockstore::Labels;
-use crabka_pprof::PprofProfile;
+use krabka_blockstore::Labels;
+use krabka_pprof::PprofProfile;
 
 use crate::error::ProfilesError;
 use crate::ingest::RawProfile;
@@ -1527,7 +1527,7 @@ fn resolve_service_name(
 }
 ```
 
-> **`PprofProfile::from_otlp(profile, dict)` is a slice-2 constructor you may need to add** — the OTLP dictionary → pprof-tables mapping belongs in `crabka-pprof` (it owns the pprof model), not here. If slice 2 lacks it, add it there as part of this task (greenfield) with its own unit test, and consume it here. Do NOT reconstruct the pprof tables inline in this crate — that duplicates the model. Verify the OTLP field names (`stack_index`, `location_indices`, `name_strindex`, `type_strindex`) against the Task-2 generated types.
+> **`PprofProfile::from_otlp(profile, dict)` is a slice-2 constructor you may need to add** — the OTLP dictionary → pprof-tables mapping belongs in `krabka-pprof` (it owns the pprof model), not here. If slice 2 lacks it, add it there as part of this task (greenfield) with its own unit test, and consume it here. Do NOT reconstruct the pprof tables inline in this crate — that duplicates the model. Verify the OTLP field names (`stack_index`, `location_indices`, `name_strindex`, `type_strindex`) against the Task-2 generated types.
 
 - [ ] **Step 4: Implement `legacy.rs`** (query parse + pprof multipart)
 
@@ -1535,8 +1535,8 @@ fn resolve_service_name(
 //! Legacy `POST /ingest` door: query (`?name=app{labels}&format=...`) + multipart
 //! body (the `profile` pprof part + an optional `sample_type_config` JSON part).
 
-use crabka_blockstore::Labels;
-use crabka_pprof::PprofProfile;
+use krabka_blockstore::Labels;
+use krabka_pprof::PprofProfile;
 
 use crate::error::ProfilesError;
 use crate::ingest::RawProfile;
@@ -1678,14 +1678,14 @@ pub async fn decode_ingest_multipart(
 
 `ingest/mod.rs`: `pub mod otlp; pub mod legacy; pub use otlp::decode_otlp; pub use legacy::{decode_ingest_multipart, parse_ingest_query, IngestFormat, IngestQuery};`
 
-Run: `cargo test -p crabka-profiles --lib ingest`
+Run: `cargo test -p krabka-profiles --lib ingest`
 Expected: PASS (all ingest tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): OTLP v1development + legacy /ingest pprof doors"
 ```
@@ -1774,7 +1774,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --lib distributor`
+Run: `cargo test -p krabka-profiles --lib distributor`
 Expected: FAIL — `cannot find function process_raw`.
 
 - [ ] **Step 3: Implement `distributor/mod.rs`**
@@ -1809,14 +1809,14 @@ Implement:
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-profiles --lib distributor`
+Run: `cargo test -p krabka-profiles --lib distributor`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): distributor — push.v1/OTLP/ingest doors, split, WAL produce"
 ```
@@ -1848,7 +1848,7 @@ mod tests {
     use super::*;
     use crate::wal::{ProfileRecord, WalSample, WalSymbolSet};
     use assert2::assert;
-    use crabka_pprof::SymbolDb;
+    use krabka_pprof::SymbolDb;
 
     fn rec(name: &str, value: i64) -> ProfileRecord {
         ProfileRecord {
@@ -1898,7 +1898,7 @@ mod tests {
 
         let store: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
         let base = url::Url::parse("memory:///").unwrap();
-        let mut bs = crabka_blockstore::BlockStore::new(store.clone(), base);
+        let mut bs = krabka_blockstore::BlockStore::new(store.clone(), base);
 
         let records = vec![rec("cpu", 5), rec("cpu", 7)];
         let metas = build_block(&mut bs, &store, "t", 0, &records, (10, 20)).await.unwrap();
@@ -1906,7 +1906,7 @@ mod tests {
         assert!(metas[0].tenant == "t");
         assert!(metas[0].row_count == 2);
         // The symbol-DB artifact landed next to the block.
-        let symdb_key = format!("{}{}", metas[0].object_key, crabka_blockstore::SYMDB_SUFFIX);
+        let symdb_key = format!("{}{}", metas[0].object_key, krabka_blockstore::SYMDB_SUFFIX);
         assert!(store.head(&object_store::path::Path::from(symdb_key)).await.is_ok());
     }
 }
@@ -1914,13 +1914,13 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --lib blockbuilder`
+Run: `cargo test -p krabka-profiles --lib blockbuilder`
 Expected: FAIL — `cannot find function object_key`.
 
 - [ ] **Step 3: Implement `blockbuilder.rs`**
 
 Implement:
-- `object_key`: `format!("blocks/{tenant}/{partition:05}/{min_offset:020}-{max_offset:020}-{min_ts}-{max_ts}.parquet")` (deterministic ⇒ idempotent overwrite). The symdb artifact key = `format!("{key}{}", crabka_blockstore::SYMDB_SUFFIX)`.
+- `object_key`: `format!("blocks/{tenant}/{partition:05}/{min_offset:020}-{max_offset:020}-{min_ts}-{max_ts}.parquet")` (deterministic ⇒ idempotent overwrite). The symdb artifact key = `format!("{key}{}", krabka_blockstore::SYMDB_SUFFIX)`.
 - `intern_record`: register `rec.symbols` tables into the `SymbolDb` (offsetting indices into the symdb's growing tables), choose a `stacktrace_partition` (per-tenant or per-block — match the slice-1 convention; default a single partition `0` for a block, noted `// TODO(slice4-stacktrace-partition-policy)`), then `symdb.intern_stacktrace(partition, &offset_refs)` per sample → `Vec<u32>`.
 - `samples_batch`: build Arrow arrays for the slice-1 `PCOL_*` columns (`COL_FINGERPRINT` UInt64, `COL_TIMESTAMP` Int64, `PCOL_PROFILE_TYPE` Dictionary<Utf8>, `PCOL_STACKTRACE_ID` UInt64, `PCOL_VALUE` Int64, `PCOL_STACKTRACE_PARTITION` UInt64, `PCOL_TOTAL_VALUE` Int64, `PCOL_SPAN_ID` UInt64 nullable, `PCOL_TRACE_ID` Binary nullable) via the slice-1 schema builder. `total_value` = the per-profile sum of values for that series+type (precomputed for SelectSeries).
 - `build_block`: intern all records into one block `SymbolDb`, build the samples batch, `bs.writer().write_block(tenant, &object_key(...), schema, &[batch])`, `symdb_store.put(symdb_key, symdb.encode())`, then `bs.index_mut()` profile-index updates (`add_series` per distinct series, the `__profile_type__` index, `add_block`/stacktrace-partition-map per the slice-1 `ProfileIndex` API). Return the `BlockMeta`s.
@@ -1938,14 +1938,14 @@ Implement:
 
 `lib.rs`: `mod blockbuilder; pub use blockbuilder::{build_block, intern_record, object_key, run};`
 
-Run: `cargo test -p crabka-profiles --lib blockbuilder`
+Run: `cargo test -p krabka-profiles --lib blockbuilder`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
 git commit -m "feat(profiles): block-builder — WAL to samples fact table + dedup SymbolDb + ProfileIndex"
 ```
@@ -1955,7 +1955,7 @@ git commit -m "feat(profiles): block-builder — WAL to samples fact table + ded
 ### Task 10: Role-selectable binary
 
 **Files:**
-- Create: `crates/profiles/src/bin/crabka-profiles.rs`
+- Create: `crates/profiles/src/bin/krabka-profiles.rs`
 - Modify: `crates/profiles/Cargo.toml` (`[[bin]]` if needed; clap already a dep)
 
 **Interfaces:**
@@ -1972,49 +1972,49 @@ mod tests {
 
     #[test]
     fn parses_distributor_target() {
-        let cli = Cli::try_parse_from(["crabka-profiles", "--target", "distributor"]).unwrap();
+        let cli = Cli::try_parse_from(["krabka-profiles", "--target", "distributor"]).unwrap();
         assert!(matches!(cli.target, Target::Distributor));
     }
 
     #[test]
     fn parses_block_builder_target() {
-        let cli = Cli::try_parse_from(["crabka-profiles", "--target", "block-builder"]).unwrap();
+        let cli = Cli::try_parse_from(["krabka-profiles", "--target", "block-builder"]).unwrap();
         assert!(matches!(cli.target, Target::BlockBuilder));
     }
 
     #[test]
     fn rejects_unknown_target() {
-        assert!(Cli::try_parse_from(["crabka-profiles", "--target", "bogus"]).is_err());
+        assert!(Cli::try_parse_from(["krabka-profiles", "--target", "bogus"]).is_err());
     }
 }
 ```
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-profiles --bin crabka-profiles`
+Run: `cargo test -p krabka-profiles --bin krabka-profiles`
 Expected: FAIL — `cannot find type Cli`.
 
 - [ ] **Step 3: Implement the binary**
 
 `#[derive(Parser)] struct Cli { #[arg(long)] target: Target, #[arg(long, default_value = "127.0.0.1:4040")] listen: String, #[arg(long, default_value = "127.0.0.1:9092")] bootstrap: String }` + `#[derive(Clone, ValueEnum)] enum Target { Distributor, BlockBuilder, Querier, QueryFrontend, Compactor, Symbolizer }` (clap renames `BlockBuilder` → `block-builder`). `main`: parse, `tracing_subscriber` init, `CancellationToken` from `tokio::signal::ctrl_c`, match `target`:
 - `Distributor` → `Producer::builder().bootstrap(&cli.bootstrap).build().await?`, wrap in `KafkaSink`, build `DistributorState`, `distributor::serve(cli.listen.parse()?, state, shutdown).await?`.
-- `BlockBuilder` → `Consumer::builder().bootstrap(&cli.bootstrap).group_id("crabka-profiles-block-builder").subscribe([PROFILES_WAL_TOPIC.to_string()]).auto_offset_reset(AutoOffsetReset::Earliest).build().await?`, build a `BlockStore` over the configured object store (memory for now; real config `// TODO(slice4-objstore-config)`), `blockbuilder::run(consumer, blockstore, "index/profiles.json", shutdown).await?`.
+- `BlockBuilder` → `Consumer::builder().bootstrap(&cli.bootstrap).group_id("krabka-profiles-block-builder").subscribe([PROFILES_WAL_TOPIC.to_string()]).auto_offset_reset(AutoOffsetReset::Earliest).build().await?`, build a `BlockStore` over the configured object store (memory for now; real config `// TODO(slice4-objstore-config)`), `blockbuilder::run(consumer, blockstore, "index/profiles.json", shutdown).await?`.
 - `Querier | QueryFrontend | Compactor | Symbolizer` → `eprintln!` + `std::process::exit(2)` with "target not implemented until slice {N}".
 
 > Keep `main` thin; testable logic lives in the modules.
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-profiles --bin crabka-profiles`
-Expected: PASS (3 tests). Then `cargo build -p crabka-profiles --bin crabka-profiles` compiles.
+Run: `cargo test -p krabka-profiles --bin krabka-profiles`
+Expected: PASS (3 tests). Then `cargo build -p krabka-profiles --bin krabka-profiles` compiles.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-profiles
-cargo clippy -p crabka-profiles --all-targets
+cargo fmt -p krabka-profiles
+cargo clippy -p krabka-profiles --all-targets
 git add crates/profiles/
-git commit -m "feat(profiles): role-selectable crabka-profiles binary (distributor|block-builder)"
+git commit -m "feat(profiles): role-selectable krabka-profiles binary (distributor|block-builder)"
 ```
 
 ---
@@ -2032,7 +2032,7 @@ This is the one test that needs a real broker. Use the in-process broker test-su
 
 - [ ] **Step 1: Decide the harness**
 
-`crates/broker/tests/support/mod.rs` is path-included by the broker's own tests; `crabka-profiles` cannot `use` it directly. Replicate the few lines into `crates/profiles/tests/support/mod.rs`: `BrokerConfig::for_tests(tempdir)`, `Broker::start(config).await`, `handle.listen_addr()` — with `crabka-broker` as a `dev-dependency` (Task 1). **Verify** `BrokerConfig::for_tests` + `Broker::start` + `listen_addr` are `pub` in `crabka-broker` (they are — confirmed against `crates/broker/tests/support/mod.rs` usage). If they are test-only, fall back to `#[ignore = "requires Docker"]` + testcontainers cp-kafka.
+`crates/broker/tests/support/mod.rs` is path-included by the broker's own tests; `krabka-profiles` cannot `use` it directly. Replicate the few lines into `crates/profiles/tests/support/mod.rs`: `BrokerConfig::for_tests(tempdir)`, `Broker::start(config).await`, `handle.listen_addr()` — with `krabka-broker` as a `dev-dependency` (Task 1). **Verify** `BrokerConfig::for_tests` + `Broker::start` + `listen_addr` are `pub` in `krabka-broker` (they are — confirmed against `crates/broker/tests/support/mod.rs` usage). If they are test-only, fall back to `#[ignore = "requires Docker"]` + testcontainers cp-kafka.
 
 - [ ] **Step 2: Write the round-trip test**
 
@@ -2058,12 +2058,12 @@ Fill in the body using the verified producer/consumer/admin APIs. Key assertions
 
 - [ ] **Step 3: Run**
 
-Run: `cargo test -p crabka-profiles --test ingest_roundtrip`
+Run: `cargo test -p krabka-profiles --test ingest_roundtrip`
 Expected: PASS (records round-trip; a block + symdb are written).
 
 - [ ] **Step 4: Whole-crate gate**
 
-Run: `cargo test -p crabka-profiles && cargo clippy -p crabka-profiles --all-targets && cargo fmt -p crabka-profiles --check`
+Run: `cargo test -p krabka-profiles && cargo clippy -p krabka-profiles --all-targets && cargo fmt -p krabka-profiles --check`
 Expected: all PASS (ignored Docker tests skipped), no warnings, formatting clean.
 
 - [ ] **Step 5: Commit**
@@ -2095,12 +2095,12 @@ git commit -m "test(profiles): end-to-end push.v1 -> WAL -> block-builder -> blo
 - Stacktrace-partition policy (one partition per block vs sharded) — Task 9 `// TODO(slice4-stacktrace-partition-policy)`; default single-partition is correct and tested.
 - TLS, per-tenant rate-limit (429 via Crabka quotas), tenant-required enforcement — `// TODO(slice4-tls)`/`-quota)`/`-tenant-required)`; structural caps (415/400) are enforced.
 
-**Placeholder scan:** no "TBD"/"similar to Task N" without code. The churn-prone surfaces — the OTLP `v1development` proto field numbers (Task 2, commit-pinned + round-trip test), the `connectrpc-axum-build` codegen + generated builder/method names (Tasks 2/8, verified against grpc-gateway), the `crabka-pprof` `PprofProfile`/`SymbolDb` accessors (Tasks 4/6/7/9, consumer-side, verify-against-slice-2), the `serde-wincode` call shape (Task 5, verified at `bootstrap.rs:104`), the producer `.send` ack pattern (Task 8), the Arrow Dictionary<Utf8> builder for `PCOL_PROFILE_TYPE` (Task 9), the `multer` multipart API (Task 7), and the in-process broker harness reachability (Task 11) — are each bounded with an explicit "verify against X" note and pinned by a behavior test, never fabricated.
+**Placeholder scan:** no "TBD"/"similar to Task N" without code. The churn-prone surfaces — the OTLP `v1development` proto field numbers (Task 2, commit-pinned + round-trip test), the `connectrpc-axum-build` codegen + generated builder/method names (Tasks 2/8, verified against grpc-gateway), the `krabka-pprof` `PprofProfile`/`SymbolDb` accessors (Tasks 4/6/7/9, consumer-side, verify-against-slice-2), the `serde-wincode` call shape (Task 5, verified at `bootstrap.rs:104`), the producer `.send` ack pattern (Task 8), the Arrow Dictionary<Utf8> builder for `PCOL_PROFILE_TYPE` (Task 9), the `multer` multipart API (Task 7), and the in-process broker harness reachability (Task 11) — are each bounded with an explicit "verify against X" note and pinned by a behavior test, never fabricated.
 
-**Type consistency:** `RawProfile` (Task 3) is produced by all three doors (Tasks 6/7) and consumed by `process_raw` (Task 8) → `split_sample_types` (Task 4) → `DecodedProfile`. `ProfileRecord`/`WalSample`/`WalSymbolSet`/`partition_key` (Task 5) are consumed by the distributor produce path (Task 8) and the block-builder (Task 9). `ProfilesError::status_code()` is the single ingest status mapping (Task 1), used by the distributor (Task 8). The slice-1 blockstore API (`BlockStore::new`/`writer`/`index_mut`/`write_block`/`ProfileIndex` updates/`save`/`PCOL_*`/`SYMDB_SUFFIX`) and the slice-2 `crabka-pprof` API (`PprofProfile`/`SymbolDb`/`ProfileType`/`Frame`/`ProfileError`) are consumed exactly as the dependency roadmap pins them — verify-against notes flag every consumer-side assumption.
+**Type consistency:** `RawProfile` (Task 3) is produced by all three doors (Tasks 6/7) and consumed by `process_raw` (Task 8) → `split_sample_types` (Task 4) → `DecodedProfile`. `ProfileRecord`/`WalSample`/`WalSymbolSet`/`partition_key` (Task 5) are consumed by the distributor produce path (Task 8) and the block-builder (Task 9). `ProfilesError::status_code()` is the single ingest status mapping (Task 1), used by the distributor (Task 8). The slice-1 blockstore API (`BlockStore::new`/`writer`/`index_mut`/`write_block`/`ProfileIndex` updates/`save`/`PCOL_*`/`SYMDB_SUFFIX`) and the slice-2 `krabka-pprof` API (`PprofProfile`/`SymbolDb`/`ProfileType`/`Frame`/`ProfileError`) are consumed exactly as the dependency roadmap pins them — verify-against notes flag every consumer-side assumption.
 
 **Known risks (flagged, not hidden):**
 - **OTLP `v1development` proto churn** — the single highest-churn surface; commit-pinned (tag comment) + behavior-pinned by the Task-2 round-trip test, so a drift is a failing test, not silent corruption. Contained to `proto/` + `wire/` + `ingest/otlp.rs`.
-- **`crabka-pprof` consumer-side assumptions** — Tasks 4/6/7/9 reuse the slice-2 `PprofProfile::sample_types()`/`string()` + `SymbolDb::intern_stacktrace` (which exist) and assume additional per-sample/period getters (`samples`, `value_at`, `location_refs`, `timestamp_ns`, `span_id`, `trace_id`, `period_type_strings`) + `PprofProfile::from_otlp` that slice 2 does **not** define yet — add these to slice 2 (greenfield) as a companion change. Pinned by the split/intern behavior tests.
+- **`krabka-pprof` consumer-side assumptions** — Tasks 4/6/7/9 reuse the slice-2 `PprofProfile::sample_types()`/`string()` + `SymbolDb::intern_stacktrace` (which exist) and assume additional per-sample/period getters (`samples`, `value_at`, `location_refs`, `timestamp_ns`, `span_id`, `trace_id`, `period_type_strings`) + `PprofProfile::from_otlp` that slice 2 does **not** define yet — add these to slice 2 (greenfield) as a companion change. Pinned by the split/intern behavior tests.
 - **connect codegen + protoc in CI** — Task 2 `build.rs` needs `protoc`; mirrors grpc-gateway's `system_protoc_available()` + `fetch_protoc` fallback. Pinned by the two prost round-trip tests so a codegen break is a compile error.
 - **The `(tenant, series_fingerprint)` partition invariant** — a single test pins `partition_key` determinism; the produce path sets `key` and leaves `partition: None` so the MurmurHash2 partitioner keeps a series together.

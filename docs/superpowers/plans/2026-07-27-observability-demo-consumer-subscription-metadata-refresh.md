@@ -18,7 +18,7 @@
 - Exact CLI name:
   `--consumer-subscription-metadata-refresh-interval-ms`.
 - Exact environment name:
-  `CRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS`.
+  `KRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS`.
 - Precedence is CLI over environment over
   `ConsumerSubscriptionMetadataRefreshInterval::default()`.
 - Preserve the exact default of `5_000` milliseconds.
@@ -72,7 +72,7 @@
 **Interfaces:**
 
 - Consumes:
-  `crabka_client_consumer::ConsumerSubscriptionMetadataRefreshInterval`.
+  `krabka_client_consumer::ConsumerSubscriptionMetadataRefreshInterval`.
 - Produces:
   `Cli::consumer_subscription_metadata_refresh_interval_ms: Option<NonZeroU64>`.
 - Produces:
@@ -80,7 +80,7 @@
 - Produces:
   `--consumer-subscription-metadata-refresh-interval-ms`.
 - Produces:
-  `CRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS`.
+  `KRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS`.
 - Routes:
   `main -> run_consume -> Consumer::builder().subscription_metadata_refresh_interval(Duration)`.
 
@@ -143,7 +143,7 @@ fn environment_is_used_and_cli_wins_before_external_io() {
     let environment = demo()
         .args(["--role", "produce"])
         .env(
-            "CRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS",
+            "KRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS",
             "37",
         )
         .output()
@@ -161,7 +161,7 @@ fn environment_is_used_and_cli_wins_before_external_io() {
             "41",
         ])
         .env(
-            "CRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS",
+            "KRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS",
             "37",
         )
         .output()
@@ -177,7 +177,7 @@ fn zero_fails_early_and_help_lists_the_flag_once() {
     let zero = demo()
         .args(["--role", "consume"])
         .env(
-            "CRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS",
+            "KRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS",
             "0",
         )
         .output()
@@ -209,12 +209,12 @@ fn consumer_metadata_refresh_is_configurable_only_on_the_consume_role() {
     let compose = docker_compose();
     let consume = compose_service_block(&compose, "demo-consume");
     assert2::assert!(consume.contains(
-        "CRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS: \"${CRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS:-5000}\""
+        "KRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS: \"${KRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS:-5000}\""
     ));
     for service in ["demo-produce", "demo-stream"] {
         assert2::assert!(
             !compose_service_block(&compose, service).contains(
-                "CRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS"
+                "KRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS"
             )
         );
     }
@@ -239,7 +239,7 @@ environment variable.
 Extend the existing Client Consumer import:
 
 ```rust
-use crabka_client_consumer::{
+use krabka_client_consumer::{
     Consumer, ConsumerLeaveGroupTimeout, ConsumerRecord,
     ConsumerSubscriptionMetadataRefreshInterval,
 };
@@ -251,7 +251,7 @@ Add immediately after `consumer_leave_group_timeout_ms` in `Cli`:
 /// Classic Consumer subscribed-topic metadata refresh interval in milliseconds.
 #[arg(
     long,
-    env = "CRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS"
+    env = "KRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS"
 )]
 consumer_subscription_metadata_refresh_interval_ms: Option<NonZeroU64>,
 ```
@@ -348,7 +348,7 @@ Under `demo-consume.environment`, immediately after the leave-group timeout,
 add:
 
 ```yaml
-CRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS: "${CRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS:-5000}"
+KRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS: "${KRABKA_DEMO_CONSUMER_SUBSCRIPTION_METADATA_REFRESH_INTERVAL_MS:-5000}"
 ```
 
 - [ ] **Step 8: Run focused green tests and package gates**

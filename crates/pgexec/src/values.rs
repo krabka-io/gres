@@ -1,5 +1,5 @@
-use crabka_pgparser::ast::{Expr, ValuesStmt};
-use crabka_pgtypes::{ColumnType, Datum};
+use krabka_pgparser::ast::{Expr, ValuesStmt};
+use krabka_pgtypes::{ColumnType, Datum};
 
 use crate::{
     clock::EvalCtx,
@@ -35,7 +35,7 @@ pub(crate) fn values_to_relation_with_ctes(
 }
 
 pub(crate) fn values_schema_relation_with_ctes(
-    catalog_kv: &dyn crabka_pgkv::Kv,
+    catalog_kv: &dyn krabka_pgkv::Kv,
     resolution: &crate::relname::ResolutionScope,
     v: &ValuesStmt,
     ctes: &crate::cte::CteContext,
@@ -76,7 +76,7 @@ fn values_to_relation_with_schema(
 
 pub(crate) fn apply_query_order(
     rel: &mut crate::join::Relation,
-    order_by: &[crabka_pgparser::ast::OrderItem],
+    order_by: &[krabka_pgparser::ast::OrderItem],
     window: crate::exec::RowWindow,
     ctx: &EvalCtx,
 ) -> Result<(), ExecError> {
@@ -235,8 +235,8 @@ fn unify_values_col(
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgparser::ast::{FuncArgs, FuncCall};
-    use crabka_pgtypes::Datum;
+    use krabka_pgparser::ast::{FuncArgs, FuncCall};
+    use krabka_pgtypes::Datum;
 
     use super::*;
 

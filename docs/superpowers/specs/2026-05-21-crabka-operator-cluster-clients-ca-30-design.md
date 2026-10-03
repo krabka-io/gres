@@ -292,12 +292,12 @@ Tests: an explicit assertion that `combined_config_hash` is **stable**
 under broker-keystore Secret changes (so leaf renewal doesn't cascade
 into a roll) and **unstable** under cluster-CA-cert Secret changes.
 
-### CronJob: `crabka-operator ca-renewal-check`
+### CronJob: `krabka-operator ca-renewal-check`
 
 New CLI subcommand in `crates/operator/src/main.rs`:
 
 ```text
-crabka-operator ca-renewal-check [--namespace <ns>]
+krabka-operator ca-renewal-check [--namespace <ns>]
 ```
 
 Without `--namespace`: cluster-scoped, requires `ClusterRole`. With
@@ -326,7 +326,7 @@ Behavior:
 The subcommand is idempotent and safe to re-run. The Helm chart ships
 the CronJob with `schedule: "0 2 * * *"` (daily, 02:00 UTC) and
 `startingDeadlineSeconds: 600`. The CronJob pod uses the same operator
-image and a dedicated `ServiceAccount` (`crabka-operator-renewal`) with
+image and a dedicated `ServiceAccount` (`krabka-operator-renewal`) with
 narrower RBAC than the main operator: read on Kafka CRs, read+patch on
 Secrets in the same namespaces, create on Events. No write access on
 `statefulsets`, no leader-Lease.
@@ -338,7 +338,7 @@ and the CronJob subcommand call it; the reconciler calls it only on
 **creation** (initial generation), not on subsequent reconciles, so
 renewal stays in the CronJob lane.
 
-### Helm chart additions (`charts/crabka-operator/templates/`)
+### Helm chart additions (`charts/krabka-operator/templates/`)
 
 - `cronjob-ca-renewal.yaml` (new) — `kind: CronJob`, schedule from
   `values.yaml`, `imagePullPolicy` matches the Deployment.
@@ -570,7 +570,7 @@ code path).
    template, update status. Tests.
 7. `crates/operator/src/main.rs` — add `CaRenewalCheck` subcommand,
    wire to `controller/cluster_ca::run_renewal_check`. Tests.
-8. `charts/crabka-operator/templates/` — CronJob, ServiceAccount,
+8. `charts/krabka-operator/templates/` — CronJob, ServiceAccount,
    ClusterRole, ClusterRoleBinding for renewal. Helm-lint test in CI.
 9. Integration tests: `reconcile_ca.rs`, `reconcile_inter_broker_mtls.rs`,
    `ca_renewal_cronjob.rs`.

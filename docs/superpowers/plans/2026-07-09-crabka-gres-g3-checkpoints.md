@@ -4,14 +4,14 @@
 
 **Goal:** Checkpoints bound spin-up and WAL growth: the writer snapshots the store between commit-groups, a checkpointer streams it to the bucket (manifest last), the WAL truncates behind it, and recovery restores checkpoint + tail instead of full history.
 
-**Architecture:** A `SnapshotKv` streaming seam in `crabka-pgkv` (fjall MVCC snapshot / mem clone); part+manifest objects under immutable `gres/<tenant>/ckpt/<offset>-<epoch>/` prefixes via the existing `ObjectOps`; truncation through a new public `AdminClient::delete_records`; restore via fjall ingestion with a `write_batch` fallback; a Stateright model of the fence/checkpoint/truncate/recover protocol as the gate.
+**Architecture:** A `SnapshotKv` streaming seam in `krabka-pgkv` (fjall MVCC snapshot / mem clone); part+manifest objects under immutable `gres/<tenant>/ckpt/<offset>-<epoch>/` prefixes via the existing `ObjectOps`; truncation through a new public `AdminClient::delete_records`; restore via fjall ingestion with a `write_batch` fallback; a Stateright model of the fence/checkpoint/truncate/recover protocol as the gate.
 
-**Tech Stack:** fjall 3.x (`Database::snapshot`, `Keyspace::start_ingestion`), `crabka-object-store` (`ObjectStoreConfig`/`ObjectOps`, `InMemory` for tests), `sha2` checksums, `serde_json` manifests, `stateright`.
+**Tech Stack:** fjall 3.x (`Database::snapshot`, `Keyspace::start_ingestion`), `krabka-object-store` (`ObjectStoreConfig`/`ObjectOps`, `InMemory` for tests), `sha2` checksums, `serde_json` manifests, `stateright`.
 
 ## Global Constraints
 
 - **Prerequisites:** G-1 and G-2 plans landed. Verify every signature against the landed tree; the fjall snapshot/ingestion APIs (`Database::snapshot() -> Snapshot`, `Snapshot::iter(&Keyspace)`, `Keyspace::start_ingestion() -> Ingestion` with `write`/`write_tombstone`/`finish`, strictly-ascending keys) were verified against fjall 3.1.6 and are present throughout fjall 3.1.x — the workspace pin is whatever G-1 imported (the donor's `fjall = "3.1.5"`); these APIs exist there too, so no version bump is required (confirm at execution time).
-- **Spec:** [2026-07-09-crabka-gres-g3-checkpoints-design.md](../specs/2026-07-09-crabka-gres-g3-checkpoints-design.md).
+- **Spec:** [2026-07-09-krabka-gres-g3-checkpoints-design.md](../specs/2026-07-09-krabka-gres-g3-checkpoints-design.md).
 - **Broker facts (verified):** `DeleteRecords` trims leader-locally, advances log start (`low_watermark` in the response), physically deletes sealed segments; `offset == -1` means HW; `target > LEO` → `OFFSET_OUT_OF_RANGE`; fetch below log start surfaces as `ClientError::Server { error_code: 1 }` through `fetch_partition_with_isolation`.
 - **Ordering invariants (the spec's; the model pins them):** snapshot between commit-groups stamped `(covered_offset, journal_seq, epoch)`; parts before manifest; manifest before DeleteRecords; DeleteRecords before prune; recovery refuses on log-start-beyond-newest-manifest, checksum mismatch, or `journal_seq` gap.
 - Lints/format/commit/test conventions as in the G-2 plan (pedantic `-D warnings`, `cargo +nightly fmt`, `assert2`, condition-driven waits, conventional commits with the Claude trailer).
@@ -20,7 +20,7 @@
 
 ## Batch 1 — three independent foundations (run Tasks 1–3 in parallel; disjoint crates)
 
-### Task 1: `SnapshotKv` seam + restore helpers in `crabka-pgkv`
+### Task 1: `SnapshotKv` seam + restore helpers in `krabka-pgkv`
 
 **Files:** Modify `crates/pgkv/src/store.rs` (or new `src/snapshot.rs` + module wiring), `src/fjall_store.rs`, `crates/pgkv/README.md`.
 
@@ -44,7 +44,7 @@ pub trait RestoreKv: Kv {
 ```
 - `FjallKv`: `snapshot()` via `self.db.snapshot()` + `snap.iter(&self.keyspace)` (hold both in the boxed iterator; map fjall errors to `KvError::Io`); `restore_sorted` via `keyspace.start_ingestion()` → `write` per pair → `finish()` → `db.persist(PersistMode::SyncAll)`. `MemKv`: clone-map iterator; chunked `write_batch` (4096-op chunks) restore.
 
-Steps: failing tests first (snapshot sees pre-snapshot state while concurrent writes proceed — spawn writes during iteration and assert the snapshot excludes them, on both backends; restore round-trip equals source store; restore rejects unsorted input loudly on the mem path and documents fjall's panic-on-unsorted as the contract), implement, `cargo nextest run -p crabka-pgkv`, clippy/fmt, README section, commit `feat(pgkv): online snapshot and sorted-restore seams`.
+Steps: failing tests first (snapshot sees pre-snapshot state while concurrent writes proceed — spawn writes during iteration and assert the snapshot excludes them, on both backends; restore round-trip equals source store; restore rejects unsorted input loudly on the mem path and documents fjall's panic-on-unsorted as the contract), implement, `cargo nextest run -p krabka-pgkv`, clippy/fmt, README section, commit `feat(pgkv): online snapshot and sorted-restore seams`.
 
 ### Task 2: `AdminClient::delete_records`
 
@@ -57,11 +57,11 @@ pub struct DeleteRecordsOp { pub topic: String, pub partition: i32, pub offset: 
 pub struct DeleteRecordsOutcome { pub topic: String, pub partition: i32, pub error_code: i16, pub low_watermark: i64 }
 pub async fn delete_records(&mut self, ops: &[DeleteRecordsOp], timeout_ms: i32) -> Result<Vec<DeleteRecordsOutcome>, AdminError>
 ```
-Builds `crabka_protocol::owned::delete_records_request::*` (grouping ops by topic), routes to the partition leader the way the existing topic methods do, flattens per-partition results.
+Builds `krabka_protocol::owned::delete_records_request::*` (grouping ops by topic), routes to the partition leader the way the existing topic methods do, flattens per-partition results.
 
 Steps: failing integration test (produce 100 → `delete_records(offset 50)` → outcome `error_code == 0 && low_watermark >= 50`; then `fetch_partition` at offset 0 errors with `ClientError::Server { error_code: 1 }` — mirror the assertions of `crates/broker/tests/admin_handlers.rs::delete_records_trims_log_start`), implement, unit test for request-building (whole-struct comparison per house test style), docs (`## Errors` rustdoc), clippy/fmt, commit `feat(client-admin): DeleteRecords admin API`.
 
-### Task 3: Part + manifest codec in `crabka-gres-substrate`
+### Task 3: Part + manifest codec in `krabka-gres-substrate`
 
 **Files:** Create `crates/gres-substrate/src/checkpoint/mod.rs`, `checkpoint/codec.rs`, `checkpoint/manifest.rs`; wire modules in `lib.rs`; extend `src/error.rs` (`Checkpoint(String)`, `TornTruncation { log_start: i64, newest_manifest: i64 }`, `ChecksumMismatch { part: String }` variants).
 
@@ -93,7 +93,7 @@ Steps: failing tests (part codec proptest round-trip incl. multi-part splitting 
 
 ### Task 4: Writer snapshot control + checkpointer task + truncate + prune
 
-**Files:** Modify `crates/gres-substrate/src/writer.rs` (control message) and `crates/gres-substrate/Cargo.toml` (`crabka-object-store`, `crabka-client-admin`, `sha2` deps), create `crates/gres-substrate/src/checkpoint/checkpointer.rs`; modify `crates/gres/src/main.rs` + `crates/gres/Cargo.toml` (bucket + threshold flags).
+**Files:** Modify `crates/gres-substrate/src/writer.rs` (control message) and `crates/gres-substrate/Cargo.toml` (`krabka-object-store`, `krabka-client-admin`, `sha2` deps), create `crates/gres-substrate/src/checkpoint/checkpointer.rs`; modify `crates/gres/src/main.rs` + `crates/gres/Cargo.toml` (bucket + threshold flags).
 
 **Interfaces:**
 - Writer: the request channel becomes `enum WalMsg { Batch(WalRequest), Checkpoint(oneshot::Sender<SnapshotHandle>) }`; between groups the writer answers `Checkpoint` with `SnapshotHandle { snapshot: Box<dyn KvSnapshot>, covered_offset: i64, journal_seq: u64, producer_epoch: i16, horizon_xid: u64 }` — `covered_offset` is the last WAL offset whose group has been applied (the writer records the max acked `RecordMetadata.offset` per group; add that bookkeeping), `horizon_xid` is `min(oldest xid visible to any active snapshot, clog_scan_lo)` — the ProcArray term via a narrow public accessor (no active sessions ⇒ next xid), floored by the recovery watermark, which by the SP20 invariant never passes a non-terminal clog entry, so in-doubt `Prepared` markers are structurally protected from the horizon (panel amendment C4; Task 4b consumes it) — taken synchronously in the loop so no group is in flight at the instant.
@@ -108,8 +108,8 @@ Steps: failing unit test for the writer control message (checkpoint between grou
 **Files:** Modify `crates/pgmvcc/src/{xid,visibility,version}.rs` (frozen sentinel), `crates/gres-substrate/src/checkpoint/checkpointer.rs` (rewrite rules in the part-streaming path), new `crates/gres-substrate/src/checkpoint/horizon.rs`; tests in both crates.
 
 **Interfaces:**
-- `crabka-pgmvcc` gains `pub const FROZEN_XID: Xid` (mirror PostgreSQL's FrozenTransactionId concept; pick a reserved value below the engine's first allocatable xid — inspect the vendored `Xid` domain and the donor's first-xid convention before choosing) with `satisfies_mvcc` treating `xmin == FROZEN_XID` as committed-for-everyone without a clog lookup. Unit tests pin the visibility table for frozen tuples.
-- `horizon.rs`: `pub fn rewrite_for_checkpoint(key: &[u8], value: &[u8], horizon: u64, clog: &impl ClogLookup) -> RewriteDecision` where `RewriteDecision::{Keep, Drop, Replace(Vec<u8>)}` implements the three spec rules — drop row versions with committed `xmax < horizon`; freeze committed `xmin < horizon` (rewrite the tuple header's xmin to `FROZEN_XID`); pass non-row keys through except clog entries with `xid < horizon`, which drop. (Key classification via the existing `crabka-pgkv` helpers + the mvcc version-key/tuple-header codecs — reuse the donor's `version.rs`/`rowenc` accessors; never hand-parse layouts.)
+- `krabka-pgmvcc` gains `pub const FROZEN_XID: Xid` (mirror PostgreSQL's FrozenTransactionId concept; pick a reserved value below the engine's first allocatable xid — inspect the vendored `Xid` domain and the donor's first-xid convention before choosing) with `satisfies_mvcc` treating `xmin == FROZEN_XID` as committed-for-everyone without a clog lookup. Unit tests pin the visibility table for frozen tuples.
+- `horizon.rs`: `pub fn rewrite_for_checkpoint(key: &[u8], value: &[u8], horizon: u64, clog: &impl ClogLookup) -> RewriteDecision` where `RewriteDecision::{Keep, Drop, Replace(Vec<u8>)}` implements the three spec rules — drop row versions with committed `xmax < horizon`; freeze committed `xmin < horizon` (rewrite the tuple header's xmin to `FROZEN_XID`); pass non-row keys through except clog entries with `xid < horizon`, which drop. (Key classification via the existing `krabka-pgkv` helpers + the mvcc version-key/tuple-header codecs — reuse the donor's `version.rs`/`rowenc` accessors; never hand-parse layouts.)
 - The checkpointer pipes every snapshot pair through `rewrite_for_checkpoint` before part framing; `total_pairs`/checksums reflect the rewritten stream.
 
 Steps: TDD the rewrite rules (dead-below-horizon dropped; dead-at-or-above kept; freeze rewrites byte-exactly; aborted-xmin versions below horizon dropped — they are invisible to everyone; clog pruning) → the **visibility-equivalence property test** (random committed/aborted/in-flight histories: for every key and every snapshot at-or-above the horizon, pre-rewrite and post-rewrite stores answer `satisfies_mvcc` identically) → wire into the checkpointer → the Task 5/6 suites re-run green including a checkpoint-restore cycle under conformance parity. Commit `feat(gres): vacuum-into-checkpoint garbage horizon`.
@@ -146,7 +146,7 @@ Model (pure, mirroring `crates/cluster`'s donor precedent style — no I/O, cano
 
 ### Task 8: Docs + CI touch-ups
 
-**Files:** Modify `crates/gres-substrate/README.md`, `crates/gres/README.md` (bucket/threshold flags), `.github/workflows/ci.yml` only if the new tests exceed the existing `gres-integration` job's timeout (raise `timeout-minutes`; the package list already includes `crabka-gres-substrate`; the `gres` changes-filter already covers the crate). Confirm `cargo nextest run --workspace --profile ci --lib --bins` and the two gres CI jobs green locally where runnable. Commit `docs(gres): checkpoint configuration and recovery documentation`.
+**Files:** Modify `crates/gres-substrate/README.md`, `crates/gres/README.md` (bucket/threshold flags), `.github/workflows/ci.yml` only if the new tests exceed the existing `gres-integration` job's timeout (raise `timeout-minutes`; the package list already includes `krabka-gres-substrate`; the `gres` changes-filter already covers the crate). Confirm `cargo nextest run --workspace --profile ci --lib --bins` and the two gres CI jobs green locally where runnable. Commit `docs(gres): checkpoint configuration and recovery documentation`.
 
 ## Completion checklist (maps to the G-3 gate)
 

@@ -1,12 +1,12 @@
-# crabka-pgtypes
+# krabka-pgtypes
 
-[![crates.io](https://img.shields.io/crates/v/crabka-pgtypes.svg)](https://crates.io/crates/crabka-pgtypes)
+[![crates.io](https://img.shields.io/crates/v/krabka-pgtypes.svg)](https://crates.io/crates/krabka-pgtypes)
 PostgreSQL value layer for the Crabka Gres engine: `Datum`, column types, text and binary wire encodings, casts, and operator semantics.
 
 Part of [Crabka](https://github.com/robot-head/crabka)'s Chapter Gres. Chapter Gres
 is a pure-Rust Postgres-compatible engine vendored from
 [crabgresql](https://github.com/robot-head/crabgresql) at `93f3d17`. See the
-[chapter design](../../docs/superpowers/specs/2026-07-09-crabka-gres-chapter-design.md).
+[chapter design](../../docs/superpowers/specs/2026-07-09-krabka-gres-chapter-design.md).
 
 ## Overview
 

@@ -1,8 +1,8 @@
-# crabka-metrics Slice 7 — Ruler (recording + alerting rule evaluation, rule-group config API, alert dispatch)
+# krabka-metrics Slice 7 — Ruler (recording + alerting rule evaluation, rule-group config API, alert dispatch)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the `ruler` role — per-tenant **rule groups** (recording + alerting), the Prometheus/Mimir ruler config API (`/prometheus/config/v1/rules` CRUD), a scheduled evaluation loop that (a) writes **recording-rule** results back to the WAL topic as first-class series and (b) drives **alerting-rule** `inactive → pending → firing` state honoring `for:` and dispatches firing alerts to a configured Alertmanager-API endpoint, the rebuildable compacted state store, the `/api/v1/rules` + `/api/v1/alerts` read APIs, and `(tenant, group)`-hash sharding — all wired behind `crabka-metrics --target ruler`.
+**Goal:** Build the `ruler` role — per-tenant **rule groups** (recording + alerting), the Prometheus/Mimir ruler config API (`/prometheus/config/v1/rules` CRUD), a scheduled evaluation loop that (a) writes **recording-rule** results back to the WAL topic as first-class series and (b) drives **alerting-rule** `inactive → pending → firing` state honoring `for:` and dispatches firing alerts to a configured Alertmanager-API endpoint, the rebuildable compacted state store, the `/api/v1/rules` + `/api/v1/alerts` read APIs, and `(tenant, group)`-hash sharding — all wired behind `krabka-metrics --target ruler`.
 
 **Architecture:** The ruler holds a `MetricStore` client (a thin `RemoteMetricStore` HTTP impl against a querier/query-frontend, OR the co-located querier's `MetricStore`) and runs `PromqlEngine::query_instant` per rule at each group's `interval`. The two rule kinds split cleanly:
 
@@ -11,14 +11,14 @@
 
 The two churn-prone surfaces — the **Kafka producer** (Slice 4 wire/produce path) and the **Alertmanager HTTP client** (`reqwest`) — are abstracted behind narrow traits (`RecordingSink`, `AlertSink`) with in-memory mocks, so the state machine and the recording→WAL round-trip are pure, deterministic test concerns. Config + state persist to compacted per-tenant topics behind a `RuleStateStore` trait (in-memory impl for tests, topic-backed impl deferred-but-structured). The evaluation clock is injected (`Clock` trait) so `for:`-duration transitions are tested without real time.
 
-**Tech Stack:** Rust 2024 · `serde` + `serde_yaml` 0.9 (rule-group YAML) · `serde_json` (read-API + Alertmanager v2 JSON) · `arrow` 59 (instant-vector samples) · `axum` 0.8 (config + read APIs, reusing `grpc-gateway/serve.rs`) · `reqwest` 0.13 (Alertmanager client) · `tokio` (eval loop, injected clock) · `thiserror`. Tests: `assert2`, `tokio` (`macros`, `rt`), `tempfile`. Consumes `crabka-promql` (`PromqlEngine`, `QueryResult`, `InstantSample`, `SampleValue`, `MetricStore`) and `crabka-metrics` Slice 1/4 (`Labels`, `WalRecord`, the produce path).
+**Tech Stack:** Rust 2024 · `serde` + `serde_yaml` 0.9 (rule-group YAML) · `serde_json` (read-API + Alertmanager v2 JSON) · `arrow` 59 (instant-vector samples) · `axum` 0.8 (config + read APIs, reusing `grpc-gateway/serve.rs`) · `reqwest` 0.13 (Alertmanager client) · `tokio` (eval loop, injected clock) · `thiserror`. Tests: `assert2`, `tokio` (`macros`, `rt`), `tempfile`. Consumes `krabka-promql` (`PromqlEngine`, `QueryResult`, `InstantSample`, `SampleValue`, `MetricStore`) and `krabka-metrics` Slice 1/4 (`Labels`, `WalRecord`, the produce path).
 
 ## Global Constraints
 
 - **No backwards compatibility.** Greenfield/undeployed. Change schemas/enums/wire shapes freely; no shims, no migration code, no `#[serde(default)]` "for old logs", no V2-kept-alongside-V1.
 - **`unsafe_code = "forbid"`** workspace-wide. No `unsafe`.
-- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p crabka-metrics --all-targets` before each commit.
-- **Formatting:** `cargo fmt -p crabka-metrics` before every commit (**never** `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
+- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p krabka-metrics --all-targets` before each commit.
+- **Formatting:** `cargo fmt -p krabka-metrics` before every commit (**never** `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
 - **Assertions:** `assert2::assert!` in tests; `assert2::check!` where multiple soft checks help.
 - **Kafka wire identity is the only compat constraint.** The recording-rule write-back path produces *ordinary* series to the WAL topic via Slice 4's produce path — byte-identical to a remote_write-originated sample. No ruler-private record format.
 - **Prometheus JSON identity for read APIs.** `/api/v1/rules` and `/api/v1/alerts` match Prometheus's exact response shapes (`status`, `data.groups[]`/`data.alerts[]`, field names/casing/`state` enum strings) — the byte-equality analog for the ruler.
@@ -30,9 +30,9 @@ The two churn-prone surfaces — the **Kafka producer** (Slice 4 wire/produce pa
 ## Dependency & slice roadmap
 
 **Depends on:**
-- **Slice 2/3 (`crabka-promql`)** — `PromqlEngine<S: MetricStore>::query_instant(tenant, query, time_ms) -> Result<QueryResult, PromqlError>`; `QueryResult::{Scalar, InstantVector(Vec<InstantSample>), ..}`; `InstantSample { labels: Labels, ts_ms: i64, value: SampleValue }`; `SampleValue::{Float(f64), Histogram(NativeHistogram)}`; the `MetricStore` trait the engine reads through. **Consume these signatures verbatim.**
+- **Slice 2/3 (`krabka-promql`)** — `PromqlEngine<S: MetricStore>::query_instant(tenant, query, time_ms) -> Result<QueryResult, PromqlError>`; `QueryResult::{Scalar, InstantVector(Vec<InstantSample>), ..}`; `InstantSample { labels: Labels, ts_ms: i64, value: SampleValue }`; `SampleValue::{Float(f64), Histogram(NativeHistogram)}`; the `MetricStore` trait the engine reads through. **Consume these signatures verbatim.**
 - **Slice 4 (ingest)** — `WalRecord` + the produce path (recording-rule output samples are produced as ordinary series); `Labels`. *Slice 4's plan file is not yet written;* this plan consumes only the **contract** (`Labels`, a "produce a series sample to the WAL topic" entry point) and wraps it behind `RecordingSink` so the exact producer type can land later without touching the ruler logic.
-- **Slice 1** — `crabka-metrics` crate exists (this plan adds modules + a `ruler` binary target to it).
+- **Slice 1** — `krabka-metrics` crate exists (this plan adds modules + a `ruler` binary target to it).
 
 **This plan = Slice 7 of 8.** Remaining: Slice 8 hardening (multi-tenancy/limits, remote_read, compliance + differential-vs-Mimir). Sharding here defines the *assignment function* + a test; actual cross-instance coordination (consumer-group membership) is stubbed with a verify-note and finished under Slice 8.
 
@@ -55,7 +55,7 @@ The two churn-prone surfaces — the **Kafka producer** (Slice 4 wire/produce pa
 | `src/ruler/sharding.rs` | `assign_group(tenant, group, n_instances) -> usize` `(tenant,group)`-hash assignment |
 | `src/ruler/api.rs` | axum router: config CRUD + `/api/v1/rules` + `/api/v1/alerts` |
 | `src/ruler/service.rs` | `RulerService` — owns config store, state store, engine, clock; spawns the eval loop |
-| `src/bin/ruler.rs` *(or arm in existing `main.rs`)* | `crabka-metrics --target ruler` wiring |
+| `src/bin/ruler.rs` *(or arm in existing `main.rs`)* | `krabka-metrics --target ruler` wiring |
 | `Cargo.toml` | add `serde_yaml`, `serde_json`, `reqwest`, `axum`, `tokio` deps |
 | *workspace* `Cargo.toml` | add `reqwest = { version = "0.13", ... }` if absent |
 
@@ -83,15 +83,15 @@ serde_json = { workspace = true }
 reqwest = { workspace = true }
 # The workspace `axum` is `default-features = false` and NO crate enables the
 # `json` feature; `api.rs` returns `axum::Json<Value>`, which REQUIRES it.
-# Enable `json` here or `cargo build -p crabka-metrics` fails to compile.
+# Enable `json` here or `cargo build -p krabka-metrics` fails to compile.
 axum = { workspace = true, features = ["json"] }
 # `service.rs` stores a `tokio_util::sync::CancellationToken`, so tokio-util is a
 # normal dep (not dev-only).
 tokio-util = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync"] }
 tracing = { workspace = true }
-# crabka-promql / Slice-4 produce path: add the path deps once those crates exist.
-# crabka-promql = { path = "../promql", version = "0.3.7" }
+# krabka-promql / Slice-4 produce path: add the path deps once those crates exist.
+# krabka-promql = { path = "../promql", version = "0.3.7" }
 
 [dev-dependencies]
 # ...existing (assert2, proptest)...
@@ -131,7 +131,7 @@ pub mod state;
 
 /// Single point of truth for types consumed from sibling slices.
 ///
-/// When `crabka-promql` (Slice 2/3) and the Slice-4 produce path are present,
+/// When `krabka-promql` (Slice 2/3) and the Slice-4 produce path are present,
 /// re-export their real types here. Until then, these local definitions carry
 /// the **exact** signatures from the shared contract so this slice compiles and
 /// tests in isolation. Swap to `pub use` re-exports the moment upstream lands;
@@ -140,7 +140,7 @@ pub mod contract {
     use std::collections::BTreeMap;
 
     /// Ordered label set. This is a **newtype struct** with the EXACT restricted
-    /// API of the real shared `Labels` (`crabka-blockstore`), NOT a bare
+    /// API of the real shared `Labels` (`krabka-blockstore`), NOT a bare
     /// `BTreeMap` alias — so every ruler call site is written against the same
     /// surface that survives the re-export swap. Notably: `get` returns
     /// `Option<&str>` (not `Option<&String>`), `insert` takes `impl Into<String>`,
@@ -198,7 +198,7 @@ pub mod contract {
 
     /// One series in a range matrix (carried so the enum matches the real
     /// 4-variant shape even though rules only read instant vectors/scalars).
-    /// Field names/types mirror Slice 2's `crabka_promql::RangeSeries`
+    /// Field names/types mirror Slice 2's `krabka_promql::RangeSeries`
     /// (`samples: Vec<(i64, SampleValue)>`) so the re-export swap is a no-op.
     #[derive(Clone, Debug, PartialEq)]
     pub struct RangeSeries {
@@ -215,7 +215,7 @@ pub mod contract {
         Histogram(()),
     }
 
-    /// PromQL query result. Carries **all four** real `crabka-promql` variants
+    /// PromQL query result. Carries **all four** real `krabka-promql` variants
     /// (`Scalar`, `InstantVector`, `RangeMatrix`, `Str`) even though the ruler
     /// only consumes the first two — so `eval.rs::as_vector`'s `match` stays
     /// exhaustive after the re-export swap.
@@ -227,7 +227,7 @@ pub mod contract {
         Str { ts_ms: i64, value: String },
     }
 
-    /// Engine error surface. Mirrors Slice 2's `crabka_promql::PromqlError`
+    /// Engine error surface. Mirrors Slice 2's `krabka_promql::PromqlError`
     /// 5-variant set so the re-export swap is a no-op (the ruler only carries
     /// this opaquely via `EvalError`, never matching/constructing variants).
     #[derive(Debug, thiserror::Error)]
@@ -285,7 +285,7 @@ mod contract_tests {
 }
 ```
 
-> **Re-export-swap note:** the moment `crabka-promql` lands, replace the bodies of `contract` with `pub use crabka_promql::{Labels, PromqlEngine, MetricStore, QueryResult, InstantSample, RangeSeries, SampleValue, PromqlError};` (note `Labels` is actually `crabka_blockstore::Labels`, re-exported by promql) and `pub use crate::WalRecord;` (Slice 4 lands `WalRecord` in this same `crabka-metrics` crate — `crates/metrics/src/wal.rs`). The `Histogram(())` placeholder becomes `Histogram(crate::NativeHistogram)`. The shim `Labels`/`QueryResult`/`RangeSeries`/`PromqlError` already mirror the real type signatures (newtype `Labels` with `get -> Option<&str>` / no `remove`; the 4-variant `QueryResult`; `RangeSeries.samples: Vec<(i64, SampleValue)>`; the 5-variant `PromqlError`), so the swap is genuinely a one-file change — but only because every ruler call site is written against that restricted API, not bare `BTreeMap`/2-variant semantics. Flag any signature drift loudly.
+> **Re-export-swap note:** the moment `krabka-promql` lands, replace the bodies of `contract` with `pub use krabka_promql::{Labels, PromqlEngine, MetricStore, QueryResult, InstantSample, RangeSeries, SampleValue, PromqlError};` (note `Labels` is actually `krabka_blockstore::Labels`, re-exported by promql) and `pub use crate::WalRecord;` (Slice 4 lands `WalRecord` in this same `krabka-metrics` crate — `crates/metrics/src/wal.rs`). The `Histogram(())` placeholder becomes `Histogram(crate::NativeHistogram)`. The shim `Labels`/`QueryResult`/`RangeSeries`/`PromqlError` already mirror the real type signatures (newtype `Labels` with `get -> Option<&str>` / no `remove`; the 4-variant `QueryResult`; `RangeSeries.samples: Vec<(i64, SampleValue)>`; the 5-variant `PromqlError`), so the swap is genuinely a one-file change — but only because every ruler call site is written against that restricted API, not bare `BTreeMap`/2-variant semantics. Flag any signature drift loudly.
 
 - [ ] **Step 3: Wire into `lib.rs`**
 
@@ -297,17 +297,17 @@ Create empty-but-compiling `clock.rs`, `model.rs`, `state.rs`, `sinks.rs`, `eval
 
 - [ ] **Step 5: Build + pin the contract API**
 
-Run: `cargo build -p crabka-metrics`
+Run: `cargo build -p krabka-metrics`
 Expected: compiles (empty modules + contract shim).
 
-Run: `cargo test -p crabka-metrics --lib ruler::contract_tests`
+Run: `cargo test -p krabka-metrics --lib ruler::contract_tests`
 Expected: PASS (2 tests) — pins the restricted `Labels` newtype API and the 4-variant `QueryResult` so the eventual re-export swap can't silently break call sites.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/ Cargo.toml
 git commit -m "feat(metrics): scaffold ruler module + contract shim + deps"
 ```
@@ -419,7 +419,7 @@ groups:
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib ruler::model`
+Run: `cargo test -p krabka-metrics --lib ruler::model`
 Expected: FAIL — `cannot find function parse_rule_groups_yaml`.
 
 - [ ] **Step 3: Implement the model**
@@ -719,14 +719,14 @@ fn fmt_duration(d: Duration) -> String {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib ruler::model`
+Run: `cargo test -p krabka-metrics --lib ruler::model`
 Expected: PASS (5 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): ruler rule-group YAML model + duration parser"
 ```
@@ -769,7 +769,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib ruler::clock`
+Run: `cargo test -p krabka-metrics --lib ruler::clock`
 Expected: FAIL — `cannot find type MockClock`.
 
 - [ ] **Step 3: Implement**
@@ -826,14 +826,14 @@ impl Clock for MockClock {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib ruler::clock`
+Run: `cargo test -p krabka-metrics --lib ruler::clock`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): ruler injectable clock (SystemClock + MockClock)"
 ```
@@ -911,7 +911,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib ruler::state`
+Run: `cargo test -p krabka-metrics --lib ruler::state`
 Expected: FAIL — `cannot find type AlertState`.
 
 - [ ] **Step 3: Implement**
@@ -1019,14 +1019,14 @@ impl RuleStateStore for InMemoryStateStore {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib ruler::state`
+Run: `cargo test -p krabka-metrics --lib ruler::state`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): ruler alert-state model + RuleStateStore + in-memory impl"
 ```
@@ -1093,7 +1093,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib ruler::sinks`
+Run: `cargo test -p krabka-metrics --lib ruler::sinks`
 Expected: FAIL — `cannot find type MockRecordingSink`.
 
 - [ ] **Step 3: Implement**
@@ -1197,14 +1197,14 @@ impl AlertSink for MockAlertSink {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib ruler::sinks`
+Run: `cargo test -p krabka-metrics --lib ruler::sinks`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): ruler RecordingSink/AlertSink traits + mocks"
 ```
@@ -1442,7 +1442,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib ruler::eval`
+Run: `cargo test -p krabka-metrics --lib ruler::eval`
 Expected: FAIL — `cannot find function evaluate_group`.
 
 - [ ] **Step 3: Implement `evaluate_group` + the state machine + templating**
@@ -1728,7 +1728,7 @@ where
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib ruler::eval`
+Run: `cargo test -p krabka-metrics --lib ruler::eval`
 Expected: PASS (5 tests).
 
 - [ ] **Step 5: Add re-exports**
@@ -1738,8 +1738,8 @@ In `ruler/mod.rs`, re-export the public eval surface: `pub use eval::{EvalError,
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): ruler evaluate_group — recording write-back + for: state machine"
 ```
@@ -1823,7 +1823,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib ruler::config_store`
+Run: `cargo test -p krabka-metrics --lib ruler::config_store`
 Expected: FAIL — `cannot find type InMemoryConfigStore`.
 
 - [ ] **Step 3: Implement** (key/value codec + in-memory map keyed `(tenant, ns) -> Vec<(group, RuleGroup, raw_yaml)>`). Codec uses `bytes::BufMut` length-prefixed strings, mirroring the broker pattern. Add `bytes = { workspace = true }` to deps if not already present.
@@ -1988,14 +1988,14 @@ In `ruler/mod.rs` add `pub mod config_store;` and re-export `RuleConfigStore`, `
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib ruler::config_store`
+Run: `cargo test -p krabka-metrics --lib ruler::config_store`
 Expected: PASS (3 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): ruler config store + compacted-topic key/value codec"
 ```
@@ -2060,7 +2060,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib ruler::sharding`
+Run: `cargo test -p krabka-metrics --lib ruler::sharding`
 Expected: FAIL — `cannot find function assign_group`.
 
 - [ ] **Step 3: Implement**
@@ -2102,14 +2102,14 @@ pub fn owns_group(tenant: &str, group: &str, n_instances: usize, my_index: usize
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib ruler::sharding`
+Run: `cargo test -p krabka-metrics --lib ruler::sharding`
 Expected: PASS (4 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): ruler (tenant,group)-hash sharding assignment"
 ```
@@ -2181,7 +2181,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib ruler::alertmanager`
+Run: `cargo test -p krabka-metrics --lib ruler::alertmanager`
 Expected: FAIL — `cannot find function to_v2_payload`.
 
 - [ ] **Step 3: Implement**
@@ -2295,7 +2295,7 @@ impl AlertSink for AlertmanagerClient {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib ruler::alertmanager`
+Run: `cargo test -p krabka-metrics --lib ruler::alertmanager`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Add re-exports** in `ruler/mod.rs` (`pub use alertmanager::{AlertmanagerClient, to_v2_payload};`).
@@ -2303,8 +2303,8 @@ Expected: PASS (2 tests).
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): ruler Alertmanager v2 client + pure payload transform"
 ```
@@ -2383,7 +2383,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib ruler::produce`
+Run: `cargo test -p krabka-metrics --lib ruler::produce`
 Expected: FAIL — `cannot find type WalRecordingSink`.
 
 - [ ] **Step 3: Implement**
@@ -2450,20 +2450,20 @@ impl<P: WalProducer> RecordingSink for WalRecordingSink<P> {
 }
 ```
 
-> **Churn-surface verify-note:** the real `WalProducer` impl wraps Slice 4's produce path — it serializes `WalSeriesSample` to the WAL record's wire shape (`crabka-metrics` `WalRecord`, via `WalRecord::encode`) and produces to Slice 4's metrics WAL topic `crate::WAL_TOPIC` (`"__crabka_metrics_wal"`), partitioned by `(tenant, series_fingerprint)` via Slice 4's `partition_key` (spec §5.4). That serialization is Slice 4's contract; this trait keeps it out of the ruler. When Slice 4 lands, add `produce.rs::KafkaWalProducer` implementing `WalProducer` over the `crabka-client-producer` `Producer` + the Slice-4 `WalRecord` encoder, defaulting its topic to `crate::WAL_TOPIC`. The `to_wal_samples` test pins the field mapping regardless.
+> **Churn-surface verify-note:** the real `WalProducer` impl wraps Slice 4's produce path — it serializes `WalSeriesSample` to the WAL record's wire shape (`krabka-metrics` `WalRecord`, via `WalRecord::encode`) and produces to Slice 4's metrics WAL topic `crate::WAL_TOPIC` (`"__krabka_metrics_wal"`), partitioned by `(tenant, series_fingerprint)` via Slice 4's `partition_key` (spec §5.4). That serialization is Slice 4's contract; this trait keeps it out of the ruler. When Slice 4 lands, add `produce.rs::KafkaWalProducer` implementing `WalProducer` over the `krabka-client-producer` `Producer` + the Slice-4 `WalRecord` encoder, defaulting its topic to `crate::WAL_TOPIC`. The `to_wal_samples` test pins the field mapping regardless.
 
 - [ ] **Step 4: Add re-exports** in `ruler/mod.rs` (`pub use produce::{WalProducer, WalRecordingSink, WalSeriesSample, to_wal_samples};`).
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib ruler::produce`
+Run: `cargo test -p krabka-metrics --lib ruler::produce`
 Expected: PASS (2 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): ruler WAL recording sink (WalProducer seam onto Slice 4)"
 ```
@@ -2595,7 +2595,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib ruler::api`
+Run: `cargo test -p krabka-metrics --lib ruler::api`
 Expected: FAIL — `cannot find type RulerApiState`.
 
 - [ ] **Step 3: Implement the router + handlers + pure JSON builders**
@@ -2843,14 +2843,14 @@ pub fn alerts_json(state: &dyn RuleStateStore, tenant: &str) -> Value {
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib ruler::api`
+Run: `cargo test -p krabka-metrics --lib ruler::api`
 Expected: PASS (3 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): ruler HTTP API (config CRUD + /api/v1/rules + /api/v1/alerts)"
 ```
@@ -2956,7 +2956,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib ruler::service`
+Run: `cargo test -p krabka-metrics --lib ruler::service`
 Expected: FAIL — `cannot find type RulerService`.
 
 - [ ] **Step 3: Implement** (`eval_once` filters by `owns_group` + calls `evaluate_group`; `run` is the interval scheduler). Keep `recording`/`config`/`state`/`my_index`/`n_instances` `pub(crate)` so the test can introspect.
@@ -3095,14 +3095,14 @@ where
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib ruler::service`
+Run: `cargo test -p krabka-metrics --lib ruler::service`
 Expected: PASS (2 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): RulerService eval loop + owned-group filtering"
 ```
@@ -3137,13 +3137,13 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::ServiceExt;
 
-use crabka_metrics::ruler::clock::MockClock;
-use crabka_metrics::ruler::config_store::InMemoryConfigStore;
-use crabka_metrics::ruler::contract::{InstantSample, Labels, QueryResult, SampleValue};
-use crabka_metrics::ruler::eval::{EvalError, Querier};
-use crabka_metrics::ruler::sinks::{MockAlertSink, MockRecordingSink};
-use crabka_metrics::ruler::state::InMemoryStateStore;
-use crabka_metrics::ruler::{RulerService, api};
+use krabka_metrics::ruler::clock::MockClock;
+use krabka_metrics::ruler::config_store::InMemoryConfigStore;
+use krabka_metrics::ruler::contract::{InstantSample, Labels, QueryResult, SampleValue};
+use krabka_metrics::ruler::eval::{EvalError, Querier};
+use krabka_metrics::ruler::sinks::{MockAlertSink, MockRecordingSink};
+use krabka_metrics::ruler::state::InMemoryStateStore;
+use krabka_metrics::ruler::{RulerService, api};
 
 #[derive(Clone)]
 struct FiringQuerier;
@@ -3228,7 +3228,7 @@ async fn ruler_end_to_end_records_and_fires() {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --test ruler_e2e`
+Run: `cargo test -p krabka-metrics --test ruler_e2e`
 Expected: FAIL — module paths unresolved until the binary/exports are wired (and `ruler` mod must be `pub`).
 
 - [ ] **Step 3: Implement the binary + ensure `pub` exports**
@@ -3236,7 +3236,7 @@ Expected: FAIL — module paths unresolved until the binary/exports are wired (a
 Ensure `crates/metrics/src/lib.rs` has `pub mod ruler;` and `ruler/mod.rs` makes its submodules `pub`. Create `crates/metrics/src/bin/ruler.rs`:
 
 ```rust
-//! `crabka-metrics --target ruler` (or `cargo run --bin ruler`).
+//! `krabka-metrics --target ruler` (or `cargo run --bin ruler`).
 //!
 //! Builds a `RulerService` with the real Alertmanager client + the WAL
 //! recording sink, serves the ruler HTTP API, and runs the eval loop.
@@ -3246,11 +3246,11 @@ use std::sync::Arc;
 use clap::Parser;
 use tokio_util::sync::CancellationToken;
 
-use crabka_metrics::ruler::alertmanager::AlertmanagerClient;
-use crabka_metrics::ruler::clock::SystemClock;
-use crabka_metrics::ruler::config_store::InMemoryConfigStore;
-use crabka_metrics::ruler::state::InMemoryStateStore;
-use crabka_metrics::ruler::{RulerService, api};
+use krabka_metrics::ruler::alertmanager::AlertmanagerClient;
+use krabka_metrics::ruler::clock::SystemClock;
+use krabka_metrics::ruler::config_store::InMemoryConfigStore;
+use krabka_metrics::ruler::state::InMemoryStateStore;
+use krabka_metrics::ruler::{RulerService, api};
 
 #[derive(Parser)]
 struct Args {
@@ -3284,7 +3284,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Placeholder querier/recording sink until upstream slices land. Replace
     // with PromqlEngine<RemoteMetricStore> + WalRecordingSink<KafkaWalProducer>.
     let querier = Arc::new(placeholder::NoopQuerier);
-    let recording = Arc::new(crabka_metrics::ruler::sinks::MockRecordingSink::default());
+    let recording = Arc::new(krabka_metrics::ruler::sinks::MockRecordingSink::default());
 
     let svc = RulerService::new(
         config,
@@ -3322,8 +3322,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 mod placeholder {
     use async_trait::async_trait;
 
-    use crabka_metrics::ruler::contract::QueryResult;
-    use crabka_metrics::ruler::eval::{EvalError, Querier};
+    use krabka_metrics::ruler::contract::QueryResult;
+    use krabka_metrics::ruler::eval::{EvalError, Querier};
 
     /// Returns an empty vector for every query until the real engine is wired.
     pub struct NoopQuerier;
@@ -3338,18 +3338,18 @@ mod placeholder {
 ```
 
 > **Binary-wiring verify-notes:**
-> 1. The binary uses `axum::serve` directly to stay self-contained; switching to `crabka_grpc_gateway::serve::serve` (for the TLS/mTLS-principal path) is a one-line change once that crate is a dep. Flagged, not blocking.
+> 1. The binary uses `axum::serve` directly to stay self-contained; switching to `krabka_grpc_gateway::serve::serve` (for the TLS/mTLS-principal path) is a one-line change once that crate is a dep. Flagged, not blocking.
 > 2. `--target ruler` mirrors the spec's role-selectable service. If the metrics service later grows a single `main.rs` dispatching all roles (`distributor`/`querier`/…), fold this binary's body into a `run_ruler(args)` arm — the `RulerService` construction is already self-contained.
 > 3. The placeholder `NoopQuerier` + `MockRecordingSink` are **binary-only** stand-ins so the role binary compiles and serves the API before Slices 2-4 merge. They never appear in library code or the e2e test (which uses its own mocks). Replace both when upstream lands.
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --test ruler_e2e`
+Run: `cargo test -p krabka-metrics --test ruler_e2e`
 Expected: PASS.
 
 - [ ] **Step 5: Whole-crate gate**
 
-Run: `cargo test -p crabka-metrics && cargo clippy -p crabka-metrics --all-targets && cargo fmt -p crabka-metrics --check`
+Run: `cargo test -p krabka-metrics && cargo clippy -p krabka-metrics --all-targets && cargo fmt -p krabka-metrics --check`
 Expected: all PASS, no warnings, formatting clean.
 
 - [ ] **Step 6: Commit**
@@ -3369,7 +3369,7 @@ git commit -m "feat(metrics): --target ruler binary + end-to-end ruler integrati
 - **State store** — compacted per-tenant alert state behind `RuleStateStore` + in-memory impl (Task 4).
 - **Read APIs** — `/api/v1/rules` + `/api/v1/alerts` in Prometheus JSON shapes (Task 11).
 - **Sharding** — `(tenant, group)`-hash `assign_group`/`owns_group` + tests (Task 8), applied in `eval_once` (Task 12).
-- **Role binary** — `crabka-metrics --target ruler` (Task 13).
+- **Role binary** — `krabka-metrics --target ruler` (Task 13).
 
 **First-class test concerns (as the brief demanded):**
 - **`for:`-duration state machine** — Task 6's `alert_goes_pending_then_firing_after_for_elapses` drives `inactive→pending→firing` across `t=0/60/120/180s` with `MockClock`, pinning the inclusive `for:` boundary, single-dispatch-on-transition, and no re-dispatch while firing; `alert_resolves_when_condition_clears` pins resolution. The e2e (Task 13) re-proves it through the full service.

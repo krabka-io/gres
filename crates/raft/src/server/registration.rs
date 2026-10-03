@@ -4,10 +4,10 @@ use std::collections::{BTreeMap, HashSet};
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use bytes::{Bytes, BytesMut};
-use crabka_metadata::{
+use krabka_metadata::{
     BrokerEndpoint, BrokerRegistrationRecord, ControllerRegistrationRecord, MetadataRecord, NodeId,
 };
-use crabka_protocol::{
+use krabka_protocol::{
     Decode, Encode,
     owned::{
         broker_heartbeat_request::{self, BrokerHeartbeatRequest},
@@ -18,7 +18,7 @@ use crabka_protocol::{
         controller_registration_response::ControllerRegistrationResponse,
     },
 };
-use crabka_security::ListenerProtocol;
+use krabka_security::ListenerProtocol;
 
 use crate::{RaftError, kraft::KraftController};
 
@@ -69,7 +69,7 @@ pub(super) async fn dispatch(
             controller_registration(version, body, engine, authorized).await
         }
         _ => Err(RaftError::Protocol(
-            crabka_protocol::ProtocolError::InvalidValue("unknown controller lifecycle API"),
+            krabka_protocol::ProtocolError::InvalidValue("unknown controller lifecycle API"),
         )),
     }
 }
@@ -361,7 +361,7 @@ fn protocol_from_wire(protocol: i16) -> Option<ListenerProtocol> {
 
 fn features_support_finalized(
     request: &BrokerRegistrationRequest,
-    image: &crabka_metadata::MetadataImage,
+    image: &krabka_metadata::MetadataImage,
 ) -> bool {
     image.finalized_features().iter().all(|(name, level)| {
         request.features.iter().any(|feature| {

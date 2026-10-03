@@ -57,7 +57,7 @@ Replace simultaneous static initialization with a **two-phase** boot:
 
 ## API changes
 
-Add a `BootstrapMode` enum to `crabka_raft::ControllerConfig`:
+Add a `BootstrapMode` enum to `krabka_raft::ControllerConfig`:
 
 ```rust
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,8 +92,8 @@ No default. Callers explicitly pick the mode they need; this is a one-time
 operational decision per broker per cluster, and silent defaults would
 silently re-introduce the simultaneous-init failure.
 
-Mirror onto `crabka_broker::BrokerConfig` with the same enum re-exported
-from `crabka_broker`. Both `Default` and `for_tests` set
+Mirror onto `krabka_broker::BrokerConfig` with the same enum re-exported
+from `krabka_broker`. Both `Default` and `for_tests` set
 `BootstrapMode::Bootstrap` — that's the right answer for single-broker
 setups (the singleton-voter path is a no-op for a 1-voter "cluster") and
 for the first broker in a multi-broker cold boot. Callers building a
@@ -238,8 +238,8 @@ single-broker test. Multi-broker test/integration callers explicitly set
 
 ## Test plan
 
-1. `cargo test -p crabka-broker` — all green on Linux + macOS + Windows.
-2. `cargo test -p crabka-broker --test jvm_acceptance --ignored` — all 9
+1. `cargo test -p krabka-broker` — all green on Linux + macOS + Windows.
+2. `cargo test -p krabka-broker --test jvm_acceptance --ignored` — all 9
    tests pass (the 4 previously-skipped multi-broker tests run).
 3. New unit test: `BrokerConfig::default()` sets `bootstrap_mode == Bootstrap`.
 4. New unit test: `Controller::start` returns `Startup` error if `Bootstrap`

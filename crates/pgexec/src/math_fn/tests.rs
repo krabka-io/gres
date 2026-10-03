@@ -1,6 +1,6 @@
 use assert2::assert;
-use crabka_pgparser::parser::parse_expr_for_test as pexpr;
-use crabka_pgtypes::{ColumnType, Datum};
+use krabka_pgparser::parser::parse_expr_for_test as pexpr;
+use krabka_pgtypes::{ColumnType, Datum};
 
 use super::{Prng, configured_random_seed};
 use crate::{clock::EvalCtx, scope::Scope};

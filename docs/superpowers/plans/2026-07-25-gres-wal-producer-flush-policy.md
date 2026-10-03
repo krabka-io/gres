@@ -88,7 +88,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-producer \
+  cargo test -p krabka-client-producer \
   builder::security_arg_tests::producer_flush_timeout -- --nocapture
 ```
 
@@ -145,7 +145,7 @@ Run the command from Step 2, then:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-producer \
+  cargo test -p krabka-client-producer \
   builder::security_arg_tests::producer_builder_rejects_flush_timeout_before_connection_io
 ```
 
@@ -184,7 +184,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-producer \
+  cargo test -p krabka-client-producer \
   producer::tests::flush_ -- --nocapture
 ```
 
@@ -223,9 +223,9 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-producer --all-targets
+  cargo test -p krabka-client-producer --all-targets
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-client-producer --all-targets -- -D warnings
+  cargo clippy -p krabka-client-producer --all-targets -- -D warnings
 cargo fmt --all -- --check
 git diff --check
 ```
@@ -269,7 +269,7 @@ Add focused tests that prove:
 - CLI overrides environment with a distinctive value;
 - zero, `2,147,483,648`, and explicit local-mode use fail;
 - the hostile WAL environment matrix clears
-  `CRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT_MS`;
+  `KRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT_MS`;
 - `LiveRecoveryConfig` defaults and replacement are exact;
 - the sole WAL producer construction receives `.flush_timeout(...)`;
 - `--help` contains `--wal-producer-flush-timeout-ms`.
@@ -280,10 +280,10 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres \
+  cargo test -p krabka-gres \
   tests::wal_producer_flush_timeout -- --nocapture
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-substrate \
+  cargo test -p krabka-gres-substrate \
   producer_flush_timeout -- --nocapture
 ```
 
@@ -296,7 +296,7 @@ Add to `ServeArgs`:
 ```rust
 #[arg(
     long = "wal-producer-flush-timeout-ms",
-    env = "CRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT_MS",
+    env = "KRABKA_GRES_WAL_PRODUCER_FLUSH_TIMEOUT_MS",
     requires = "substrate_bootstrap"
 )]
 pub wal_producer_flush_timeout_ms: Option<PositiveMillis>,
@@ -334,11 +334,11 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-substrate --all-targets
+  cargo test -p krabka-gres-substrate --all-targets
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres --all-targets
+  cargo test -p krabka-gres --all-targets
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-gres-substrate -p crabka-gres \
+  cargo clippy -p krabka-gres-substrate -p krabka-gres \
   --all-targets -- -D warnings
 cargo fmt --all -- --check
 git diff --check
@@ -396,7 +396,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator \
+  cargo test -p krabka-operator \
   wal_producer_flush_timeout -- --nocapture
 ```
 
@@ -438,9 +438,9 @@ Generate into two fresh temporary directories:
 crd_a=$(mktemp -d)
 crd_b=$(mktemp -d)
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-operator -- gen-crds "$crd_a"
+  cargo run -q -p krabka-operator -- gen-crds "$crd_a"
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-operator -- gen-crds "$crd_b"
+  cargo run -q -p krabka-operator -- gen-crds "$crd_b"
 test "$(find "$crd_a" -maxdepth 1 -type f | wc -l)" -eq 9
 diff -ru "$crd_a" "$crd_b"
 cp "$crd_a"/*.yaml deploy/crds/
@@ -455,9 +455,9 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator --all-targets
+  cargo test -p krabka-operator --all-targets
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-operator --all-targets -- -D warnings
+  cargo clippy -p krabka-operator --all-targets -- -D warnings
 cargo fmt --all -- --check
 git diff --check
 ```
@@ -525,13 +525,13 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-producer -p crabka-gres-substrate \
-  -p crabka-gres -p crabka-operator --all-targets
+  cargo test -p krabka-client-producer -p krabka-gres-substrate \
+  -p krabka-gres -p krabka-operator --all-targets
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-client-producer -p crabka-gres-substrate \
-  -p crabka-gres -p crabka-operator --all-targets -- -D warnings
+  cargo clippy -p krabka-client-producer -p krabka-gres-substrate \
+  -p krabka-gres -p krabka-operator --all-targets -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-gres -- --help |
+  cargo run -q -p krabka-gres -- --help |
   rg -- "--wal-producer-flush-timeout-ms"
 cargo fmt --all -- --check
 git diff --check

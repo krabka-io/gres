@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Subsystem design. **The differentiated slice** of the [serverless messaging cycle](2026-07-06-crabka-gateway-header-carrythrough-design.md) — exposes KIP-932 share-group backlog as a KEDA-consumable signal so serverless consumer replicas autoscale on queue depth, including scale-to-zero.
+**Type:** Subsystem design. **The differentiated slice** of the [serverless messaging cycle](2026-07-06-krabka-gateway-header-carrythrough-design.md) — exposes KIP-932 share-group backlog as a KEDA-consumable signal so serverless consumer replicas autoscale on queue depth, including scale-to-zero.
 
 ## Context — the one differentiated slice, honestly
 
@@ -23,7 +23,7 @@ So "each broker emits its local intersection" produces series only for `initiali
 
 ## Design Goals
 
-- **Fleet-complete backlog** as a Prometheus gauge on the broker's existing `/metrics` (`metrics_server.rs`, default `:9404`); `sum(crabka_broker_share_group_backlog{group_id="G"})` is the true fleet total.
+- **Fleet-complete backlog** as a Prometheus gauge on the broker's existing `/metrics` (`metrics_server.rs`, default `:9404`); `sum(krabka_broker_share_group_backlog{group_id="G"})` is the true fleet total.
 - **Never emit `-1`:** uninitialized SPSO → **full available backlog** (`hwm − log_start`); a data partition led elsewhere → fetch its **authoritative HWM cross-broker**, never `-1`, never a false `0`.
 - **Exactly one series per partition** — the coordinator broker is the single emitter, so `sum()` has no double-count and no gap; `sum() == 0` iff every initialized partition is genuinely drained.
 - **Scale-to-zero, safely** — `minReplicaCount: 0` with an `activationThreshold`; because emission is complete and never `-1`, an empty/zero `sum()` means *actually drained*, not *unknown*.
@@ -91,7 +91,7 @@ The loop computes a full snapshot (all `await`s — `read_state`, HWM — happen
 
 ### Gauge shape
 
-One labeled family on `BrokerMetrics`, mirroring the landed `partition_disk_bytes: Family<PartitionLabel, Gauge>` (`metrics.rs:144`): `share_group_backlog: Family<ShareGroupLabel, Gauge>` with `ShareGroupLabel { group_id, topic, partition }`. The registry prefix (`Registry::with_prefix("crabka_broker")`, `metrics.rs:344`) makes it encode as `crabka_broker_share_group_backlog`; it is a `Gauge` (no `_total` suffix). Set via `get_or_create(&lbl).set(backlog)`.
+One labeled family on `BrokerMetrics`, mirroring the landed `partition_disk_bytes: Family<PartitionLabel, Gauge>` (`metrics.rs:144`): `share_group_backlog: Family<ShareGroupLabel, Gauge>` with `ShareGroupLabel { group_id, topic, partition }`. The registry prefix (`Registry::with_prefix("krabka_broker")`, `metrics.rs:344`) makes it encode as `krabka_broker_share_group_backlog`; it is a `Gauge` (no `_total` suffix). Set via `get_or_create(&lbl).set(backlog)`.
 
 ### KEDA integration — stock `prometheus` scaler
 
@@ -110,7 +110,7 @@ spec:
   - type: prometheus
     metadata:
       serverAddress: http://prometheus.monitoring.svc:9090
-      query: 'sum(crabka_broker_share_group_backlog{group_id="my-group"})'
+      query: 'sum(krabka_broker_share_group_backlog{group_id="my-group"})'
       threshold: '100'           # target backlog-per-replica; HPA drives replicas toward sum/threshold
       activationThreshold: '1'   # wake from 0 only when backlog >= 1
 ```
@@ -135,7 +135,7 @@ Scale-to-zero is correct **only because emission is complete and never `-1`**: `
 ## Testing
 
 - **`effective_backlog` unit tests:** initialized (`hwm − spso`); uninitialized (`hwm − log_start`, the full-backlog case, **not** `-1`/`0`); `spso > hwm` clamps to `0`; all-zero → `0`.
-- **Metric encode:** register + `get_or_create` + `set(N)` + encode the registry → assert `crabka_broker_share_group_backlog{group_id=..,topic=..,partition=..} N` appears with **no** `_total` suffix (behavioral encode, not source-text).
+- **Metric encode:** register + `get_or_create` + `set(N)` + encode the registry → assert `krabka_broker_share_group_backlog{group_id=..,topic=..,partition=..} N` appears with **no** `_total` suffix (behavioral encode, not source-text).
 - **Poll loop, local:** a coordinator broker with one initialized share group, `hwm > log_start`, **uninitialized SPSO** → after a tick, the scraped series equals `hwm − log_start` (full backlog), not `-1`, not `0`.
 - **Poll loop, remote-HWM:** the same group's data partition led by a *different* broker → the series is **still emitted** with the correct backlog (exercises the `ListOffsets` peer read) — the co-location regression guard.
 - **Drained → 0:** acquire+Accept all records → the series reads `0` (enables scale-to-zero).

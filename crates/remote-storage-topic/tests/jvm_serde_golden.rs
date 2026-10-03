@@ -27,13 +27,13 @@ use std::{
     fmt::Write as _,
 };
 
-use crabka_ids::LeaderEpoch;
-use crabka_remote_storage::{
+use krabka_ids::LeaderEpoch;
+use krabka_remote_storage::{
     CustomMetadata, RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentMetadataUpdate,
     RemoteLogSegmentState, RemotePartitionDeleteMetadata, RemotePartitionDeleteState,
     TopicIdPartition,
 };
-use crabka_remote_storage_topic::MetadataEvent;
+use krabka_remote_storage_topic::MetadataEvent;
 use uuid::Uuid;
 
 /// Load and hex-decode one named golden vector from the committed fixture.
@@ -76,7 +76,7 @@ fn base_add() -> RemoteLogSegmentMetadata {
         100, // max_timestamp_ms
         42,  // broker_id
         123,
-        crabka_remote_storage::RemoteLogSegmentDetails::new(
+        krabka_remote_storage::RemoteLogSegmentDetails::new(
             // event_timestamp_ms
             4096, // segment_size_in_bytes
             RemoteLogSegmentState::CopySegmentStarted,

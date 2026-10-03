@@ -3,9 +3,9 @@
 //! through the committer.
 use std::sync::Arc;
 
-use crabka_pgexec::{Committer, ExecError, Linearizer, SqlEngine};
-use crabka_pgkv::{Kv, MemKv, WriteOp};
-use crabka_pgwire::engine::{Engine, QueryResult, Session};
+use krabka_pgexec::{Committer, ExecError, Linearizer, SqlEngine};
+use krabka_pgkv::{Kv, MemKv, WriteOp};
+use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
 /// Commits directly to a shared in-memory KV. It stands in for
 /// `RaftCommitter`.

@@ -12,7 +12,7 @@ use super::*;
 pub(crate) async fn execute_write(
     write_ctx: &WriteContext<'_>,
     stmt: &Statement,
-) -> Result<(QueryResult, Vec<crabka_pgkv::WriteOp>), ExecError> {
+) -> Result<(QueryResult, Vec<krabka_pgkv::WriteOp>), ExecError> {
     crate::srf::reject_write_calls(stmt)?;
     let span = execute_write_span(write_ctx, stmt);
     let triggers_before = crate::trigger::fired_count();
@@ -74,7 +74,7 @@ fn execute_write_span(write_ctx: &WriteContext<'_>, stmt: &Statement) -> tracing
             write_ctx.fctx.resolution,
             relation,
             SchemaDisposition::Reference,
-        ) && let Ok(table) = crabka_pgcatalog::get_table(write_ctx.catalog_kv, &resolved)
+        ) && let Ok(table) = krabka_pgcatalog::get_table(write_ctx.catalog_kv, &resolved)
         {
             span.record("pg.table_id", crate::telemetry::integer(table.id));
         }
@@ -124,11 +124,11 @@ async fn execute_write_with_ctes(
     ctes: &crate::cte::CteContext,
     stmt: &Statement,
     writes: &mut StatementWrites,
-) -> Result<(WriteOutcome, Vec<crabka_pgkv::WriteOp>), ExecError> {
+) -> Result<(WriteOutcome, Vec<krabka_pgkv::WriteOp>), ExecError> {
     let mut statement_triggers = Vec::new();
     if let Some(with) = statement_with_clause(stmt) {
         for cte in &with.ctes {
-            if let crabka_pgparser::ast::CteBody::Dml(dml) = &cte.body {
+            if let krabka_pgparser::ast::CteBody::Dml(dml) = &cte.body {
                 statement_triggers.extend(statement_trigger_targets(write_ctx, dml)?);
             }
         }
@@ -139,7 +139,7 @@ async fn execute_write_with_ctes(
             write_ctx.catalog_kv,
             table,
             *event,
-            crabka_pgcatalog::trigger::TriggerTiming::Before,
+            krabka_pgcatalog::trigger::TriggerTiming::Before,
             updated,
             write_ctx.eval_ctx,
         )?;
@@ -153,7 +153,7 @@ async fn execute_write_with_ctes(
             write_ctx.catalog_kv,
             table,
             *event,
-            crabka_pgcatalog::trigger::TriggerTiming::After,
+            krabka_pgcatalog::trigger::TriggerTiming::After,
             updated,
             write_ctx.eval_ctx,
         )?;
@@ -176,8 +176,8 @@ async fn execute_write_with_ctes(
 pub(super) fn truncate_names(
     kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
-    targets: &[crabka_pgparser::ast::TruncateTarget],
-) -> Result<Vec<crabka_pgparser::ast::RelationRef>, ExecError> {
+    targets: &[krabka_pgparser::ast::TruncateTarget],
+) -> Result<Vec<krabka_pgparser::ast::RelationRef>, ExecError> {
     let mut out = Vec::with_capacity(targets.len());
     let mut seen = HashSet::new();
     for target in targets {
@@ -197,7 +197,7 @@ pub(super) fn truncate_names(
         }
         for relation in tree {
             if seen.insert(relation.clone()) {
-                out.push(crabka_pgparser::ast::RelationRef::qualified(
+                out.push(krabka_pgparser::ast::RelationRef::qualified(
                     &relation.schema,
                     &relation.name,
                 ));
@@ -244,7 +244,7 @@ fn statement_trigger_targets(
                 // target has to be refused here or it is reported as missing.
                 match truncate_wrong_kind(write_ctx.catalog_kv, name) {
                     Some(error) => Err(error),
-                    None => Ok(crabka_pgcatalog::get_table(write_ctx.catalog_kv, name)?),
+                    None => Ok(krabka_pgcatalog::get_table(write_ctx.catalog_kv, name)?),
                 }
             })
             .collect::<Result<Vec<_>, ExecError>>()?;
@@ -259,8 +259,8 @@ fn statement_trigger_targets(
     if let Statement::Insert {
         table,
         on_conflict:
-            Some(crabka_pgparser::ast::OnConflict {
-                action: crabka_pgparser::ast::OnConflictAction::DoUpdate { assignments, .. },
+            Some(krabka_pgparser::ast::OnConflict {
+                action: krabka_pgparser::ast::OnConflictAction::DoUpdate { assignments, .. },
                 ..
             }),
         ..
@@ -298,9 +298,9 @@ fn statement_trigger_targets(
         let mut updated = Vec::new();
         for clause in clauses {
             match &clause.action {
-                crabka_pgparser::ast::MergeAction::Insert { .. } => insert = true,
-                crabka_pgparser::ast::MergeAction::Delete => delete = true,
-                crabka_pgparser::ast::MergeAction::Update(assignments) => {
+                krabka_pgparser::ast::MergeAction::Insert { .. } => insert = true,
+                krabka_pgparser::ast::MergeAction::Delete => delete = true,
+                krabka_pgparser::ast::MergeAction::Update(assignments) => {
                     for column in assignments
                         .iter()
                         .flat_map(|assignment| assignment.targets.iter())
@@ -310,7 +310,7 @@ fn statement_trigger_targets(
                         }
                     }
                 }
-                crabka_pgparser::ast::MergeAction::DoNothing => {}
+                krabka_pgparser::ast::MergeAction::DoNothing => {}
             }
         }
         let mut targets = Vec::new();
@@ -347,7 +347,7 @@ fn statement_trigger_targets(
         SchemaDisposition::Reference,
     )?;
     let table = crate::trigger::relation_trigger_table(write_ctx.catalog_kv, &name)?;
-    if crabka_pgcatalog::get_view(write_ctx.catalog_kv, &name).is_ok()
+    if krabka_pgcatalog::get_view(write_ctx.catalog_kv, &name).is_ok()
         && !crate::trigger::has_instead_row_trigger(
             write_ctx.catalog_kv,
             table.id,
@@ -383,7 +383,7 @@ async fn execute_write_parts(
     ctes: &crate::cte::CteContext,
     stmt: &Statement,
     writes: &mut StatementWrites,
-) -> Result<(WriteOutcome, Vec<crabka_pgkv::WriteOp>), ExecError> {
+) -> Result<(WriteOutcome, Vec<krabka_pgkv::WriteOp>), ExecError> {
     let Some(with) = statement_with_clause(stmt) else {
         return execute_write_body(write_ctx, ctes, stmt, writes, Reach::of(stmt)).await;
     };
@@ -395,11 +395,11 @@ async fn execute_write_parts(
     let mut deferred = Vec::new();
     for (index, cte) in with.ctes.iter().enumerate() {
         let rel = match &cte.body {
-            crabka_pgparser::ast::CteBody::Query(_) => {
+            krabka_pgparser::ast::CteBody::Query(_) => {
                 let read = write_ctx.read_ctx(&scope);
                 crate::cte::evaluate_cte_relation(&read, cte, with.recursive, &scope)?
             }
-            crabka_pgparser::ast::CteBody::Dml(dml) => {
+            krabka_pgparser::ast::CteBody::Dml(dml) => {
                 reject_unsupported_rule_for_data_modifying_cte(write_ctx, dml)?;
                 if !cte_is_referenced(with, &body, index, &cte.name) {
                     // Nothing demands its rows, so it runs after the body.
@@ -456,7 +456,7 @@ fn reject_unsupported_rule_for_data_modifying_cte(
     write_ctx: &WriteContext<'_>,
     stmt: &Statement,
 ) -> Result<(), ExecError> {
-    use crabka_pgcatalog::rule::RuleEvent;
+    use krabka_pgcatalog::rule::RuleEvent;
 
     let (reference, event) = match stmt {
         Statement::Insert { table, .. } => (table, RuleEvent::Insert),
@@ -470,8 +470,8 @@ fn reject_unsupported_rule_for_data_modifying_cte(
         reference,
         SchemaDisposition::Reference,
     )?;
-    let table = crabka_pgcatalog::get_table(write_ctx.catalog_kv, &table)?;
-    for rule in crabka_pgcatalog::rule::rules_for_table(write_ctx.catalog_kv, table.id)? {
+    let table = krabka_pgcatalog::get_table(write_ctx.catalog_kv, &table)?;
+    for rule in krabka_pgcatalog::rule::rules_for_table(write_ctx.catalog_kv, table.id)? {
         if rule.event != event || !rule_is_enabled(rule.enabled) {
             continue;
         }
@@ -497,7 +497,7 @@ fn reject_unsupported_rule_for_data_modifying_cte(
             .strip_prefix('(')
             .and_then(|action| action.strip_suffix(')'))
             .unwrap_or(&rule.action);
-        let actions = crabka_pgparser::parse(action)?;
+        let actions = krabka_pgparser::parse(action)?;
         if actions.len() > 1 {
             return Err(ExecError::Unsupported(
                 "multi-statement DO INSTEAD rules are not supported for data-modifying statements in WITH"
@@ -513,7 +513,7 @@ fn reject_unsupported_rule_for_data_modifying_cte(
             }
             [
                 Statement::Insert {
-                    source: crabka_pgparser::ast::InsertSource::Query(_),
+                    source: krabka_pgparser::ast::InsertSource::Query(_),
                     ..
                 },
             ] => {
@@ -531,7 +531,7 @@ fn reject_unsupported_rule_for_data_modifying_cte(
 /// Whether anything after `WITH` item `index` names it: a later item, or the
 /// statement body.
 fn cte_is_referenced(
-    with: &crabka_pgparser::ast::WithClause,
+    with: &krabka_pgparser::ast::WithClause,
     stmt: &Statement,
     index: usize,
     name: &str,
@@ -539,17 +539,17 @@ fn cte_is_referenced(
     with.ctes[index + 1..]
         .iter()
         .any(|later| match &later.body {
-            crabka_pgparser::ast::CteBody::Query(query) => {
+            krabka_pgparser::ast::CteBody::Query(query) => {
                 crate::cte::query_references(query, name)
             }
-            crabka_pgparser::ast::CteBody::Dml(dml) => statement_references_relation(dml, name),
+            krabka_pgparser::ast::CteBody::Dml(dml) => statement_references_relation(dml, name),
         })
         || statement_references_relation(stmt, name)
 }
 
 /// Whether a statement's relation positions name `name`.
 fn statement_references_relation(stmt: &Statement, name: &str) -> bool {
-    use crabka_pgparser::ast::{CreateAsSource, InsertSource, MergeSource};
+    use krabka_pgparser::ast::{CreateAsSource, InsertSource, MergeSource};
     match stmt {
         Statement::Query(query) => crate::cte::query_references(query, name),
         Statement::CreateTableAs { source, .. } => match source {
@@ -572,8 +572,8 @@ fn statement_references_relation(stmt: &Statement, name: &str) -> bool {
     }
 }
 
-fn table_expr_references(item: &crabka_pgparser::ast::TableExpr, name: &str) -> bool {
-    use crabka_pgparser::ast::TableExpr;
+fn table_expr_references(item: &krabka_pgparser::ast::TableExpr, name: &str) -> bool {
+    use krabka_pgparser::ast::TableExpr;
     match item {
         TableExpr::Table { name: source, .. } => source.name == *name,
         TableExpr::Derived { subquery, .. } => crate::cte::query_references(subquery, name),
@@ -585,11 +585,11 @@ fn table_expr_references(item: &crabka_pgparser::ast::TableExpr, name: &str) -> 
 }
 
 /// The `WITH` list attached to a statement, when it has one.
-pub(crate) fn statement_with_clause(stmt: &Statement) -> Option<&crabka_pgparser::ast::WithClause> {
+pub(crate) fn statement_with_clause(stmt: &Statement) -> Option<&krabka_pgparser::ast::WithClause> {
     match stmt {
         Statement::Query(q) => q.with.as_ref(),
         Statement::CreateTableAs {
-            source: crabka_pgparser::ast::CreateAsSource::Query(query),
+            source: krabka_pgparser::ast::CreateAsSource::Query(query),
             ..
         } => query.with.as_ref(),
         Statement::Insert { with, .. }
@@ -607,7 +607,7 @@ fn statement_without_with(stmt: &Statement) -> Statement {
     match &mut stmt {
         Statement::Query(q) => q.with = None,
         Statement::CreateTableAs {
-            source: crabka_pgparser::ast::CreateAsSource::Query(query),
+            source: krabka_pgparser::ast::CreateAsSource::Query(query),
             ..
         } => query.with = None,
         Statement::Insert { with, .. }
@@ -631,7 +631,7 @@ pub(super) fn resolve_write_subqueries(
     ctes: &crate::cte::CteContext,
     stmt: &Statement,
 ) -> Result<Statement, ExecError> {
-    use crabka_pgparser::ast::{
+    use krabka_pgparser::ast::{
         AssignmentValue, InsertSource, MergeAction, OnConflictAction, Returning, SelectItem,
     };
 
@@ -641,7 +641,7 @@ pub(super) fn resolve_write_subqueries(
         expr.as_ref().map(&resolve).transpose()
     };
     let resolve_assignments =
-        |assignments: &mut Vec<crabka_pgparser::ast::Assignment>| -> Result<(), ExecError> {
+        |assignments: &mut Vec<krabka_pgparser::ast::Assignment>| -> Result<(), ExecError> {
             for assignment in assignments {
                 match &mut assignment.value {
                     AssignmentValue::Expr(expr) => *expr = resolve(expr)?,
@@ -674,7 +674,7 @@ pub(super) fn resolve_write_subqueries(
     // statement runs when the insert collides. They are ordinary write-side
     // expressions and fold like `UPDATE`'s own.
     let resolve_on_conflict =
-        |on_conflict: &mut Option<crabka_pgparser::ast::OnConflict>| -> Result<(), ExecError> {
+        |on_conflict: &mut Option<krabka_pgparser::ast::OnConflict>| -> Result<(), ExecError> {
             let Some(on_conflict) = on_conflict.as_mut() else {
                 return Ok(());
             };

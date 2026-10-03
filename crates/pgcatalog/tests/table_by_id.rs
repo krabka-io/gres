@@ -1,12 +1,12 @@
 use assert2::assert;
-use crabka_pgcatalog::{
+use krabka_pgcatalog::{
     BOOTSTRAP_ROLE, CatalogError, Column, RelationName, Table, TableCreation, TableId,
     TableIdSource, TableOptions, create_fdw, create_foreign_table, create_schema_ops,
     create_server, create_table_ops, create_table_with_options_ops, drop_table_ops, get_table,
     read_next_table_id, relation_name_of, rename_table_ops, set_next_table_id_op, table_by_id,
 };
-use crabka_pgkv::{Kv, MemKv, WriteOp};
-use crabka_pgtypes::ColumnType;
+use krabka_pgkv::{Kv, MemKv, WriteOp};
+use krabka_pgtypes::ColumnType;
 
 fn columns() -> Vec<Column> {
     vec![
@@ -200,7 +200,7 @@ fn table_id_source_decides_whether_the_shared_counter_moves() {
             },
         )
         .expect("create table ops");
-        let counter_key = crabka_pgkv::key::meta_next_table_id_key();
+        let counter_key = krabka_pgkv::key::meta_next_table_id_key();
         let counter_writes = ops.iter().filter(|op| op_key(op) == counter_key).count();
         apply(&kv, &ops);
 

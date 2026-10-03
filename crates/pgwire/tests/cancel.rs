@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use crabka_pgwire::{session::SessionConfig, stub::StubEngine};
+use krabka_pgwire::{session::SessionConfig, stub::StubEngine};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
@@ -58,7 +58,7 @@ fn error_sqlstate(body: &[u8]) -> Option<String> {
 async fn cancel_request_interrupts_running_query() {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
-    tokio::spawn(crabka_pgwire::server::serve(
+    tokio::spawn(krabka_pgwire::server::serve(
         listener,
         Arc::new(StubEngine::new()),
         Arc::new(SessionConfig::trust()),
@@ -93,7 +93,7 @@ async fn cancel_request_interrupts_running_query() {
 async fn wrong_cancel_key_is_ignored() {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
-    tokio::spawn(crabka_pgwire::server::serve(
+    tokio::spawn(krabka_pgwire::server::serve(
         listener,
         Arc::new(StubEngine::new()),
         Arc::new(SessionConfig::trust()),
@@ -137,7 +137,7 @@ async fn wrong_cancel_key_is_ignored() {
 async fn cancel_while_idle_does_not_poison_next_query() {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
-    tokio::spawn(crabka_pgwire::server::serve(
+    tokio::spawn(krabka_pgwire::server::serve(
         listener,
         Arc::new(StubEngine::new()),
         Arc::new(SessionConfig::trust()),
@@ -190,7 +190,7 @@ async fn cancel_while_idle_does_not_poison_next_query() {
 async fn cancel_during_extended_batch_window_cancels_next_execute() {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
-    tokio::spawn(crabka_pgwire::server::serve(
+    tokio::spawn(krabka_pgwire::server::serve(
         listener,
         Arc::new(StubEngine::new()),
         Arc::new(SessionConfig::trust()),

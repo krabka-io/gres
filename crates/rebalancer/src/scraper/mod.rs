@@ -11,7 +11,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crabka_units::{fmt::Human as _, prelude::*};
+use krabka_units::{fmt::Human as _, prelude::*};
 pub use parse::{MetricKind, ParsedSample};
 pub use targets::{ScrapeTarget, TargetParseError, TargetSource, parse_targets};
 use tokio_util::sync::CancellationToken;
@@ -220,7 +220,7 @@ enum Outcome {
 mod tests {
     use std::collections::BTreeSet;
 
-    use crabka_units::prelude::*;
+    use krabka_units::prelude::*;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     use super::*;
@@ -362,7 +362,7 @@ mod tests {
 
     #[tokio::test]
     async fn tick_once_inserts_samples_only_on_success_status() {
-        let metric_body = "crabka_broker_partition_disk_bytes{topic=\"t\",partition=\"0\"} 42\n";
+        let metric_body = "krabka_broker_partition_disk_bytes{topic=\"t\",partition=\"0\"} 42\n";
 
         let failed_addr = one_response_server("500 Internal Server Error", metric_body).await;
         let failed_store = Arc::new(UsageStore::new(WindowConfig {

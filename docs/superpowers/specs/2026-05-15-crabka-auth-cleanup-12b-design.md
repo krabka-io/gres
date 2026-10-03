@@ -24,8 +24,8 @@ Slice 12 shipped TLS + SASL across the broker's data plane,
 inter-broker replication, and controller heartbeat. Two pieces were
 deferred:
 
-- The `OutboundDialer` trait abstraction landed in `crabka-raft`
-  alongside an `InterBrokerDialer` adapter in `crabka-broker`, but
+- The `OutboundDialer` trait abstraction landed in `krabka-raft`
+  alongside an `InterBrokerDialer` adapter in `krabka-broker`, but
   `ControllerConfig::dialer` is injected as `None` in slice 12 — so
   raft RPC still uses raw `TcpStream::connect` on outbound and the
   controller's listener accepts raw `TcpStream` on inbound. The
@@ -44,9 +44,9 @@ The scope is exclusively wiring + config + tests.
 
 | Crate | Change |
 |-------|--------|
-| `crabka-broker` | `controller_listener_protocol` on `BrokerConfig`; new `raft_handshake.rs` module; bootstrap-records loader; `Broker::start` wires both. |
-| `crabka-raft` | `RaftListenerHandshake` trait + `ControllerConfig::handshake` slot. No behavior change when slot is `None`. |
-| `crabka-cli` | No code change — its slice-12 output is now consumed for the first time. |
+| `krabka-broker` | `controller_listener_protocol` on `BrokerConfig`; new `raft_handshake.rs` module; bootstrap-records loader; `Broker::start` wires both. |
+| `krabka-raft` | `RaftListenerHandshake` trait + `ControllerConfig::handshake` slot. No behavior change when slot is `None`. |
+| `krabka-cli` | No code change — its slice-12 output is now consumed for the first time. |
 
 ### Controller listener protocol
 
@@ -196,7 +196,7 @@ fn load_bootstrap_records(
 }
 ```
 
-Matches the framing `crabka-cli`'s format subcommand wrote in slice 12.
+Matches the framing `krabka-cli`'s format subcommand wrote in slice 12.
 
 The records are appended to the initial `submit_change` batch *after*
 the `V1ClusterId` record. openraft applies them in order; the metadata
@@ -210,7 +210,7 @@ truth.
 
 ## Components
 
-### `crabka-broker`
+### `krabka-broker`
 
 - `config.rs`:
   - `pub controller_listener_protocol: ListenerProtocol` field (default `Plaintext`).
@@ -231,7 +231,7 @@ truth.
     - Build `InterBrokerDialer` and assign to `controller_config.dialer`.
     - Call `load_bootstrap_records` on the bootstrap branch; chain into the initial `submit_change`.
 
-### `crabka-raft`
+### `krabka-raft`
 
 - `config.rs`:
   - `pub handshake: Option<Arc<dyn RaftListenerHandshake>>` on `ControllerConfig`.
@@ -242,7 +242,7 @@ truth.
   - `pub use network::{RaftListenerHandshake, RaftHandshakeError};` (exposed so the broker can implement the trait).
 - Pre-existing PLAINTEXT-only multi-broker tests must keep passing. The `handshake = None` default preserves behavior.
 
-### `crabka-cli`
+### `krabka-cli`
 
 No code change. Slice 12's `format --add-scram` already produces the
 file shape the new loader expects.
@@ -312,7 +312,7 @@ No new variants — both reuse slice 12's error types.
 
 ### Unit tests
 
-`crabka-broker`:
+`krabka-broker`:
 
 - `raft_handshake::tests::plaintext_passthrough` — `BrokerRaftHandshake { protocol: Plaintext, .. }` returns the raw stream wrapped. In-process `tokio::io::duplex()` pair; no TCP.
 - `raft_handshake::tests::sasl_plain_rejects_bad_password` — drive handshake in-process, send bad PLAIN creds, expect connection close.

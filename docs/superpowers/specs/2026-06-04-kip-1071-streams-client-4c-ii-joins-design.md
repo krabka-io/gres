@@ -143,7 +143,7 @@ capture): one subtopology with `source_topics: ["left","right"]` (sorted),
 - `KStream::join`/`left_join` against a materialized KTable work (execution) and the
   join topology byte-matches captured JVM 4.1 output (incl. `copartition_groups`).
 - The 6 prior golden frames unchanged.
-- `cargo test -p crabka-client-streams` green; `cargo clippy --workspace
+- `cargo test -p krabka-client-streams` green; `cargo clippy --workspace
   --all-targets -- -D warnings` + `cargo fmt --check` clean; `cargo build
   --workspace`.
 - A documented join example/doctest in `lib.rs`.

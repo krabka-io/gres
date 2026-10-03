@@ -1,6 +1,6 @@
 mod harness;
 
-use crabka_gres_ranges::RangeId;
+use krabka_gres_ranges::RangeId;
 use harness::{FaultEvent, SystemHarness, TableAccount, process::ProcessHarness};
 
 #[tokio::test]

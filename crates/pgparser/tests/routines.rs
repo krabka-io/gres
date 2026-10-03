@@ -2,7 +2,7 @@
 //! `PROCEDURE` and `ROUTINE`, plus `CALL` and `DO`.
 
 use assert2::assert;
-use crabka_pgparser::{
+use krabka_pgparser::{
     ast::{
         AlterRoutineAction, CreateRoutineStmt, RoutineArg, RoutineArgMode, RoutineBody,
         RoutineObject, RoutineOption, RoutineParallel, RoutineReturn, RoutineSignature,
@@ -11,7 +11,7 @@ use crabka_pgparser::{
     command::CommandIdentity,
     parse, parse_with_command_identities,
 };
-use crabka_pgtypes::ColumnType;
+use krabka_pgtypes::ColumnType;
 
 fn one(sql: &str) -> Statement {
     let mut statements = parse(sql).unwrap_or_else(|e| panic!("{sql}: {}", e.message));
@@ -389,8 +389,8 @@ fn parses_call_and_do() {
             == Statement::Call {
                 name: "p".into(),
                 args: vec![
-                    crabka_pgparser::ast::Expr::IntLiteral("1".into()),
-                    crabka_pgparser::ast::Expr::StringLiteral("x".into()),
+                    krabka_pgparser::ast::Expr::IntLiteral("1".into()),
+                    krabka_pgparser::ast::Expr::StringLiteral("x".into()),
                 ],
                 named_args: Vec::new(),
                 variadic: None,

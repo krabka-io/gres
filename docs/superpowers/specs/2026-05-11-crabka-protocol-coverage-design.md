@@ -1,15 +1,15 @@
-# crabka-protocol Coverage — Design
+# krabka-protocol Coverage — Design
 
 **Status:** Draft for review
 **Date:** 2026-05-11
 **Author:** Matthew Stone (with Claude)
-**Predecessor:** [`2026-05-10-crabka-rust-rewrite-design.md`](2026-05-10-crabka-rust-rewrite-design.md) (project meta-spec) and [`2026-05-10-crabka-protocol-foundation.md`](../plans/2026-05-10-crabka-protocol-foundation.md) (foundation plan, now shipped).
+**Predecessor:** [`2026-05-10-krabka-rust-rewrite-design.md`](2026-05-10-krabka-rust-rewrite-design.md) (project meta-spec) and [`2026-05-10-krabka-protocol-foundation.md`](../plans/2026-05-10-krabka-protocol-foundation.md) (foundation plan, now shipped).
 
 ## Summary
 
-`crabka-protocol-coverage` takes `crabka-protocol` from "ApiVersions works,
+`krabka-protocol-coverage` takes `krabka-protocol` from "ApiVersions works,
 nothing else does" to "every Kafka 4.2 message encodes and decodes
-byte-equivalent to the JVM," adds a companion `crabka-compression` crate
+byte-equivalent to the JVM," adds a companion `krabka-compression` crate
 covering the four wire codecs (gzip, snappy, lz4, zstd), introduces a
 typed `RecordBatch` v2 decoder, and ships `0.1.0` of both crates to
 crates.io.
@@ -28,7 +28,7 @@ conversion, type mapping, and emitter abstractions.
 ## North star (acceptance gate for the slice)
 
 1. All 197 vendored Kafka 4.2 schemas have generated owned + borrowed
-   types in `crabka-protocol`.
+   types in `krabka-protocol`.
 2. Every supported `(api_key, version)` pair passes the three JVM-
    differential checks (JVM→Rust, Rust→JVM, byte-equality) at PR-CI
    budget (100 cases per pair) and nightly budget (10,000 cases per
@@ -36,15 +36,15 @@ conversion, type mapping, and emitter abstractions.
 3. Every known tagged field is decoded into a typed Rust field.
    `unknown_tagged_fields` only carries tags absent from the schema.
 4. `RECORDS` and `COMPACT_RECORDS` fields decode to a typed
-   `RecordBatch` (v2) with compression handled via `crabka-compression`.
-5. `crabka-protocol` 0.1.0 and `crabka-compression` 0.1.0 published to
+   `RecordBatch` (v2) with compression handled via `krabka-compression`.
+5. `krabka-protocol` 0.1.0 and `krabka-compression` 0.1.0 published to
    crates.io.
 6. CI matrix green on Linux/macOS/Windows × Rust 1.95.0.
 
 ## Non-goals
 
 - Pre-v2 record batches (v0/v1). Kafka 0.11+ writes only v2; legacy
-  reads belong to `crabka-log` (project meta-spec slice 3).
+  reads belong to `krabka-log` (project meta-spec slice 3).
 - Stream processing (Streams) or connector framework (Connect). These
   are separate products in the project meta-spec.
 - Public API stability past 0.1.0. Minor-version breaks are allowed
@@ -57,7 +57,7 @@ Five sub-plans, ordered by dependency:
 
 ```
 1a codegen generalization      ─┐
-1b crabka-compression           ├── independent, parallelizable
+1b krabka-compression           ├── independent, parallelizable
 1c typed RecordBatch in proto   ├── needs 1a + 1b
 1d mass rollout + diff sweep    ├── needs 1a, 1c
 1e 0.1.0 publish prep           └── needs 1d green
@@ -65,11 +65,11 @@ Five sub-plans, ordered by dependency:
 
 | # | Sub-plan | Crates touched | Done means |
 |---|---|---|---|
-| 1a | Codegen generalization | `crabka-protocol-codegen`, `crabka-protocol` (curated representative schemas) | Emitters handle every IR construct used by 4.2 schemas: arrays of primitives, arrays of structs, nested struct types, all 11 primitive types found in the schemas, every declared tagged field as a typed field. Snapshot tests pass for a curated 5–8 message set spanning all shapes; codegen IR validation accepts every 4.2 schema; mass rollout is *not* turned on yet. |
-| 1b | `crabka-compression` | new `crabka-compression` crate | Pure-Rust where viable (flate2 with `rust_backend`, `snap`, `lz4_flex`; `zstd` C-backed). Encode + decode for gzip, snappy, lz4, zstd, each behind a default-enabled feature flag. Differential tests against the JVM `org.apache.kafka.common.utils.*` codecs via a Java sidecar. |
-| 1c | Typed `RecordBatch` v2 | `crabka-protocol` | New `records` module with `RecordBatch` v2 (header fields, CRC-32C, attributes including compression, base offset/sequence, producer ID/epoch) and `Vec<Record>`. Eager decompression via 1b on decode, eager recompression on encode. JVM-differential per compression codec. |
-| 1d | Mass rollout | `crabka-protocol`, `crabka-protocol-codegen` | All 197 schemas turned on. Every `(api_key, version)` pair passes the three diff checks at PR-CI budget. Captured-traffic corpus grows to at least one entry per realistically capturable pair (synthetic OK with the existing `synthetic = true` flag). `KNOWN_ISSUES.md` enumerates any deliberate exclusions with rationale. |
-| 1e | 0.1.0 publish | `crabka-protocol`, `crabka-compression` | crates.io metadata, `cargo deny` clean, `cargo semver-checks` set up, `cargo publish --dry-run` clean, `CHANGELOG.md` with `[0.1.0]` entry, docs.rs builds clean for both, GitHub `v0.1.0` release tagged. Both crates installable via `cargo add`. |
+| 1a | Codegen generalization | `krabka-protocol-codegen`, `krabka-protocol` (curated representative schemas) | Emitters handle every IR construct used by 4.2 schemas: arrays of primitives, arrays of structs, nested struct types, all 11 primitive types found in the schemas, every declared tagged field as a typed field. Snapshot tests pass for a curated 5–8 message set spanning all shapes; codegen IR validation accepts every 4.2 schema; mass rollout is *not* turned on yet. |
+| 1b | `krabka-compression` | new `krabka-compression` crate | Pure-Rust where viable (flate2 with `rust_backend`, `snap`, `lz4_flex`; `zstd` C-backed). Encode + decode for gzip, snappy, lz4, zstd, each behind a default-enabled feature flag. Differential tests against the JVM `org.apache.kafka.common.utils.*` codecs via a Java sidecar. |
+| 1c | Typed `RecordBatch` v2 | `krabka-protocol` | New `records` module with `RecordBatch` v2 (header fields, CRC-32C, attributes including compression, base offset/sequence, producer ID/epoch) and `Vec<Record>`. Eager decompression via 1b on decode, eager recompression on encode. JVM-differential per compression codec. |
+| 1d | Mass rollout | `krabka-protocol`, `krabka-protocol-codegen` | All 197 schemas turned on. Every `(api_key, version)` pair passes the three diff checks at PR-CI budget. Captured-traffic corpus grows to at least one entry per realistically capturable pair (synthetic OK with the existing `synthetic = true` flag). `KNOWN_ISSUES.md` enumerates any deliberate exclusions with rationale. |
+| 1e | 0.1.0 publish | `krabka-protocol`, `krabka-compression` | crates.io metadata, `cargo deny` clean, `cargo semver-checks` set up, `cargo publish --dry-run` clean, `CHANGELOG.md` with `[0.1.0]` entry, docs.rs builds clean for both, GitHub `v0.1.0` release tagged. Both crates installable via `cargo add`. |
 
 Each sub-plan gets its own brainstorm → plan → execute cycle. This
 document only details 1a below.
@@ -212,7 +212,7 @@ have one). The set is "tested in 1a"; the rest are tested in 1d.
 
 The sub-plan ships when **all** of these hold:
 
-1. `cargo run -p crabka-protocol-codegen -- ...` with the curated
+1. `cargo run -p krabka-protocol-codegen -- ...` with the curated
    message list emits compiling Rust source for every name in the list,
    owned + borrowed.
 2. Snapshot tests for the curated set pass; `UPDATE_SNAPSHOTS=1` is
@@ -224,7 +224,7 @@ The sub-plan ships when **all** of these hold:
 5. IR validator accepts all 197 vendored 4.2 schemas (i.e., the
    emitter could in principle be asked to generate any of them; we
    just choose not to until 1d).
-6. `ApiKey` enum generated and re-exported from `crabka-protocol`'s
+6. `ApiKey` enum generated and re-exported from `krabka-protocol`'s
    crate root, listing every (request, response) pair in the 4.2
    schemas with their version ranges in rustdoc.
 7. `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test
@@ -237,9 +237,9 @@ The sub-plan ships when **all** of these hold:
 These apply to the slice as a whole; surfacing here so they are not
 re-litigated per sub-plan.
 
-## `crabka-compression` crate boundary
+## `krabka-compression` crate boundary
 
-- **Separate crate, not a feature of `crabka-protocol`.** Compression
+- **Separate crate, not a feature of `krabka-protocol`.** Compression
   has a real C-dependency risk (zstd). Isolation keeps the protocol
   crate light and lets downstream consumers swap codecs.
 - **Per-codec features.** Default features enable all four (`gzip`,
@@ -255,7 +255,7 @@ re-litigated per sub-plan.
 
 ## Typed `RecordBatch` shape (1c)
 
-- **v2 only.** Reading legacy v0/v1 batches is a `crabka-log` (slice
+- **v2 only.** Reading legacy v0/v1 batches is a `krabka-log` (slice
   3) concern.
 - **CRC validation on decode, regeneration on encode.** Kafka uses
   CRC-32C (Castagnoli) for v2; the `crc32c` crate provides it.
@@ -300,7 +300,7 @@ re-litigated per sub-plan.
   breaking API changes that aren't reflected in a version bump.
 - **MSRV policy:** documented in `CHANGELOG.md`; current MSRV is
   1.95.0.
-- **Publish order:** `crabka-compression` 0.1.0 first; `crabka-protocol`
+- **Publish order:** `krabka-compression` 0.1.0 first; `krabka-protocol`
   0.1.0 then references it via the published version. No path
   dependencies in the published manifests.
 
@@ -332,9 +332,9 @@ The coverage slice ships when **all** of the following hold:
    typed Rust field; `unknown_tagged_fields` only carries tags absent
    from the schema.
 5. `RECORDS` / `COMPACT_RECORDS` decode to a typed `RecordBatch` v2
-   with compression handled via `crabka-compression`; JVM-differential
+   with compression handled via `krabka-compression`; JVM-differential
    per codec.
-6. `crabka-compression` exposes encode + decode for gzip, snappy, lz4,
+6. `krabka-compression` exposes encode + decode for gzip, snappy, lz4,
    zstd behind per-codec features, default-enabled.
 7. A central `ApiKey` enum lists every (request, response) pair with
    their version ranges; documented in rustdoc.
@@ -357,8 +357,8 @@ The coverage slice ships when **all** of the following hold:
 11. `cargo deny check` passes on advisories, bans, sources, licenses.
 12. `cargo semver-checks check-release` passes (no-op for the initial
     publish; gating for subsequent releases).
-13. `cargo publish --dry-run` succeeds for both `crabka-compression`
-    and `crabka-protocol`.
+13. `cargo publish --dry-run` succeeds for both `krabka-compression`
+    and `krabka-protocol`.
 14. `cargo doc --no-deps` for both crates builds with zero warnings.
 15. `CHANGELOG.md` exists at repo root with a `[0.1.0]` entry
     summarizing the slice.
@@ -376,9 +376,9 @@ The coverage slice ships when **all** of the following hold:
 
 ## Public artifacts
 
-20. `crabka-compression` 0.1.0 published to crates.io.
-21. `crabka-protocol` 0.1.0 published to crates.io, depending on
-    `crabka-compression = "0.1"`.
+20. `krabka-compression` 0.1.0 published to crates.io.
+21. `krabka-protocol` 0.1.0 published to crates.io, depending on
+    `krabka-compression = "0.1"`.
 22. GitHub release tagged `v0.1.0` with notes pointing at the design
     spec and `CHANGELOG.md`.
 23. docs.rs builds clean for both crates.
@@ -400,7 +400,7 @@ The coverage slice ships when **all** of the following hold:
   helper trait.
 - **1d:** which pairs end up in `KNOWN_ISSUES.md` (cannot be known
   until 1d is run).
-- **1e:** whether `crabka-protocol` re-exports `crabka-compression` or
+- **1e:** whether `krabka-protocol` re-exports `krabka-compression` or
   consumers must depend on both. Re-exporting simplifies common usage
   but couples the public APIs.
 

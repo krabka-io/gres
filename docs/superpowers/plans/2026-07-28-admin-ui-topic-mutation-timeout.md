@@ -16,11 +16,11 @@
 ## Global Constraints
 
 - Preserve the exact 30,000-millisecond default.
-- `--topic-mutation-timeout-ms` overrides `CRABKA_ADMIN_UI_TOPIC_MUTATION_TIMEOUT_MS`.
+- `--topic-mutation-timeout-ms` overrides `KRABKA_ADMIN_UI_TOPIC_MUTATION_TIMEOUT_MS`.
 - Reject zero, malformed, negative, and `i32` overflow values before listener or broker I/O.
 - Use one shared setting for create-topic, delete-topic, and create-partitions requests.
 - Preserve authentication, request validation, outcome mapping, and `NOT_CONTROLLER` retry behavior.
-- Add no CRD or operator field because no checked-in Kubernetes owner deploys `crabka-admin-ui`.
+- Add no CRD or operator field because no checked-in Kubernetes owner deploys `krabka-admin-ui`.
 - Do not migrate unrelated existing admin UI settings.
 - Any crate in the repository may add the existing workspace-pinned `refined_type` dependency when it owns a validated newtype.
 - This slice adds no dependency and must not change `Cargo.lock`.
@@ -60,7 +60,7 @@
 Extend the imports in `crates/admin-ui/tests/config.rs`:
 
 ```rust
-use crabka_admin_ui::config::{
+use krabka_admin_ui::config::{
     AdminUiConfig, AdminUiRuntimeArgs, BrokerSecurityConfig, ConfigError,
     DEFAULT_MUTATION_JSON_BODY_LIMIT_BYTES, MutationJsonBodyLimitBytes,
     SessionTtlSeconds, TopicMutationTimeoutMs,
@@ -95,7 +95,7 @@ fn topic_mutation_timeout_rejects_invalid_values() {
     for invalid in ["0", "not-a-number", "-1", overflowing.as_str()] {
         assert!(
             AdminUiRuntimeArgs::try_parse_from([
-                "crabka-admin-ui",
+                "krabka-admin-ui",
                 "--topic-mutation-timeout-ms",
                 invalid,
             ])
@@ -111,8 +111,8 @@ fn topic_mutation_timeout_environment_and_cli_precedence() {
         .arg("--exact")
         .arg("topic_mutation_timeout_precedence_child")
         .arg("--nocapture")
-        .env("CRABKA_ADMIN_UI_TOPIC_TIMEOUT_CHILD", "1")
-        .env("CRABKA_ADMIN_UI_TOPIC_MUTATION_TIMEOUT_MS", "32")
+        .env("KRABKA_ADMIN_UI_TOPIC_TIMEOUT_CHILD", "1")
+        .env("KRABKA_ADMIN_UI_TOPIC_MUTATION_TIMEOUT_MS", "32")
         .output()
         .expect("child test process runs");
 
@@ -126,16 +126,16 @@ fn topic_mutation_timeout_environment_and_cli_precedence() {
 
 #[test]
 fn topic_mutation_timeout_precedence_child() {
-    if std::env::var_os("CRABKA_ADMIN_UI_TOPIC_TIMEOUT_CHILD").is_none() {
+    if std::env::var_os("KRABKA_ADMIN_UI_TOPIC_TIMEOUT_CHILD").is_none() {
         return;
     }
 
-    let from_env = AdminUiRuntimeArgs::try_parse_from(["crabka-admin-ui"])
+    let from_env = AdminUiRuntimeArgs::try_parse_from(["krabka-admin-ui"])
         .expect("environment value is valid");
     assert_eq!(from_env.topic_mutation_timeout_ms.into_value(), 32);
 
     let from_cli = AdminUiRuntimeArgs::try_parse_from([
-        "crabka-admin-ui",
+        "krabka-admin-ui",
         "--topic-mutation-timeout-ms",
         "64",
     ])
@@ -154,7 +154,7 @@ production constants.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-admin-ui --test config topic_mutation_timeout --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-admin-ui --test config topic_mutation_timeout --locked
 ```
 
 Expected: compilation fails because `TopicMutationTimeoutMs` and the new
@@ -230,7 +230,7 @@ Add this field to `AdminUiRuntimeArgs`:
 /// Kafka request timeout for topic mutations, in milliseconds.
 #[arg(
     long = "topic-mutation-timeout-ms",
-    env = "CRABKA_ADMIN_UI_TOPIC_MUTATION_TIMEOUT_MS",
+    env = "KRABKA_ADMIN_UI_TOPIC_MUTATION_TIMEOUT_MS",
     default_value_t = TopicMutationTimeoutMs::default()
 )]
 pub topic_mutation_timeout_ms: TopicMutationTimeoutMs,
@@ -271,7 +271,7 @@ the request/retry logic.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-admin-ui --test config topic_mutation_timeout --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-admin-ui --test config topic_mutation_timeout --locked
 ```
 
 Expected: all five focused tests pass.
@@ -295,10 +295,10 @@ Expected: the first search prints nothing; the second command prints exactly
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-admin-ui --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-admin-ui --all-targets --locked -- -D warnings
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo run -p crabka-admin-ui --locked -- --help
-target/debug/crabka-admin-ui --help | rg -c -- '--topic-mutation-timeout-ms'
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-admin-ui --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-admin-ui --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo run -p krabka-admin-ui --locked -- --help
+target/debug/krabka-admin-ui --help | rg -c -- '--topic-mutation-timeout-ms'
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 git diff --check
 git diff -- Cargo.lock
@@ -346,7 +346,7 @@ Run:
 ```bash
 tools/audit-runtime-values.sh
 tools/audit-runtime-values.sh | rg '^crates/admin-ui/'
-rg -n "topic_mutation_timeout_ms|TopicMutationTimeoutMs|DEFAULT_TOPIC_MUTATION_TIMEOUT_MS|topic-mutation-timeout-ms|CRABKA_ADMIN_UI_TOPIC_MUTATION_TIMEOUT_MS" crates/admin-ui docs/configuration-audit.md
+rg -n "topic_mutation_timeout_ms|TopicMutationTimeoutMs|DEFAULT_TOPIC_MUTATION_TIMEOUT_MS|topic-mutation-timeout-ms|KRABKA_ADMIN_UI_TOPIC_MUTATION_TIMEOUT_MS" crates/admin-ui docs/configuration-audit.md
 rg -n "Duration::|_seconds|_millis|timeout|interval|backoff|capacity|limit" crates/admin-ui/src
 ```
 
@@ -382,8 +382,8 @@ Append `## Admin UI Topic Mutation Timeout` to
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-admin-ui --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-admin-ui --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-admin-ui --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-admin-ui --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 git diff --check
 git diff -- Cargo.lock

@@ -6,10 +6,10 @@
 use std::sync::Arc;
 
 use assert2::assert;
-use crabka_pgcatalog::RelationName;
-use crabka_pgexec::{Committer, ExecError, LocalLinearizer, SqlEngine, SqlSession};
-use crabka_pgkv::{Kv, MemKv, WriteOp};
-use crabka_pgwire::engine::{Engine, QueryResult, Session};
+use krabka_pgcatalog::RelationName;
+use krabka_pgexec::{Committer, ExecError, LocalLinearizer, SqlEngine, SqlSession};
+use krabka_pgkv::{Kv, MemKv, WriteOp};
+use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
 async fn exec(session: &mut SqlSession, sql: &str) -> Vec<QueryResult> {
     session
@@ -37,14 +37,14 @@ async fn select_rows(session: &mut SqlSession, sql: &str) -> Vec<Vec<Option<Stri
 
 /// Number of physical tuple versions stored for one rowid.
 fn version_count(kv: &dyn Kv, table_id: u32, rowid: u64) -> usize {
-    kv.scan_prefix(&crabka_pgkv::key::row_key(table_id, rowid))
+    kv.scan_prefix(&krabka_pgkv::key::row_key(table_id, rowid))
         .expect("scan row versions")
         .len()
 }
 
 /// Number of physical tuple versions stored for a whole table.
 fn table_version_count(kv: &dyn Kv, table_id: u32) -> usize {
-    kv.scan_prefix(&crabka_pgkv::key::table_prefix(table_id))
+    kv.scan_prefix(&krabka_pgkv::key::table_prefix(table_id))
         .expect("scan table versions")
         .len()
 }
@@ -52,15 +52,15 @@ fn table_version_count(kv: &dyn Kv, table_id: u32) -> usize {
 /// Number of physical entries stored in one local secondary index. Each live
 /// key has an equality and an ordered B-tree representation.
 fn index_entry_count(kv: &dyn Kv, table_id: u32, index_id: u32) -> usize {
-    kv.scan_prefix(&crabka_pgkv::key::secondary_index_prefix(
+    kv.scan_prefix(&krabka_pgkv::key::secondary_index_prefix(
         table_id, index_id,
     ))
     .expect("scan index entries")
     .len()
 }
 
-fn only_local_index(kv: &dyn Kv, table: &str) -> crabka_pgcatalog::Index {
-    let mut indexes = crabka_pgcatalog::list_table_indexes(kv, &RelationName::public(table))
+fn only_local_index(kv: &dyn Kv, table: &str) -> krabka_pgcatalog::Index {
+    let mut indexes = krabka_pgcatalog::list_table_indexes(kv, &RelationName::public(table))
         .expect("list indexes");
     assert!(indexes.len() == 1, "expected exactly one index on {table}");
     indexes.remove(0)
@@ -291,9 +291,9 @@ async fn replicated_mode_prunes_in_commit_batches_and_vacuum_is_a_no_op() {
     // batches would commit outside statement order. Full pass and bounded
     // step alike leave the store untouched.
     let stats = engine.vacuum().await.expect("vacuum");
-    assert!(stats == crabka_pgexec::VacuumStats::default());
+    assert!(stats == krabka_pgexec::VacuumStats::default());
     let step = engine.vacuum_step().await.expect("vacuum step");
-    assert!(step == crabka_pgexec::VacuumStepStats::default());
+    assert!(step == krabka_pgexec::VacuumStepStats::default());
     assert!(version_count(kv.as_ref(), table.id, 1) == pruned_chain);
 }
 
@@ -398,8 +398,8 @@ async fn vacuum_freezes_survivors_truncates_the_clog_and_updates_still_work() {
     let floor = engine.clog_scan_lo().expect("scan lo");
     let below_floor = kv
         .scan_range(
-            &crabka_pgkv::key::clog_key(0),
-            &crabka_pgkv::key::clog_key(floor),
+            &krabka_pgkv::key::clog_key(0),
+            &krabka_pgkv::key::clog_key(floor),
         )
         .expect("scan clog")
         .len();
@@ -434,8 +434,8 @@ async fn vacuum_freezes_survivors_truncates_the_clog_and_updates_still_work() {
 
 /// Run bounded sweep steps until a cycle completes, then return the aggregated
 /// stats and the number of steps the cycle took.
-async fn run_steps_to_cycle_end(engine: &SqlEngine) -> (crabka_pgexec::VacuumStats, u32) {
-    let mut total = crabka_pgexec::VacuumStats::default();
+async fn run_steps_to_cycle_end(engine: &SqlEngine) -> (krabka_pgexec::VacuumStats, u32) {
+    let mut total = krabka_pgexec::VacuumStats::default();
     for steps in 1..=1_000 {
         let step = engine.vacuum_step().await.expect("vacuum step");
         total += step.stats;
@@ -492,8 +492,8 @@ async fn chunked_steps_sweep_a_large_table_and_truncate_the_clog_only_at_cycle_e
     assert!(floor > floor_before);
     let below_floor = kv
         .scan_range(
-            &crabka_pgkv::key::clog_key(0),
-            &crabka_pgkv::key::clog_key(floor),
+            &krabka_pgkv::key::clog_key(0),
+            &krabka_pgkv::key::clog_key(floor),
         )
         .expect("scan clog")
         .len();
@@ -604,7 +604,7 @@ async fn vacuum_advances_the_durable_clog_scan_floor() {
     // but never below it.
     let floor = engine.clog_scan_lo().expect("scan lo");
     assert!(
-        floor > crabka_pgmvcc::xid::FIRST_NORMAL_XID,
+        floor > krabka_pgmvcc::xid::FIRST_NORMAL_XID,
         "expected the clog scan floor to advance, found {floor}"
     );
     assert!(floor <= engine.checkpoint_garbage_horizon().expect("horizon"));

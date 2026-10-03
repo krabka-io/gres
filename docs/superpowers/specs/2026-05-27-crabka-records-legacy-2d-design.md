@@ -11,7 +11,7 @@ handlers for legacy versions are all on `main`.
 
 Prove the legacy-client path works end-to-end by driving a real
 Apache Kafka 0.10.0 console-producer and console-consumer (inside a
-`cp-kafka:3.1.2` container) against a Rust `crabka-broker` running on
+`cp-kafka:3.1.2` container) against a Rust `krabka-broker` running on
 the host. Cover the pure-legacy round-trip and both cross-version
 directions (legacy↔modern) so down-conversion and up-conversion are
 each exercised against a genuine JVM client.
@@ -93,7 +93,7 @@ Reuse the existing helpers as-is:
 No workflow changes. The existing `broker-jvm-acceptance` job already runs:
 
 ```
-cargo llvm-cov -p crabka-broker --test jvm_acceptance --lcov \
+cargo llvm-cov -p krabka-broker --test jvm_acceptance --lcov \
   --output-path coverage/broker-jvm-acceptance.lcov \
   -- --ignored --nocapture --test-threads=1
 ```

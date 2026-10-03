@@ -43,10 +43,10 @@ crates/rebalancer/
 │   ├── bin/rebalancer.rs                           # MODIFIED — new CLI flag, loader call, GoalContext wiring
 │   └── lib.rs                                      # MODIFIED — pub mod capacity;
 ├── tests/end_to_end.rs                             # MODIFIED — 1 new integration test
-charts/crabka-rebalancer/
+charts/krabka-rebalancer/
 ├── values.yaml                                      # MODIFIED — brokerCapacities (inline map) + optional brokerCapacityFile override
 ├── templates/
-│   ├── deployment.yaml                              # MODIFIED — mount the capacity ConfigMap + set CRABKA_BROKER_CAPACITY_FILE
+│   ├── deployment.yaml                              # MODIFIED — mount the capacity ConfigMap + set KRABKA_BROKER_CAPACITY_FILE
 │   └── configmap.yaml                               # NEW — only rendered when .Values.brokerCapacities is non-empty
 └── tests/
     ├── deployment_test.yaml                         # MODIFIED — assert mount + env when brokerCapacities set
@@ -65,7 +65,7 @@ Five new goal files keep each goal in its own focused module — consistent with
 
 ### File format
 
-YAML at `--broker-capacity-file` (env `CRABKA_BROKER_CAPACITY_FILE`, optional — no default). Schema version 1:
+YAML at `--broker-capacity-file` (env `KRABKA_BROKER_CAPACITY_FILE`, optional — no default). Schema version 1:
 
 ```yaml
 version: 1
@@ -205,14 +205,14 @@ Add the env var + volume mount when `brokerCapacities` is non-empty:
 ```yaml
 # In container.env:
 {{- if .Values.brokerCapacities }}
-- name: CRABKA_BROKER_CAPACITY_FILE
-  value: /etc/crabka-rebalancer/capacity.yaml
+- name: KRABKA_BROKER_CAPACITY_FILE
+  value: /etc/krabka-rebalancer/capacity.yaml
 {{- end }}
 
 # In container.volumeMounts:
 {{- if .Values.brokerCapacities }}
 - name: capacity-config
-  mountPath: /etc/crabka-rebalancer
+  mountPath: /etc/krabka-rebalancer
   readOnly: true
 {{- end }}
 
@@ -224,7 +224,7 @@ Add the env var + volume mount when `brokerCapacities` is non-empty:
 {{- end }}
 ```
 
-**Precedence:** if `brokerCapacityFile` is set (non-empty string), it takes priority — the chart sets `CRABKA_BROKER_CAPACITY_FILE` to that path and does **not** render the ConfigMap (operator is responsible for providing the file via their own mechanism, e.g., an existing ConfigMap or a CSI driver). If `brokerCapacityFile` is empty and `brokerCapacities` is non-empty, the chart renders the ConfigMap and points the env var at the in-pod mount. If both are empty, neither is rendered and the capacity goals are no-ops.
+**Precedence:** if `brokerCapacityFile` is set (non-empty string), it takes priority — the chart sets `KRABKA_BROKER_CAPACITY_FILE` to that path and does **not** render the ConfigMap (operator is responsible for providing the file via their own mechanism, e.g., an existing ConfigMap or a CSI driver). If `brokerCapacityFile` is empty and `brokerCapacities` is non-empty, the chart renders the ConfigMap and points the env var at the in-pod mount. If both are empty, neither is rendered and the capacity goals are no-ops.
 
 ## Testing
 
@@ -256,7 +256,7 @@ Add the env var + volume mount when `brokerCapacities` is non-empty:
   - With one broker entry: ConfigMap renders + payload contains `version: 1` + `max_replicas:` field.
 
 - **`deployment_test.yaml`** (extended, 1 new test):
-  - With `brokerCapacities` set: `CRABKA_BROKER_CAPACITY_FILE` env var + capacity-config volume mount both present.
+  - With `brokerCapacities` set: `KRABKA_BROKER_CAPACITY_FILE` env var + capacity-config volume mount both present.
 
 ## Risks
 
@@ -267,10 +267,10 @@ Add the env var + volume mount when `brokerCapacities` is non-empty:
 
 ## Acceptance criteria
 
-1. `cargo test -p crabka-rebalancer` — all existing tests pass + ~14 new unit tests + 1 new integration test.
+1. `cargo test -p krabka-rebalancer` — all existing tests pass + ~14 new unit tests + 1 new integration test.
 2. `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings` clean.
-3. `helm lint charts/crabka-rebalancer --set bootstrapServers=test:9092` clean.
-4. `helm unittest charts/crabka-rebalancer` clean (existing 5 suites + new `configmap_test.yaml` suite).
+3. `helm lint charts/krabka-rebalancer --set bootstrapServers=test:9092` clean.
+4. `helm unittest charts/krabka-rebalancer` clean (existing 5 suites + new `configmap_test.yaml` suite).
 5. `STATUS.md` gains a slice-43d entry.
 6. `--broker-capacity-file <path>` accepted by the binary; absent → all five capacity goals are no-ops; present → `ReplicaCapacity` actively enforces, four stubs remain no-op pending 43e.
 
@@ -293,7 +293,7 @@ crates/rebalancer/
 │   ├── bin/rebalancer.rs                            # MODIFIED — CLI flag + loader
 │   └── lib.rs                                       # MODIFIED — pub mod capacity;
 └── tests/end_to_end.rs                              # MODIFIED — 1 new test
-charts/crabka-rebalancer/
+charts/krabka-rebalancer/
 ├── values.yaml                                       # MODIFIED
 ├── templates/configmap.yaml                          # NEW
 ├── templates/deployment.yaml                         # MODIFIED

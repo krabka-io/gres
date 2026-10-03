@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-09
 **Status:** Approved
-**Type:** Program decomposition (the chapter-roadmap genre). Orders "finish all SQL language support" — full PostgreSQL 18 SQL-surface parity for the Gres engine — into dependency-ordered waves across six tracks, with milestone gates, a per-command compatibility matrix, and the standing per-cycle rules. This supersedes and absorbs the [G-6 design](2026-07-09-crabka-gres-g6-fdw-sql-breadth-design.md)'s SQL-breadth track (G-6's FDW items are untouched); each wave remains its own design cycle under the chapter's process.
+**Type:** Program decomposition (the chapter-roadmap genre). Orders "finish all SQL language support" — full PostgreSQL 18 SQL-surface parity for the Gres engine — into dependency-ordered waves across six tracks, with milestone gates, a per-command compatibility matrix, and the standing per-cycle rules. This supersedes and absorbs the [G-6 design](2026-07-09-krabka-gres-g6-fdw-sql-breadth-design.md)'s SQL-breadth track (G-6's FDW items are untouched); each wave remains its own design cycle under the chapter's process.
 
 ## Context — the verified gap, and the two findings that order everything
 

@@ -179,7 +179,7 @@ byte-identical**.
   output; the store/changelog records use byte-exact `WindowKeySchema` +
   `ValueAndTimestamp`.
 - The 8 prior golden frames unchanged.
-- `cargo test -p crabka-client-streams` green; `cargo clippy --workspace --all-targets
+- `cargo test -p krabka-client-streams` green; `cargo clippy --workspace --all-targets
   -- -D warnings` + `cargo fmt --check` clean; `cargo build --workspace`.
 - A documented windowed-aggregation note/example in `lib.rs`.
 

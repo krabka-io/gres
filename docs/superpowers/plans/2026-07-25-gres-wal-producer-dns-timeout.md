@@ -11,7 +11,7 @@
 producer's standalone CLI/environment and fleet CRD configuration paths.
 
 **Architecture:** Add one validated DNS duration to the producer builder,
-reuse `crabka_client_core::ClientDnsTimeout` throughout Gres runtime
+reuse `krabka_client_core::ClientDnsTimeout` throughout Gres runtime
 propagation, and render one optional Gres CRD field into the existing compute
 argument vector. Keep DNS separate from producer retry, TCP-connect, and
 request policy.
@@ -26,11 +26,11 @@ Tokio, generated Kubernetes CRDs.
 - Every lock-aware Cargo command must use `--locked`; this slice adds no
   dependency.
 - RED precedes production edits.
-- Reuse `crabka_client_core::ClientDnsTimeout`; add no producer-specific
+- Reuse `krabka_client_core::ClientDnsTimeout`; add no producer-specific
   validation type or resolver abstraction.
 - Use the existing 10-second `DEFAULT_CLIENT_DNS_TIMEOUT`.
 - The setting is `--wal-producer-dns-timeout-ms` /
-  `CRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT_MS` /
+  `KRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT_MS` /
   `spec.compute.walProducerDnsTimeoutMs`.
 - CLI precedence is command line, then environment, then the 10-second
   default.
@@ -53,8 +53,8 @@ Tokio, generated Kubernetes CRDs.
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo test \
-  -p crabka-client-producer -p crabka-gres-substrate \
-  -p crabka-gres -p crabka-operator --all-targets --locked
+  -p krabka-client-producer -p krabka-gres-substrate \
+  -p krabka-gres -p krabka-operator --all-targets --locked
 ```
 
 - Use a fresh implementer per task and independent spec-compliance and quality
@@ -69,7 +69,7 @@ CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
 
 **Interfaces:**
 - Consumes:
-  `crabka_client_core::{ClientDnsTimeout, DEFAULT_CLIENT_DNS_TIMEOUT}`
+  `krabka_client_core::{ClientDnsTimeout, DEFAULT_CLIENT_DNS_TIMEOUT}`
 - Produces: Bon builder setter
   `Producer::builder().dns_timeout(Duration)`
 - Preserves: all existing producer defaults and public policy types
@@ -123,7 +123,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-producer \
+  cargo test -p krabka-client-producer \
   producer_builder_rejects_invalid_dns_timeout_before_connection_io --lib --locked
 ```
 
@@ -135,7 +135,7 @@ setter.
 Extend the existing client-core import:
 
 ```rust
-use crabka_client_core::{
+use krabka_client_core::{
     Client, ClientDnsTimeout, ClientError, DEFAULT_CLIENT_DNS_TIMEOUT,
 };
 ```
@@ -167,11 +167,11 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-producer producer_builder_ --lib --locked
+  cargo test -p krabka-client-producer producer_builder_ --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-client-producer --all-targets --locked
+  cargo test -p krabka-client-producer --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-client-producer --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-client-producer --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo fmt --all -- --check
 git diff --check
@@ -223,11 +223,11 @@ fn producer_dns_timeout_defaults_replaces_and_reaches_builder() {
         LiveRecoveryConfig::new("localhost:9092", tenant, RangeId::new(7), None);
     assert_eq!(
         config.producer_dns_timeout(),
-        crabka_client_core::ClientDnsTimeout::default()
+        krabka_client_core::ClientDnsTimeout::default()
     );
 
     let replacement =
-        crabka_client_core::ClientDnsTimeout::new(Duration::from_millis(37))
+        krabka_client_core::ClientDnsTimeout::new(Duration::from_millis(37))
             .expect("valid DNS timeout");
     assert_eq!(
         config
@@ -249,7 +249,7 @@ It must assert:
 ClientDnsTimeout::default().milliseconds()
 
 // environment
-CRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT_MS=27
+KRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT_MS=27
 
 // CLI wins over environment
 --wal-producer-dns-timeout-ms=37
@@ -259,7 +259,7 @@ Add zero and local-only cases:
 
 ```rust
 Cli::try_parse_from([
-    "crabka-gres",
+    "krabka-gres",
     "--substrate-bootstrap=k:9092",
     "--tenant=t",
     "--wal-producer-dns-timeout-ms=0",
@@ -267,7 +267,7 @@ Cli::try_parse_from([
 .expect_err("zero DNS timeout");
 
 Cli::try_parse_from([
-    "crabka-gres",
+    "krabka-gres",
     "--wal-producer-dns-timeout-ms=1",
 ])
 .expect_err("substrate bootstrap required");
@@ -283,9 +283,9 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-substrate producer_dns_timeout --lib --locked
+  cargo test -p krabka-gres-substrate producer_dns_timeout --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres wal_producer_dns_timeout --lib --locked
+  cargo test -p krabka-gres wal_producer_dns_timeout --lib --locked
 ```
 
 Expected: compilation fails because the runtime field, config methods, and
@@ -296,7 +296,7 @@ Clap option do not exist.
 Add to `LiveRecoveryConfig`:
 
 ```rust
-producer_dns_timeout: crabka_client_core::ClientDnsTimeout,
+producer_dns_timeout: krabka_client_core::ClientDnsTimeout,
 ```
 
 Initialize it with `Default::default()`, add the exact builder/accessor from
@@ -316,7 +316,7 @@ Add immediately before `wal_producer_request_timeout_ms`:
 /// Timeout for resolving WAL producer broker hostnames.
 #[arg(
     long = "wal-producer-dns-timeout-ms",
-    env = "CRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT_MS",
+    env = "KRABKA_GRES_WAL_PRODUCER_DNS_TIMEOUT_MS",
     requires = "substrate_bootstrap"
 )]
 pub wal_producer_dns_timeout_ms: Option<PositiveMillis>,
@@ -331,11 +331,11 @@ Add the effective conversion:
 ```rust
 fn effective_wal_producer_dns_timeout(
     args: &ServeArgs,
-) -> std::io::Result<crabka_client_core::ClientDnsTimeout> {
+) -> std::io::Result<krabka_client_core::ClientDnsTimeout> {
     args.wal_producer_dns_timeout_ms.map_or_else(
-        || Ok(crabka_client_core::ClientDnsTimeout::default()),
+        || Ok(krabka_client_core::ClientDnsTimeout::default()),
         |timeout| {
-            crabka_client_core::ClientDnsTimeout::new(Duration::from_millis(
+            krabka_client_core::ClientDnsTimeout::new(Duration::from_millis(
                 timeout.into_value(),
             ))
             .map_err(|error| {
@@ -349,7 +349,7 @@ fn effective_wal_producer_dns_timeout(
 Store the result on `SubstrateRuntimeConfig`:
 
 ```rust
-pub producer_dns_timeout: crabka_client_core::ClientDnsTimeout,
+pub producer_dns_timeout: krabka_client_core::ClientDnsTimeout,
 ```
 
 Construct it in `from_args`, then propagate it through the existing
@@ -365,16 +365,16 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-substrate producer_dns_timeout --lib --locked
+  cargo test -p krabka-gres-substrate producer_dns_timeout --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres wal_producer_dns_timeout --lib --locked
+  cargo test -p krabka-gres wal_producer_dns_timeout --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres-substrate -p crabka-gres --all-targets --locked
+  cargo test -p krabka-gres-substrate -p krabka-gres --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-gres-substrate -p crabka-gres \
+  cargo clippy -p krabka-gres-substrate -p krabka-gres \
   --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-gres --locked -- --help |
+  cargo run -q -p krabka-gres --locked -- --help |
   rg -- '--wal-producer-dns-timeout-ms'
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo fmt --all -- --check
@@ -434,7 +434,7 @@ fn wal_producer_dns_timeout_has_exact_schema_default_override_and_error() {
         .effective_policy()
         .expect("default compute policy")
         .wal_producer_dns_timeout;
-    assert!(default == crabka_client_core::ClientDnsTimeout::default());
+    assert!(default == krabka_client_core::ClientDnsTimeout::default());
 
     let configured = GresComputeSpec {
         wal_producer_dns_timeout_ms: Some(37),
@@ -477,7 +477,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator wal_producer_dns_timeout --lib --locked
+  cargo test -p krabka-operator wal_producer_dns_timeout --lib --locked
 ```
 
 Expected: compilation fails because the CRD and effective-policy fields do
@@ -497,16 +497,16 @@ pub wal_producer_dns_timeout_ms: Option<u64>,
 Add to `EffectiveGresComputePolicy`:
 
 ```rust
-pub(crate) wal_producer_dns_timeout: crabka_client_core::ClientDnsTimeout,
+pub(crate) wal_producer_dns_timeout: krabka_client_core::ClientDnsTimeout,
 ```
 
 Resolve it without a second validation type:
 
 ```rust
-wal_producer_dns_timeout: crabka_client_core::ClientDnsTimeout::new(
+wal_producer_dns_timeout: krabka_client_core::ClientDnsTimeout::new(
     Duration::from_millis(
         self.wal_producer_dns_timeout_ms.unwrap_or_else(|| {
-            crabka_client_core::ClientDnsTimeout::default().milliseconds()
+            krabka_client_core::ClientDnsTimeout::default().milliseconds()
         }),
     ),
 )
@@ -519,7 +519,7 @@ Add:
 
 ```rust
 fn wal_producer_dns_args(
-    timeout: crabka_client_core::ClientDnsTimeout,
+    timeout: krabka_client_core::ClientDnsTimeout,
 ) -> [String; 2] {
     [
         "--wal-producer-dns-timeout-ms".to_owned(),
@@ -546,9 +546,9 @@ Run:
 crd_a=$(mktemp -d)
 crd_b=$(mktemp -d)
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-operator --locked -- gen-crds "$crd_a"
+  cargo run -q -p krabka-operator --locked -- gen-crds "$crd_a"
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-operator --locked -- gen-crds "$crd_b"
+  cargo run -q -p krabka-operator --locked -- gen-crds "$crd_b"
 test "$(find "$crd_a" -maxdepth 1 -type f | wc -l)" -eq 9
 test "$(find "$crd_b" -maxdepth 1 -type f | wc -l)" -eq 9
 diff -ru "$crd_a" "$crd_b"
@@ -564,11 +564,11 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator wal_producer_dns_timeout --lib --locked
+  cargo test -p krabka-operator wal_producer_dns_timeout --lib --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator --all-targets --locked
+  cargo test -p krabka-operator --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-operator --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-operator --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo fmt --all -- --check
 git diff --check
@@ -666,14 +666,14 @@ Run:
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo test \
-  -p crabka-client-producer -p crabka-gres-substrate \
-  -p crabka-gres -p crabka-operator --all-targets --locked
+  -p krabka-client-producer -p krabka-gres-substrate \
+  -p krabka-gres -p krabka-operator --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo clippy \
-  -p crabka-client-producer -p crabka-gres-substrate \
-  -p crabka-gres -p crabka-operator --all-targets --locked -- -D warnings
+  -p krabka-client-producer -p krabka-gres-substrate \
+  -p krabka-gres -p krabka-operator --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-gres --locked -- --help |
+  cargo run -q -p krabka-gres --locked -- --help |
   rg -- '--wal-producer-dns-timeout-ms'
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo fmt --all -- --check

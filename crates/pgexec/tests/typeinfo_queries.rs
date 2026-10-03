@@ -16,8 +16,8 @@
 //! fidelity in the wire layer — a separate design.
 
 use assert2::assert;
-use crabka_pgexec::SqlEngine;
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::SqlEngine;
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 /// tokio-postgres 0.7.18 `TYPEINFO_QUERY`, `$1` written as the literal 20.
 const TYPEINFO_QUERY: &str = "\

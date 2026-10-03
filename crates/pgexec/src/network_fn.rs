@@ -7,8 +7,8 @@
 //! on the value's own `is_cidr` flag, which is what selects the `cidr` overload
 //! in `PostgreSQL`'s catalog.
 
-use crabka_pgparser::ast::{BinaryOp, Expr, FuncCall};
-use crabka_pgtypes::{ColumnType, Datum, Inet, TypeError};
+use krabka_pgparser::ast::{BinaryOp, Expr, FuncCall};
+use krabka_pgtypes::{ColumnType, Datum, Inet, TypeError};
 
 use crate::{
     clock::EvalCtx,
@@ -183,7 +183,7 @@ fn coercion_result_type(
     let source = infer_type(&args[0], scope)?;
     if is_unknown_literal(&args[0])
         || source.is_string()
-        || crabka_pgtypes::cast::cast_allowed(source, target)
+        || krabka_pgtypes::cast::cast_allowed(source, target)
     {
         return Ok(target);
     }
@@ -282,7 +282,7 @@ pub(crate) fn eval_network(
         NetworkFunc::MacAddr8Set7Bit => match values.as_slice() {
             [Datum::MacAddr8(value)] => Ok(Datum::MacAddr8(value.set7bit())),
             [Datum::Text(text)] => Ok(Datum::MacAddr8(
-                crabka_pgtypes::MacAddr8::parse(text)
+                krabka_pgtypes::MacAddr8::parse(text)
                     .map_err(ExecError::Type)?
                     .set7bit(),
             )),
@@ -493,22 +493,22 @@ fn apply_mac_bitwise(
         | (Datum::Null, Datum::MacAddr(_) | Datum::MacAddr8(_)) => Ok(Some(Datum::Null)),
         (Datum::MacAddr(_), Datum::Text(text)) => {
             let right =
-                Datum::MacAddr(crabka_pgtypes::MacAddr::parse(text).map_err(ExecError::Type)?);
+                Datum::MacAddr(krabka_pgtypes::MacAddr::parse(text).map_err(ExecError::Type)?);
             apply_mac_bitwise(op, left, &right)
         }
         (Datum::MacAddr8(_), Datum::Text(text)) => {
             let right =
-                Datum::MacAddr8(crabka_pgtypes::MacAddr8::parse(text).map_err(ExecError::Type)?);
+                Datum::MacAddr8(krabka_pgtypes::MacAddr8::parse(text).map_err(ExecError::Type)?);
             apply_mac_bitwise(op, left, &right)
         }
         (Datum::Text(text), Datum::MacAddr(_)) => {
             let left =
-                Datum::MacAddr(crabka_pgtypes::MacAddr::parse(text).map_err(ExecError::Type)?);
+                Datum::MacAddr(krabka_pgtypes::MacAddr::parse(text).map_err(ExecError::Type)?);
             apply_mac_bitwise(op, &left, right)
         }
         (Datum::Text(text), Datum::MacAddr8(_)) => {
             let left =
-                Datum::MacAddr8(crabka_pgtypes::MacAddr8::parse(text).map_err(ExecError::Type)?);
+                Datum::MacAddr8(krabka_pgtypes::MacAddr8::parse(text).map_err(ExecError::Type)?);
             apply_mac_bitwise(op, &left, right)
         }
         _ => Ok(None),

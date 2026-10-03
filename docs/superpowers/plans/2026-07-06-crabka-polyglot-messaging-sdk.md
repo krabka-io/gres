@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go 1.2x + connect-go, buf, `protoc-gen-connect-go`/`protoc-gen-go`, Rust `hyper_util` (h2c), apko (OCI image), docker-compose, `cargo +nightly fmt`, `clippy::pedantic`, `go test`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-polyglot-messaging-sdk-design.md`](../specs/2026-07-06-crabka-polyglot-messaging-sdk-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-polyglot-messaging-sdk-design.md`](../specs/2026-07-06-krabka-polyglot-messaging-sdk-design.md).
 
 **PREREQUISITES (for a *complete* CE round-trip, not for publish):** MSG-1 (SDK CE-*consume*), MSG-3 (manual per-offset ack). MSG-5 v1 ships without them (publish CE is transparent today; subscribe defaults to `auto_commit`).
 
@@ -36,7 +36,7 @@
 - **`buf.yaml`, `buf.gen.yaml`** (repo root, new) — Connect codegen (Task 1).
 - **`sdks/go/`** (new: `go.mod`, `gen/`, `client.go`, `subscribe.go`, `README.md`) — the Go SDK (Tasks 1, 3, 5, 6).
 - **`crates/grpc-gateway/src/serve.rs:30`** — h2c listener swap (Task 2).
-- **`packaging/apko/crabka-gateway.yaml`** + **`sdks/go/testdata/docker-compose.yml`** (new) — harness (Task 4).
+- **`packaging/apko/krabka-gateway.yaml`** + **`sdks/go/testdata/docker-compose.yml`** (new) — harness (Task 4).
 - **`.github/workflows/`** — buf drift + Go SDK job (Task 6).
 
 **Batching:** Task 1 (buf + `sdks/`) ∥ Task 2 (`serve.rs`) — disjoint. Task 3 (Go publish, needs Task 1 stubs) ∥ Task 4 (harness) — disjoint. Task 5 (subscribe round-trip) needs 2+3+4. Task 6 last.
@@ -130,7 +130,7 @@ loop {
 
 - [ ] **Step 3: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-grpc-gateway --test <serve/streaming test>` → PASS (h1 tests still pass; the new h2c `Send` succeeds).
+Run: `cargo test -p krabka-grpc-gateway --test <serve/streaming test>` → PASS (h1 tests still pass; the new h2c `Send` succeeds).
 
 ```bash
 git add crates/grpc-gateway/src/serve.rs crates/grpc-gateway/Cargo.toml
@@ -264,15 +264,15 @@ git commit -m "feat(sdk-go): publish + publishEvent (CloudEvents binary mode)"
 ## Task 4 (Batch B): Gateway OCI image + compose harness
 
 **Files:**
-- Create: `packaging/apko/crabka-gateway.yaml`, `sdks/go/testdata/docker-compose.yml`
+- Create: `packaging/apko/krabka-gateway.yaml`, `sdks/go/testdata/docker-compose.yml`
 - Modify: `.github/workflows/publish-images.yml` (matrix entry)
 
-- [ ] **Step 1:** Author `packaging/apko/crabka-gateway.yaml` mirroring an existing apko config (e.g. broker), entrypoint `/usr/bin/gateway`; add a `crabka-gateway` entry to the `publish-images.yml` build matrix.
+- [ ] **Step 1:** Author `packaging/apko/krabka-gateway.yaml` mirroring an existing apko config (e.g. broker), entrypoint `/usr/bin/gateway`; add a `krabka-gateway` entry to the `publish-images.yml` build matrix.
 - [ ] **Step 2:** `sdks/go/testdata/docker-compose.yml` launches the broker + gateway (plaintext, h2c) exposing the gateway port on `localhost`.
 - [ ] **Step 3:** Verify the image builds and the gateway answers a unary `Send` over h2c (`docker compose up` + a quick `go run` publish). Commit.
 
 ```bash
-git add packaging/apko/crabka-gateway.yaml sdks/go/testdata/docker-compose.yml .github/workflows/publish-images.yml
+git add packaging/apko/krabka-gateway.yaml sdks/go/testdata/docker-compose.yml .github/workflows/publish-images.yml
 git commit -m "build(gateway): OCI image + docker-compose harness for SDK integration tests"
 ```
 
@@ -359,7 +359,7 @@ git commit -m "feat(sdk-go): subscribe with filter over h2c (auto_commit)"
 Add a workflow job (reuse `actions/setup-go@v6`): `buf generate` then `git diff --exit-code sdks/go/gen` (mirror `codegen-check.yml`); then bring up the compose harness (built gateway image) and run `go test -tags integration ./sdks/go/...`. Note in the workflow that TS/Python jobs are blocked pending `setup-node`/`setup-python`.
 
 - [ ] **Step 2: Honest README** — `sdks/go/README.md`: document `publish`/`publishEvent`/`subscribe`+`Equals`; and clearly label as **experimental/unimplemented** with links to the gating work: manual per-offset ack (h2 + MSG-3), share-group consume (net-new gateway RPC), topic auto-provision (net-new `EnsureTopic` RPC), CloudEvents *consume* (MSG-1); note the filter is **EQUALS-only, structured-records-only** and bearer tokens are **dev/test-only** (unsecured JWS).
-- [ ] **Step 3: Gate** — `cargo +nightly fmt --check` (serve.rs); `cargo clippy -p crabka-grpc-gateway --all-targets -- -D warnings`; `cd sdks/go && gofmt -l . && go vet ./...`; `buf lint`. Commit.
+- [ ] **Step 3: Gate** — `cargo +nightly fmt --check` (serve.rs); `cargo clippy -p krabka-grpc-gateway --all-targets -- -D warnings`; `cd sdks/go && gofmt -l . && go vet ./...`; `buf lint`. Commit.
 
 ```bash
 git add sdks/go/README.md .github/workflows/

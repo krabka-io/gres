@@ -16,10 +16,10 @@ concurrency:
 
 env:
   CORE_PACKAGES: >-
-    -p crabka-units -p crabka-trace-context -p crabka-pgtypes
-    -p crabka-pgparser -p crabka-pgwire -p crabka-pgkv -p crabka-pgmvcc
-    -p crabka-pgcatalog -p crabka-pgexec -p crabka-gres-conformance
-    -p crabka-client-producer
+    -p krabka-units -p krabka-trace-context -p krabka-pgtypes
+    -p krabka-pgparser -p krabka-pgwire -p krabka-pgkv -p krabka-pgmvcc
+    -p krabka-pgcatalog -p krabka-pgexec -p krabka-gres-conformance
+    -p krabka-client-producer
   CORE_TARGETS: >-
     //crates/units/... //crates/trace-context/... //crates/pgtypes/...
     //crates/pgparser/... //crates/pgwire/... //crates/pgkv/...
@@ -61,7 +61,7 @@ jobs:
           tar zxf "${RUNNER_TEMP}/cargo-nextest.tar.gz" \
             -C "${CARGO_HOME:-${HOME}/.cargo}/bin"
       - name: process-isolated telemetry tests
-        run: cargo nextest run -p crabka-pgexec --test telemetry --test telemetry_exec
+        run: cargo nextest run -p krabka-pgexec --test telemetry --test telemetry_exec
 
   coverage:
     name: coverage

@@ -1,6 +1,6 @@
 //! `KafkaGrpcGateway` CRD.
 //!
-//! One `KafkaGrpcGateway` is a deployment of the `crabka-grpc-gateway`
+//! One `KafkaGrpcGateway` is a deployment of the `krabka-grpc-gateway`
 //! binary that the operator manages. The operator produces a Deployment, a
 //! Service, a serving-cert Secret, a config Secret, and a child
 //! `KafkaUser` for the broker-mTLS client identity of the gateway. It
@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use crabka_units::{ByteSize, Ratio, Time};
+use krabka_units::{ByteSize, Ratio, Time};
 use k8s_openapi::api::core::v1::ResourceRequirements;
 use kube::CustomResource;
 use schemars::JsonSchema;
@@ -121,7 +121,7 @@ pub struct DedupSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub window: Option<Time>,
@@ -149,7 +149,7 @@ pub struct GatewayTuning {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_byte_size"
+        with = "krabka_units::serde_units::human::option_byte_size"
     )]
     #[schemars(with = "Option<String>")]
     pub client_frame_max: Option<ByteSize>,
@@ -161,28 +161,28 @@ pub struct GatewayTuning {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub internal_topic_create_timeout: Option<Time>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub internal_topic_segment: Option<Time>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_ratio"
+        with = "krabka_units::serde_units::human::option_ratio"
     )]
     #[schemars(with = "Option<String>")]
     pub internal_topic_min_cleanable_dirty_ratio: Option<Ratio>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub consumer_poll_timeout: Option<Time>,
@@ -192,21 +192,21 @@ pub struct GatewayTuning {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub readiness_poll_interval: Option<Time>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_byte_size"
+        with = "krabka_units::serde_units::human::option_byte_size"
     )]
     #[schemars(with = "Option<String>")]
     pub produce_max_body: Option<ByteSize>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_byte_size"
+        with = "krabka_units::serde_units::human::option_byte_size"
     )]
     #[schemars(with = "Option<String>")]
     pub forward_max_body: Option<ByteSize>,
@@ -221,7 +221,7 @@ pub struct GatewaySchemaRegistrySpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub latest_cache_ttl: Option<Time>,
@@ -268,7 +268,7 @@ pub struct GatewayTlsSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub reload_interval: Option<Time>,
@@ -293,7 +293,7 @@ pub struct GatewayAuthzSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub acl_refresh: Option<Time>,
@@ -321,7 +321,7 @@ pub struct GatewayBearerSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub allowable_clock_skew: Option<Time>,
@@ -369,7 +369,7 @@ pub struct InboundWebhookSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub timestamp_tolerance: Option<Time>,
@@ -388,7 +388,7 @@ pub struct InboundWebhookSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_byte_size"
+        with = "krabka_units::serde_units::human::option_byte_size"
     )]
     #[schemars(with = "Option<String>")]
     pub max_body: Option<ByteSize>,
@@ -442,7 +442,7 @@ pub struct OutboundSubscriptionSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub base_backoff: Option<Time>,
@@ -451,7 +451,7 @@ pub struct OutboundSubscriptionSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub max_backoff: Option<Time>,
@@ -460,7 +460,7 @@ pub struct OutboundSubscriptionSpec {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub request_timeout: Option<Time>,
@@ -554,7 +554,7 @@ pub struct KafkaGrpcGatewayStatus {
 #[cfg(test)]
 mod tests {
     use assert2::{assert, check};
-    use crabka_units::{mebibytes, millis, minutes, secs};
+    use krabka_units::{mebibytes, millis, minutes, secs};
     use kube::CustomResourceExt as _;
 
     use super::*;
@@ -567,7 +567,7 @@ mod tests {
     fn dimensioned_tuning_fields_serialize_as_unit_carrying_strings() {
         let tuning = GatewayTuning {
             client_dispatch_queue_capacity: Some(7),
-            client_frame_max: Some(crabka_units::kibibytes(32)),
+            client_frame_max: Some(krabka_units::kibibytes(32)),
             internal_topic_create_timeout: Some(secs(10)),
             internal_topic_segment: Some(minutes(1)),
             consumer_poll_timeout: Some(millis(500)),
@@ -674,7 +674,7 @@ mod tests {
             "my-gateway",
             KafkaGrpcGatewaySpec {
                 replicas: Some(2),
-                image: Some("ghcr.io/robot-head/crabka-grpc-gateway:latest".into()),
+                image: Some("ghcr.io/robot-head/krabka-grpc-gateway:latest".into()),
                 resources: None,
                 dedup: Some(DedupSpec {
                     topic: Some("my-gateway-dedup".into()),
@@ -718,7 +718,7 @@ mod tests {
                     timestamp_tolerance: Some(secs(300)),
                     idempotency_source: Some("header:X-Idempotency-Key".into()),
                     key_source: None,
-                    max_body: Some(crabka_units::bytes(1_048_576)),
+                    max_body: Some(krabka_units::bytes(1_048_576)),
                     schema_subject: None,
                     schema_format: None,
                     secret_ref: Some(SecretKeyRef {

@@ -45,19 +45,19 @@ Add tests beside the existing registry/checkpoint parser tests:
 ```rust
 #[test]
 fn local_vacuum_options_are_absent_by_default_and_cli_overrides_environment() {
-    let defaults = Cli::try_parse_from(["crabka-gres"]).expect("defaults").serve;
+    let defaults = Cli::try_parse_from(["krabka-gres"]).expect("defaults").serve;
     assert_eq!(defaults.local_vacuum, LocalVacuumOptions::default());
 
-    const CHILD: &str = "CRABKA_TEST_GRES_LOCAL_VACUUM_ENV_CHILD";
+    const CHILD: &str = "KRABKA_TEST_GRES_LOCAL_VACUUM_ENV_CHILD";
     let variables = [
-        ("CRABKA_GRES_LOCAL_VACUUM_IDLE_INTERVAL_MS", "11"),
-        ("CRABKA_GRES_LOCAL_VACUUM_BACKOFF_FLOOR_MS", "12"),
-        ("CRABKA_GRES_LOCAL_VACUUM_HOT_DEBT", "13"),
-        ("CRABKA_GRES_LOCAL_VACUUM_KEY_BUDGET", "14"),
-        ("CRABKA_GRES_LOCAL_VACUUM_MAX_KEY_BUDGET", "15"),
-        ("CRABKA_GRES_LOCAL_VACUUM_STEP_FAST_MS", "16"),
-        ("CRABKA_GRES_LOCAL_VACUUM_STEP_SLOW_MS", "17"),
-        ("CRABKA_GRES_LOCAL_VACUUM_IDLE_AFTER_MS", "18"),
+        ("KRABKA_GRES_LOCAL_VACUUM_IDLE_INTERVAL_MS", "11"),
+        ("KRABKA_GRES_LOCAL_VACUUM_BACKOFF_FLOOR_MS", "12"),
+        ("KRABKA_GRES_LOCAL_VACUUM_HOT_DEBT", "13"),
+        ("KRABKA_GRES_LOCAL_VACUUM_KEY_BUDGET", "14"),
+        ("KRABKA_GRES_LOCAL_VACUUM_MAX_KEY_BUDGET", "15"),
+        ("KRABKA_GRES_LOCAL_VACUUM_STEP_FAST_MS", "16"),
+        ("KRABKA_GRES_LOCAL_VACUUM_STEP_SLOW_MS", "17"),
+        ("KRABKA_GRES_LOCAL_VACUUM_IDLE_AFTER_MS", "18"),
     ];
     if std::env::var_os(CHILD).is_none() {
         let status = std::process::Command::new(std::env::current_exe().expect("test exe"))
@@ -73,7 +73,7 @@ fn local_vacuum_options_are_absent_by_default_and_cli_overrides_environment() {
         return;
     }
 
-    let environment = Cli::try_parse_from(["crabka-gres"])
+    let environment = Cli::try_parse_from(["krabka-gres"])
         .expect("environment policy")
         .serve
         .local_vacuum;
@@ -87,7 +87,7 @@ fn local_vacuum_options_are_absent_by_default_and_cli_overrides_environment() {
     assert_eq!(environment.idle_after_ms.map(PositiveMillis::into_value), Some(18));
 
     let cli = Cli::try_parse_from([
-        "crabka-gres",
+        "krabka-gres",
         "--local-vacuum-idle-interval-ms", "21",
         "--local-vacuum-backoff-floor-ms", "22",
         "--local-vacuum-hot-debt", "23",
@@ -125,7 +125,7 @@ fn local_vacuum_policy_rejects_invalid_relationships_and_substrate_noops() {
         "--local-vacuum-step-slow-ms=0",
         "--local-vacuum-idle-after-ms=0",
     ] {
-        assert!(Cli::try_parse_from(["crabka-gres", option]).is_err());
+        assert!(Cli::try_parse_from(["krabka-gres", option]).is_err());
     }
 
     for arguments in [
@@ -137,7 +137,7 @@ fn local_vacuum_policy_rejects_invalid_relationships_and_substrate_noops() {
          "--local-vacuum-step-slow-ms", "10"].as_slice(),
     ] {
         let args = Cli::try_parse_from(
-            std::iter::once("crabka-gres").chain(arguments.iter().copied())
+            std::iter::once("krabka-gres").chain(arguments.iter().copied())
         ).expect("scalar-valid arguments").serve;
         assert!(local_vacuum_policy(&args).is_err());
     }
@@ -153,7 +153,7 @@ fn local_vacuum_policy_rejects_invalid_relationships_and_substrate_noops() {
         "--local-vacuum-idle-after-ms=1",
     ] {
         let args = Cli::try_parse_from([
-            "crabka-gres",
+            "krabka-gres",
             "--substrate-bootstrap=memory://",
             "--tenant=tenant-a",
             option,
@@ -169,9 +169,9 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres local_vacuum_options --lib
+  cargo test -p krabka-gres local_vacuum_options --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres local_vacuum_policy_rejects --lib
+  cargo test -p krabka-gres local_vacuum_policy_rejects --lib
 ```
 
 Expected: compilation fails because `LocalVacuumOptions`, its `ServeArgs`
@@ -192,28 +192,28 @@ Define the group with these exact bindings and no defaults:
 #[derive(clap::Args, Debug, Clone, Copy, Default, Eq, PartialEq)]
 pub struct LocalVacuumOptions {
     #[arg(long = "local-vacuum-idle-interval-ms",
-          env = "CRABKA_GRES_LOCAL_VACUUM_IDLE_INTERVAL_MS")]
+          env = "KRABKA_GRES_LOCAL_VACUUM_IDLE_INTERVAL_MS")]
     idle_interval_ms: Option<PositiveMillis>,
     #[arg(long = "local-vacuum-backoff-floor-ms",
-          env = "CRABKA_GRES_LOCAL_VACUUM_BACKOFF_FLOOR_MS")]
+          env = "KRABKA_GRES_LOCAL_VACUUM_BACKOFF_FLOOR_MS")]
     backoff_floor_ms: Option<PositiveMillis>,
     #[arg(long = "local-vacuum-hot-debt",
-          env = "CRABKA_GRES_LOCAL_VACUUM_HOT_DEBT")]
+          env = "KRABKA_GRES_LOCAL_VACUUM_HOT_DEBT")]
     hot_debt: Option<NonZeroU64>,
     #[arg(long = "local-vacuum-key-budget",
-          env = "CRABKA_GRES_LOCAL_VACUUM_KEY_BUDGET")]
+          env = "KRABKA_GRES_LOCAL_VACUUM_KEY_BUDGET")]
     key_budget: Option<PositiveUsize>,
     #[arg(long = "local-vacuum-max-key-budget",
-          env = "CRABKA_GRES_LOCAL_VACUUM_MAX_KEY_BUDGET")]
+          env = "KRABKA_GRES_LOCAL_VACUUM_MAX_KEY_BUDGET")]
     max_key_budget: Option<PositiveUsize>,
     #[arg(long = "local-vacuum-step-fast-ms",
-          env = "CRABKA_GRES_LOCAL_VACUUM_STEP_FAST_MS")]
+          env = "KRABKA_GRES_LOCAL_VACUUM_STEP_FAST_MS")]
     step_fast_ms: Option<PositiveMillis>,
     #[arg(long = "local-vacuum-step-slow-ms",
-          env = "CRABKA_GRES_LOCAL_VACUUM_STEP_SLOW_MS")]
+          env = "KRABKA_GRES_LOCAL_VACUUM_STEP_SLOW_MS")]
     step_slow_ms: Option<PositiveMillis>,
     #[arg(long = "local-vacuum-idle-after-ms",
-          env = "CRABKA_GRES_LOCAL_VACUUM_IDLE_AFTER_MS")]
+          env = "KRABKA_GRES_LOCAL_VACUUM_IDLE_AFTER_MS")]
     idle_after_ms: Option<PositiveMillis>,
 }
 ```
@@ -256,7 +256,7 @@ fn local_vacuum_policy(args: &ServeArgs) -> std::io::Result<Option<LocalVacuumPo
     }
 
     let key_budget = options.key_budget.map_or(
-        crabka_pgexec::VACUUM_STEP_KEY_BUDGET,
+        krabka_pgexec::VACUUM_STEP_KEY_BUDGET,
         PositiveUsize::into_value,
     );
     let max_key_budget = match options.max_key_budget {
@@ -368,7 +368,7 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres vacuum_pacing_tests --lib
+  cargo test -p krabka-gres vacuum_pacing_tests --lib
 ```
 
 Expected: compilation fails because `VacuumPacer::new` does not receive the
@@ -426,7 +426,7 @@ Change the loop signature and spawn:
 ```rust
 async fn run_local_vacuum_loop(
     engine: SqlEngine,
-    activity: Arc<crabka_pgwire::server::ActivityTracker>,
+    activity: Arc<krabka_pgwire::server::ActivityTracker>,
     shutdown: CancellationToken,
     policy: LocalVacuumPolicy,
 ) {
@@ -455,11 +455,11 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres vacuum_pacing_tests --lib
+  cargo test -p krabka-gres vacuum_pacing_tests --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres local_vacuum --lib
+  cargo test -p krabka-gres local_vacuum --lib
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -q -p crabka-gres -- --help \
+  cargo run -q -p krabka-gres -- --help \
   | rg 'local-vacuum-(idle-interval|backoff-floor|hot-debt|key-budget|max-key-budget|step-fast|step-slow|idle-after)'
 ```
 
@@ -471,11 +471,11 @@ Run:
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo check -p crabka-gres --all-targets
+  cargo check -p krabka-gres --all-targets
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-gres --no-fail-fast
+  cargo test -p krabka-gres --no-fail-fast
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-gres --all-targets --all-features -- -D warnings
+  cargo clippy -p krabka-gres --all-targets --all-features -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo fmt --all -- --check
 git diff --check
@@ -528,8 +528,8 @@ continuing.
 Run:
 
 ```bash
-tools/audit-runtime-values.sh > /tmp/crabka-gres-local-vacuum-values.txt
-wc -l /tmp/crabka-gres-local-vacuum-values.txt
+tools/audit-runtime-values.sh > /tmp/krabka-gres-local-vacuum-values.txt
+wc -l /tmp/krabka-gres-local-vacuum-values.txt
 rg -n 'LOCAL_VACUUM|local.vacuum|vacuum.*(Duration|budget|debt|interval)' \
   crates/gres/src/lib.rs crates/pgexec/src/lib.rs
 ```

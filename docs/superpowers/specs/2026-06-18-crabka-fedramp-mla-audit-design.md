@@ -36,7 +36,7 @@ Crabka today has structured JSON application logs (`tracing` + `logfmt`), Promet
 
 | Area | Decision |
 |---|---|
-| Delivery model | **Kafka-native**: a dedicated internal `__crabka_audit` topic is the primary audit interface. |
+| Delivery model | **Kafka-native**: a dedicated internal `__krabka_audit` topic is the primary audit interface. |
 | Failure policy (AU-5) | **Spool + async replay** by default; **fail-closed opt-in** per event class. |
 | Event coverage (LET) | **Control-plane always**; **data-plane configurable** (`off`/`deny_only`/`all`), deny-only default when enabled. |
 | Tamper-evidence (OSM) | **Per-broker hash-chain + periodic signed checkpoints**. |
@@ -74,7 +74,7 @@ The authorizer decorator is the key design lever: routing *all* deny decisions t
 
 ### 3.3 Kafka-native write path
 
-The `__crabka_audit` topic is partitioned by **broker affinity**: it has ≥ N partitions and **each broker leads its own partition**. A broker writes its records to *its own* partition through the **internal partition-append path** — the same path replication uses — so the common case is a **local append with no network round-trip**, then replicated to followers at `acks=all` / `min.insync.replicas=2`.
+The `__krabka_audit` topic is partitioned by **broker affinity**: it has ≥ N partitions and **each broker leads its own partition**. A broker writes its records to *its own* partition through the **internal partition-append path** — the same path replication uses — so the common case is a **local append with no network round-trip**, then replicated to followers at `acks=all` / `min.insync.replicas=2`.
 
 Consequences:
 - The **hash-chain is per-broker** (one clean monotonic chain per partition) — no cross-broker ordering coordination needed.
@@ -93,7 +93,7 @@ Consequences:
 
 SIEMs ingest OCSF JSON directly off the topic (native consumer or Kafka Connect). To avoid an audit-write feedback loop, a hard rule applies:
 
-> **Operations on `__crabka_audit` are never data-plane-audited** — writing audit records produces no audit records. **Administrative** changes to the audit topic (retention, ACL, delete) **are** audited (by the `audit-admin` role, §7).
+> **Operations on `__krabka_audit` are never data-plane-audited** — writing audit records produces no audit records. **Administrative** changes to the audit topic (retention, ACL, delete) **are** audited (by the `audit-admin` role, §7).
 
 ---
 
@@ -106,7 +106,7 @@ auth / authz-decorator / admin handler / lifecycle / EVC
    crates/audit::AuditLog
         │  OCSF-serialize → assign seq + prev_hash → record headers
         ▼
-   internal partition-append (this broker's __crabka_audit partition)
+   internal partition-append (this broker's __krabka_audit partition)
         │
    ┌────┴───────────── durable & replicated? ───────────────┐
    │ yes                                                      │ no (under-replicated /
@@ -132,7 +132,7 @@ For **fail-closed event classes**, if the record cannot be durably persisted to 
 - **Signed checkpoints.** Every *N* records or *T* seconds the broker emits a checkpoint record: a signature over `{broker_id, seq_range, chain_head_hash, timestamp, key_id}` using the broker's audit signing key.
 - **Algorithm.** FIPS-approved — **Ed25519 (FIPS 186-5)** or **ECDSA P-256** (final selection in the plan).
 - **Key management.** Keys sourced from config / file / KMS. **Rotation** via `key_id` carried on each checkpoint, so a chain spans key epochs verifiably.
-- **Offline verification.** A `crabka-audit verify` CLI walks a partition, validates chain continuity and every checkpoint signature, and reports the first break (seq + reason).
+- **Offline verification.** A `krabka-audit verify` CLI walks a partition, validates chain continuity and every checkpoint signature, and reports the first break (seq + reason).
 
 ---
 
@@ -142,7 +142,7 @@ The degraded path triggers when a record cannot reach a **durable, replicated** 
 
 1. The record is written to a **durable local spool** (append-only file; the hash-chain stays continuous across spool → topic).
 2. A **background replayer** drains the spool into the topic on recovery.
-3. `crabka_broker_audit_*` metrics and a log alert fire (spool depth, replay lag, drop count).
+3. `krabka_broker_audit_*` metrics and a log alert fire (spool depth, replay lag, drop count).
 4. Event classes flagged **fail-closed** in config (e.g. ACL changes, super-user actions) instead **reject the originating operation** if the record can't be durably persisted to topic-or-spool.
 
 Everything not flagged fail-closed stays available; the spool bounds loss to catastrophic local-disk failure, which the replicated topic + per-broker chain make evident.
@@ -151,7 +151,7 @@ Everything not flagged fail-closed stays available; the spool bounds loss to cat
 
 ## 7. Log access model (KSI-MLA-ALA + AC-5)
 
-- **Dedicated authorizations** `audit-reader` and `audit-admin` gate read and administration of `__crabka_audit`.
+- **Dedicated authorizations** `audit-reader` and `audit-admin` gate read and administration of `__krabka_audit`.
 - **Super-user exclusion.** The authorizer treats the audit topic specially: **cluster super-user status does not grant** the audit roles. A broker admin cannot silently read or purge the trail — enforcing **separation of duties (AC-5)**.
 - **Write-lock.** The topic is write-locked to the internal broker principal; no external principal (super-user included) can produce to it.
 - **Audited administration.** Retention / delete / ACL changes on the audit topic are themselves audited, attributed to `audit-admin`.
@@ -162,8 +162,8 @@ Everything not flagged fail-closed stays available; the spool bounds loss to cat
 ## 8. Config evaluation (KSI-MLA-EVC)
 
 1. **Hardening baseline.** A documented secure-by-default profile (TLS required on client listeners, anonymous auth off, ACL authorizer on with deny-by-default, audit enabled, fail-closed set for sensitive classes, …), each rule annotated with its NIST control.
-2. **`crabka-broker check-config`.** Evaluates the running/declared config against the baseline, prints a pass/fail/drift report with control references, and **exits non-zero on failure** so it drops into operator CI as the IaC-evaluation gate.
-3. **Runtime posture.** The broker re-evaluates periodically, emits a `compliance_posture` audit event **on change** (drift is itself auditable/alertable), and exposes a `crabka_broker_compliance_posture` gauge.
+2. **`krabka-broker check-config`.** Evaluates the running/declared config against the baseline, prints a pass/fail/drift report with control references, and **exits non-zero on failure** so it drops into operator CI as the IaC-evaluation gate.
+3. **Runtime posture.** The broker re-evaluates periodically, emits a `compliance_posture` audit event **on change** (drift is itself auditable/alertable), and exposes a `krabka_broker_compliance_posture` gauge.
 
 ---
 
@@ -193,7 +193,7 @@ New `[audit]` section in `broker.toml`:
 ```toml
 [audit]
 enabled = true                       # part of the hardening baseline
-topic = "__crabka_audit"
+topic = "__krabka_audit"
 partitions = "per-broker"            # broker-affinity
 replication_factor = 3
 min_insync_replicas = 2
@@ -236,8 +236,8 @@ Defaults are compliant out of the box; `enabled = true` is part of the hardening
 
 Each slice gets its own plan. File sets are mostly disjoint, so several can batch in parallel (per `CLAUDE.md` parallel-subagent guidance).
 
-1. **Audit core + write path** — `crates/audit` (event model, OCSF serializer, `AuditLog`); `__crabka_audit` topic + broker-affinity append; control-plane instrumentation (authn, authorizer-decorator denies, admin handlers, lifecycle). *Foundation; everything depends on it.*
-2. **Tamper-evidence** — per-broker hash-chain, signed checkpoints, key management/rotation, `crabka-audit verify` CLI.
+1. **Audit core + write path** — `crates/audit` (event model, OCSF serializer, `AuditLog`); `__krabka_audit` topic + broker-affinity append; control-plane instrumentation (authn, authorizer-decorator denies, admin handlers, lifecycle). *Foundation; everything depends on it.*
+2. **Tamper-evidence** — per-broker hash-chain, signed checkpoints, key management/rotation, `krabka-audit verify` CLI.
 3. **Durability / AU-5** — spool + replay, fail-closed classes, metrics/alerts.
 4. **ALA access model** — `audit-reader`/`audit-admin` roles, super-user exclusion, write-lock, audited retention/delete, JIT delegation tokens.
 5. **Data-plane auditing** — configurable `deny_only`/`all`, resource selectors, sampling (high-volume, optional path).

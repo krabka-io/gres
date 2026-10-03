@@ -1,4 +1,4 @@
-# crabka-pprof Slice 2 — pprof core (pprof model + codec + `SymbolDb` + `ProfileType` + `ProfileStore` trait + the MERGE→flamegraph engine) Implementation Plan
+# krabka-pprof Slice 2 — pprof core (pprof model + codec + `SymbolDb` + `ProfileType` + `ProfileStore` trait + the MERGE→flamegraph engine) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -6,16 +6,16 @@
 
 **Goal:** Build the core of the **language-less** profiles engine — the perftools.profiles **pprof model + codec** (decode/encode), the deduplicated **`SymbolDb`** (parent-pointer stacktrace tree + dedup string/function/location/mapping tables + `encode`/`decode` artifact behind a `SymbolSource` trait), the 5-part **`ProfileType`** parse/`Display`, the **`ProfileStore`** query seam + an `InMemoryProfileStore` test impl (builds a samples DataFusion table + a `SymbolDb`), and — the **centerpiece** — the **MERGE→flamegraph** engine: resolve a Prometheus-matcher `label_selector` string + profile type + `[start,end]` → `ProfileStore.select` → DataFusion `GROUP BY (stacktrace_partition, stacktrace_id) → SUM(value)` (the merge-*before*-symbolize step) → Rust resolve distinct ids via `SymbolDb` (inlined frames expanded, leaf-first) → fold into one `Tree` (total-along-path, self-at-leaf) → `to_flamegraph(max_nodes)` → the 4-ints-per-bar `FlameGraph`. `SelectSeries`/`Diff`/`SelectHeatmap`/raw-profile output are **deferred to Slice 3** (signatures frozen here).
 
-**Architecture:** A query crate `crabka-pprof` that depends on DataFusion (same git pin as blockstore) and **no profiles query parser — there is no language**. The only thing resembling a parser is the Prometheus label-matcher string helper (reusing blockstore `LabelMatcher`/`MatchOp`). The engine is generic over a `ProfileStore` trait that yields a DataFusion `SessionContext` with a samples table registered + an `Arc<dyn SymbolSource>` for a (tenant, profile_type, matchers, time-range) scan — production wires this to the querier's hot/cold UNION (Slice 5), but this slice ships an `InMemoryProfileStore` test impl so the engine is independently testable. The **DataFusion/Rust split is the load-bearing design**: DataFusion does the cheap set-shrinking fold (`GROUP BY (partition, id) → SUM`) *before* symbolization; Rust resolves the symbol-DB tree + folds the flamegraph *only* on the distinct surviving ids. Raw `stacktrace_id`s are only meaningful within their own block's `SymbolDb` partition, so symbolization is always local-then-merge (`Tree::merge`) — never raw ids across a partition/block boundary.
+**Architecture:** A query crate `krabka-pprof` that depends on DataFusion (same git pin as blockstore) and **no profiles query parser — there is no language**. The only thing resembling a parser is the Prometheus label-matcher string helper (reusing blockstore `LabelMatcher`/`MatchOp`). The engine is generic over a `ProfileStore` trait that yields a DataFusion `SessionContext` with a samples table registered + an `Arc<dyn SymbolSource>` for a (tenant, profile_type, matchers, time-range) scan — production wires this to the querier's hot/cold UNION (Slice 5), but this slice ships an `InMemoryProfileStore` test impl so the engine is independently testable. The **DataFusion/Rust split is the load-bearing design**: DataFusion does the cheap set-shrinking fold (`GROUP BY (partition, id) → SUM`) *before* symbolization; Rust resolves the symbol-DB tree + folds the flamegraph *only* on the distinct surviving ids. Raw `stacktrace_id`s are only meaningful within their own block's `SymbolDb` partition, so symbolization is always local-then-merge (`Tree::merge`) — never raw ids across a partition/block boundary.
 
-**Tech Stack:** Rust 2024 · `datafusion` (git `main`, pinned — see Global Constraints) · `arrow` 59 · `prost` 0.14 (pprof wire model) · `async-trait` · `tokio` · `futures` · `regex` (matcher-string helper) · `thiserror`. Depends on `crabka-blockstore` (types: `LabelMatcher`, `MatchOp`; the `PCOL_*` samples-table column constants + schema from profiles Slice 1). Tests: `assert2`, `proptest`, `tokio` (`macros`, `rt-multi-thread`).
+**Tech Stack:** Rust 2024 · `datafusion` (git `main`, pinned — see Global Constraints) · `arrow` 59 · `prost` 0.14 (pprof wire model) · `async-trait` · `tokio` · `futures` · `regex` (matcher-string helper) · `thiserror`. Depends on `krabka-blockstore` (types: `LabelMatcher`, `MatchOp`; the `PCOL_*` samples-table column constants + schema from profiles Slice 1). Tests: `assert2`, `proptest`, `tokio` (`macros`, `rt-multi-thread`).
 
 ## Global Constraints
 
 - **No backwards compatibility.** Crabka is greenfield/undeployed. No `#[serde(default)]` shims, no V2-alongside-V1 enum variants, no migration code, no default-off feature gates. Change schemas/enums/interfaces/the symdb on-disk encoding freely. (Only Kafka wire compat matters — and this crate touches none of it; the pprof wire model is a separate, externally-fixed contract pinned below.)
 - **`unsafe_code = "forbid"`** workspace-wide. No `unsafe`.
-- **Lints:** `clippy::pedantic` is `warn` workspace-wide (`module_name_repetitions`, `missing_errors_doc`, `missing_panics_doc` allowed). New code must be clippy-pedantic clean. Run `cargo clippy -p crabka-pprof --all-targets` before each commit.
-- **Formatting:** run `cargo fmt -p crabka-pprof` before every commit. **NEVER** run `cargo +nightly fmt --all` — it fails with OS error 206 / path-too-long in deep worktrees on Windows; always scope with `-p`.
+- **Lints:** `clippy::pedantic` is `warn` workspace-wide (`module_name_repetitions`, `missing_errors_doc`, `missing_panics_doc` allowed). New code must be clippy-pedantic clean. Run `cargo clippy -p krabka-pprof --all-targets` before each commit.
+- **Formatting:** run `cargo fmt -p krabka-pprof` before every commit. **NEVER** run `cargo +nightly fmt --all` — it fails with OS error 206 / path-too-long in deep worktrees on Windows; always scope with `-p`.
 - **Assertions:** use `assert2::assert!` / `assert2::check!` in tests, `prop_assert*` inside `proptest!`.
 - **Async tests:** `#[tokio::test]`. Crate dev-dep `tokio` features = `["macros", "rt-multi-thread"]`.
 - **Dependency pin (locked):** `datafusion = { git = "https://github.com/apache/datafusion", rev = "0838a4ddb902535b0e95a1c5a254be7e9c7fe9bf" }`. This `main` revision tracks arrow 59 / parquet 59 / object_store 0.13.2, which unify with the workspace pins (same major → cargo unifies to one crate instance, so arrow types cross the DataFusion boundary cleanly). Do **not** substitute a released `datafusion` (54.x is on arrow 58 and pulls a second, incompatible arrow major).
@@ -31,14 +31,14 @@
 ## Dependency & slice roadmap
 
 **Depends on:**
-- `crabka-blockstore` (generalized in profiles Slice 1): the `LabelMatcher`/`MatchOp`/`Labels` types and the **profile samples fact-table column constants + Arrow schema** (`PCOL_PROFILE_TYPE`, `PCOL_STACKTRACE_ID`, `PCOL_VALUE`, `PCOL_STACKTRACE_PARTITION`, `PCOL_TOTAL_VALUE`, `PCOL_SPAN_ID`, `PCOL_TRACE_ID` + the mandatory `COL_FINGERPRINT`/`COL_TIMESTAMP`) and the **symbol-DB on-block artifact byte layout**. **This slice consumes only the *column-name contract* + the matcher types** — the `BlockStore`-backed `ProfileStore` impl lands in Slice 5; here we ship `InMemoryProfileStore`, which emits the identical samples columns from hand-built profiles so the merge tests are trustworthy. (If Slice 1 has not landed in this tree, the `PCOL_*` constants are re-declared in this crate's `samples.rs` against the same names and the dependency is wired but not gated — see Task A6.)
+- `krabka-blockstore` (generalized in profiles Slice 1): the `LabelMatcher`/`MatchOp`/`Labels` types and the **profile samples fact-table column constants + Arrow schema** (`PCOL_PROFILE_TYPE`, `PCOL_STACKTRACE_ID`, `PCOL_VALUE`, `PCOL_STACKTRACE_PARTITION`, `PCOL_TOTAL_VALUE`, `PCOL_SPAN_ID`, `PCOL_TRACE_ID` + the mandatory `COL_FINGERPRINT`/`COL_TIMESTAMP`) and the **symbol-DB on-block artifact byte layout**. **This slice consumes only the *column-name contract* + the matcher types** — the `BlockStore`-backed `ProfileStore` impl lands in Slice 5; here we ship `InMemoryProfileStore`, which emits the identical samples columns from hand-built profiles so the merge tests are trustworthy. (If Slice 1 has not landed in this tree, the `PCOL_*` constants are re-declared in this crate's `samples.rs` against the same names and the dependency is wired but not gated — see Task A6.)
 
 **The 8 profiles slices** (this plan = Slice 2; each later slice gets its own plan):
 
 1. **Blockstore `ProfileIndex` + samples schema + symbol-DB artifact** — `ProfileIndex` (`impl BlockIndex`) = label-series postings (reuse the metrics `SeriesIndex`) + profile-type index + per-block time-range + stacktrace-partition map; the `PCOL_*` samples columns + schema; the symbol-DB artifact. *(planned/built separately)*
-2. **`crabka-pprof` core** *(this plan)* — pprof model + codec, `SymbolDb` + `SymbolSource`, `ProfileType` parse/`Display`, the `ProfileStore` trait + `InMemoryProfileStore` + the pinned engine result types, and the **MERGE→flamegraph** engine (fold-before-symbolize, `Tree`, the 4-ints-per-bar `FlameGraph`). Defines the `crabka-pprof` public contract the rest interlock on. **No query parser — there is no language.**
+2. **`krabka-pprof` core** *(this plan)* — pprof model + codec, `SymbolDb` + `SymbolSource`, `ProfileType` parse/`Display`, the `ProfileStore` trait + `InMemoryProfileStore` + the pinned engine result types, and the **MERGE→flamegraph** engine (fold-before-symbolize, `Tree`, the 4-ints-per-bar `FlameGraph`). Defines the `krabka-pprof` public contract the rest interlock on. **No query parser — there is no language.**
 3. **Engine completeness** — `SelectSeries` (precomputed `total_value`, step-in-seconds, SUM/AVERAGE → `FlameGraphDiff`'s sibling `Series`), `Diff` (7-ints-per-bar `FlameGraphDiff`), `max_nodes` truncation refinements, raw-profile output (`select_merge_profile` → pprof), `SelectMergeSpanProfile` + `SelectHeatmap`. **Reuses this slice's `ProfileStore`/`SymbolSource`/`Tree`/`FlameGraph`/`FlameEngine` — those public names are frozen here.**
-4. **Ingest service** (`crabka-profiles`) — `distributor` (`push.v1` + `/ingest` + OTLP `v1development` + relabel + multi-value split) → `(tenant, series_fingerprint)`-partitioned WAL; `block-builder` consumer group → samples fact table + dedup symbol DB + `ProfileIndex` (write-then-commit, idempotent keys). **Consumes the pprof codec + `SymbolDb` interning.**
+4. **Ingest service** (`krabka-profiles`) — `distributor` (`push.v1` + `/ingest` + OTLP `v1development` + relabel + multi-value split) → `(tenant, series_fingerprint)`-partitioned WAL; `block-builder` consumer group → samples fact table + dedup symbol DB + `ProfileIndex` (write-then-commit, idempotent keys). **Consumes the pprof codec + `SymbolDb` interning.**
 5. **Querier + Connect `querier.v1` API + legacy render** — implement `ProfileStore` as the hot/cold UNION; serve the Connect `querier.v1` methods + legacy `/pyroscope/render`. **Replaces `InMemoryProfileStore` with a `BlockStore`-backed `ProfileStore` — the trait is frozen here.**
 6. **Query-frontend** — query split/shard + the **partial-tree merge** (`Tree::merge` across blocks; raw ids never cross a boundary). **Consumes `FlameEngine`/`Tree`.**
 7. **Native symbolization** (the heavy slice) — query-time `build_id → debuginfod` + DWARF/ELF/`.gopclntab` parse + demangle + inline expansion, behind the `SymbolSource` wrapper; `gimli`/`object`/`addr2line` + a debuginfod `reqwest` client.
@@ -205,7 +205,7 @@ The `samples_table` registered by `ProfileStore::select` has **one row per SAMPL
 - Modify: root `Cargo.toml` (members glob `crates/*` already covers it; `prost`/`prost-build`/`datafusion`/`arrow` already in `[workspace.dependencies]` per the blockstore/metrics plans)
 
 **Interfaces:**
-- Produces: a compiling `crabka-pprof` crate whose `build.rs` generates the perftools.profiles prost module, with `pub fn crate_smoke() -> bool` (placeholder, removed in A2).
+- Produces: a compiling `krabka-pprof` crate whose `build.rs` generates the perftools.profiles prost module, with `pub fn crate_smoke() -> bool` (placeholder, removed in A2).
 
 - [ ] **Step 1: Vendor `crates/pprof/proto/profile.proto`** — copy the perftools.profiles `Profile` proto verbatim from google/pprof `proto/profile.proto` (Apache-2.0). Pin the source: header comment `// vendored from github.com/google/pprof proto/profile.proto @ master, 2026-06-18`. **Do not edit field numbers.** The proto defines `Profile { sample_type[], sample[], mapping[], location[], function[], string_table[], ... }`, `Sample { location_id[], value[], label[] }`, `Location { id, mapping_id, address, line[] }`, `Line { function_id, line }`, `Function { id, name, system_name, filename, start_line }`, `Mapping { id, memory_start, memory_limit, file_offset, filename, build_id, has_functions, has_filenames, has_line_numbers, has_inline_frames }`, `ValueType { type, unit }`.
 
@@ -213,16 +213,16 @@ The `samples_table` registered by `ProfileStore::select` has **one row per SAMPL
 
 ```toml
 [package]
-name = "crabka-pprof"
+name = "krabka-pprof"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "Language-less profiles engine (pprof model + symbol DB + flamegraph-merge) for Crabka's Grafana-Pyroscope-equivalent profiles backend"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-pprof"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-pprof"
 readme = "README.md"
 keywords = ["observability", "pyroscope", "pprof", "profiling", "crabka"]
 categories = ["database-implementations"]
@@ -231,7 +231,7 @@ categories = ["database-implementations"]
 workspace = true
 
 [dependencies]
-crabka-blockstore = { path = "../blockstore", version = "0.3.7" }
+krabka-blockstore = { path = "../blockstore", version = "0.3.7" }
 arrow = { workspace = true }
 datafusion = { workspace = true }
 prost = { workspace = true }
@@ -312,16 +312,16 @@ mod tests {
 
 - [ ] **Step 5: Build and test**
 
-Run: `cargo test -p crabka-pprof`
+Run: `cargo test -p krabka-pprof`
 Expected: `build.rs` compiles the proto, the crate compiles, `smoke` + `proto_module_compiles` PASS. If the build fails with `protoc` not found, align `build.rs` with the grpc-gateway crate's `protoc` discovery (Step 3 note). If it fails with an arrow major mismatch, the datafusion rev is wrong — re-confirm the pin tracks arrow 59.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-pprof
-cargo clippy -p crabka-pprof --all-targets
+cargo fmt -p krabka-pprof
+cargo clippy -p krabka-pprof --all-targets
 git add Cargo.toml Cargo.lock crates/pprof/
-git commit -m "feat(pprof): scaffold crabka-pprof crate + vendored perftools.profiles proto"
+git commit -m "feat(pprof): scaffold krabka-pprof crate + vendored perftools.profiles proto"
 ```
 
 ---
@@ -373,7 +373,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-pprof --lib error`
+Run: `cargo test -p krabka-pprof --lib error`
 Expected: FAIL — `cannot find type ProfileError`.
 
 - [ ] **Step 3: Implement `error.rs`**
@@ -436,14 +436,14 @@ pub(crate) use error::Result;
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-pprof --lib error`
+Run: `cargo test -p krabka-pprof --lib error`
 Expected: PASS (3 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-pprof
-cargo clippy -p crabka-pprof --all-targets
+cargo fmt -p krabka-pprof
+cargo clippy -p krabka-pprof --all-targets
 git add crates/pprof/
 git commit -m "feat(pprof): ProfileError type + DataFusion/prost conversions"
 ```
@@ -524,7 +524,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-pprof --lib pprof`
+Run: `cargo test -p krabka-pprof --lib pprof`
 Expected: FAIL — `cannot find type PprofProfile`.
 
 - [ ] **Step 3: Implement `pprof.rs`**
@@ -593,12 +593,12 @@ impl PprofProfile {
 
 - [ ] **Step 4: Wire into `lib.rs`** — add `mod pprof;` and `pub use pprof::{Frame, PprofProfile};`.
 
-- [ ] **Step 5: Run to verify it passes** — `cargo test -p crabka-pprof --lib pprof` → PASS (2 tests).
+- [ ] **Step 5: Run to verify it passes** — `cargo test -p krabka-pprof --lib pprof` → PASS (2 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-pprof && cargo clippy -p crabka-pprof --all-targets
+cargo fmt -p krabka-pprof && cargo clippy -p krabka-pprof --all-targets
 git add crates/pprof/
 git commit -m "feat(pprof): PprofProfile decode/encode wrapper + Frame + string-table helpers"
 ```
@@ -716,8 +716,8 @@ impl fmt::Display for ProfileType {
 - [ ] **Step 4: Wire + run + commit** — add `mod profile_type;` + `pub use profile_type::ProfileType;`.
 
 ```bash
-cargo test -p crabka-pprof --lib profile_type  # PASS (3 tests)
-cargo fmt -p crabka-pprof && cargo clippy -p crabka-pprof --all-targets
+cargo test -p krabka-pprof --lib profile_type  # PASS (3 tests)
+cargo fmt -p krabka-pprof && cargo clippy -p krabka-pprof --all-targets
 git add crates/pprof/
 git commit -m "feat(pprof): ProfileType 5-part parse + Display"
 ```
@@ -835,8 +835,8 @@ mod tests {
 - [ ] **Step 4: Wire + run + commit** — add `mod symbols;` + `pub use symbols::{SymbolDb, SymbolSource};`.
 
 ```bash
-cargo test -p crabka-pprof --lib symbols  # PASS (5 tests)
-cargo fmt -p crabka-pprof && cargo clippy -p crabka-pprof --all-targets
+cargo test -p krabka-pprof --lib symbols  # PASS (5 tests)
+cargo fmt -p krabka-pprof && cargo clippy -p krabka-pprof --all-targets
 git add crates/pprof/ Cargo.toml
 git commit -m "feat(pprof): SymbolDb (parent-pointer stacktrace tree + dedup tables + encode/decode) + SymbolSource"
 ```
@@ -857,9 +857,9 @@ git commit -m "feat(pprof): SymbolDb (parent-pointer stacktrace tree + dedup tab
   - `pub(crate) fn parse_label_selector(s: &str) -> Result<Vec<LabelMatcher>, ProfileError>` — parse a Prometheus matcher string `{k1="v1", k2=~"re", k3!="v4"}` (braces optional; empty/`{}` ⇒ `[]`) into blockstore `LabelMatcher`s using `MatchOp` (`=`/`!=`/`=~`/`!~`). **This is the only thing resembling a parser in the crate — it is just Prometheus label matching, not a profiles query language.**
 - `samples.rs` Produces:
   - the `PCOL_*` column-name constants matching the **Samples table column contract** above (`PCOL_PROFILE_TYPE`, `PCOL_STACKTRACE_ID`, `PCOL_VALUE`, `PCOL_STACKTRACE_PARTITION`, `PCOL_TOTAL_VALUE`, `PCOL_SPAN_ID`, `PCOL_TRACE_ID`) plus re-exported `COL_FINGERPRINT`/`COL_TIMESTAMP` (from blockstore, or local consts if Slice 1 absent).
-  - `pub fn profile_samples_schema() -> arrow::datatypes::SchemaRef` — the one-row-per-sample Arrow schema (the same name Slice 1 exports from `crabka-blockstore`; re-export that when Slice 1 has landed).
+  - `pub fn profile_samples_schema() -> arrow::datatypes::SchemaRef` — the one-row-per-sample Arrow schema (the same name Slice 1 exports from `krabka-blockstore`; re-export that when Slice 1 has landed).
 
-> **Reuse note:** import `LabelMatcher`/`MatchOp`/`COL_FINGERPRINT`/`COL_TIMESTAMP`/`PCOL_*` from `crabka_blockstore` if profiles Slice 1 has landed. If it has NOT landed in this tree, declare the `PCOL_*` constants + `profile_samples_schema` here against the identical names (the contract above) and re-export blockstore's `LabelMatcher`/`MatchOp` (those land in the logs-wedge base blockstore, already present). The block-builder (Slice 1/4) is contracted to emit the identical column names/types.
+> **Reuse note:** import `LabelMatcher`/`MatchOp`/`COL_FINGERPRINT`/`COL_TIMESTAMP`/`PCOL_*` from `krabka_blockstore` if profiles Slice 1 has landed. If it has NOT landed in this tree, declare the `PCOL_*` constants + `profile_samples_schema` here against the identical names (the contract above) and re-export blockstore's `LabelMatcher`/`MatchOp` (those land in the logs-wedge base blockstore, already present). The block-builder (Slice 1/4) is contracted to emit the identical column names/types.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -870,7 +870,7 @@ git commit -m "feat(pprof): SymbolDb (parent-pointer stacktrace tree + dedup tab
 mod tests {
     use super::*;
     use assert2::assert;
-    use crabka_blockstore::MatchOp;
+    use krabka_blockstore::MatchOp;
 
     #[test]
     fn parses_braced_matchers() {
@@ -935,7 +935,7 @@ use std::sync::Arc;
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 
 // Re-export the blockstore-mandatory columns (or declare locally if Slice 1 absent).
-pub use crabka_blockstore::{COL_FINGERPRINT, COL_TIMESTAMP};
+pub use krabka_blockstore::{COL_FINGERPRINT, COL_TIMESTAMP};
 
 pub const PCOL_PROFILE_TYPE: &str = "profile_type";
 pub const PCOL_STACKTRACE_ID: &str = "stacktrace_id";
@@ -946,7 +946,7 @@ pub const PCOL_SPAN_ID: &str = "span_id";
 pub const PCOL_TRACE_ID: &str = "trace_id";
 
 /// The one-row-per-sample Arrow schema (spec §4.1). Named to match Slice 1's
-/// `crabka_blockstore::profile_samples_schema` so the re-export path is a no-op.
+/// `krabka_blockstore::profile_samples_schema` so the re-export path is a no-op.
 #[must_use]
 pub fn profile_samples_schema() -> SchemaRef {
     Arc::new(Schema::new(vec![
@@ -967,13 +967,13 @@ pub fn profile_samples_schema() -> SchemaRef {
 }
 ```
 
-> If `crabka_blockstore::{COL_FINGERPRINT, COL_TIMESTAMP, PCOL_*, profile_samples_schema}` already exist (profiles Slice 1 landed), import the `PCOL_*` + `profile_samples_schema` from there and delete the local consts/fn — one source of truth. The local fallback is named `profile_samples_schema` (identical to Slice 1's blockstore export) so the re-export swap is a no-op. The test asserts the *types*, so either source satisfies it.
+> If `krabka_blockstore::{COL_FINGERPRINT, COL_TIMESTAMP, PCOL_*, profile_samples_schema}` already exist (profiles Slice 1 landed), import the `PCOL_*` + `profile_samples_schema` from there and delete the local consts/fn — one source of truth. The local fallback is named `profile_samples_schema` (identical to Slice 1's blockstore export) so the re-export swap is a no-op. The test asserts the *types*, so either source satisfies it.
 
 - [ ] **Step 4: Wire + run + commit** — add `mod matcher; mod samples;` + `pub use samples::{COL_FINGERPRINT, COL_TIMESTAMP, PCOL_PROFILE_TYPE, PCOL_STACKTRACE_ID, PCOL_STACKTRACE_PARTITION, PCOL_SPAN_ID, PCOL_TOTAL_VALUE, PCOL_TRACE_ID, PCOL_VALUE, profile_samples_schema};` (`parse_label_selector` stays `pub(crate)`).
 
 ```bash
-cargo test -p crabka-pprof --lib matcher --lib samples  # PASS
-cargo fmt -p crabka-pprof && cargo clippy -p crabka-pprof --all-targets
+cargo test -p krabka-pprof --lib matcher --lib samples  # PASS
+cargo fmt -p krabka-pprof && cargo clippy -p krabka-pprof --all-targets
 git add crates/pprof/
 git commit -m "feat(pprof): Prometheus matcher-string helper + samples-table column contract"
 ```
@@ -1001,7 +1001,7 @@ Create `crates/pprof/src/store.rs`:
 mod tests {
     use super::*;
     use assert2::assert;
-    use crabka_blockstore::LabelMatcher;
+    use krabka_blockstore::LabelMatcher;
     use datafusion::prelude::SessionContext;
 
     struct Empty;
@@ -1050,7 +1050,7 @@ mod tests {
 
 use std::sync::Arc;
 
-use crabka_blockstore::LabelMatcher;
+use krabka_blockstore::LabelMatcher;
 use datafusion::prelude::SessionContext;
 
 use crate::error::ProfileError;
@@ -1123,8 +1123,8 @@ pub trait ProfileStore: Send + Sync {
 - [ ] **Step 4: Wire + run + commit** — add `mod store;` + `pub use store::{ProfileScan, ProfileStore};`.
 
 ```bash
-cargo test -p crabka-pprof --lib store  # PASS
-cargo fmt -p crabka-pprof && cargo clippy -p crabka-pprof --all-targets
+cargo test -p krabka-pprof --lib store  # PASS
+cargo fmt -p krabka-pprof && cargo clippy -p krabka-pprof --all-targets
 git add crates/pprof/
 git commit -m "feat(pprof): ProfileStore trait + ProfileScan"
 ```
@@ -1216,7 +1216,7 @@ mod tests {
 - [ ] **Step 5: Phase A gate + commit**
 
 ```bash
-cargo test -p crabka-pprof && cargo clippy -p crabka-pprof --all-targets && cargo fmt -p crabka-pprof --check
+cargo test -p krabka-pprof && cargo clippy -p krabka-pprof --all-targets && cargo fmt -p krabka-pprof --check
 git add crates/pprof/ Cargo.toml
 git commit -m "feat(pprof): InMemoryProfileStore building samples DataFusion table + SymbolDb"
 ```
@@ -1308,8 +1308,8 @@ mod tests {
 - [ ] **Step 4: Run + wire + commit** — add `mod tree;` + `pub use tree::Tree;` (the `FlameGraph` types are exported in B2).
 
 ```bash
-cargo test -p crabka-pprof --lib tree  # PASS (2 tests)
-cargo fmt -p crabka-pprof && cargo clippy -p crabka-pprof --all-targets
+cargo test -p krabka-pprof --lib tree  # PASS (2 tests)
+cargo fmt -p krabka-pprof && cargo clippy -p krabka-pprof --all-targets
 git add crates/pprof/
 git commit -m "feat(pprof): Tree fold (total-along-path, self-at-leaf) + merge"
 ```
@@ -1395,8 +1395,8 @@ Append to `tree.rs`'s `tests`:
 - [ ] **Step 4: Run + wire + commit** — extend the `lib.rs` re-export to `pub use tree::{FlameGraph, FlameGraphDiff, Level, Tree};`.
 
 ```bash
-cargo test -p crabka-pprof --lib tree  # PASS (5 tests)
-cargo fmt -p crabka-pprof && cargo clippy -p crabka-pprof --all-targets
+cargo test -p krabka-pprof --lib tree  # PASS (5 tests)
+cargo fmt -p krabka-pprof && cargo clippy -p krabka-pprof --all-targets
 git add crates/pprof/
 git commit -m "feat(pprof): FlameGraph 4-ints-per-bar encoding (xOffsetDelta) + max_nodes truncation w/ synthetic other"
 ```
@@ -1443,7 +1443,7 @@ mod tests {
 - [ ] **Step 4: Phase B gate + wire + commit** — add `mod series;` + `pub use series::{Series, SeriesAgg};`.
 
 ```bash
-cargo test -p crabka-pprof && cargo clippy -p crabka-pprof --all-targets && cargo fmt -p crabka-pprof --check
+cargo test -p krabka-pprof && cargo clippy -p krabka-pprof --all-targets && cargo fmt -p krabka-pprof --check
 git add crates/pprof/
 git commit -m "feat(pprof): Series/SeriesAgg types (frozen for slice 3)"
 ```
@@ -1519,8 +1519,8 @@ mod tests {
 - [ ] **Step 4: Run + wire + commit** — add `mod engine;` + `pub use engine::{EngineOpts, FlameEngine};`.
 
 ```bash
-cargo test -p crabka-pprof --lib engine  # PASS
-cargo fmt -p crabka-pprof && cargo clippy -p crabka-pprof --all-targets
+cargo test -p krabka-pprof --lib engine  # PASS
+cargo fmt -p krabka-pprof && cargo clippy -p krabka-pprof --all-targets
 git add crates/pprof/
 git commit -m "feat(pprof): FlameEngine scaffold + EngineOpts + frozen slice-3 signatures"
 ```
@@ -1629,7 +1629,7 @@ Append to `engine.rs`'s `tests`:
 - [ ] **Step 4: Phase C gate + commit**
 
 ```bash
-cargo test -p crabka-pprof && cargo clippy -p crabka-pprof --all-targets && cargo fmt -p crabka-pprof --check
+cargo test -p krabka-pprof && cargo clippy -p krabka-pprof --all-targets && cargo fmt -p krabka-pprof --check
 git add crates/pprof/
 git commit -m "feat(pprof): select_merge_stacktraces — fold-before-symbolize MERGE->flamegraph engine"
 ```
@@ -1646,7 +1646,7 @@ git commit -m "feat(pprof): select_merge_stacktraces — fold-before-symbolize M
 - Create: `crates/pprof/tests/golden_merge.rs`
 
 **Interfaces:**
-- Consumes: `crabka_pprof::{FlameEngine, EngineOpts, InMemoryProfileStore, SymbolDb, ProfileType, FlameGraph}` + the public result model.
+- Consumes: `krabka_pprof::{FlameEngine, EngineOpts, InMemoryProfileStore, SymbolDb, ProfileType, FlameGraph}` + the public result model.
 - Produces: an integration test asserting a curated set of MERGE queries against a fixed fixture with hand-computed expected flamegraph levels.
 
 - [ ] **Step 1: Write the suite** — build a fixed multi-profile fixture (one `InMemoryProfileStore` with a populated `SymbolDb` partition 0 containing a known tree: `main → {work → {alloc}, other}`, with inlined frames on at least one location), push samples across multiple timestamps, then assert each query's `FlameGraph` against hand-computed expected `names`/`levels`/`total`/`max_self`. Cover, at minimum:
@@ -1657,12 +1657,12 @@ git commit -m "feat(pprof): select_merge_stacktraces — fold-before-symbolize M
   - **`ProfileType` round-trip:** `parse` + `Display` over the fixture's profile-type string.
   - **multiple profile types:** samples of a second profile_type are excluded from a merge of the first.
 
-- [ ] **Step 2: Run** — `cargo test -p crabka-pprof --test golden_merge`. Each failure is an engine/encoding/symbol-DB bug — fix it in the relevant Phase A/B/C file (the hand-computed expectations are ground truth; never weaken an expectation to pass). Iterate to green.
+- [ ] **Step 2: Run** — `cargo test -p krabka-pprof --test golden_merge`. Each failure is an engine/encoding/symbol-DB bug — fix it in the relevant Phase A/B/C file (the hand-computed expectations are ground truth; never weaken an expectation to pass). Iterate to green.
 
 - [ ] **Step 3: Final whole-crate gate + commit**
 
 ```bash
-cargo test -p crabka-pprof && cargo clippy -p crabka-pprof --all-targets && cargo fmt -p crabka-pprof --check
+cargo test -p krabka-pprof && cargo clippy -p krabka-pprof --all-targets && cargo fmt -p krabka-pprof --check
 git add crates/pprof/
 git commit -m "test(pprof): curated golden-merge suite (fold-before-symbolize/inline-expansion/truncation/4-ints encoding)"
 ```

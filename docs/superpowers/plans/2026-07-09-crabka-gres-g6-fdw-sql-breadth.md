@@ -4,32 +4,32 @@
 
 **Goal:** The FDW becomes an honest product surface — headers populated, protobuf complete, own-cluster topics queryable with zero configuration — and the SQL-breadth ratchet process is installed. (Breadth features themselves are separate design cycles per the spec; this plan covers the FDW track and the process.)
 
-**Architecture:** Header decoding lands in the published `crabka-client-core` fetch path; the FDW's protobuf stub completes over `writer_message_type` + a runtime `protox` compile; the default server resolves to the compute's own bootstrap in substrate mode; the baseline-ratchet rule is codified where reviewers will see it.
+**Architecture:** Header decoding lands in the published `krabka-client-core` fetch path; the FDW's protobuf stub completes over `writer_message_type` + a runtime `protox` compile; the default server resolves to the compute's own bootstrap in substrate mode; the baseline-ratchet rule is codified where reviewers will see it.
 
 **Tech Stack:** Kafka record-format v2 header encoding (varint counts/lengths), `protox` (pure-Rust protobuf compiler, already a workspace dep) + `prost-reflect` `DynamicMessage`, the gres-fdw roundtrip harness.
 
 ## Global Constraints
 
 - **Prerequisites:** G-1 landed (G-2 only for the default-server item's substrate wiring — that one step gates on it). Verify signatures against the landed tree.
-- **Spec:** [2026-07-09-crabka-gres-g6-fdw-sql-breadth-design.md](../specs/2026-07-09-crabka-gres-g6-fdw-sql-breadth-design.md).
-- **Header decoding must match the wire exactly** — the v2 record format's header array (varint count; per header: varint key length, UTF-8 key, varint value length or -1 for null, value bytes). Differential-verify against batches produced by `crabka-client-producer` AND, if a JVM fixture is cheap via the existing oracle tooling, one JVM-produced batch.
-- **`crabka-client-core` is a published crate:** the API addition gets rustdoc, a changelog-worthy conventional commit (`feat(client-core): …`), and whole-struct test comparisons per house style.
+- **Spec:** [2026-07-09-krabka-gres-g6-fdw-sql-breadth-design.md](../specs/2026-07-09-krabka-gres-g6-fdw-sql-breadth-design.md).
+- **Header decoding must match the wire exactly** — the v2 record format's header array (varint count; per header: varint key length, UTF-8 key, varint value length or -1 for null, value bytes). Differential-verify against batches produced by `krabka-client-producer` AND, if a JVM fixture is cheap via the existing oracle tooling, one JVM-produced batch.
+- **`krabka-client-core` is a published crate:** the API addition gets rustdoc, a changelog-worthy conventional commit (`feat(client-core): …`), and whole-struct test comparisons per house style.
 - Lints/format/commit/test conventions as in the G-2 plan.
 
 ---
 
 ## Batch 1 — independent foundations (run Tasks 1 and 2 in parallel; disjoint crates)
 
-### Task 1: Record headers through `crabka-client-core`
+### Task 1: Record headers through `krabka-client-core`
 
 **Files:** Modify `crates/client-core/src/fetch.rs` (and the record-decode layer it calls — locate where `FetchedRecord` is assembled from the decoded batch; the protocol crate's record structs already parse headers off the wire for the broker's benefit — verify, and if the *client-side* decode path skips them, extend it there), tests in the same crate.
 
 **Interfaces:**
 - `FetchedRecord` gains `pub headers: Vec<FetchedHeader>` with `pub struct FetchedHeader { pub key: String, pub value: Option<Bytes> }` (mirror the protocol crate's existing header type if one is public — prefer re-use over a new type; decide by inspection).
 
-Steps: failing test — produce a record with two headers (one null-valued) via `crabka-client-producer` against an in-process broker, `fetch_partition` returns them key/value-exact (whole-struct compare); plus a pure decode unit over a hand-encoded v2 batch fixture (covers varint edge cases: empty headers, null value, multi-byte varint lengths). Implement. Confirm zero behavior change for existing callers (additive field). nextest/clippy/fmt; commit `feat(client-core): surface record headers from fetch`.
+Steps: failing test — produce a record with two headers (one null-valued) via `krabka-client-producer` against an in-process broker, `fetch_partition` returns them key/value-exact (whole-struct compare); plus a pure decode unit over a hand-encoded v2 batch fixture (covers varint edge cases: empty headers, null value, multi-byte varint lengths). Implement. Confirm zero behavior change for existing callers (additive field). nextest/clippy/fmt; commit `feat(client-core): surface record headers from fetch`.
 
-### Task 2: Protobuf descriptor completion in `crabka-gres-fdw`
+### Task 2: Protobuf descriptor completion in `krabka-gres-fdw`
 
 **Files:** Modify `crates/gres-fdw/src/decode.rs` (the `build_message_descriptor` stub), `Cargo.toml` (`protox` moves from dev-dependency to dependency), tests.
 

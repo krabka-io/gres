@@ -9,7 +9,7 @@ existing CLI/environment configuration without changing defaults.
 existing role-specific paths. Reuse `Time`, `NonZeroUsize`, current parsers,
 and current builders/functions. Add no policy container or dependency.
 
-**Tech Stack:** Rust, clap, crabka-units, refined_type where validation needs a
+**Tech Stack:** Rust, clap, krabka-units, refined_type where validation needs a
 newtype, tokio tests.
 
 ### Task 1: Distributor policy
@@ -35,7 +35,7 @@ newtype, tokio tests.
 
 ### Task 4: Closure
 
-- [x] Run `cargo test -p crabka-observability --all-targets --locked`.
+- [x] Run `cargo test -p krabka-observability --all-targets --locked`.
 - [x] Run workspace all-target check and strict warnings-as-errors Clippy.
 - [x] Run nightly formatting and `git diff --check`.
 - [x] Update `docs/configuration-audit.md` with the implemented surface and evidence.

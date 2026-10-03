@@ -1,5 +1,5 @@
 [package]
-name = "crabka-pgparser"
+name = "krabka-pgparser"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,7 +8,7 @@ rust-version.workspace = true
 description = "Hand-written PostgreSQL SQL lexer and parser producing the Crabka Gres AST"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-pgparser"
+documentation = "https://docs.rs/krabka-pgparser"
 readme = "README.md"
 keywords = ["postgres", "sql", "parser", "crabka", "gres"]
 categories = ["database-implementations", "parser-implementations"]
@@ -23,7 +23,7 @@ oracle = ["dep:pg_query"]
 
 [dependencies]
 thiserror = { workspace = true }
-crabka-pgtypes = { version = "0.4.2", path = "../pgtypes" }
+krabka-pgtypes = { version = "0.4.2", path = "../pgtypes" }
 pg_query = { workspace = true, optional = true }
 
 [dev-dependencies]

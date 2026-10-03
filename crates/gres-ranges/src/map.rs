@@ -94,7 +94,7 @@ impl HashShardSpec {
     ///
     /// Panics if an internal invariant is violated.
     pub fn bucket_for_value(&self, value: impl AsRef<[u8]>) -> u32 {
-        crabka_pgkv::key::hash_bucket(value.as_ref(), self.bucket_count)
+        krabka_pgkv::key::hash_bucket(value.as_ref(), self.bucket_count)
             .expect("validated hash spec has a power-of-two bucket count")
     }
 }
@@ -1166,7 +1166,7 @@ mod tests {
 
         for (value, expected) in corpus {
             assert_eq!(spec.bucket_for_value(value), expected);
-            assert_eq!(crabka_pgkv::key::hash_bucket(value, 16), Some(expected));
+            assert_eq!(krabka_pgkv::key::hash_bucket(value, 16), Some(expected));
         }
     }
 

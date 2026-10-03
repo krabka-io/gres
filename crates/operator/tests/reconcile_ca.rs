@@ -16,7 +16,7 @@ mod shared;
 use std::sync::Arc;
 
 use base64::Engine as _;
-use crabka_operator::{
+use krabka_operator::{
     controller::{cluster_ca::compute_san_digest, kafka::reconcile},
     crd::{CertificateAuthority, Kafka, KafkaSpec},
 };
@@ -376,9 +376,9 @@ async fn byo_mode_adopts_pre_existing_secrets_does_not_overwrite() {
     // Generate real CA material so the operator can parse the PEM and derive
     // notAfter for the status field.
     let cluster_ca_mat =
-        crabka_security::ca::generate_cluster_ca("c5-cluster-ca", 365).expect("cluster CA gen");
+        krabka_security::ca::generate_cluster_ca("c5-cluster-ca", 365).expect("cluster CA gen");
     let clients_ca_mat =
-        crabka_security::ca::generate_clients_ca("c5-clients-ca", 365).expect("clients CA gen");
+        krabka_security::ca::generate_clients_ca("c5-clients-ca", 365).expect("clients CA gen");
 
     let rules = vec![
         // 1. PATCH headless service
@@ -700,17 +700,17 @@ async fn reconciler_does_not_renew_valid_leaf_certs() {
 
     // Generate real CA material so the operator can parse notAfter for status.
     let cluster_ca_mat =
-        crabka_security::ca::generate_cluster_ca("c7-cluster-ca", 365).expect("cluster CA gen");
+        krabka_security::ca::generate_cluster_ca("c7-cluster-ca", 365).expect("cluster CA gen");
     let clients_ca_mat =
-        crabka_security::ca::generate_clients_ca("c7-clients-ca", 365).expect("clients CA gen");
+        krabka_security::ca::generate_clients_ca("c7-clients-ca", 365).expect("clients CA gen");
 
     // Issue a leaf cert for broker 0 with only 5 days validity — inside the
     // 30-day renewal window. The reconciler must NOT replace it.
-    let leaf = crabka_security::ca::issue_broker_cert(
+    let leaf = krabka_security::ca::issue_broker_cert(
         &cluster_ca_mat.cert_pem,
         &cluster_ca_mat.key_pem,
         "c7-brokers-0",
-        &[crabka_security::ca::SubjectAltName::Dns(format!(
+        &[krabka_security::ca::SubjectAltName::Dns(format!(
             "c7-brokers-0.c7-broker-headless.{ns}.svc.cluster.local"
         ))],
         &[],
@@ -723,14 +723,14 @@ async fn reconciler_does_not_renew_valid_leaf_certs() {
     // Compute the SAN digest that the reconciler will derive for broker 0.
     // SANs match what kafka.rs builds: pod_fqdn, pod_name, headless-svc FQDN, localhost.
     let broker_sans = vec![
-        crabka_security::ca::SubjectAltName::Dns(format!(
+        krabka_security::ca::SubjectAltName::Dns(format!(
             "c7-brokers-0.c7-broker-headless.{ns}.svc.cluster.local"
         )),
-        crabka_security::ca::SubjectAltName::Dns("c7-brokers-0".into()),
-        crabka_security::ca::SubjectAltName::Dns(format!(
+        krabka_security::ca::SubjectAltName::Dns("c7-brokers-0".into()),
+        krabka_security::ca::SubjectAltName::Dns(format!(
             "c7-broker-headless.{ns}.svc.cluster.local"
         )),
-        crabka_security::ca::SubjectAltName::Ip(std::net::IpAddr::V4(
+        krabka_security::ca::SubjectAltName::Ip(std::net::IpAddr::V4(
             std::net::Ipv4Addr::LOCALHOST,
         )),
     ];
@@ -953,16 +953,16 @@ fn broker_sans(
     cluster: &str,
     pool_name: &str,
     ns: &str,
-) -> Vec<crabka_security::ca::SubjectAltName> {
+) -> Vec<krabka_security::ca::SubjectAltName> {
     vec![
-        crabka_security::ca::SubjectAltName::Dns(format!(
+        krabka_security::ca::SubjectAltName::Dns(format!(
             "{cluster}-{pool_name}-0.{cluster}-broker-headless.{ns}.svc.cluster.local"
         )),
-        crabka_security::ca::SubjectAltName::Dns(format!("{cluster}-{pool_name}-0")),
-        crabka_security::ca::SubjectAltName::Dns(format!(
+        krabka_security::ca::SubjectAltName::Dns(format!("{cluster}-{pool_name}-0")),
+        krabka_security::ca::SubjectAltName::Dns(format!(
             "{cluster}-broker-headless.{ns}.svc.cluster.local"
         )),
-        crabka_security::ca::SubjectAltName::Ip(std::net::IpAddr::V4(
+        krabka_security::ca::SubjectAltName::Ip(std::net::IpAddr::V4(
             std::net::Ipv4Addr::LOCALHOST,
         )),
     ]
@@ -1012,9 +1012,9 @@ async fn broker_leaf_certs_chain_to_cluster_ca() {
 
     // BYO so the cluster CA stays stable and we control the PEM directly.
     let cluster_ca_mat =
-        crabka_security::ca::generate_cluster_ca("c2-cluster-ca", 365).expect("cluster CA gen");
+        krabka_security::ca::generate_cluster_ca("c2-cluster-ca", 365).expect("cluster CA gen");
     let clients_ca_mat =
-        crabka_security::ca::generate_clients_ca("c2-clients-ca", 365).expect("clients CA gen");
+        krabka_security::ca::generate_clients_ca("c2-clients-ca", 365).expect("clients CA gen");
 
     let pool_one = pool_item(name, ns, pool_name, 0);
     let pool_resp = pool_body_resp(name, ns, pool_name, 0);
@@ -1199,9 +1199,9 @@ async fn scale_up_adds_entries_does_not_reissue_existing() {
     let secret_name = format!("{name}-cluster-id");
 
     let cluster_ca_mat =
-        crabka_security::ca::generate_cluster_ca("c3-cluster-ca", 365).expect("cluster CA gen");
+        krabka_security::ca::generate_cluster_ca("c3-cluster-ca", 365).expect("cluster CA gen");
     let clients_ca_mat =
-        crabka_security::ca::generate_clients_ca("c3-clients-ca", 365).expect("clients CA gen");
+        krabka_security::ca::generate_clients_ca("c3-clients-ca", 365).expect("clients CA gen");
 
     // Pre-issue leaf certs for brokers 0, 1, 2 against the BYO cluster CA with
     // the SAN list the reconciler will compute. Matching SAN digests trigger
@@ -1213,7 +1213,7 @@ async fn scale_up_adds_entries_does_not_reissue_existing() {
     for (i, pool) in pool_names.iter().enumerate() {
         let id = i32::try_from(i).unwrap();
         let sans = broker_sans(name, pool, ns);
-        let leaf = crabka_security::ca::issue_broker_cert(
+        let leaf = krabka_security::ca::issue_broker_cert(
             &cluster_ca_mat.cert_pem,
             &cluster_ca_mat.key_pem,
             &format!("{name}-{pool}-0"),
@@ -1411,9 +1411,9 @@ async fn scale_down_prunes_entries() {
     let secret_name = format!("{name}-cluster-id");
 
     let cluster_ca_mat =
-        crabka_security::ca::generate_cluster_ca("c4-cluster-ca", 365).expect("cluster CA gen");
+        krabka_security::ca::generate_cluster_ca("c4-cluster-ca", 365).expect("cluster CA gen");
     let clients_ca_mat =
-        crabka_security::ca::generate_clients_ca("c4-clients-ca", 365).expect("clients CA gen");
+        krabka_security::ca::generate_clients_ca("c4-clients-ca", 365).expect("clients CA gen");
 
     // Pre-issue 4 brokers (0..=3). The "removed" broker (id 3) uses a pool name
     // that won't be in the post-scale-down pool list.
@@ -1430,7 +1430,7 @@ async fn scale_down_prunes_entries() {
             removed_pool_name
         };
         let sans = broker_sans(name, pname, ns);
-        let leaf = crabka_security::ca::issue_broker_cert(
+        let leaf = krabka_security::ca::issue_broker_cert(
             &cluster_ca_mat.cert_pem,
             &cluster_ca_mat.key_pem,
             &format!("{name}-{pname}-0"),

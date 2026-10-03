@@ -2,12 +2,12 @@
 
 use super::*;
 
-pub(super) type PendingUniqueKey = (crabka_pgcatalog::IndexId, Vec<Datum>);
+pub(super) type PendingUniqueKey = (krabka_pgcatalog::IndexId, Vec<Datum>);
 
 pub(super) async fn enforce_unique_local_index_updates(
     write_ctx: &WriteContext<'_>,
     table: &Table,
-    indexes: &[crabka_pgcatalog::Index],
+    indexes: &[krabka_pgcatalog::Index],
     rowid: u64,
     old_row: &[Datum],
     new_row: &[Datum],
@@ -47,7 +47,7 @@ pub(super) async fn enforce_unique_local_index_updates(
 pub(super) async fn enforce_unique_local_indexes(
     write_ctx: &WriteContext<'_>,
     table: &Table,
-    indexes: &[crabka_pgcatalog::Index],
+    indexes: &[krabka_pgcatalog::Index],
     rowid: u64,
     row: &[Datum],
     writes: &mut StatementWrites,
@@ -81,7 +81,7 @@ pub(super) async fn enforce_unique_local_indexes(
 /// hand-written `EXCLUDE … WITH &&` happily stores empty ranges.
 pub(super) fn reject_empty_without_overlaps(
     table: &Table,
-    index: &crabka_pgcatalog::Index,
+    index: &krabka_pgcatalog::Index,
     values: &[Datum],
 ) -> Result<(), ExecError> {
     if !index.without_overlaps {
@@ -107,7 +107,7 @@ pub(super) fn reject_empty_without_overlaps(
 pub(super) async fn enforce_exclusion_constraint(
     write_ctx: &WriteContext<'_>,
     table: &Table,
-    index: &crabka_pgcatalog::Index,
+    index: &krabka_pgcatalog::Index,
     rowid: u64,
     values: Vec<Datum>,
     writes: &mut StatementWrites,
@@ -154,7 +154,7 @@ pub(super) async fn enforce_exclusion_constraint(
 pub(super) async fn exclusion_conflict(
     write_ctx: &WriteContext<'_>,
     table: &Table,
-    index: &crabka_pgcatalog::Index,
+    index: &krabka_pgcatalog::Index,
     self_rowid: Option<u64>,
     values: &[Datum],
     writes: &StatementWrites,
@@ -171,7 +171,7 @@ pub(super) async fn exclusion_conflict(
     write_ctx
         .lockmgr
         .acquire_key_as(
-            crate::lockmgr::LockKey::UniqueKey(crabka_pgkv::key::secondary_index_entry_prefix(
+            crate::lockmgr::LockKey::UniqueKey(krabka_pgkv::key::secondary_index_entry_prefix(
                 table.id,
                 index.id,
                 &[],
@@ -214,7 +214,7 @@ pub(super) async fn exclusion_conflict(
 }
 
 pub(super) fn exclusion_keys_conflict(
-    operators: &[crabka_pgcatalog::ExclusionOperator],
+    operators: &[krabka_pgcatalog::ExclusionOperator],
     left: &[Datum],
     right: &[Datum],
 ) -> Result<bool, ExecError> {
@@ -223,21 +223,21 @@ pub(super) fn exclusion_keys_conflict(
             return Ok(false);
         }
         let conflicts = match operator {
-            crabka_pgcatalog::ExclusionOperator::Equal => {
-                crabka_pgtypes::ops::compare(left, right)? == Some(std::cmp::Ordering::Equal)
+            krabka_pgcatalog::ExclusionOperator::Equal => {
+                krabka_pgtypes::ops::compare(left, right)? == Some(std::cmp::Ordering::Equal)
             }
-            crabka_pgcatalog::ExclusionOperator::Overlaps => match (left, right) {
+            krabka_pgcatalog::ExclusionOperator::Overlaps => match (left, right) {
                 (Datum::Range(left), Datum::Range(right)) => {
-                    crabka_pgtypes::range::overlaps(left, right)?
+                    krabka_pgtypes::range::overlaps(left, right)?
                 }
                 (Datum::Multirange(left), Datum::Multirange(right)) => {
-                    crabka_pgtypes::multirange::overlaps(left, right)?
+                    krabka_pgtypes::multirange::overlaps(left, right)?
                 }
                 (Datum::Multirange(left), Datum::Range(right)) => {
-                    crabka_pgtypes::multirange::overlaps_range(left, right)?
+                    krabka_pgtypes::multirange::overlaps_range(left, right)?
                 }
                 (Datum::Range(left), Datum::Multirange(right)) => {
-                    crabka_pgtypes::multirange::overlaps_range(right, left)?
+                    krabka_pgtypes::multirange::overlaps_range(right, left)?
                 }
                 _ => return Err(ExecError::UndefinedFunction("operator &&".into())),
             },
@@ -252,7 +252,7 @@ pub(super) fn exclusion_keys_conflict(
 pub(super) fn exclusion_violation(
     write_ctx: &WriteContext<'_>,
     table: &Table,
-    index: &crabka_pgcatalog::Index,
+    index: &krabka_pgcatalog::Index,
     proposed: &[Datum],
     existing: &[Datum],
 ) -> ExecError {
@@ -276,7 +276,7 @@ pub(super) fn exclusion_violation(
         _ => "Key conflicts with existing key.".to_string(),
     };
     ExecError::Remote(
-        crabka_pgwire::error::PgError::error(
+        krabka_pgwire::error::PgError::error(
             "23P01",
             format!(
                 "conflicting key value violates exclusion constraint \"{}\"",
@@ -295,7 +295,7 @@ pub(super) fn exclusion_violation(
 pub(super) fn unique_violation(
     write_ctx: &WriteContext<'_>,
     table: &Table,
-    index: &crabka_pgcatalog::Index,
+    index: &krabka_pgcatalog::Index,
     values: &[Datum],
 ) -> ExecError {
     ExecError::UniqueViolation(Box::new(crate::error::UniqueViolation {
@@ -314,7 +314,7 @@ pub(super) fn unique_violation(
 pub(super) async fn enforce_unique_local_index(
     write_ctx: &WriteContext<'_>,
     table: &Table,
-    index: &crabka_pgcatalog::Index,
+    index: &krabka_pgcatalog::Index,
     rowid: u64,
     values: Vec<Datum>,
     writes: &mut StatementWrites,
@@ -385,7 +385,7 @@ pub(super) async fn enforce_unique_local_index(
 pub(super) async fn lock_and_probe_unique_key(
     write_ctx: &WriteContext<'_>,
     table: &Table,
-    index: &crabka_pgcatalog::Index,
+    index: &krabka_pgcatalog::Index,
     values: &[Datum],
 ) -> Result<Vec<ScannedRow>, ExecError> {
     acquire_unique_key_lock(write_ctx, table, index, values).await?;
@@ -398,13 +398,13 @@ pub(super) async fn lock_and_probe_unique_key(
 pub(super) async fn acquire_unique_key_lock(
     write_ctx: &WriteContext<'_>,
     table: &Table,
-    index: &crabka_pgcatalog::Index,
+    index: &krabka_pgcatalog::Index,
     values: &[Datum],
 ) -> Result<(), ExecError> {
     write_ctx
         .lockmgr
         .acquire_key_as(
-            crate::lockmgr::LockKey::UniqueKey(crabka_pgkv::key::secondary_index_entry_prefix(
+            crate::lockmgr::LockKey::UniqueKey(krabka_pgkv::key::secondary_index_entry_prefix(
                 table.id, index.id, values,
             )),
             crate::lockmgr::LockMode::Exclusive,
@@ -425,7 +425,7 @@ pub(super) fn probe_unique_key(
     write_ctx: &WriteContext<'_>,
     kv: &dyn Kv,
     table: &Table,
-    index: &crabka_pgcatalog::Index,
+    index: &krabka_pgcatalog::Index,
     values: &[Datum],
 ) -> Result<Vec<ScannedRow>, ExecError> {
     let mvcc = write_ctx.mvcc_read();
@@ -463,10 +463,10 @@ pub(super) fn probe_unique_key(
 /// refuses them for every write on the table.
 pub(crate) fn resolve_arbiter_indexes(
     table: &Table,
-    local_indexes: &[crabka_pgcatalog::Index],
-    target: &crabka_pgparser::ast::OnConflictTarget,
-) -> Result<Vec<crabka_pgcatalog::Index>, ExecError> {
-    use crabka_pgparser::ast::OnConflictTarget;
+    local_indexes: &[krabka_pgcatalog::Index],
+    target: &krabka_pgparser::ast::OnConflictTarget,
+) -> Result<Vec<krabka_pgcatalog::Index>, ExecError> {
+    use krabka_pgparser::ast::OnConflictTarget;
 
     // Inference by column list arbitrates on equality alone, so an
     // exclusion-enforced index can never satisfy it — `ON CONFLICT (id,
@@ -532,13 +532,13 @@ pub(crate) fn resolve_arbiter_indexes(
 /// relation has.
 pub(super) fn reject_deferrable_arbiter(
     table: &Table,
-    arbiters: &[crabka_pgcatalog::Index],
+    arbiters: &[krabka_pgcatalog::Index],
 ) -> Result<(), ExecError> {
     let Some(index) = arbiters.iter().find(|index| index.deferral.is_deferrable()) else {
         return Ok(());
     };
     Err(ExecError::Remote(
-        crabka_pgwire::error::PgError::error(
+        krabka_pgwire::error::PgError::error(
             "55000",
             "ON CONFLICT does not support deferrable unique constraints/exclusion constraints as \
              arbiters",
@@ -590,12 +590,12 @@ pub(super) enum InsertRowPlan {
 pub(super) async fn arbitrate_insert_row(
     write_ctx: &WriteContext<'_>,
     table: &Table,
-    arbiters: &[crabka_pgcatalog::Index],
-    on_conflict: &crabka_pgparser::ast::OnConflict,
+    arbiters: &[krabka_pgcatalog::Index],
+    on_conflict: &krabka_pgparser::ast::OnConflict,
     proposed: &[Datum],
     writes: &StatementWrites,
 ) -> Result<InsertRowPlan, ExecError> {
-    use crabka_pgparser::ast::OnConflictAction;
+    use krabka_pgparser::ast::OnConflictAction;
 
     let do_update = matches!(on_conflict.action, OnConflictAction::DoUpdate { .. });
     // An exclusion-enforced arbiter has no single conflicting row to update:

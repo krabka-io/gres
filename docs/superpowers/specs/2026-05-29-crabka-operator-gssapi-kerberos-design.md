@@ -222,7 +222,7 @@ New error reason strings follow the existing `ListenerOauth*` naming convention
 - README "Kubernetes operator" table: `Listener auth wiring (TLS / SCRAM)` →
   `(TLS / SCRAM / OAuth / Kerberos)` — this also corrects the already-stale
   omission of OAuth, which the operator has supported since slices 49/50.
-- README `crabka-security` crate row: add GSSAPI to the listed mechanisms.
+- README `krabka-security` crate row: add GSSAPI to the listed mechanisms.
 - README roadmap line: remove SASL/GSSAPI from "still cooking".
 - KIP-12 (SSL & SASL/Kerberos) row: `⚠️` → `✅` once both client and inter-broker
   GSSAPI land.

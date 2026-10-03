@@ -8,9 +8,9 @@
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `serde`/`serde_wincode` (metadata record carrier), `tokio`, `async-trait`, `stateright` (dev), `assert2`, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
-**Spec:** [`docs/superpowers/specs/2026-07-05-crabka-diskless-wal-slice2-design.md`](../specs/2026-07-05-crabka-diskless-wal-slice2-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-05-krabka-diskless-wal-slice2-design.md`](../specs/2026-07-05-krabka-diskless-wal-slice2-design.md).
 
-**PREREQUISITE:** Slice 1 (`2026-07-05-crabka-diskless-wal-slice1.md`) is implemented and merged. This plan modifies the Slice-1 diskless writer branch and reuses its `WalStore`/`recompute_hw_for_wal_durable`/`diskless` flag. If Slice 1 is not yet landed, execute it first.
+**PREREQUISITE:** Slice 1 (`2026-07-05-krabka-diskless-wal-slice1.md`) is implemented and merged. This plan modifies the Slice-1 diskless writer branch and reuses its `WalStore`/`recompute_hw_for_wal_durable`/`diskless` flag. If Slice 1 is not yet landed, execute it first.
 
 ---
 
@@ -76,7 +76,7 @@ In `crates/metadata/src/image.rs` tests, add:
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metadata offset_advance_applies_as_monotonic_delta`
+Run: `cargo test -p krabka-metadata offset_advance_applies_as_monotonic_delta`
 Expected: FAIL — the record type, the field, and the accessor don't exist.
 
 - [ ] **Step 3: Define the record struct + enum variant**
@@ -143,7 +143,7 @@ In `crates/metadata/src/image.rs`:
 
 - [ ] **Step 6: Run to verify it passes**
 
-Run: `cargo test -p crabka-metadata offset_advance_applies_as_monotonic_delta`
+Run: `cargo test -p krabka-metadata offset_advance_applies_as_monotonic_delta`
 Expected: PASS. (The `kraft_translate` exhaustive match will fail to COMPILE until Task 2 — if `cargo test` fails to build on the `to_kraft_iter` match, do Task 2 Step 3 first, then return here. To keep this task self-contained, add the Task 2 encode arm now if the build blocks.)
 
 - [ ] **Step 7: Commit**
@@ -197,7 +197,7 @@ In `crates/metadata/src/image.rs` tests (extend `to_records_round_trips_all_vari
 
 - [ ] **Step 2: Run to verify they fail**
 
-Run: `cargo test -p crabka-metadata offset_advance_round_trips_through_carrier offset_advance_survives_snapshot_round_trip`
+Run: `cargo test -p krabka-metadata offset_advance_round_trips_through_carrier offset_advance_survives_snapshot_round_trip`
 Expected: FAIL — no carrier arm / no snapshot emit.
 
 - [ ] **Step 3: Add the carrier encode + apiKey + decode guard**
@@ -246,12 +246,12 @@ In `crates/metadata/src/image.rs` `to_records` (`:683-825`), after the existing 
 
 - [ ] **Step 5: Run to verify they pass**
 
-Run: `cargo test -p crabka-metadata offset_advance`
+Run: `cargo test -p krabka-metadata offset_advance`
 Expected: PASS — carrier round-trip + snapshot round-trip green.
 
 - [ ] **Step 6: Run the metadata crate suite (nothing regressed)**
 
-Run: `cargo test -p crabka-metadata`
+Run: `cargo test -p krabka-metadata`
 Expected: PASS — existing round-trip tests (`to_records_round_trips_all_variants`, `records.rs` `round_trip`) still green.
 
 - [ ] **Step 7: Commit**
@@ -296,7 +296,7 @@ In `crates/log/src/log.rs` tests, add:
 
 - [ ] **Step 2: Run to verify they fail**
 
-Run: `cargo test -p crabka-log append_verbatim_at`
+Run: `cargo test -p krabka-log append_verbatim_at`
 Expected: FAIL — no `append_verbatim_at`.
 
 - [ ] **Step 3: Implement `append_verbatim_at`**
@@ -339,7 +339,7 @@ In `crates/log/src/log.rs`, next to `append_verbatim` (`:522`), add a public met
 
 - [ ] **Step 4: Run to verify they pass**
 
-Run: `cargo test -p crabka-log append_verbatim_at`
+Run: `cargo test -p krabka-log append_verbatim_at`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -369,7 +369,7 @@ Create `crates/broker/src/wal/offset_sequencer.rs` with its test module first. D
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_ids::{Offset, PartitionIndex};
+    use krabka_ids::{Offset, PartitionIndex};
 
     use super::*;
 
@@ -390,7 +390,7 @@ mod tests {
 
 - [ ] **Step 3: Run to verify it fails**
 
-Run: `cargo test -p crabka-broker offset_sequencer`
+Run: `cargo test -p krabka-broker offset_sequencer`
 Expected: FAIL — `OffsetSequencer`/`ControllerSequencer` undefined.
 
 - [ ] **Step 4: Implement the trait + impl**
@@ -404,8 +404,8 @@ Insert at the TOP of `crates/broker/src/wal/offset_sequencer.rs`:
 //! local-submit only; Slice 6 replaces this impl for concurrent/leaderless use.
 
 use async_trait::async_trait;
-use crabka_ids::{Offset, PartitionIndex};
-use crabka_metadata::{MetadataRecord, PartitionOffsetAdvanceRecord};
+use krabka_ids::{Offset, PartitionIndex};
+use krabka_metadata::{MetadataRecord, PartitionOffsetAdvanceRecord};
 
 use crate::error::BrokerError;
 
@@ -470,7 +470,7 @@ Implementer notes:
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-broker offset_sequencer`
+Run: `cargo test -p krabka-broker offset_sequencer`
 Expected: PASS — contiguous bases from the controller.
 
 - [ ] **Step 6: Commit**
@@ -572,12 +572,12 @@ Add a `run_produce_append_batch_at` async wrapper mirroring `run_produce_append_
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-broker diskless_produce_uses_controller_assigned_base`
+Run: `cargo test -p krabka-broker diskless_produce_uses_controller_assigned_base`
 Expected: PASS.
 
 - [ ] **Step 6: Run the writer suite (classic path unregressed)**
 
-Run: `cargo test -p crabka-broker partition_writer`
+Run: `cargo test -p krabka-broker partition_writer`
 Expected: PASS — classic (`sequencer: None`) path unchanged; Slice-1 diskless tests still green.
 
 - [ ] **Step 7: Commit**
@@ -616,7 +616,7 @@ Add a `Property::sometimes("offsets_assigned", |_, s| !s.assigned.is_empty())` s
 
 - [ ] **Step 3: Run the model check**
 
-Run: `cargo test -p crabka-broker data_diskless_offsets_gap_free_and_unique -- --nocapture`
+Run: `cargo test -p krabka-broker data_diskless_offsets_gap_free_and_unique -- --nocapture`
 Expected: PASS. A counterexample means the single-sequencer append ordering admits a gap/overlap — reconcile `Assign`/append with the `base == log_end_offset()` guard (Task 3/5) until the property holds. Do NOT weaken the property.
 
 - [ ] **Step 4: Commit**
@@ -632,7 +632,7 @@ git commit -m "test(broker): stateright gap-free/monotonic/unique offset proof (
 
 - [ ] **Step 1:** `cargo +nightly fmt` then `cargo +nightly fmt --check` — no diff.
 - [ ] **Step 2:** `cargo clippy --workspace --all-targets -- -D warnings` — no warnings.
-- [ ] **Step 3:** `cargo nextest run -p crabka-metadata -p crabka-log -p crabka-broker` (or `cargo test`) — PASS, including the offset-sequencer proof.
+- [ ] **Step 3:** `cargo nextest run -p krabka-metadata -p krabka-log -p krabka-broker` (or `cargo test`) — PASS, including the offset-sequencer proof.
 - [ ] **Step 4:** Commit any formatting: `git commit -am "style: cargo +nightly fmt"` (skip if clean).
 
 ---

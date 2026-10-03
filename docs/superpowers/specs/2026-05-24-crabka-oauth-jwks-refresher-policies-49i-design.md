@@ -2,7 +2,7 @@
 
 Status: Draft
 Date: 2026-05-24
-Umbrella: `docs/superpowers/specs/2026-05-23-crabka-oauth-parity-roadmap-design.md`
+Umbrella: `docs/superpowers/specs/2026-05-23-krabka-oauth-parity-roadmap-design.md`
 Builds on: slice 49b (JWKS validator + refresher), slices 49g/49h (sibling long-tail clusters)
 Follows: nothing — this is the LAST OAUTHBEARER umbrella slice.
 
@@ -357,7 +357,7 @@ The 3 new fields plumb into the signed-validator branch only
     v.expiry_ms = oauth.jwks_expiry_seconds.map(|s| i64::from(s) * 1000);
 
     cfg.oauthbearer_validator =
-        crabka_security::OAuthBearerValidator::Signed(v);
+        krabka_security::OAuthBearerValidator::Signed(v);
     // ... refresher spawned by Broker::start as before
 }
 ```

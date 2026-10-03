@@ -1,27 +1,27 @@
-# crabka-traces Slice 7 — Metrics-generator (span-metrics RED + service-graphs + remote_write)
+# krabka-traces Slice 7 — Metrics-generator (span-metrics RED + service-graphs + remote_write)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the `metrics-generator` role — the third traces consumer group. It runs two processors over the `__crabka_traces_wal` stream: a **span-metrics (RED)** processor (`traces_spanmetrics_calls_total` counter, `traces_spanmetrics_latency` histogram with `ObserveWithExemplar(trace_id)`, `traces_spanmetrics_size_total`, optional `traces_target_info`) dimensioned by `service`/`span_name`/`span_kind`/`status_code`; and a **service-graphs** processor that pairs a client-kind span with the server-kind span of the **same trace** via a bounded TTL'd edge store keyed by `trace + relationship` (partner→record, wait-expiry→`unpaired_spans_total`, store-full→`dropped_spans_total`) and emits `traces_service_graph_request_total`/`_request_failed_total`/`_request_server_seconds`/`_request_client_seconds`/`_request_messaging_system_seconds` labeled `client`/`server`/`connection_type`. Both processors flush via the **remote_write client reused from the metrics signal** (native-histogram codec + exemplars) to a configured Prometheus endpoint. The headline tests are the **TTL'd edge-pairing state machine**, the **RED derivation**, and **exemplar attachment**, all driven by a mock remote_write sink + an injected clock. Wired behind `crabka-traces --target metrics-generator`. Edge state is in-memory and rebuildable from WAL offsets; checkpoint-to-compacted-topic is structured-but-deferred.
+**Goal:** Build the `metrics-generator` role — the third traces consumer group. It runs two processors over the `__krabka_traces_wal` stream: a **span-metrics (RED)** processor (`traces_spanmetrics_calls_total` counter, `traces_spanmetrics_latency` histogram with `ObserveWithExemplar(trace_id)`, `traces_spanmetrics_size_total`, optional `traces_target_info`) dimensioned by `service`/`span_name`/`span_kind`/`status_code`; and a **service-graphs** processor that pairs a client-kind span with the server-kind span of the **same trace** via a bounded TTL'd edge store keyed by `trace + relationship` (partner→record, wait-expiry→`unpaired_spans_total`, store-full→`dropped_spans_total`) and emits `traces_service_graph_request_total`/`_request_failed_total`/`_request_server_seconds`/`_request_client_seconds`/`_request_messaging_system_seconds` labeled `client`/`server`/`connection_type`. Both processors flush via the **remote_write client reused from the metrics signal** (native-histogram codec + exemplars) to a configured Prometheus endpoint. The headline tests are the **TTL'd edge-pairing state machine**, the **RED derivation**, and **exemplar attachment**, all driven by a mock remote_write sink + an injected clock. Wired behind `krabka-traces --target metrics-generator`. Edge state is in-memory and rebuildable from WAL offsets; checkpoint-to-compacted-topic is structured-but-deferred.
 
 **Architecture:** The metrics-generator holds a `SpanSource` (the traces WAL consumer group; mocked in tests), runs each polled `SpanRecord` through the two processors, and on each **collection interval** flushes accumulated series through a `RemoteWriteSink`. The two processors split cleanly:
 
 - **Span-metrics** is a *pure fold*: a `SpanMetricsRegistry` accumulates per-`(service, span_name, span_kind, status_code)` counters + a latency native-histogram (absolute bucket counts at rest, reusing Slice-1 metrics' `NativeHistogram`), retaining a bounded set of latency exemplars (each = `(value, trace_id, span_id)`). `record_span` is a side-effect-free state update; `drain()` produces the remote_write series.
 - **Service-graphs** is a *TTL'd edge state machine*: each span is mapped to an `EdgeKey = (trace_id, connection_key)`; the first arrival (client *or* server) records a half-edge, the partner completes it, a completed edge emits one request observation. The bounded `EdgeStore` evicts on `max_items` (→ `dropped_spans_total`) and expires half-edges past their TTL (→ `unpaired_spans_total`), both driven by an injected `Clock`.
 
-The two churn-prone surfaces — the **traces WAL consumer** (`crabka-client-consumer`) and the **remote_write HTTP client** (prost-encoded `WriteRequest` over `reqwest`) — are abstracted behind narrow traits (`SpanSource`, `RemoteWriteSink`) with in-memory mocks, so the processors and the flush path are pure, deterministic test concerns. The collection clock is injected (`Clock` trait) so TTL expiry and interval flushes are tested without real time.
+The two churn-prone surfaces — the **traces WAL consumer** (`krabka-client-consumer`) and the **remote_write HTTP client** (prost-encoded `WriteRequest` over `reqwest`) — are abstracted behind narrow traits (`SpanSource`, `RemoteWriteSink`) with in-memory mocks, so the processors and the flush path are pure, deterministic test concerns. The collection clock is injected (`Clock` trait) so TTL expiry and interval flushes are tested without real time.
 
-**Tech Stack:** Rust 2024 · `arrow` 59 (the latency native-histogram reuses Slice-1's `NativeHistogram` ⇄ Arrow codec is *not* needed here — remote_write carries the histogram on the wire) · `serde` (config) · `serde_json` (none on the hot path) · `prost` 0.13 (remote_write `WriteRequest` encode — reuses the metrics Slice-4 `pb::v1`/`pb::v2` generated types) · `reqwest` 0.13 (remote_write POST) · `tokio` (collect loop, injected clock) · `thiserror`. Tests: `assert2`, `tokio` (`macros`, `rt-multi-thread`, `time`, `test-util`), `tempfile`. Consumes `crabka-traceql` (the `SpanRecord`/span shape via the Slice-4 service contract) and `crabka-metrics` Slice 1/4 (`NativeHistogram`, the remote_write `pb` types + symbol-table interning).
+**Tech Stack:** Rust 2024 · `arrow` 59 (the latency native-histogram reuses Slice-1's `NativeHistogram` ⇄ Arrow codec is *not* needed here — remote_write carries the histogram on the wire) · `serde` (config) · `serde_json` (none on the hot path) · `prost` 0.13 (remote_write `WriteRequest` encode — reuses the metrics Slice-4 `pb::v1`/`pb::v2` generated types) · `reqwest` 0.13 (remote_write POST) · `tokio` (collect loop, injected clock) · `thiserror`. Tests: `assert2`, `tokio` (`macros`, `rt-multi-thread`, `time`, `test-util`), `tempfile`. Consumes `krabka-traceql` (the `SpanRecord`/span shape via the Slice-4 service contract) and `krabka-metrics` Slice 1/4 (`NativeHistogram`, the remote_write `pb` types + symbol-table interning).
 
 ## Global Constraints
 
 - **No backwards compatibility.** Greenfield/undeployed. Change schemas/enums/wire-internal types freely; no shims, no migration code, no `#[serde(default)]` "for old WAL records", no V1/V2 dual variants kept for replay.
 - **`unsafe_code = "forbid"`** workspace-wide. No `unsafe`.
-- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p crabka-traces --all-targets` before each commit.
-- **Formatting:** `cargo fmt -p crabka-traces` before every commit (**never** `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
+- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p krabka-traces --all-targets` before each commit.
+- **Formatting:** `cargo fmt -p krabka-traces` before every commit (**never** `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
 - **Assertions:** `assert2::assert!` in tests; `assert2::check!` where multiple soft checks help.
 - **Prometheus remote_write wire identity is the compat constraint on the output edge.** The series this role produces (`traces_spanmetrics_*`, `traces_service_graph_*`) are *ordinary* Prometheus series + native histograms + exemplars, byte-encoded via the metrics signal's existing `pb::v1::WriteRequest`/`pb::v2::Request` types — byte-identical to a Prometheus-scraper-originated remote_write request. No metrics-generator-private record format. The **metric names, label names, `_total`/`_seconds`/`_bucket` suffixes, and `le`/`connection_type` label conventions must match Tempo exactly** (Grafana reads them by name; the Service Graph panel hard-codes `traces_service_graph_*`).
-- **Kafka wire-protocol exactness** on the *input* edge is preserved automatically by consuming through the existing `crabka-client-consumer` client — do not hand-roll protocol frames. The metrics-generator is the third independent consumer group on the `trace_id`-partitioned WAL (`group_id = "crabka-traces-metrics-generator"`), with its own offsets; the dedup-avoidance invariant (all spans of a trace in one partition) is what lets it run at RF1.
+- **Kafka wire-protocol exactness** on the *input* edge is preserved automatically by consuming through the existing `krabka-client-consumer` client — do not hand-roll protocol frames. The metrics-generator is the third independent consumer group on the `trace_id`-partitioned WAL (`group_id = "krabka-traces-metrics-generator"`), with its own offsets; the dedup-avoidance invariant (all spans of a trace in one partition) is what lets it run at RF1.
 - **Injected time + injected sinks.** The collect loop never reads the wall clock directly and never calls a real consumer/HTTP endpoint in unit tests — `Clock`, `SpanSource`, `RemoteWriteSink` are traits with deterministic mocks. This is what makes the TTL edge-pairing state machine, the RED derivation, and exemplar attachment first-class testable.
 - **Rebuildable, no durable state.** Edge state + accumulated series are pure in-memory read-derived state, rebuildable from WAL offsets on restart (spec §9). An optional checkpoint to a compacted topic is structured (codec + trait) but its live Kafka-backed impl is deferred to Slice 8.
 
@@ -30,9 +30,9 @@ The two churn-prone surfaces — the **traces WAL consumer** (`crabka-client-con
 ## Dependency & slice roadmap
 
 **Depends on:**
-- **Slice 4 (ingest service)** — defines `SpanRecord` (the WAL record: `tenant` + an OTLP-derived span — `trace_id[16]`, `span_id[8]`, `parent_span_id[8]`, `name`, `kind`, `start_ns`, `duration_ns`, `status`, resource attrs, span attrs, events, links) and `TRACES_WAL_TOPIC = "__crabka_traces_wal"`. Slice 4's real `SpanRecord` is `{ tenant: String, span: Span }` (span fields nested under `span`); this role reads a **flattened projection** of it via `contract::SpanRecord`, filled by the `SpanSource` decode adapter (see the re-export-swap note). `SpanKind`/`StatusCode`/`TRACES_WAL_TOPIC` are consumed verbatim. The metrics-generator is a *peer consumer group* defined alongside `block-builder`/`live-store` in Slice 4's service crate.
-- **Slice 1 (`crabka-blockstore`) / `crabka-metrics` Slice 1+4** — `NativeHistogram` (absolute bucket counts) for the latency histogram, and the remote_write `pb::v1`/`pb::v2` generated message types + the `SymbolTable` interner (Slice-4 metrics `crate::wire::pb` + `crate::SymbolTable`) for the v2 encode path. *These crates may not be merged when this slice is implemented;* consume only the **contract** (the `NativeHistogram` field set, the `pb` message shape, "POST a `WriteRequest` to a configured endpoint") and wrap it behind `RemoteWriteSink` so the exact wire encoder can land later without touching the processors.
-- **`crabka-client-consumer`** — `Consumer::builder().bootstrap(..).group_id(..).subscribe([..]).auto_offset_reset(AutoOffsetReset::Earliest).build().await?`; `Consumer::poll(Duration) -> Result<Vec<ConsumerRecord>, ConsumerError>`; `Consumer::commit_sync() -> Result<(), ConsumerError>`; `ConsumerRecord { topic, partition:i32, offset:i64, key:Option<Bytes>, value:Option<Bytes>, .. }`. (Verify against `crates/client-consumer/src/{consumer,poll,commit}.rs`.) Wrapped behind `SpanSource` — the role decodes `ConsumerRecord.value` → `SpanRecord` only inside the real source impl.
+- **Slice 4 (ingest service)** — defines `SpanRecord` (the WAL record: `tenant` + an OTLP-derived span — `trace_id[16]`, `span_id[8]`, `parent_span_id[8]`, `name`, `kind`, `start_ns`, `duration_ns`, `status`, resource attrs, span attrs, events, links) and `TRACES_WAL_TOPIC = "__krabka_traces_wal"`. Slice 4's real `SpanRecord` is `{ tenant: String, span: Span }` (span fields nested under `span`); this role reads a **flattened projection** of it via `contract::SpanRecord`, filled by the `SpanSource` decode adapter (see the re-export-swap note). `SpanKind`/`StatusCode`/`TRACES_WAL_TOPIC` are consumed verbatim. The metrics-generator is a *peer consumer group* defined alongside `block-builder`/`live-store` in Slice 4's service crate.
+- **Slice 1 (`krabka-blockstore`) / `krabka-metrics` Slice 1+4** — `NativeHistogram` (absolute bucket counts) for the latency histogram, and the remote_write `pb::v1`/`pb::v2` generated message types + the `SymbolTable` interner (Slice-4 metrics `crate::wire::pb` + `crate::SymbolTable`) for the v2 encode path. *These crates may not be merged when this slice is implemented;* consume only the **contract** (the `NativeHistogram` field set, the `pb` message shape, "POST a `WriteRequest` to a configured endpoint") and wrap it behind `RemoteWriteSink` so the exact wire encoder can land later without touching the processors.
+- **`krabka-client-consumer`** — `Consumer::builder().bootstrap(..).group_id(..).subscribe([..]).auto_offset_reset(AutoOffsetReset::Earliest).build().await?`; `Consumer::poll(Duration) -> Result<Vec<ConsumerRecord>, ConsumerError>`; `Consumer::commit_sync() -> Result<(), ConsumerError>`; `ConsumerRecord { topic, partition:i32, offset:i64, key:Option<Bytes>, value:Option<Bytes>, .. }`. (Verify against `crates/client-consumer/src/{consumer,poll,commit}.rs`.) Wrapped behind `SpanSource` — the role decodes `ConsumerRecord.value` → `SpanRecord` only inside the real source impl.
 
 **This plan = Slice 7 of 8.** Remaining: Slice 8 hardening (per-tenant limits + multi-tenancy isolation, the differential-vs-Tempo corpus, and the Grafana integration where the Service Graph is rendered end-to-end from the `traces_service_graph_*` series). The checkpoint-to-compacted-topic edge-state persistence + the real Kafka consumer/remote_write impls are finished there.
 
@@ -55,7 +55,7 @@ The two churn-prone surfaces — the **traces WAL consumer** (`crabka-client-con
 | `src/metricsgen/checkpoint.rs` | edge-state compacted-topic key/value codec (structured + tested; live impl deferred) |
 | `src/metricsgen/processor.rs` | `MetricsGenerator` — owns both processors + clock; `process(SpanRecord)` + `collect()` (interval flush) |
 | `src/metricsgen/service.rs` | `MetricsGenService` — wires `SpanSource` + processors + sink + clock; the poll/collect loop |
-| `src/bin/metrics_generator.rs` *(or arm in existing `main.rs`)* | `crabka-traces --target metrics-generator` wiring |
+| `src/bin/metrics_generator.rs` *(or arm in existing `main.rs`)* | `krabka-traces --target metrics-generator` wiring |
 | `Cargo.toml` | add `serde`, `prost`, `reqwest`, `tokio`, `tracing` deps (if absent) |
 
 ---
@@ -83,9 +83,9 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sy
 tracing = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
-# crabka-metrics (NativeHistogram + remote_write pb types) / Slice-4 SpanRecord:
+# krabka-metrics (NativeHistogram + remote_write pb types) / Slice-4 SpanRecord:
 # add the path deps once those crates/modules exist.
-# crabka-metrics = { path = "../metrics", version = "0.x" }
+# krabka-metrics = { path = "../metrics", version = "0.x" }
 
 [dev-dependencies]
 assert2 = { workspace = true }
@@ -125,7 +125,7 @@ pub mod spanmetrics;
 /// do not let the two diverge.
 pub mod contract {
     /// The WAL topic the three traces consumer groups read.
-    pub const TRACES_WAL_TOPIC: &str = "__crabka_traces_wal";
+    pub const TRACES_WAL_TOPIC: &str = "__krabka_traces_wal";
 
     /// OTLP span kind (matches the spec §4.1 enum order).
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -192,7 +192,7 @@ pub mod contract {
     /// A native (exponential) histogram with **absolute** bucket counts. Mirrors
     /// metrics Slice-1's `NativeHistogram`; only the fields the latency histogram
     /// populates are modelled here. (On re-export this becomes
-    /// `crabka_metrics::NativeHistogram`.)
+    /// `krabka_metrics::NativeHistogram`.)
     #[derive(Clone, Debug, PartialEq)]
     pub struct NativeHistogram {
         pub schema: i8,
@@ -208,7 +208,7 @@ pub mod contract {
 pub use contract::{BucketSpan, NativeHistogram, SpanKind, SpanRecord, StatusCode, TRACES_WAL_TOPIC};
 ```
 
-> **Re-export-swap note:** the metrics-generator is a `metricsgen` module **inside the same `crabka-traces` crate** that Slice 4 builds (the `SpanRecord`/`SpanKind`/`StatusCode`/`TRACES_WAL_TOPIC` come from `crate::wal` + `crate::span`, not an external crate). The moment Slice 4 lands, replace the matching bodies of `contract` with `pub use crate::wal::TRACES_WAL_TOPIC; pub use crate::span::{SpanKind, StatusCode};` (these match Slice 4's definitions verbatim — identical variant order, identical topic literal) and `pub use crabka_metrics::{NativeHistogram, BucketSpan};` once the metrics crate lands. **`SpanRecord` is the exception:** Slice 4's real `SpanRecord` is `{ tenant: String, span: Span }` (the span fields are nested under `span`), whereas this role's `contract::SpanRecord` is a **flattened projection** the processors read (`service_name`, `kind`, `status`, `duration_ns`, `size_bytes`, span attrs). So `contract::SpanRecord` stays a local type, and the **`SpanSource` adapter** (Task 7 / the real impl in Task 12) decodes `crate::wal::SpanRecord` → this projection — adapt that one decode site, never the processor logic. No other `metricsgen` file references the upstream types directly — they all go through `contract`, so this stays a one-file swap (plus the `SpanSource` decode).
+> **Re-export-swap note:** the metrics-generator is a `metricsgen` module **inside the same `krabka-traces` crate** that Slice 4 builds (the `SpanRecord`/`SpanKind`/`StatusCode`/`TRACES_WAL_TOPIC` come from `crate::wal` + `crate::span`, not an external crate). The moment Slice 4 lands, replace the matching bodies of `contract` with `pub use crate::wal::TRACES_WAL_TOPIC; pub use crate::span::{SpanKind, StatusCode};` (these match Slice 4's definitions verbatim — identical variant order, identical topic literal) and `pub use krabka_metrics::{NativeHistogram, BucketSpan};` once the metrics crate lands. **`SpanRecord` is the exception:** Slice 4's real `SpanRecord` is `{ tenant: String, span: Span }` (the span fields are nested under `span`), whereas this role's `contract::SpanRecord` is a **flattened projection** the processors read (`service_name`, `kind`, `status`, `duration_ns`, `size_bytes`, span attrs). So `contract::SpanRecord` stays a local type, and the **`SpanSource` adapter** (Task 7 / the real impl in Task 12) decodes `crate::wal::SpanRecord` → this projection — adapt that one decode site, never the processor logic. No other `metricsgen` file references the upstream types directly — they all go through `contract`, so this stays a one-file swap (plus the `SpanSource` decode).
 
 - [x] **Step 3: Wire into `lib.rs`**
 
@@ -220,14 +220,14 @@ Create empty-but-compiling `clock.rs`, `config.rs`, `series.rs`, `spanmetrics.rs
 
 - [x] **Step 5: Build**
 
-Run: `cargo build -p crabka-traces`
+Run: `cargo build -p krabka-traces`
 Expected: compiles (empty modules + contract shim).
 
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/ Cargo.toml
 git commit -m "feat(traces): scaffold metrics-generator module + contract shim + deps"
 ```
@@ -270,7 +270,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::clock`
+Run: `cargo test -p krabka-traces --lib metricsgen::clock`
 Expected: FAIL — `cannot find type MockClock`.
 
 - [x] **Step 3: Implement**
@@ -327,7 +327,7 @@ impl Clock for MockClock {
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::clock`
+Run: `cargo test -p krabka-traces --lib metricsgen::clock`
 Expected: PASS.
 
 - [x] **Step 5: Add re-exports** in `metricsgen/mod.rs` (`pub use clock::{Clock, MockClock, SystemClock};`).
@@ -335,8 +335,8 @@ Expected: PASS.
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/
 git commit -m "feat(traces): metrics-generator injectable clock (SystemClock + MockClock)"
 ```
@@ -394,7 +394,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::config`
+Run: `cargo test -p krabka-traces --lib metricsgen::config`
 Expected: FAIL — `cannot find type MetricsGenConfig`.
 
 - [x] **Step 3: Implement**
@@ -479,7 +479,7 @@ mod secs {
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::config`
+Run: `cargo test -p krabka-traces --lib metricsgen::config`
 Expected: PASS (2 tests).
 
 - [x] **Step 5: Add re-exports** in `metricsgen/mod.rs` (`pub use config::{DEFAULT_LATENCY_BUCKETS_NS, MetricsGenConfig};`).
@@ -487,8 +487,8 @@ Expected: PASS (2 tests).
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/
 git commit -m "feat(traces): metrics-generator config model + Tempo-default buckets"
 ```
@@ -551,7 +551,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::series`
+Run: `cargo test -p krabka-traces --lib metricsgen::series`
 Expected: FAIL — `cannot find function sorted_labels`.
 
 - [x] **Step 3: Implement**
@@ -616,7 +616,7 @@ pub fn sorted_labels(mut pairs: Vec<(String, String)>) -> Vec<(String, String)> 
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::series`
+Run: `cargo test -p krabka-traces --lib metricsgen::series`
 Expected: PASS (2 tests).
 
 - [x] **Step 5: Add re-exports** in `metricsgen/mod.rs` (`pub use series::{Exemplar, Series, SeriesPayload, SeriesSample, sorted_labels};`).
@@ -624,8 +624,8 @@ Expected: PASS (2 tests).
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/
 git commit -m "feat(traces): metrics-generator neutral series output model"
 ```
@@ -772,7 +772,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::spanmetrics`
+Run: `cargo test -p krabka-traces --lib metricsgen::spanmetrics`
 Expected: FAIL — `cannot find type SpanMetricsRegistry`.
 
 - [x] **Step 3: Implement**
@@ -985,7 +985,7 @@ fn hex8(b: &[u8; 8]) -> String {
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::spanmetrics`
+Run: `cargo test -p krabka-traces --lib metricsgen::spanmetrics`
 Expected: PASS (5 tests).
 
 - [x] **Step 5: Add re-exports** in `metricsgen/mod.rs` (`pub use spanmetrics::SpanMetricsRegistry;`).
@@ -993,8 +993,8 @@ Expected: PASS (5 tests).
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/
 git commit -m "feat(traces): span-metrics RED registry + latency histogram + exemplars"
 ```
@@ -1165,7 +1165,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::servicegraph`
+Run: `cargo test -p krabka-traces --lib metricsgen::servicegraph`
 Expected: FAIL — `cannot find type EdgeStore`.
 
 - [x] **Step 3: Implement**
@@ -1484,7 +1484,7 @@ use super::series::Series;
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::servicegraph`
+Run: `cargo test -p krabka-traces --lib metricsgen::servicegraph`
 Expected: PASS (6 tests).
 
 - [x] **Step 5: Add re-exports** in `metricsgen/mod.rs` (`pub use servicegraph::{ConnectionType, EdgeStore, RecordOutcome};`).
@@ -1492,8 +1492,8 @@ Expected: PASS (6 tests).
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/
 git commit -m "feat(traces): service-graph TTL'd edge-pairing state machine + RED edges"
 ```
@@ -1508,7 +1508,7 @@ git commit -m "feat(traces): service-graph TTL'd edge-pairing state machine + RE
 **Interfaces:**
 - Produces:
   - `trait RemoteWriteSink: Send + Sync { async fn write(&self, payload: &SeriesPayload) -> Result<(), SinkError>; }` (use `#[async_trait]` — the service stores `Arc<dyn RemoteWriteSink>`, so object safety is required).
-  - `trait SpanSource: Send + Sync { async fn poll(&self, max: usize) -> Result<Vec<SpanRecord>, SinkError>; async fn commit(&self) -> Result<(), SinkError>; }` — the WAL-consumer seam onto `crabka-client-consumer`.
+  - `trait SpanSource: Send + Sync { async fn poll(&self, max: usize) -> Result<Vec<SpanRecord>, SinkError>; async fn commit(&self) -> Result<(), SinkError>; }` — the WAL-consumer seam onto `krabka-client-consumer`.
   - `enum SinkError` (`thiserror`): `Transport(String)`, `Decode(String)`, `Source(String)`.
   - `struct MockRemoteWriteSink` (`Default`, `Clone`) recording all written `SeriesPayload`s; `writes() -> Vec<SeriesPayload>`; `fail_next()` forcing one `Transport` error.
   - `struct MockSpanSource` (`Default`, `Clone`) returning scripted batches; `push_batch(Vec<SpanRecord>)`; records `commit()` calls; `commits() -> usize`.
@@ -1581,7 +1581,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::sink`
+Run: `cargo test -p krabka-traces --lib metricsgen::sink`
 Expected: FAIL — `cannot find type MockRemoteWriteSink`.
 
 - [x] **Step 3: Implement**
@@ -1690,7 +1690,7 @@ impl SpanSource for MockSpanSource {
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::sink`
+Run: `cargo test -p krabka-traces --lib metricsgen::sink`
 Expected: PASS (2 tests).
 
 - [x] **Step 5: Add re-exports** in `metricsgen/mod.rs` (`pub use sink::{MockRemoteWriteSink, MockSpanSource, RemoteWriteSink, SinkError, SpanSource};`).
@@ -1698,8 +1698,8 @@ Expected: PASS (2 tests).
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/
 git commit -m "feat(traces): metrics-generator RemoteWriteSink/SpanSource traits + mocks"
 ```
@@ -1813,7 +1813,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::remotewrite`
+Run: `cargo test -p krabka-traces --lib metricsgen::remotewrite`
 Expected: FAIL — `cannot find function to_timeseries`.
 
 - [x] **Step 3: Implement**
@@ -1967,21 +1967,21 @@ fn encode_write_request(_rows: &[WireTimeSeries]) -> Result<Vec<u8>, String> {
     // TODO(slice7-pb): build `pb::v1::WriteRequest { timeseries: rows.map(..) }`,
     // `prost::Message::encode` to a buffer, then `snap::raw::Encoder::compress_vec`.
     // Each WireTimeSeries -> pb::v1::TimeSeries { labels, samples:[Sample{value,ts}],
-    // exemplars }. See verify-note 1/2. Returns Err until `crabka-metrics`'s pb
+    // exemplars }. See verify-note 1/2. Returns Err until `krabka-metrics`'s pb
     // module + `snap` are deps.
-    Err("remote_write pb-encode not wired until crabka-metrics pb module is a dep".to_string())
+    Err("remote_write pb-encode not wired until krabka-metrics pb module is a dep".to_string())
 }
 ```
 
 > **Churn-surface verify-notes:**
 > 1. **`reqwest` API drift** — `Client::post().header().body().send()` is the stable reqwest builder chain; if a method moves at 0.13, fix the call, not the test (`to_timeseries`/`le_label` have no reqwest in them). Keep `write` the only reqwest-touching code.
-> 2. **prost `pb` shape** — `encode_write_request` must build the metrics Slice-4 `pb::v1::WriteRequest`/`pb::v1::TimeSeries`/`Sample`/`Label`/`Exemplar` types (the generated `OUT_DIR` types are the source of truth — do **not** fabricate field names). When `crabka-metrics` is a dep, import `crabka_metrics::wire::pb`, map each `WireTimeSeries`, `prost::Message::encode`, then `snap::raw::Encoder::compress_vec` (the *plain* snappy `snap::raw` variant — **not** the Kafka Xerial-framed `crabka-compression::snappy`; using the wrong one corrupts every request, per the metrics Slice-4 note). Pin with a behavior test (decode-back round-trip) at that point.
+> 2. **prost `pb` shape** — `encode_write_request` must build the metrics Slice-4 `pb::v1::WriteRequest`/`pb::v1::TimeSeries`/`Sample`/`Label`/`Exemplar` types (the generated `OUT_DIR` types are the source of truth — do **not** fabricate field names). When `krabka-metrics` is a dep, import `krabka_metrics::wire::pb`, map each `WireTimeSeries`, `prost::Message::encode`, then `snap::raw::Encoder::compress_vec` (the *plain* snappy `snap::raw` variant — **not** the Kafka Xerial-framed `krabka-compression::snappy`; using the wrong one corrupts every request, per the metrics Slice-4 note). Pin with a behavior test (decode-back round-trip) at that point.
 > 3. **Native histograms (remote_write v2)** — emitting the latency as a native histogram requires the v2 `pb::v2::Request` + symbol-table interning. `to_timeseries` deliberately skips `NativeHistogram` (classic is the default path); the v2 native encode is a flagged Slice-8 option, structured by the `NativeHistogram` contract type already in scope.
 > 4. **Integration smoke** — add `crates/traces/tests/remote_write_smoke.rs` behind `#[ignore]` that POSTs a real `WriteRequest` to a testcontainers Prometheus/Mimir and asserts `2xx` + a follow-up query returns the series. Run manually / in a dedicated CI lane; the unit suite never depends on a live endpoint.
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::remotewrite`
+Run: `cargo test -p krabka-traces --lib metricsgen::remotewrite`
 Expected: PASS (3 tests).
 
 - [x] **Step 5: Add re-exports** in `metricsgen/mod.rs` (`pub use remotewrite::{PrometheusRemoteWriteSink, WireTimeSeries, le_label, to_timeseries};`).
@@ -1989,8 +1989,8 @@ Expected: PASS (3 tests).
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/
 git commit -m "feat(traces): metrics-generator remote_write encoder + pure timeseries transform"
 ```
@@ -2049,7 +2049,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::checkpoint`
+Run: `cargo test -p krabka-traces --lib metricsgen::checkpoint`
 Expected: FAIL — `cannot find function encode_checkpoint_key`.
 
 - [x] **Step 3: Implement**
@@ -2151,7 +2151,7 @@ impl EdgeCheckpointStore for InMemoryCheckpointStore {
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::checkpoint`
+Run: `cargo test -p krabka-traces --lib metricsgen::checkpoint`
 Expected: PASS (2 tests).
 
 - [x] **Step 5: Add re-exports** in `metricsgen/mod.rs` (`pub use checkpoint::{EdgeCheckpointStore, InMemoryCheckpointStore, encode_checkpoint_key, parse_checkpoint_key};`).
@@ -2159,8 +2159,8 @@ Expected: PASS (2 tests).
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/
 git commit -m "feat(traces): metrics-generator edge-state checkpoint codec + in-memory store"
 ```
@@ -2256,7 +2256,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::processor`
+Run: `cargo test -p krabka-traces --lib metricsgen::processor`
 Expected: FAIL — `cannot find type MetricsGenerator`.
 
 - [x] **Step 3: Implement**
@@ -2323,7 +2323,7 @@ impl MetricsGenerator {
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::processor`
+Run: `cargo test -p krabka-traces --lib metricsgen::processor`
 Expected: PASS (2 tests).
 
 - [x] **Step 5: Add re-exports** in `metricsgen/mod.rs` (`pub use processor::MetricsGenerator;`).
@@ -2331,8 +2331,8 @@ Expected: PASS (2 tests).
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/
 git commit -m "feat(traces): MetricsGenerator processor — per-tenant span-metrics + service-graphs"
 ```
@@ -2437,7 +2437,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::service`
+Run: `cargo test -p krabka-traces --lib metricsgen::service`
 Expected: FAIL — `cannot find type MetricsGenService`.
 
 - [x] **Step 3: Implement**
@@ -2549,11 +2549,11 @@ where
 }
 ```
 
-> **Loop-fidelity verify-note:** `run` interleaves a continuous poll future with the interval ticker via `select!`. The *correctness* (RED derivation, edge pairing, write-then-commit) is fully in `poll_once`/`collect_once` and fully tested; the precise poll/flush interleaving + backpressure tuning are Slice-8 refinements (flagged). The real `SpanSource` impl wraps `crabka-client-consumer` (`Consumer::poll(Duration)` → decode each `ConsumerRecord.value` via the Slice-4 `SpanRecord` decoder → `Vec<SpanRecord>`; `commit()` → `Consumer::commit_sync()`); that wrapping is Task 12's binary concern, kept out of the tested service via the `SpanSource` seam.
+> **Loop-fidelity verify-note:** `run` interleaves a continuous poll future with the interval ticker via `select!`. The *correctness* (RED derivation, edge pairing, write-then-commit) is fully in `poll_once`/`collect_once` and fully tested; the precise poll/flush interleaving + backpressure tuning are Slice-8 refinements (flagged). The real `SpanSource` impl wraps `krabka-client-consumer` (`Consumer::poll(Duration)` → decode each `ConsumerRecord.value` via the Slice-4 `SpanRecord` decoder → `Vec<SpanRecord>`; `commit()` → `Consumer::commit_sync()`); that wrapping is Task 12's binary concern, kept out of the tested service via the `SpanSource` seam.
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traces --lib metricsgen::service`
+Run: `cargo test -p krabka-traces --lib metricsgen::service`
 Expected: PASS (3 tests).
 
 - [x] **Step 5: Add re-exports** in `metricsgen/mod.rs` (`pub use service::MetricsGenService;`).
@@ -2561,8 +2561,8 @@ Expected: PASS (3 tests).
 - [x] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-traces
-cargo clippy -p crabka-traces --all-targets
+cargo fmt -p krabka-traces
+cargo clippy -p krabka-traces --all-targets
 git add crates/traces/
 git commit -m "feat(traces): MetricsGenService poll/collect loop + write-then-commit"
 ```
@@ -2576,7 +2576,7 @@ git commit -m "feat(traces): MetricsGenService poll/collect loop + write-then-co
 - Create: `crates/traces/tests/metrics_generator_e2e.rs`
 
 **Interfaces:**
-- Produces: a binary that parses `--target metrics-generator` + flags (`--bootstrap`, `--remote-write-url`, `--collection-interval`, `--config`), builds a `MetricsGenService` with the real Kafka `SpanSource` (over `crabka-client-consumer`, `group_id = "crabka-traces-metrics-generator"`, subscribing `TRACES_WAL_TOPIC`) + the real `PrometheusRemoteWriteSink`, and spawns `service.run(shutdown)`.
+- Produces: a binary that parses `--target metrics-generator` + flags (`--bootstrap`, `--remote-write-url`, `--collection-interval`, `--config`), builds a `MetricsGenService` with the real Kafka `SpanSource` (over `krabka-client-consumer`, `group_id = "krabka-traces-metrics-generator"`, subscribing `TRACES_WAL_TOPIC`) + the real `PrometheusRemoteWriteSink`, and spawns `service.run(shutdown)`.
 - The **e2e test** is the headline: drives the whole pipeline with mocks end-to-end — feed a scripted batch of client+server spans through `poll_once`, advance the clock past the collection interval, `collect_once`, and assert the mock remote_write sink received `traces_spanmetrics_calls_total` + `traces_service_graph_request_total` with the right labels/exemplars — proving the wiring (source → processors → sink) composes.
 
 - [x] **Step 1: Write the failing e2e test**
@@ -2593,11 +2593,11 @@ use std::sync::Arc;
 
 use assert2::assert;
 
-use crabka_traces::metricsgen::clock::MockClock;
-use crabka_traces::metricsgen::config::MetricsGenConfig;
-use crabka_traces::metricsgen::contract::{SpanKind, SpanRecord, StatusCode};
-use crabka_traces::metricsgen::sink::{MockRemoteWriteSink, MockSpanSource};
-use crabka_traces::metricsgen::MetricsGenService;
+use krabka_traces::metricsgen::clock::MockClock;
+use krabka_traces::metricsgen::config::MetricsGenConfig;
+use krabka_traces::metricsgen::contract::{SpanKind, SpanRecord, StatusCode};
+use krabka_traces::metricsgen::sink::{MockRemoteWriteSink, MockSpanSource};
+use krabka_traces::metricsgen::MetricsGenService;
 
 fn span(service: &str, kind: SpanKind, status: StatusCode, span_id: [u8; 8], parent: [u8; 8], dur_ns: i64) -> SpanRecord {
     SpanRecord {
@@ -2666,7 +2666,7 @@ async fn metrics_generator_end_to_end_red_and_service_graph() {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traces --test metrics_generator_e2e`
+Run: `cargo test -p krabka-traces --test metrics_generator_e2e`
 Expected: FAIL — module paths unresolved until the binary/exports are wired (and `metricsgen` mod must be `pub`).
 
 - [x] **Step 3: Implement the binary + ensure `pub` exports**
@@ -2674,7 +2674,7 @@ Expected: FAIL — module paths unresolved until the binary/exports are wired (a
 Ensure `crates/traces/src/lib.rs` has `pub mod metricsgen;` and `metricsgen/mod.rs` makes its submodules `pub`. Create `crates/traces/src/bin/metrics_generator.rs`:
 
 ```rust
-//! `crabka-traces --target metrics-generator` (or `cargo run --bin metrics_generator`).
+//! `krabka-traces --target metrics-generator` (or `cargo run --bin metrics_generator`).
 //!
 //! Builds a `MetricsGenService` with the real Kafka `SpanSource` (the third
 //! traces consumer group) + the Prometheus remote_write sink, and runs the
@@ -2686,12 +2686,12 @@ use async_trait::async_trait;
 use clap::Parser;
 use tokio_util::sync::CancellationToken;
 
-use crabka_traces::metricsgen::clock::SystemClock;
-use crabka_traces::metricsgen::config::MetricsGenConfig;
-use crabka_traces::metricsgen::contract::SpanRecord;
-use crabka_traces::metricsgen::remotewrite::PrometheusRemoteWriteSink;
-use crabka_traces::metricsgen::sink::{SinkError, SpanSource};
-use crabka_traces::metricsgen::MetricsGenService;
+use krabka_traces::metricsgen::clock::SystemClock;
+use krabka_traces::metricsgen::config::MetricsGenConfig;
+use krabka_traces::metricsgen::contract::SpanRecord;
+use krabka_traces::metricsgen::remotewrite::PrometheusRemoteWriteSink;
+use krabka_traces::metricsgen::sink::{SinkError, SpanSource};
+use krabka_traces::metricsgen::MetricsGenService;
 
 #[derive(Parser)]
 struct Args {
@@ -2715,7 +2715,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     cfg.collection_interval = std::time::Duration::from_secs(args.collection_interval);
     cfg.remote_write_url = args.remote_write_url.clone();
 
-    // NOTE: the real Kafka SpanSource wraps crabka-client-consumer; until that
+    // NOTE: the real Kafka SpanSource wraps krabka-client-consumer; until that
     // dep is wired it's a placeholder so the binary compiles and the loop runs.
     // Replace `KafkaSpanSource::connect(...)` when Slice 4's SpanRecord decoder
     // is a dep.
@@ -2757,19 +2757,19 @@ mod placeholder {
 ```
 
 > **Binary-wiring verify-notes:**
-> 1. The real `SpanSource` wraps `crabka-client-consumer`: `Consumer::builder().bootstrap(&args.bootstrap).group_id("crabka-traces-metrics-generator").subscribe([TRACES_WAL_TOPIC.to_string()]).auto_offset_reset(AutoOffsetReset::Earliest).build().await?`; `poll` → `consumer.poll(Duration::from_millis(500))` then decode each `ConsumerRecord.value` via the Slice-4 `SpanRecord` decoder; `commit` → `consumer.commit_sync()`. This is the third independent consumer group — its own offsets, RF1-safe by the `trace_id`-partition invariant. Flagged; the `SpanSource` seam keeps it out of the tested library + e2e.
+> 1. The real `SpanSource` wraps `krabka-client-consumer`: `Consumer::builder().bootstrap(&args.bootstrap).group_id("krabka-traces-metrics-generator").subscribe([TRACES_WAL_TOPIC.to_string()]).auto_offset_reset(AutoOffsetReset::Earliest).build().await?`; `poll` → `consumer.poll(Duration::from_millis(500))` then decode each `ConsumerRecord.value` via the Slice-4 `SpanRecord` decoder; `commit` → `consumer.commit_sync()`. This is the third independent consumer group — its own offsets, RF1-safe by the `trace_id`-partition invariant. Flagged; the `SpanSource` seam keeps it out of the tested library + e2e.
 > 2. `--target metrics-generator` mirrors the spec's role-selectable service. If the traces service grows a single `main.rs` dispatching all roles (`distributor`/`block-builder`/`live-store`/`querier`/`query-frontend`/`compactor`/`metrics-generator`), fold this binary's body into a `run_metrics_generator(args)` arm — the `MetricsGenService` construction is self-contained.
-> 3. The placeholder `EmptySpanSource` is **binary-only** so the role binary compiles and runs the loop before Slice 4 merges. It never appears in library code or the e2e test (which uses `MockSpanSource`). Replace it + wire `PrometheusRemoteWriteSink::write`'s `encode_write_request` (Task 8 TODO) when the `crabka-metrics` pb module is a dep.
+> 3. The placeholder `EmptySpanSource` is **binary-only** so the role binary compiles and runs the loop before Slice 4 merges. It never appears in library code or the e2e test (which uses `MockSpanSource`). Replace it + wire `PrometheusRemoteWriteSink::write`'s `encode_write_request` (Task 8 TODO) when the `krabka-metrics` pb module is a dep.
 > 4. `clap` is a workspace dep (used by the other role binaries). Confirm `clap = { workspace = true, features = ["derive"] }` is in `crates/traces/Cargo.toml`.
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traces --test metrics_generator_e2e`
+Run: `cargo test -p krabka-traces --test metrics_generator_e2e`
 Expected: PASS.
 
 - [x] **Step 5: Whole-crate gate**
 
-Run: `cargo test -p crabka-traces && cargo clippy -p crabka-traces --all-targets && cargo fmt -p crabka-traces --check`
+Run: `cargo test -p krabka-traces && cargo clippy -p krabka-traces --all-targets && cargo fmt -p krabka-traces --check`
 Expected: all PASS, no warnings, formatting clean.
 
 - [x] **Step 6: Commit**
@@ -2787,9 +2787,9 @@ git commit -m "feat(traces): --target metrics-generator binary + end-to-end inte
 - **Span-metrics (RED)** — `traces_spanmetrics_calls_total` (counter), `traces_spanmetrics_latency` (classic histogram with `_bucket`/`_sum`/`_count`) carrying `trace_id`/`span_id` exemplars (`ObserveWithExemplar`), `traces_spanmetrics_size_total` (counter), and the optional `traces_target_info` (gauge), dimensioned by `service`/`span_name`/`span_kind`/`status_code` → Task 5 (`SpanMetricsRegistry`). Exemplars gated by `max_exemplars_per_series` (off by default, matching Tempo).
 - **Service-graphs** — the bounded, TTL'd edge store keyed by `(trace_id, edge_id)`: partner→record→complete, wait-expiry→`unpaired_spans_total`, store-full→`dropped_spans_total`, emitting `traces_service_graph_request_total`/`_request_failed_total`/`_request_client_seconds`/`_request_server_seconds`/`_request_messaging_system_seconds`/`_unpaired_spans_total`/`_dropped_spans_total` labeled `client`/`server`/`connection_type` (unset/`virtual_node`/`messaging_system`/`database`) → Task 6 (`EdgeStore`).
 - **remote_write output** — via the metrics signal's client (prost `pb::v1` `WriteRequest` + snappy + exemplars; v2 native-histogram path structured + flagged), to a configured Prometheus endpoint, `X-Scope-OrgID` per tenant → Task 8 (`PrometheusRemoteWriteSink`) + the pure `to_timeseries` transform.
-- **Consumer group** — the third independent group on the `trace_id`-partitioned WAL (`group_id = "crabka-traces-metrics-generator"`), own offsets, RF1-safe → the `SpanSource` seam (Task 7) + the binary wiring (Task 12).
+- **Consumer group** — the third independent group on the `trace_id`-partitioned WAL (`group_id = "krabka-traces-metrics-generator"`), own offsets, RF1-safe → the `SpanSource` seam (Task 7) + the binary wiring (Task 12).
 - **Rebuildable in-memory state + optional checkpoint** — edges/series are pure read-derived state (Task 10 `MetricsGenerator`); the compacted-topic checkpoint codec is structured + tested (Task 9), live impl deferred to Slice 8.
-- **Role binary** — `crabka-traces --target metrics-generator` (Task 12).
+- **Role binary** — `krabka-traces --target metrics-generator` (Task 12).
 
 **First-class test concerns (as the brief demanded):**
 - **TTL'd edge-pairing state machine** — Task 6's `pairs_client_then_server_into_one_request`, `unpaired_half_edge_expires_after_ttl`, and `store_full_drops_new_spans` drive partner→complete, TTL-expiry→unpaired, and capacity→dropped with explicit `now_ns` values (no real time); `failed_when_either_side_errors`, `non_client_server_spans_ignored`, and `database_connection_type_from_db_system_attr` pin the error/ignore/classification edges. Task 10 + the e2e re-prove it through the full service with `MockClock`.
@@ -2798,8 +2798,8 @@ git commit -m "feat(traces): --target metrics-generator binary + end-to-end inte
 - **Mock remote_write sink** — `MockRemoteWriteSink` (Task 7) captures every payload + can `fail_next()`; Task 11's `collect_does_not_commit_when_write_fails` pins the write-then-commit crash-safety order.
 
 **Churn-prone surfaces handled per the brief (structure + behavior-pinning tests + verify-notes):**
-- **Kafka consumer** — isolated behind `SpanSource` (Task 7); the processors + loop are tested with `MockSpanSource`, and the real `crabka-client-consumer` wiring (`poll`/`commit_sync`, `group_id`, `SpanRecord` decode) is a documented one-impl swap in Task 12's binary. Zero Kafka in any tested transform.
-- **remote_write HTTP + prost** — the `reqwest` POST + the `pb::v1` prost encode + `snap::raw` snappy (Task 8) are the only network/wire-touching code; the flat `Series`→`TimeSeries` transform is pinned by the pure `to_timeseries`/`le_label` tests, with `encode_write_request` returning a documented `Err` until `crabka-metrics`'s pb module is a dep (so the unit suite is green + the binary compiles), an AM-style snappy-variant verify-note (use `snap::raw`, not Kafka Xerial framing), and an `#[ignore]` testcontainers smoke. No unit test depends on a live endpoint or a not-yet-merged pb module.
+- **Kafka consumer** — isolated behind `SpanSource` (Task 7); the processors + loop are tested with `MockSpanSource`, and the real `krabka-client-consumer` wiring (`poll`/`commit_sync`, `group_id`, `SpanRecord` decode) is a documented one-impl swap in Task 12's binary. Zero Kafka in any tested transform.
+- **remote_write HTTP + prost** — the `reqwest` POST + the `pb::v1` prost encode + `snap::raw` snappy (Task 8) are the only network/wire-touching code; the flat `Series`→`TimeSeries` transform is pinned by the pure `to_timeseries`/`le_label` tests, with `encode_write_request` returning a documented `Err` until `krabka-metrics`'s pb module is a dep (so the unit suite is green + the binary compiles), an AM-style snappy-variant verify-note (use `snap::raw`, not Kafka Xerial framing), and an `#[ignore]` testcontainers smoke. No unit test depends on a live endpoint or a not-yet-merged pb module.
 
 **Contract-shim discipline:** every upstream type (`SpanRecord`/`SpanKind`/`StatusCode`/`TRACES_WAL_TOPIC` from Slice 4; `NativeHistogram`/`BucketSpan` + the remote_write `pb` types from the metrics crate) flows through `crate::metricsgen::contract` (Task 1), so when Slice 4 + the metrics crate merge the swap is one file. No `metricsgen` module references an upstream crate directly. The `SpanSource`, `RemoteWriteSink`, and `EdgeCheckpointStore` traits are *role-owned* seams (the role↔consumer, role↔remote_write, and role↔checkpoint boundaries), correctly **not** in `contract`.
 
@@ -2816,4 +2816,4 @@ git commit -m "feat(traces): --target metrics-generator binary + end-to-end inte
 
 **Type consistency:** label pairs are `Vec<(String, String)>` sorted by key everywhere (stable series identity / JSON); `Series`/`SeriesSample`/`Exemplar`/`SeriesPayload` field sets are identical across the two processors, the encoder, and the mocks. `SinkError` is the single sink/source error. `SpanKind`/`StatusCode` dimension renderings (`SPAN_KIND_*`/`STATUS_CODE_*`) are defined once (Task 1 + Task 5/6) and used identically. The latency/`_seconds` unit convention is **seconds on the wire, nanoseconds in the accumulator** — converted exactly once per path (`NS_PER_SEC`), pinned by the `_sum`-in-seconds + exemplar-value-in-seconds tests.
 
-**Greenfield compliance:** no `#[serde(default)]`-for-old-data (the `#[serde(default)]` on `MetricsGenConfig` is for *absent optional config fields*, not back-compat — correct), no V1/V2 dual variants kept for replay, no migration code. Prometheus remote_write wire identity preserved: the emitted series are ordinary Prometheus series + native histograms + exemplars through the metrics signal's existing `pb` types (no metrics-generator-private format); the metric/label names match Tempo so Grafana reads them by name. Kafka wire identity on the input edge preserved by consuming through `crabka-client-consumer`.
+**Greenfield compliance:** no `#[serde(default)]`-for-old-data (the `#[serde(default)]` on `MetricsGenConfig` is for *absent optional config fields*, not back-compat — correct), no V1/V2 dual variants kept for replay, no migration code. Prometheus remote_write wire identity preserved: the emitted series are ordinary Prometheus series + native histograms + exemplars through the metrics signal's existing `pb` types (no metrics-generator-private format); the metric/label names match Tempo so Grafana reads them by name. Kafka wire identity on the input edge preserved by consuming through `krabka-client-consumer`.

@@ -3,7 +3,7 @@
 **Date:** 2026-05-26
 **Status:** Slice design. Follows slice 48d (remote read path). Part of
 the KIP-405 umbrella
-(`docs/superpowers/specs/2026-05-25-crabka-tiered-storage-roadmap-design.md`).
+(`docs/superpowers/specs/2026-05-25-krabka-tiered-storage-roadmap-design.md`).
 
 ## Goal
 
@@ -263,6 +263,6 @@ sole record of which partitions need the cascade.
 
 - `cargo fmt --all --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test -p crabka-broker -p crabka-remote-storage -p crabka-log`
+- `cargo test -p krabka-broker -p krabka-remote-storage -p krabka-log`
 - `cargo build --workspace`
 - No CRD drift (no CRDs touched).

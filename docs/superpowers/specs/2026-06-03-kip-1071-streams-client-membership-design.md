@@ -33,7 +33,7 @@ sits on and is independently JVM-interop-validatable against the done broker.
 
 ### Goal
 
-A new `crabka-client-streams` crate that lets a Rust application:
+A new `krabka-client-streams` crate that lets a Rust application:
 
 1. **Define a topology** with a Processor-API-style builder and serialize it to
    the `StreamsGroupHeartbeatRequest.Topology` wire shape **byte-for-byte
@@ -124,11 +124,11 @@ and insertion order are explicit and caller-controlled. DSL topologies
 
 ## 5. Architecture: crate and modules
 
-New crate **`crabka-client-streams`** (`crates/client-streams`), matching the
+New crate **`krabka-client-streams`** (`crates/client-streams`), matching the
 existing `client-consumer`/`-producer`/`-admin` family. Dependencies:
-`crabka-client-core` (transport + `Client::send`), `crabka-protocol`
+`krabka-client-core` (transport + `Client::send`), `krabka-protocol`
 (`streams_group_heartbeat_*` owned types), `tokio`, `uuid`, `tracing`,
-`thiserror`, `bon`. Dev-deps: `crabka-broker` with `test-helpers`, `assert2`,
+`thiserror`, `bon`. Dev-deps: `krabka-broker` with `test-helpers`, `assert2`,
 `tempfile`, `tokio` test-util — mirroring `client-consumer`.
 
 ```
@@ -278,7 +278,7 @@ negotiation glue may be missing — a small, self-contained task to verify and a
    `testdata/`. The real interop gate; independent of broker leniency. Producing
    the golden frames (a JVM Streams PAPI app + captured frame) is its own plan
    task; doable on the Mac (single client RPC, no inter-broker replication).
-3. **In-process integration** — spin a `crabka-broker` via `test-helpers`
+3. **In-process integration** — spin a `krabka-broker` via `test-helpers`
    (dev-dep, like consumer/admin), enable the `streams.version` feature +
    config, join a streams group, and assert: member-id/epoch progression,
    NotReady→Ready as internal topics are created, `ActiveTasks` for a simple
@@ -303,7 +303,7 @@ negotiation glue may be missing — a small, self-contained task to verify and a
 
 ## 14. Success criteria
 
-- `cargo test -p crabka-client-streams` green, including the golden-frame
+- `cargo test -p krabka-client-streams` green, including the golden-frame
   byte-comparison and the in-process broker integration test.
 - `cargo clippy --workspace --all-targets -- -D warnings` and
   `cargo fmt --check` clean.

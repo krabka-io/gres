@@ -7,7 +7,7 @@ Status: Approved (brainstorming) — pending spec review
 
 Slice 3 replaces openraft with a hand-rolled KRaft engine (decomposed 3a–3d).
 3a built the pure consensus core (`crates/raft/src/kraft/core.rs`); 3b built the
-`KraftLog` over `crabka-log` (`crates/raft/src/kraft/log.rs`). 3c is the
+`KraftLog` over `krabka-log` (`crates/raft/src/kraft/log.rs`). 3c is the
 **combined cutover**: a new async `KraftController` runs the core + log + the
 `MetadataImage` over the real KIP-595 wire, replacing openraft entirely behind
 the **unchanged** `ControllerHandle` public API, and openraft is deleted.
@@ -146,7 +146,7 @@ coordinator + mock tests); `error.rs` (minus the openraft variant; add
   `raft/tests/single_node.rs`, `raft/tests/snapshot.rs` (trigger + restart),
   `raft/tests/reconfig.rs` (mock).
 - **openraft-gone check:** `openraft` absent from `Cargo.toml`; the deleted
-  files are gone; `cargo test -p crabka-raft -p crabka-broker` green; clippy/fmt
+  files are gone; `cargo test -p krabka-raft -p krabka-broker` green; clippy/fmt
   clean.
 
 ## Error handling

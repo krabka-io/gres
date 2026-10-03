@@ -15,7 +15,7 @@ clients reuse their process policy rather than adding component-specific
 settings.
 
 **Tech Stack:** Rust, Clap, existing environment parsing helpers,
-`crabka-units`, `refined_type`, Cargo tests.
+`krabka-units`, `refined_type`, Cargo tests.
 
 ## Global Constraints
 
@@ -39,17 +39,17 @@ settings.
 | Process | Queue/frame environment prefix | Extra fetch minimum |
 |---|---|---|
 | bench-driver | `BENCH_` | none |
-| broker | `CRABKA_BROKER_` | none |
-| gres | `CRABKA_GRES_` | `FDW_FETCH_MIN`, `WAL_RECOVERY_FETCH_MIN`, `REGISTRY_READER_FETCH_MIN` |
-| grpc-gateway | `CRABKA_GRPC_GATEWAY_` | none |
-| metrics | `CRABKA_METRICS_` | none |
-| metrics-service | `CRABKA_METRICS_SERVICE_` | none |
-| observability-demo-app | `CRABKA_DEMO_` | `STREAMS_FETCH_MIN` |
-| profiles | `CRABKA_PROFILES_` | none |
-| rebalancer | `CRABKA_REBALANCER_` | none |
-| replicator | `CRABKA_REPLICATOR_` | none |
+| broker | `KRABKA_BROKER_` | none |
+| gres | `KRABKA_GRES_` | `FDW_FETCH_MIN`, `WAL_RECOVERY_FETCH_MIN`, `REGISTRY_READER_FETCH_MIN` |
+| grpc-gateway | `KRABKA_GRPC_GATEWAY_` | none |
+| metrics | `KRABKA_METRICS_` | none |
+| metrics-service | `KRABKA_METRICS_SERVICE_` | none |
+| observability-demo-app | `KRABKA_DEMO_` | `STREAMS_FETCH_MIN` |
+| profiles | `KRABKA_PROFILES_` | none |
+| rebalancer | `KRABKA_REBALANCER_` | none |
+| replicator | `KRABKA_REPLICATOR_` | none |
 | schema-registry | `SCHEMA_REGISTRY_` | none |
-| traces | `CRABKA_TRACES_` | none |
+| traces | `KRABKA_TRACES_` | none |
 
 If a binary's checked-in parser uses a different established prefix, preserve
 that prefix and update this table/audit rather than introducing an alias.
@@ -76,10 +76,10 @@ that prefix and update this table/audit rather than introducing an alias.
 **Files:**
 - Modify: `crates/bench-driver/src/main.rs`
 - Modify: `crates/bench-driver/src/workload.rs`
-- Modify: `crates/metrics/src/bin/crabka-metrics.rs`
+- Modify: `crates/metrics/src/bin/krabka-metrics.rs`
 - Modify: `crates/metrics-service/src/main.rs`
-- Modify: `crates/profiles/src/bin/crabka-profiles.rs`
-- Modify: `crates/traces/src/bin/crabka-traces.rs`
+- Modify: `crates/profiles/src/bin/krabka-profiles.rs`
+- Modify: `crates/traces/src/bin/krabka-traces.rs`
 - Modify: focused parser/propagation tests beside each owner
 
 - [ ] Add failing parser precedence and invalid-input tests for each binary.
@@ -121,7 +121,7 @@ feat(traces): expose client resource policy
 - [ ] Store it once in the existing rebalancer config and forward it to all
   five client-owning paths.
 - [ ] Verify reconnect/reload paths retain the pair.
-- [ ] Run `cargo test -p crabka-rebalancer --all-targets --locked` and commit.
+- [ ] Run `cargo test -p krabka-rebalancer --all-targets --locked` and commit.
 
 ---
 
@@ -140,7 +140,7 @@ feat(traces): expose client resource policy
 - [ ] Validate once at gateway startup and store the typed pair in its existing
   application configuration.
 - [ ] Forward the same pair to all `Producer::builder()` calls.
-- [ ] Run `cargo test -p crabka-grpc-gateway --all-targets --locked` and commit.
+- [ ] Run `cargo test -p krabka-grpc-gateway --all-targets --locked` and commit.
 
 ---
 
@@ -158,7 +158,7 @@ feat(traces): expose client resource policy
 - [ ] Carry typed values through the existing Kafka-store config into writer,
   reader, and reader reconstruction paths.
 - [ ] Keep unrelated HTTP `reqwest::Client` builders out of scope.
-- [ ] Run `cargo test -p crabka-schema-registry --all-targets --locked` and
+- [ ] Run `cargo test -p krabka-schema-registry --all-targets --locked` and
   commit.
 
 ---
@@ -229,7 +229,7 @@ feat(traces): expose client resource policy
   them, preserving existing Gres validation behavior.
 - [ ] Ensure Gres-local direct `ConnectionOptions` and `IsolatedFetch` sites
   reuse the corresponding typed policies.
-- [ ] Run `cargo test -p crabka-gres --all-targets --locked` and the affected
+- [ ] Run `cargo test -p krabka-gres --all-targets --locked` and the affected
   Gres library packages, then commit.
 
 ---
@@ -241,7 +241,7 @@ feat(traces): expose client resource policy
 - Modify: role/config tests
 
 - [ ] Add the process queue/frame pair plus
-  `--streams-fetch-min` / `CRABKA_DEMO_STREAMS_FETCH_MIN`.
+  `--streams-fetch-min` / `KRABKA_DEMO_STREAMS_FETCH_MIN`.
 - [ ] Validate before role startup.
 - [ ] Pass values to `KafkaStreams::builder()` only for the Stream role.
 - [ ] Preserve or add explicit rejection when the fetch-minimum is supplied to

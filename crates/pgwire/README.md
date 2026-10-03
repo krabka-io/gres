@@ -1,12 +1,12 @@
-# crabka-pgwire
+# krabka-pgwire
 
-[![crates.io](https://img.shields.io/crates/v/crabka-pgwire.svg)](https://crates.io/crates/crabka-pgwire)
+[![crates.io](https://img.shields.io/crates/v/krabka-pgwire.svg)](https://crates.io/crates/krabka-pgwire)
 PostgreSQL v3 wire-protocol server: simple and extended query protocols, SCRAM-SHA-256, TLS, and CancelRequest.
 
 Part of [Crabka](https://github.com/robot-head/crabka)'s Chapter Gres. Chapter Gres
 is a pure-Rust Postgres-compatible engine vendored from
 [crabgresql](https://github.com/robot-head/crabgresql) at `93f3d17`. See the
-[chapter design](../../docs/superpowers/specs/2026-07-09-crabka-gres-chapter-design.md).
+[chapter design](../../docs/superpowers/specs/2026-07-09-krabka-gres-chapter-design.md).
 
 ## Overview
 

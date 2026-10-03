@@ -9,7 +9,7 @@ defaults and source topic topology.
 ## Configuration boundary
 
 Add one `ReplicatorRuntimePolicy` flattened into the standalone binary's
-existing Clap CLI. Every flag is backed by a `CRABKA_REPLICATOR_*` environment
+existing Clap CLI. Every flag is backed by a `KRABKA_REPLICATOR_*` environment
 variable, so Kubernetes can override the process without adding runtime policy
 to the replicator's workload-definition YAML.
 

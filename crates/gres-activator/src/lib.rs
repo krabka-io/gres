@@ -10,9 +10,9 @@ use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
 use async_trait::async_trait;
 use bytes::BytesMut;
 pub use config_value::{NonEmptyValue, PositiveMillis};
-use crabka_gres_control::{Registry, TenantName, TenantState};
-use crabka_pgwire::{error::PgError, messages::backend};
-use crabka_units::{
+use krabka_gres_control::{Registry, TenantName, TenantState};
+use krabka_pgwire::{error::PgError, messages::backend};
+use krabka_units::{
     Time,
     convert::{StdDurationExt as _, TimeExt as _},
     fmt::Human as _,
@@ -261,7 +261,7 @@ impl WakeRegistry for ControlRegistryWakeRegistry {
 pub enum ActivatorError {
     /// Control-plane registry operation failed.
     #[error("gres control registry error: {0}")]
-    Control(#[from] crabka_gres_control::ControlError),
+    Control(#[from] krabka_gres_control::ControlError),
     /// I/O operation failed.
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
@@ -365,8 +365,8 @@ mod tests {
 
     use assert2::assert;
     use bytes::{BufMut, BytesMut};
-    use crabka_gres_control::TenantName;
-    use crabka_units::{millis, secs};
+    use krabka_gres_control::TenantName;
+    use krabka_units::{millis, secs};
     use tokio::{io::AsyncWriteExt, join};
 
     use super::{test_doubles::FakeWakeRegistry, *};

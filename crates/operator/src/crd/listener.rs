@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use crabka_units::Time;
+use krabka_units::Time;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -384,7 +384,7 @@ pub struct ListenerAuthenticationGssapi {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        with = "crabka_units::serde_units::human::option_time"
+        with = "krabka_units::serde_units::human::option_time"
     )]
     #[schemars(with = "Option<String>")]
     pub max_time_skew: Option<Time>,
@@ -1451,7 +1451,7 @@ mod tests {
         let ListenerAuthentication::Gssapi(gssapi) = listener.authentication.unwrap() else {
             panic!("expected gssapi authentication");
         };
-        assert!(gssapi.max_time_skew == Some(crabka_units::secs(17)));
+        assert!(gssapi.max_time_skew == Some(krabka_units::secs(17)));
 
         let schema = serde_json::to_string(&schemars::schema_for!(Listener)).unwrap();
         assert!(schema.contains("maxTimeSkew"));

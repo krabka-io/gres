@@ -1,6 +1,6 @@
 //! Fence-first recovery prologue for a tenant range.
 
-use crabka_pgkv::Kv;
+use krabka_pgkv::Kv;
 
 use crate::{RangeId, range0_tail::Range0TailError};
 
@@ -154,7 +154,7 @@ pub async fn recover_range(input: RecoverRange<'_>) -> Result<ServingRange, Prol
 pub enum PrologueError {
     /// Underlying local storage failed.
     #[error(transparent)]
-    Kv(#[from] crabka_pgkv::KvError),
+    Kv(#[from] krabka_pgkv::KvError),
     /// Range-0 tail application failed.
     #[error(transparent)]
     Range0Tail(#[from] Range0TailError),
@@ -177,7 +177,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use assert2::assert;
-    use crabka_pgkv::MemKv;
+    use krabka_pgkv::MemKv;
 
     use super::*;
 

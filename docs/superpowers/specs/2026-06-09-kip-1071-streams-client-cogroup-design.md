@@ -9,7 +9,7 @@ window surfaces (non-windowed + time/session/sliding windowed) to
 ## 1. Context
 
 The KIP-1071 streams **client** runtime (`crates/client-streams`, crate
-`crabka-client-streams`) is feature-rich: the original 7-sub-project program
+`krabka-client-streams`) is feature-rich: the original 7-sub-project program
 plus FK-join, global table, suppress, punctuation, EOS, standby/warmup,
 schema-serde, and (most recently) sliding windows (KIP-450) have all merged.
 The remaining Kafka-Streams DSL-parity gaps are **cogroup (KIP-150)**, versioned

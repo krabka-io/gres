@@ -1,6 +1,6 @@
 //! Kafka wire-protocol codec.
 //!
-//! `crabka-protocol` is a pure-Rust library that encodes and decodes every
+//! `krabka-protocol` is a pure-Rust library that encodes and decodes every
 //! Apache Kafka request and response message, byte-equivalent to the upstream
 //! JVM implementation. It does no I/O and makes no async assumptions. The
 //! broker, client, and tooling crates in the Crabka project use it.
@@ -19,7 +19,7 @@
 //!
 //! ## Versioning
 //!
-//! `crabka-protocol` is pre-1.0. Breaking API changes are allowed per minor
+//! `krabka-protocol` is pre-1.0. Breaking API changes are allowed per minor
 //! version. See CHANGELOG.md. `crates/protocol/schemas/VERSION` records the
 //! wire-protocol pin.
 //!
@@ -27,7 +27,7 @@
 //!
 //! ```rust
 //! use bytes::BytesMut;
-//! use crabka_protocol::{Encode, owned::api_versions_request::ApiVersionsRequest};
+//! use krabka_protocol::{Encode, owned::api_versions_request::ApiVersionsRequest};
 //!
 //! let req = ApiVersionsRequest::default();
 //! let version = 4;

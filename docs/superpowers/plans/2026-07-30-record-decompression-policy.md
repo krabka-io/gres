@@ -4,9 +4,9 @@
 
 **Goal:** Replace duplicated Kafka record decompression budgets with one validated UOM policy configurable through the broker and Kafka CRD.
 
-**Architecture:** `crabka-compression` owns the policy and budget calculation. Protocol and legacy decoders retain default-compatible entry points and add explicit policy-aware variants; only the broker's untrusted Produce fallback supplies deployment configuration. Existing broker runtime TOML and operator `BrokerTuning` carry the three values.
+**Architecture:** `krabka-compression` owns the policy and budget calculation. Protocol and legacy decoders retain default-compatible entry points and add explicit policy-aware variants; only the broker's untrusted Produce fallback supplies deployment configuration. Existing broker runtime TOML and operator `BrokerTuning` carry the three values.
 
-**Tech Stack:** Rust, `crabka-units`, `refined_type`, Clap environment arguments, Serde/TOML, kube/schemars CRDs.
+**Tech Stack:** Rust, `krabka-units`, `refined_type`, Clap environment arguments, Serde/TOML, kube/schemars CRDs.
 
 ## Global Constraints
 
@@ -73,7 +73,7 @@ Run:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-compression record_policy --locked
+  cargo test -p krabka-compression record_policy --locked
 ```
 
 Expected: compilation fails because `RecordDecompressionPolicy` does not exist.
@@ -149,9 +149,9 @@ Run:
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-compression record_policy --offline
+  cargo test -p krabka-compression record_policy --offline
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-compression --locked
+  cargo test -p krabka-compression --locked
 ```
 
 Expected: all compression tests pass.
@@ -171,7 +171,7 @@ git commit -m "feat(compression): add record decode policy"
 - Modify: `crates/protocol/src/records/payload.rs`
 
 **Interfaces:**
-- Consumes: `crabka_compression::RecordDecompressionPolicy`
+- Consumes: `krabka_compression::RecordDecompressionPolicy`
 - Produces: `RecordBatch::decode_with_policy`
 - Produces: borrowed `RecordBatch::decode_borrow_with_policy`
 - Produces: `RecordsPayload::from_bytes_with_policy`
@@ -210,7 +210,7 @@ assert2::assert!(
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-protocol decompression_policy --locked
+  cargo test -p krabka-protocol decompression_policy --locked
 ```
 
 Expected: compilation fails on the missing policy-aware methods.
@@ -240,7 +240,7 @@ Replace both local 16 MiB / 100× / 1 GiB calculations with
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-protocol decompression_policy --locked
+  cargo test -p krabka-protocol decompression_policy --locked
 ```
 
 Expected: policy tests pass and existing record tests remain green.
@@ -295,7 +295,7 @@ assert2::assert!(
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-records-legacy decompression_policy --locked
+  cargo test -p krabka-records-legacy decompression_policy --locked
 ```
 
 Expected: compilation fails on the missing policy-aware functions.
@@ -326,7 +326,7 @@ budget function.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-records-legacy --locked
+  cargo test -p krabka-records-legacy --locked
 ```
 
 - [x] **Step 5: Commit**
@@ -380,7 +380,7 @@ fn record_decompression_rejects_weakened_security_bounds() {
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-broker record_decompression --locked
+  cargo test -p krabka-broker record_decompression --locked
 ```
 
 - [x] **Step 3: Add broker fields and validation**
@@ -395,16 +395,16 @@ reuse that single constructor path.
 Add CLI/env fields:
 
 ```rust
-#[arg(long, env = "CRABKA_RECORD_DECOMPRESSION_MAX_RATIO",
-      value_parser = crabka_units::parse::positive_ratio)]
+#[arg(long, env = "KRABKA_RECORD_DECOMPRESSION_MAX_RATIO",
+      value_parser = krabka_units::parse::positive_ratio)]
 record_decompression_max_ratio: Option<Ratio>,
 
-#[arg(long, env = "CRABKA_RECORD_DECOMPRESSION_OUTPUT_FLOOR",
-      value_parser = crabka_units::parse::positive_byte_size)]
+#[arg(long, env = "KRABKA_RECORD_DECOMPRESSION_OUTPUT_FLOOR",
+      value_parser = krabka_units::parse::positive_byte_size)]
 record_decompression_output_floor: Option<ByteSize>,
 
-#[arg(long, env = "CRABKA_RECORD_DECOMPRESSION_OUTPUT_CEILING",
-      value_parser = crabka_units::parse::positive_byte_size)]
+#[arg(long, env = "KRABKA_RECORD_DECOMPRESSION_OUTPUT_CEILING",
+      value_parser = krabka_units::parse::positive_byte_size)]
 record_decompression_output_ceiling: Option<ByteSize>,
 ```
 
@@ -415,9 +415,9 @@ bytes before assignment, and include all three in the runtime overlay.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-broker --lib record_decompression --locked
+  cargo test -p krabka-broker --lib record_decompression --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-broker --bin crabka-broker runtime_policy_cli --locked
+  cargo test -p krabka-broker --bin krabka-broker runtime_policy_cli --locked
 ```
 
 - [x] **Step 5: Commit**
@@ -473,7 +473,7 @@ assert2::assert!(error == codes::INVALID_RECORD);
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-broker --test produce_legacy_upconvert record_decompression --locked
+  cargo test -p krabka-broker --test produce_legacy_upconvert record_decompression --locked
 ```
 
 - [x] **Step 3: Pass one policy value through the fallback**
@@ -488,9 +488,9 @@ path.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-broker --test produce_legacy_upconvert --locked
+  cargo test -p krabka-broker --test produce_legacy_upconvert --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-broker --test produce_verbatim_passthrough --locked
+  cargo test -p krabka-broker --test produce_verbatim_passthrough --locked
 ```
 
 - [x] **Step 5: Commit**
@@ -516,7 +516,7 @@ git commit -m "feat(broker): apply record decode limits"
 - [x] **Step 1: Add failing CRD tests**
 
 Deserialize `100`, `16MiB`, and `1GiB`; validate and render them. Parse the
-rendered TOML with `crabka_broker::file_config::FileConfig` and assert the
+rendered TOML with `krabka_broker::file_config::FileConfig` and assert the
 effective broker values. Add invalid cases for ratio 101, floor above ceiling,
 and ceiling above 1 GiB.
 
@@ -529,8 +529,8 @@ let tuning: BrokerTuning = serde_json::from_value(serde_json::json!({
 .unwrap();
 tuning.validate().unwrap();
 let rendered = tuning.render_runtime_toml();
-let file: crabka_broker::file_config::FileConfig = toml::from_str(&rendered).unwrap();
-let mut broker = crabka_broker::BrokerConfig::default();
+let file: krabka_broker::file_config::FileConfig = toml::from_str(&rendered).unwrap();
+let mut broker = krabka_broker::BrokerConfig::default();
 file.apply_to(&mut broker).unwrap();
 assert2::assert!(
     broker.record_decompression_policy().unwrap()
@@ -542,12 +542,12 @@ assert2::assert!(
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator broker_tuning_record_decompression --locked
+  cargo test -p krabka-operator broker_tuning_record_decompression --locked
 ```
 
 - [x] **Step 3: Add CRD fields and shared validation**
 
-Add `crabka-compression` as a direct dependency. Define the fields in
+Add `krabka-compression` as a direct dependency. Define the fields in
 `BrokerTuning` with human ratio/byte-size Serde. In relational validation,
 construct `RecordDecompressionPolicy` from configured values or shared
 defaults and map errors to `spec.brokerTuning.recordDecompression*`.
@@ -558,7 +558,7 @@ defaults and map errors to `spec.brokerTuning.recordDecompression*`.
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   tools/regen-crds.sh
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-operator broker_tuning_record_decompression --locked
+  cargo test -p krabka-operator broker_tuning_record_decompression --locked
 ```
 
 - [x] **Step 5: Commit**
@@ -588,8 +588,8 @@ bit masks as fixed, documenting the shared configured policy, and moving
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-compression -p crabka-protocol \
-    -p crabka-records-legacy --locked
+  cargo test -p krabka-compression -p krabka-protocol \
+    -p krabka-records-legacy --locked
 ```
 
 - [x] **Step 3: Run workspace gates**

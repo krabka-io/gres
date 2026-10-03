@@ -18,11 +18,11 @@
 use std::collections::BTreeMap;
 
 use assert2::{assert, check};
-use crabka_gres_ranges::{
+use krabka_gres_ranges::{
     GatewayCommitFault, HashShardSpec, MultiRangeTenant, MultiRangeTenantConfig, RangeId, TableId,
     TenantName,
 };
-use crabka_pgwire::engine::{Engine, Session};
+use krabka_pgwire::engine::{Engine, Session};
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_sdk::trace::{InMemorySpanExporter, Sampler, SdkTracerProvider, SpanData};
 use tracing_subscriber::{EnvFilter, Layer as _, layer::SubscriberExt as _};
@@ -48,7 +48,7 @@ impl Traces {
         // the gateway tier, are collected too.
         let layer = tracing_opentelemetry::layer()
             .with_tracer(provider.tracer("gateway-tracing"))
-            .with_filter(EnvFilter::new("crabka_gres_ranges::route=trace"));
+            .with_filter(EnvFilter::new("krabka_gres_ranges::route=trace"));
         tracing::subscriber::set_global_default(tracing_subscriber::registry().with(layer))
             .expect("install global subscriber; run these tests under cargo nextest");
         Self { provider, exporter }
@@ -154,7 +154,7 @@ fn hash_split_config(tenant: &str) -> MultiRangeTenantConfig {
 /// Two `id` values that hash into different ranges. An `INSERT` that carries
 /// both is therefore a true multi-participant scatter, and not a one-range write
 /// that only looks like one.
-fn cross_range_ids(range_map: &crabka_gres_ranges::RangeMap, spec: &HashShardSpec) -> (i32, i32) {
+fn cross_range_ids(range_map: &krabka_gres_ranges::RangeMap, spec: &HashShardSpec) -> (i32, i32) {
     let first = 0_i32;
     let first_range = hash_range(range_map, spec, first);
     for second in 1_i32..100 {
@@ -165,7 +165,7 @@ fn cross_range_ids(range_map: &crabka_gres_ranges::RangeMap, spec: &HashShardSpe
     panic!("expected ids in different hash ranges")
 }
 
-fn hash_range(range_map: &crabka_gres_ranges::RangeMap, spec: &HashShardSpec, id: i32) -> RangeId {
+fn hash_range(range_map: &krabka_gres_ranges::RangeMap, spec: &HashShardSpec, id: i32) -> RangeId {
     range_map
         .route_hash_equality(spec, id.to_be_bytes())
         .expect("route")
@@ -214,7 +214,7 @@ async fn routed_select_records_route_and_statement_spans() {
             ("db.collection.name", "t150"),
             ("db.query.summary", "SELECT t150"),
             ("db.response.returned_rows", "1"),
-            // Off unless CRABKA_OTLP_SQL_TEXT says otherwise: the only
+            // Off unless KRABKA_OTLP_SQL_TEXT says otherwise: the only
             // attribute here that can carry a literal off the node.
             ("db.query.text", UNSET),
             ("pg.tenant", "tenant_trace_route"),
@@ -547,7 +547,7 @@ async fn cross_range_transaction_commits_through_global_two_phase_commit() {
             .await
             .unwrap_or_else(|error| panic!("read {table}: {error:?}"));
         let rows = match result.as_slice() {
-            [crabka_pgwire::engine::QueryResult::Rows { rows, .. }] => rows.len(),
+            [krabka_pgwire::engine::QueryResult::Rows { rows, .. }] => rows.len(),
             other => panic!("read {table}: unexpected result {other:?}"),
         };
         check!(rows == 1, "expected one row in {table}");

@@ -14,8 +14,8 @@
 //! Every expectation here was measured against `PostgreSQL` 18.4.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::{
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::{
     engine::{Engine, Session},
     error::PgError,
 };

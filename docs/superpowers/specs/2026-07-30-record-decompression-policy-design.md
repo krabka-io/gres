@@ -13,8 +13,8 @@ invariants.
 
 ## Policy
 
-`crabka-compression` owns `RecordDecompressionPolicy` because both
-`crabka-protocol` and `crabka-records-legacy` already depend on that crate.
+`krabka-compression` owns `RecordDecompressionPolicy` because both
+`krabka-protocol` and `krabka-records-legacy` already depend on that crate.
 The policy contains:
 
 - `max_ratio: Ratio`, default and immutable upper bound `100`;
@@ -55,9 +55,9 @@ the shared policy. The existing runtime overlay exposes:
 
 | CLI | Environment | CRD `brokerTuning` |
 |---|---|---|
-| `--record-decompression-max-ratio` | `CRABKA_RECORD_DECOMPRESSION_MAX_RATIO` | `recordDecompressionMaxRatio` |
-| `--record-decompression-output-floor` | `CRABKA_RECORD_DECOMPRESSION_OUTPUT_FLOOR` | `recordDecompressionOutputFloor` |
-| `--record-decompression-output-ceiling` | `CRABKA_RECORD_DECOMPRESSION_OUTPUT_CEILING` | `recordDecompressionOutputCeiling` |
+| `--record-decompression-max-ratio` | `KRABKA_RECORD_DECOMPRESSION_MAX_RATIO` | `recordDecompressionMaxRatio` |
+| `--record-decompression-output-floor` | `KRABKA_RECORD_DECOMPRESSION_OUTPUT_FLOOR` | `recordDecompressionOutputFloor` |
+| `--record-decompression-output-ceiling` | `KRABKA_RECORD_DECOMPRESSION_OUTPUT_CEILING` | `recordDecompressionOutputCeiling` |
 
 File configuration uses the matching snake-case names in `[runtime]`.
 The operator validates the same bounds, renders the runtime TOML, includes it

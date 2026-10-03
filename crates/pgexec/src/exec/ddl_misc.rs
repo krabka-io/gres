@@ -1,7 +1,7 @@
 use super::*;
 
 /// A `GENERATED … AS IDENTITY` sequence, from the parsed option list.
-pub(super) fn sequence_from_options(options: &crabka_pgparser::ast::SequenceOptions) -> Sequence {
+pub(super) fn sequence_from_options(options: &krabka_pgparser::ast::SequenceOptions) -> Sequence {
     let increment = options.increment.unwrap_or(1);
     Sequence::new(
         options.start.unwrap_or(if increment > 0 { 1 } else { -1 }),
@@ -45,14 +45,14 @@ pub(super) fn ensure_default_can_be_persisted(value: &Datum) -> Result<(), ExecE
 
 /// Convert an object-exists error to a no-op when `IF NOT EXISTS` was written.
 pub(super) fn ignore_duplicate<T>(
-    result: Result<T, crabka_pgcatalog::CatalogError>,
+    result: Result<T, krabka_pgcatalog::CatalogError>,
     if_not_exists: bool,
 ) -> Result<Option<T>, ExecError> {
     match result {
         Ok(value) => Ok(Some(value)),
         Err(
-            crabka_pgcatalog::CatalogError::DuplicateObject(_)
-            | crabka_pgcatalog::CatalogError::DuplicateTable(_),
+            krabka_pgcatalog::CatalogError::DuplicateObject(_)
+            | krabka_pgcatalog::CatalogError::DuplicateTable(_),
         ) if if_not_exists => Ok(None),
         Err(error) => Err(error.into()),
     }

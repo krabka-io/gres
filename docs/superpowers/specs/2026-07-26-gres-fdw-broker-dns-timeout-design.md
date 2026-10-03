@@ -17,7 +17,7 @@ The existing ten-second `ClientDnsTimeout` default remains unchanged.
 ## Scope
 
 This slice covers broker hostname resolution performed by
-`crabka-gres-fdw`:
+`krabka-gres-fdw`:
 
 - metadata connections used by foreign-table scans;
 - the raw broker connection used for `ListOffsets` and fetch requests; and
@@ -31,10 +31,10 @@ limits remain separate audit owners.
 
 ### Standalone Gres
 
-`crabka-gres` adds:
+`krabka-gres` adds:
 
 - CLI: `--fdw-broker-dns-timeout-ms`
-- environment: `CRABKA_GRES_FDW_BROKER_DNS_TIMEOUT_MS`
+- environment: `KRABKA_GRES_FDW_BROKER_DNS_TIMEOUT_MS`
 - default: `ClientDnsTimeout::default()` (10,000 ms)
 - precedence: CLI over environment over the typed default
 

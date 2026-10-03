@@ -29,10 +29,10 @@ dependency.
 The standalone surface is:
 
 - `--registry-reader-admin-dns-timeout-ms`
-- `CRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT_MS`
+- `KRABKA_GRES_REGISTRY_READER_ADMIN_DNS_TIMEOUT_MS`
 
-It is added to the existing registry options in `crabka-gres`, `crabka gres`,
-`crabka-gres-activator`, and `crabka-gres-loadtest`. Load-test child processes
+It is added to the existing registry options in `krabka-gres`, `crabka gres`,
+`krabka-gres-activator`, and `krabka-gres-loadtest`. Load-test child processes
 receive the effective value through the existing registry-policy argument
 renderer.
 

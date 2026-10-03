@@ -5,8 +5,8 @@ Status: Approved (brainstorming) — pending spec review
 
 ## Context
 
-Slice 3d migrates the live metadata path off the wincode `crabka_metadata::MetadataRecord`
-enum onto the real KIP-631 `crabka_protocol::records::metadata::KraftMetadataRecord`
+Slice 3d migrates the live metadata path off the wincode `krabka_metadata::MetadataRecord`
+enum onto the real KIP-631 `krabka_protocol::records::metadata::KraftMetadataRecord`
 (full handler migration — the chosen end-state: handlers speak genuine Kafka
 records, no wincode enum, fully byte-real log for the mixed JVM+Crabka quorum,
 Slice 6). That is a 4-part mini-program (incremental, tree green at each step):

@@ -19,14 +19,14 @@ optional at parsing time, has an environment binding, and has no Clap default:
 
 | CLI | Environment | Effective local default |
 |---|---|---:|
-| `--local-vacuum-idle-interval-ms` | `CRABKA_GRES_LOCAL_VACUUM_IDLE_INTERVAL_MS` | `2000` |
-| `--local-vacuum-backoff-floor-ms` | `CRABKA_GRES_LOCAL_VACUUM_BACKOFF_FLOOR_MS` | `25` |
-| `--local-vacuum-hot-debt` | `CRABKA_GRES_LOCAL_VACUUM_HOT_DEBT` | effective base key budget |
-| `--local-vacuum-key-budget` | `CRABKA_GRES_LOCAL_VACUUM_KEY_BUDGET` | `crabka_pgexec::VACUUM_STEP_KEY_BUDGET` |
-| `--local-vacuum-max-key-budget` | `CRABKA_GRES_LOCAL_VACUUM_MAX_KEY_BUDGET` | checked `4 ×` effective base key budget |
-| `--local-vacuum-step-fast-ms` | `CRABKA_GRES_LOCAL_VACUUM_STEP_FAST_MS` | `3` |
-| `--local-vacuum-step-slow-ms` | `CRABKA_GRES_LOCAL_VACUUM_STEP_SLOW_MS` | `12` |
-| `--local-vacuum-idle-after-ms` | `CRABKA_GRES_LOCAL_VACUUM_IDLE_AFTER_MS` | `1000` |
+| `--local-vacuum-idle-interval-ms` | `KRABKA_GRES_LOCAL_VACUUM_IDLE_INTERVAL_MS` | `2000` |
+| `--local-vacuum-backoff-floor-ms` | `KRABKA_GRES_LOCAL_VACUUM_BACKOFF_FLOOR_MS` | `25` |
+| `--local-vacuum-hot-debt` | `KRABKA_GRES_LOCAL_VACUUM_HOT_DEBT` | effective base key budget |
+| `--local-vacuum-key-budget` | `KRABKA_GRES_LOCAL_VACUUM_KEY_BUDGET` | `krabka_pgexec::VACUUM_STEP_KEY_BUDGET` |
+| `--local-vacuum-max-key-budget` | `KRABKA_GRES_LOCAL_VACUUM_MAX_KEY_BUDGET` | checked `4 ×` effective base key budget |
+| `--local-vacuum-step-fast-ms` | `KRABKA_GRES_LOCAL_VACUUM_STEP_FAST_MS` | `3` |
+| `--local-vacuum-step-slow-ms` | `KRABKA_GRES_LOCAL_VACUUM_STEP_SLOW_MS` | `12` |
+| `--local-vacuum-idle-after-ms` | `KRABKA_GRES_LOCAL_VACUUM_IDLE_AFTER_MS` | `1000` |
 
 Reuse the existing `refined_type`-backed `PositiveMillis` and `PositiveUsize`
 types. Use `NonZeroU64` for hot debt; it already provides the required scalar

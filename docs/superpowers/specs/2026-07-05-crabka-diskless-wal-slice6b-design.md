@@ -6,7 +6,7 @@
 
 ## Context — where this sits
 
-Sub-slice of Slice 6 (see the [6a spec](2026-07-05-crabka-diskless-wal-slice6a-design.md) for the 6a→6c→6b→6d decomposition). 6a made a diskless partition's WAL a 2f+1 AZ quorum, so **every WAL-group member holds the committed tail in its local WAL-replica log** and the durable watermark is quorum-committed. 6b makes that useful for **reads**: any WAL-group member — not just the write-leader — can serve a byte-exact diskless fetch, gated on a correct high watermark sourced from the quorum.
+Sub-slice of Slice 6 (see the [6a spec](2026-07-05-krabka-diskless-wal-slice6a-design.md) for the 6a→6c→6b→6d decomposition). 6a made a diskless partition's WAL a 2f+1 AZ quorum, so **every WAL-group member holds the committed tail in its local WAL-replica log** and the durable watermark is quorum-committed. 6b makes that useful for **reads**: any WAL-group member — not just the write-leader — can serve a byte-exact diskless fetch, gated on a correct high watermark sourced from the quorum.
 
 **Scope decision (write path → 6c).** "Leaderless serving" here is the **read** side. The leaderless *write* path — flipping the produce leadership gate (`produce.rs:459-476`) to accept-and-sequence-on-any-broker — belongs to **6c** (the concurrent sequencer, which owns concurrent appenders + the offset authority the gate defers to). 6b builds the *ability* to serve from any member; the client-routing that sends fetches to non-leader members (KIP-392 fetch-from-follower or the 6c leaderless Metadata advertisement) is likewise **deferred**. This keeps 6b dependent on 6a alone and unblocked.
 

@@ -3,7 +3,7 @@
 // part of making wrappers uniformly generated.
 
 use bytes::BytesMut;
-use crabka_protocol::{
+use krabka_protocol::{
     Decode, Encode, UnknownTaggedFields,
     owned::request_header::{MAX_VERSION, MIN_VERSION, RequestHeader},
 };

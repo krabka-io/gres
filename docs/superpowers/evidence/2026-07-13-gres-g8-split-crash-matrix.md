@@ -58,22 +58,22 @@ python3 scripts/tests/validate-gres-split-crash-evidence.py --validate-matrix "$
 The regression gates at the same commit were:
 
 ```text
-cargo test --locked -p crabka-gres-ranges --test split_model -- --nocapture
+cargo test --locked -p krabka-gres-ranges --test split_model -- --nocapture
 # 5 passed, including broken-model counterexample teeth
 
 scripts/tests/gres-topology-process-nemesis-ci.sh
 # foundation plus four source-phase SIGKILL variants passed; JSON audit passed
 
-cargo test --locked -p crabka-gres-ranges transport::tests --lib
+cargo test --locked -p krabka-gres-ranges transport::tests --lib
 # 13 passed
 
-cargo test --locked -p crabka-operator controller::gres_split_operation --lib
+cargo test --locked -p krabka-operator controller::gres_split_operation --lib
 # 10 passed
 
-cargo check --locked -p crabka-operator
+cargo check --locked -p krabka-operator
 # exited zero
 
-cargo test --locked -p crabka-gres --test topology_process_split_crash
+cargo test --locked -p krabka-gres --test topology_process_split_crash
 # 23 passed
 
 cargo fmt --all --check

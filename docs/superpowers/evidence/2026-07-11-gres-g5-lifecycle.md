@@ -10,8 +10,8 @@ This document does not claim later Gres chapters.
 Command:
 
 ```console
-CRABKA_GRES_COLDSTART_ITERATIONS=10 \
-CRABKA_GRES_KIND_KEEP_CLUSTER=1 \
+KRABKA_GRES_COLDSTART_ITERATIONS=10 \
+KRABKA_GRES_KIND_KEEP_CLUSTER=1 \
 timeout 1800s scripts/gres-kind-lifecycle.sh
 ```
 
@@ -72,12 +72,12 @@ compute remains at one and the physical WAL is preserved.
 
 ## Focused static evidence
 
-- `cargo test -p crabka-gres-activator --lib`: 5 passed.
+- `cargo test -p krabka-gres-activator --lib`: 5 passed.
 - Focused G5 library suites: 44 + 5 + 47 + 106 + 440 passed.
 - Lazy route/hash and expired-grace operator tests pass.
 - PgDog admin/reload tests, renderer goldens, lifecycle script syntax, and
   `scripts/tests/gres-kind-lifecycle-structure.sh` pass.
-- `cargo check -p crabka-operator -p crabka-gres -p crabka-gres-activator`
+- `cargo check -p krabka-operator -p krabka-gres -p krabka-gres-activator`
   passes.
 - `cargo check --workspace --all-targets` passes. Stable-toolchain workspace
   clippy reaches unrelated pre-existing `manual_assert_eq` findings in

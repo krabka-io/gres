@@ -1,6 +1,6 @@
 //! SP38: date/time formatting + constructor functions + numeric `to_char`.
 //!
-//! This module exposes the Task 1–5 `crabka_pgtypes::{datetime,numeric}` value
+//! This module exposes the Task 1–5 `krabka_pgtypes::{datetime,numeric}` value
 //! engines as SQL functions: `to_char` for temporal and numeric values,
 //! `to_timestamp`, `to_date`, the `make_*` constructors, and the `justify_*`
 //! interval normalizers.
@@ -17,8 +17,8 @@
 //! the Task-8 wire test and the Task-9 conformance corpus diffed against
 //! PostgreSQL.
 
-use crabka_pgparser::ast::{Expr, FuncArgs, FuncCall};
-use crabka_pgtypes::{
+use krabka_pgparser::ast::{Expr, FuncArgs, FuncCall};
+use krabka_pgtypes::{
     ColumnType, Datum, TemporalType, TypeError,
     datetime::{self, Interval},
     numeric,
@@ -331,7 +331,7 @@ pub(crate) fn eval_format(
             // rule, not jiff's default; see `datetime::zone_offset_for`.
             datetime::zoned_instant(
                 dt.civil().ok_or_else(|| {
-                    map_type(crabka_pgtypes::TypeError::DatetimeOutOfRange {
+                    map_type(krabka_pgtypes::TypeError::DatetimeOutOfRange {
                         message: "timestamp out of range".into(),
                     })
                 })?,
@@ -496,7 +496,7 @@ fn to_number(input: &str, template: &str, name: &str) -> Result<Datum, ExecError
             message: format!("invalid input syntax for type numeric: \"{input}\""),
         });
     }
-    crabka_pgtypes::numeric::parse(&digits)
+    krabka_pgtypes::numeric::parse(&digits)
         .map(Datum::Numeric)
         .ok_or_else(|| ExecError::FunctionError {
             sqlstate: "22P02",
@@ -752,7 +752,7 @@ fn check_arity(f: FmtFunc, fc: &FuncCall, n: usize) -> Result<(), ExecError> {
     require_arity(fc, ok)
 }
 
-/// Map a `crabka_pgtypes::TypeError`, such as 22007, 22008 or 22003, onto the
+/// Map a `krabka_pgtypes::TypeError`, such as 22007, 22008 or 22003, onto the
 /// executor error, so its SQLSTATE propagates to the wire.
 fn map_type(e: TypeError) -> ExecError {
     ExecError::Type(e)
@@ -827,28 +827,28 @@ fn zone_arg(d: &Datum, name: &str) -> Result<jiff::tz::TimeZone, ExecError> {
     if zone.starts_with(|c: char| c.is_ascii_digit()) {
         return Err(ExecError::NumericTimeZoneSyntax(zone.to_string()));
     }
-    match crabka_pgtypes::datetime::decode_numeric_time_zone(zone) {
+    match krabka_pgtypes::datetime::decode_numeric_time_zone(zone) {
         Ok(offset) => return Ok(jiff::tz::TimeZone::fixed(offset)),
-        Err(crabka_pgtypes::datetime::DecodeError::TzDisplacement) => {
+        Err(krabka_pgtypes::datetime::DecodeError::TzDisplacement) => {
             return Err(ExecError::NumericTimeZoneOutOfRange(zone.to_string()));
         }
         Err(_) => {}
     }
-    crabka_pgtypes::datetime::resolve_time_zone(zone)
+    krabka_pgtypes::datetime::resolve_time_zone(zone)
         .ok_or_else(|| ExecError::UnknownTimeZone(zone.to_string()))
 }
 
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgtypes::{ColumnType, Datum};
+    use krabka_pgtypes::{ColumnType, Datum};
 
     use crate::{clock::EvalCtx, scope::Scope};
 
     fn ev(sql: &str) -> Datum {
         let ctx = EvalCtx::test_default();
         crate::eval::eval(
-            &crabka_pgparser::parser::parse_expr_for_test(sql).expect("parse"),
+            &krabka_pgparser::parser::parse_expr_for_test(sql).expect("parse"),
             &Scope::empty(),
             &[],
             &ctx,
@@ -857,7 +857,7 @@ mod tests {
     }
     fn ty(sql: &str) -> ColumnType {
         crate::eval::infer_type(
-            &crabka_pgparser::parser::parse_expr_for_test(sql).expect("p"),
+            &krabka_pgparser::parser::parse_expr_for_test(sql).expect("p"),
             &Scope::empty(),
         )
         .expect("ty")
@@ -865,7 +865,7 @@ mod tests {
     fn ec(sql: &str) -> String {
         let ctx = EvalCtx::test_default();
         crate::eval::eval(
-            &crabka_pgparser::parser::parse_expr_for_test(sql).expect("p"),
+            &krabka_pgparser::parser::parse_expr_for_test(sql).expect("p"),
             &Scope::empty(),
             &[],
             &ctx,
@@ -875,10 +875,10 @@ mod tests {
         .code
     }
 
-    fn pg_error(sql: &str) -> crabka_pgwire::error::PgError {
+    fn pg_error(sql: &str) -> krabka_pgwire::error::PgError {
         let ctx = EvalCtx::test_default();
         crate::eval::eval(
-            &crabka_pgparser::parser::parse_expr_for_test(sql).expect("parse"),
+            &krabka_pgparser::parser::parse_expr_for_test(sql).expect("parse"),
             &Scope::empty(),
             &[],
             &ctx,
@@ -938,13 +938,13 @@ mod tests {
             ("to_number('-1234.56', 'S9999.99')", "-1234.56"),
         ] {
             let got = ev(expr);
-            let want = crabka_pgtypes::numeric::parse(expected).expect("expected parses");
+            let want = krabka_pgtypes::numeric::parse(expected).expect("expected parses");
             assert!(got == Datum::Numeric(want), "{expr}: {got:?}");
         }
         // Nothing numeric in the input at all is 22P02, not a zero.
         let ctx = EvalCtx::test_default();
         let error = crate::eval::eval(
-            &crabka_pgparser::parser::parse_expr_for_test("to_number('abc', '999')")
+            &krabka_pgparser::parser::parse_expr_for_test("to_number('abc', '999')")
                 .expect("parse"),
             &Scope::empty(),
             &[],
@@ -973,10 +973,10 @@ mod tests {
     fn to_char_returns_null_for_infinite_temporal_values() {
         let ctx = EvalCtx::test_default();
         for value in [
-            Datum::Date(crabka_pgtypes::datetime::DATE_INFINITY),
-            Datum::Timestamp(crabka_pgtypes::datetime::TIMESTAMP_INFINITY),
+            Datum::Date(krabka_pgtypes::datetime::DATE_INFINITY),
+            Datum::Timestamp(krabka_pgtypes::datetime::TIMESTAMP_INFINITY),
             Datum::Timestamptz(jiff::Timestamp::MAX),
-            Datum::Interval(crabka_pgtypes::datetime::Interval::INFINITY),
+            Datum::Interval(krabka_pgtypes::datetime::Interval::INFINITY),
         ] {
             assert_eq!(
                 super::to_char(&value, "YYYY", &ctx, "to_char").expect("to_char"),
@@ -1007,7 +1007,7 @@ mod tests {
             ("-1.5", "2012-12-12T00:00:00Z", "-01:30 -01:30"),
             ("+2", "2012-12-12T00:00:00Z", "+02 +02"),
         ] {
-            ctx.time_zone = crabka_pgtypes::datetime::resolve_guc_time_zone(zone)
+            ctx.time_zone = krabka_pgtypes::datetime::resolve_guc_time_zone(zone)
                 .unwrap_or_else(|| panic!("{zone} resolves"));
             assert_eq!(
                 super::to_char(&Datum::Timestamptz(instant(at)), "TZ tz", &ctx, "to_char")
@@ -1035,11 +1035,11 @@ mod tests {
         );
         assert_eq!(
             ev("to_timestamp('Infinity'::float8)"),
-            Datum::Timestamptz(crabka_pgtypes::datetime::timestamptz_infinity())
+            Datum::Timestamptz(krabka_pgtypes::datetime::timestamptz_infinity())
         );
         assert_eq!(
             ev("to_timestamp('-Infinity'::float8)"),
-            Datum::Timestamptz(crabka_pgtypes::datetime::timestamptz_neg_infinity())
+            Datum::Timestamptz(krabka_pgtypes::datetime::timestamptz_neg_infinity())
         );
         assert_eq!(
             ev("make_date(2024, 7, 4)"),
@@ -1047,7 +1047,7 @@ mod tests {
         );
         assert_eq!(
             ev("make_interval(0, 0, 0, 5)"),
-            Datum::Interval(crabka_pgtypes::datetime::Interval {
+            Datum::Interval(krabka_pgtypes::datetime::Interval {
                 months: 0,
                 days: 5,
                 micros: 0
@@ -1059,7 +1059,7 @@ mod tests {
         );
         assert_eq!(
             ev("justify_hours(INTERVAL '27 hours')"),
-            Datum::Interval(crabka_pgtypes::datetime::Interval {
+            Datum::Interval(krabka_pgtypes::datetime::Interval {
                 months: 0,
                 days: 1,
                 micros: 3 * 3_600_000_000
@@ -1211,7 +1211,7 @@ mod tests {
             ),
         ] {
             let error = crate::eval::eval(
-                &crabka_pgparser::parser::parse_expr_for_test(expr).expect("parse"),
+                &krabka_pgparser::parser::parse_expr_for_test(expr).expect("parse"),
                 &Scope::empty(),
                 &[],
                 &EvalCtx::test_default(),
@@ -1238,7 +1238,7 @@ mod tests {
         // justify_interval rolls 27h → +1 day, 3h and 35 days → +1 month, 5 days.
         assert_eq!(
             ev("justify_interval(INTERVAL '35 days 27 hours')"),
-            Datum::Interval(crabka_pgtypes::datetime::Interval {
+            Datum::Interval(krabka_pgtypes::datetime::Interval {
                 months: 1,
                 days: 6,
                 micros: 3 * 3_600_000_000
@@ -1247,7 +1247,7 @@ mod tests {
         // justify_days rolls 35 days → 1 month, 5 days.
         assert_eq!(
             ev("justify_days(INTERVAL '35 days')"),
-            Datum::Interval(crabka_pgtypes::datetime::Interval {
+            Datum::Interval(krabka_pgtypes::datetime::Interval {
                 months: 1,
                 days: 5,
                 micros: 0

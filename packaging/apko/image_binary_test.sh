@@ -21,9 +21,9 @@ rootfs="${work}/rootfs"
 mkdir -p "${rootfs}"
 tar -xf "${layer}" -C "${rootfs}"
 
-binary="${rootfs}/usr/bin/crabka-gres"
-[[ -x "${binary}" ]] || fail "crabka-gres is not executable"
-[[ "$(od -An -tx1 -N 4 "${binary}" | tr -d ' \n')" == "7f454c46" ]] || fail "crabka-gres is not ELF"
+binary="${rootfs}/usr/bin/krabka-gres"
+[[ -x "${binary}" ]] || fail "krabka-gres is not executable"
+[[ "$(od -An -tx1 -N 4 "${binary}" | tr -d ' \n')" == "7f454c46" ]] || fail "krabka-gres is not ELF"
 machine="$(od -An -tx1 -j 18 -N 2 "${binary}" | tr -d ' \n')"
 [[ "${machine}" == "${want_machine}" ]] || fail "binary architecture ${machine} does not match ${arch}"
 
@@ -43,4 +43,4 @@ esac
 if [[ "$(uname -s)" == "Linux" && "${native}" == true ]]; then
     "${binary}" --help >/dev/null
 fi
-echo "image_binary_test: crabka-gres is a ${arch} ELF in the image"
+echo "image_binary_test: krabka-gres is a ${arch} ELF in the image"

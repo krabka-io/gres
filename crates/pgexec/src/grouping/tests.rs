@@ -1,5 +1,5 @@
 use assert2::assert;
-use crabka_pgwire::engine::{Engine, QueryResult, Session};
+use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
 use super::*;
 use crate::SqlEngine;

@@ -1,5 +1,5 @@
 [package]
-name = "crabka-pgwire"
+name = "krabka-pgwire"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,7 +8,7 @@ rust-version.workspace = true
 description = "PostgreSQL v3 wire-protocol server: simple and extended query protocols, SCRAM-SHA-256, TLS, and CancelRequest"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-pgwire"
+documentation = "https://docs.rs/krabka-pgwire"
 readme = "README.md"
 keywords = ["postgres", "wire-protocol", "scram", "crabka", "gres"]
 categories = ["database-implementations", "network-programming"]
@@ -24,9 +24,9 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "io-
 tokio-util = { workspace = true }
 tracing = { workspace = true }
 # W3C trace-context ingress. The only tracing crate a *published* wire-protocol
-# crate may depend on: `crabka-telemetry` is `publish = false` and drags in a web
+# crate may depend on: `krabka-telemetry` is `publish = false` and drags in a web
 # server, a CLI parser and a profiler.
-crabka-trace-context = { version = "0.4.2", path = "../trace-context" }
+krabka-trace-context = { version = "0.4.2", path = "../trace-context" }
 # Exact, lint-clean `f64 -> u64` truncation for the `TraceIdRatioBased`
 # resampling bound, which has to agree bit-for-bit with `opentelemetry_sdk`.
 num-traits = { workspace = true }

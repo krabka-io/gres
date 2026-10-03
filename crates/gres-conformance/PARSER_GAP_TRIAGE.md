@@ -37,7 +37,7 @@ Related gate that stays: `sum(v ORDER BY v) FILTER (...)` still dies earlier at 
 <details><summary>corrections</summary>
 
 ```
-SCOPE OF VERIFICATION: I re-ran all 69 truth-table rows against the oracle (PostgreSQL 18.4 Debian 18.4-1.pgdg13+1 at 127.0.0.1:54320), using CREATE TEMP TABLE aggfilterv_t/aggfilterv_e with the spec's exact fixture data. I checked 52 code anchors (19 entries in the `anchors` array + 33 further file:line:function/helper references made in the prose). I re-ran 12 additional edge cases the spec omitted. Probe scripts: /tmp/claude-1001/-home-matt-git-crabka--claude-worktrees-sql-postgresql-18-4-conformance-4ea05c/6537af26-a0b9-4c1b-a9cd-65e083bdfcbc/scratchpad/probes/{setup.sql,rows.sql,errs.txt,gaps.txt}. No repo file was modified.
+SCOPE OF VERIFICATION: I re-ran all 69 truth-table rows against the oracle (PostgreSQL 18.4 Debian 18.4-1.pgdg13+1 at 127.0.0.1:54320), using CREATE TEMP TABLE aggfilterv_t/aggfilterv_e with the spec's exact fixture data. I checked 52 code anchors (19 entries in the `anchors` array + 33 further file:line:function/helper references made in the prose). I re-ran 12 additional edge cases the spec omitted. Probe scripts: /tmp/claude-1001/-home-matt-git-krabka--claude-worktrees-sql-postgresql-18-4-conformance-4ea05c/6537af26-a0b9-4c1b-a9cd-65e083bdfcbc/scratchpad/probes/{setup.sql,rows.sql,errs.txt,gaps.txt}. No repo file was modified.
 
 =====================================================================
 1. TRUTH TABLE: 68/69 CORRECT, 1 WRONG
@@ -173,7 +173,7 @@ Third: `percentile_disc(0.5) within group (order by thousand) filter (where hund
 <details><summary>corrections</summary>
 
 ```
-I re-ran all 152 truth-table rows against PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1) on 127.0.0.1:54320. Probe scripts: /tmp/claude-1001/-home-matt-git-crabka--claude-worktrees-sql-postgresql-18-4-conformance-4ea05c/6537af26-a0b9-4c1b-a9cd-65e083bdfcbc/scratchpad/probes/v1.sql .. v4.sql. Temp objects were slug-prefixed (withingroupv_four, withingroupv_null, withingroupv_empty, withingroupv_n, withingroupv_gs); the spec's table names were substituted 1:1 (withingroup_four -> withingroupv_four etc.), nothing else changed.
+I re-ran all 152 truth-table rows against PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1) on 127.0.0.1:54320. Probe scripts: /tmp/claude-1001/-home-matt-git-krabka--claude-worktrees-sql-postgresql-18-4-conformance-4ea05c/6537af26-a0b9-4c1b-a9cd-65e083bdfcbc/scratchpad/probes/v1.sql .. v4.sql. Temp objects were slug-prefixed (withingroupv_four, withingroupv_null, withingroupv_empty, withingroupv_n, withingroupv_gs); the spec's table names were substituted 1:1 (withingroup_four -> withingroupv_four etc.), nothing else changed.
 
 === TRUTH TABLE: 0 of 152 rows wrong ===
 Every value, type, SQLSTATE, message, HINT, DETAIL, row count, ordering and float rendering matched exactly. I could not refute a single row. Spot-checks of the least-obvious ones, verbatim from psql:
@@ -261,7 +261,7 @@ Source: `crates/pgparser/src/parser.rs:2877` opens the `Token::Ident(s) if s == 
 
 `ParseError::new` (crates/pgparser/src/error.rs:22-28) prefixes `syntax error at position {position}: ` and hardcodes `sqlstate: "42601"`. `peek_pos()` (parser.rs:263) returns the offset of the *current* token, which at that dispatch point is still `alter` — i.e. offset 0 for a statement that starts the string. So every one of the 24 regress `ALTER SEQUENCE` statements dies in the parser before any executor code runs. There is no `CommandIdentity::AlterSequence` (crates/pgparser/src/command.rs `command_identities!` jumps from `AlterSchema` at :31 to `AlterServer` at :32), no `Statement::AlterSequence` variant, and no `COMMAND_PROBES` entry for "ALTER SEQUENCE".
 
-Note the shape crabka uses for the sequence statements it *does* support: CREATE SEQUENCE is desugared into `Statement::CreateIndex { table: "__crabka_sequence__", keys: <options as "k=v" strings> }` (parser.rs:6039-6060 + parser.rs:10168 `encode_sequence_options`), decoded back in `execute_ddl` at crates/pgexec/src/exec.rs:559-570 via `sequence_from_encoded_options` (exec.rs:1243). DROP SEQUENCE is desugared into `Statement::DropTable` with `__crabka_sequence__:<name>` names (parser.rs:6124-6140, decoded at exec.rs:356).
+Note the shape crabka uses for the sequence statements it *does* support: CREATE SEQUENCE is desugared into `Statement::CreateIndex { table: "__krabka_sequence__", keys: <options as "k=v" strings> }` (parser.rs:6039-6060 + parser.rs:10168 `encode_sequence_options`), decoded back in `execute_ddl` at crates/pgexec/src/exec.rs:559-570 via `sequence_from_encoded_options` (exec.rs:1243). DROP SEQUENCE is desugared into `Statement::DropTable` with `__krabka_sequence__:<name>` names (parser.rs:6124-6140, decoded at exec.rs:356).
 - verifier verdict **?** (? truth rows wrong, ? anchors wrong)
 
 <details><summary>corrections</summary>
@@ -449,7 +449,7 @@ Do NOT fix this in the parser. Two attempts were made and reverted:
 Relation names are also read by bare `expect_ident()` at ~8 sites (create_table, alter, drop, insert,
 create index, …), not through `expect_object_name`, so a parser fix would have to touch all of them.
 
-**The catalog half of this is now DONE.** `crabka_pgkv::key::unqualified_relation` strips a leading
+**The catalog half of this is now DONE.** `krabka_pgkv::key::unqualified_relation` strips a leading
 `public.`/`pg_temp.` and is applied by `catalog_key`, `catalog_sharding_key`, `pgcatalog::view_key` and
 `catalog_sequence_key`, and `get_table` normalizes the name it stores so the qualifier cannot reach an error
 message or `pg_class`. Reads now resolve: `SELECT a FROM public.t` finds `t` where it was 42P01 before.
@@ -462,7 +462,7 @@ normalize what it is never handed. That is the ~8 sites listed above; they want 
 `expect_relation_name()` that accepts `ident [. ident]` and hands the whole dotted string to the catalog,
 which now knows what to do with it. `expect_object_name` is NOT that helper — see the two reverted attempts.
 
-Original analysis of the seam, kept for context: `crabka_pgkv::key::catalog_key` (crates/pgkv/src/key.rs:337) is a plain
+Original analysis of the seam, kept for context: `krabka_pgkv::key::catalog_key` (crates/pgkv/src/key.rs:337) is a plain
 `system_prefix("catalog") + name` concatenation that every relation read AND write goes through, alongside
 its siblings `catalog_sharding_key`, `view_key` and `catalog_sequence_key`. Normalising the name there —
 stripping a leading `public.` or `pg_temp.`, which is what crabka's single flat namespace means under

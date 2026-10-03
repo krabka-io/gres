@@ -1,6 +1,6 @@
 mod support;
 use bytes::BytesMut;
-use crabka_protocol::{
+use krabka_protocol::{
     Decode, Encode, UnknownTaggedFields,
     owned::{
         api_versions_request::ApiVersionsRequest,
@@ -40,7 +40,7 @@ fn apiversions_request_v3_byte_equal() {
     let req = ApiVersionsRequest {
         client_software_name: "crabka".into(),
         client_software_version: "0.0.0".into(),
-        unknown_tagged_fields: crabka_protocol::UnknownTaggedFields::default(),
+        unknown_tagged_fields: krabka_protocol::UnknownTaggedFields::default(),
         ..Default::default()
     };
     let rust = rust_encode(&req, 3);
@@ -81,7 +81,7 @@ fn apiversions_response_v3_byte_equal() {
         finalized_features_epoch: -1,
         finalized_features: vec![],
         zk_migration_ready: false,
-        unknown_tagged_fields: crabka_protocol::UnknownTaggedFields::default(),
+        unknown_tagged_fields: krabka_protocol::UnknownTaggedFields::default(),
     };
     let rust = rust_encode(&resp, 3);
     let java = o.encode(

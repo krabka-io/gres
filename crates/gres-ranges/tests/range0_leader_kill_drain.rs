@@ -1,6 +1,6 @@
 mod harness;
 
-use crabka_gres_ranges::RangeId;
+use krabka_gres_ranges::RangeId;
 use harness::{FaultEvent, SystemHarness, TableAccount, process::ProcessHarness};
 
 #[tokio::test]
@@ -268,37 +268,37 @@ fn range_listen_endpoint(log: &str) -> Option<String> {
         })
 }
 
-async fn range0_sql_probe_ok(client: &crabka_gres_ranges::FramedTcpClient, endpoint: &str) -> bool {
+async fn range0_sql_probe_ok(client: &krabka_gres_ranges::FramedTcpClient, endpoint: &str) -> bool {
     matches!(
         client
             .call(
                 endpoint,
-                &crabka_gres_ranges::RangeRequest::Sql {
+                &krabka_gres_ranges::RangeRequest::Sql {
                     range_id: RangeId::new(0),
                     sql: "SELECT 1".to_string(),
                 },
             )
             .await,
-        Ok(crabka_gres_ranges::RangeResponse::Sql { .. }
-            | crabka_gres_ranges::RangeResponse::SqlResults { .. })
+        Ok(krabka_gres_ranges::RangeResponse::Sql { .. }
+            | krabka_gres_ranges::RangeResponse::SqlResults { .. })
     )
 }
 
 async fn range0_grant_probe_ok(
-    client: &crabka_gres_ranges::FramedTcpClient,
+    client: &krabka_gres_ranges::FramedTcpClient,
     endpoint: &str,
 ) -> bool {
     matches!(
         client
             .call(
                 endpoint,
-                &crabka_gres_ranges::RangeRequest::Tso(crabka_gres_ranges::TsoReq::Grant {
+                &krabka_gres_ranges::RangeRequest::Tso(krabka_gres_ranges::TsoReq::Grant {
                     count: 1,
                 }),
             )
             .await,
-        Ok(crabka_gres_ranges::RangeResponse::Tso(
-            crabka_gres_ranges::TsoResp::Granted { .. }
+        Ok(krabka_gres_ranges::RangeResponse::Tso(
+            krabka_gres_ranges::TsoResp::Granted { .. }
         ))
     )
 }

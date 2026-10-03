@@ -2,7 +2,7 @@
 
 Serve range-0 timestamp grants as soon as range 0 itself recovers, instead of after every hosted range recovers and the tenant assembles.
 
-**Type:** Startup-sequencing change scoped to the live multirange boot path. Follows the G-9a TSO reliability work (successor grace period, gateway grant retry) and closes the "TSO as a liveness dependency" gap named in [G-9](2026-07-09-crabka-gres-g9-distributed-maturity-design.md): every sharded-table transaction in the fleet stalls while the range-0 host is booting, and today that stall spans the recovery of *all* ranges on the host plus tenant assembly, even though the oracle needs only range 0.
+**Type:** Startup-sequencing change scoped to the live multirange boot path. Follows the G-9a TSO reliability work (successor grace period, gateway grant retry) and closes the "TSO as a liveness dependency" gap named in [G-9](2026-07-09-krabka-gres-g9-distributed-maturity-design.md): every sharded-table transaction in the fleet stalls while the range-0 host is booting, and today that stall spans the recovery of *all* ranges on the host plus tenant assembly, even though the oracle needs only range 0.
 
 ## Design Goals
 

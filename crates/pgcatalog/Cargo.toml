@@ -1,5 +1,5 @@
 [package]
-name = "crabka-pgcatalog"
+name = "krabka-pgcatalog"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,7 +8,7 @@ rust-version.workspace = true
 description = "System catalog for the Crabka Gres engine: tables, columns, and FDW metadata as a stateless view over the KV storage seam"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-pgcatalog"
+documentation = "https://docs.rs/krabka-pgcatalog"
 readme = "README.md"
 keywords = ["postgres", "catalog", "crabka", "gres"]
 categories = ["database-implementations"]
@@ -18,9 +18,9 @@ workspace = true
 
 [dependencies]
 thiserror = { workspace = true }
-crabka-pgtypes = { version = "0.4.2", path = "../pgtypes" }
-crabka-pgkv = { version = "0.4.2", path = "../pgkv" }
-crabka-pgmvcc = { version = "0.4.2", path = "../pgmvcc" }
+krabka-pgtypes = { version = "0.4.2", path = "../pgtypes" }
+krabka-pgkv = { version = "0.4.2", path = "../pgkv" }
+krabka-pgmvcc = { version = "0.4.2", path = "../pgmvcc" }
 zerocopy = { workspace = true }
 
 [dev-dependencies]

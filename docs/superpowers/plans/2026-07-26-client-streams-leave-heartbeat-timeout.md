@@ -29,7 +29,7 @@
 - Preserve one best-effort leave heartbeat with `member_epoch = -1`; timeout,
   transport, and broker errors remain ignored.
 - Use `--streams-leave-heartbeat-timeout-ms` and
-  `CRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS`.
+  `KRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS`.
 - Preserve CLI over environment over typed-default precedence.
 - Resolve demo configuration before telemetry initialization or external I/O.
 - Expose the deployment variable only on `demo-stream`, defaulting to `5000`.
@@ -264,7 +264,7 @@ fn leave_heartbeat_timeout_uses_typed_default_and_override() {
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams leave_heartbeat_timeout --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams leave_heartbeat_timeout --locked
 ```
 
 Expected: compilation fails because the new type, constant, fields, and builder
@@ -415,11 +415,11 @@ Re-export `DEFAULT_STREAMS_LEAVE_HEARTBEAT_TIMEOUT` and
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams leave_heartbeat_timeout --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams run_loop_bounds_stalled_leave_with_configured_timeout --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams low_level_runtime_validation_names_the_invalid_field --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-client-streams --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams leave_heartbeat_timeout --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams run_loop_bounds_stalled_leave_with_configured_timeout --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams low_level_runtime_validation_names_the_invalid_field --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-client-streams --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all -- --check
 git diff --check
 git diff -- Cargo.lock
@@ -457,7 +457,7 @@ git commit -m "feat(streams): configure leave timeout"
 **Interfaces:**
 - Consumes: `StreamsLeaveHeartbeatTimeout`
 - Produces: `--streams-leave-heartbeat-timeout-ms`
-- Produces: `CRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS`
+- Produces: `KRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS`
 - Produces: the typed timeout passed to
   `StreamsApp::leave_heartbeat_timeout(StreamsLeaveHeartbeatTimeout)`
 
@@ -479,7 +479,7 @@ fn demo() -> Command {
 fn environment_is_used_and_cli_wins_before_external_io() {
     let environment = demo()
         .args(["--role", "produce"])
-        .env("CRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS", "37")
+        .env("KRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS", "37")
         .output()
         .expect("run demo");
     assert!(!environment.status.success());
@@ -494,7 +494,7 @@ fn environment_is_used_and_cli_wins_before_external_io() {
             "--streams-leave-heartbeat-timeout-ms",
             "41",
         ])
-        .env("CRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS", "37")
+        .env("KRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS", "37")
         .output()
         .expect("run demo");
     assert!(!cli.status.success());
@@ -507,7 +507,7 @@ fn environment_is_used_and_cli_wins_before_external_io() {
 fn zero_fails_early_and_help_lists_the_flag_once() {
     let zero = demo()
         .args(["--role", "stream"])
-        .env("CRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS", "0")
+        .env("KRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS", "0")
         .output()
         .expect("run demo");
     assert!(!zero.status.success());
@@ -533,7 +533,7 @@ In
 
 ```rust
 assert2::assert!(stream.contains(
-    "CRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS: \"${CRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS:-5000}\""
+    "KRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS: \"${KRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS:-5000}\""
 ));
 ```
 
@@ -541,7 +541,7 @@ Add inside the existing Produce/Consume loop:
 
 ```rust
 assert2::assert!(
-    !service.contains("CRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS")
+    !service.contains("KRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS")
 );
 ```
 
@@ -563,7 +563,7 @@ Import `StreamsLeaveHeartbeatTimeout` and add to `Cli`:
 
 ```rust
 /// Client Streams final leave-heartbeat timeout in milliseconds.
-#[arg(long, env = "CRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS")]
+#[arg(long, env = "KRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS")]
 streams_leave_heartbeat_timeout_ms: Option<NonZeroU64>,
 ```
 
@@ -613,7 +613,7 @@ Add a `StreamsLeaveHeartbeatTimeout` parameter to `run_stream`, pass it from
 In `demo/observability/docker-compose.yml`, add to `demo-stream`:
 
 ```yaml
-CRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS: "${CRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS:-5000}"
+KRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS: "${KRABKA_DEMO_STREAMS_LEAVE_HEARTBEAT_TIMEOUT_MS:-5000}"
 ```
 
 Do not add it to `demo-produce`, `demo-consume`, or a shared anchor.
@@ -706,8 +706,8 @@ five-second leave deadlines explicitly pending and separate.
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-streams -p observability-demo-app --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-client-streams -p observability-demo-app --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-streams -p observability-demo-app --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-client-streams -p observability-demo-app --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all -- --check
 ./target/debug/observability-demo-app --help | grep -o -- '--streams-leave-heartbeat-timeout-ms' | wc -l
 git diff --check

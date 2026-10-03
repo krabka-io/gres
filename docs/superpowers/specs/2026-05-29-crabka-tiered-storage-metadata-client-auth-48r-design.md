@@ -3,7 +3,7 @@
 **Date:** 2026-05-29
 **Status:** Slice design. Sequenced after 48o (both touch `kafka_log.rs`).
 Closes a 48f follow-up. Part of the KIP-405 umbrella
-(`docs/superpowers/specs/2026-05-25-crabka-tiered-storage-roadmap-design.md`).
+(`docs/superpowers/specs/2026-05-25-krabka-tiered-storage-roadmap-design.md`).
 
 ## Goal
 
@@ -138,6 +138,6 @@ the topic-RLMM chain.
 
 - `cargo fmt --all --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test -p crabka-client-core -p crabka-broker -p crabka-remote-storage-topic`
+- `cargo test -p krabka-client-core -p krabka-broker -p krabka-remote-storage-topic`
 - `cargo test --workspace` (no regressions)
 - Inter-broker SASL/TLS semantics unchanged; no CRD drift.

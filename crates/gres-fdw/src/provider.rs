@@ -1,5 +1,5 @@
 //! Establishes one process-global rustls `CryptoProvider` (ring) so both the
-//! pgwire frontend and the crabka-client backend resolve the same default.
+//! pgwire frontend and the krabka-client backend resolve the same default.
 use std::sync::Once;
 
 static INSTALL: Once = Once::new();
@@ -10,7 +10,7 @@ static INSTALL: Once = Once::new();
 /// itself runs exactly once. It mirrors what the pgwire frontend does with
 /// `rustls::ServerConfig::builder_with_provider` and
 /// `Arc::new(rustls::crypto::ring::default_provider())`. It installs the
-/// provider as the process default, so `crabka-client-core`'s
+/// provider as the process default, so `krabka-client-core`'s
 /// `TlsConnectorConfig::build()` gets the same provider. That method calls
 /// `rustls::ClientConfig::builder()` with no explicit provider.
 pub fn install_default_provider() {
@@ -24,15 +24,15 @@ mod tests {
     use super::*;
 
     /// Coexistence spike. It proves that
-    /// `crabka_client_core::security::TlsConnectorConfig::build()` succeeds
+    /// `krabka_client_core::security::TlsConnectorConfig::build()` succeeds
     /// after the ring process default is installed, so the Kafka client TLS
     /// uses the same process default as pgwire.
     #[test]
     fn pgwire_and_kafka_tls_configs_build_together() {
         install_default_provider();
 
-        // crabka-client-core builds its ClientConfig from the process default:
-        let tls = crabka_client_core::security::TlsConnectorConfig {
+        // krabka-client-core builds its ClientConfig from the process default:
+        let tls = krabka_client_core::security::TlsConnectorConfig {
             trust_roots_pem: None,
             server_name: "localhost".into(),
             client_identity: None,

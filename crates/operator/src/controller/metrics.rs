@@ -320,8 +320,8 @@ mod tests {
                     "namespace": "default",
                     "labels": {
                         "app.kubernetes.io/instance": "demo",
-                        "app.kubernetes.io/managed-by": "crabka-operator",
-                        "app.kubernetes.io/name": "crabka-broker",
+                        "app.kubernetes.io/managed-by": "krabka-operator",
+                        "app.kubernetes.io/name": "krabka-broker",
                         "app.kubernetes.io/version": "0.1.1",
                     },
                     "ownerReferences": [{
@@ -337,7 +337,7 @@ mod tests {
                     "namespaceSelector": { "matchNames": ["default"] },
                     "selector": {
                         "matchLabels": {
-                            "app.kubernetes.io/name": "crabka-broker",
+                            "app.kubernetes.io/name": "krabka-broker",
                             "app.kubernetes.io/instance": "demo",
                         }
                     },
@@ -369,8 +369,8 @@ mod tests {
                     "namespace": "default",
                     "labels": {
                         "app.kubernetes.io/instance": "demo",
-                        "app.kubernetes.io/managed-by": "crabka-operator",
-                        "app.kubernetes.io/name": "crabka-broker",
+                        "app.kubernetes.io/managed-by": "krabka-operator",
+                        "app.kubernetes.io/name": "krabka-broker",
                         "app.kubernetes.io/version": "0.1.1",
                         "team": "platform",
                     },
@@ -387,7 +387,7 @@ mod tests {
                     "namespaceSelector": { "matchNames": ["default"] },
                     "selector": {
                         "matchLabels": {
-                            "app.kubernetes.io/name": "crabka-broker",
+                            "app.kubernetes.io/name": "krabka-broker",
                             "app.kubernetes.io/instance": "demo",
                         }
                     },
@@ -414,8 +414,8 @@ mod tests {
                     "namespace": "default",
                     "labels": {
                         "app.kubernetes.io/instance": "demo",
-                        "app.kubernetes.io/managed-by": "crabka-operator",
-                        "app.kubernetes.io/name": "crabka-broker",
+                        "app.kubernetes.io/managed-by": "krabka-operator",
+                        "app.kubernetes.io/name": "krabka-broker",
                         "app.kubernetes.io/version": "0.1.1",
                     },
                     "ownerReferences": [{
@@ -431,7 +431,7 @@ mod tests {
                     "namespaceSelector": { "matchNames": ["default"] },
                     "selector": {
                         "matchLabels": {
-                            "app.kubernetes.io/name": "crabka-broker",
+                            "app.kubernetes.io/name": "krabka-broker",
                             "app.kubernetes.io/instance": "demo",
                         }
                     },

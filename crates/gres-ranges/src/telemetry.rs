@@ -3,7 +3,7 @@
 //! This module emits every span it builds under the single [`ROUTE_TARGET`]
 //! target, so an operator enables or silences the whole gateway tier with one
 //! `EnvFilter` directive. Only the OTLP layer names that target, as
-//! `crabka_gres_ranges::route=debug` in the gres default filter. The stdout
+//! `krabka_gres_ranges::route=debug` in the gres default filter. The stdout
 //! `fmt` layer deliberately does not name it, so a gateway that does not export
 //! pays one disabled level check per statement and prints nothing.
 //!
@@ -53,12 +53,12 @@ use crate::ids::RangeId;
 /// `tracing` target carrying every gateway routing, statement and 2PC span.
 ///
 /// The spelling matches the directive in
-/// `crabka_gres::telemetry::OTEL_DEFAULT_FILTER`. The two cannot share a
-/// constant, because `crabka-gres` depends on this crate.
-pub const ROUTE_TARGET: &str = "crabka_gres_ranges::route";
+/// `krabka_gres::telemetry::OTEL_DEFAULT_FILTER`. The two cannot share a
+/// constant, because `krabka-gres` depends on this crate.
+pub const ROUTE_TARGET: &str = "krabka_gres_ranges::route";
 
 /// Environment variable gating verbatim SQL on `db.statement`.
-pub const SQL_TEXT_ENV: &str = "CRABKA_OTLP_SQL_TEXT";
+pub const SQL_TEXT_ENV: &str = "KRABKA_OTLP_SQL_TEXT";
 
 /// Cap on the `db.query.text` attribute. A generated `INSERT` can carry
 /// megabytes of literals, and the collector would drop them anyway.
@@ -816,12 +816,12 @@ mod tests {
         }
     }
 
-    /// The target string is what an operator types into `CRABKA_OTLP_FILTER`,
-    /// and what `crabka-gres` names in its default filter. A rename that misses
+    /// The target string is what an operator types into `KRABKA_OTLP_FILTER`,
+    /// and what `krabka-gres` names in its default filter. A rename that misses
     /// either side silently stops the export of the whole gateway tier.
     #[test]
     fn route_target_is_the_documented_directive() {
-        check!(ROUTE_TARGET == "crabka_gres_ranges::route");
-        assert!(let Some(("crabka_gres_ranges", "route")) = ROUTE_TARGET.split_once("::"));
+        check!(ROUTE_TARGET == "krabka_gres_ranges::route");
+        assert!(let Some(("krabka_gres_ranges", "route")) = ROUTE_TARGET.split_once("::"));
     }
 }

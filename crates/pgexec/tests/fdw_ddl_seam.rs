@@ -1,14 +1,14 @@
 use std::sync::{Arc, Mutex};
 
 use assert2::assert;
-use crabka_pgcatalog::{
+use krabka_pgcatalog::{
     CatalogError, Column, ForeignServer, HashSharding, RelationName, ShardingStrategy, Table,
     TablePrivilege, UserMapping, get_table, list_table_privileges,
 };
-use crabka_pgexec::{Committer, LocalLinearizer, SqlEngine, foreign};
-use crabka_pgkv::{Kv, MemKv, WriteOp};
-use crabka_pgtypes::{ColumnType, Datum};
-use crabka_pgwire::engine::{Engine, Session};
+use krabka_pgexec::{Committer, LocalLinearizer, SqlEngine, foreign};
+use krabka_pgkv::{Kv, MemKv, WriteOp};
+use krabka_pgtypes::{ColumnType, Datum};
+use krabka_pgwire::engine::{Engine, Session};
 
 struct RecordingCommitter {
     kv: Arc<dyn Kv>,
@@ -30,7 +30,7 @@ impl RecordingCommitter {
 
 #[async_trait::async_trait]
 impl Committer for RecordingCommitter {
-    async fn commit(&self, ops: Vec<WriteOp>) -> Result<(), crabka_pgexec::ExecError> {
+    async fn commit(&self, ops: Vec<WriteOp>) -> Result<(), krabka_pgexec::ExecError> {
         self.kv.write_batch(&ops)?;
         self.batches.lock().expect("batches mutex").push(ops);
         Ok(())
@@ -46,8 +46,8 @@ impl foreign::ForeignScanner for ImportingScanner {
         _server: &ForeignServer,
         _mapping: Option<&UserMapping>,
         _bounds: &foreign::ScanBounds,
-        _ctx: &crabka_pgexec::clock::EvalCtx,
-    ) -> Result<Vec<Vec<Datum>>, crabka_pgexec::ExecError> {
+        _ctx: &krabka_pgexec::clock::EvalCtx,
+    ) -> Result<Vec<Vec<Datum>>, krabka_pgexec::ExecError> {
         Ok(Vec::new())
     }
 
@@ -56,7 +56,7 @@ impl foreign::ForeignScanner for ImportingScanner {
         _server: &ForeignServer,
         _mapping: Option<&UserMapping>,
         filter: &foreign::ImportFilter,
-    ) -> Result<Vec<foreign::ImportedTable>, crabka_pgexec::ExecError> {
+    ) -> Result<Vec<foreign::ImportedTable>, krabka_pgexec::ExecError> {
         let tables = ["imported_one", "imported_two"]
             .into_iter()
             .filter(|name| filter.retains(name))
@@ -75,7 +75,7 @@ impl foreign::ForeignScanner for ImportingScanner {
         mapping: Option<&UserMapping>,
         filter: &foreign::ImportFilter,
         options: &[(String, String)],
-    ) -> Result<Vec<foreign::ImportedTable>, crabka_pgexec::ExecError> {
+    ) -> Result<Vec<foreign::ImportedTable>, krabka_pgexec::ExecError> {
         assert!(options == [("fetch_size".into(), "1000".into())]);
         self.import_schema(server, mapping, filter)
     }
@@ -109,7 +109,7 @@ fn engine_with_separate_catalog_and_data_stores() -> (SqlEngine, Arc<dyn Kv>, Ar
     (engine, catalog_kv, data_kv)
 }
 
-async fn run(session: &mut crabka_pgexec::SqlSession, sql: &str) {
+async fn run(session: &mut krabka_pgexec::SqlSession, sql: &str) {
     session.simple_query(sql).await.expect(sql);
 }
 
@@ -210,7 +210,7 @@ async fn alter_table_rename_uses_authoritative_catalog_and_preserves_sharding_an
     );
     assert_eq!(
         catalog_kv
-            .get(&crabka_pgkv::key::catalog_sharding_key(
+            .get(&krabka_pgkv::key::catalog_sharding_key(
                 &orders.schema,
                 &orders.name
             ))
@@ -219,7 +219,7 @@ async fn alter_table_rename_uses_authoritative_catalog_and_preserves_sharding_an
     );
     assert_eq!(
         data_kv
-            .get(&crabka_pgkv::key::catalog_key(
+            .get(&krabka_pgkv::key::catalog_key(
                 &fulfilled.schema,
                 &fulfilled.name
             ))
@@ -264,7 +264,7 @@ async fn import_foreign_schema_routes_created_tables_through_committer() {
         .simple_query("SELECT value FROM imported_one")
         .await
         .expect("imported table is visible through committed catalog ops");
-    let [crabka_pgwire::engine::QueryResult::Rows { rows, .. }] = &rows[..] else {
+    let [krabka_pgwire::engine::QueryResult::Rows { rows, .. }] = &rows[..] else {
         panic!("expected rows from imported foreign table");
     };
     assert!(rows.is_empty());

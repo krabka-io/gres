@@ -12,12 +12,12 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crabka_gres_ranges::{
+use krabka_gres_ranges::{
     CheckpointManifest, InDoubtMarker, MapEpoch, MergeRangeCommand, RangeId, RangeKey, RangeMap,
     RangeSpec, SplitCommand, SplitError, SplitHooks, SplitState, SplitStateStore, SplitStep,
     SuccessorDescriptor, TableId, TenantName, run_merge, run_split,
 };
-use crabka_pgwire::engine::Engine;
+use krabka_pgwire::engine::Engine;
 use harness::{first_i64, run};
 
 const MAX_PAUSED_WRITES: usize = 6;
@@ -339,11 +339,11 @@ async fn merge_under_live_sharded_load_bounds_write_pause() {
 async fn start_gateway_session(
     tenant: &TenantName,
     table_ids: &[u64],
-) -> crabka_gres_ranges::tenant::GatewaySession {
+) -> krabka_gres_ranges::tenant::GatewaySession {
     let config =
-        crabka_gres_ranges::MultiRangeTenantConfig::from_boundaries(tenant.clone(), "0,100,200")
+        krabka_gres_ranges::MultiRangeTenantConfig::from_boundaries(tenant.clone(), "0,100,200")
             .expect("config");
-    let (gateway, _handles) = crabka_gres_ranges::MultiRangeTenant::start(config).expect("tenant");
+    let (gateway, _handles) = krabka_gres_ranges::MultiRangeTenant::start(config).expect("tenant");
     let mut session = gateway.connect();
     for table_id in table_ids {
         run(
@@ -361,7 +361,7 @@ async fn start_gateway_session(
 }
 
 async fn run_deterministic_load(
-    session: &mut crabka_gres_ranges::tenant::GatewaySession,
+    session: &mut krabka_gres_ranges::tenant::GatewaySession,
     hooks: &NemesisHooks,
     table_ids: &[u64],
 ) -> LoadLedger {
@@ -385,7 +385,7 @@ async fn run_deterministic_load(
 }
 
 async fn write_balance(
-    session: &mut crabka_gres_ranges::tenant::GatewaySession,
+    session: &mut krabka_gres_ranges::tenant::GatewaySession,
     table_id: u64,
     delta: i64,
 ) {
@@ -399,7 +399,7 @@ async fn write_balance(
 }
 
 async fn read_balance(
-    session: &mut crabka_gres_ranges::tenant::GatewaySession,
+    session: &mut krabka_gres_ranges::tenant::GatewaySession,
     table_id: u64,
 ) -> i64 {
     first_i64(&run(session, &format!("SELECT balance FROM t{table_id}")).await)

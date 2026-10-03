@@ -1,4 +1,4 @@
-use crabka_compression::{CompressionType, compress, decompress};
+use krabka_compression::{CompressionType, compress, decompress};
 use proptest::prelude::*;
 
 fn arb_payload() -> impl Strategy<Value = Vec<u8>> {
@@ -16,7 +16,7 @@ macro_rules! roundtrip_for {
             #[test]
             fn $name(data in arb_payload()) {
                 let z = compress($ct, &data).unwrap();
-                let back = decompress($ct, &z, crabka_units::convert::ByteSizeExt::from_bytes(u64::MAX)).unwrap();
+                let back = decompress($ct, &z, krabka_units::convert::ByteSizeExt::from_bytes(u64::MAX)).unwrap();
                 prop_assert_eq!(back.as_ref(), data.as_slice());
             }
         }

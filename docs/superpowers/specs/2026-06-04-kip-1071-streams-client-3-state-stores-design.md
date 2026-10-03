@@ -212,7 +212,7 @@ producer).
 
 ## 9. Success criteria
 
-- `cargo test -p crabka-client-streams` green: store units + test-driver
+- `cargo test -p krabka-client-streams` green: store units + test-driver
   stateful/count + restore unit + in-process broker stateful + restart-restore +
   doctest.
 - `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --check`

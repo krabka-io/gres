@@ -186,4 +186,4 @@ It must NOT be mistaken for production code: it serves a hand-captured static lo
 no state machine, election, writes, registration, or multi-voter support. Delete it
 (or keep purely as a wire reference) once slice 3 lands the real KRaft consensus layer.
 The default build is unaffected — the openraft controller path is unchanged when the
-feature is off (verified: `cargo build -p crabka-raft` + 30 raft unit tests green).
+feature is off (verified: `cargo build -p krabka-raft` + 30 raft unit tests green).

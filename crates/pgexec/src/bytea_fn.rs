@@ -13,7 +13,7 @@
 //! `crc32`, `crc32c`) live with the families that own their names, the same way
 //! `bit_fn` keeps `get_bit` beside `set_bit`; only their bodies are here.
 
-use crabka_pgtypes::Datum;
+use krabka_pgtypes::Datum;
 
 use crate::error::ExecError;
 
@@ -177,7 +177,7 @@ pub(crate) fn like_match(
             Some(byte) if Some(*byte) == escape => {
                 let literal = *pattern
                     .get(pi + 1)
-                    .ok_or(ExecError::Type(crabka_pgtypes::TypeError::InvalidEscape))?;
+                    .ok_or(ExecError::Type(krabka_pgtypes::TypeError::InvalidEscape))?;
                 let hit = subject[si] == literal;
                 if hit {
                     pi += 2;

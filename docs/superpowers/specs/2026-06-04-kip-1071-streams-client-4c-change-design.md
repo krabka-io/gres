@@ -121,7 +121,7 @@ changes execution, not topology. This is the primary regression gate.
   materialized stores delete on tombstone; `to_table` works.
 - `to_table` golden frame byte-matches captured JVM 4.1 output; the 5 prior golden
   frames unchanged.
-- `cargo test -p crabka-client-streams` green; `cargo clippy --workspace
+- `cargo test -p krabka-client-streams` green; `cargo clippy --workspace
   --all-targets -- -D warnings` + `cargo fmt --check` clean; `cargo build
   --workspace`.
 - A documented `to_table` / Change example or doctest in `lib.rs`.

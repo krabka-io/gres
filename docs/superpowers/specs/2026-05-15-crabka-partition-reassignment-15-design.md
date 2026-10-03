@@ -248,8 +248,8 @@ v!(list_partition_reassignments_request),
 
 `network/dispatch.rs::handler_body_flexible` appends:
 ```rust
-45 => version >= crabka_protocol::owned::alter_partition_reassignments_request::FLEXIBLE_MIN,
-46 => version >= crabka_protocol::owned::list_partition_reassignments_request::FLEXIBLE_MIN,
+45 => version >= krabka_protocol::owned::alter_partition_reassignments_request::FLEXIBLE_MIN,
+46 => version >= krabka_protocol::owned::list_partition_reassignments_request::FLEXIBLE_MIN,
 ```
 
 Plus per-connection intercept arms with `handle_alter_partition_reassignments_frame` and `handle_list_partition_reassignments_frame` helpers (mirroring slice 14's `handle_elect_leaders_frame`).

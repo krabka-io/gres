@@ -30,7 +30,7 @@ Two independent changes, each in its own commit.
 
 ### 1. Expose `change_membership` on the controller
 
-`crabka_raft::ControllerHandle` gains a `change_membership` method that
+`krabka_raft::ControllerHandle` gains a `change_membership` method that
 forwards to openraft's `Raft::change_membership(members, retain=false)`.
 Same shape on `BrokerHandle` as a wrapper, so tests and production
 callers don't need to reach into the raft crate.
@@ -134,12 +134,12 @@ crates/broker/tests/
 Existing-coverage assumption: the 3 deferred tests are the acceptance
 criteria. We don't add new unit tests for `change_membership` itself
 because openraft's own test suite covers correctness; we add only
-crabka-level integration coverage via the un-ignored tests.
+krabka-level integration coverage via the un-ignored tests.
 
 Acceptance:
-- `cargo test -p crabka-broker --test leader_election` — 4/4 pass on
+- `cargo test -p krabka-broker --test leader_election` — 4/4 pass on
   Linux (currently 3/4)
-- `cargo test -p crabka-broker --test jvm_acceptance --ignored` — 9/9
+- `cargo test -p krabka-broker --test jvm_acceptance --ignored` — 9/9
   pass on Linux with Docker (currently 7/9)
 - `cargo test --workspace` — all green on ubuntu/macos/windows
 - CI workflow has no remaining `--skip` flags in `broker-jvm-acceptance`

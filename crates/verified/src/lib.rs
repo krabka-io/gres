@@ -4,7 +4,7 @@
 //! Creusot proves its functional contract. See `docs/verification.md`. Host
 //! crates call through to these functions, and there are no duplicate bodies
 //! anywhere.
-#![doc(html_root_url = "https://docs.rs/crabka-verified/0.4.2")]
+#![doc(html_root_url = "https://docs.rs/krabka-verified/0.4.2")]
 
 pub mod broker;
 pub mod compaction;

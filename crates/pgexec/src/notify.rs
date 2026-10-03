@@ -33,7 +33,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crabka_pgwire::engine::Notification;
+use krabka_pgwire::engine::Notification;
 use tokio::sync::mpsc;
 
 /// Per-session queue capacity. A listener that falls this far behind makes the

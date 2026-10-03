@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use crabka_gres_ranges::{Range0EndSampler, Range0Frame, Range0Tail};
-use crabka_pgkv::{Kv, RestoreKv};
+use krabka_gres_ranges::{Range0EndSampler, Range0Frame, Range0Tail};
+use krabka_pgkv::{Kv, RestoreKv};
 use tokio::sync::Mutex;
 
 use crate::{
@@ -193,11 +193,11 @@ async fn scan_to_stable_end(
 
 #[async_trait::async_trait]
 impl Range0EndSampler for BrokerRange0EndSampler {
-    async fn sample_end_after_call_begins(&self) -> Result<i64, crabka_gres_ranges::BarrierError> {
+    async fn sample_end_after_call_begins(&self) -> Result<i64, krabka_gres_ranges::BarrierError> {
         self.0
             .committed_end_after_call_begins()
             .await
-            .map_err(|error| crabka_gres_ranges::BarrierError::Sample(error.to_string()))
+            .map_err(|error| krabka_gres_ranges::BarrierError::Sample(error.to_string()))
     }
 }
 
@@ -309,7 +309,7 @@ pub fn wal_trimmed_past_applied(applied_offset: i64, log_start: Option<i64>) -> 
 /// Rebuild `tail` from the newest checkpoint after its WAL tail was trimmed.
 ///
 /// `fresh_store` must be empty, and it must not be the store that `tail` is
-/// currently serving. [`crabka_pgkv::RestoreKv::restore_sorted`] refuses a
+/// currently serving. [`krabka_pgkv::RestoreKv::restore_sorted`] refuses a
 /// non-empty target, and a restore into the live store would expose
 /// half-rebuilt state to readers that the barrier has already released. The
 /// restore happens entirely in `fresh_store`, and this function gives only a
@@ -349,9 +349,9 @@ mod tests {
     };
 
     use assert2::assert;
-    use crabka_gres_ranges::{Range0Barrier, RangeId, TenantName};
-    use crabka_pgexec::Linearizer as _;
-    use crabka_pgkv::{Kv, MemKv, WriteOp};
+    use krabka_gres_ranges::{Range0Barrier, RangeId, TenantName};
+    use krabka_pgexec::Linearizer as _;
+    use krabka_pgkv::{Kv, MemKv, WriteOp};
 
     use super::*;
     use crate::{
@@ -559,7 +559,7 @@ mod tests {
         .expect("write checkpoint");
         crate::checkpoint::CheckpointWalPruner::delete_records(
             log.as_ref(),
-            &[crabka_client_admin::DeleteRecordsOp {
+            &[krabka_client_admin::DeleteRecordsOp {
                 topic: config.wal_topic(),
                 partition: 0,
                 offset: 3,
@@ -880,7 +880,7 @@ mod tests {
         let barrier = Range0Barrier::with_timeout(
             tail.clone(),
             Arc::new(BrokerRange0EndSampler(Arc::new(broker.sampler()))),
-            crabka_units::secs(5),
+            krabka_units::secs(5),
         );
 
         let waiter = tokio::spawn({

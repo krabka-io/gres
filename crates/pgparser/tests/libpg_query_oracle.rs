@@ -218,7 +218,7 @@ fn pg_accepts(sql: &str) -> bool {
 }
 
 fn we_accept(sql: &str) -> bool {
-    crabka_pgparser::parse(sql).is_ok()
+    krabka_pgparser::parse(sql).is_ok()
 }
 
 #[test]
@@ -242,7 +242,7 @@ fn compatibility_refusal_representatives_are_postgresql_syntax() {
         "ROLLBACK PREPARED 'xid-1'",
     ];
     for sql in explicit.into_iter().chain(
-        crabka_pgparser::ast::NON_GOAL_REFUSALS
+        krabka_pgparser::ast::NON_GOAL_REFUSALS
             .iter()
             .map(|spec| spec.representative_sql),
     ) {
@@ -255,7 +255,7 @@ fn compatibility_refusal_representatives_are_postgresql_syntax() {
             "pgparser rejected refusal representative: {sql}"
         );
     }
-    for spec in crabka_pgparser::ast::NON_GOAL_REFUSALS {
+    for spec in krabka_pgparser::ast::NON_GOAL_REFUSALS {
         let variant = refusal_variant(spec.representative_sql);
         assert!(
             pg_accepts(&variant),
@@ -271,7 +271,7 @@ fn compatibility_refusal_representatives_are_postgresql_syntax() {
 }
 
 fn refusal_variant(sql: &str) -> String {
-    use crabka_pgparser::token::Token;
+    use krabka_pgparser::token::Token;
 
     const SLOTS: &[&str] = &[
         "conv",
@@ -300,7 +300,7 @@ fn refusal_variant(sql: &str) -> String {
         "f",
     ];
     let mut parts: Vec<String> = Vec::new();
-    for (token, _) in crabka_pgparser::lexer::lex(sql).expect("representative lexes") {
+    for (token, _) in krabka_pgparser::lexer::lex(sql).expect("representative lexes") {
         let part = match token {
             Token::Eof => break,
             Token::Ident(value) if SLOTS.contains(&value.as_str()) => format!("{value}_variant"),

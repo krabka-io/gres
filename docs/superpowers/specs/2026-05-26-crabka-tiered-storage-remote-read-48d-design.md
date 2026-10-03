@@ -3,7 +3,7 @@
 **Date:** 2026-05-26
 **Status:** Slice design. Follows slice 48c (local-retention split). Part
 of the KIP-405 umbrella
-(`docs/superpowers/specs/2026-05-25-crabka-tiered-storage-roadmap-design.md`).
+(`docs/superpowers/specs/2026-05-25-krabka-tiered-storage-roadmap-design.md`).
 
 ## Goal
 
@@ -105,7 +105,7 @@ These mirror `crates/log/src/index.rs::{OffsetIndex,TimeIndex}::lookup`
 byte-for-byte (the on-the-wire and on-disk formats are identical — the
 copy path in 48b just streams the local index files verbatim into the
 RSM). Living in `remote_reader.rs` keeps the broker from depending on
-`crabka_log`'s private index module while preserving format parity.
+`krabka_log`'s private index module while preserving format parity.
 
 ## Fetch handler integration
 
@@ -266,6 +266,6 @@ remote path is skipped and the existing behavior is preserved.
 
 - `cargo fmt --all --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test -p crabka-broker -p crabka-remote-storage`
+- `cargo test -p krabka-broker -p krabka-remote-storage`
 - `cargo build --workspace`
 - No CRD drift (no CRDs touched).

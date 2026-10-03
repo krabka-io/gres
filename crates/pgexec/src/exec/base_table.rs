@@ -10,11 +10,11 @@ use super::*;
 /// arm this size is paid at every level of the recursion.
 pub(super) fn build_base_table(
     read_ctx: &crate::subquery::SubCtx<'_>,
-    te: &crabka_pgparser::ast::TableExpr,
+    te: &krabka_pgparser::ast::TableExpr,
     bounds: Option<&ScanBounds>,
     scan_plan: Option<&crate::plan_dist::DistributedScanPlan>,
 ) -> Result<Relation, ExecError> {
-    use crabka_pgparser::ast::TableExpr;
+    use krabka_pgparser::ast::TableExpr;
     let TableExpr::Table {
         name,
         only,
@@ -108,7 +108,7 @@ pub(super) fn build_base_table(
     {
         return Ok(rel);
     }
-    match crabka_pgcatalog::get_view(catalog_kv, name) {
+    match krabka_pgcatalog::get_view(catalog_kv, name) {
         Ok(view) => {
             // A view carries its own ACL, and it is checked *before* the
             // identity switch below — under whatever role reached this view,
@@ -122,7 +122,7 @@ pub(super) fn build_base_table(
                 crate::privilege::RelationKind::View,
                 crate::privilege::Privilege::Select,
             )?;
-            let statement = crabka_pgparser::parse(&view.definition)?;
+            let statement = krabka_pgparser::parse(&view.definition)?;
             let [Statement::Query(query)] = statement.as_slice() else {
                 return Err(ExecError::Unsupported(
                     "stored view definition is not a query".into(),
@@ -158,7 +158,7 @@ pub(super) fn build_base_table(
                 crate::catalog_rel::relation_rowtype(catalog_kv, &view.name)?,
             );
         }
-        Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => {}
+        Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => {}
         Err(error) => return Err(error.into()),
     }
     scan_stored_base_table(read_ctx, te, name, bounds, scan_plan, None)
@@ -169,9 +169,9 @@ pub(super) fn build_base_table(
 /// declines to the established read path, which reports the original error.
 pub(crate) fn is_direct_stored_base_table(
     read_ctx: &crate::subquery::SubCtx<'_>,
-    te: &crabka_pgparser::ast::TableExpr,
+    te: &krabka_pgparser::ast::TableExpr,
 ) -> bool {
-    use crabka_pgparser::ast::TableExpr;
+    use krabka_pgparser::ast::TableExpr;
     let TableExpr::Table {
         name,
         columns,
@@ -207,8 +207,8 @@ pub(crate) fn is_direct_stored_base_table(
     ) else {
         return false;
     };
-    crabka_pgcatalog::get_view(read_ctx.catalog_kv, &name).is_err()
-        && crabka_pgcatalog::get_table(read_ctx.catalog_kv, &name)
+    krabka_pgcatalog::get_view(read_ctx.catalog_kv, &name).is_err()
+        && krabka_pgcatalog::get_table(read_ctx.catalog_kv, &name)
             .is_ok_and(|table| table.foreign.is_none() && !table.sharded)
 }
 
@@ -219,20 +219,20 @@ pub(crate) fn is_direct_stored_base_table(
 /// the security module, and row security is the only way out.
 pub(crate) fn scan_stored_base_table(
     read_ctx: &crate::subquery::SubCtx<'_>,
-    te: &crabka_pgparser::ast::TableExpr,
-    name: &crabka_pgcatalog::RelationName,
+    te: &krabka_pgparser::ast::TableExpr,
+    name: &krabka_pgcatalog::RelationName,
     bounds: Option<&ScanBounds>,
     scan_plan: Option<&crate::plan_dist::DistributedScanPlan>,
     pruned_columns: Option<&[ColumnBinding]>,
 ) -> Result<Relation, ExecError> {
-    let crabka_pgparser::ast::TableExpr::Table { only, alias, .. } = te else {
+    let krabka_pgparser::ast::TableExpr::Table { only, alias, .. } = te else {
         return Err(ExecError::Unsupported(
             "scan_stored_base_table expects a base relation".into(),
         ));
     };
     // Consulted only once `get_table` has missed, so an ordinary read pays no
     // second catalog lookup for it.
-    let t = crabka_pgcatalog::get_table(read_ctx.catalog_kv, name).map_err(|error| {
+    let t = krabka_pgcatalog::get_table(read_ctx.catalog_kv, name).map_err(|error| {
         open_wrong_kind(read_ctx.catalog_kv, name).unwrap_or_else(|| error.into())
     })?;
     // An unpopulated materialized view is refused here, at the one place every

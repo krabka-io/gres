@@ -9,15 +9,15 @@
 use std::sync::Arc;
 
 use assert2::{assert, check};
-use crabka_broker::{Broker, BrokerConfig, BrokerHandle};
-use crabka_gres_ranges::{RangeId, TenantName};
-use crabka_gres_substrate::{
+use krabka_broker::{Broker, BrokerConfig, BrokerHandle};
+use krabka_gres_ranges::{RangeId, TenantName};
+use krabka_gres_substrate::{
     GroupCommitRequest, LiveRecoveryConfig, ProducerWalWriter, SubstrateError,
     TransactionalWalWriter, WalFrame,
     readonly_fold::{FoldLimits, FoldProjection, GenerationWitness, committed_fold_snapshot_live},
     recover_live,
 };
-use crabka_pgkv::{MemKv, WriteOp};
+use krabka_pgkv::{MemKv, WriteOp};
 use tempfile::TempDir;
 
 async fn boot() -> (BrokerHandle, String, TempDir) {

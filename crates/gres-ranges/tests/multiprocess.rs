@@ -356,14 +356,14 @@ fn follower_store_dir(cache_dir: &Path) -> PathBuf {
 
 /// `(total keys, keys under the notify prefix)` in a stopped node's store.
 fn scan_store(path: &Path) -> (usize, usize) {
-    use crabka_pgkv::Kv as _;
+    use krabka_pgkv::Kv as _;
 
     assert!(path.is_dir(), "no store at {}", path.display());
-    let store = crabka_pgkv::FjallKv::open_cache(path)
+    let store = krabka_pgkv::FjallKv::open_cache(path)
         .unwrap_or_else(|error| panic!("open {}: {error:?}", path.display()));
     let total = store.scan_prefix(&[]).expect("scan the whole store").len();
     let notify = store
-        .scan_prefix(&crabka_pgkv::key::notify_prefix())
+        .scan_prefix(&krabka_pgkv::key::notify_prefix())
         .expect("scan the notify prefix")
         .len();
     (total, notify)

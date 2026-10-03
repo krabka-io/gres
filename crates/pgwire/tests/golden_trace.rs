@@ -4,7 +4,7 @@
 //! If libpq frames something the decoder cannot parse, this test catches it.
 
 use bytes::BytesMut;
-use crabka_pgwire::messages::frontend::{self, FrontendMessage, StartupPacket};
+use krabka_pgwire::messages::frontend::{self, FrontendMessage, StartupPacket};
 
 fn frontend_bytes(trace: &str) -> Vec<u8> {
     let mut out = Vec::new();

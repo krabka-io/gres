@@ -1,10 +1,10 @@
-# crabka-metrics Slice 8 — Hardening (multi-tenancy/limits, remote_read, cardinality, conformance + differential-vs-Mimir)
+# krabka-metrics Slice 8 — Hardening (multi-tenancy/limits, remote_read, cardinality, conformance + differential-vs-Mimir)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the metrics backend production-faithful at its multi-tenant edges and prove it against the real ecosystem. Add per-tenant limits/quotas (ingestion rate, active series, label/sample/range caps) with Prometheus-shaped errors and a YAML runtime-overrides file; harden tenant isolation so org A can never observe org B; implement `remote_read` (`POST /api/v1/read`); add the three Mimir cardinality APIs; wire the PromQL `.test` corpus as a CI gate with a per-file coverage report; and build the three external-system differential suites — `prometheus/compliance`, **differential-vs-real-Mimir**, and **Grafana**. The two headline tests are (1) end-to-end tenant isolation through the HTTP API with two `X-Scope-OrgID`s and (2) query-corpus equality vs real Mimir over identically-ingested data.
 
-**Architecture:** This slice adds **no new query semantics** — it is a hardening band around the Slice 4 distributor (ingest), the Slice 5 querier + Prometheus HTTP API, and the Slice 2/3 `PromqlEngine`. New code lives in three areas of `crabka-metrics`: (a) a `limits` module (a per-tenant `Limits` struct, a YAML `OverridesProvider` modeled on Mimir's `runtime.yaml`, and enforcement points wired into the distributor write path and the querier read path, reusing the broker's `TokenBucket` token-bucket — lifted into a shared `crabka-throttle` crate and given an independent-burst knob — for the *rate* limit); (b) a `wire::remote_read` module (Prometheus `ReadRequest`/`ReadResponse` protobuf + snappy-block, translating matchers+range into a `PromqlEngine` series query); (c) HTTP handlers for `/api/v1/read` and the three `/api/v1/cardinality/*` endpoints, which read from the same `Index` the querier uses. Tenant isolation is **not** a new mechanism — it is the assertion that every existing key (WAL partition key, block/index object key, HA-tracker key, quota bucket key, in-memory head map key) is already `(tenant, …)`-prefixed; this slice adds the tests that prove it and fixes any leak they expose. The external suites (`prometheus`, Mimir, Grafana) are black-box harnesses over the compiled HTTP server + Docker containers, all `#[ignore]`, run in a dedicated CI job.
+**Architecture:** This slice adds **no new query semantics** — it is a hardening band around the Slice 4 distributor (ingest), the Slice 5 querier + Prometheus HTTP API, and the Slice 2/3 `PromqlEngine`. New code lives in three areas of `krabka-metrics`: (a) a `limits` module (a per-tenant `Limits` struct, a YAML `OverridesProvider` modeled on Mimir's `runtime.yaml`, and enforcement points wired into the distributor write path and the querier read path, reusing the broker's `TokenBucket` token-bucket — lifted into a shared `krabka-throttle` crate and given an independent-burst knob — for the *rate* limit); (b) a `wire::remote_read` module (Prometheus `ReadRequest`/`ReadResponse` protobuf + snappy-block, translating matchers+range into a `PromqlEngine` series query); (c) HTTP handlers for `/api/v1/read` and the three `/api/v1/cardinality/*` endpoints, which read from the same `Index` the querier uses. Tenant isolation is **not** a new mechanism — it is the assertion that every existing key (WAL partition key, block/index object key, HA-tracker key, quota bucket key, in-memory head map key) is already `(tenant, …)`-prefixed; this slice adds the tests that prove it and fixes any leak they expose. The external suites (`prometheus`, Mimir, Grafana) are black-box harnesses over the compiled HTTP server + Docker containers, all `#[ignore]`, run in a dedicated CI job.
 
 **Tech Stack:** Rust 2024 · `arrow` 59 · `axum` 0.8 (handlers, reuse Slice 5 router) · `prost` 0.14 + `prost-build` (remote_read protobuf) · `snap` 1 (snappy-block) · `serde_yaml` 0.9 + `serde` (overrides file) · the broker `TokenBucket` (KIP-73, via a thin re-export) · `thiserror`. Tests: `assert2`; `reqwest` 0.13 + `tokio` for in-process HTTP drive; `testcontainers` 0.27 + `testcontainers-modules` 0.15 for the Docker differential suites; `serde_json` for response diffing.
 
@@ -12,20 +12,20 @@
 
 - **No backwards compatibility.** Greenfield/undeployed. Change the `Limits` schema, the overrides YAML shape, the remote_read translation, and any error-body shape freely; no shims, no migration code, no `#[serde(default)]` "to keep old configs readable".
 - **`unsafe_code = "forbid"`** workspace-wide. No `unsafe`.
-- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p crabka-metrics --all-targets` before each commit.
-- **Formatting:** `cargo fmt -p crabka-metrics` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
+- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p krabka-metrics --all-targets` before each commit.
+- **Formatting:** `cargo fmt -p krabka-metrics` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
 - **Assertions:** `assert2::assert!` / `assert2::check!` in tests.
 - **Kafka wire compat is the only external contract that must not drift.** This slice touches no Kafka bytes. The Prometheus/Mimir HTTP byte-exactness is the *analog* constraint here: status codes and `data.resultType` shapes must match Prometheus/Mimir exactly (that is what the differential suites verify). **Error-body shape is per-surface**, not uniform: the **query API** (`/query`, `/query_range`, `/series`) returns the Prometheus JSON `errorType` envelope; the **push API** (`/api/v1/push`) returns Mimir's **plain-text `err-mimir-*` bodies** (no JSON `errorType`). Match the right shape for each surface (Task 7) — do not assert the query envelope on the push path.
 - **Docker/external-system tests are `#[ignore]`.** Every test that needs a running Prometheus, Mimir, or Grafana container is annotated `#[ignore = "requires Docker"]` and lives behind the dedicated CI job (`metrics-differential`), never in the default `cargo test --workspace` path. Reuse the Confluent-image rationale and bootstrap-retry patterns from `crates/client-core/tests/integration.rs`.
-- **Reuse, don't reinvent, the token bucket.** Per-tenant *rate* limits (ingestion rate) use the broker's `TokenBucket` semantics (KIP-73 `plan_consume`: `capped = min(available+refill, rate)`, `grant = min(requested, capped)`), lifted into a shared `crabka-throttle` crate and extended with `set_rate_with_burst(rate, burst)` so Mimir's independent `ingestion_burst_size` is honored (Task 3). Do not write a second rate limiter. The *count/length* limits (max active series, max label length, max samples-per-query, max series-per-query, max range) are plain comparisons, not buckets.
+- **Reuse, don't reinvent, the token bucket.** Per-tenant *rate* limits (ingestion rate) use the broker's `TokenBucket` semantics (KIP-73 `plan_consume`: `capped = min(available+refill, rate)`, `grant = min(requested, capped)`), lifted into a shared `krabka-throttle` crate and extended with `set_rate_with_burst(rate, burst)` so Mimir's independent `ingestion_burst_size` is honored (Task 3). Do not write a second rate limiter. The *count/length* limits (max active series, max label length, max samples-per-query, max series-per-query, max range) are plain comparisons, not buckets.
 
 ---
 
 ## Dependency & slice roadmap
 
 **Depends on:**
-- **Slice 1** (data layer) — `crabka-metrics` crate, block schemas, `SymbolTable`. ✅ planned.
-- **Slice 2/3** (`crabka-promql`) — the `PromqlEngine`/query entry point this slice queries for `remote_read` and that the limits cap. **Consumed via contract** (see Shared Contract below); if Slice 3 is unlanded, the `remote_read` and `.test`-gate tasks stub the engine behind the documented trait and the task notes say so.
+- **Slice 1** (data layer) — `krabka-metrics` crate, block schemas, `SymbolTable`. ✅ planned.
+- **Slice 2/3** (`krabka-promql`) — the `PromqlEngine`/query entry point this slice queries for `remote_read` and that the limits cap. **Consumed via contract** (see Shared Contract below); if Slice 3 is unlanded, the `remote_read` and `.test`-gate tasks stub the engine behind the documented trait and the task notes say so.
 - **Slice 4** (ingest service) — the distributor write path (`validate → HA dedup → tenant-route → produce`) where ingestion-rate / series / label limits are enforced; the `Index` the cardinality APIs read.
 - **Slice 5** (querier + Prometheus HTTP API) — the axum router, `X-Scope-OrgID` tenancy extractor, the Prometheus-shaped JSON response/error envelope, and the `Index`. **This slice extends that router** (adds `/api/v1/read`, `/cardinality/*`) and that error envelope (adds `429`/`422` limit errors).
 
@@ -133,7 +133,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib limits`
+Run: `cargo test -p krabka-metrics --lib limits`
 Expected: FAIL — `cannot find type Limits`.
 
 - [ ] **Step 3: Implement `Limits` + `LimitError`**
@@ -144,14 +144,14 @@ Prepend above `tests`. Define `Limits` with the fields/`Default` above (using th
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib limits`
+Run: `cargo test -p krabka-metrics --lib limits`
 Expected: PASS (2 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): per-tenant Limits model + Prometheus-shaped LimitError"
 ```
@@ -224,7 +224,7 @@ overrides:
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib overrides`
+Run: `cargo test -p krabka-metrics --lib overrides`
 Expected: FAIL — `cannot find type OverridesProvider`.
 
 - [ ] **Step 3: Implement `overrides.rs`**
@@ -235,14 +235,14 @@ Define an internal `#[derive(Deserialize)] struct PartialLimits` with every fiel
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib overrides`
+Run: `cargo test -p krabka-metrics --lib overrides`
 Expected: PASS (3 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): Mimir-style runtime.yaml OverridesProvider"
 ```
@@ -254,11 +254,11 @@ git commit -m "feat(metrics): Mimir-style runtime.yaml OverridesProvider"
 **Files:**
 - Create: `crates/metrics/src/limits/enforce.rs`
 - Modify: `crates/metrics/src/limits/mod.rs` (declare submodule + re-export)
-- Modify: `crates/metrics/Cargo.toml` (add `crabka-throttle` path dep for `TokenBucket` — the lifted bucket crate, see note)
-- Create: `crates/throttle/` (`crabka-throttle`) — lift `bucket.rs` (+ `plan_consume`) out of `crabka-broker`, add `set_rate_with_burst`; re-export from `crabka-broker` so the broker keeps `crabka_broker::throttle::TokenBucket`.
+- Modify: `crates/metrics/Cargo.toml` (add `krabka-throttle` path dep for `TokenBucket` — the lifted bucket crate, see note)
+- Create: `crates/throttle/` (`krabka-throttle`) — lift `bucket.rs` (+ `plan_consume`) out of `krabka-broker`, add `set_rate_with_burst`; re-export from `krabka-broker` so the broker keeps `krabka_broker::throttle::TokenBucket`.
 
 **Interfaces:**
-- Consumes: `Limits`, `LimitError` (Task 1); `crabka_throttle::TokenBucket` (with `set_rate_with_burst(rate, burst)`); `Labels`.
+- Consumes: `Limits`, `LimitError` (Task 1); `krabka_throttle::TokenBucket` (with `set_rate_with_burst(rate, burst)`); `Labels`.
 - Produces:
   - `struct IngestEnforcer` holding a `DashMap<String /*tenant*/, Arc<TokenBucket>>` for the per-tenant ingestion-rate bucket and a `DashMap<String, u64>` (or an injected active-series counter) for active-series accounting.
   - `impl IngestEnforcer`:
@@ -270,7 +270,7 @@ git commit -m "feat(metrics): Mimir-style runtime.yaml OverridesProvider"
     - `pub fn check_series_count(limits: &Limits, selected: u64) -> Result<(), LimitError>` — `> max_fetched_series_per_query` ⇒ `SeriesPerQueryExceeded`.
     - `pub fn check_sample_count(limits: &Limits, processed: u64) -> Result<(), LimitError>` — `> max_samples_per_query` ⇒ `SamplesPerQueryExceeded`.
 
-> **TokenBucket reuse note:** `crabka_broker::throttle::TokenBucket` is the KIP-73 bucket (`new()`, `set_rate(u64)`, `try_consume(u64) -> u64` granted). It meters in whatever integer unit you set the rate in; here the unit is *samples* and refill rate = `ingestion_rate` rounded to `u64`. **Burst caveat:** the existing `set_rate(rate)` unconditionally seeds `available = rate` (`crates/broker/src/throttle/bucket.rs:47-51`, `self.available.store(new_rate)`) — there is **no** API to set the burst capacity independently of the rate, so a naive reuse would silently ignore `ingestion_burst_size` whenever `burst != rate`. Since Mimir's `ingestion_burst_size` **is** independent of `ingestion_rate`, this task must extend the bucket with a `set_rate_with_burst(rate, burst)` that seeds `available = burst` while keeping `rate` as the refill — and because that extension changes broker code, lift `bucket.rs` (+ `plan_consume`) into a tiny `crabka-throttle` crate first and depend on that from both `crabka-broker` and `crabka-metrics` (the note already contemplated this lift; the burst knob makes it required, not optional). The pure refill arithmetic (`plan_consume`) is already unit-tested in the broker, so this task tests the *mapping* (limit → bucket config → decision) **including a `burst != rate` case**, not the refill math.
+> **TokenBucket reuse note:** `krabka_broker::throttle::TokenBucket` is the KIP-73 bucket (`new()`, `set_rate(u64)`, `try_consume(u64) -> u64` granted). It meters in whatever integer unit you set the rate in; here the unit is *samples* and refill rate = `ingestion_rate` rounded to `u64`. **Burst caveat:** the existing `set_rate(rate)` unconditionally seeds `available = rate` (`crates/broker/src/throttle/bucket.rs:47-51`, `self.available.store(new_rate)`) — there is **no** API to set the burst capacity independently of the rate, so a naive reuse would silently ignore `ingestion_burst_size` whenever `burst != rate`. Since Mimir's `ingestion_burst_size` **is** independent of `ingestion_rate`, this task must extend the bucket with a `set_rate_with_burst(rate, burst)` that seeds `available = burst` while keeping `rate` as the refill — and because that extension changes broker code, lift `bucket.rs` (+ `plan_consume`) into a tiny `krabka-throttle` crate first and depend on that from both `krabka-broker` and `krabka-metrics` (the note already contemplated this lift; the burst knob makes it required, not optional). The pure refill arithmetic (`plan_consume`) is already unit-tested in the broker, so this task tests the *mapping* (limit → bucket config → decision) **including a `burst != rate` case**, not the refill math.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -366,25 +366,25 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib enforce`
+Run: `cargo test -p krabka-metrics --lib enforce`
 Expected: FAIL — `cannot find type IngestEnforcer`.
 
 - [ ] **Step 3: Implement `enforce.rs`**
 
-Implement `IngestEnforcer` (with `DashMap` bucket cache, `new()`), `QueryEnforcer`, and the seven check methods exactly per the interfaces. First lift `bucket.rs` into a `crabka-throttle` crate and add `set_rate_with_burst(rate, burst)` (seeds `available = burst`, keeps `rate` as refill). For `check_sample_rate`: round `ingestion_rate` to `u64`; get-or-create the tenant's `TokenBucket`, `set_rate_with_burst(rate, ingestion_burst_size)` on creation (seeds the independent burst); `try_consume(n)`. Add `crabka-throttle` (path) + `dashmap` to `Cargo.toml` dev/normal deps as needed.
+Implement `IngestEnforcer` (with `DashMap` bucket cache, `new()`), `QueryEnforcer`, and the seven check methods exactly per the interfaces. First lift `bucket.rs` into a `krabka-throttle` crate and add `set_rate_with_burst(rate, burst)` (seeds `available = burst`, keeps `rate` as refill). For `check_sample_rate`: round `ingestion_rate` to `u64`; get-or-create the tenant's `TokenBucket`, `set_rate_with_burst(rate, ingestion_burst_size)` on creation (seeds the independent burst); `try_consume(n)`. Add `krabka-throttle` (path) + `dashmap` to `Cargo.toml` dev/normal deps as needed.
 
 - [ ] **Step 4: Wire into `mod.rs`** — `mod enforce; pub use enforce::{IngestEnforcer, QueryEnforcer};` + re-export from `lib.rs`.
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib enforce`
+Run: `cargo test -p krabka-metrics --lib enforce`
 Expected: PASS (7 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): per-tenant limit enforcement (ingest rate/series/labels + query caps)"
 ```
@@ -464,7 +464,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --lib remote_read`
+Run: `cargo test -p krabka-metrics --lib remote_read`
 Expected: FAIL — proto module / `decode_read_request` missing (build.rs not yet present).
 
 - [ ] **Step 3: Implement proto + build.rs + `remote_read.rs`**
@@ -475,14 +475,14 @@ Vendor `prometheus.proto`, add `build.rs`, implement the four functions + the er
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --lib remote_read`
+Run: `cargo test -p krabka-metrics --lib remote_read`
 Expected: PASS (2 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): remote_read protobuf + snappy-block (SAMPLES path)"
 ```
@@ -515,7 +515,7 @@ Create `crates/metrics/tests/cardinality_api.rs` that boots the in-process serve
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --test cardinality_api`
+Run: `cargo test -p krabka-metrics --test cardinality_api`
 Expected: FAIL — routes 404 / handlers absent.
 
 - [ ] **Step 3: Implement the handlers + register routes**
@@ -524,14 +524,14 @@ Implement `read.rs` and `cardinality.rs`; register all four routes on the Slice 
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --test cardinality_api --test remote_read`
+Run: `cargo test -p krabka-metrics --test cardinality_api --test remote_read`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): /api/v1/read + /api/v1/cardinality/* handlers"
 ```
@@ -551,7 +551,7 @@ git commit -m "feat(metrics): /api/v1/read + /api/v1/cardinality/* handlers"
   - `pub async fn push_samples(base: &str, tenant: &str, series: &[(Labels, Vec<(i64,f64)>)])` — remote_write v1 (or native produce) of samples for `tenant` via `X-Scope-OrgID`.
   - helpers `query(base, tenant, promql)`, `series(base, tenant, match)`, `labels(base, tenant)`, `label_values(base, tenant, name)` — each issues the HTTP request with the tenant header and returns parsed JSON.
 
-> **Contract gap note:** if the Slice 4/5 in-process boot isn't available, this helper assembles it from the public role constructors `crabka-metrics` exposes; if those are absent, the task spins the `axum::Router` directly over an in-memory `Index` + `PromqlEngine` and drives writes through the distributor entry fn. Either way: **real HTTP over a real socket** (so `X-Scope-OrgID` goes through the genuine extractor), not a function call shortcut — the whole point is to exercise the tenancy boundary as a client would.
+> **Contract gap note:** if the Slice 4/5 in-process boot isn't available, this helper assembles it from the public role constructors `krabka-metrics` exposes; if those are absent, the task spins the `axum::Router` directly over an in-memory `Index` + `PromqlEngine` and drives writes through the distributor entry fn. Either way: **real HTTP over a real socket** (so `X-Scope-OrgID` goes through the genuine extractor), not a function call shortcut — the whole point is to exercise the tenancy boundary as a client would.
 
 - [ ] **Step 1: Write the failing isolation test**
 
@@ -605,7 +605,7 @@ async fn tenants_are_fully_isolated_across_all_read_surfaces() {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --test tenant_isolation`
+Run: `cargo test -p krabka-metrics --test tenant_isolation`
 Expected: FAIL — `support::metrics_server` / boot not yet present (or, if present, a real leak surfaces — fix it).
 
 - [ ] **Step 3: Implement `support::metrics_server` + fix any leak**
@@ -618,14 +618,14 @@ Append a test: set a tiny `ingestion_rate` override for `tenant-a` only (via an 
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --test tenant_isolation`
+Run: `cargo test -p krabka-metrics --test tenant_isolation`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "test(metrics): headline multi-tenant isolation across all read surfaces + per-tenant quota"
 ```
@@ -694,7 +694,7 @@ overrides:
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --test limits_overrides`
+Run: `cargo test -p krabka-metrics --test limits_overrides`
 Expected: FAIL — enforcement not wired; over-limit requests currently succeed (200/204).
 
 - [ ] **Step 3: Wire enforcement into the live handlers**
@@ -703,14 +703,14 @@ Call `IngestEnforcer::check_labels` + `check_active_series` + `check_sample_rate
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --test limits_overrides`
+Run: `cargo test -p krabka-metrics --test limits_overrides`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "feat(metrics): enforce per-tenant limits at live write/read edges with Prometheus error bodies"
 ```
@@ -720,7 +720,7 @@ git commit -m "feat(metrics): enforce per-tenant limits at live write/read edges
 ### Task 8: PromQL `.test` conformance gate + per-file coverage report
 
 **Files:**
-- Create: `crates/metrics/tests/promql_conformance.rs` (or in `crabka-promql` if the `.test` harness lives there — **place it beside the harness from Slice 2/3**; this task wires it as a *gate* + report).
+- Create: `crates/metrics/tests/promql_conformance.rs` (or in `krabka-promql` if the `.test` harness lives there — **place it beside the harness from Slice 2/3**; this task wires it as a *gate* + report).
 - Modify: CI workflow (a `metrics-conformance` job) — see Task 11.
 
 **Interfaces:**
@@ -734,7 +734,7 @@ git commit -m "feat(metrics): enforce per-tenant limits at live write/read edges
 - [ ] **Step 1: Write the failing test**
 
 ```rust
-// crates/metrics/tests/promql_conformance.rs  (or crabka-promql/tests/)
+// crates/metrics/tests/promql_conformance.rs  (or krabka-promql/tests/)
 use assert2::assert;
 
 /// Files we knowingly don't pass yet (each MUST carry a reason).
@@ -744,7 +744,7 @@ const KNOWN_UNSUPPORTED: &[(&str, &str)] = &[
 
 #[test]
 fn full_promql_test_corpus_passes() {
-    let report = crabka_promql::testkit::run_corpus_dir(
+    let report = krabka_promql::testkit::run_corpus_dir(
         "tests/testdata/promql", // vendored
     );
     // Write the per-file report.
@@ -760,23 +760,23 @@ fn full_promql_test_corpus_passes() {
 
 - [ ] **Step 2: Run to verify it fails (or passes if the harness is complete)**
 
-Run: `cargo test -p crabka-metrics --test promql_conformance -- --nocapture` (or `-p crabka-promql`).
+Run: `cargo test -p krabka-metrics --test promql_conformance -- --nocapture` (or `-p krabka-promql`).
 Expected: FAIL — `run_corpus_dir`/`Report::write_to` missing, **or** a real conformance gap surfaces.
 
 - [ ] **Step 3: Implement the report API on the harness + the gate**
 
-Add **public** `crabka_promql::testkit::run_corpus_dir(dir) -> Report` and `pub struct Report { pub files: Vec<FileResult { name, passed, passed_cases, total_cases }> }` with `Report::write_to(path)` to the Slice 2/3 harness `testkit` module (small addition — the per-file iteration + a text writer). These must be `pub` in `crabka-promql` so this slice's `crabka-metrics` test crate can import them. Vendor the corpus if not already (Apache-2.0 attribution).
+Add **public** `krabka_promql::testkit::run_corpus_dir(dir) -> Report` and `pub struct Report { pub files: Vec<FileResult { name, passed, passed_cases, total_cases }> }` with `Report::write_to(path)` to the Slice 2/3 harness `testkit` module (small addition — the per-file iteration + a text writer). These must be `pub` in `krabka-promql` so this slice's `krabka-metrics` test crate can import them. Vendor the corpus if not already (Apache-2.0 attribution).
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --test promql_conformance -- --nocapture`
+Run: `cargo test -p krabka-metrics --test promql_conformance -- --nocapture`
 Expected: PASS; `target/promql-conformance-report.txt` lists every file.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/ docs/
 git commit -m "test(metrics): PromQL .test conformance gate + per-file coverage report"
 ```
@@ -839,7 +839,7 @@ fn corpus_is_nonempty_and_covers_key_functions() {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-metrics --test diff_corpus_selftest`
+Run: `cargo test -p krabka-metrics --test diff_corpus_selftest`
 Expected: FAIL — `diff_corpus` module absent.
 
 - [ ] **Step 3: Implement `support/diff_corpus.rs`**
@@ -848,14 +848,14 @@ Implement the seed dataset, query corpus, `normalize` (float-epsilon + label-sor
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-metrics --test diff_corpus_selftest`
+Run: `cargo test -p krabka-metrics --test diff_corpus_selftest`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "test(metrics): shared differential query corpus + Prometheus JSON differ (Docker-free)"
 ```
@@ -876,7 +876,7 @@ git commit -m "test(metrics): shared differential query corpus + Prometheus JSON
 > - **Container:** `GenericImage::new("mirror.gcr.io/prom/prometheus", "<pinned tag>")` with cmd args `--web.enable-remote-write-receiver`, `--enable-feature=native-histograms` (so native-histogram cases match), a `WaitFor::message_on_stderr("Server is ready to receive web requests")`. Map `9090`.
 > - **Data load:** build remote_write `WriteRequest` protobuf from `seed_dataset()` (reuse the Slice 4 v1 encoder, or a tiny local encoder), snappy-block, POST to both targets with identical bytes (Prometheus URL `http://localhost:<mapped>/api/v1/write`; Crabka `…/api/v1/push`, `X-Scope-OrgID: compliance`). One write, two destinations — guarantees identical input.
 > - **Settle:** poll `/api/v1/query?query=up` style readiness, or sleep-with-retry on the first corpus query until both return non-empty (bounded, ~10s, mirroring the `client-core` bootstrap-retry pattern).
-> - **Assert:** for each `QueryCase`, fetch from both, `assert_query_equal(case.name, crabka_json, prom_json)`. Known divergences (if any: e.g. `@ end()` wall-clock, `time()`/`timestamp()` of "now") are pinned to fixed `@` timestamps in the corpus so results are deterministic.
+> - **Assert:** for each `QueryCase`, fetch from both, `assert_query_equal(case.name, krabka_json, prom_json)`. Known divergences (if any: e.g. `@ end()` wall-clock, `time()`/`timestamp()` of "now") are pinned to fixed `@` timestamps in the corpus so results are deterministic.
 > - **Documented limitation:** native-histogram JSON encoding parity is asserted only if both sides emit the same native-histogram JSON object shape; otherwise that case is in a `PROM_KNOWN_DIVERGENCE` list with a reason.
 
 - [ ] **Step 1: Write the `#[ignore]` test**
@@ -885,14 +885,14 @@ Create `crates/metrics/tests/diff_prometheus.rs` with the harness above; `#[toki
 
 - [ ] **Step 2: Run to verify it is skipped by default + runs under `--ignored`**
 
-Run (default): `cargo test -p crabka-metrics --test diff_prometheus` → reports `0 run, 1 ignored`.
-Run (with Docker): `cargo test -p crabka-metrics --test diff_prometheus -- --ignored --nocapture` → PASS (or surfaces a real divergence to fix).
+Run (default): `cargo test -p krabka-metrics --test diff_prometheus` → reports `0 run, 1 ignored`.
+Run (with Docker): `cargo test -p krabka-metrics --test diff_prometheus -- --ignored --nocapture` → PASS (or surfaces a real divergence to fix).
 
 - [ ] **Step 3: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "test(metrics): prometheus/compliance black-box differential harness (ignored, Docker)"
 ```
@@ -913,7 +913,7 @@ git commit -m "test(metrics): prometheus/compliance black-box differential harne
 > - **Container:** `mirror.gcr.io/grafana/mimir:<pinned tag>` started with `-target=all` and a mounted `mimir.yaml` (filesystem `blocks_storage`, `common.storage.backend: filesystem`, short `-blocks-storage.tsdb.head-compaction-interval`, multitenancy with a single `X-Scope-OrgID: diff`). `WaitFor` on Mimir's `/ready` (poll the mapped HTTP port until 200). Mimir's push endpoint is `POST /api/v1/push` with `X-Scope-OrgID`.
 > - **Data load:** identical remote_write bytes to Crabka and Mimir (same one-write-two-destinations approach as Task 10). Use a fixed wall-clock base for sample timestamps so `@`/`time()` cases are deterministic.
 > - **Compaction wait:** Mimir serves recent samples from its ingester head immediately; for cases that depend on block compaction, either keep the corpus within the head window or trigger/await Mimir's head compaction. Default: keep the corpus in the head window (simplest, deterministic).
-> - **Assert:** per `QueryCase`, `assert_query_equal(case.name, crabka_json, mimir_json)`. `MIMIR_KNOWN_DIVERGENCE` list (each entry justified) covers any Mimir-specific metadata (e.g. Mimir injects `__mimir__` internal labels or query-stats headers we strip in `normalize`).
+> - **Assert:** per `QueryCase`, `assert_query_equal(case.name, krabka_json, mimir_json)`. `MIMIR_KNOWN_DIVERGENCE` list (each entry justified) covers any Mimir-specific metadata (e.g. Mimir injects `__mimir__` internal labels or query-stats headers we strip in `normalize`).
 > - **Why headline:** Mimir is the system Crabka claims to replace; corpus equality over identical input is the strongest single correctness signal in the slice. Keep this test the most carefully curated corpus.
 
 - [ ] **Step 1: Write the `#[ignore]` test + mount config**
@@ -922,14 +922,14 @@ Create `crates/metrics/tests/diff_mimir.rs` (embed the minimal `mimir.yaml` as a
 
 - [ ] **Step 2: Run to verify ignored-by-default + runnable**
 
-Run (default): `cargo test -p crabka-metrics --test diff_mimir` → `0 run, 1 ignored`.
-Run (Docker): `cargo test -p crabka-metrics --test diff_mimir -- --ignored --nocapture` → PASS (or a real divergence to fix).
+Run (default): `cargo test -p krabka-metrics --test diff_mimir` → `0 run, 1 ignored`.
+Run (Docker): `cargo test -p krabka-metrics --test diff_mimir -- --ignored --nocapture` → PASS (or a real divergence to fix).
 
 - [ ] **Step 3: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "test(metrics): headline differential vs real Mimir (ignored, testcontainers)"
 ```
@@ -947,7 +947,7 @@ git commit -m "test(metrics): headline differential vs real Mimir (ignored, test
   - Boot Crabka in-process (seed a known metric); start `mirror.gcr.io/grafana/grafana:<pinned>` with a **provisioned Prometheus datasource** whose `url` points at the Crabka base URL (Grafana must reach the host — use `host.docker.internal` or run Crabka bound to the container-visible address); drive Grafana's datasource **proxy/Explore query API** (`POST /api/ds/query` or the datasource proxy `/api/datasources/proxy/uid/<uid>/api/v1/query`) for a couple of corpus queries; assert the response renders (status `success`, non-empty frames).
 
 > **Harness structure & data loading (explicit):**
-> - **Datasource provisioning:** mount a `datasources.yaml` (`apiVersion: 1`, a `prometheus` datasource, `url: http://host.docker.internal:<crabka_port>`, `isDefault: true`, a fixed `uid`, and `httpHeaderName1: X-Scope-OrgID` / `httpHeaderValue1: grafana` so Grafana sends the tenant header). Set `GF_AUTH_ANONYMOUS_ENABLED=true`, `GF_AUTH_ANONYMOUS_ORG_ROLE=Admin` so the test calls the API without login.
+> - **Datasource provisioning:** mount a `datasources.yaml` (`apiVersion: 1`, a `prometheus` datasource, `url: http://host.docker.internal:<krabka_port>`, `isDefault: true`, a fixed `uid`, and `httpHeaderName1: X-Scope-OrgID` / `httpHeaderValue1: grafana` so Grafana sends the tenant header). Set `GF_AUTH_ANONYMOUS_ENABLED=true`, `GF_AUTH_ANONYMOUS_ORG_ROLE=Admin` so the test calls the API without login.
 > - **Host reach:** start Crabka bound to `0.0.0.0` and pass the container `--add-host=host.docker.internal:host-gateway` (Linux) so the datasource URL resolves; document this as the platform-specific knob.
 > - **Drive:** `POST /api/ds/query` with a Prometheus query payload referencing the datasource `uid`; assert HTTP 200 + the result frames are non-empty and carry the seeded series. (This proves the full Grafana → Prometheus-datasource → Crabka path renders, the spec's "assert they render".)
 > - **Scope:** one instant + one range query is sufficient; this is an integration smoke, not a second differential corpus.
@@ -958,14 +958,14 @@ Create `crates/metrics/tests/grafana_integration.rs` with the provisioning + dri
 
 - [ ] **Step 2: Run to verify ignored + runnable**
 
-Run (default): `cargo test -p crabka-metrics --test grafana_integration` → `0 run, 1 ignored`.
-Run (Docker): `cargo test -p crabka-metrics --test grafana_integration -- --ignored --nocapture` → PASS.
+Run (default): `cargo test -p krabka-metrics --test grafana_integration` → `0 run, 1 ignored`.
+Run (Docker): `cargo test -p krabka-metrics --test grafana_integration -- --ignored --nocapture` → PASS.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
-cargo clippy -p crabka-metrics --all-targets
+cargo fmt -p krabka-metrics
+cargo clippy -p krabka-metrics --all-targets
 git add crates/metrics/
 git commit -m "test(metrics): Grafana built-in Prometheus datasource integration (ignored, Docker)"
 ```
@@ -980,8 +980,8 @@ git commit -m "test(metrics): Grafana built-in Prometheus datasource integration
 
 **Interfaces:**
 - Produces:
-  - A **`metrics-conformance`** CI job (Linux): `cargo test -p crabka-metrics --test promql_conformance` (and the `crabka-promql` harness tests) — runs on every PR as a **gate**; uploads `target/promql-conformance-report.txt` as an artifact.
-  - A **`metrics-differential`** CI job (Linux, Docker available): `cargo test -p crabka-metrics -- --ignored` scoped to the three Docker suites (`diff_prometheus`, `diff_mimir`, `grafana_integration`) — runs on a schedule + on-demand label (not every PR, to keep PR latency low), mirroring how the repo gates other Docker-heavy suites (`client-core-integration`). Document that these never run in the default `cargo test --workspace`.
+  - A **`metrics-conformance`** CI job (Linux): `cargo test -p krabka-metrics --test promql_conformance` (and the `krabka-promql` harness tests) — runs on every PR as a **gate**; uploads `target/promql-conformance-report.txt` as an artifact.
+  - A **`metrics-differential`** CI job (Linux, Docker available): `cargo test -p krabka-metrics -- --ignored` scoped to the three Docker suites (`diff_prometheus`, `diff_mimir`, `grafana_integration`) — runs on a schedule + on-demand label (not every PR, to keep PR latency low), mirroring how the repo gates other Docker-heavy suites (`client-core-integration`). Document that these never run in the default `cargo test --workspace`.
 
 - [ ] **Step 1: Add the two CI jobs**
 
@@ -989,18 +989,18 @@ Add `metrics-conformance` (every PR) and `metrics-differential` (scheduled/label
 
 - [ ] **Step 2: Verify locally**
 
-Run the default suite (no Docker): `cargo test -p crabka-metrics` → all non-ignored pass, the three Docker suites report ignored.
-Run the gate: `cargo test -p crabka-metrics --test promql_conformance` → PASS.
+Run the default suite (no Docker): `cargo test -p krabka-metrics` → all non-ignored pass, the three Docker suites report ignored.
+Run the gate: `cargo test -p krabka-metrics --test promql_conformance` → PASS.
 
 - [ ] **Step 3: Final whole-crate gate**
 
-Run: `cargo test -p crabka-metrics && cargo clippy -p crabka-metrics --all-targets && cargo fmt -p crabka-metrics --check`
+Run: `cargo test -p krabka-metrics && cargo clippy -p krabka-metrics --all-targets && cargo fmt -p krabka-metrics --check`
 Expected: all PASS, no warnings, formatting clean. (Docker suites remain ignored.)
 
 - [ ] **Step 4: Commit**
 
 ```bash
-cargo fmt -p crabka-metrics
+cargo fmt -p krabka-metrics
 git add .github/ crates/metrics/ docs/
 git commit -m "ci(metrics): conformance gate + dedicated metrics-differential Docker job"
 ```
@@ -1030,8 +1030,8 @@ git commit -m "ci(metrics): conformance gate + dedicated metrics-differential Do
 
 **No-back-compat respected.** No `#[serde(default)]`-as-compat-shim, no version variants, no migration. The single `#[serde(default)]` use (Task 2, `PartialLimits`) is the *partial-config mechanism* (a tenant overrides only named fields), explicitly distinguished in-task from a compat shim, with a code comment so a reviewer doesn't misflag it.
 
-**Placeholder scan.** Every task has a failing-test → run-fails-with-expected → real-code → run-passes → commit cycle with concrete `cargo test -p crabka-metrics …` commands and assert2 assertions. The Docker tasks (10/11/12), where literal code would be guesswork against live container behavior, instead provide a **fully specified harness structure** — exact image/tag knobs, the one-write-two-destinations data-load mechanism, the settle/wait strategy, the assertion, and an explicit known-divergence list — which is the honest level of detail for a black-box external suite, not a placeholder.
+**Placeholder scan.** Every task has a failing-test → run-fails-with-expected → real-code → run-passes → commit cycle with concrete `cargo test -p krabka-metrics …` commands and assert2 assertions. The Docker tasks (10/11/12), where literal code would be guesswork against live container behavior, instead provide a **fully specified harness structure** — exact image/tag knobs, the one-write-two-destinations data-load mechanism, the settle/wait strategy, the assertion, and an explicit known-divergence list — which is the honest level of detail for a black-box external suite, not a placeholder.
 
 **Type/name consistency.** `Limits` field set is identical across Tasks 1/2/3/7 and every test (`ingestion_rate`, `max_global_series_per_user`, `max_label_name_length`/`value`, `max_fetched_series_per_query`, `max_samples_per_query`, `max_query_length_secs`, `max_query_lookback_secs`). `LimitError` variants and their `http_status`/`error_type` mapping are defined once (Task 1) and asserted unchanged in Tasks 3/7. The remote_read function set (`decode_read_request`/`encode_read_response`/`matchers_to_selectors`/`series_to_timeseries`) is consistent between Tasks 4 and 5. The `support::metrics_server` and `support::diff_corpus` helper signatures are fixed in Tasks 6/9 and consumed unchanged in Tasks 5/7/10/11/12.
 
-**Known risks (flagged).** (1) `crabka-metrics` needs `TokenBucket` but the existing `crabka_broker` bucket has no independent-burst knob (`set_rate` clamps the initial budget to `rate`), so honoring Mimir's independent `ingestion_burst_size` requires both a code change and avoiding a heavy/cyclic dep on the broker. Task 3 resolves both by lifting `bucket.rs` into a tiny `crabka-throttle` crate and adding `set_rate_with_burst(rate, burst)` there (broker re-exports it, so its public path is unchanged); a `burst != rate` test pins the new behavior. (2) Docker-host reachability for Grafana (Task 12) is platform-specific (`host.docker.internal` + `--add-host`); flagged with the exact knob. (3) Mimir/Prometheus internal-label and header noise (Tasks 10/11) is contained by `normalize` + an explicit per-suite `KNOWN_DIVERGENCE` list rather than loosening the differ. (4) The `.test` corpus + remote_read proto must pin the **same** Prometheus tag (Tasks 4/8) — called out in both tasks.
+**Known risks (flagged).** (1) `krabka-metrics` needs `TokenBucket` but the existing `krabka_broker` bucket has no independent-burst knob (`set_rate` clamps the initial budget to `rate`), so honoring Mimir's independent `ingestion_burst_size` requires both a code change and avoiding a heavy/cyclic dep on the broker. Task 3 resolves both by lifting `bucket.rs` into a tiny `krabka-throttle` crate and adding `set_rate_with_burst(rate, burst)` there (broker re-exports it, so its public path is unchanged); a `burst != rate` test pins the new behavior. (2) Docker-host reachability for Grafana (Task 12) is platform-specific (`host.docker.internal` + `--add-host`); flagged with the exact knob. (3) Mimir/Prometheus internal-label and header noise (Tasks 10/11) is contained by `normalize` + an explicit per-suite `KNOWN_DIVERGENCE` list rather than loosening the differ. (4) The `.test` corpus + remote_read proto must pin the **same** Prometheus tag (Tasks 4/8) — called out in both tasks.

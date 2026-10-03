@@ -26,9 +26,9 @@ pub(super) struct LateralBinder<'a> {
     pub(super) scalar_lookups: Vec<CorrelatedScalarLookup>,
 }
 
-const INITPLAN_MARKER: &str = "\0crabka_initplan";
-const INITPLAN_LHS_MARKER: &str = "\0crabka_initplan_lhs";
-const SCALAR_LOOKUP_MARKER: &str = "\0crabka_scalar_lookup";
+const INITPLAN_MARKER: &str = "\0krabka_initplan";
+const INITPLAN_LHS_MARKER: &str = "\0krabka_initplan_lhs";
+const SCALAR_LOOKUP_MARKER: &str = "\0krabka_scalar_lookup";
 
 pub(super) struct LazyInitPlan {
     pub(super) template: Expr,
@@ -37,7 +37,7 @@ pub(super) struct LazyInitPlan {
 }
 
 pub(super) struct CorrelatedScalarLookup {
-    pub(super) query: crabka_pgparser::ast::QueryExpr,
+    pub(super) query: krabka_pgparser::ast::QueryExpr,
     /// The inner relation, behind the proof that the session may read it and
     /// that no policy filters it.
     ///
@@ -168,7 +168,7 @@ fn resolve_correlated_scalar_fallback(
 ) -> Result<Expr, ExecError> {
     let temporary = read_ctx.statement_memory.reserve();
     let mut query = plan.query.clone();
-    let crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Select(select)) =
+    let krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Select(select)) =
         &mut query.body
     else {
         unreachable!("a scalar lookup plan always has one SELECT body")
@@ -247,10 +247,10 @@ impl<'a> LateralBinder<'a> {
     /// and falls back to the lateral scope.
     pub(super) fn bind(
         &mut self,
-        te: &crabka_pgparser::ast::TableExpr,
+        te: &krabka_pgparser::ast::TableExpr,
         outer: &Scope,
         row: &[Datum],
-    ) -> (crabka_pgparser::ast::TableExpr, Option<String>) {
+    ) -> (krabka_pgparser::ast::TableExpr, Option<String>) {
         let mut bound = te.clone();
         let ctes = self.ctes.child();
         let mut pass = BindPass {
@@ -275,10 +275,10 @@ impl<'a> LateralBinder<'a> {
     /// relation qualifier.
     pub(super) fn bind_query(
         &mut self,
-        query: &crabka_pgparser::ast::QueryExpr,
+        query: &krabka_pgparser::ast::QueryExpr,
         outer: &Scope,
         row: &[Datum],
-    ) -> Result<(crabka_pgparser::ast::QueryExpr, bool), ExecError> {
+    ) -> Result<(krabka_pgparser::ast::QueryExpr, bool), ExecError> {
         let mut bound = query.clone();
         let ctes = self.ctes.child();
         let mut pass = BindPass {
@@ -457,7 +457,7 @@ impl Shadow {
         catalog_kv: &dyn Kv,
         resolution: &crate::relname::ResolutionScope,
         ctes: &crate::cte::CteContext,
-        from: &[crabka_pgparser::ast::TableExpr],
+        from: &[krabka_pgparser::ast::TableExpr],
     ) {
         collect_qualifiers(from, &mut self.qualifiers);
         match from_column_names(catalog_kv, resolution, ctes, from) {
@@ -487,7 +487,7 @@ fn from_column_names(
     catalog_kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
     ctes: &crate::cte::CteContext,
-    from: &[crabka_pgparser::ast::TableExpr],
+    from: &[krabka_pgparser::ast::TableExpr],
 ) -> Option<Vec<String>> {
     if from.is_empty() {
         return Some(Vec::new());
@@ -507,7 +507,7 @@ fn from_column_names(
 
 impl BindPass<'_, '_> {
     /// The shadow in force inside a query block whose FROM list is `from`.
-    fn extended(&mut self, shadow: &Shadow, from: &[crabka_pgparser::ast::TableExpr]) -> Shadow {
+    fn extended(&mut self, shadow: &Shadow, from: &[krabka_pgparser::ast::TableExpr]) -> Shadow {
         let mut next = shadow.clone();
         collect_qualifiers(from, &mut next.qualifiers);
         match self.describe(from) {
@@ -522,7 +522,7 @@ impl BindPass<'_, '_> {
     }
 
     /// The column names `from` supplies, cached across outer rows.
-    fn describe(&mut self, from: &[crabka_pgparser::ast::TableExpr]) -> Option<Vec<String>> {
+    fn describe(&mut self, from: &[krabka_pgparser::ast::TableExpr]) -> Option<Vec<String>> {
         let index = self.visited;
         self.visited += 1;
         let walk = self.binder.walk;
@@ -541,8 +541,8 @@ impl BindPass<'_, '_> {
         self.binder.described[walk][index].clone()
     }
 
-    fn table_expr(&mut self, te: &mut crabka_pgparser::ast::TableExpr, shadow: &Shadow) {
-        use crabka_pgparser::ast::TableExpr;
+    fn table_expr(&mut self, te: &mut krabka_pgparser::ast::TableExpr, shadow: &Shadow) {
+        use krabka_pgparser::ast::TableExpr;
         match te {
             TableExpr::Table { .. } => {}
             TableExpr::Derived { subquery, .. } => self.query(subquery, shadow),
@@ -573,14 +573,14 @@ impl BindPass<'_, '_> {
                 let inner = self.extended(&inner, std::slice::from_ref(right));
                 self.table_expr(left, shadow);
                 self.table_expr(right, shadow);
-                if let crabka_pgparser::ast::JoinConstraint::On(expr) = constraint {
+                if let krabka_pgparser::ast::JoinConstraint::On(expr) = constraint {
                     self.expr(expr, &inner);
                 }
             }
         }
     }
 
-    fn query(&mut self, query: &mut crabka_pgparser::ast::QueryExpr, shadow: &Shadow) {
+    fn query(&mut self, query: &mut krabka_pgparser::ast::QueryExpr, shadow: &Shadow) {
         let parent_ctes = self.ctes.clone();
         // A CTE inside a lateral item may reference the outer row too, so the
         // WITH list is part of the walk. Describe each bound item in declaration
@@ -588,10 +588,10 @@ impl BindPass<'_, '_> {
         if let Some(with) = &mut query.with {
             for cte in &mut with.ctes {
                 match &mut cte.body {
-                    crabka_pgparser::ast::CteBody::Query(body) => self.query(body, shadow),
+                    krabka_pgparser::ast::CteBody::Query(body) => self.query(body, shadow),
                     // A data-modifying CTE is not a lateral read path; leaving it
                     // alone keeps the reference to be reported by name resolution.
-                    crabka_pgparser::ast::CteBody::Dml(_) => {}
+                    krabka_pgparser::ast::CteBody::Dml(_) => {}
                 }
                 if let Ok(relation) = crate::cte::describe_cte_relation(
                     self.binder.catalog_kv,
@@ -606,7 +606,7 @@ impl BindPass<'_, '_> {
         }
         self.set_expr(&mut query.body, shadow);
         let order_shadow = match &query.body {
-            crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Select(
+            krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Select(
                 select,
             )) => {
                 let mut inner = self.extended(shadow, &select.from);
@@ -638,8 +638,8 @@ impl BindPass<'_, '_> {
         self.ctes = parent_ctes;
     }
 
-    fn set_expr(&mut self, body: &mut crabka_pgparser::ast::SetExpr, shadow: &Shadow) {
-        use crabka_pgparser::ast::{QueryBody, SetExpr};
+    fn set_expr(&mut self, body: &mut krabka_pgparser::ast::SetExpr, shadow: &Shadow) {
+        use krabka_pgparser::ast::{QueryBody, SetExpr};
         match body {
             SetExpr::Query(QueryBody::Select(select)) => {
                 for item in &mut select.from {
@@ -819,8 +819,8 @@ impl BindPass<'_, '_> {
 
 /// Every qualifier a FROM list introduces (alias if present, else the relation
 /// or function name).
-pub(super) fn collect_qualifiers(from: &[crabka_pgparser::ast::TableExpr], out: &mut Vec<String>) {
-    use crabka_pgparser::ast::TableExpr;
+pub(super) fn collect_qualifiers(from: &[krabka_pgparser::ast::TableExpr], out: &mut Vec<String>) {
+    use krabka_pgparser::ast::TableExpr;
     for item in from {
         match item {
             TableExpr::Table { name, alias, .. } => {
@@ -867,7 +867,7 @@ fn select_exprs(select: &SelectStmt) -> Vec<&Expr> {
     out.extend(&select.group_by);
     out.extend(&select.having);
     out.extend(select.order_by.iter().map(|item| &item.expr));
-    if let crabka_pgparser::ast::DistinctClause::On(on) = &select.distinct {
+    if let krabka_pgparser::ast::DistinctClause::On(on) = &select.distinct {
         out.extend(on);
     }
     for call in &select.window_calls {
@@ -875,7 +875,7 @@ fn select_exprs(select: &SelectStmt) -> Vec<&Expr> {
             out.extend(args);
         }
         out.extend(&call.filter);
-        if let crabka_pgparser::ast::WindowRef::Spec(spec) = &call.over {
+        if let krabka_pgparser::ast::WindowRef::Spec(spec) = &call.over {
             out.extend(window_spec_exprs(spec));
         }
     }
@@ -885,18 +885,18 @@ fn select_exprs(select: &SelectStmt) -> Vec<&Expr> {
     out
 }
 
-fn window_spec_exprs(spec: &crabka_pgparser::ast::WindowSpec) -> Vec<&Expr> {
+fn window_spec_exprs(spec: &krabka_pgparser::ast::WindowSpec) -> Vec<&Expr> {
     let mut out = Vec::new();
     out.extend(&spec.partition_by);
     out.extend(spec.order_by.iter().map(|item| &item.expr));
     if let Some(frame) = &spec.frame {
         for bound in [&frame.start, &frame.end] {
             match bound {
-                crabka_pgparser::ast::FrameBound::Preceding(expr)
-                | crabka_pgparser::ast::FrameBound::Following(expr) => out.push(expr),
-                crabka_pgparser::ast::FrameBound::UnboundedPreceding
-                | crabka_pgparser::ast::FrameBound::CurrentRow
-                | crabka_pgparser::ast::FrameBound::UnboundedFollowing => {}
+                krabka_pgparser::ast::FrameBound::Preceding(expr)
+                | krabka_pgparser::ast::FrameBound::Following(expr) => out.push(expr),
+                krabka_pgparser::ast::FrameBound::UnboundedPreceding
+                | krabka_pgparser::ast::FrameBound::CurrentRow
+                | krabka_pgparser::ast::FrameBound::UnboundedFollowing => {}
             }
         }
     }
@@ -915,7 +915,7 @@ fn select_exprs_mut(select: &mut SelectStmt) -> Vec<&mut Expr> {
     out.extend(select.group_by.iter_mut());
     out.extend(select.having.iter_mut());
     out.extend(select.order_by.iter_mut().map(|item| &mut item.expr));
-    if let crabka_pgparser::ast::DistinctClause::On(on) = &mut select.distinct {
+    if let krabka_pgparser::ast::DistinctClause::On(on) = &mut select.distinct {
         out.extend(on.iter_mut());
     }
     for call in &mut select.window_calls {
@@ -923,7 +923,7 @@ fn select_exprs_mut(select: &mut SelectStmt) -> Vec<&mut Expr> {
             out.extend(args);
         }
         out.extend(call.filter.iter_mut());
-        if let crabka_pgparser::ast::WindowRef::Spec(spec) = &mut call.over {
+        if let krabka_pgparser::ast::WindowRef::Spec(spec) = &mut call.over {
             out.extend(window_spec_exprs_mut(spec));
         }
     }
@@ -933,18 +933,18 @@ fn select_exprs_mut(select: &mut SelectStmt) -> Vec<&mut Expr> {
     out
 }
 
-fn window_spec_exprs_mut(spec: &mut crabka_pgparser::ast::WindowSpec) -> Vec<&mut Expr> {
+fn window_spec_exprs_mut(spec: &mut krabka_pgparser::ast::WindowSpec) -> Vec<&mut Expr> {
     let mut out = Vec::new();
     out.extend(&mut spec.partition_by);
     out.extend(spec.order_by.iter_mut().map(|item| &mut item.expr));
     if let Some(frame) = &mut spec.frame {
         for bound in [&mut frame.start, &mut frame.end] {
             match bound {
-                crabka_pgparser::ast::FrameBound::Preceding(expr)
-                | crabka_pgparser::ast::FrameBound::Following(expr) => out.push(expr),
-                crabka_pgparser::ast::FrameBound::UnboundedPreceding
-                | crabka_pgparser::ast::FrameBound::CurrentRow
-                | crabka_pgparser::ast::FrameBound::UnboundedFollowing => {}
+                krabka_pgparser::ast::FrameBound::Preceding(expr)
+                | krabka_pgparser::ast::FrameBound::Following(expr) => out.push(expr),
+                krabka_pgparser::ast::FrameBound::UnboundedPreceding
+                | krabka_pgparser::ast::FrameBound::CurrentRow
+                | krabka_pgparser::ast::FrameBound::UnboundedFollowing => {}
             }
         }
     }
@@ -1033,10 +1033,10 @@ pub(super) fn scalar_lookup_parts(expr: &Expr) -> Option<(usize, &Expr)> {
 
 fn plan_correlated_scalar_lookup(
     read_ctx: &crate::subquery::SubCtx<'_>,
-    query: &crabka_pgparser::ast::QueryExpr,
+    query: &krabka_pgparser::ast::QueryExpr,
     outer: &Scope,
 ) -> Result<Option<(CorrelatedScalarLookup, Expr)>, ExecError> {
-    use crabka_pgparser::ast::{DistinctClause, QueryBody, SetExpr, TableExpr};
+    use krabka_pgparser::ast::{DistinctClause, QueryBody, SetExpr, TableExpr};
 
     if query.with.is_some()
         || !query.order_by.is_empty()
@@ -1088,9 +1088,9 @@ fn plan_correlated_scalar_lookup(
         name,
         SchemaDisposition::Reference,
     )?;
-    let table = match crabka_pgcatalog::get_table(read_ctx.catalog_kv, &resolved_name) {
+    let table = match krabka_pgcatalog::get_table(read_ctx.catalog_kv, &resolved_name) {
         Ok(table) => table,
-        Err(crabka_pgcatalog::CatalogError::UndefinedTable(_)) => return Ok(None),
+        Err(krabka_pgcatalog::CatalogError::UndefinedTable(_)) => return Ok(None),
         Err(error) => return Err(error.into()),
     };
     // A materialized view whose contents have never been computed is an error
@@ -1211,10 +1211,10 @@ fn plan_correlated_scalar_lookup(
 
 fn plan_correlated_exists_lookup(
     read_ctx: &crate::subquery::SubCtx<'_>,
-    query: &crabka_pgparser::ast::QueryExpr,
+    query: &krabka_pgparser::ast::QueryExpr,
     outer: &Scope,
 ) -> Result<Option<(CorrelatedScalarLookup, Expr)>, ExecError> {
-    use crabka_pgparser::ast::{QueryBody, SetExpr};
+    use krabka_pgparser::ast::{QueryBody, SetExpr};
 
     if query.limit.is_some() {
         return Ok(None);
@@ -1454,13 +1454,13 @@ pub(super) fn resolve_uncorrelated_derived_projections(
 
 fn resolve_derived_query_projections(
     read_ctx: &crate::subquery::SubCtx<'_>,
-    query: &mut crabka_pgparser::ast::QueryExpr,
+    query: &mut krabka_pgparser::ast::QueryExpr,
     outer: &Scope,
     resolve_projections: bool,
 ) -> Result<(), ExecError> {
     if let Some(with) = &mut query.with {
         for cte in &mut with.ctes {
-            if let crabka_pgparser::ast::CteBody::Query(query) = &mut cte.body {
+            if let krabka_pgparser::ast::CteBody::Query(query) = &mut cte.body {
                 resolve_derived_query_projections(read_ctx, query, outer, false)?;
             }
         }
@@ -1470,11 +1470,11 @@ fn resolve_derived_query_projections(
 
 fn resolve_derived_set_projections(
     read_ctx: &crate::subquery::SubCtx<'_>,
-    body: &mut crabka_pgparser::ast::SetExpr,
+    body: &mut krabka_pgparser::ast::SetExpr,
     outer: &Scope,
     resolve_projections: bool,
 ) -> Result<(), ExecError> {
-    use crabka_pgparser::ast::{QueryBody, SetExpr};
+    use krabka_pgparser::ast::{QueryBody, SetExpr};
 
     match body {
         SetExpr::Query(QueryBody::Select(select)) => {
@@ -1512,14 +1512,14 @@ fn resolve_derived_set_projections(
 
 fn resolve_derived_table_projections(
     read_ctx: &crate::subquery::SubCtx<'_>,
-    table: &mut crabka_pgparser::ast::TableExpr,
+    table: &mut krabka_pgparser::ast::TableExpr,
     outer: &Scope,
 ) -> Result<(), ExecError> {
     match table {
-        crabka_pgparser::ast::TableExpr::Derived {
+        krabka_pgparser::ast::TableExpr::Derived {
             subquery, lateral, ..
         } => resolve_derived_query_projections(read_ctx, subquery, outer, !*lateral),
-        crabka_pgparser::ast::TableExpr::Join { left, right, .. } => {
+        krabka_pgparser::ast::TableExpr::Join { left, right, .. } => {
             resolve_derived_table_projections(read_ctx, left, outer)?;
             resolve_derived_table_projections(read_ctx, right, outer)
         }
@@ -1876,7 +1876,7 @@ impl OuterAggregatePass<'_, '_> {
     /// `enclosing` (outermost first). An empty `enclosing` puts `expr` at the
     /// statement's own level, where an aggregate is already
     /// [`crate::grouping::is_grouping_query`]'s business.
-    fn expr(&self, expr: &Expr, enclosing: &[&[crabka_pgparser::ast::TableExpr]]) -> bool {
+    fn expr(&self, expr: &Expr, enclosing: &[&[krabka_pgparser::ast::TableExpr]]) -> bool {
         if !enclosing.is_empty()
             && let Expr::Func(call) = expr
             && crate::agg::is_aggregate_call(call)
@@ -1892,14 +1892,14 @@ impl OuterAggregatePass<'_, '_> {
 
     fn query(
         &self,
-        query: &crabka_pgparser::ast::QueryExpr,
-        enclosing: &[&[crabka_pgparser::ast::TableExpr]],
+        query: &krabka_pgparser::ast::QueryExpr,
+        enclosing: &[&[krabka_pgparser::ast::TableExpr]],
     ) -> bool {
         // A tail ORDER BY / LIMIT is evaluated at the query's own level, so it
         // walks under whatever FROM its body introduces. A set operation has no
         // single such FROM; its branches each describe their own.
         let body_from = match &query.body {
-            crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Select(
+            krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Select(
                 select,
             )) => select.from.as_slice(),
             _ => &[],
@@ -1918,19 +1918,19 @@ impl OuterAggregatePass<'_, '_> {
                 .iter()
                 .flat_map(|with| &with.ctes)
                 .any(|cte| match &cte.body {
-                    crabka_pgparser::ast::CteBody::Query(body) => self.query(body, enclosing),
+                    krabka_pgparser::ast::CteBody::Query(body) => self.query(body, enclosing),
                     // A data-modifying CTE is not a read path this rewrite ever
                     // reaches; whatever it references is resolved elsewhere.
-                    crabka_pgparser::ast::CteBody::Dml(_) => false,
+                    krabka_pgparser::ast::CteBody::Dml(_) => false,
                 })
     }
 
     fn set_expr(
         &self,
-        body: &crabka_pgparser::ast::SetExpr,
-        enclosing: &[&[crabka_pgparser::ast::TableExpr]],
+        body: &krabka_pgparser::ast::SetExpr,
+        enclosing: &[&[krabka_pgparser::ast::TableExpr]],
     ) -> bool {
-        use crabka_pgparser::ast::{QueryBody, SetExpr};
+        use krabka_pgparser::ast::{QueryBody, SetExpr};
         match body {
             SetExpr::Query(QueryBody::Select(select)) => {
                 let inner = [enclosing, &[select.from.as_slice()]].concat();
@@ -1958,10 +1958,10 @@ impl OuterAggregatePass<'_, '_> {
     /// sits one level down from the query the item belongs to — not inside it.
     fn table_expr(
         &self,
-        te: &crabka_pgparser::ast::TableExpr,
-        enclosing: &[&[crabka_pgparser::ast::TableExpr]],
+        te: &krabka_pgparser::ast::TableExpr,
+        enclosing: &[&[krabka_pgparser::ast::TableExpr]],
     ) -> bool {
-        use crabka_pgparser::ast::TableExpr;
+        use krabka_pgparser::ast::TableExpr;
         match te {
             TableExpr::Table { .. } => false,
             TableExpr::Derived { subquery, .. } => self.query(subquery, enclosing),
@@ -1991,7 +1991,7 @@ impl OuterAggregatePass<'_, '_> {
                 .concat();
                 self.table_expr(left, enclosing)
                     || self.table_expr(right, enclosing)
-                    || matches!(constraint, crabka_pgparser::ast::JoinConstraint::On(on)
+                    || matches!(constraint, krabka_pgparser::ast::JoinConstraint::On(on)
                         if self.expr(on, &inner))
             }
         }
@@ -2002,7 +2002,7 @@ impl OuterAggregatePass<'_, '_> {
     fn belongs_to_statement(
         &self,
         call: &FuncCall,
-        enclosing: &[&[crabka_pgparser::ast::TableExpr]],
+        enclosing: &[&[krabka_pgparser::ast::TableExpr]],
     ) -> bool {
         let reach = self.levels.reach_of(call, enclosing);
         reach.unknown || (reach.statement && !reach.enclosing)
@@ -2015,7 +2015,7 @@ impl AggregateLevels<'_, '_> {
     fn reach_of(
         &self,
         call: &FuncCall,
-        enclosing: &[&[crabka_pgparser::ast::TableExpr]],
+        enclosing: &[&[krabka_pgparser::ast::TableExpr]],
     ) -> AggregateReach {
         let mut covered = Shadow::default();
         for from in enclosing {
@@ -2084,12 +2084,12 @@ impl AggregateLevels<'_, '_> {
 
     fn reach_query(
         &self,
-        query: &crabka_pgparser::ast::QueryExpr,
+        query: &krabka_pgparser::ast::QueryExpr,
         covered: &Shadow,
         local: &Shadow,
         reach: &mut AggregateReach,
     ) {
-        let crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Select(select)) =
+        let krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Select(select)) =
             &query.body
         else {
             // A set operation or nested body reads names this pass does not lay
@@ -2184,8 +2184,8 @@ pub(super) struct FromClauseAggregatePass<'a, 'b> {
 /// A pure AST walk with no catalog reads, which is what keeps
 /// [`FromClauseAggregatePass`] free for the FROM clauses — nearly all of them —
 /// that cannot trip the rule.
-fn from_item_calls_aggregate(te: &crabka_pgparser::ast::TableExpr) -> bool {
-    use crabka_pgparser::ast::{JoinConstraint, TableExpr};
+fn from_item_calls_aggregate(te: &krabka_pgparser::ast::TableExpr) -> bool {
+    use krabka_pgparser::ast::{JoinConstraint, TableExpr};
     match te {
         TableExpr::Table { .. } => false,
         TableExpr::Derived { subquery, .. } => query_calls_aggregate(subquery),
@@ -2221,8 +2221,8 @@ fn expr_calls_aggregate(expr: &Expr) -> bool {
 }
 
 /// The [`from_item_calls_aggregate`] pre-filter over one query expression.
-fn query_calls_aggregate(query: &crabka_pgparser::ast::QueryExpr) -> bool {
-    use crabka_pgparser::ast::{CteBody, QueryBody, SetExpr};
+fn query_calls_aggregate(query: &krabka_pgparser::ast::QueryExpr) -> bool {
+    use krabka_pgparser::ast::{CteBody, QueryBody, SetExpr};
     fn body(set: &SetExpr) -> bool {
         match set {
             SetExpr::Query(QueryBody::Select(select)) => {
@@ -2259,10 +2259,10 @@ impl FromClauseAggregatePass<'_, '_> {
     /// the level rule.
     pub(super) fn check(
         &self,
-        te: &crabka_pgparser::ast::TableExpr,
-        constraint: &crabka_pgparser::ast::JoinConstraint,
+        te: &krabka_pgparser::ast::TableExpr,
+        constraint: &krabka_pgparser::ast::JoinConstraint,
     ) -> Result<(), ExecError> {
-        if let crabka_pgparser::ast::JoinConstraint::On(on) = constraint {
+        if let krabka_pgparser::ast::JoinConstraint::On(on) = constraint {
             self.expr(on, &[], Self::owning(FromAggregateSite::JoinCondition))?;
         }
         self.table_expr(te)
@@ -2278,8 +2278,8 @@ impl FromClauseAggregatePass<'_, '_> {
     /// A FROM item is transformed at the level that owns it, so nothing its own
     /// FROM clause introduces is in scope for it yet — which is why `enclosing`
     /// starts empty however deep the join tree is.
-    fn table_expr(&self, te: &crabka_pgparser::ast::TableExpr) -> Result<(), ExecError> {
-        use crabka_pgparser::ast::{JoinConstraint, TableExpr};
+    fn table_expr(&self, te: &krabka_pgparser::ast::TableExpr) -> Result<(), ExecError> {
+        use krabka_pgparser::ast::{JoinConstraint, TableExpr};
         if !from_item_calls_aggregate(te) {
             return Ok(());
         }
@@ -2331,7 +2331,7 @@ impl FromClauseAggregatePass<'_, '_> {
     fn expr(
         &self,
         expr: &Expr,
-        enclosing: &[&[crabka_pgparser::ast::TableExpr]],
+        enclosing: &[&[krabka_pgparser::ast::TableExpr]],
         ctx: FromAggregateContext,
     ) -> Result<(), ExecError> {
         if let Expr::Func(call) = expr
@@ -2354,11 +2354,11 @@ impl FromClauseAggregatePass<'_, '_> {
 
     fn query(
         &self,
-        query: &crabka_pgparser::ast::QueryExpr,
-        enclosing: &[&[crabka_pgparser::ast::TableExpr]],
+        query: &krabka_pgparser::ast::QueryExpr,
+        enclosing: &[&[krabka_pgparser::ast::TableExpr]],
         ctx: FromAggregateContext,
     ) -> Result<(), ExecError> {
-        use crabka_pgparser::ast::{CteBody, QueryBody, SetExpr};
+        use krabka_pgparser::ast::{CteBody, QueryBody, SetExpr};
         // A tail ORDER BY / LIMIT is evaluated at the query's own level, so it
         // walks under whatever FROM its body introduces. A set operation has no
         // single such FROM; its branches each describe their own.
@@ -2389,11 +2389,11 @@ impl FromClauseAggregatePass<'_, '_> {
 
     fn set_expr(
         &self,
-        body: &crabka_pgparser::ast::SetExpr,
-        enclosing: &[&[crabka_pgparser::ast::TableExpr]],
+        body: &krabka_pgparser::ast::SetExpr,
+        enclosing: &[&[krabka_pgparser::ast::TableExpr]],
         ctx: FromAggregateContext,
     ) -> Result<(), ExecError> {
-        use crabka_pgparser::ast::{QueryBody, SetExpr};
+        use krabka_pgparser::ast::{QueryBody, SetExpr};
         match body {
             SetExpr::Query(QueryBody::Select(select)) => {
                 let inner = [enclosing, &[select.from.as_slice()]].concat();
@@ -2426,11 +2426,11 @@ impl FromClauseAggregatePass<'_, '_> {
     /// so the site stays the one the outermost item fixed.
     fn nested_table_expr(
         &self,
-        te: &crabka_pgparser::ast::TableExpr,
-        enclosing: &[&[crabka_pgparser::ast::TableExpr]],
+        te: &krabka_pgparser::ast::TableExpr,
+        enclosing: &[&[krabka_pgparser::ast::TableExpr]],
         ctx: FromAggregateContext,
     ) -> Result<(), ExecError> {
-        use crabka_pgparser::ast::{JoinConstraint, TableExpr};
+        use krabka_pgparser::ast::{JoinConstraint, TableExpr};
         let ctx = ctx.nested();
         match te {
             TableExpr::Table { .. } => Ok(()),
@@ -2483,7 +2483,7 @@ impl FromClauseAggregatePass<'_, '_> {
     fn belongs_to_this_level(
         &self,
         call: &FuncCall,
-        enclosing: &[&[crabka_pgparser::ast::TableExpr]],
+        enclosing: &[&[krabka_pgparser::ast::TableExpr]],
         ctx: FromAggregateContext,
     ) -> bool {
         let reach = self.levels.reach_of(call, enclosing);

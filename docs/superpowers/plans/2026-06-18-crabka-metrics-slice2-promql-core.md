@@ -1,4 +1,4 @@
-# crabka-metrics Slice 2 — `crabka-promql` core (parser + operator pattern + selectors + rate-family + aggregations + binary ops + `.test` harness)
+# krabka-metrics Slice 2 — `krabka-promql` core (parser + operator pattern + selectors + rate-family + aggregations + binary ops + `.test` harness)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -6,16 +6,16 @@
 
 **Goal:** Build the core of the PromQL engine — parse PromQL with `promql-parser`, lower the AST onto a DataFusion `LogicalPlan` using the GreptimeDB-proven custom range-vector operator pattern (`SeriesDivide`/`SeriesNormalize`/`InstantManipulate`/`RangeManipulate` + the `RangeArray` Arrow array), implement the rate-family ScalarUDFs (the byte-exact counter-reset + extrapolation algorithm), the core aggregations (`sum`/`avg`/`min`/`max`/`count` with `by`/`without`), and binary ops (arithmetic + comparison with `on`/`ignoring` one-to-one matching and the `bool` modifier) — then drive it from `query_instant`/`query_range` over a step grid honoring lookback-delta + staleness, assemble `QueryResult`, and verify with a Prometheus `.test` conformance harness over an `InMemoryMetricStore`. The long-tail function catalog, `histogram_quantile`, and subqueries are deferred to Slice 3.
 
-**Architecture:** A query crate `crabka-promql` that depends on DataFusion (same git pin as blockstore) and `promql-parser`. The engine is generic over a `MetricStore` trait that yields a DataFusion `SessionContext` with float and/or histogram tables registered for a (tenant, matchers, time-range) scan — production wires this to `crabka-blockstore::BlockStore::scan_context` (Slice 5), but this slice ships an `InMemoryMetricStore` test impl so the engine is independently testable. Range-vector semantics have no native DataFusion equivalent, so we reimplement them as four `UserDefinedLogicalNodeCore` operators each with a matching `ExecutionPlan` + `RecordBatchStream`, fed by a custom list-like `RangeArray` Arrow array (each cell is a slice of a contiguous backing array = "the samples in this step's lookback window"). `rate`/`increase`/`delta`/`irate`/`idelta` are `ScalarUDF`s over the `RangeArray`-paired (timestamps, values) columns, not UDAFs. The planner recurses the AST into a `LogicalPlan`; `query_instant`/`query_range` build the step grid, execute the plan, and assemble a Prometheus-shaped `QueryResult`.
+**Architecture:** A query crate `krabka-promql` that depends on DataFusion (same git pin as blockstore) and `promql-parser`. The engine is generic over a `MetricStore` trait that yields a DataFusion `SessionContext` with float and/or histogram tables registered for a (tenant, matchers, time-range) scan — production wires this to `krabka-blockstore::BlockStore::scan_context` (Slice 5), but this slice ships an `InMemoryMetricStore` test impl so the engine is independently testable. Range-vector semantics have no native DataFusion equivalent, so we reimplement them as four `UserDefinedLogicalNodeCore` operators each with a matching `ExecutionPlan` + `RecordBatchStream`, fed by a custom list-like `RangeArray` Arrow array (each cell is a slice of a contiguous backing array = "the samples in this step's lookback window"). `rate`/`increase`/`delta`/`irate`/`idelta` are `ScalarUDF`s over the `RangeArray`-paired (timestamps, values) columns, not UDAFs. The planner recurses the AST into a `LogicalPlan`; `query_instant`/`query_range` build the step grid, execute the plan, and assemble a Prometheus-shaped `QueryResult`.
 
-**Tech Stack:** Rust 2024 · `datafusion` (git `main`, pinned — see Global Constraints) · `arrow` 59 · `promql-parser` 0.10 · `async-trait` · `tokio` · `futures` · `thiserror`. Depends on `crabka-blockstore` (types: `LabelMatcher`, `MatchOp`, `Labels`, `SeriesFingerprint`) and `crabka-metrics` (Slice 1: `NativeHistogram`, schema builders, codecs, `COL_FINGERPRINT`/`COL_TIMESTAMP`). Tests: `assert2`, `proptest`, `tokio` (`macros`, `rt-multi-thread`).
+**Tech Stack:** Rust 2024 · `datafusion` (git `main`, pinned — see Global Constraints) · `arrow` 59 · `promql-parser` 0.10 · `async-trait` · `tokio` · `futures` · `thiserror`. Depends on `krabka-blockstore` (types: `LabelMatcher`, `MatchOp`, `Labels`, `SeriesFingerprint`) and `krabka-metrics` (Slice 1: `NativeHistogram`, schema builders, codecs, `COL_FINGERPRINT`/`COL_TIMESTAMP`). Tests: `assert2`, `proptest`, `tokio` (`macros`, `rt-multi-thread`).
 
 ## Global Constraints
 
 - **No backwards compatibility.** Crabka is greenfield/undeployed. No `#[serde(default)]` shims, no V2-alongside-V1 enum variants, no migration code, no default-off feature gates. Change schemas/enums/interfaces freely. (Only Kafka wire compat matters — and this crate touches none of it.)
 - **`unsafe_code = "forbid"`** workspace-wide. No `unsafe` — including in the custom `RangeArray` (build it on safe arrow buffer/offset APIs).
-- **Lints:** `clippy::pedantic` is `warn` workspace-wide (`module_name_repetitions`, `missing_errors_doc`, `missing_panics_doc` allowed). New code must be clippy-pedantic clean. Run `cargo clippy -p crabka-promql --all-targets` before each commit.
-- **Formatting:** run `cargo fmt -p crabka-promql` before every commit. **NEVER** run `cargo +nightly fmt --all` — it fails with OS error 206 / path-too-long in deep worktrees on Windows; always scope with `-p`.
+- **Lints:** `clippy::pedantic` is `warn` workspace-wide (`module_name_repetitions`, `missing_errors_doc`, `missing_panics_doc` allowed). New code must be clippy-pedantic clean. Run `cargo clippy -p krabka-promql --all-targets` before each commit.
+- **Formatting:** run `cargo fmt -p krabka-promql` before every commit. **NEVER** run `cargo +nightly fmt --all` — it fails with OS error 206 / path-too-long in deep worktrees on Windows; always scope with `-p`.
 - **Assertions:** use `assert2::assert!` / `assert2::check!` in tests, `prop_assert*` inside `proptest!`.
 - **Async tests:** `#[tokio::test]`. Crate dev-dep `tokio` features = `["macros", "rt-multi-thread"]`.
 - **Dependency pin (locked):** `datafusion = { git = "https://github.com/apache/datafusion", rev = "0838a4ddb902535b0e95a1c5a254be7e9c7fe9bf" }`. This `main` revision tracks arrow 59 / parquet 59 / object_store 0.13.2, which unify with the workspace pins (same major → cargo unifies to one crate instance, so arrow types cross the DataFusion boundary cleanly). Do **not** substitute a released `datafusion` (54.x is on arrow 58 and pulls a second, incompatible arrow major). `promql-parser = "0.10"` is parser-only (no arrow/DataFusion deps) — it cannot cause a version clash.
@@ -28,14 +28,14 @@
 ## Dependency & slice roadmap
 
 **Depends on:**
-- `crabka-blockstore` (built — logs wedge Phase 1): `BlockStore`, `BlockStore::scan_context(tenant, &[LabelMatcher], min_ts: i64, max_ts: i64, schema: SchemaRef) -> Result<(SessionContext, String)>`, `Index`, `Labels`, `SeriesFingerprint = u64`, `LabelMatcher { name, op, value }`, `MatchOp { Eq, Neq, Re, Nre }`. Mandatory block columns `series_fingerprint: UInt64`, `timestamp: Int64`. **This slice consumes only the *types* (`LabelMatcher`/`MatchOp`/`Labels`/`SeriesFingerprint`)** — the `BlockStore`-backed `MetricStore` impl lands in Slice 5; here we ship `InMemoryMetricStore`.
-- `crabka-metrics` (built — Slice 1): `NativeHistogram`, `BucketSpan`, `ResetHint`, `float_sample_schema()` / `native_histogram_schema()`, `encode/decode_native_histograms`, `encode/decode_float_samples`, `COL_FINGERPRINT` / `COL_TIMESTAMP`.
+- `krabka-blockstore` (built — logs wedge Phase 1): `BlockStore`, `BlockStore::scan_context(tenant, &[LabelMatcher], min_ts: i64, max_ts: i64, schema: SchemaRef) -> Result<(SessionContext, String)>`, `Index`, `Labels`, `SeriesFingerprint = u64`, `LabelMatcher { name, op, value }`, `MatchOp { Eq, Neq, Re, Nre }`. Mandatory block columns `series_fingerprint: UInt64`, `timestamp: Int64`. **This slice consumes only the *types* (`LabelMatcher`/`MatchOp`/`Labels`/`SeriesFingerprint`)** — the `BlockStore`-backed `MetricStore` impl lands in Slice 5; here we ship `InMemoryMetricStore`.
+- `krabka-metrics` (built — Slice 1): `NativeHistogram`, `BucketSpan`, `ResetHint`, `float_sample_schema()` / `native_histogram_schema()`, `encode/decode_native_histograms`, `encode/decode_float_samples`, `COL_FINGERPRINT` / `COL_TIMESTAMP`.
 
 **The 8 metrics slices** (this plan = Slice 2; each later slice gets its own plan):
 
 1. **Data layer** — block schemas + native-histogram codec + symbol table. *(built)*
-2. **`crabka-promql` core** *(this plan)* — parser + operator pattern + selectors + rate-family + aggregations + binary ops + `.test` harness.
-3. **Query completeness** — `histogram_quantile` (classic + native), full function catalog, subqueries, `@`/`offset` general form. **Reuses this slice's operators (`SeriesDivide`/`SeriesNormalize`/`InstantManipulate`/`RangeManipulate`/`RangeArray`), the `InMemoryMetricStore` test double, and the `.test` DSL harness (`crabka_promql::testkit::{run_test_file(&TestFile), run_test_path(&str)}`) — those public names are frozen here.**
+2. **`krabka-promql` core** *(this plan)* — parser + operator pattern + selectors + rate-family + aggregations + binary ops + `.test` harness.
+3. **Query completeness** — `histogram_quantile` (classic + native), full function catalog, subqueries, `@`/`offset` general form. **Reuses this slice's operators (`SeriesDivide`/`SeriesNormalize`/`InstantManipulate`/`RangeManipulate`/`RangeArray`), the `InMemoryMetricStore` test double, and the `.test` DSL harness (`krabka_promql::testkit::{run_test_file(&TestFile), run_test_path(&str)}`) — those public names are frozen here.**
 4. **Ingest service** — remote_write v1/v2 + OTLP + Kafka produce + distributor + HA dedup + compactor.
 5. **Querier + Prometheus HTTP API** + hot/cold merge. **Replaces `InMemoryMetricStore` with a `BlockStore`-backed `MetricStore` — the trait is frozen here.**
 6. **Query-frontend** — split / shard / cache.
@@ -103,7 +103,7 @@ pub enum PromqlError { Parse(String), Plan(String), Exec(String), Store(String),
 //       pub async fn run_test_file(file: &TestFile) -> Result<(), PromqlError>;
 //       pub async fn run_test_path(path: &str)  -> Result<(), PromqlError>;
 //   }
-//   (both also re-exported at the crate root: crabka_promql::{run_test_file, run_test_path})
+//   (both also re-exported at the crate root: krabka_promql::{run_test_file, run_test_path})
 ```
 
 ---
@@ -152,14 +152,14 @@ pub enum PromqlError { Parse(String), Plan(String), Exec(String), Store(String),
 - Modify: root `Cargo.toml` (add `promql-parser` to `[workspace.dependencies]`; `datafusion`/`parquet`/`url` already added by the blockstore plan)
 
 **Interfaces:**
-- Produces: a compiling `crabka-promql` crate with `pub fn crate_smoke() -> bool` (placeholder, removed in A2).
+- Produces: a compiling `krabka-promql` crate with `pub fn crate_smoke() -> bool` (placeholder, removed in A2).
 
 - [ ] **Step 1: Add the `promql-parser` workspace dependency**
 
 In root `Cargo.toml`, under `[workspace.dependencies]`, add (near the `datafusion` line the blockstore plan introduced):
 
 ```toml
-# crabka-promql: faithful Prometheus-3.8 PromQL grammar port, parser-only (no
+# krabka-promql: faithful Prometheus-3.8 PromQL grammar port, parser-only (no
 # arrow/DataFusion deps, so it cannot clash with the datafusion arrow pin). We
 # supply our own PromQL->DataFusion planner.
 promql-parser = "0.10"
@@ -171,16 +171,16 @@ promql-parser = "0.10"
 
 ```toml
 [package]
-name = "crabka-promql"
+name = "krabka-promql"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "PromQL engine (parser integration + PromQL->DataFusion planner + range-vector operators) for Crabka's Prometheus/Mimir-equivalent metrics backend"
-repository = "https://github.com/robot-head/crabka"
-homepage = "https://github.com/robot-head/crabka"
-documentation = "https://docs.rs/crabka-promql"
+repository = "https://github.com/krabka-io/gres"
+homepage = "https://github.com/krabka-io/gres"
+documentation = "https://docs.rs/krabka-promql"
 readme = "README.md"
 keywords = ["observability", "prometheus", "promql", "datafusion", "crabka"]
 categories = ["database-implementations"]
@@ -189,8 +189,8 @@ categories = ["database-implementations"]
 workspace = true
 
 [dependencies]
-crabka-blockstore = { path = "../blockstore", version = "0.3.7" }
-crabka-metrics = { path = "../metrics", version = "0.3.7" }
+krabka-blockstore = { path = "../blockstore", version = "0.3.7" }
+krabka-metrics = { path = "../metrics", version = "0.3.7" }
 arrow = { workspace = true }
 datafusion = { workspace = true }
 promql-parser = { workspace = true }
@@ -206,7 +206,7 @@ proptest = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 ```
 
-> Add `crabka-blockstore` and `crabka-metrics` to `[workspace.dependencies]` too if they are not already there (they are introduced by their own slice plans with `path`/`version`). If those crates are not yet present in this tree, the build will fail at this step — land Slices 1 (metrics) and the blockstore plan first.
+> Add `krabka-blockstore` and `krabka-metrics` to `[workspace.dependencies]` too if they are not already there (they are introduced by their own slice plans with `path`/`version`). If those crates are not yet present in this tree, the build will fail at this step — land Slices 1 (metrics) and the blockstore plan first.
 
 - [ ] **Step 3: Create `crates/promql/src/lib.rs` with a placeholder**
 
@@ -238,7 +238,7 @@ mod tests {
 
 - [ ] **Step 4: Build and test**
 
-Run: `cargo test -p crabka-promql`
+Run: `cargo test -p krabka-promql`
 Expected: compiles (first build fetches + compiles DataFusion from git — slow, several minutes, normal) and `smoke` PASSES.
 
 If the build fails with an arrow major mismatch (`expected struct arrow::... found struct arrow::...`), the datafusion rev is wrong — re-confirm the pinned rev tracks arrow 59.
@@ -246,10 +246,10 @@ If the build fails with an arrow major mismatch (`expected struct arrow::... fou
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add Cargo.toml Cargo.lock crates/promql/
-git commit -m "feat(promql): scaffold crabka-promql crate + promql-parser dep"
+git commit -m "feat(promql): scaffold krabka-promql crate + promql-parser dep"
 ```
 
 ---
@@ -293,7 +293,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib error`
+Run: `cargo test -p krabka-promql --lib error`
 Expected: FAIL — `cannot find type PromqlError`.
 
 - [ ] **Step 3: Implement `error.rs`**
@@ -347,14 +347,14 @@ pub(crate) use error::Result;
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --lib error`
+Run: `cargo test -p krabka-promql --lib error`
 Expected: PASS (2 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): PromqlError type + DataFusion conversion"
 ```
@@ -368,7 +368,7 @@ git commit -m "feat(promql): PromqlError type + DataFusion conversion"
 - Modify: `crates/promql/src/lib.rs`
 
 **Interfaces:**
-- Consumes: `crabka_blockstore::Labels`, `crabka_metrics::NativeHistogram`.
+- Consumes: `krabka_blockstore::Labels`, `krabka_metrics::NativeHistogram`.
 - Produces:
   - `pub enum SampleValue { Float(f64), Histogram(NativeHistogram) }` (`Clone`, `Debug`, `PartialEq`)
   - `pub struct InstantSample { pub labels: Labels, pub ts_ms: i64, pub value: SampleValue }` (`Clone`, `Debug`, `PartialEq`)
@@ -385,7 +385,7 @@ Create `crates/promql/src/result.rs`:
 mod tests {
     use super::*;
     use assert2::assert;
-    use crabka_blockstore::Labels;
+    use krabka_blockstore::Labels;
 
     #[test]
     fn result_type_strings_match_prometheus() {
@@ -407,7 +407,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib result`
+Run: `cargo test -p krabka-promql --lib result`
 Expected: FAIL — `cannot find type QueryResult`.
 
 - [ ] **Step 3: Implement `result.rs`**
@@ -418,8 +418,8 @@ Prepend above the `tests` module:
 //! The Prometheus-shaped query result model. A later slice serializes these to
 //! the HTTP API's `data.resultType` + `result` shapes byte-for-byte.
 
-use crabka_blockstore::Labels;
-use crabka_metrics::NativeHistogram;
+use krabka_blockstore::Labels;
+use krabka_metrics::NativeHistogram;
 
 /// A single sample value: a float or a native histogram.
 #[derive(Clone, Debug, PartialEq)]
@@ -472,14 +472,14 @@ Add `mod result;` and `pub use result::{InstantSample, QueryResult, RangeSeries,
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --lib result`
+Run: `cargo test -p krabka-promql --lib result`
 Expected: PASS (2 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): QueryResult / InstantSample / RangeSeries / SampleValue model"
 ```
@@ -493,7 +493,7 @@ git commit -m "feat(promql): QueryResult / InstantSample / RangeSeries / SampleV
 - Modify: `crates/promql/src/lib.rs`
 
 **Interfaces:**
-- Consumes: `crabka_blockstore::{LabelMatcher, Labels}`, `datafusion::prelude::SessionContext`, `PromqlError`.
+- Consumes: `krabka_blockstore::{LabelMatcher, Labels}`, `datafusion::prelude::SessionContext`, `PromqlError`.
 - Produces:
   - `pub struct ScanResult { pub ctx: SessionContext, pub float_table: Option<String>, pub histogram_table: Option<String> }`
   - `#[async_trait::async_trait] pub trait MetricStore: Send + Sync { ... }` with exactly the four methods from the Shared cross-slice contract.
@@ -507,7 +507,7 @@ Create `crates/promql/src/store.rs` (a trivial in-test impl proves the trait is 
 mod tests {
     use super::*;
     use assert2::assert;
-    use crabka_blockstore::Labels;
+    use krabka_blockstore::Labels;
     use datafusion::prelude::SessionContext;
 
     struct Empty;
@@ -517,7 +517,7 @@ mod tests {
         async fn scan(
             &self,
             _tenant: &str,
-            _matchers: &[crabka_blockstore::LabelMatcher],
+            _matchers: &[krabka_blockstore::LabelMatcher],
             _start_ms: i64,
             _end_ms: i64,
         ) -> Result<ScanResult, PromqlError> {
@@ -526,7 +526,7 @@ mod tests {
         async fn label_names(
             &self,
             _tenant: &str,
-            _matchers: &[crabka_blockstore::LabelMatcher],
+            _matchers: &[krabka_blockstore::LabelMatcher],
             _start_ms: i64,
             _end_ms: i64,
         ) -> Result<Vec<String>, PromqlError> {
@@ -536,7 +536,7 @@ mod tests {
             &self,
             _tenant: &str,
             _name: &str,
-            _matchers: &[crabka_blockstore::LabelMatcher],
+            _matchers: &[krabka_blockstore::LabelMatcher],
             _start_ms: i64,
             _end_ms: i64,
         ) -> Result<Vec<String>, PromqlError> {
@@ -545,7 +545,7 @@ mod tests {
         async fn series(
             &self,
             _tenant: &str,
-            _matchers: &[crabka_blockstore::LabelMatcher],
+            _matchers: &[krabka_blockstore::LabelMatcher],
             _start_ms: i64,
             _end_ms: i64,
         ) -> Result<Vec<Labels>, PromqlError> {
@@ -565,7 +565,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib store`
+Run: `cargo test -p krabka-promql --lib store`
 Expected: FAIL — `cannot find type MetricStore`.
 
 - [ ] **Step 3: Implement `store.rs`**
@@ -574,11 +574,11 @@ Prepend above the `tests` module:
 
 ```rust
 //! The data-access seam. The engine is generic over `MetricStore`; production
-//! wires it to `crabka_blockstore::BlockStore::scan_context` (Slice 5), tests use
+//! wires it to `krabka_blockstore::BlockStore::scan_context` (Slice 5), tests use
 //! `InMemoryMetricStore`. `scan` yields a DataFusion `SessionContext` with the
 //! float and/or histogram tables registered for the (tenant, matchers, range).
 
-use crabka_blockstore::{LabelMatcher, Labels};
+use krabka_blockstore::{LabelMatcher, Labels};
 use datafusion::prelude::SessionContext;
 
 use crate::error::PromqlError;
@@ -640,14 +640,14 @@ Add `mod store;` and `pub use store::{MetricStore, ScanResult};`.
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --lib store`
+Run: `cargo test -p krabka-promql --lib store`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cargo fmt -p crabka-promql
-cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql
+cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): MetricStore trait + ScanResult"
 ```
@@ -661,7 +661,7 @@ git commit -m "feat(promql): MetricStore trait + ScanResult"
 - Modify: `crates/promql/src/lib.rs`
 
 **Interfaces:**
-- Consumes: `MetricStore`, `ScanResult`, `crabka_metrics::{float_sample_schema, native_histogram_schema, encode_float_samples, encode_native_histograms, NativeHistogram, COL_FINGERPRINT, COL_TIMESTAMP}`, `crabka_blockstore::{Labels, LabelMatcher, MatchOp, SeriesFingerprint}`, DataFusion `MemTable`.
+- Consumes: `MetricStore`, `ScanResult`, `krabka_metrics::{float_sample_schema, native_histogram_schema, encode_float_samples, encode_native_histograms, NativeHistogram, COL_FINGERPRINT, COL_TIMESTAMP}`, `krabka_blockstore::{Labels, LabelMatcher, MatchOp, SeriesFingerprint}`, DataFusion `MemTable`.
 - Produces:
   - `pub struct InMemoryMetricStore` (`Default`)
   - `pub fn new() -> Self`
@@ -680,7 +680,7 @@ Create `crates/promql/src/in_memory.rs`:
 mod tests {
     use super::*;
     use assert2::assert;
-    use crabka_blockstore::{LabelMatcher, Labels, MatchOp};
+    use krabka_blockstore::{LabelMatcher, Labels, MatchOp};
     use datafusion::arrow::array::AsArray;
 
     fn lbls(pairs: &[(&str, &str)]) -> Labels {
@@ -739,12 +739,12 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib in_memory`
+Run: `cargo test -p krabka-promql --lib in_memory`
 Expected: FAIL — `cannot find type InMemoryMetricStore`.
 
 - [ ] **Step 3: Implement `in_memory.rs`**
 
-Prepend above the `tests` module. The store holds raw samples and builds a `MemTable` per scan; column order matches `crabka_metrics::float_sample_schema()` / `native_histogram_schema()`.
+Prepend above the `tests` module. The store holds raw samples and builds a `MemTable` per scan; column order matches `krabka_metrics::float_sample_schema()` / `native_histogram_schema()`.
 
 ```rust
 //! In-memory `MetricStore` used by the conformance harness and engine tests.
@@ -755,8 +755,8 @@ Prepend above the `tests` module. The store holds raw samples and builds a `MemT
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crabka_blockstore::{LabelMatcher, Labels, MatchOp, SeriesFingerprint};
-use crabka_metrics::{
+use krabka_blockstore::{LabelMatcher, Labels, MatchOp, SeriesFingerprint};
+use krabka_metrics::{
     NativeHistogram, encode_float_samples, encode_native_histograms, float_sample_schema,
     native_histogram_schema,
 };
@@ -968,7 +968,7 @@ impl InMemoryMetricStore {
 }
 ```
 
-> **Dev-dependency note:** `regex` is already a workspace dependency; add `regex = { workspace = true }` to `crabka-promql`'s `[dependencies]` (the matcher anchoring needs it). Add it in this task's `Cargo.toml` edit.
+> **Dev-dependency note:** `regex` is already a workspace dependency; add `regex = { workspace = true }` to `krabka-promql`'s `[dependencies]` (the matcher anchoring needs it). Add it in this task's `Cargo.toml` edit.
 
 - [ ] **Step 4: Wire into `lib.rs`**
 
@@ -976,13 +976,13 @@ Add `mod in_memory;` and `pub use in_memory::InMemoryMetricStore;`.
 
 - [ ] **Step 5: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --lib in_memory`
+Run: `cargo test -p krabka-promql --lib in_memory`
 Expected: PASS (3 tests).
 
 - [ ] **Step 6: Phase A gate + commit**
 
 ```bash
-cargo test -p crabka-promql && cargo clippy -p crabka-promql --all-targets && cargo fmt -p crabka-promql --check
+cargo test -p krabka-promql && cargo clippy -p krabka-promql --all-targets && cargo fmt -p krabka-promql --check
 git add crates/promql/ Cargo.toml
 git commit -m "feat(promql): InMemoryMetricStore test impl over DataFusion MemTables"
 ```
@@ -1058,7 +1058,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib range_array`
+Run: `cargo test -p krabka-promql --lib range_array`
 Expected: FAIL — `cannot find type RangeArray`.
 
 - [ ] **Step 3: Implement `range_array.rs`**
@@ -1131,7 +1131,7 @@ impl RangeArray {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --lib range_array`
+Run: `cargo test -p krabka-promql --lib range_array`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Add the DataFusion-column encoding (the GreptimeDB trick) + its round-trip test**
@@ -1159,8 +1159,8 @@ The operators in B5 / the UDFs in Phase C must pass a `RangeArray` as an Arrow c
 Add `mod range_array;` and `pub use range_array::RangeArray;`.
 
 ```bash
-cargo test -p crabka-promql --lib range_array
-cargo fmt -p crabka-promql && cargo clippy -p crabka-promql --all-targets
+cargo test -p krabka-promql --lib range_array
+cargo fmt -p krabka-promql && cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): RangeArray — windowed view + DataFusion dict-array encoding"
 ```
@@ -1243,7 +1243,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib extension::series_divide`
+Run: `cargo test -p krabka-promql --lib extension::series_divide`
 Expected: FAIL — `cannot find type SeriesDivideExec`.
 
 - [ ] **Step 3: Implement `series_divide.rs`**
@@ -1379,8 +1379,8 @@ Create `crates/promql/src/extension/mod.rs` with `pub mod series_divide;` and a 
 - [ ] **Step 5: Run to verify it passes + commit**
 
 ```bash
-cargo test -p crabka-promql --lib extension::series_divide
-cargo fmt -p crabka-promql && cargo clippy -p crabka-promql --all-targets
+cargo test -p krabka-promql --lib extension::series_divide
+cargo fmt -p krabka-promql && cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): SeriesDivide operator (logical node + exec + stream)"
 ```
@@ -1449,7 +1449,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib extension::normalize`
+Run: `cargo test -p krabka-promql --lib extension::normalize`
 Expected: FAIL — `cannot find type SeriesNormalizeExec`.
 
 - [ ] **Step 3: Implement `normalize.rs`**
@@ -1458,10 +1458,10 @@ Mirror the `SeriesDivide` shape (logical node + exec + stream). In the stream: a
 
 - [ ] **Step 4: Wire + run + commit**
 
-Add to `extension/mod.rs` + `lib.rs`. `cargo test -p crabka-promql --lib extension::normalize` → PASS.
+Add to `extension/mod.rs` + `lib.rs`. `cargo test -p krabka-promql --lib extension::normalize` → PASS.
 
 ```bash
-cargo fmt -p crabka-promql && cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql && cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): SeriesNormalize operator (offset + sort + NaN filter)"
 ```
@@ -1524,7 +1524,7 @@ Logical node + exec + stream. The per-series transform: build, for each grid `t`
 
 - [ ] **Step 5: Phase B gate**
 
-Run: `cargo test -p crabka-promql && cargo clippy -p crabka-promql --all-targets && cargo fmt -p crabka-promql --check`
+Run: `cargo test -p krabka-promql && cargo clippy -p krabka-promql --all-targets && cargo fmt -p krabka-promql --check`
 Expected: all PASS. Commit any fmt/clippy fixups.
 
 ---
@@ -1622,7 +1622,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --lib functions::extrapolate`
+Run: `cargo test -p krabka-promql --lib functions::extrapolate`
 Expected: FAIL — `cannot find function extrapolated_rate`.
 
 - [ ] **Step 3: Implement `extrapolate.rs`**
@@ -1760,7 +1760,7 @@ pub(crate) fn instant_delta(timestamps: &[i64], values: &[f64], kind: IrateFn) -
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-promql --lib functions::extrapolate`
+Run: `cargo test -p krabka-promql --lib functions::extrapolate`
 Expected: PASS (5 tests).
 
 - [ ] **Step 5: Wire `functions/mod.rs` + `lib.rs` + commit**
@@ -1768,7 +1768,7 @@ Expected: PASS (5 tests).
 Create `crates/promql/src/functions/mod.rs` with `pub(crate) mod extrapolate;`; add `mod functions;` to `lib.rs`.
 
 ```bash
-cargo fmt -p crabka-promql && cargo clippy -p crabka-promql --all-targets
+cargo fmt -p krabka-promql && cargo clippy -p krabka-promql --all-targets
 git add crates/promql/
 git commit -m "feat(promql): counter-reset + extrapolation core (rate/increase/delta/irate/idelta)"
 ```
@@ -1833,7 +1833,7 @@ Build each UDF with `ScalarUDF::new_from_impl(...)` over a `struct RateUdf { kin
 - Modify: `crates/promql/src/planner/mod.rs`
 
 **Interfaces:**
-- Consumes: `MetricStore::scan`, `ScanResult`, the operators `SeriesDivide`/`SeriesNormalize`/`InstantManipulate`/`RangeManipulate`, `crabka_blockstore::{LabelMatcher, MatchOp}`, `promql_parser::parser::{VectorSelector, MatrixSelector}`.
+- Consumes: `MetricStore::scan`, `ScanResult`, the operators `SeriesDivide`/`SeriesNormalize`/`InstantManipulate`/`RangeManipulate`, `krabka_blockstore::{LabelMatcher, MatchOp}`, `promql_parser::parser::{VectorSelector, MatrixSelector}`.
 - Produces:
   - `pub(crate) async fn plan_vector_selector(planner, vs: &VectorSelector) -> Result<PlannedQuery, PromqlError>` — converts the selector's matchers (including the `__name__` from the metric name) to `LabelMatcher`s, calls `store.scan(tenant, matchers, start-lookback, end)`, registers the float table, and builds the logical plan `floats -> SeriesDivide -> SeriesNormalize -> InstantManipulate` (the instant-vector pipeline).
   - `pub(crate) async fn plan_matrix_selector(planner, ms: &MatrixSelector) -> Result<PlannedQuery, PromqlError>` — same scan + `SeriesDivide -> SeriesNormalize -> RangeManipulate` (the range-vector pipeline; `range_ms` from the selector).
@@ -1871,7 +1871,7 @@ Build each UDF with `ScalarUDF::new_from_impl(...)` over a `struct RateUdf { kin
 - [ ] **Step 4: Phase C gate + commit**
 
 ```bash
-cargo test -p crabka-promql && cargo clippy -p crabka-promql --all-targets && cargo fmt -p crabka-promql --check
+cargo test -p krabka-promql && cargo clippy -p krabka-promql --all-targets && cargo fmt -p krabka-promql --check
 git add crates/promql/
 git commit -m "feat(promql): lower rate-family calls onto matrix selector + UDF projection"
 ```
@@ -1961,7 +1961,7 @@ mod tests {
     use std::sync::Arc;
 
     use assert2::assert;
-    use crabka_blockstore::Labels;
+    use krabka_blockstore::Labels;
 
     use super::*;
     use crate::in_memory::InMemoryMetricStore;
@@ -2047,7 +2047,7 @@ mod tests {
 - [ ] **Step 5: Phase D gate + commit**
 
 ```bash
-cargo test -p crabka-promql && cargo clippy -p crabka-promql --all-targets && cargo fmt -p crabka-promql --check
+cargo test -p krabka-promql && cargo clippy -p krabka-promql --all-targets && cargo fmt -p krabka-promql --check
 git add crates/promql/
 git commit -m "feat(promql): PromqlEngine — step grid + execution + QueryResult assembly"
 ```
@@ -2111,7 +2111,7 @@ verbatim (cases using Slice-3 features removed) from:
 Prometheus is licensed under the Apache License 2.0. The full license text is in
 the upstream `LICENSE` file. These files retain their original copyright; they are
 used here unmodified except for the removal of test cases exercising features not
-yet implemented in `crabka-promql` (tracked for Slice 3).
+yet implemented in `krabka-promql` (tracked for Slice 3).
 ```
 
 > Replace `<TAG>`/`<SHA>` with the exact pinned values at vendoring time. The full 21-file corpus is wired in Slice 3 — this slice vendors only the two subsets the harness needs to be credible.
@@ -2142,7 +2142,7 @@ Create `crates/promql/tests/conformance.rs`:
 //! Runs the vendored Prometheus `.test` subsets through the engine via the
 //! in-memory store. The headline conformance signal for Slice 2.
 
-use crabka_promql::testkit::run_test_path;
+use krabka_promql::testkit::run_test_path;
 
 async fn run_file(path: &str) {
     // `run_test_path` = read + `parse_test_file` + `run_test_file(&TestFile)`.
@@ -2162,8 +2162,8 @@ async fn functions_subset_conforms() {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-promql --test conformance`
-Expected: FAIL — `cannot find function run_test_path` / unresolved `crabka_promql::testkit` (then, once wired, real conformance failures to drive fixes against).
+Run: `cargo test -p krabka-promql --test conformance`
+Expected: FAIL — `cannot find function run_test_path` / unresolved `krabka_promql::testkit` (then, once wired, real conformance failures to drive fixes against).
 
 - [ ] **Step 3: Implement `runner.rs`** — the statement interpreter (`run_test_file(&TestFile)`) + the `run_test_path(&str)` read+parse+run wrapper + `metric_to_labels` + the `InstantVector`/`expect` comparison (build a `BTreeMap<Labels, f64>` from each side and compare with tolerance). Provide the full real code. Expose both under a `pub mod testkit` (whose `run_test_file`/`run_test_path` are the frozen names Slice 3 consumes); wire it into `conformance/mod.rs` and re-export `testkit` (and `run_test_file`/`run_test_path` at the crate root) from `lib.rs`.
 
@@ -2174,7 +2174,7 @@ Run the conformance test; each real failure is a planner/operator/UDF bug — fi
 - [ ] **Step 5: Final whole-crate gate + commit**
 
 ```bash
-cargo test -p crabka-promql && cargo clippy -p crabka-promql --all-targets && cargo fmt -p crabka-promql --check
+cargo test -p krabka-promql && cargo clippy -p krabka-promql --all-targets && cargo fmt -p krabka-promql --check
 git add crates/promql/
 git commit -m "test(promql): Prometheus .test conformance harness over InMemoryMetricStore"
 ```

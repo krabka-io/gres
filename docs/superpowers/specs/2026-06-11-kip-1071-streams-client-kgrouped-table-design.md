@@ -6,7 +6,7 @@
 
 ## 1. Goal
 
-Add the **table re-grouping + aggregation** path to the `crabka-client-streams`
+Add the **table re-grouping + aggregation** path to the `krabka-client-streams`
 DSL: `KTable<K,V>.group_by(mapper) -> KGroupedTable<KR,VR>` with `count`,
 `reduce(adder, subtractor)`, and `aggregate(init, adder, subtractor)` producing a
 materialized `KTable<KR, T>`.

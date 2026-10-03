@@ -8,7 +8,7 @@ binary CLI/environment surface and thread it through existing owners. Retain
 source partition counts during discovery rather than exposing topology as a
 knob.
 
-**Tech Stack:** Rust, Clap, crabka-units, refined_type, Kafka admin/client APIs.
+**Tech Stack:** Rust, Clap, krabka-units, refined_type, Kafka admin/client APIs.
 
 ### Task 1: Validated process policy
 

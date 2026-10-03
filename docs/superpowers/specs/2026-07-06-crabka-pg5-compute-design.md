@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Subsystem design. The keystone slice of the [Chapter C roadmap](2026-07-06-crabka-postgres-chapter-roadmap-design.md): a real Postgres boots and runs against the disaggregated stack. Structured as **PG-5a** (pageserver readiness, pure Rust) + **PG-5b** (the compute image). **The compute client decision — a Rust cdylib behind a C ABI — was resolved by the user in this cycle**, establishing the workspace's one sanctioned `unsafe` boundary.
+**Type:** Subsystem design. The keystone slice of the [Chapter C roadmap](2026-07-06-krabka-postgres-chapter-roadmap-design.md): a real Postgres boots and runs against the disaggregated stack. Structured as **PG-5a** (pageserver readiness, pure Rust) + **PG-5b** (the compute image). **The compute client decision — a Rust cdylib behind a C ABI — was resolved by the user in this cycle**, establishing the workspace's one sanctioned `unsafe` boundary.
 
 ## Context — what compute actually forces
 
@@ -17,13 +17,13 @@
 **PG-5b — the compute image (the C/fork half).**
 - **A minimal PG-17 core patch:** upstream Postgres through 17 has **no pluggable smgr**, so a small vendored patch adds an smgr-registration hook (the shape the Neon/TDE forks use) — maintained per supported major, applied to pinned PG 17.x sources in the image build. Everything else lives in an extension.
 - **The `crabka` extension (C):** registers the smgr — reads → `GetPage(lsn = flushed WAL position)`, `nblocks` → `GetRelSize` (+ a local size cache maintained by `extend`/`truncate`), `write`/`extend` → **no-ops for data** (WAL is the truth; evicted buffers drop), `exists` via `GetRelSize`. GUCs: pageserver endpoint, tenant/timeline/cluster id.
-- **The client — the resolved crux:** **`crabka-compute-client`**, a Rust **cdylib** exposing a C ABI (`ck_get_page`, `ck_get_rel_size`, `ck_connect`, …) over a **blocking** Connect-unary HTTP/1.1 client (prost + a sync HTTP dep) — smgr calls are synchronous, so no async runtime, no h2, no streaming. Proto codegen is shared with the pageserver: the client can never drift.
+- **The client — the resolved crux:** **`krabka-compute-client`**, a Rust **cdylib** exposing a C ABI (`ck_get_page`, `ck_get_rel_size`, `ck_connect`, …) over a **blocking** Connect-unary HTTP/1.1 client (prost + a sync HTTP dep) — smgr calls are synchronous, so no async runtime, no h2, no streaming. Proto codegen is shared with the pageserver: the client can never drift.
 - **The write path composes what exists:** the patched compute is a stock-shaped *primary* (`wal_level=replica`, `full_page_writes=on` — FPIs remain the redo bases, as PG-3/4 assume); **PG-1's safekeeper attaches to it as a replica**, unchanged.
 
 ## The sanctioned `unsafe` boundary (user decision, encoded)
 
 The workspace forbids `unsafe`; an `extern "C"` ABI cannot exist without it. The exception is **narrow and structural**:
-- Exactly **one** crate (`crabka-compute-client`) declines the workspace lint set; `unsafe` code is confined to a single thin `src/ffi.rs` (pointer/CStr marshalling only — every other module remains `#![forbid(unsafe_code)]` at the module level via lint config), with `unsafe_op_in_unsafe_fn = "deny"` and every `unsafe` block carrying a `// SAFETY:` justification.
+- Exactly **one** crate (`krabka-compute-client`) declines the workspace lint set; `unsafe` code is confined to a single thin `src/ffi.rs` (pointer/CStr marshalling only — every other module remains `#![forbid(unsafe_code)]` at the module level via lint config), with `unsafe_op_in_unsafe_fn = "deny"` and every `unsafe` block carrying a `// SAFETY:` justification.
 - The FFI surface is C-header-generated (`cbindgen`) so the C side never hand-declares signatures.
 - The code style guide gains a paragraph recording this exception and its rules — the precedent is documented, not implicit.
 
@@ -49,7 +49,7 @@ seed_timeline(initdb_dir)                          pinned PG 17.x sources
 live ingest: consume __pg_wal.<cluster>                smgr read    → ck_get_page(rel, blk, lsn)
   → WalStreamDecoder → page-store ingest               smgr nblocks → ck_get_rel_size (+ size cache)
   → last_ingested_lsn                                  write/extend → data no-op (WAL is truth)
-GetPage/GetRelSize: wait last_ingested ≥ lsn         + crabka-compute-client cdylib (Rust):
+GetPage/GetRelSize: wait last_ingested ≥ lsn         + krabka-compute-client cdylib (Rust):
 Basebackup(lsn) → tar: pg_control @ lsn,               blocking Connect unary over h1 (prost)
   SLRUs (PG-4b), seeded nonrel files                   ffi.rs = the one unsafe boundary (cbindgen)
 
@@ -78,7 +78,7 @@ The image build fetches pinned `postgres-17.x` sources, applies vendored `patche
 ## Integration
 
 - **`crates/pageserver`** (extends PG-4's crate) — seeding, live ingest, LSN-wait, `Basebackup` RPC.
-- **`crates/compute-client`** (new, `crabka-compute-client`, cdylib+rlib) — **`publish = false` + release-plz entry**; the lint opt-out + `ffi.rs` + cbindgen header.
+- **`crates/compute-client`** (new, `krabka-compute-client`, cdylib+rlib) — **`publish = false` + release-plz entry**; the lint opt-out + `ffi.rs` + cbindgen header.
 - **`compute/`** (new top-level, outside the Cargo workspace — like `sdks/`) — `patches/pg17/`, the extension C sources, the image build (`packaging/` conventions).
 - **`docs/style_guides/code_style_guide.md`** — the documented `unsafe`-boundary exception.
 - **Prerequisites:** PG-1…PG-4 designs; **PG-4b lands before the boot gate** (SLRUs in basebackup). PG-5a itself needs only PG-2/3/4's crates.

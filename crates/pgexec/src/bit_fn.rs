@@ -13,8 +13,8 @@
 //! here. They live with their text counterparts, so that adding a bit overload
 //! cannot accidentally take the name away from the string one.
 
-use crabka_pgparser::ast::{BinaryOp, Expr, FuncCall};
-use crabka_pgtypes::{BitString, BitwiseOp, ColumnType, Datum};
+use krabka_pgparser::ast::{BinaryOp, Expr, FuncCall};
+use krabka_pgtypes::{BitString, BitwiseOp, ColumnType, Datum};
 
 use crate::{
     clock::EvalCtx,
@@ -267,11 +267,11 @@ pub(crate) fn apply_bit_operator(
             Datum::Int2(n) => i32::from(*n),
             Datum::Int4(n) => *n,
             Datum::Int8(n) => i32::try_from(*n)
-                .map_err(|_| ExecError::Type(crabka_pgtypes::TypeError::Overflow))?,
+                .map_err(|_| ExecError::Type(krabka_pgtypes::TypeError::Overflow))?,
             Datum::Text(text) => text
                 .trim()
                 .parse::<i32>()
-                .map_err(|_| ExecError::Type(crabka_pgtypes::TypeError::Overflow))?,
+                .map_err(|_| ExecError::Type(krabka_pgtypes::TypeError::Overflow))?,
             _ => return Ok(None),
         };
         return Ok(Some(Datum::BitString(if op == BinaryOp::Shl {
@@ -479,12 +479,12 @@ fn int_arg(value: &Datum) -> Result<i32, ExecError> {
         Datum::Int2(n) => Ok(i32::from(*n)),
         Datum::Int4(n) => Ok(*n),
         Datum::Int8(n) => {
-            i32::try_from(*n).map_err(|_| ExecError::Type(crabka_pgtypes::TypeError::Overflow))
+            i32::try_from(*n).map_err(|_| ExecError::Type(krabka_pgtypes::TypeError::Overflow))
         }
         Datum::Text(text) => text
             .trim()
             .parse::<i32>()
-            .map_err(|_| ExecError::Type(crabka_pgtypes::TypeError::Overflow)),
+            .map_err(|_| ExecError::Type(krabka_pgtypes::TypeError::Overflow)),
         other => Err(ExecError::TypeMismatch(format!(
             "argument of bit function must be integer, not {}",
             other.column_type().map_or("unknown", ColumnType::name)
@@ -551,8 +551,8 @@ pub(crate) fn position(haystack: &Datum, needle: &Datum) -> Result<Option<i32>, 
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgparser::ast::BinaryOp;
-    use crabka_pgtypes::{BitString, ColumnType, Datum};
+    use krabka_pgparser::ast::BinaryOp;
+    use krabka_pgtypes::{BitString, ColumnType, Datum};
 
     use super::{apply_bit_operator, is_bit_func, is_bit_type};
 

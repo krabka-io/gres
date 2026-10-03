@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crabka_kafka_tap::{Recorder, frame::CapturedFrame, spawn};
+use krabka_kafka_tap::{Recorder, frame::CapturedFrame, spawn};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();

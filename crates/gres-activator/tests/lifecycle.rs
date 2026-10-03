@@ -7,24 +7,24 @@ use std::{
 };
 
 use assert2::assert;
-use crabka_gres::{
+use krabka_gres::{
     FinalCheckpointer, SuspendMonitorOutcome, SuspendPolicy, SuspendRegistry,
     try_suspend_idle_tenant,
 };
-use crabka_gres_activator::{
+use krabka_gres_activator::{
     ActivatorError, BackendEndpoint, Readiness, WaitForReadyConfig, WakeCoordinator, WakeRegistry,
     WakeRequest,
 };
-use crabka_gres_control::{
+use krabka_gres_control::{
     FinalCheckpoint, SqlUser, TenantId, TenantName, TenantRecord, TenantState,
 };
-use crabka_gres_substrate::{
+use krabka_gres_substrate::{
     GroupCommitRequest, InMemoryWalLog, SubstrateError, TransactionalWalWriter, WalFrame,
     WriterGeneration, recover_after_barrier,
 };
-use crabka_pgkv::{Kv, MemKv, WriteOp};
-use crabka_pgwire::server::ActivityTracker;
-use crabka_units::{ByteSize, convert::ByteSizeExt as _, kibibytes, millis, secs};
+use krabka_pgkv::{Kv, MemKv, WriteOp};
+use krabka_pgwire::server::ActivityTracker;
+use krabka_units::{ByteSize, convert::ByteSizeExt as _, kibibytes, millis, secs};
 use tokio::sync::{Mutex, Notify};
 
 const TENANT: &str = "tenant-a";

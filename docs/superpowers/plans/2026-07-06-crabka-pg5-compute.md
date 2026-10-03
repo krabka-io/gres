@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Boot a real Postgres 17 against the disaggregated stack. **PG-5a:** pageserver readiness — timeline seeding from an `initdb` dir, live topic ingest, LSN-wait on `GetPage`, a `Basebackup` RPC. **PG-5b:** the compute image — a minimal vendored smgr-hook patch over pinned PG-17 sources, a C extension whose smgr calls `crabka-compute-client` (a Rust cdylib behind a C ABI — the workspace's one sanctioned `unsafe` boundary). Gate: pgbench end-to-end (Tier 1, blocked on PG-4b) + page-image differential vs stock PG (Tier 2).
+**Goal:** Boot a real Postgres 17 against the disaggregated stack. **PG-5a:** pageserver readiness — timeline seeding from an `initdb` dir, live topic ingest, LSN-wait on `GetPage`, a `Basebackup` RPC. **PG-5b:** the compute image — a minimal vendored smgr-hook patch over pinned PG-17 sources, a C extension whose smgr calls `krabka-compute-client` (a Rust cdylib behind a C ABI — the workspace's one sanctioned `unsafe` boundary). Gate: pgbench end-to-end (Tier 1, blocked on PG-4b) + page-image differential vs stock PG (Tier 2).
 
 **Architecture:** 5a extends `crates/pageserver` in pure Rust; 5b adds `crates/compute-client` (cdylib) and a non-workspace `compute/` tree (patches, extension C, image build). Compute is a stock-shaped primary; PG-1's safekeeper attaches unchanged, closing the WAL loop.
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `prost` + a blocking HTTP client (no tokio in the cdylib), `cbindgen`, `tar`, `tokio` (pageserver), C + libpq-less extension against patched PG-17 headers, `testcontainers` (+ `postgres` module), `assert2`/`nextest`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-pg5-compute-design.md`](../specs/2026-07-06-crabka-pg5-compute-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-pg5-compute-design.md`](../specs/2026-07-06-krabka-pg5-compute-design.md).
 
 **PREREQUISITES (unlanded):** PG-2, PG-3, PG-4 crates (5a builds on them); PG-1 (the WAL loop for the gate); **PG-4b blocks Task 7's boot gate only** (SLRUs in basebackup). A local/containerized PG 17 for fixtures.
 
@@ -33,10 +33,10 @@
 ## File Structure
 
 - **`crates/pageserver/src/{seed.rs, live_ingest.rs, basebackup.rs}`** + LSN-wait in `service.rs`; proto gains `Basebackup`.
-- **`crates/compute-client/`** (new, cdylib+rlib): `src/{lib.rs, client.rs, ffi.rs}`, `build.rs` (compiles the pageserver proto + runs cbindgen → `include/crabka_compute.h`), own `[lints]` table (the opt-out).
+- **`crates/compute-client/`** (new, cdylib+rlib): `src/{lib.rs, client.rs, ffi.rs}`, `build.rs` (compiles the pageserver proto + runs cbindgen → `include/krabka_compute.h`), own `[lints]` table (the opt-out).
 - **`compute/`** (new, non-workspace): `patches/pg17/0001-smgr-hook.patch`, `extension/{crabka.c, Makefile}`, `image/build.sh` (packaging idiom).
 - **`docs/style_guides/code_style_guide.md`** — the exception paragraph.
-- **`release-plz.toml`** — the `crabka-compute-client` private entry.
+- **`release-plz.toml`** — the `krabka-compute-client` private entry.
 
 **Batching:** Tasks 1–4 (5a) are intra-`pageserver` — 1 → (2 ∥ 3) → 4. Task 5 (cdylib) is parallel with all of 5a. Task 6 (patch/extension/image) after 5. Task 7 (Tier 1, **PG-4b-gated**) and Task 8 (Tier 2 + final gate) last.
 
@@ -125,7 +125,7 @@ git commit -m "feat(pageserver): Basebackup RPC (pg_control patching, pg_control
 
 ---
 
-## Task 5 (5b, ∥ Tasks 1–4): `crabka-compute-client` — the cdylib + the one unsafe boundary
+## Task 5 (5b, ∥ Tasks 1–4): `krabka-compute-client` — the cdylib + the one unsafe boundary
 
 **Files:**
 - Create: `crates/compute-client/{Cargo.toml, build.rs, src/lib.rs, src/client.rs, src/ffi.rs, cbindgen.toml}`
@@ -154,7 +154,7 @@ FFI: a build-time C harness (`cc` crate, dev-only) compiling a caller of `ck_con
 
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-compute-client` → PASS; `./tools/check-publish-allowlist.sh` → 0.
+Run: `cargo test -p krabka-compute-client` → PASS; `./tools/check-publish-allowlist.sh` → 0.
 
 ```bash
 git add crates/compute-client release-plz.toml docs/style_guides/code_style_guide.md
@@ -170,7 +170,7 @@ git commit -m "feat(compute-client): blocking Connect cdylib with the sanctioned
 
 - [ ] **Step 1: The core patch** — against pinned `postgres-17.x` sources: add a registration hook (`typedef const f_smgr *(*smgr_hook_type)(...); extern PGDLLIMPORT smgr_hook_type smgr_hook;`) consulted in the smgr-open dispatch so an extension can substitute the relation smgr table for non-temp relations (~50-line diff, the Neon/TDE fork shape). Vendor the reviewed diff; add the CI check: fetch-pin → `git apply --check`.
 - [ ] **Step 2: The extension** — `crabka.c`: `_PG_init` reads GUCs (`crabka.pageserver_endpoint`, `crabka.tenant/timeline`), `ck_connect`s, installs the hook; the `f_smgr` table: `read → ck_get_page(…, lsn = GetFlushRecPtr())`, `nblocks → ck_get_rel_size` (+ a per-relation size cache updated by `extend`/`truncate`), `write/extend → data no-op + cache`, `exists → ck_get_rel_size ≥ 0`, `unlink → no-op`. Client errors → `ereport(ERROR, …)` naming the pageserver cause. Builds via PGXS against the patched tree.
-- [ ] **Step 3: The image** — `build.sh` (packaging idiom): fetch pinned sources → apply patches → build PG → build the cdylib (`cargo build -p crabka-compute-client --release`) → build the extension → assemble the OCI image (entrypoint: basebackup-fetch into `$PGDATA` if empty, then `postgres`). Verify: the image builds; `postgres --version` runs; the extension loads (`shared_preload_libraries=crabka` against a mock endpoint fails *gracefully* with the documented error).
+- [ ] **Step 3: The image** — `build.sh` (packaging idiom): fetch pinned sources → apply patches → build PG → build the cdylib (`cargo build -p krabka-compute-client --release`) → build the extension → assemble the OCI image (entrypoint: basebackup-fetch into `$PGDATA` if empty, then `postgres`). Verify: the image builds; `postgres --version` runs; the extension loads (`shared_preload_libraries=crabka` against a mock endpoint fails *gracefully* with the documented error).
 - [ ] **Step 4: Commit**
 
 ```bash
@@ -195,7 +195,7 @@ git commit -m "test(pg5): Tier-1 boot gate — pgbench end-to-end on the disaggr
 ## Task 8: Tier-2 fidelity + final gate
 
 - [ ] **Step 1:** The deterministic workload replayed on stock PG 17; compare relation page images at matched LSNs (PG-4's standby-oracle comparator + masking, reused system-level).
-- [ ] **Step 2:** `cargo +nightly fmt --check`; `cargo clippy -p crabka-pageserver -p crabka-compute-client --all-targets -- -D warnings`; `cargo nextest run -p crabka-pageserver -p crabka-compute-client`; `./tools/check-publish-allowlist.sh`; the patch-apply + cbindgen drift checks — all green. Commit.
+- [ ] **Step 2:** `cargo +nightly fmt --check`; `cargo clippy -p krabka-pageserver -p krabka-compute-client --all-targets -- -D warnings`; `cargo nextest run -p krabka-pageserver -p krabka-compute-client`; `./tools/check-publish-allowlist.sh`; the patch-apply + cbindgen drift checks — all green. Commit.
 
 ---
 

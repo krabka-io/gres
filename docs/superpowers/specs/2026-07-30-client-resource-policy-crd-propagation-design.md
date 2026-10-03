@@ -53,10 +53,10 @@ remains shared registry-topic policy.
 
 The activator binary gains the missing standalone
 `--client-dispatch-queue-capacity` /
-`CRABKA_GRES_ACTIVATOR_CLIENT_DISPATCH_QUEUE_CAPACITY`,
-`--client-frame-max` / `CRABKA_GRES_ACTIVATOR_CLIENT_FRAME_MAX`, and
+`KRABKA_GRES_ACTIVATOR_CLIENT_DISPATCH_QUEUE_CAPACITY`,
+`--client-frame-max` / `KRABKA_GRES_ACTIVATOR_CLIENT_FRAME_MAX`, and
 `--registry-reader-fetch-min` /
-`CRABKA_GRES_REGISTRY_READER_FETCH_MIN` inputs. This is required for its CRD
+`KRABKA_GRES_REGISTRY_READER_FETCH_MIN` inputs. This is required for its CRD
 owner to render the same validated settings; it is not a separate policy.
 
 ## Validation

@@ -4,7 +4,7 @@
 //! JSON next to a rendered Markdown summary. [`render_comparison`] lines up
 //! two reports of the same scenario under different timestamp modes.
 //!
-//! Dimensioned fields are [`crabka_units`] quantities. Values that a person
+//! Dimensioned fields are [`krabka_units`] quantities. Values that a person
 //! reads off the report serialize in their human form, such as `"20s"`,
 //! `"512MiB"`, and `"1000/s"`. Those are the applied-fault offsets, the peak
 //! RSS, and the headline rates. Values that a tool compares or plots serialize
@@ -17,7 +17,7 @@ use std::{
     fmt::{self, Write as _},
 };
 
-use crabka_units::{
+use krabka_units::{
     fmt::Human as _,
     prelude::*,
     serde_units::{

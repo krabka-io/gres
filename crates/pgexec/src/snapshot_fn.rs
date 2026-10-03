@@ -13,7 +13,7 @@
 //!
 //! Nothing here is modelled. `pg_current_snapshot()` is the running set the
 //! [`ProcArray`](crate::procarray::ProcArray) already keeps, exported through
-//! [`crabka_pgtypes::snapshot::PgSnapshot::from_running`], which is
+//! [`krabka_pgtypes::snapshot::PgSnapshot::from_running`], which is
 //! `sort_snapshot`. `pg_current_xact_id()` is the same xid the write path
 //! allocates. `pg_xact_status` reads the clog the visibility rules read.
 //!
@@ -48,9 +48,9 @@
 
 use std::borrow::Cow;
 
-use crabka_pgmvcc::clog::XidStatus;
-use crabka_pgparser::ast::{Expr, FuncCall};
-use crabka_pgtypes::{ColumnType, Datum, snapshot::PgSnapshot};
+use krabka_pgmvcc::clog::XidStatus;
+use krabka_pgparser::ast::{Expr, FuncCall};
+use krabka_pgtypes::{ColumnType, Datum, snapshot::PgSnapshot};
 
 use crate::{
     clock::{EvalCtx, TxnRuntime},
@@ -315,12 +315,12 @@ fn assigned_xact_id(txn: &TxnRuntime) -> Option<u64> {
 
 /// `pg_xact_status` over the clog and the running set.
 fn xact_status(ctx: &EvalCtx, txn: &TxnRuntime, xid: u64) -> Result<Datum, ExecError> {
-    if xid == crabka_pgmvcc::xid::INVALID_XID {
+    if xid == krabka_pgmvcc::xid::INVALID_XID {
         // `TransactionIdInRecentPast` refuses an invalid id before it looks at
         // anything else, and the caller turns that refusal into NULL.
         return Ok(Datum::Null);
     }
-    if xid < crabka_pgmvcc::xid::FIRST_NORMAL_XID {
+    if xid < krabka_pgmvcc::xid::FIRST_NORMAL_XID {
         // `TransactionIdInRecentPast` accepts a non-normal id straight away —
         // "for non-normal transaction IDs, we can ignore the epoch" — so this
         // precedes the future test rather than following it.
@@ -354,7 +354,7 @@ fn xact_status(ctx: &EvalCtx, txn: &TxnRuntime, xid: u64) -> Result<Datum, ExecE
     // can retain one while advancing it. A real record is still authoritative:
     // never turn a durable commit or abort into NULL merely because the
     // watermark is ahead of it.
-    if xid < oldest_recorded_xid(kv)? && kv.get(&crabka_pgkv::key::clog_key(xid))?.is_none() {
+    if xid < oldest_recorded_xid(kv)? && kv.get(&krabka_pgkv::key::clog_key(xid))?.is_none() {
         // The entry that would have answered was deleted, so the engine no
         // longer knows and says so. This is `TransactionIdInRecentPast`'s
         // `oldestClogXid` test, and the reason it must not be answered
@@ -362,7 +362,7 @@ fn xact_status(ctx: &EvalCtx, txn: &TxnRuntime, xid: u64) -> Result<Datum, ExecE
         // committed long ago just as often as one that never did.
         return Ok(Datum::Null);
     }
-    Ok(status_text(match crabka_pgmvcc::clog::get(kv, xid)? {
+    Ok(status_text(match krabka_pgmvcc::clog::get(kv, xid)? {
         XidStatus::Committed => "committed",
         // A prepared transaction has not been decided, so from here it is
         // neither of the two outcomes — which is what "in progress" reports.
@@ -385,14 +385,14 @@ fn status_text(status: &str) -> Datum {
 /// floor it truncated to durably. Reading that record is what lets this
 /// function distinguish "never committed" from "no longer known", which are
 /// the same absent key.
-fn oldest_recorded_xid(kv: &dyn crabka_pgkv::Kv) -> Result<u64, ExecError> {
-    match kv.get(&crabka_pgkv::key::clog_scan_lo_key())? {
+fn oldest_recorded_xid(kv: &dyn krabka_pgkv::Kv) -> Result<u64, ExecError> {
+    match kv.get(&krabka_pgkv::key::clog_scan_lo_key())? {
         Some(recorded) if recorded.len() == 8 => Ok(u64::from_be_bytes(
             recorded[..8].try_into().expect("eight bytes make a u64"),
         )),
         // Nothing was ever truncated, so every entry the engine wrote is still
         // there and the floor is the first id it could have written one for.
-        _ => Ok(crabka_pgmvcc::xid::FIRST_NORMAL_XID),
+        _ => Ok(krabka_pgmvcc::xid::FIRST_NORMAL_XID),
     }
 }
 
@@ -404,14 +404,14 @@ fn oldest_recorded_xid(kv: &dyn crabka_pgkv::Kv) -> Result<u64, ExecError> {
 fn xid_arg(fc: &FuncCall, value: &Datum, family: Family, ctx: &EvalCtx) -> Result<u64, ExecError> {
     match (family, value) {
         (Family::Modern, Datum::Xid8(xid)) => Ok(*xid),
-        (Family::Modern, Datum::Text(text)) => Ok(crabka_pgtypes::sysid::uint64_in(text, "xid8")?),
+        (Family::Modern, Datum::Text(text)) => Ok(krabka_pgtypes::sysid::uint64_in(text, "xid8")?),
         // `bigint` is signed, and the id is the same 64 bits under either
         // reading, so a negative one names an id past 2^63 rather than failing.
         (Family::Legacy, Datum::Int8(value)) => Ok(value.cast_unsigned()),
         (Family::Legacy, Datum::Int4(value)) => Ok(i64::from(*value).cast_unsigned()),
         (Family::Legacy, Datum::Int2(value)) => Ok(i64::from(*value).cast_unsigned()),
         (Family::Legacy, Datum::Text(_)) => {
-            match crabka_pgtypes::cast::cast_in(value, ColumnType::Int8, ctx.output_style())? {
+            match krabka_pgtypes::cast::cast_in(value, ColumnType::Int8, ctx.output_style())? {
                 Datum::Int8(value) => Ok(value.cast_unsigned()),
                 other => Err(wrong_arg(fc, &other)),
             }
@@ -430,7 +430,7 @@ fn snapshot_arg<'a>(
     match value {
         Datum::PgSnapshot(snapshot) => Ok(Cow::Borrowed(snapshot)),
         Datum::Text(_) => {
-            match crabka_pgtypes::cast::cast_in(value, ColumnType::PgSnapshot, ctx.output_style())?
+            match krabka_pgtypes::cast::cast_in(value, ColumnType::PgSnapshot, ctx.output_style())?
             {
                 Datum::PgSnapshot(snapshot) => Ok(Cow::Owned(*snapshot)),
                 other => Err(wrong_arg(fc, &other)),
@@ -453,7 +453,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use assert2::assert;
-    use crabka_pgkv::{Kv, MemKv, WriteOp};
+    use krabka_pgkv::{Kv, MemKv, WriteOp};
 
     use super::*;
 
@@ -466,9 +466,9 @@ mod tests {
         );
         let xid = procarray.begin_write().expect("xid");
         kv.write_batch(&[
-            crabka_pgmvcc::clog::put_op(xid, XidStatus::Committed),
+            krabka_pgmvcc::clog::put_op(xid, XidStatus::Committed),
             WriteOp::Put {
-                key: crabka_pgkv::key::clog_scan_lo_key(),
+                key: krabka_pgkv::key::clog_scan_lo_key(),
                 value: (xid + 1).to_be_bytes().to_vec(),
             },
         ])

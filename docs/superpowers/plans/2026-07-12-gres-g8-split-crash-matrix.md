@@ -6,7 +6,7 @@
 
 **Architecture:** A dedicated integration-test binary owns the Split crash model, continuous two-table workload, production reconciliation driver, and terminal verifier. Three shell shards enumerate literal case sets and a standalone validator rejects missing or inconsistent evidence. Existing production code is exercised through the real CLI, broker, mTLS control transport, registry, and topic admin without crash hooks.
 
-**Tech Stack:** Rust/Tokio integration tests, `crabka-gres-control`, `crabka-gres-ranges`, `crabka-operator`, real broker process harness, JSON Lines, Bash, Python 3 evidence validation, Stateright model checking.
+**Tech Stack:** Rust/Tokio integration tests, `krabka-gres-control`, `krabka-gres-ranges`, `krabka-operator`, real broker process harness, JSON Lines, Bash, Python 3 evidence validation, Stateright model checking.
 
 ## Global Constraints
 
@@ -49,7 +49,7 @@ fn split_kill_points_are_exhaustive_unique_and_sharded() {
 
 - [ ] **Step 2: Run the test and verify RED**
 
-Run: `cargo test -p crabka-gres --test topology_process_split_crash split_kill_points_are_exhaustive_unique_and_sharded`
+Run: `cargo test -p krabka-gres --test topology_process_split_crash split_kill_points_are_exhaustive_unique_and_sharded`
 
 Expected: compile failure because `SplitKillPoint` is undefined.
 
@@ -88,7 +88,7 @@ For every `SplitKillPoint`, construct one exact accepted state and then mutate e
 
 - [ ] **Step 5: Run focused tests and verify GREEN**
 
-Run: `cargo test -p crabka-gres --test topology_process_split_crash split_kill_point -- --nocapture`
+Run: `cargo test -p krabka-gres --test topology_process_split_crash split_kill_point -- --nocapture`
 
 Expected: all enum, family, parsing, bounds, and predicate truth-table tests pass.
 
@@ -126,7 +126,7 @@ fn closed_payload_ledger_is_exact_and_fail_closed() {
 
 - [ ] **Step 2: Run parser tests and verify RED**
 
-Run: `cargo test -p crabka-gres --test topology_process_split_crash payload_ledger`
+Run: `cargo test -p krabka-gres --test topology_process_split_crash payload_ledger`
 
 Expected: compile failure because parser/types are undefined.
 
@@ -162,7 +162,7 @@ Compute the maximum `later.timestamp_ms - earlier.timestamp_ms` over consecutive
 
 - [ ] **Step 6: Run focused tests and commit**
 
-Run: `cargo test -p crabka-gres --test topology_process_split_crash payload_ledger -- --nocapture`
+Run: `cargo test -p krabka-gres --test topology_process_split_crash payload_ledger -- --nocapture`
 
 ```bash
 git add crates/gres/tests/topology_process_split_crash.rs
@@ -184,7 +184,7 @@ Create fixture requests for all control operations and assert classification rec
 
 - [ ] **Step 2: Run and verify RED**
 
-Run: `cargo test -p crabka-gres --test topology_process_split_crash control_observation`
+Run: `cargo test -p krabka-gres --test topology_process_split_crash control_observation`
 
 Expected: compile failure because the recording client is undefined.
 
@@ -220,7 +220,7 @@ Use existing durable receipt replay and registry/admin ambiguity facilities: all
 
 - [ ] **Step 6: Add driver model tests and commit**
 
-Run: `cargo test -p crabka-gres --test topology_process_split_crash split_driver -- --nocapture`
+Run: `cargo test -p krabka-gres --test topology_process_split_crash split_driver -- --nocapture`
 
 ```bash
 git add crates/gres/tests/topology_process_split_crash.rs
@@ -242,7 +242,7 @@ Table-drive mutations for wrong phase/layout/version, equal endpoints, wrong gen
 
 - [ ] **Step 2: Run and verify RED**
 
-Run: `cargo test -p crabka-gres --test topology_process_split_crash completed_split_verifier`
+Run: `cargo test -p krabka-gres --test topology_process_split_crash completed_split_verifier`
 
 - [ ] **Step 3: Implement exact marker and physical ownership checks**
 
@@ -258,7 +258,7 @@ Every boolean is computed from captured values immediately before serialization.
 
 - [ ] **Step 6: Run focused tests and commit**
 
-Run: `cargo test -p crabka-gres --test topology_process_split_crash completed_split_verifier -- --nocapture`
+Run: `cargo test -p krabka-gres --test topology_process_split_crash completed_split_verifier -- --nocapture`
 
 ```bash
 git add crates/gres/tests/topology_process_split_crash.rs
@@ -303,7 +303,7 @@ Require exact keys/types, unique tenant/operation identities, exact expected fil
 
 - [ ] **Step 3: Implement family scripts**
 
-Each script builds CLI/GRES once with `--locked`, removes and recreates its target evidence directory, loops over its literal cases, gives each invocation `CRABKA_G8_SPLIT_CRASH=1`, case name, unique evidence path, and `timeout 240s`, then validates the full directory. Use `--exact real_process_split_crash_anywhere --nocapture` so each case is independently reproducible.
+Each script builds CLI/GRES once with `--locked`, removes and recreates its target evidence directory, loops over its literal cases, gives each invocation `KRABKA_G8_SPLIT_CRASH=1`, case name, unique evidence path, and `timeout 240s`, then validates the full directory. Use `--exact real_process_split_crash_anywhere --nocapture` so each case is independently reproducible.
 
 - [ ] **Step 4: Run negative and synthetic-positive validator gates**
 
@@ -345,7 +345,7 @@ Expected: 11, 2, and 6 unique cases pass; every family validator accepts its exa
 
 - [ ] **Step 2: Run existing Split Stateright exhaustive gate**
 
-Run: `cargo test --locked -p crabka-gres-ranges --test split_model -- --nocapture`
+Run: `cargo test --locked -p krabka-gres-ranges --test split_model -- --nocapture`
 
 Expected: the repository's exhaustive Split Stateright model passes with no counterexample. Record the command and explored-state result verbatim in the evidence document.
 
@@ -353,10 +353,10 @@ Expected: the repository's exhaustive Split Stateright model passes with no coun
 
 ```bash
 scripts/tests/gres-topology-process-nemesis-ci.sh
-cargo test --locked -p crabka-gres-ranges transport::tests --lib
-cargo test --locked -p crabka-operator controller::gres_split_operation --lib
-cargo check --locked -p crabka-operator
-cargo test --locked -p crabka-gres --test topology_process_split_crash
+cargo test --locked -p krabka-gres-ranges transport::tests --lib
+cargo test --locked -p krabka-operator controller::gres_split_operation --lib
+cargo check --locked -p krabka-operator
+cargo test --locked -p krabka-gres --test topology_process_split_crash
 ```
 
 Expected: all pass; legacy marker receipt decode remains green.

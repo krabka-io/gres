@@ -1,12 +1,12 @@
 //! `SchemaRegistry` reconciler.
 //!
 //! This reconciler renders a stateless Deployment, a headless Service, and a
-//! `ClusterIP` Service for the `crabka-schema-registry` binary. The
+//! `ClusterIP` Service for the `krabka-schema-registry` binary. The
 //! `crabka.io/cluster` label associates them with a managed `Kafka`.
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use crabka_units::{
+use krabka_units::{
     ByteSize, Time,
     convert::{ByteSizeExt as _, TimeExt as _},
     fmt::Human as _,
@@ -43,13 +43,13 @@ use crate::{
     },
 };
 
-const APP_NAME: &str = "crabka-schema-registry";
+const APP_NAME: &str = "krabka-schema-registry";
 const SR_PORT: i32 = 8081;
 const DEFAULT_ELECTION_SESSION_TIMEOUT: Time = secs(10);
 const DEFAULT_ELECTION_REBALANCE_TIMEOUT: Time = secs(30);
 const DEFAULT_ELECTION_HEARTBEAT_INTERVAL: Time = secs(3);
 const DEFAULT_IMAGE: &str = concat!(
-    "ghcr.io/robot-head/crabka-schema-registry:",
+    "ghcr.io/robot-head/krabka-schema-registry:",
     env!("CARGO_PKG_VERSION")
 );
 
@@ -358,12 +358,12 @@ fn validate_config(spec: &SchemaRegistrySpec) -> Result<(), String> {
     if let Some(runtime) = &spec.runtime {
         runtime
             .client_dispatch_queue_capacity
-            .map(crabka_client_core::ConnectionDispatchQueueCapacity::new)
+            .map(krabka_client_core::ConnectionDispatchQueueCapacity::new)
             .transpose()
             .map_err(|error| format!("spec.runtime.clientDispatchQueueCapacity: {error}"))?;
         runtime
             .client_frame_max
-            .map(crabka_client_core::ClientFrameMax::try_from)
+            .map(krabka_client_core::ClientFrameMax::try_from)
             .transpose()
             .map_err(|error| format!("spec.runtime.clientFrameMax: {error}"))?;
         validate_protocol_millis_i32(
@@ -402,14 +402,14 @@ fn validate_config(spec: &SchemaRegistrySpec) -> Result<(), String> {
         ] {
             if value.is_some_and(|value| {
                 !value.secs_f64().is_finite()
-                    || value <= <Time as crabka_units::convert::TimeExt>::ZERO
+                    || value <= <Time as krabka_units::convert::TimeExt>::ZERO
             }) {
                 return Err(format!("{path}: must be positive"));
             }
         }
         if runtime.forward_max_body.is_some_and(|value| {
             !value.bytes_f64().is_finite()
-                || value <= <ByteSize as crabka_units::convert::ByteSizeExt>::ZERO
+                || value <= <ByteSize as krabka_units::convert::ByteSizeExt>::ZERO
         }) {
             return Err("spec.runtime.forwardMaxBody: must be positive".into());
         }
@@ -483,7 +483,7 @@ fn validate_config(spec: &SchemaRegistrySpec) -> Result<(), String> {
         .and_then(|authn| authn.bearer.as_ref())
         .and_then(|bearer| bearer.jwks_refresh)
         && (!refresh.secs_f64().is_finite()
-            || refresh <= <Time as crabka_units::convert::TimeExt>::ZERO)
+            || refresh <= <Time as krabka_units::convert::TimeExt>::ZERO)
     {
         return Err("spec.authentication.bearer.jwksRefresh: must be positive".into());
     }
@@ -492,7 +492,7 @@ fn validate_config(spec: &SchemaRegistrySpec) -> Result<(), String> {
         .as_ref()
         .and_then(|authz| authz.acl_refresh)
         && (!refresh.secs_f64().is_finite()
-            || refresh <= <Time as crabka_units::convert::TimeExt>::ZERO)
+            || refresh <= <Time as krabka_units::convert::TimeExt>::ZERO)
     {
         return Err("spec.authorization.aclRefresh: must be positive".into());
     }
@@ -524,7 +524,7 @@ fn meta_labels(obj: &SchemaRegistry) -> BTreeMap<String, String> {
     m.insert("app.kubernetes.io/version".into(), "0.1.1".into());
     m.insert(
         "app.kubernetes.io/managed-by".into(),
-        "crabka-operator".into(),
+        "krabka-operator".into(),
     );
     m
 }
@@ -981,7 +981,7 @@ mod tests {
         );
         registry.spec.runtime = Some(crate::crd::SchemaRegistryRuntime {
             client_dispatch_queue_capacity: Some(7),
-            client_frame_max: Some(crabka_units::kibibytes(32)),
+            client_frame_max: Some(krabka_units::kibibytes(32)),
             ..crate::crd::SchemaRegistryRuntime::default()
         });
 

@@ -40,10 +40,10 @@
 
 use std::collections::BTreeSet;
 
-use crabka_pgcatalog::{RelationName, Table};
-use crabka_pgkv::Kv;
-use crabka_pgparser::ast::{Expr, FuncCall, QueryBody, SelectItem, SetExpr, Statement, TableExpr};
-use crabka_pgtypes::{ColumnType, Datum, Tid};
+use krabka_pgcatalog::{RelationName, Table};
+use krabka_pgkv::Kv;
+use krabka_pgparser::ast::{Expr, FuncCall, QueryBody, SelectItem, SetExpr, Statement, TableExpr};
+use krabka_pgtypes::{ColumnType, Datum, Tid};
 
 use crate::{
     clock::EvalCtx,
@@ -140,7 +140,7 @@ fn latest_tid(
         crate::exec::relation_kind(catalog, &name).ok_or_else(|| parsed.undefined_table())?;
     match kind {
         "view" => {
-            let view = crabka_pgcatalog::get_view(catalog, &name)?;
+            let view = krabka_pgcatalog::get_view(catalog, &name)?;
             require_select(catalog, ctx, &view.name, &view.owner, RelationKind::View)?;
             view_latest_tid(catalog, data, ctx, &view, tid, depth)
         }
@@ -157,7 +157,7 @@ fn latest_tid(
             Ok(tid)
         }
         _ => {
-            let table = crabka_pgcatalog::get_table(catalog, &name).map_err(|_| {
+            let table = krabka_pgcatalog::get_table(catalog, &name).map_err(|_| {
                 // Every other kind reaching here is a relation the catalog
                 // synthesises, which has rows to read and no storage they are
                 // read from.
@@ -200,17 +200,17 @@ fn table_latest_tid(
                 "currtid2 encountered a cyclic update chain".into(),
             ));
         }
-        let versions = data.scan_prefix(&crabka_pgkv::key::row_key(table.id, rowid))?;
+        let versions = data.scan_prefix(&krabka_pgkv::key::row_key(table.id, rowid))?;
         let tuple_target = versions.into_iter().try_fold(None, |target, (_, bytes)| {
             let (_, _, _, _, _, update_target) =
-                crabka_pgmvcc::version::decode_tuple_with_command_ids_and_update_target(&bytes)?;
-            Ok::<_, crabka_pgkv::KvError>(update_target.or(target))
+                krabka_pgmvcc::version::decode_tuple_with_command_ids_and_update_target(&bytes)?;
+            Ok::<_, krabka_pgkv::KvError>(update_target.or(target))
         })?;
         let next_rowid = match tuple_target {
             Some(target) => Some(target),
             None => data
-                .get(&crabka_pgkv::key::update_target_key(table.id, rowid))?
-                .map(|value| crabka_pgkv::key::update_target_of(&value))
+                .get(&krabka_pgkv::key::update_target_key(table.id, rowid))?
+                .map(|value| krabka_pgkv::key::update_target_of(&value))
                 .transpose()?,
         };
         let Some(next_rowid) = next_rowid else {
@@ -237,7 +237,7 @@ fn view_latest_tid(
     catalog: &dyn Kv,
     data: &dyn Kv,
     ctx: &EvalCtx,
-    view: &crabka_pgcatalog::View,
+    view: &krabka_pgcatalog::View,
     tid: Tid,
     depth: usize,
 ) -> Result<Tid, ExecError> {
@@ -263,8 +263,8 @@ fn view_latest_tid(
 /// The relation a view's `ctid` output column is the `ctid` *of*, written as a
 /// name [`latest_tid`] can resolve, or `None` when the body does not select one
 /// relation's own `ctid` into that position.
-fn ctid_source(view: &crabka_pgcatalog::View, ordinal: usize) -> Option<String> {
-    let statements = crabka_pgparser::parse(&view.definition).ok()?;
+fn ctid_source(view: &krabka_pgcatalog::View, ordinal: usize) -> Option<String> {
+    let statements = krabka_pgparser::parse(&view.definition).ok()?;
     let [Statement::Query(query)] = statements.as_slice() else {
         return None;
     };
@@ -323,7 +323,7 @@ fn valid_in_relation(data: &dyn Kv, table: &Table, tid: Tid) -> Result<(), ExecE
         return Err(invalid_tid(tid, &table.name));
     }
     let first = crate::scope::first_identity_in_block(tid.block);
-    let snapshot = crabka_pgmvcc::visibility::Snapshot {
+    let snapshot = krabka_pgmvcc::visibility::Snapshot {
         xmin: 0,
         xmax: u64::MAX,
         xip: Vec::new(),
@@ -361,7 +361,7 @@ fn invalid_tid(tid: Tid, name: &RelationName) -> ExecError {
 fn no_storage(name: &RelationName) -> ExecError {
     ExecError::Unsupported(format!(
         "cannot look at latest visible tid for relation \"{}.{}\"",
-        crabka_pgcatalog::displayed_schema(&name.schema),
+        krabka_pgcatalog::displayed_schema(&name.schema),
         name.name
     ))
 }
@@ -416,7 +416,7 @@ fn tid_arg(value: &Datum, ctx: &EvalCtx) -> Result<Tid, ExecError> {
     match value {
         Datum::Tid(tid) => Ok(*tid),
         Datum::Text(_) => {
-            match crabka_pgtypes::cast::cast_in(value, ColumnType::Tid, ctx.output_style())? {
+            match krabka_pgtypes::cast::cast_in(value, ColumnType::Tid, ctx.output_style())? {
                 Datum::Tid(tid) => Ok(tid),
                 other => Err(ExecError::TypeMismatch(format!(
                     "currtid2 argument must be tid, not {}",
@@ -434,7 +434,7 @@ fn tid_arg(value: &Datum, ctx: &EvalCtx) -> Result<Tid, ExecError> {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+    use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
     use crate::SqlEngine;
 

@@ -8,7 +8,7 @@
 //! error.
 
 use assert2::assert;
-use crabka_pgtypes::{
+use krabka_pgtypes::{
     TypeError,
     datetime::{
         DATE_INFINITY, DATE_NEG_INFINITY, DateOrder, DateStyle, Interval, PgTime,
@@ -269,7 +269,7 @@ fn a_non_finite_date_swallows_the_time_it_is_combined_with() {
     assert!(
         combine_date_time(day, end_of_day)
             == Some(
-                crabka_pgtypes::datetime::date_to_midnight(parse_date("2020-01-02").expect("date"))
+                krabka_pgtypes::datetime::date_to_midnight(parse_date("2020-01-02").expect("date"))
                     .expect("ordinary date fits timestamp")
             )
     );
@@ -324,7 +324,7 @@ fn a_literal_out_of_the_types_range_is_named_by_the_type() {
     for literal in ["294277-01-01", "6874898-06-01"] {
         let expected = format!("timestamp out of range: \"{literal}\"");
         assert!(
-            crabka_pgtypes::datetime::parse_timestamp(literal)
+            krabka_pgtypes::datetime::parse_timestamp(literal)
                 .expect_err("refused")
                 .to_string()
                 == expected
@@ -347,7 +347,7 @@ fn an_interval_reads_as_a_time_by_its_microseconds_alone() {
     for (span, expected) in cases {
         let read = interval_to_time(interval(span)).unwrap_or_else(|e| panic!("{span}: {e}"));
         assert!(
-            crabka_pgtypes::datetime::time_to_text(read) == *expected,
+            krabka_pgtypes::datetime::time_to_text(read) == *expected,
             "interval {span:?} as time"
         );
     }
@@ -373,7 +373,7 @@ fn make_date_reads_a_negative_year_as_the_bc_era() {
         let built = make_date(*year, *month, *day)
             .unwrap_or_else(|error| panic!("make_date({year},{month},{day}): {error}"));
         assert!(
-            crabka_pgtypes::datetime::date_to_text(built) == *expected,
+            krabka_pgtypes::datetime::date_to_text(built) == *expected,
             "make_date({year},{month},{day})"
         );
     }
@@ -486,7 +486,7 @@ fn make_time_sums_its_fields_and_bounds_only_the_total() {
         let built = make_time(*hour, *min, *sec)
             .unwrap_or_else(|error| panic!("make_time({hour},{min},{sec}): {error}"));
         assert!(
-            crabka_pgtypes::datetime::time_to_text(built) == *expected,
+            krabka_pgtypes::datetime::time_to_text(built) == *expected,
             "make_time({hour},{min},{sec})"
         );
     }
@@ -509,7 +509,7 @@ fn make_timestamp_borrows_the_wording_of_the_half_that_refused() {
             == "time field value out of range: 25:02:03"
     );
     let built = make_timestamp_civil(-44, 3, 15, 1, 2, 3.0).expect("44 BC");
-    assert!(crabka_pgtypes::datetime::timestamp_to_text(built) == "0044-03-15 01:02:03 BC");
+    assert!(krabka_pgtypes::datetime::timestamp_to_text(built) == "0044-03-15 01:02:03 BC");
 }
 
 /// Every `interval` overflow is `interval out of range`. `integer out of range`

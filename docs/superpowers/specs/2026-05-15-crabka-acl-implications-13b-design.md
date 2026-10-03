@@ -48,7 +48,7 @@ implication update (touch every ACL call site once).
 ### Operation implications
 
 A small `implies(stored, requested) -> bool` helper lives in
-`crabka-broker::authorizer`. It returns `true` for the table:
+`krabka-broker::authorizer`. It returns `true` for the table:
 
 | Stored operation | Implies (matches when requested is...) |
 |---|---|
@@ -139,7 +139,7 @@ operator missing config), not an implication.
 
 ## Components
 
-### `crabka-broker/src/config.rs`
+### `krabka-broker/src/config.rs`
 
 - Replace `pub super_user_name: Option<String>` with
   `pub super_users: std::collections::HashSet<String>`.
@@ -150,7 +150,7 @@ operator missing config), not an implication.
   (no parser exists yet — slice 13's `super_user_name` is set
   programmatically).
 
-### `crabka-broker/src/authorizer.rs`
+### `krabka-broker/src/authorizer.rs`
 
 - `super_user_name: Option<&str>` parameter → `super_users: &HashSet<String>`.
 - `if super_user_name == Some(&req.principal.name)` → `if super_users.contains(&req.principal.name)`.
@@ -306,7 +306,7 @@ If a test fails after dropping the Describe ACL:
 
 ## Testing
 
-### Unit tests — `crabka-broker::authorizer`
+### Unit tests — `krabka-broker::authorizer`
 
 New implication tests:
 
@@ -328,7 +328,7 @@ New super-user tests:
 - `empty_super_user_set_engages_compat_shim_when_no_acls`
 - `empty_super_user_set_denies_when_acls_present`
 
-### Unit tests — `crabka-broker::config`
+### Unit tests — `krabka-broker::config`
 
 - `super_users_default_is_empty`
 - `super_users_for_tests_is_empty`

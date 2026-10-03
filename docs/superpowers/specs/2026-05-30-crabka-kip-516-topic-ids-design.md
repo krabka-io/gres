@@ -61,7 +61,7 @@ which is the single path through which all records (including snapshot installs)
 **Cleanup:** the existing `image.topics().find(|t| t.topic_id.into_bytes() == ...)` scans in
 the Fetch/Produce/Metadata/DeleteTopics handlers are replaced with `topic_by_id` lookups.
 (The metadata layer keys on `uuid::Uuid`; the wire layer uses
-`crabka_protocol::primitives::uuid::Uuid` = `[u8; 16]`. Convert with
+`krabka_protocol::primitives::uuid::Uuid` = `[u8; 16]`. Convert with
 `uuid::Uuid::from_bytes(wire.0)` / `topic_id.into_bytes()`.)
 
 ## Component 2 — Error codes

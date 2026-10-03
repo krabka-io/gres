@@ -69,11 +69,11 @@ register_toolchains("@apko_toolchains//:all")
 apk = use_extension("@rules_apko//apko:extensions.bzl", "apko")
 apk.translate_lock(
     name = "gres_base_lock",
-    lock = "//packaging/apko:crabka-gres.lock.json",
+    lock = "//packaging/apko:krabka-gres.lock.json",
 )
 apk.translate_lock(
     name = "gres_base_arm64_lock",
-    lock = "//packaging/apko:crabka-gres.arm64.lock.json",
+    lock = "//packaging/apko:krabka-gres.arm64.lock.json",
 )
 use_repo(apk, "gres_base_arm64_lock", "gres_base_lock")
 

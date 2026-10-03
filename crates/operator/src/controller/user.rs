@@ -13,11 +13,11 @@ use std::{
 };
 
 use base64::Engine as _;
-use crabka_client_admin::{
+use krabka_client_admin::{
     AclEntry, AclEntryFilter, AclOperation, AdminError, DEFAULT_SCRAM_ITERATIONS, PatternType,
     PermissionType, ResourceType, ScramDeletion, ScramUpsertion,
 };
-use crabka_units::{Time, convert::TimeExt as _, fmt::Human as _, minutes};
+use krabka_units::{Time, convert::TimeExt as _, fmt::Human as _, minutes};
 use futures::StreamExt as _;
 use k8s_openapi::{
     ByteString,
@@ -185,7 +185,7 @@ async fn handle_user_lifecycle(
                 Ok(cur) if !cur.is_empty() => {
                     let ops: Vec<_> = cur
                         .into_keys()
-                        .map(|key| crabka_client_admin::QuotaOp::Remove { key })
+                        .map(|key| krabka_client_admin::QuotaOp::Remove { key })
                         .collect();
                     if let Err(e) = admin.alter_user_quotas(quota_username, &ops, false).await {
                         tracing::warn!(error = %e, %name, "quota delete during finalizer failed");
@@ -384,7 +384,7 @@ async fn reconcile_access(sync: UserSyncContext<'_>) -> Result<Action, Reconcile
                 return Ok(common::requeue(ctx.config.controller_error_requeue));
             }
         };
-        let ops = crabka_client_admin::diff_user_quotas(&current, &desired);
+        let ops = krabka_client_admin::diff_user_quotas(&current, &desired);
         if !ops.is_empty() {
             ensure_token_access_pending(user_api, name, token_access.as_mut()).await?;
         }
@@ -863,9 +863,9 @@ async fn reconcile_inner(obj: Arc<KafkaUser>, ctx: Arc<Context>) -> Result<Actio
 }
 
 async fn apply_alter_user_quotas(
-    admin: &mut tokio::sync::MutexGuard<'_, dyn crabka_client_admin::AdminClientLike + Send>,
+    admin: &mut tokio::sync::MutexGuard<'_, dyn krabka_client_admin::AdminClientLike + Send>,
     username: &str,
-    ops: &[crabka_client_admin::QuotaOp],
+    ops: &[krabka_client_admin::QuotaOp],
 ) -> Result<(), AdminError> {
     if let Some(err) = admin.alter_user_quotas(username, ops, false).await? {
         return Err(AdminError::Broker {
@@ -880,7 +880,7 @@ async fn apply_alter_user_quotas(
 
 #[tracing::instrument(level = "info", skip_all, fields(additions = additions.len()), err)]
 async fn apply_create_acls(
-    admin: &mut tokio::sync::MutexGuard<'_, dyn crabka_client_admin::AdminClientLike + Send>,
+    admin: &mut tokio::sync::MutexGuard<'_, dyn krabka_client_admin::AdminClientLike + Send>,
     additions: &[AclEntry],
 ) -> Result<(), AdminError> {
     let outcomes = admin.create_acls(additions).await?;
@@ -897,7 +897,7 @@ async fn apply_create_acls(
 
 #[tracing::instrument(level = "info", skip_all, fields(deletions = deletions.len()), err)]
 async fn apply_delete_acls(
-    admin: &mut tokio::sync::MutexGuard<'_, dyn crabka_client_admin::AdminClientLike + Send>,
+    admin: &mut tokio::sync::MutexGuard<'_, dyn krabka_client_admin::AdminClientLike + Send>,
     deletions: &[AclEntry],
 ) -> Result<(), AdminError> {
     let filters: Vec<AclEntryFilter> = deletions.iter().map(entry_to_exact_filter).collect();
@@ -1227,10 +1227,10 @@ fn render_password_secret(obj: &KafkaUser, password: &str) -> Result<Secret, Rec
          username=\"{name}\" password=\"{password}\";"
     );
     let mut labels: BTreeMap<String, String> = BTreeMap::new();
-    labels.insert("app.kubernetes.io/name".into(), "crabka-broker".into());
+    labels.insert("app.kubernetes.io/name".into(), "krabka-broker".into());
     labels.insert(
         "app.kubernetes.io/managed-by".into(),
-        "crabka-operator".into(),
+        "krabka-operator".into(),
     );
     if let Some(cluster) = obj
         .meta()
@@ -1632,11 +1632,11 @@ mod tests {
             (Some(Time::ZERO), None, "spec.authentication.maxLifetime"),
             (
                 None,
-                Some(crabka_units::secs(59)),
+                Some(krabka_units::secs(59)),
                 "spec.authentication.renewBeforeExpiry",
             ),
             (
-                Some(crabka_units::micros(1_500)),
+                Some(krabka_units::micros(1_500)),
                 None,
                 "spec.authentication.maxLifetime",
             ),

@@ -582,7 +582,7 @@ shared bottlenecks and are annotated with the region/function each workstream ma
   options), sec-nonrelation-object-privileges 144, sec-role-attributes-lifecycle 131+65 (create_role,
   password), views R7 view privileges 98, zeropriv 37, role grant options 23, dgr type privileges 12,
   fn privileges 32, seq privileges 38, GRANT ON DATABASE/TABLESPACE, SET ROLE for non-bootstrap
-  superuser (crabka_pgcatalog::role_can_set), predefined roles). Files: crates/pgexec/src/privilege.rs
+  superuser (krabka_pgcatalog::role_can_set), predefined roles). Files: crates/pgexec/src/privilege.rs
   (542 ReadPermit, 42/1127 column grants), crates/pgcatalog/src/lib.rs roles/ACL records +
   role_can_set, parser.rs GRANT/REVOKE/ALTER DEFAULT PRIVILEGES/CREATE ROLE options, exec.rs grant
   arms + role DDL, catalog_fn.rs has_*_privilege family, catalog_rel.rs pg_default_acl/pg_auth_members
@@ -812,7 +812,7 @@ read path, query.rs, session.rs run_select_traced/explain, pgparser ExplainOptio
 utility dispatch, describe-path errors ~500) and to hold every currently-exact file exact. Exit:
 zero regressions on the 56 exact files + Phase-0 gains; explain.out format/option blocks match except
 the parallel JSON block; select_into, tsrf, rangetypes, fast_default EXPLAIN blocks match; EXPLAIN
-ANALYZE prints per-node actual rows/loops and '(never executed)'; `cargo test -p crabka-pgexec` green
+ANALYZE prints per-node actual rows/loops and '(never executed)'; `cargo test -p krabka-pgexec` green
 with the read path served only by plan/exec.
 
 Phase 2a — rule-based transforms (batch 3: P1): pull_up_subqueries, distribute quals to scans vs

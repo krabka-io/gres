@@ -158,11 +158,11 @@ SHOW no_such_parameter_at_all;
 RESET no_such_parameter_at_all;
 
 -- A two-part name is a customized option, created on first assignment.
-SET crabka_corpus.flag = 'on';
-SHOW crabka_corpus.flag;
-SELECT current_setting('crabka_corpus.flag');
-SET crabka_corpus.flag = 'off';
-SHOW crabka_corpus.flag;
+SET krabka_corpus.flag = 'on';
+SHOW krabka_corpus.flag;
+SELECT current_setting('krabka_corpus.flag');
+SET krabka_corpus.flag = 'off';
+SHOW krabka_corpus.flag;
 
 -- pg_settings exposes one row per parameter.
 SELECT name, setting, vartype FROM pg_settings WHERE name = 'enable_seqscan';

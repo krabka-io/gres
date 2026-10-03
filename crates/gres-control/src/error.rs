@@ -29,13 +29,13 @@ pub enum ControlError {
     },
     /// The registry topic could not be created or described.
     #[error("admin client error: {0}")]
-    Admin(#[from] crabka_client_admin::AdminError),
+    Admin(#[from] krabka_client_admin::AdminError),
     /// Produce failed.
     #[error("producer error: {0}")]
-    Producer(#[from] crabka_client_producer::ProducerError),
+    Producer(#[from] krabka_client_producer::ProducerError),
     /// The registry reader failed to fetch from Kafka.
     #[error("client error: {0}")]
-    Client(#[from] crabka_client_core::ClientError),
+    Client(#[from] krabka_client_core::ClientError),
     /// JSON serialization failed.
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),

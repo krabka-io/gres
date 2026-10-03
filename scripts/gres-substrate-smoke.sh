@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Substrate-mode smoke: boot a local Crabka broker, run crabka-gres against a
+# Substrate-mode smoke: boot a local Crabka broker, run krabka-gres against a
 # tenant WAL topic, kill the compute, and prove a fresh disposable compute
 # replays the acked SQL state without any cache directory.
 set -euo pipefail
@@ -10,18 +10,18 @@ if [ "${1:-}" = "--help" ]; then
     cat <<'EOF'
 Usage: scripts/gres-substrate-smoke.sh [broker-port [controller-port [gres-port]]]
 
-Boots a local standalone Crabka broker, starts crabka-gres with
+Boots a local standalone Crabka broker, starts krabka-gres with
 --substrate-bootstrap and --tenant, writes SQL state, restarts the disposable
 compute without a cache directory, and verifies replay from the tenant WAL.
 
-Set CRABKA_GRES_SKIP_BUILD=1 to reuse existing target/debug binaries.
+Set KRABKA_GRES_SKIP_BUILD=1 to reuse existing target/debug binaries.
 EOF
     exit 0
 fi
 
 if ! command -v psql >/dev/null; then
     echo "SKIP: psql not installed; substrate smoke requires a real pgwire client"
-    cargo run -p crabka-gres -- --help >/dev/null
+    cargo run -p krabka-gres -- --help >/dev/null
     exit 0
 fi
 
@@ -145,7 +145,7 @@ start_gres() {
     local label="$1"
     local deadline=$((SECONDS + 30))
     while [ "$SECONDS" -lt "$deadline" ]; do
-        ./target/debug/crabka-gres \
+        ./target/debug/krabka-gres \
             --listen "127.0.0.1:${GRES_PORT}" \
             --substrate-bootstrap "127.0.0.1:${BROKER_PORT}" \
             --tenant "$TENANT" \
@@ -161,8 +161,8 @@ start_gres() {
     return 1
 }
 
-if [ "${CRABKA_GRES_SKIP_BUILD:-}" != "1" ]; then
-    cargo build --locked -p crabka-cli -p crabka-broker -p crabka-gres
+if [ "${KRABKA_GRES_SKIP_BUILD:-}" != "1" ]; then
+    cargo build --locked -p krabka-cli -p krabka-broker -p krabka-gres
 fi
 
 ./target/debug/crabka format \
@@ -172,7 +172,7 @@ fi
     --node-id 1 \
     --controller-listener "127.0.0.1:${CONTROLLER_PORT}"
 
-./target/debug/crabka-broker \
+./target/debug/krabka-broker \
     --log-dir "${DATA_ROOT}/broker" \
     --cluster-id "$CLUSTER_ID" \
     --broker-id 1 \

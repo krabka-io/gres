@@ -9,7 +9,7 @@
 
 **Goal:** Bound every Kafka broker DNS lookup made by the Gres FDW with one validated process policy exposed through Gres CLI/environment configuration and `Gres.spec.compute`.
 
-**Architecture:** Reuse `crabka_client_core::ClientDnsTimeout` from the configuration boundary through the process-owned `KafkaFdw`. Add one secured admin constructor that changes only DNS policy, and bound the FDW raw `lookup_host` before connecting by `SocketAddr`; keep catalog connection profiles and existing public default entry points compatible.
+**Architecture:** Reuse `krabka_client_core::ClientDnsTimeout` from the configuration boundary through the process-owned `KafkaFdw`. Add one secured admin constructor that changes only DNS policy, and bound the FDW raw `lookup_host` before connecting by `SocketAddr`; keep catalog connection profiles and existing public default entry points compatible.
 
 **Tech Stack:** Rust, Tokio, Clap, `refined_type`, kube/schemars CRDs, Cargo tests and Clippy.
 
@@ -17,7 +17,7 @@
 
 - Preserve `ClientDnsTimeout::default()` at exactly 10,000 ms.
 - Use exact CLI name `--fdw-broker-dns-timeout-ms`.
-- Use exact environment name `CRABKA_GRES_FDW_BROKER_DNS_TIMEOUT_MS`.
+- Use exact environment name `KRABKA_GRES_FDW_BROKER_DNS_TIMEOUT_MS`.
 - Use exact CRD field `spec.compute.fdwBrokerDnsTimeoutMs`.
 - CLI precedence is CLI over environment over typed default.
 - The setting is valid in local and substrate modes; do not add `requires = "substrate_bootstrap"`.
@@ -41,8 +41,8 @@
   ```rust
   pub async fn AdminClient::connect_secured_with_dns_timeout(
       bootstrap_addrs: &[String],
-      security: Option<crabka_client_core::security::ClientSecurity>,
-      dns_timeout: crabka_client_core::ClientDnsTimeout,
+      security: Option<krabka_client_core::security::ClientSecurity>,
+      dns_timeout: krabka_client_core::ClientDnsTimeout,
   ) -> Result<Self, AdminError>
   ```
 - Preserves `connect_secured` and `connect_with_dns_timeout`; the latter delegates to the new method with `None` security.
@@ -55,7 +55,7 @@
   #[tokio::test]
   async fn secured_dns_timeout_preserves_security_and_admin_defaults() {
       let live = ObservedAdminBroker::start(Duration::ZERO).await;
-      let timeout = crabka_client_core::ClientDnsTimeout::new(Duration::from_millis(37))
+      let timeout = krabka_client_core::ClientDnsTimeout::new(Duration::from_millis(37))
           .expect("positive timeout");
       let security = ClientSecurity {
           protocol: ListenerProtocol::SaslPlaintext,
@@ -76,7 +76,7 @@
 
       assert2::assert!(admin.options.dns_timeout == timeout);
       assert2::assert!(admin.options.security.is_some());
-      assert2::assert!(admin.options.client_id == "crabka-operator");
+      assert2::assert!(admin.options.client_id == "krabka-operator");
       assert2::assert!(admin.options.connect_timeout == Duration::from_secs(5));
       assert2::assert!(admin.options.request_timeout == Duration::from_secs(30));
       live.stop();
@@ -89,7 +89,7 @@
 
   ```bash
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-    -p crabka-client-admin --locked \
+    -p krabka-client-admin --locked \
     secured_dns_timeout_preserves_security_and_admin_defaults
   ```
 
@@ -102,8 +102,8 @@
   ```rust
   pub async fn connect_secured_with_dns_timeout(
       bootstrap_addrs: &[String],
-      security: Option<crabka_client_core::security::ClientSecurity>,
-      dns_timeout: crabka_client_core::ClientDnsTimeout,
+      security: Option<krabka_client_core::security::ClientSecurity>,
+      dns_timeout: krabka_client_core::ClientDnsTimeout,
   ) -> Result<Self, AdminError> {
       let mut options = Self::opts(security);
       options.dns_timeout = dns_timeout;
@@ -124,9 +124,9 @@
 
   ```bash
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-    -p crabka-client-admin --all-targets --locked
+    -p krabka-client-admin --all-targets --locked
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy \
-    -p crabka-client-admin --all-targets --locked -- -D warnings
+    -p krabka-client-admin --all-targets --locked -- -D warnings
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo fmt --all -- --check
   git diff --check
   ```
@@ -156,18 +156,18 @@
   ```rust
   pub fn KafkaFdw::with_broker_dns_timeout(
       self,
-      timeout: crabka_client_core::ClientDnsTimeout,
+      timeout: krabka_client_core::ClientDnsTimeout,
   ) -> Self
 
   pub fn KafkaFdw::broker_dns_timeout(
       &self,
-  ) -> crabka_client_core::ClientDnsTimeout
+  ) -> krabka_client_core::ClientDnsTimeout
 
   pub async fn source::scan_topic_with_dns_timeout(
       profile: &ConnProfile,
       topic: &str,
       bounds: &ScanBounds,
-      dns_timeout: crabka_client_core::ClientDnsTimeout,
+      dns_timeout: krabka_client_core::ClientDnsTimeout,
   ) -> Result<Vec<RawRecord>, KafkaFdwError>
   ```
 - Preserves `KafkaFdw::with_defaults(default_bootstrap)` and
@@ -181,7 +181,7 @@
   ```rust
   #[test]
   fn fdw_carries_typed_broker_dns_timeout() {
-      let timeout = crabka_client_core::ClientDnsTimeout::new(
+      let timeout = krabka_client_core::ClientDnsTimeout::new(
           std::time::Duration::from_millis(37),
       )
       .expect("positive timeout");
@@ -199,7 +199,7 @@
   ```rust
   #[tokio::test(start_paused = true)]
   async fn raw_dns_lookup_stops_at_configured_deadline() {
-      let timeout = crabka_client_core::ClientDnsTimeout::new(
+      let timeout = krabka_client_core::ClientDnsTimeout::new(
           Duration::from_millis(37),
       )
       .expect("positive timeout");
@@ -222,9 +222,9 @@
 
   ```bash
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-    -p crabka-gres-fdw --lib --locked fdw_carries_typed_broker_dns_timeout
+    -p krabka-gres-fdw --lib --locked fdw_carries_typed_broker_dns_timeout
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-    -p crabka-gres-fdw --lib --locked raw_dns_lookup_stops_at_configured_deadline
+    -p krabka-gres-fdw --lib --locked raw_dns_lookup_stops_at_configured_deadline
   ```
 
   Expected: compile failures naming the missing builder/accessor and
@@ -237,7 +237,7 @@
   ```rust
   pub struct KafkaFdw {
       default_bootstrap: Option<String>,
-      broker_dns_timeout: crabka_client_core::ClientDnsTimeout,
+      broker_dns_timeout: krabka_client_core::ClientDnsTimeout,
   }
   ```
 
@@ -264,7 +264,7 @@
           profile,
           topic,
           bounds,
-          crabka_client_core::ClientDnsTimeout::default(),
+          krabka_client_core::ClientDnsTimeout::default(),
       )
       .await
   }
@@ -278,7 +278,7 @@
   ```rust
   async fn lookup_first<F, I>(
       host_port: &str,
-      dns_timeout: crabka_client_core::ClientDnsTimeout,
+      dns_timeout: krabka_client_core::ClientDnsTimeout,
       lookup: F,
   ) -> Result<std::net::SocketAddr, KafkaFdwError>
   where
@@ -312,12 +312,12 @@
   Preserve every effective non-DNS option with this exact literal:
 
   ```rust
-  let options = crabka_client_core::ConnectionOptions {
-      client_id: "crabka-fdw".to_string(),
+  let options = krabka_client_core::ConnectionOptions {
+      client_id: "krabka-fdw".to_string(),
       connect_timeout: std::time::Duration::from_secs(10),
       request_timeout: std::time::Duration::from_secs(30),
       security: profile.security.clone().map(Box::new),
-      ..crabka_client_core::ConnectionOptions::default()
+      ..krabka_client_core::ConnectionOptions::default()
   };
   ```
 
@@ -333,9 +333,9 @@
 
   ```bash
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-    -p crabka-gres-fdw --all-targets --locked
+    -p krabka-gres-fdw --all-targets --locked
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy \
-    -p crabka-gres-fdw --all-targets --locked -- -D warnings
+    -p krabka-gres-fdw --all-targets --locked -- -D warnings
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo fmt --all -- --check
   git diff --check
   ```
@@ -367,7 +367,7 @@
 
   fn effective_fdw_broker_dns_timeout(
       args: &ServeArgs,
-  ) -> std::io::Result<crabka_client_core::ClientDnsTimeout>
+  ) -> std::io::Result<krabka_client_core::ClientDnsTimeout>
   ```
 - `register_kafka_scanner_with_default_bootstrap` gains a
   `ClientDnsTimeout` argument; `register_kafka_scanner` remains a typed-default
@@ -381,8 +381,8 @@
   ```rust
   #[test]
   fn fdw_broker_dns_timeout_uses_default_environment_and_cli_precedence() {
-      const CHILD: &str = "CRABKA_TEST_GRES_FDW_BROKER_DNS_TIMEOUT_CHILD";
-      const ENV: &str = "CRABKA_GRES_FDW_BROKER_DNS_TIMEOUT_MS";
+      const CHILD: &str = "KRABKA_TEST_GRES_FDW_BROKER_DNS_TIMEOUT_CHILD";
+      const ENV: &str = "KRABKA_GRES_FDW_BROKER_DNS_TIMEOUT_MS";
       if std::env::var_os(CHILD).is_none() {
           for mode in ["defaults", "environment"] {
               let mut child =
@@ -402,13 +402,13 @@
           return;
       }
 
-      let args = <Cli as clap::Parser>::try_parse_from(["crabka-gres"])
+      let args = <Cli as clap::Parser>::try_parse_from(["krabka-gres"])
           .expect("default FDW DNS timeout")
           .serve;
       let expected_ms = if std::env::var(CHILD).as_deref() == Ok("environment") {
           27
       } else {
-          crabka_client_core::ClientDnsTimeout::default().milliseconds()
+          krabka_client_core::ClientDnsTimeout::default().milliseconds()
       };
       assert_eq!(
           effective_fdw_broker_dns_timeout(&args)
@@ -418,7 +418,7 @@
       );
 
       let args = <Cli as clap::Parser>::try_parse_from([
-          "crabka-gres",
+          "krabka-gres",
           "--fdw-broker-dns-timeout-ms=37",
       ])
       .expect("CLI FDW DNS timeout")
@@ -441,9 +441,9 @@
   ```rust
   #[test]
   fn fdw_broker_dns_timeout_rejects_zero_but_allows_local_mode() {
-      Cli::try_parse_from(["crabka-gres", "--fdw-broker-dns-timeout-ms=0"])
+      Cli::try_parse_from(["krabka-gres", "--fdw-broker-dns-timeout-ms=0"])
           .expect_err("zero DNS timeout");
-      Cli::try_parse_from(["crabka-gres", "--fdw-broker-dns-timeout-ms=1"])
+      Cli::try_parse_from(["krabka-gres", "--fdw-broker-dns-timeout-ms=1"])
           .expect("local FDW policy");
   }
   ```
@@ -452,10 +452,10 @@
 
   ```bash
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-    -p crabka-gres --lib --locked \
+    -p krabka-gres --lib --locked \
     fdw_broker_dns_timeout_uses_default_environment_and_cli_precedence
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-    -p crabka-gres --lib --locked \
+    -p krabka-gres --lib --locked \
     fdw_broker_dns_timeout_rejects_zero_but_allows_local_mode
   ```
 
@@ -469,7 +469,7 @@
   /// Timeout for resolving Kafka broker hostnames used by the FDW.
   #[arg(
       long = "fdw-broker-dns-timeout-ms",
-      env = "CRABKA_GRES_FDW_BROKER_DNS_TIMEOUT_MS"
+      env = "KRABKA_GRES_FDW_BROKER_DNS_TIMEOUT_MS"
   )]
   pub fdw_broker_dns_timeout_ms: Option<PositiveMillis>,
   ```
@@ -479,11 +479,11 @@
   ```rust
   fn effective_fdw_broker_dns_timeout(
       args: &ServeArgs,
-  ) -> std::io::Result<crabka_client_core::ClientDnsTimeout> {
+  ) -> std::io::Result<krabka_client_core::ClientDnsTimeout> {
       args.fdw_broker_dns_timeout_ms.map_or_else(
-          || Ok(crabka_client_core::ClientDnsTimeout::default()),
+          || Ok(krabka_client_core::ClientDnsTimeout::default()),
           |timeout| {
-              crabka_client_core::ClientDnsTimeout::new(Duration::from_millis(
+              krabka_client_core::ClientDnsTimeout::new(Duration::from_millis(
                   timeout.into_value(),
               ))
               .map_err(|error| {
@@ -512,7 +512,7 @@
   Configure the scanner with:
 
   ```rust
-  crabka_gres_fdw::KafkaFdw::with_defaults(default_bootstrap)
+  krabka_gres_fdw::KafkaFdw::with_defaults(default_bootstrap)
       .with_broker_dns_timeout(broker_dns_timeout)
   ```
 
@@ -528,11 +528,11 @@
 
   ```bash
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-    -p crabka-gres --all-targets --locked
+    -p krabka-gres --all-targets --locked
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy \
-    -p crabka-gres --all-targets --locked -- -D warnings
+    -p krabka-gres --all-targets --locked -- -D warnings
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo run -q \
-    -p crabka-gres --locked -- --help |
+    -p krabka-gres --locked -- --help |
     rg -- '--fdw-broker-dns-timeout-ms'
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo fmt --all -- --check
   git diff --check
@@ -562,7 +562,7 @@
   ```rust
   pub GresComputeSpec::fdw_broker_dns_timeout_ms: Option<u64>
   pub(crate) EffectiveGresComputePolicy::fdw_broker_dns_timeout:
-      crabka_client_core::ClientDnsTimeout
+      krabka_client_core::ClientDnsTimeout
   ```
 
 - [ ] **Step 1: Add failing CRD policy tests**
@@ -583,7 +583,7 @@
           .expect("default policy");
       assert_eq!(
           defaults.fdw_broker_dns_timeout,
-          crabka_client_core::ClientDnsTimeout::default()
+          krabka_client_core::ClientDnsTimeout::default()
       );
 
       let overridden = GresComputeSpec {
@@ -660,7 +660,7 @@
                           bootstrap: "k:9092",
                           wal_topic: &wal_topic,
                           config_topic: "__gres_cfg.tenant-a",
-                          policy: &crabka_gres_control::RegistryPolicy::default(),
+                          policy: &krabka_gres_control::RegistryPolicy::default(),
                           compute_policy,
                           replicas: 1,
                           operator_config: &operator_config,
@@ -699,10 +699,10 @@
 
   ```bash
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-    -p crabka-operator --lib --locked \
+    -p krabka-operator --lib --locked \
     fdw_broker_dns_timeout_has_exact_schema_default_override_and_error
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-    -p crabka-operator --lib --locked \
+    -p krabka-operator --lib --locked \
     fdw_broker_dns_timeout_is_exact_once_in_single_and_two_range_deployments
   ```
 
@@ -723,9 +723,9 @@
   `EffectiveGresComputePolicy`, then construct it with:
 
   ```rust
-  fdw_broker_dns_timeout: crabka_client_core::ClientDnsTimeout::new(
+  fdw_broker_dns_timeout: krabka_client_core::ClientDnsTimeout::new(
       Duration::from_millis(self.fdw_broker_dns_timeout_ms.unwrap_or_else(|| {
-          crabka_client_core::ClientDnsTimeout::default().milliseconds()
+          krabka_client_core::ClientDnsTimeout::default().milliseconds()
       })),
   )
   .map_err(|error| format!("spec.compute.fdwBrokerDnsTimeoutMs: {error}"))?,
@@ -745,9 +745,9 @@
 - [ ] **Step 6: Regenerate and compare all nine CRDs**
 
   ```bash
-  crd_dir=$(mktemp -d /tmp/crabka-fdw-dns-crds.XXXXXX)
+  crd_dir=$(mktemp -d /tmp/krabka-fdw-dns-crds.XXXXXX)
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo run -q \
-    -p crabka-operator --locked -- gen-crds "$crd_dir"
+    -p krabka-operator --locked -- gen-crds "$crd_dir"
   test "$(find "$crd_dir" -maxdepth 1 -type f | wc -l)" -eq 9
   cp "$crd_dir/crabka.io_greses.yaml" deploy/crds/crabka.io_greses.yaml
   rm -rf -- "$crd_dir"
@@ -760,9 +760,9 @@
 
   ```bash
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-    -p crabka-operator --all-targets --locked
+    -p krabka-operator --all-targets --locked
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy \
-    -p crabka-operator --all-targets --locked -- -D warnings
+    -p krabka-operator --all-targets --locked -- -D warnings
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo fmt --all -- --check
   git diff --check
   ```
@@ -831,21 +831,21 @@
 
   ```bash
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test \
-    -p crabka-client-admin \
-    -p crabka-gres-fdw \
-    -p crabka-gres \
-    -p crabka-operator \
+    -p krabka-client-admin \
+    -p krabka-gres-fdw \
+    -p krabka-gres \
+    -p krabka-operator \
     --all-targets --locked
 
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy \
-    -p crabka-client-admin \
-    -p crabka-gres-fdw \
-    -p crabka-gres \
-    -p crabka-operator \
+    -p krabka-client-admin \
+    -p krabka-gres-fdw \
+    -p krabka-gres \
+    -p krabka-operator \
     --all-targets --locked -- -D warnings
 
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo run -q \
-    -p crabka-gres --locked -- --help |
+    -p krabka-gres --locked -- --help |
     rg -- '--fdw-broker-dns-timeout-ms'
 
   CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo fmt --all -- --check

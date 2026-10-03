@@ -1,5 +1,5 @@
 [package]
-name = "crabka-remote-storage"
+name = "krabka-remote-storage"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -9,7 +9,7 @@ rust-version.workspace = true
 description = "KIP-405 tiered-storage SPI (RemoteStorageManager / RemoteLogMetadataManager) and reference implementations for Crabka"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-remote-storage"
+documentation = "https://docs.rs/krabka-remote-storage"
 readme = "README.md"
 keywords = ["kafka", "tiered-storage", "object-store", "crabka"]
 categories = ["database-implementations", "filesystem"]
@@ -20,9 +20,9 @@ workspace = true
 [dependencies]
 base64 = { workspace = true }
 bytes = { workspace = true }
-crabka-ids = { version = "0.4.2", path = "../ids" }
-crabka-object-store = { version = "0.4.2", path = "../object-store" }
-crabka-units = { workspace = true }
+krabka-ids = { version = "0.4.2", path = "../ids" }
+krabka-object-store = { version = "0.4.2", path = "../object-store" }
+krabka-units = { workspace = true }
 object_store = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
@@ -31,8 +31,8 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 assert2 = { workspace = true }
-crabka-log = { version = "0.4.2", path = "../log" }
-crabka-protocol = { version = "0.4.2", path = "../protocol", default-features = false }
+krabka-log = { version = "0.4.2", path = "../log" }
+krabka-protocol = { version = "0.4.2", path = "../protocol", default-features = false }
 sha2 = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

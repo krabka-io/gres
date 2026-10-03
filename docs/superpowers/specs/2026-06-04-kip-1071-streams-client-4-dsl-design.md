@@ -29,7 +29,7 @@ Joins (4c) and windowing (4d) are deferred to later slices.
 
 ### Goal
 
-A `dsl` module in `crabka-client-streams` that lets a Rust app write a fluent
+A `dsl` module in `krabka-client-streams` that lets a Rust app write a fluent
 KStream/KTable topology which **compiles to the existing Processor-API `Topology`**
 (and thus runs on the #2/#3 runtime unchanged), producing a wire `Topology`
 **byte-identical to the JVM 4.x DSL** (with `optimization=all`) for the supported
@@ -323,7 +323,7 @@ One fixture per representative topology; each asserts
   topologies (§6.2).
 - `count`/`reduce`/`aggregate` execute correctly via `TopologyTestDriver` and a
   broker integration test (incl. restart-restore via #3's changelog).
-- `cargo test -p crabka-client-streams` green (DSL unit + optimizer + golden +
+- `cargo test -p krabka-client-streams` green (DSL unit + optimizer + golden +
   test-driver + integration + doctests); the existing #1 Processor-API golden frame
   still green; `cargo clippy --workspace --all-targets -- -D warnings` and
   `cargo fmt --check` clean; `cargo build --workspace` builds.

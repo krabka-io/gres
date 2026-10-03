@@ -47,11 +47,11 @@ pub(crate) fn pg_class_columns() -> Vec<Column> {
         (
             "relacl",
             Array(
-                crabka_pgtypes::ElemType::from_column_type(Aclitem)
+                krabka_pgtypes::ElemType::from_column_type(Aclitem)
                     .expect("aclitem has a builtin array element"),
             ),
         ),
-        ("reloptions", Array(crabka_pgtypes::ElemType::Text)),
+        ("reloptions", Array(krabka_pgtypes::ElemType::Text)),
         ("relpartbound", Text),
     ])
 }
@@ -80,10 +80,10 @@ pub(crate) fn pg_attribute_columns() -> Vec<Column> {
         ("attinhcount", Int2),
         ("attcollation", Int4),
         ("attstattarget", Int2),
-        ("attacl", Array(crabka_pgtypes::ElemType::Text)),
-        ("attoptions", Array(crabka_pgtypes::ElemType::Text)),
-        ("attfdwoptions", Array(crabka_pgtypes::ElemType::Text)),
-        ("attmissingval", Array(crabka_pgtypes::ElemType::Text)),
+        ("attacl", Array(krabka_pgtypes::ElemType::Text)),
+        ("attoptions", Array(krabka_pgtypes::ElemType::Text)),
+        ("attfdwoptions", Array(krabka_pgtypes::ElemType::Text)),
+        ("attmissingval", Array(krabka_pgtypes::ElemType::Text)),
     ])
 }
 
@@ -99,11 +99,11 @@ pub(crate) fn virtual_catalog_rows(
         "pg_type" => pg_type_rows(catalog_kv),
         "pg_ts_config" => text_search_catalog_rows(
             catalog_kv,
-            crabka_pgparser::ast::TextSearchObjectKind::Configuration,
+            krabka_pgparser::ast::TextSearchObjectKind::Configuration,
         ),
         "pg_ts_dict" => text_search_catalog_rows(
             catalog_kv,
-            crabka_pgparser::ast::TextSearchObjectKind::Dictionary,
+            krabka_pgparser::ast::TextSearchObjectKind::Dictionary,
         ),
         "pg_ts_parser" => pg_ts_parser_rows(),
         "pg_ts_template" => pg_ts_template_rows(),
@@ -138,8 +138,8 @@ pub(crate) fn virtual_catalog_rows(
         "pg_inherits" => pg_inherits_rows(catalog_kv),
         "pg_partitioned_table" => pg_partitioned_table_rows(catalog_kv),
         "pg_largeobject" => {
-            let role = if ctx.current_user == crabka_pgcatalog::PUBLIC_ROLE {
-                crabka_pgcatalog::BOOTSTRAP_ROLE
+            let role = if ctx.current_user == krabka_pgcatalog::PUBLIC_ROLE {
+                krabka_pgcatalog::BOOTSTRAP_ROLE
             } else {
                 &ctx.current_user
             };
@@ -212,7 +212,7 @@ pub(crate) fn virtual_catalog_rows(
 /// healthy and the missing link would be invisible. One odd row is what a
 /// catalog table owes.
 pub(crate) fn pg_inherits_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    let tables = crabka_pgcatalog::list_tables(catalog_kv)?;
+    let tables = krabka_pgcatalog::list_tables(catalog_kv)?;
     let table_ids = tables
         .iter()
         .map(|table| (&table.name, table.id))
@@ -251,7 +251,7 @@ pub(crate) const UNRESOLVED_PARENT_OID: i32 = 0;
 /// `pg_partitioned_table`: one row per partitioned parent.
 pub(crate) fn pg_partitioned_table_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
     let mut rows = Vec::new();
-    for table in crabka_pgcatalog::list_tables(catalog_kv)? {
+    for table in krabka_pgcatalog::list_tables(catalog_kv)? {
         let Some(scheme) = crate::partition::scheme_of(catalog_kv, &table.name)? else {
             continue;
         };
@@ -282,7 +282,7 @@ pub(crate) fn pg_partitioned_table_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<D
 /// `pg_namespace`: one row per schema the catalog holds — nothing is added
 /// here, so a schema appears exactly once and a dropped one not at all.
 pub(crate) fn pg_namespace_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    Ok(crabka_pgcatalog::list_schemas(catalog_kv)?
+    Ok(krabka_pgcatalog::list_schemas(catalog_kv)?
         .into_iter()
         .map(|schema| {
             vec![
@@ -300,7 +300,7 @@ pub(crate) fn pg_namespace_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, 
 /// superuser, because trust auth makes every session that user and crabka has
 /// no ownership model to distinguish them by.
 pub(crate) fn schema_owner_oid(owner: &str) -> i32 {
-    if owner == crabka_pgcatalog::PUBLIC_SCHEMA_OWNER {
+    if owner == krabka_pgcatalog::PUBLIC_SCHEMA_OWNER {
         crate::catalog_fn::DATABASE_OWNER_ROLE_OID
     } else {
         crate::catalog_fn::BOOTSTRAP_ROLE_OID
@@ -313,15 +313,15 @@ pub(crate) fn schema_owner_oid(owner: &str) -> i32 {
 /// relations `v`. `psql`'s `\dt`/`\dv`/`\dm`/`\di`/`\ds` differ only in the
 /// `relkind` they filter on, so all of them need this one list.
 pub(crate) fn pg_class_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    let triggered_relation_ids = crabka_pgcatalog::trigger::list_triggers(catalog_kv)?
+    let triggered_relation_ids = krabka_pgcatalog::trigger::list_triggers(catalog_kv)?
         .into_iter()
         .map(|trigger| trigger.table_id)
         .collect::<std::collections::HashSet<_>>();
-    let rule_relation_ids = crabka_pgcatalog::rule::list_rules(catalog_kv)?
+    let rule_relation_ids = krabka_pgcatalog::rule::list_rules(catalog_kv)?
         .into_iter()
         .map(|rule| rule.table_id)
         .collect::<std::collections::HashSet<_>>();
-    let indexes = crabka_pgcatalog::list_indexes(catalog_kv)?;
+    let indexes = krabka_pgcatalog::list_indexes(catalog_kv)?;
     let indexed_table_ids = indexes
         .iter()
         .map(|index| index.table_id)
@@ -336,7 +336,7 @@ pub(crate) fn pg_class_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
     // again per index.
     let mut table_owner_oids = std::collections::BTreeMap::new();
     let mut rows = Vec::new();
-    for table in crabka_pgcatalog::list_tables(catalog_kv)? {
+    for table in krabka_pgcatalog::list_tables(catalog_kv)? {
         let partitioned = crate::partition::is_partitioned(catalog_kv, &table.name)?;
         let relkind = match (
             table.foreign.is_some(),
@@ -355,7 +355,7 @@ pub(crate) fn pg_class_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
             crate::catalog_rel::namespace_oid(&table.name.schema),
         );
         row.reltype = rowtype_oids.get(&table.name).map_or(0, |(oid, _)| *oid);
-        if let Some(oid) = crabka_pgcatalog::typed_table_type(catalog_kv, &table.name)? {
+        if let Some(oid) = krabka_pgcatalog::typed_table_type(catalog_kv, &table.name)? {
             row.reloftype = i32::try_from(oid)
                 .map_err(|_| ExecError::Unsupported("typed table oid exceeds int4".into()))?;
         }
@@ -379,20 +379,20 @@ pub(crate) fn pg_class_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
             row.relispartition = true;
             row.relpartbound = Some(crate::partition::bound_text(&bound));
         }
-        row.relpersistence = crabka_pgcatalog::relpersistence_of(&table.name.schema);
-        row.reltablespace = crabka_pgcatalog::relation_tablespace_oid(catalog_kv, &table.name)?;
-        if let Some(oid) = crabka_pgcatalog::relation_access_method_oid(catalog_kv, &table.name)? {
+        row.relpersistence = krabka_pgcatalog::relpersistence_of(&table.name.schema);
+        row.reltablespace = krabka_pgcatalog::relation_tablespace_oid(catalog_kv, &table.name)?;
+        if let Some(oid) = krabka_pgcatalog::relation_access_method_oid(catalog_kv, &table.name)? {
             row.relam = i32::try_from(oid)
                 .map_err(|_| ExecError::Unsupported("access method oid exceeds int4".into()))?;
         }
         row.relowner = role_oid_of(&role_oids, &table.owner);
         row.relrowsecurity = table.row_security;
         row.relforcerowsecurity = table.force_row_security;
-        row.relreplident = match crabka_pgcatalog::replica_identity(catalog_kv, table.id)? {
-            crabka_pgcatalog::ReplicaIdentity::Default => 'd',
-            crabka_pgcatalog::ReplicaIdentity::Full => 'f',
-            crabka_pgcatalog::ReplicaIdentity::Nothing => 'n',
-            crabka_pgcatalog::ReplicaIdentity::Index(_) => 'i',
+        row.relreplident = match krabka_pgcatalog::replica_identity(catalog_kv, table.id)? {
+            krabka_pgcatalog::ReplicaIdentity::Default => 'd',
+            krabka_pgcatalog::ReplicaIdentity::Full => 'f',
+            krabka_pgcatalog::ReplicaIdentity::Nothing => 'n',
+            krabka_pgcatalog::ReplicaIdentity::Index(_) => 'i',
         };
         let stats = relstats.get(&table.name).copied().unwrap_or_default();
         row.reltuples = stats.reltuples;
@@ -423,11 +423,11 @@ pub(crate) fn pg_class_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
             // TOAST storage is heap-backed, like an ordinary table.
             toast.relam = 2;
             toast.relowner = table_owner_oids[&table.name];
-            toast.relpersistence = crabka_pgcatalog::relpersistence_of(&table.name.schema);
+            toast.relpersistence = krabka_pgcatalog::relpersistence_of(&table.name.schema);
             rows.push(toast.build()?);
         }
     }
-    for view in crabka_pgcatalog::list_views(catalog_kv)? {
+    for view in krabka_pgcatalog::list_views(catalog_kv)? {
         let oid = crate::catalog_rel::view_oids(catalog_kv)?
             .get(&view.name)
             .copied()
@@ -444,10 +444,10 @@ pub(crate) fn pg_class_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
         row.relhasrules = true;
         row.relhastriggers =
             u32::try_from(oid).is_ok_and(|oid| triggered_relation_ids.contains(&oid));
-        row.relpersistence = crabka_pgcatalog::relpersistence_of(&view.name.schema);
+        row.relpersistence = krabka_pgcatalog::relpersistence_of(&view.name.schema);
         rows.push(row.build()?);
     }
-    for (name, _) in crabka_pgcatalog::list_sequences(catalog_kv)? {
+    for (name, _) in krabka_pgcatalog::list_sequences(catalog_kv)? {
         let oid = crate::catalog_rel::sequence_oids(catalog_kv)?
             .get(&name)
             .copied()
@@ -459,14 +459,14 @@ pub(crate) fn pg_class_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
             crate::catalog_rel::namespace_oid(&name.schema),
         );
         row.reltype = rowtype_oids.get(&name).map_or(0, |(oid, _)| *oid);
-        row.relpersistence = crabka_pgcatalog::relpersistence_of(&name.schema);
+        row.relpersistence = krabka_pgcatalog::relpersistence_of(&name.schema);
         rows.push(row.build()?);
     }
-    for ty in crabka_pgcatalog::list_user_types(catalog_kv)? {
+    for ty in krabka_pgcatalog::list_user_types(catalog_kv)? {
         let Some(fields) = ty.fields() else { continue };
         let type_oid = i32::try_from(ty.oid)
             .map_err(|_| ExecError::Unsupported("composite type oid exceeds int4".into()))?;
-        let oid = i32::try_from(crabka_pgtypes::usertype::composite_relation_oid(ty.oid))
+        let oid = i32::try_from(krabka_pgtypes::usertype::composite_relation_oid(ty.oid))
             .map_err(|_| ExecError::Unsupported("composite relation oid exceeds int4".into()))?;
         let mut row = PgClassRow::new(
             oid,
@@ -529,15 +529,15 @@ pub(crate) fn pg_class_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
         );
         row.relnatts = index.columns.len() + index.include.len();
         row.relam = match index.method {
-            crabka_pgcatalog::IndexMethod::Btree => crate::catalog_rel::BTREE_AM_OID,
-            crabka_pgcatalog::IndexMethod::Hash => crate::catalog_rel::HASH_AM_OID,
-            crabka_pgcatalog::IndexMethod::Gist => crate::catalog_rel::GIST_AM_OID,
-            crabka_pgcatalog::IndexMethod::Gin => crate::catalog_rel::GIN_AM_OID,
-            crabka_pgcatalog::IndexMethod::Spgist => crate::catalog_rel::SPGIST_AM_OID,
+            krabka_pgcatalog::IndexMethod::Btree => crate::catalog_rel::BTREE_AM_OID,
+            krabka_pgcatalog::IndexMethod::Hash => crate::catalog_rel::HASH_AM_OID,
+            krabka_pgcatalog::IndexMethod::Gist => crate::catalog_rel::GIST_AM_OID,
+            krabka_pgcatalog::IndexMethod::Gin => crate::catalog_rel::GIN_AM_OID,
+            krabka_pgcatalog::IndexMethod::Spgist => crate::catalog_rel::SPGIST_AM_OID,
         };
-        row.relpersistence = crabka_pgcatalog::relpersistence_of(&index.table.schema);
+        row.relpersistence = krabka_pgcatalog::relpersistence_of(&index.table.schema);
         row.reltablespace =
-            crabka_pgcatalog::relation_tablespace_oid(catalog_kv, &index.qualified_name())?;
+            krabka_pgcatalog::relation_tablespace_oid(catalog_kv, &index.qualified_name())?;
         let stats = relstats
             .get(&index.qualified_name())
             .copied()
@@ -656,8 +656,8 @@ pub(crate) fn toast_relation_oid(table_id: u32) -> Result<i32, ExecError> {
 /// relation's own oid.
 pub(crate) fn toast_relation_name(
     table_id: u32,
-) -> Result<crabka_pgcatalog::RelationName, ExecError> {
-    Ok(crabka_pgcatalog::RelationName::new(
+) -> Result<krabka_pgcatalog::RelationName, ExecError> {
+    Ok(krabka_pgcatalog::RelationName::new(
         PG_TOAST_SCHEMA,
         format!(
             "pg_toast_{}",
@@ -681,7 +681,7 @@ pub(crate) fn table_has_toast_relation(
 pub(crate) fn toast_relation_for_oid(
     catalog_kv: &dyn Kv,
     oid: i32,
-) -> Result<Option<crabka_pgcatalog::RelationName>, ExecError> {
+) -> Result<Option<krabka_pgcatalog::RelationName>, ExecError> {
     let Some(table_id) = oid
         .checked_sub(TOAST_OID_BASE)
         .filter(|id| (0..i32::try_from(TOAST_OID_BAND_WIDTH).unwrap_or_default()).contains(id))
@@ -689,7 +689,7 @@ pub(crate) fn toast_relation_for_oid(
     else {
         return Ok(None);
     };
-    let Ok(table) = crabka_pgcatalog::table_by_id(catalog_kv, table_id) else {
+    let Ok(table) = krabka_pgcatalog::table_by_id(catalog_kv, table_id) else {
         return Ok(None);
     };
     table_has_toast_relation(catalog_kv, &table)?
@@ -700,12 +700,12 @@ pub(crate) fn toast_relation_for_oid(
 /// Resolve a live synthetic TOAST relation name to its owning table.
 pub(crate) fn toast_relation_for_name(
     catalog_kv: &dyn Kv,
-    name: &crabka_pgcatalog::RelationName,
+    name: &krabka_pgcatalog::RelationName,
 ) -> Result<Option<Table>, ExecError> {
     if name.schema != PG_TOAST_SCHEMA {
         return Ok(None);
     }
-    for table in crabka_pgcatalog::list_tables(catalog_kv)? {
+    for table in krabka_pgcatalog::list_tables(catalog_kv)? {
         if table_has_toast_relation(catalog_kv, &table)? && toast_relation_name(table.id)? == *name
         {
             return Ok(Some(table));
@@ -958,7 +958,7 @@ pub(crate) fn pg_attribute_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, 
     // one flat namespace and a per-relation scan would reread it for every
     // table in the database.
     let acl = ColumnAcl::read(catalog_kv)?;
-    for table in crabka_pgcatalog::list_tables(catalog_kv)? {
+    for table in krabka_pgcatalog::list_tables(catalog_kv)? {
         rows.extend(attribute_rows_for_table(
             crate::catalog_rel::table_relation_oid(table.id)?,
             &table,
@@ -989,8 +989,8 @@ pub(crate) fn pg_attribute_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, 
             )?);
         }
     }
-    for index in crabka_pgcatalog::list_indexes(catalog_kv)? {
-        let source = crabka_pgcatalog::get_table(catalog_kv, &index.table)?;
+    for index in krabka_pgcatalog::list_indexes(catalog_kv)? {
+        let source = krabka_pgcatalog::get_table(catalog_kv, &index.table)?;
         let table = index_attribute_table(&index, &source)?;
         rows.extend(attribute_rows_for_table(
             catalog_index_oid(index.id)?,
@@ -1003,11 +1003,11 @@ pub(crate) fn pg_attribute_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, 
     // introspection read them from. They carry no default and no NOT NULL,
     // which is what a `View`'s own column list already says.
     let view_oids = crate::catalog_rel::view_oids(catalog_kv)?;
-    for view in crabka_pgcatalog::list_views(catalog_kv)? {
+    for view in krabka_pgcatalog::list_views(catalog_kv)? {
         let Some(oid) = view_oids.get(&view.name).copied() else {
             continue;
         };
-        let table = crabka_pgcatalog::Table {
+        let table = krabka_pgcatalog::Table {
             id: 0,
             owner: view.owner.clone(),
             name: view.name.clone(),
@@ -1041,8 +1041,8 @@ pub(crate) fn pg_attribute_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, 
     }
     let aggregate_index = Table {
         id: 2650,
-        owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
-        name: crabka_pgcatalog::RelationName::new(
+        owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+        name: krabka_pgcatalog::RelationName::new(
             crate::search_path::PG_CATALOG,
             PG_AGGREGATE_FNOID_INDEX.name,
         ),
@@ -1063,17 +1063,17 @@ pub(crate) fn pg_attribute_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, 
     // A composite type's attributes hang off the relation its `pg_type.typrelid`
     // points at, which is how `\d <type>` and the driver introspection queries
     // reach them.
-    for ty in crabka_pgcatalog::list_user_types(catalog_kv)? {
+    for ty in krabka_pgcatalog::list_user_types(catalog_kv)? {
         let Some(fields) = ty.fields() else { continue };
-        let relid = i32::try_from(crabka_pgtypes::usertype::composite_relation_oid(ty.oid))
+        let relid = i32::try_from(krabka_pgtypes::usertype::composite_relation_oid(ty.oid))
             .map_err(|_| ExecError::Unsupported("composite relation oid exceeds int4".into()))?;
-        let table = crabka_pgcatalog::Table {
+        let table = krabka_pgcatalog::Table {
             id: 0,
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
-            name: crabka_pgcatalog::RelationName::new(ty.schema.clone(), ty.name.clone()),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            name: krabka_pgcatalog::RelationName::new(ty.schema.clone(), ty.name.clone()),
             columns: fields
                 .iter()
-                .map(|field| crabka_pgcatalog::Column::new(field.name.clone(), field.ty))
+                .map(|field| krabka_pgcatalog::Column::new(field.name.clone(), field.ty))
                 .collect(),
             sharded: false,
             row_security: false,
@@ -1097,7 +1097,7 @@ pub(crate) fn information_schema_schemata_rows(
     catalog_kv: &dyn Kv,
     database: &str,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
-    Ok(crabka_pgcatalog::list_schemas(catalog_kv)?
+    Ok(krabka_pgcatalog::list_schemas(catalog_kv)?
         .into_iter()
         .map(|schema| {
             vec![
@@ -1117,8 +1117,8 @@ fn foreign_option_array(options: &[(String, String)]) -> Datum {
     if options.is_empty() {
         Datum::Null
     } else {
-        Datum::Array(crabka_pgtypes::ArrayValue::new(
-            crabka_pgtypes::ElemType::Text,
+        Datum::Array(krabka_pgtypes::ArrayValue::new(
+            krabka_pgtypes::ElemType::Text,
             options
                 .iter()
                 .map(|(name, value)| Datum::Text(format!("{name}={value}")))
@@ -1130,8 +1130,8 @@ fn foreign_option_array(options: &[(String, String)]) -> Datum {
 /// The role name behind [`schema_owner_oid`], so the two schema projections
 /// cannot disagree about who owns a schema.
 pub(crate) fn schema_owner_name(owner: &str) -> &'static str {
-    if owner == crabka_pgcatalog::PUBLIC_SCHEMA_OWNER {
-        crabka_pgcatalog::PUBLIC_SCHEMA_OWNER
+    if owner == krabka_pgcatalog::PUBLIC_SCHEMA_OWNER {
+        krabka_pgcatalog::PUBLIC_SCHEMA_OWNER
     } else {
         crate::catalog_fn::OBJECT_OWNER
     }
@@ -1146,8 +1146,8 @@ pub(crate) fn schema_owner_name(owner: &str) -> &'static str {
 /// `pg_class` and its namespace in all three. Only the standard's relation
 /// views hide it.
 pub(crate) fn is_other_temp_schema(schema: &str, backend_id: i32) -> bool {
-    crabka_pgcatalog::is_temp_schema(schema)
-        && schema != crabka_pgcatalog::temp_schema_name(backend_id)
+    krabka_pgcatalog::is_temp_schema(schema)
+        && schema != krabka_pgcatalog::temp_schema_name(backend_id)
 }
 
 /// Every relation the SQL standard calls a table: base tables, foreign tables,
@@ -1162,7 +1162,7 @@ pub(crate) fn information_schema_tables_rows(
     database: &str,
     backend_id: i32,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
-    let mut rows = crabka_pgcatalog::list_tables(catalog_kv)?
+    let mut rows = krabka_pgcatalog::list_tables(catalog_kv)?
         .into_iter()
         .filter(|table| {
             !is_other_temp_schema(&table.name.schema, backend_id) && table.materialized.is_none()
@@ -1184,7 +1184,7 @@ pub(crate) fn information_schema_tables_rows(
         })
         .collect::<Vec<_>>();
     rows.extend(
-        crabka_pgcatalog::list_views(catalog_kv)?
+        krabka_pgcatalog::list_views(catalog_kv)?
             .into_iter()
             .filter(|view| !is_other_temp_schema(&view.name.schema, backend_id))
             .map(|view| {
@@ -1200,7 +1200,7 @@ pub(crate) fn information_schema_tables_rows(
 
 pub(crate) fn information_schema_table_row(
     database: &str,
-    name: &crabka_pgcatalog::RelationName,
+    name: &krabka_pgcatalog::RelationName,
     table_type: &str,
     insertable: bool,
 ) -> Vec<Datum> {
@@ -1224,7 +1224,7 @@ pub(crate) fn information_schema_columns_rows(
     backend_id: i32,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
     let mut rows = Vec::new();
-    for table in crabka_pgcatalog::list_tables(catalog_kv)? {
+    for table in krabka_pgcatalog::list_tables(catalog_kv)? {
         // A materialized view contributes no rows here for the same reason it
         // contributes none to `information_schema.tables`: the standard has no
         // such relation, so PostgreSQL leaves it out of both.
@@ -1245,7 +1245,7 @@ pub(crate) fn information_schema_columns_rows(
     }
     // A view's columns belong here too — `is_updatable` is a per-column answer
     // and a view is where it stops being uniformly YES.
-    for view in crabka_pgcatalog::list_views(catalog_kv)? {
+    for view in krabka_pgcatalog::list_views(catalog_kv)? {
         if is_other_temp_schema(&view.name.schema, backend_id) {
             continue;
         }
@@ -1266,8 +1266,8 @@ pub(crate) fn information_schema_columns_rows(
 
 pub(crate) fn information_schema_column_row(
     catalog_kv: &dyn Kv,
-    relation: &crabka_pgcatalog::RelationName,
-    column: &crabka_pgcatalog::Column,
+    relation: &krabka_pgcatalog::RelationName,
+    column: &krabka_pgcatalog::Column,
     index: usize,
     updatable: bool,
 ) -> Result<Vec<Datum>, ExecError> {
@@ -1292,10 +1292,10 @@ pub(crate) fn information_schema_column_row(
 pub(crate) fn information_schema_trigger_rows(
     catalog_kv: &dyn Kv,
     database: &str,
-    style: crabka_pgtypes::encoding::OutputStyle<'_>,
+    style: krabka_pgtypes::encoding::OutputStyle<'_>,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
-    use crabka_pgcatalog::trigger::{TriggerLevel, TriggerTiming};
-    let triggers = crabka_pgcatalog::trigger::list_triggers(catalog_kv)?;
+    use krabka_pgcatalog::trigger::{TriggerLevel, TriggerTiming};
+    let triggers = krabka_pgcatalog::trigger::list_triggers(catalog_kv)?;
     let mut rows = Vec::new();
     for trigger in triggers.iter().filter(|trigger| !trigger.is_internal) {
         let function = crate::routine::routine_by_oid(
@@ -1333,7 +1333,7 @@ pub(crate) fn information_schema_trigger_rows(
                 .join(", ");
             let condition = match &trigger.when {
                 Some(source) => {
-                    let predicate = crabka_pgparser::parser::parse_expression(source)?;
+                    let predicate = krabka_pgparser::parser::parse_expression(source)?;
                     text(&crate::viewdef::expression_text_with_qualifiers(
                         &predicate, style,
                     ))
@@ -1390,7 +1390,7 @@ pub(crate) fn information_schema_triggered_update_column_rows(
     database: &str,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
     let mut rows = Vec::new();
-    for trigger in crabka_pgcatalog::trigger::list_triggers(catalog_kv)?
+    for trigger in krabka_pgcatalog::trigger::list_triggers(catalog_kv)?
         .into_iter()
         .filter(|trigger| !trigger.is_internal && trigger.events.update)
     {
@@ -1440,7 +1440,7 @@ pub(crate) fn format_column_default(
                 crate::relname::ResolutionScope::default_scope(),
                 value.oid,
             )
-            .unwrap_or_else(|_| crabka_pgtypes::RegclassValue::unresolved(value.oid));
+            .unwrap_or_else(|_| krabka_pgtypes::RegclassValue::unresolved(value.oid));
             format!("'{}'::{}", escape_sql_string(&resolved.name), ty.name())
         }
         ColumnDefault::Value(value) => format_default_value(value, ty),
@@ -1469,7 +1469,7 @@ pub(crate) fn format_default_value(value: &Datum, ty: ColumnType) -> String {
         // `real` default reads back as PostgreSQL spells it (`1e+06`, not
         // `1000000`).
         Datum::Float4(_) | Datum::Float8(_) => String::from_utf8(
-            crabka_pgtypes::encoding::encode_text(value, &jiff::tz::TimeZone::UTC),
+            krabka_pgtypes::encoding::encode_text(value, &jiff::tz::TimeZone::UTC),
         )
         .expect("a Datum's text encoding is always valid UTF-8"),
         Datum::Numeric(value) => value.to_string(),
@@ -1568,7 +1568,7 @@ pub(crate) fn zone_independent_text(value: &Datum) -> Option<String> {
     if zone_dependent(value) {
         return None;
     }
-    String::from_utf8(crabka_pgtypes::encoding::encode_text(
+    String::from_utf8(krabka_pgtypes::encoding::encode_text(
         value,
         &jiff::tz::TimeZone::UTC,
     ))
@@ -1589,14 +1589,14 @@ pub(crate) fn escape_sql_string(value: &str) -> String {
 /// granted, which is what `PostgreSQL` stores and what `pg_dump` tests before
 /// it emits a `GRANT`.
 pub(crate) struct ColumnAcl(
-    std::collections::BTreeMap<(crabka_pgcatalog::RelationName, String), Vec<String>>,
+    std::collections::BTreeMap<(krabka_pgcatalog::RelationName, String), Vec<String>>,
 );
 
 impl ColumnAcl {
     pub(crate) fn read(catalog_kv: &dyn Kv) -> Result<Self, ExecError> {
         let mut grouped: std::collections::BTreeMap<_, Vec<String>> =
             std::collections::BTreeMap::new();
-        for privilege in crabka_pgcatalog::list_column_privileges(catalog_kv)? {
+        for privilege in krabka_pgcatalog::list_column_privileges(catalog_kv)? {
             grouped
                 .entry((privilege.table, privilege.column))
                 .or_default()
@@ -1604,7 +1604,7 @@ impl ColumnAcl {
                     "{}={}/{}",
                     privilege.grantee,
                     acl_privilege_letter(&privilege.privilege),
-                    crabka_pgcatalog::BOOTSTRAP_ROLE,
+                    krabka_pgcatalog::BOOTSTRAP_ROLE,
                 ));
         }
         for entry in grouped.values_mut() {
@@ -1613,12 +1613,12 @@ impl ColumnAcl {
         Ok(Self(grouped))
     }
 
-    pub(crate) fn of(&self, table: &crabka_pgcatalog::RelationName, column: &str) -> Datum {
+    pub(crate) fn of(&self, table: &krabka_pgcatalog::RelationName, column: &str) -> Datum {
         self.0
             .get(&(table.clone(), column.to_string()))
             .map_or(Datum::Null, |items| {
-                Datum::Array(crabka_pgtypes::ArrayValue::new(
-                    crabka_pgtypes::ElemType::Text,
+                Datum::Array(krabka_pgtypes::ArrayValue::new(
+                    krabka_pgtypes::ElemType::Text,
                     items.iter().map(|item| Datum::Text(item.clone())).collect(),
                 ))
             })
@@ -1653,8 +1653,8 @@ pub(crate) fn attribute_rows_for_table(
             let attnum = i16::try_from(idx + 1)
                 .map_err(|_| ExecError::Unsupported("attnum exceeds int2 range".into()))?;
             let identity = match column.identity {
-                Some(crabka_pgcatalog::IdentityKind::Always) => "a",
-                Some(crabka_pgcatalog::IdentityKind::ByDefault) => "d",
+                Some(krabka_pgcatalog::IdentityKind::Always) => "a",
+                Some(krabka_pgcatalog::IdentityKind::ByDefault) => "d",
                 None => "",
             };
             Ok(vec![
@@ -1721,7 +1721,7 @@ pub(crate) fn attribute_rows_for_table(
 /// The physical fields that `pg_attribute` duplicates from `pg_type`.
 fn attribute_layout(
     ty: ColumnType,
-    layout: Option<crabka_pgtypes::usertype::BaseLayout>,
+    layout: Option<krabka_pgtypes::usertype::BaseLayout>,
 ) -> (i16, bool, u8) {
     if let Some(layout) = layout {
         return (layout.length, layout.by_value, layout.alignment as u8);
@@ -1769,7 +1769,7 @@ fn attribute_layout(
         C::Array(_)
             if matches!(
                 ty.oid(),
-                crabka_pgtypes::oids::ACLITEMARRAY | crabka_pgtypes::oids::FLOAT8ARRAY
+                krabka_pgtypes::oids::ACLITEMARRAY | krabka_pgtypes::oids::FLOAT8ARRAY
             ) =>
         {
             b'd'
@@ -1787,7 +1787,7 @@ fn attribute_layout(
 /// The columns PostgreSQL exposes for an index relation. Expression keys have
 /// no source column name, so its catalog attribute is the conventional `expr`.
 pub(crate) fn index_attribute_table(
-    index: &crabka_pgcatalog::Index,
+    index: &krabka_pgcatalog::Index,
     source: &Table,
 ) -> Result<Table, ExecError> {
     let scope = Scope::single(source, &source.name.name);
@@ -1796,11 +1796,11 @@ pub(crate) fn index_attribute_table(
         .iter()
         .chain(index.include.iter())
         .map(|key| {
-            if let Some(expression) = crabka_pgcatalog::index_key_expression(key) {
-                return Ok(crabka_pgcatalog::Column::new(
+            if let Some(expression) = krabka_pgcatalog::index_key_expression(key) {
+                return Ok(krabka_pgcatalog::Column::new(
                     "expr",
                     crate::eval::infer_type(
-                        &crabka_pgparser::parser::parse_expression(expression)?,
+                        &krabka_pgparser::parser::parse_expression(expression)?,
                         &scope,
                     )?,
                 ));
@@ -1972,14 +1972,14 @@ pub(crate) fn text_collation_oid(ty: ColumnType) -> i32 {
 pub(crate) fn builtin_type_collation_oid(oid: i32) -> i32 {
     let collatable = matches!(
         u32::try_from(oid),
-        Ok(crabka_pgtypes::oids::TEXT
-            | crabka_pgtypes::oids::NAME
-            | crabka_pgtypes::oids::VARCHAR
-            | crabka_pgtypes::oids::BPCHAR
-            | crabka_pgtypes::oids::TEXTARRAY
-            | crabka_pgtypes::oids::NAMEARRAY
-            | crabka_pgtypes::oids::VARCHARARRAY
-            | crabka_pgtypes::oids::BPCHARARRAY)
+        Ok(krabka_pgtypes::oids::TEXT
+            | krabka_pgtypes::oids::NAME
+            | krabka_pgtypes::oids::VARCHAR
+            | krabka_pgtypes::oids::BPCHAR
+            | krabka_pgtypes::oids::TEXTARRAY
+            | krabka_pgtypes::oids::NAMEARRAY
+            | krabka_pgtypes::oids::VARCHARARRAY
+            | krabka_pgtypes::oids::BPCHARARRAY)
     );
     if collatable {
         crate::catalog_rel::DEFAULT_COLLATION_OID
@@ -2034,7 +2034,7 @@ pub(crate) fn pg_type_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecE
     rows.extend([
         pg_type_row(
             PgTypeRow {
-                oid: crabka_pgtypes::oids::RECORD as i32,
+                oid: krabka_pgtypes::oids::RECORD as i32,
                 name: "record",
                 namespace: PG_CATALOG_NAMESPACE_OID,
                 len: -1,
@@ -2042,7 +2042,7 @@ pub(crate) fn pg_type_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecE
                 typtype: "p",
                 typrelid: 0,
                 typelem: 0,
-                typarray: crabka_pgtypes::oids::RECORDARRAY as i32,
+                typarray: krabka_pgtypes::oids::RECORDARRAY as i32,
                 typbasetype: 0,
                 typcollation: 0,
                 domain_base: None,
@@ -2052,14 +2052,14 @@ pub(crate) fn pg_type_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecE
         ),
         pg_type_row(
             PgTypeRow {
-                oid: crabka_pgtypes::oids::RECORDARRAY as i32,
+                oid: krabka_pgtypes::oids::RECORDARRAY as i32,
                 name: "_record",
                 namespace: PG_CATALOG_NAMESPACE_OID,
                 len: -1,
                 category: "P",
                 typtype: "p",
                 typrelid: 0,
-                typelem: crabka_pgtypes::oids::RECORD as i32,
+                typelem: krabka_pgtypes::oids::RECORD as i32,
                 typarray: 0,
                 typbasetype: 0,
                 typcollation: 0,
@@ -2209,7 +2209,7 @@ fn relation_type_rows(
     let mut rows = Vec::new();
     for (name, (oid, array_oid)) in crate::catalog_rel::relation_rowtype_oids(catalog_kv)? {
         let typrelid = crate::catalog_fn::relation_oid(catalog_kv, &name)?.ok_or_else(|| {
-            ExecError::Catalog(crabka_pgcatalog::CatalogError::UndefinedTable(
+            ExecError::Catalog(krabka_pgcatalog::CatalogError::UndefinedTable(
                 name.to_string(),
             ))
         })?;
@@ -2360,10 +2360,10 @@ fn information_schema_domain_rows(proc_oids: &BTreeMap<String, i32>) -> Vec<Vec<
                 typelem: 0,
                 typarray: array_oid,
                 typbasetype: match base {
-                    "int4" => crabka_pgtypes::oids::INT4 as i32,
-                    "varchar" => crabka_pgtypes::oids::VARCHAR as i32,
+                    "int4" => krabka_pgtypes::oids::INT4 as i32,
+                    "varchar" => krabka_pgtypes::oids::VARCHAR as i32,
                     "name" => 19,
-                    "timestamptz" => crabka_pgtypes::oids::TIMESTAMPTZ as i32,
+                    "timestamptz" => krabka_pgtypes::oids::TIMESTAMPTZ as i32,
                     _ => unreachable!("fixed information_schema domain base"),
                 },
                 typcollation,
@@ -2437,7 +2437,7 @@ fn pg_type_row_with_metadata(
     storage: Option<char>,
     routine_overrides: [Option<&str>; 8],
     default: Option<&str>,
-    layout: Option<crabka_pgtypes::usertype::BaseLayout>,
+    layout: Option<krabka_pgtypes::usertype::BaseLayout>,
 ) -> Vec<Datum> {
     let typlen = layout.map_or(row.len, |layout| i32::from(layout.length));
     let typbyval = layout.map_or(matches!(row.len, 1 | 2 | 4 | 8), |layout| layout.by_value);
@@ -2650,30 +2650,30 @@ fn pg_type_routine_stem(name: &str) -> &str {
 }
 
 fn regproc(oid: i32, name: &str) -> Datum {
-    Datum::Regclass(crabka_pgtypes::RegclassValue::resolved(oid, name))
+    Datum::Regclass(krabka_pgtypes::RegclassValue::resolved(oid, name))
 }
 
 fn absent_regproc() -> Datum {
-    Datum::Regclass(crabka_pgtypes::RegclassValue::unresolved(0))
+    Datum::Regclass(krabka_pgtypes::RegclassValue::unresolved(0))
 }
 
 pub(crate) fn text_search_catalog_rows(
     kv: &dyn Kv,
-    kind: crabka_pgparser::ast::TextSearchObjectKind,
+    kind: krabka_pgparser::ast::TextSearchObjectKind,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
     Ok(crate::text_search_catalog::catalog_rows(kv, kind)?
         .into_iter()
         .map(|(name, base)| {
             let oid = crate::text_search_catalog::object_oid(&name);
             match kind {
-                crabka_pgparser::ast::TextSearchObjectKind::Configuration => vec![
+                krabka_pgparser::ast::TextSearchObjectKind::Configuration => vec![
                     Datum::Int4(oid),
                     Datum::Text(name),
                     Datum::Int4(PG_CATALOG_NAMESPACE_OID),
                     Datum::Int4(10),
                     Datum::Int4(3722),
                 ],
-                crabka_pgparser::ast::TextSearchObjectKind::Dictionary => vec![
+                krabka_pgparser::ast::TextSearchObjectKind::Dictionary => vec![
                     Datum::Int4(oid),
                     Datum::Text(name),
                     Datum::Int4(PG_CATALOG_NAMESPACE_OID),
@@ -2740,7 +2740,7 @@ fn pg_ts_template_rows() -> Result<Vec<Vec<Datum>>, ExecError> {
 fn pg_ts_config_map_rows(kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
     let configs = crate::text_search_catalog::catalog_rows(
         kv,
-        crabka_pgparser::ast::TextSearchObjectKind::Configuration,
+        krabka_pgparser::ast::TextSearchObjectKind::Configuration,
     )?;
     let mut rows = Vec::new();
     for (config, _) in configs {
@@ -2776,7 +2776,7 @@ pub(crate) fn user_type_rows(
     catalog_kv: &dyn Kv,
     proc_oids: &BTreeMap<String, i32>,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
-    use crabka_pgtypes::usertype;
+    use krabka_pgtypes::usertype;
     let mut proc_oids = proc_oids.clone();
     proc_oids.extend(
         crate::routine::user_pg_proc_rows(catalog_kv)?
@@ -2786,7 +2786,7 @@ pub(crate) fn user_type_rows(
                 _ => None,
             }),
     );
-    let user_types = crabka_pgcatalog::list_user_types(catalog_kv)?;
+    let user_types = krabka_pgcatalog::list_user_types(catalog_kv)?;
     let mut rows = Vec::new();
     for ty in &user_types {
         let column_type = ty.column_type();
@@ -3034,7 +3034,7 @@ pub(crate) fn pg_range_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
     })
     .collect::<Vec<_>>();
     rows.extend(
-        crabka_pgcatalog::list_user_types(catalog_kv)?
+        krabka_pgcatalog::list_user_types(catalog_kv)?
             .into_iter()
             .filter_map(|ty| {
                 let range = ty.range()?;
@@ -3066,7 +3066,7 @@ pub(crate) fn pg_range_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
 
 /// The `pg_type.typcategory` of a built-in type, for the domain rows that
 /// inherit their base type's category.
-pub(crate) fn builtin_type_category(base: crabka_pgtypes::ColumnType) -> &'static str {
+pub(crate) fn builtin_type_category(base: krabka_pgtypes::ColumnType) -> &'static str {
     builtin_type_rows()
         .iter()
         .find(|row| u32::try_from(row.oid) == Ok(base.oid()))
@@ -3291,8 +3291,8 @@ pub(crate) fn builtin_catalog_index_table(index: &BuiltinCatalogOidIndex) -> Tab
         .expect("catalog oid index refers to a catalog with an oid column");
     Table {
         id: u32::try_from(index.oid).expect("built-in index oid is positive"),
-        owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
-        name: crabka_pgcatalog::RelationName::new(crate::search_path::PG_CATALOG, index.name),
+        owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+        name: krabka_pgcatalog::RelationName::new(crate::search_path::PG_CATALOG, index.name),
         columns: vec![oid_column],
         sharded: false,
         row_security: false,
@@ -3305,13 +3305,13 @@ pub(crate) fn builtin_catalog_index_table(index: &BuiltinCatalogOidIndex) -> Tab
 }
 
 pub(crate) fn pg_index_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    let mut rows = crabka_pgcatalog::list_indexes(catalog_kv)?
+    let mut rows = krabka_pgcatalog::list_indexes(catalog_kv)?
         .into_iter()
         .map(|index| {
-            let table = crabka_pgcatalog::get_table(catalog_kv, &index.table)?;
+            let table = krabka_pgcatalog::get_table(catalog_kv, &index.table)?;
             let is_replica_identity = matches!(
-                crabka_pgcatalog::replica_identity(catalog_kv, index.table_id)?,
-                crabka_pgcatalog::ReplicaIdentity::Index(name) if name == index.name
+                krabka_pgcatalog::replica_identity(catalog_kv, index.table_id)?,
+                krabka_pgcatalog::ReplicaIdentity::Index(name) if name == index.name
             );
             // An expression key has no table column to point at: PostgreSQL
             // writes 0 in `indkey` for it and carries the expression itself in
@@ -3322,11 +3322,11 @@ pub(crate) fn pg_index_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
             let mut indkey = Vec::with_capacity(index.columns.len() + index.include.len());
             let mut key_types = Vec::with_capacity(index.columns.len());
             for column in &index.columns {
-                if let Some(source) = crabka_pgcatalog::index_key_expression(column) {
+                if let Some(source) = krabka_pgcatalog::index_key_expression(column) {
                     expressions.push(source);
                     indkey.push(Datum::Int4(0));
                     key_types.push(crate::eval::infer_type(
-                        &crabka_pgparser::parser::parse_expression(source)?,
+                        &krabka_pgparser::parser::parse_expression(source)?,
                         &Scope::single(&table, &table.name.name),
                     )?);
                     continue;
@@ -3359,8 +3359,8 @@ pub(crate) fn pg_index_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
                 .map_err(|_| ExecError::Unsupported("indnkeyatts exceeds int2 range".into()))?;
             let natts = i16::try_from(index.columns.len() + index.include.len())
                 .map_err(|_| ExecError::Unsupported("indnatts exceeds int2 range".into()))?;
-            let indcollation = crabka_pgtypes::ArrayValue::with_dims(
-                crabka_pgtypes::ElemType::Int4,
+            let indcollation = krabka_pgtypes::ArrayValue::with_dims(
+                krabka_pgtypes::ElemType::Int4,
                 index
                     .key_options
                     .iter()
@@ -3375,20 +3375,20 @@ pub(crate) fn pg_index_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
                         )
                     })
                     .collect(),
-                vec![crabka_pgtypes::ArrayDim::new(0, i32::from(nkeyatts))],
+                vec![krabka_pgtypes::ArrayDim::new(0, i32::from(nkeyatts))],
             );
-            let indclass = crabka_pgtypes::ArrayValue::with_dims(
-                crabka_pgtypes::ElemType::Int4,
+            let indclass = krabka_pgtypes::ArrayValue::with_dims(
+                krabka_pgtypes::ElemType::Int4,
                 index
                     .key_options
                     .iter()
                     .zip(&key_types)
                     .map(|(option, ty)| index_opclass_oid(catalog_kv, index.method, *ty, option))
                     .collect::<Result<Vec<_>, _>>()?,
-                vec![crabka_pgtypes::ArrayDim::new(0, i32::from(nkeyatts))],
+                vec![krabka_pgtypes::ArrayDim::new(0, i32::from(nkeyatts))],
             );
-            let indoption = crabka_pgtypes::ArrayValue::with_dims(
-                crabka_pgtypes::ElemType::Int2,
+            let indoption = krabka_pgtypes::ArrayValue::with_dims(
+                krabka_pgtypes::ElemType::Int2,
                 index
                     .key_options
                     .iter()
@@ -3398,7 +3398,7 @@ pub(crate) fn pg_index_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
                         )
                     })
                     .collect(),
-                vec![crabka_pgtypes::ArrayDim::new(0, i32::from(nkeyatts))],
+                vec![krabka_pgtypes::ArrayDim::new(0, i32::from(nkeyatts))],
             );
             Ok(vec![
                 int(catalog_index_oid(index.id)?),
@@ -3410,7 +3410,7 @@ pub(crate) fn pg_index_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
                 // The catalog knows which index backs the primary key; ORMs
                 // introspecting for upserts key off exactly this column.
                 Datum::Bool(
-                    index.constraint == Some(crabka_pgcatalog::IndexConstraint::PrimaryKey),
+                    index.constraint == Some(krabka_pgcatalog::IndexConstraint::PrimaryKey),
                 ),
                 // `indisexclusion` covers a `WITHOUT OVERLAPS` key too: it is
                 // an exclusion constraint that also happens to be catalogued as
@@ -3433,10 +3433,10 @@ pub(crate) fn pg_index_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
                 Datum::Bool(true),
                 Datum::Bool(true),
                 Datum::Bool(is_replica_identity),
-                Datum::OidVector(crabka_pgtypes::ArrayValue::with_dims(
-                    crabka_pgtypes::ElemType::Int4,
+                Datum::OidVector(krabka_pgtypes::ArrayValue::with_dims(
+                    krabka_pgtypes::ElemType::Int4,
                     indkey,
-                    vec![crabka_pgtypes::ArrayDim::new(0, i32::from(natts))],
+                    vec![krabka_pgtypes::ArrayDim::new(0, i32::from(natts))],
                 )),
                 Datum::OidVector(indcollation),
                 Datum::OidVector(indclass),
@@ -3476,10 +3476,10 @@ pub(crate) fn pg_index_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
             Datum::Bool(true),
             Datum::Bool(true),
             Datum::Bool(false),
-            Datum::OidVector(crabka_pgtypes::ArrayValue::with_dims(
-                crabka_pgtypes::ElemType::Int4,
+            Datum::OidVector(krabka_pgtypes::ArrayValue::with_dims(
+                krabka_pgtypes::ElemType::Int4,
                 vec![Datum::Int4(i32::from(attnum))],
-                vec![crabka_pgtypes::ArrayDim::new(0, 1)],
+                vec![krabka_pgtypes::ArrayDim::new(0, 1)],
             )),
             Datum::Null,
             Datum::Null,
@@ -3504,21 +3504,21 @@ pub(crate) fn pg_index_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
         Datum::Bool(true),
         Datum::Bool(true),
         Datum::Bool(false),
-        Datum::OidVector(crabka_pgtypes::ArrayValue::with_dims(
-            crabka_pgtypes::ElemType::Int4,
+        Datum::OidVector(krabka_pgtypes::ArrayValue::with_dims(
+            krabka_pgtypes::ElemType::Int4,
             vec![Datum::Int4(1)],
-            vec![crabka_pgtypes::ArrayDim::new(0, 1)],
+            vec![krabka_pgtypes::ArrayDim::new(0, 1)],
         )),
         Datum::Null,
-        Datum::OidVector(crabka_pgtypes::ArrayValue::with_dims(
-            crabka_pgtypes::ElemType::Int4,
+        Datum::OidVector(krabka_pgtypes::ArrayValue::with_dims(
+            krabka_pgtypes::ElemType::Int4,
             vec![Datum::Int4(1981)],
-            vec![crabka_pgtypes::ArrayDim::new(0, 1)],
+            vec![krabka_pgtypes::ArrayDim::new(0, 1)],
         )),
-        Datum::OidVector(crabka_pgtypes::ArrayValue::with_dims(
-            crabka_pgtypes::ElemType::Int2,
+        Datum::OidVector(krabka_pgtypes::ArrayValue::with_dims(
+            krabka_pgtypes::ElemType::Int2,
             vec![Datum::Int2(0)],
-            vec![crabka_pgtypes::ArrayDim::new(0, 1)],
+            vec![krabka_pgtypes::ArrayDim::new(0, 1)],
         )),
         Datum::Null,
         Datum::Null,
@@ -3528,16 +3528,16 @@ pub(crate) fn pg_index_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
 
 fn index_opclass_oid(
     kv: &dyn Kv,
-    method: crabka_pgcatalog::IndexMethod,
+    method: krabka_pgcatalog::IndexMethod,
     ty: ColumnType,
-    option: &crabka_pgcatalog::IndexKeyOptions,
+    option: &krabka_pgcatalog::IndexKeyOptions,
 ) -> Result<Datum, ExecError> {
     let method_oid = match method {
-        crabka_pgcatalog::IndexMethod::Btree => crate::catalog_rel::BTREE_AM_OID,
-        crabka_pgcatalog::IndexMethod::Hash => crate::catalog_rel::HASH_AM_OID,
-        crabka_pgcatalog::IndexMethod::Gist => crate::catalog_rel::GIST_AM_OID,
-        crabka_pgcatalog::IndexMethod::Gin => crate::catalog_rel::GIN_AM_OID,
-        crabka_pgcatalog::IndexMethod::Spgist => crate::catalog_rel::SPGIST_AM_OID,
+        krabka_pgcatalog::IndexMethod::Btree => crate::catalog_rel::BTREE_AM_OID,
+        krabka_pgcatalog::IndexMethod::Hash => crate::catalog_rel::HASH_AM_OID,
+        krabka_pgcatalog::IndexMethod::Gist => crate::catalog_rel::GIST_AM_OID,
+        krabka_pgcatalog::IndexMethod::Gin => crate::catalog_rel::GIN_AM_OID,
+        krabka_pgcatalog::IndexMethod::Spgist => crate::catalog_rel::SPGIST_AM_OID,
     };
     let compatible = |input_oid: i32| {
         u32::try_from(input_oid)
@@ -3560,7 +3560,7 @@ fn index_opclass_oid(
         {
             return Ok(Datum::Int4(*oid));
         }
-        if let Some(class) = crabka_pgcatalog::list_operator_classes(kv)?
+        if let Some(class) = krabka_pgcatalog::list_operator_classes(kv)?
             .into_iter()
             .find(|class| class.method == index_method_name(method) && class.name.name == name)
         {
@@ -3612,8 +3612,8 @@ pub(crate) fn pg_show_all_settings_rows() -> Result<Vec<Vec<Datum>>, ExecError> 
             let enumvals = crate::session::guc_setting_enum_values(&setting.name).map_or(
                 Datum::Null,
                 |values| {
-                    Datum::Array(crabka_pgtypes::ArrayValue::new(
-                        crabka_pgtypes::ElemType::Text,
+                    Datum::Array(krabka_pgtypes::ArrayValue::new(
+                        krabka_pgtypes::ElemType::Text,
                         values.iter().map(|value| text(value)).collect(),
                     ))
                 },
@@ -3778,7 +3778,7 @@ pub(crate) fn require_role_memberships(
     kv: &dyn Kv,
     fctx: ForeignCtx<'_>,
     roles: &[String],
-    members: &[crabka_pgparser::ast::RoleSpec],
+    members: &[krabka_pgparser::ast::RoleSpec],
     direction: crate::privilege::RoleGrant,
 ) -> Result<Vec<String>, ExecError> {
     // `PUBLIC` has no membership to move, on either side: `GRANT r TO PUBLIC`
@@ -3786,7 +3786,7 @@ pub(crate) fn require_role_memberships(
     // `GRANT SELECT … TO PUBLIC` is the ordinary way to open a relation to
     // everyone. Membership needs a role with a record, and it has none.
     let holds_membership = |name: &str| -> Result<bool, ExecError> {
-        Ok(name != crabka_pgcatalog::PUBLIC_ROLE && crabka_pgcatalog::role_is_nameable(kv, name)?)
+        Ok(name != krabka_pgcatalog::PUBLIC_ROLE && krabka_pgcatalog::role_is_nameable(kv, name)?)
     };
     let mut resolved = Vec::with_capacity(members.len());
     for member in members {
@@ -3809,11 +3809,11 @@ pub(crate) fn require_role_memberships(
 /// returning the resulting login flag. An option the statement did not write
 /// keeps its current value, which is what `ALTER ROLE … WITH SUPERUSER` means.
 pub(crate) fn apply_role_options(
-    attributes: &mut crabka_pgcatalog::RoleAttributes,
+    attributes: &mut krabka_pgcatalog::RoleAttributes,
     can_login: bool,
-    options: crabka_pgparser::ast::RoleOptions,
+    options: krabka_pgparser::ast::RoleOptions,
 ) -> bool {
-    use crabka_pgcatalog::RoleAttribute;
+    use krabka_pgcatalog::RoleAttribute;
     for (attribute, written) in [
         (RoleAttribute::Superuser, options.superuser),
         (RoleAttribute::Inherit, options.inherit),
@@ -3830,9 +3830,9 @@ pub(crate) fn apply_role_options(
 }
 
 pub(crate) fn pg_roles_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    use crabka_pgcatalog::RoleAttribute;
+    use krabka_pgcatalog::RoleAttribute;
     let oids = crate::catalog_rel::role_oids(catalog_kv)?;
-    Ok(crabka_pgcatalog::list_roles(catalog_kv)?
+    Ok(krabka_pgcatalog::list_roles(catalog_kv)?
         .into_iter()
         .map(|role| {
             let bootstrap = role.name == crate::catalog_fn::OBJECT_OWNER;
@@ -3859,7 +3859,7 @@ pub(crate) fn pg_roles_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, Exec
 }
 
 pub(crate) fn pg_user_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, ExecError> {
-    Ok(crabka_pgcatalog::list_roles(catalog_kv)?
+    Ok(krabka_pgcatalog::list_roles(catalog_kv)?
         .into_iter()
         .filter(|role| role.can_login)
         .map(|role| vec![text(&role.name), Datum::Bool(false), Datum::Bool(false)])
@@ -3921,20 +3921,20 @@ pub(crate) fn pg_stats_ext_rows(
     catalog_kv: &dyn Kv,
     ctx: &crate::clock::EvalCtx,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
-    let role = if ctx.current_user == crabka_pgcatalog::PUBLIC_ROLE {
-        crabka_pgcatalog::BOOTSTRAP_ROLE
+    let role = if ctx.current_user == krabka_pgcatalog::PUBLIC_ROLE {
+        krabka_pgcatalog::BOOTSTRAP_ROLE
     } else {
         &ctx.current_user
     };
     let superuser = crate::rls::role_is_superuser(catalog_kv, role)?;
-    let tables = crabka_pgcatalog::list_tables(catalog_kv)?;
+    let tables = krabka_pgcatalog::list_tables(catalog_kv)?;
     let mut rows = Vec::new();
-    for object in crabka_pgcatalog::statistics::list(catalog_kv)? {
+    for object in krabka_pgcatalog::statistics::list(catalog_kv)? {
         let Some(table) = tables.iter().find(|table| table.id == object.table_id) else {
             continue;
         };
         if crate::rls::row_security_active(catalog_kv, role, table)?
-            || (!superuser && !crabka_pgcatalog::role_has_privs_of(catalog_kv, role, &table.owner)?)
+            || (!superuser && !krabka_pgcatalog::role_has_privs_of(catalog_kv, role, &table.owner)?)
         {
             continue;
         }
@@ -3956,7 +3956,7 @@ pub(crate) fn pg_stats_ext_rows(
             let mcv = data
                 .mcv
                 .as_deref()
-                .and_then(crabka_pgcatalog::statistics::decode_mcv);
+                .and_then(krabka_pgcatalog::statistics::decode_mcv);
             let mcv_values = mcv.as_ref().and_then(|items| {
                 (!items.is_empty()).then(|| {
                     Datum::Text(format!(
@@ -3994,8 +3994,8 @@ pub(crate) fn pg_stats_ext_rows(
                     .map(|item| item.frequency.parse::<f64>().ok().map(Datum::Float8))
                     .collect::<Option<Vec<_>>>()
                     .map(|values| {
-                        Datum::Array(crabka_pgtypes::ArrayValue::new(
-                            crabka_pgtypes::ElemType::Float8,
+                        Datum::Array(krabka_pgtypes::ArrayValue::new(
+                            krabka_pgtypes::ElemType::Float8,
                             values,
                         ))
                     })
@@ -4006,8 +4006,8 @@ pub(crate) fn pg_stats_ext_rows(
                     .map(|item| item.base_frequency.parse::<f64>().ok().map(Datum::Float8))
                     .collect::<Option<Vec<_>>>()
                     .map(|values| {
-                        Datum::Array(crabka_pgtypes::ArrayValue::new(
-                            crabka_pgtypes::ElemType::Float8,
+                        Datum::Array(krabka_pgtypes::ArrayValue::new(
+                            krabka_pgtypes::ElemType::Float8,
                             values,
                         ))
                     })
@@ -4020,16 +4020,16 @@ pub(crate) fn pg_stats_ext_rows(
                 text(&object.owner),
                 (!attnames.is_empty())
                     .then(|| {
-                        Datum::Array(crabka_pgtypes::ArrayValue::new(
-                            crabka_pgtypes::ElemType::Text,
+                        Datum::Array(krabka_pgtypes::ArrayValue::new(
+                            krabka_pgtypes::ElemType::Text,
                             attnames,
                         ))
                     })
                     .unwrap_or(Datum::Null),
                 (!object.expressions.is_empty())
                     .then(|| {
-                        Datum::Array(crabka_pgtypes::ArrayValue::new(
-                            crabka_pgtypes::ElemType::Text,
+                        Datum::Array(krabka_pgtypes::ArrayValue::new(
+                            krabka_pgtypes::ElemType::Text,
                             object
                                 .expressions
                                 .iter()
@@ -4039,8 +4039,8 @@ pub(crate) fn pg_stats_ext_rows(
                         ))
                     })
                     .unwrap_or(Datum::Null),
-                Datum::Array(crabka_pgtypes::ArrayValue::new(
-                    crabka_pgtypes::ElemType::Text,
+                Datum::Array(krabka_pgtypes::ArrayValue::new(
+                    krabka_pgtypes::ElemType::Text,
                     object.kinds.iter().cloned().map(Datum::Text).collect(),
                 )),
                 Datum::Bool(data.inherited),
@@ -4062,20 +4062,20 @@ pub(crate) fn pg_stats_ext_exprs_rows(
     catalog_kv: &dyn Kv,
     ctx: &crate::clock::EvalCtx,
 ) -> Result<Vec<Vec<Datum>>, ExecError> {
-    let role = if ctx.current_user == crabka_pgcatalog::PUBLIC_ROLE {
-        crabka_pgcatalog::BOOTSTRAP_ROLE
+    let role = if ctx.current_user == krabka_pgcatalog::PUBLIC_ROLE {
+        krabka_pgcatalog::BOOTSTRAP_ROLE
     } else {
         &ctx.current_user
     };
     let superuser = crate::rls::role_is_superuser(catalog_kv, role)?;
-    let tables = crabka_pgcatalog::list_tables(catalog_kv)?;
+    let tables = krabka_pgcatalog::list_tables(catalog_kv)?;
     let mut rows = Vec::new();
-    for object in crabka_pgcatalog::statistics::list(catalog_kv)? {
+    for object in krabka_pgcatalog::statistics::list(catalog_kv)? {
         let Some(table) = tables.iter().find(|table| table.id == object.table_id) else {
             continue;
         };
         if crate::rls::row_security_active(catalog_kv, role, table)?
-            || (!superuser && !crabka_pgcatalog::role_has_privs_of(catalog_kv, role, &table.owner)?)
+            || (!superuser && !krabka_pgcatalog::role_has_privs_of(catalog_kv, role, &table.owner)?)
         {
             continue;
         }
@@ -4183,8 +4183,8 @@ pub(crate) fn pg_statistic_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, 
         if let Some(number) = stats.correlation {
             slots.push((
                 3,
-                Datum::Array(crabka_pgtypes::ArrayValue::new(
-                    crabka_pgtypes::ElemType::Float4,
+                Datum::Array(krabka_pgtypes::ArrayValue::new(
+                    krabka_pgtypes::ElemType::Float4,
                     vec![Datum::Float4(number)],
                 )),
                 Datum::Null,
@@ -4224,16 +4224,16 @@ pub(crate) fn pg_statistic_rows(catalog_kv: &dyn Kv) -> Result<Vec<Vec<Datum>>, 
 
 fn statistics_relation_table(
     catalog_kv: &dyn Kv,
-    relation: &crabka_pgcatalog::RelationName,
+    relation: &krabka_pgcatalog::RelationName,
 ) -> Result<(Table, i32), ExecError> {
-    if let Ok(table) = crabka_pgcatalog::get_table(catalog_kv, relation) {
+    if let Ok(table) = krabka_pgcatalog::get_table(catalog_kv, relation) {
         return Ok((
             table.clone(),
             crate::catalog_rel::table_relation_oid(table.id)?,
         ));
     }
-    let index = crabka_pgcatalog::get_index(catalog_kv, relation)?;
-    let source = crabka_pgcatalog::get_table(catalog_kv, &index.table)?;
+    let index = krabka_pgcatalog::get_index(catalog_kv, relation)?;
+    let source = krabka_pgcatalog::get_table(catalog_kv, &index.table)?;
     Ok((
         index_attribute_table(&index, &source)?,
         catalog_index_oid(index.id)?,
@@ -4242,10 +4242,10 @@ fn statistics_relation_table(
 
 fn float4_array(value: &str) -> Result<Datum, ExecError> {
     let zone = jiff::tz::TimeZone::UTC;
-    crabka_pgtypes::cast::cast_in(
+    krabka_pgtypes::cast::cast_in(
         &Datum::Text(value.into()),
-        ColumnType::Array(crabka_pgtypes::ElemType::Float4),
-        crabka_pgtypes::encoding::OutputStyle::with_zone(&zone),
+        ColumnType::Array(krabka_pgtypes::ElemType::Float4),
+        krabka_pgtypes::encoding::OutputStyle::with_zone(&zone),
     )
     .map_err(ExecError::from)
 }
@@ -4340,11 +4340,11 @@ pub(crate) fn regclass_by_oid(
     catalog_kv: &dyn Kv,
     scope: &crate::relname::ResolutionScope,
     oid: i32,
-) -> Result<crabka_pgtypes::RegclassValue, ExecError> {
+) -> Result<krabka_pgtypes::RegclassValue, ExecError> {
     Ok(
         crate::catalog_fn::relation_name_by_oid(catalog_kv, scope, oid)?.map_or_else(
-            || crabka_pgtypes::RegclassValue::unresolved(oid),
-            |name| crabka_pgtypes::RegclassValue::resolved(oid, &name),
+            || krabka_pgtypes::RegclassValue::unresolved(oid),
+            |name| krabka_pgtypes::RegclassValue::resolved(oid, &name),
         ),
     )
 }
@@ -4380,7 +4380,7 @@ pub(crate) fn holds_reg(ty: ColumnType) -> Option<crate::reg_fn::RegKind> {
 pub(crate) fn resolve_scanned_regclass(
     catalog_kv: &dyn Kv,
     scope: &crate::relname::ResolutionScope,
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     rows: &mut [Vec<Datum>],
 ) -> Result<(), ExecError> {
     resolve_regclass_at(catalog_kv, scope, &regclass_column_indexes(table, 0), rows)
@@ -4390,7 +4390,7 @@ pub(crate) fn resolve_scanned_regclass(
 /// whose first column sits at `offset` — non-zero for a join result, which
 /// concatenates one table's columns after another's.
 pub(crate) fn regclass_column_indexes(
-    table: &crabka_pgcatalog::Table,
+    table: &krabka_pgcatalog::Table,
     offset: usize,
 ) -> Vec<(usize, crate::reg_fn::RegKind, bool)> {
     table
@@ -4417,7 +4417,7 @@ pub(crate) fn resolve_regclass_at(
     if columns.is_empty() {
         return Ok(());
     }
-    let mut resolved: HashMap<(i32, crate::reg_fn::RegKind), crabka_pgtypes::RegclassValue> =
+    let mut resolved: HashMap<(i32, crate::reg_fn::RegKind), krabka_pgtypes::RegclassValue> =
         HashMap::new();
     for row in rows {
         for &(index, kind, in_array) in columns {
@@ -4438,7 +4438,7 @@ fn resolve_regclass_value(
     in_array: bool,
     catalog_kv: &dyn Kv,
     scope: &crate::relname::ResolutionScope,
-    resolved: &mut HashMap<(i32, crate::reg_fn::RegKind), crabka_pgtypes::RegclassValue>,
+    resolved: &mut HashMap<(i32, crate::reg_fn::RegKind), krabka_pgtypes::RegclassValue>,
 ) -> Result<(), ExecError> {
     if in_array {
         let Datum::Array(array) = value else {
@@ -4485,7 +4485,7 @@ pub(crate) fn regclass_from_text(
 
 /// The catalog-aware half of a `… :: regclass` cast. `None` for an operand the
 /// catalog adds nothing to (NULL, an out-of-range `int8`), which then takes the
-/// pure cast in [`crabka_pgtypes::cast`] and its error reporting.
+/// pure cast in [`krabka_pgtypes::cast`] and its error reporting.
 pub(crate) fn regclass_cast(
     catalog_kv: &dyn Kv,
     scope: &crate::relname::ResolutionScope,
@@ -4557,18 +4557,18 @@ pub(crate) fn resolve_type_name(
         && !schema_exists(kv, schema)?
     {
         return Err(ExecError::Catalog(
-            crabka_pgcatalog::CatalogError::UndefinedSchema(schema.clone()),
+            krabka_pgcatalog::CatalogError::UndefinedSchema(schema.clone()),
         ));
     }
     // crabka declares every type in `pg_catalog`, so a qualifier that names an
     // existing schema other than that one finds nothing — which is exactly what
     // PostgreSQL reports for `public.int4`.
     let found = match schema.as_deref() {
-        Some("information_schema") => crabka_pgtypes::ColumnType::information_schema_domain(&name)
+        Some("information_schema") => krabka_pgtypes::ColumnType::information_schema_domain(&name)
             .and_then(|ty| i32::try_from(ty.oid()).ok()),
         Some(schema) if schema != "pg_catalog" => None,
         _ => regtype_oid(&name).or_else(|| {
-            crabka_pgtypes::usertype::lookup(&name).and_then(|ty| i32::try_from(ty.oid).ok())
+            krabka_pgtypes::usertype::lookup(&name).and_then(|ty| i32::try_from(ty.oid).ok())
         }),
     };
     found.ok_or_else(|| {
@@ -4619,9 +4619,9 @@ pub(crate) fn regtype_oid(name: &str) -> Option<i32> {
             {
                 return Some(row.array);
             }
-            let resolved = crabka_pgtypes::ColumnType::from_builtin_sql_name(&element)?;
+            let resolved = krabka_pgtypes::ColumnType::from_builtin_sql_name(&element)?;
             let resolved = if spelling.ends_with("[]") {
-                crabka_pgtypes::ColumnType::array_of(resolved)?
+                krabka_pgtypes::ColumnType::array_of(resolved)?
             } else {
                 resolved
             };
@@ -4630,7 +4630,7 @@ pub(crate) fn regtype_oid(name: &str) -> Option<i32> {
 }
 
 pub(crate) fn regtype_name(oid: i32) -> String {
-    crabka_pgtypes::usertype::lookup_oid(u32::try_from(oid).unwrap_or(0))
+    krabka_pgtypes::usertype::lookup_oid(u32::try_from(oid).unwrap_or(0))
         .map(|ty| ty.name.clone())
         .or_else(|| {
             builtin_type_rows()
@@ -4672,13 +4672,13 @@ pub(crate) fn regtype_name(oid: i32) -> String {
 /// Propagates the catalog's undefined-table error (42P01).
 pub(crate) fn resolve_base_relation(
     catalog_kv: &dyn Kv,
-    name: &crabka_pgcatalog::RelationName,
+    name: &krabka_pgcatalog::RelationName,
 ) -> Result<i32, ExecError> {
     let key = virtual_lookup_key(name);
     if virtual_table_names().contains(&key.as_str()) {
         return Ok(virtual_relation_oid(&key));
     }
-    let table = crabka_pgcatalog::get_table(catalog_kv, name)?;
+    let table = krabka_pgcatalog::get_table(catalog_kv, name)?;
     crate::catalog_rel::table_relation_oid(table.id)
 }
 
@@ -4720,55 +4720,55 @@ pub(crate) fn virtual_relation_oid(name: &str) -> i32 {
 fn scalar_type_rows() -> &'static [BuiltinTypeRow] {
     &[
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::OID as i32,
+            oid: krabka_pgtypes::oids::OID as i32,
             name: "oid",
             len: 4,
             category: "N",
             elem: 0,
-            array: crabka_pgtypes::oids::OIDARRAY as i32,
+            array: krabka_pgtypes::oids::OIDARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::XID as i32,
+            oid: krabka_pgtypes::oids::XID as i32,
             name: "xid",
             len: 4,
             category: "U",
             elem: 0,
-            array: crabka_pgtypes::oids::XIDARRAY as i32,
+            array: krabka_pgtypes::oids::XIDARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::XID8 as i32,
+            oid: krabka_pgtypes::oids::XID8 as i32,
             name: "xid8",
             len: 8,
             category: "U",
             elem: 0,
-            array: crabka_pgtypes::oids::XID8ARRAY as i32,
+            array: krabka_pgtypes::oids::XID8ARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::CID as i32,
+            oid: krabka_pgtypes::oids::CID as i32,
             name: "cid",
             len: 4,
             category: "U",
             elem: 0,
-            array: crabka_pgtypes::oids::CIDARRAY as i32,
+            array: krabka_pgtypes::oids::CIDARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::TID as i32,
+            oid: krabka_pgtypes::oids::TID as i32,
             name: "tid",
             len: 6,
             category: "U",
             elem: 0,
-            array: crabka_pgtypes::oids::TIDARRAY as i32,
+            array: krabka_pgtypes::oids::TIDARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::PG_LSN as i32,
+            oid: krabka_pgtypes::oids::PG_LSN as i32,
             name: "pg_lsn",
             len: 8,
             category: "U",
             elem: 0,
-            array: crabka_pgtypes::oids::PG_LSNARRAY as i32,
+            array: krabka_pgtypes::oids::PG_LSNARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::PG_SNAPSHOT as i32,
+            oid: krabka_pgtypes::oids::PG_SNAPSHOT as i32,
             name: "pg_snapshot",
             len: -1,
             category: "U",
@@ -4779,7 +4779,7 @@ fn scalar_type_rows() -> &'static [BuiltinTypeRow] {
         // row of its own: a column declared with it reports 2970, and
         // `FigureColname` labels a cast to it `txid_snapshot`.
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::TXID_SNAPSHOT as i32,
+            oid: krabka_pgtypes::oids::TXID_SNAPSHOT as i32,
             name: "txid_snapshot",
             len: -1,
             category: "U",
@@ -4787,23 +4787,23 @@ fn scalar_type_rows() -> &'static [BuiltinTypeRow] {
             array: TXID_SNAPSHOT_ARRAY_OID,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::OIDVECTOR as i32,
+            oid: krabka_pgtypes::oids::OIDVECTOR as i32,
             name: "oidvector",
             len: -1,
             category: "A",
-            elem: crabka_pgtypes::oids::OID as i32,
+            elem: krabka_pgtypes::oids::OID as i32,
             array: 1013,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::INT2VECTOR as i32,
+            oid: krabka_pgtypes::oids::INT2VECTOR as i32,
             name: "int2vector",
             len: -1,
             category: "A",
-            elem: crabka_pgtypes::oids::INT2 as i32,
+            elem: krabka_pgtypes::oids::INT2 as i32,
             array: INT2VECTOR_ARRAY_OID,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::REGPROCEDURE as i32,
+            oid: krabka_pgtypes::oids::REGPROCEDURE as i32,
             name: "regprocedure",
             len: 4,
             category: "N",
@@ -4811,15 +4811,15 @@ fn scalar_type_rows() -> &'static [BuiltinTypeRow] {
             array: 2207,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::REGNAMESPACE as i32,
+            oid: krabka_pgtypes::oids::REGNAMESPACE as i32,
             name: "regnamespace",
             len: 4,
             category: "N",
             elem: 0,
-            array: crabka_pgtypes::oids::REGNAMESPACEARRAY as i32,
+            array: krabka_pgtypes::oids::REGNAMESPACEARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::REGCLASS as i32,
+            oid: krabka_pgtypes::oids::REGCLASS as i32,
             name: "regclass",
             len: 4,
             category: "N",
@@ -4827,7 +4827,7 @@ fn scalar_type_rows() -> &'static [BuiltinTypeRow] {
             array: 2210,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::REGPROC as i32,
+            oid: krabka_pgtypes::oids::REGPROC as i32,
             name: "regproc",
             len: 4,
             category: "N",
@@ -4835,7 +4835,7 @@ fn scalar_type_rows() -> &'static [BuiltinTypeRow] {
             array: 1008,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::REGOPER as i32,
+            oid: krabka_pgtypes::oids::REGOPER as i32,
             name: "regoper",
             len: 4,
             category: "N",
@@ -4843,7 +4843,7 @@ fn scalar_type_rows() -> &'static [BuiltinTypeRow] {
             array: 2208,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::REGOPERATOR as i32,
+            oid: krabka_pgtypes::oids::REGOPERATOR as i32,
             name: "regoperator",
             len: 4,
             category: "N",
@@ -4851,7 +4851,7 @@ fn scalar_type_rows() -> &'static [BuiltinTypeRow] {
             array: 2209,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::REGCONFIG as i32,
+            oid: krabka_pgtypes::oids::REGCONFIG as i32,
             name: "regconfig",
             len: 4,
             category: "N",
@@ -4859,7 +4859,7 @@ fn scalar_type_rows() -> &'static [BuiltinTypeRow] {
             array: 3735,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::REGDICTIONARY as i32,
+            oid: krabka_pgtypes::oids::REGDICTIONARY as i32,
             name: "regdictionary",
             len: 4,
             category: "N",
@@ -4867,7 +4867,7 @@ fn scalar_type_rows() -> &'static [BuiltinTypeRow] {
             array: 3770,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::REGROLE as i32,
+            oid: krabka_pgtypes::oids::REGROLE as i32,
             name: "regrole",
             len: 4,
             category: "N",
@@ -4875,7 +4875,7 @@ fn scalar_type_rows() -> &'static [BuiltinTypeRow] {
             array: 4097,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::REGCOLLATION as i32,
+            oid: krabka_pgtypes::oids::REGCOLLATION as i32,
             name: "regcollation",
             len: 4,
             category: "N",
@@ -4883,7 +4883,7 @@ fn scalar_type_rows() -> &'static [BuiltinTypeRow] {
             array: 4192,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::REGTYPE as i32,
+            oid: krabka_pgtypes::oids::REGTYPE as i32,
             name: "regtype",
             len: 4,
             category: "N",
@@ -4899,12 +4899,12 @@ fn scalar_type_rows() -> &'static [BuiltinTypeRow] {
             array: 1263,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::ACLITEM as i32,
+            oid: krabka_pgtypes::oids::ACLITEM as i32,
             name: "aclitem",
             len: 16,
             category: "U",
             elem: 0,
-            array: crabka_pgtypes::oids::ACLITEMARRAY as i32,
+            array: krabka_pgtypes::oids::ACLITEMARRAY as i32,
         },
         BuiltinTypeRow {
             oid: 1790,
@@ -4915,188 +4915,188 @@ fn scalar_type_rows() -> &'static [BuiltinTypeRow] {
             array: 2201,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::BOOL as i32,
+            oid: krabka_pgtypes::oids::BOOL as i32,
             name: "bool",
             len: 1,
             category: "B",
             elem: 0,
-            array: crabka_pgtypes::oids::BOOLARRAY as i32,
+            array: krabka_pgtypes::oids::BOOLARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::BYTEA as i32,
+            oid: krabka_pgtypes::oids::BYTEA as i32,
             name: "bytea",
             len: -1,
             category: "U",
             elem: 0,
-            array: crabka_pgtypes::oids::BYTEAARRAY as i32,
+            array: krabka_pgtypes::oids::BYTEAARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::NAME as i32,
+            oid: krabka_pgtypes::oids::NAME as i32,
             name: "name",
             len: 64,
             category: "S",
             elem: 0,
-            array: crabka_pgtypes::oids::NAMEARRAY as i32,
+            array: krabka_pgtypes::oids::NAMEARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::INT2 as i32,
+            oid: krabka_pgtypes::oids::INT2 as i32,
             name: "int2",
             len: 2,
             category: "N",
             elem: 0,
-            array: crabka_pgtypes::oids::INT2ARRAY as i32,
+            array: krabka_pgtypes::oids::INT2ARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::INT8 as i32,
+            oid: krabka_pgtypes::oids::INT8 as i32,
             name: "int8",
             len: 8,
             category: "N",
             elem: 0,
-            array: crabka_pgtypes::oids::INT8ARRAY as i32,
+            array: krabka_pgtypes::oids::INT8ARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::INT4 as i32,
+            oid: krabka_pgtypes::oids::INT4 as i32,
             name: "int4",
             len: 4,
             category: "N",
             elem: 0,
-            array: crabka_pgtypes::oids::INT4ARRAY as i32,
+            array: krabka_pgtypes::oids::INT4ARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::TEXT as i32,
+            oid: krabka_pgtypes::oids::TEXT as i32,
             name: "text",
             len: -1,
             category: "S",
             elem: 0,
-            array: crabka_pgtypes::oids::TEXTARRAY as i32,
+            array: krabka_pgtypes::oids::TEXTARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::BPCHAR as i32,
+            oid: krabka_pgtypes::oids::BPCHAR as i32,
             name: "bpchar",
             len: -1,
             category: "S",
             elem: 0,
-            array: crabka_pgtypes::oids::BPCHARARRAY as i32,
+            array: krabka_pgtypes::oids::BPCHARARRAY as i32,
         },
         // `"char"` is not in the string category with its neighbours: it is
         // `typcategory` Z, the internal-use category, because it is one byte
         // rather than a string. Its `typarray` resolves even though `ElemType`
         // has no variant for it, the position `timetz` and `money` are in.
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::CHAR as i32,
+            oid: krabka_pgtypes::oids::CHAR as i32,
             name: "char",
             len: 1,
             category: "Z",
             elem: 0,
-            array: crabka_pgtypes::oids::CHARARRAY as i32,
+            array: krabka_pgtypes::oids::CHARARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::VARCHAR as i32,
+            oid: krabka_pgtypes::oids::VARCHAR as i32,
             name: "varchar",
             len: -1,
             category: "S",
             elem: 0,
-            array: crabka_pgtypes::oids::VARCHARARRAY as i32,
+            array: krabka_pgtypes::oids::VARCHARARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::FLOAT4 as i32,
+            oid: krabka_pgtypes::oids::FLOAT4 as i32,
             name: "float4",
             len: 4,
             category: "N",
             elem: 0,
-            array: crabka_pgtypes::oids::FLOAT4ARRAY as i32,
+            array: krabka_pgtypes::oids::FLOAT4ARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::FLOAT8 as i32,
+            oid: krabka_pgtypes::oids::FLOAT8 as i32,
             name: "float8",
             len: 8,
             category: "N",
             elem: 0,
-            array: crabka_pgtypes::oids::FLOAT8ARRAY as i32,
+            array: krabka_pgtypes::oids::FLOAT8ARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::POINT as i32,
+            oid: krabka_pgtypes::oids::POINT as i32,
             name: "point",
             len: 16,
             category: "G",
             elem: 0,
-            array: crabka_pgtypes::oids::POINTARRAY as i32,
+            array: krabka_pgtypes::oids::POINTARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::PATH as i32,
+            oid: krabka_pgtypes::oids::PATH as i32,
             name: "path",
             len: -1,
             category: "G",
             elem: 0,
-            array: crabka_pgtypes::oids::PATHARRAY as i32,
+            array: krabka_pgtypes::oids::PATHARRAY as i32,
         },
         // The other five geometric types, category 'G' like `point`/`path`.
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::LSEG as i32,
+            oid: krabka_pgtypes::oids::LSEG as i32,
             name: "lseg",
             len: 32,
             category: "G",
             elem: 0,
-            array: crabka_pgtypes::oids::LSEGARRAY as i32,
+            array: krabka_pgtypes::oids::LSEGARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::BOX as i32,
+            oid: krabka_pgtypes::oids::BOX as i32,
             name: "box",
             len: 32,
             category: "G",
             elem: 0,
-            array: crabka_pgtypes::oids::BOXARRAY as i32,
+            array: krabka_pgtypes::oids::BOXARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::POLYGON as i32,
+            oid: krabka_pgtypes::oids::POLYGON as i32,
             name: "polygon",
             len: -1,
             category: "G",
             elem: 0,
-            array: crabka_pgtypes::oids::POLYGONARRAY as i32,
+            array: krabka_pgtypes::oids::POLYGONARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::LINE as i32,
+            oid: krabka_pgtypes::oids::LINE as i32,
             name: "line",
             len: 24,
             category: "G",
             elem: 0,
-            array: crabka_pgtypes::oids::LINEARRAY as i32,
+            array: krabka_pgtypes::oids::LINEARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::CIRCLE as i32,
+            oid: krabka_pgtypes::oids::CIRCLE as i32,
             name: "circle",
             len: 24,
             category: "G",
             elem: 0,
-            array: crabka_pgtypes::oids::CIRCLEARRAY as i32,
+            array: krabka_pgtypes::oids::CIRCLEARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::NUMERIC as i32,
+            oid: krabka_pgtypes::oids::NUMERIC as i32,
             name: "numeric",
             len: -1,
             category: "N",
             elem: 0,
-            array: crabka_pgtypes::oids::NUMERICARRAY as i32,
+            array: krabka_pgtypes::oids::NUMERICARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::DATE as i32,
+            oid: krabka_pgtypes::oids::DATE as i32,
             name: "date",
             len: 4,
             category: "D",
             elem: 0,
-            array: crabka_pgtypes::oids::DATEARRAY as i32,
+            array: krabka_pgtypes::oids::DATEARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::TIME as i32,
+            oid: krabka_pgtypes::oids::TIME as i32,
             name: "time",
             len: 8,
             category: "D",
             elem: 0,
-            array: crabka_pgtypes::oids::TIMEARRAY as i32,
+            array: krabka_pgtypes::oids::TIMEARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::TIMETZ as i32,
+            oid: krabka_pgtypes::oids::TIMETZ as i32,
             name: "timetz",
             len: 12,
             category: "D",
@@ -5104,199 +5104,199 @@ fn scalar_type_rows() -> &'static [BuiltinTypeRow] {
             array: TIMETZ_ARRAY_OID,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::TIMESTAMP as i32,
+            oid: krabka_pgtypes::oids::TIMESTAMP as i32,
             name: "timestamp",
             len: 8,
             category: "D",
             elem: 0,
-            array: crabka_pgtypes::oids::TIMESTAMPARRAY as i32,
+            array: krabka_pgtypes::oids::TIMESTAMPARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::TIMESTAMPTZ as i32,
+            oid: krabka_pgtypes::oids::TIMESTAMPTZ as i32,
             name: "timestamptz",
             len: 8,
             category: "D",
             elem: 0,
-            array: crabka_pgtypes::oids::TIMESTAMPTZARRAY as i32,
+            array: krabka_pgtypes::oids::TIMESTAMPTZARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::INTERVAL as i32,
+            oid: krabka_pgtypes::oids::INTERVAL as i32,
             name: "interval",
             len: 16,
             category: "T",
             elem: 0,
-            array: crabka_pgtypes::oids::INTERVALARRAY as i32,
+            array: krabka_pgtypes::oids::INTERVALARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::UUID as i32,
+            oid: krabka_pgtypes::oids::UUID as i32,
             name: "uuid",
             len: 16,
             category: "U",
             elem: 0,
-            array: crabka_pgtypes::oids::UUIDARRAY as i32,
+            array: krabka_pgtypes::oids::UUIDARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::JSON as i32,
+            oid: krabka_pgtypes::oids::JSON as i32,
             name: "json",
             len: -1,
             category: "U",
             elem: 0,
-            array: crabka_pgtypes::oids::JSONARRAY as i32,
+            array: krabka_pgtypes::oids::JSONARRAY as i32,
         },
         // `typcategory` U, like `json` and `jsonb`: `xml` belongs to no family
         // with a preferred type, which is one reason nothing implicitly coerces
         // to it.
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::XML as i32,
+            oid: krabka_pgtypes::oids::XML as i32,
             name: "xml",
             len: -1,
             category: "U",
             elem: 0,
-            array: crabka_pgtypes::oids::XMLARRAY as i32,
+            array: krabka_pgtypes::oids::XMLARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::JSONB as i32,
+            oid: krabka_pgtypes::oids::JSONB as i32,
             name: "jsonb",
             len: -1,
             category: "U",
             elem: 0,
-            array: crabka_pgtypes::oids::JSONBARRAY as i32,
+            array: krabka_pgtypes::oids::JSONBARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::JSONPATH as i32,
+            oid: krabka_pgtypes::oids::JSONPATH as i32,
             name: "jsonpath",
             len: -1,
             category: "U",
             elem: 0,
-            array: crabka_pgtypes::oids::JSONPATHARRAY as i32,
+            array: krabka_pgtypes::oids::JSONPATHARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::TSVECTOR as i32,
+            oid: krabka_pgtypes::oids::TSVECTOR as i32,
             name: "tsvector",
             len: -1,
             category: "U",
             elem: 0,
-            array: crabka_pgtypes::oids::TSVECTORARRAY as i32,
+            array: krabka_pgtypes::oids::TSVECTORARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::TSQUERY as i32,
+            oid: krabka_pgtypes::oids::TSQUERY as i32,
             name: "tsquery",
             len: -1,
             category: "U",
             elem: 0,
-            array: crabka_pgtypes::oids::TSQUERYARRAY as i32,
+            array: krabka_pgtypes::oids::TSQUERYARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::MONEY as i32,
+            oid: krabka_pgtypes::oids::MONEY as i32,
             name: "money",
             len: 8,
             category: "N",
             elem: 0,
-            array: crabka_pgtypes::oids::MONEYARRAY as i32,
+            array: krabka_pgtypes::oids::MONEYARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::BIT as i32,
+            oid: krabka_pgtypes::oids::BIT as i32,
             name: "bit",
             len: -1,
             category: "V",
             elem: 0,
-            array: crabka_pgtypes::oids::BITARRAY as i32,
+            array: krabka_pgtypes::oids::BITARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::VARBIT as i32,
+            oid: krabka_pgtypes::oids::VARBIT as i32,
             name: "varbit",
             len: -1,
             category: "V",
             elem: 0,
-            array: crabka_pgtypes::oids::VARBITARRAY as i32,
+            array: krabka_pgtypes::oids::VARBITARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::INET as i32,
+            oid: krabka_pgtypes::oids::INET as i32,
             name: "inet",
             len: -1,
             category: "I",
             elem: 0,
-            array: crabka_pgtypes::oids::INETARRAY as i32,
+            array: krabka_pgtypes::oids::INETARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::CIDR as i32,
+            oid: krabka_pgtypes::oids::CIDR as i32,
             name: "cidr",
             len: -1,
             category: "I",
             elem: 0,
-            array: crabka_pgtypes::oids::CIDRARRAY as i32,
+            array: krabka_pgtypes::oids::CIDRARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::MACADDR as i32,
+            oid: krabka_pgtypes::oids::MACADDR as i32,
             name: "macaddr",
             len: 6,
             category: "U",
             elem: 0,
-            array: crabka_pgtypes::oids::MACADDRARRAY as i32,
+            array: krabka_pgtypes::oids::MACADDRARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::MACADDR8 as i32,
+            oid: krabka_pgtypes::oids::MACADDR8 as i32,
             name: "macaddr8",
             len: 8,
             category: "U",
             elem: 0,
-            array: crabka_pgtypes::oids::MACADDR8ARRAY as i32,
+            array: krabka_pgtypes::oids::MACADDR8ARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::INT4RANGE as i32,
+            oid: krabka_pgtypes::oids::INT4RANGE as i32,
             name: "int4range",
             len: -1,
             category: "R",
             elem: 0,
-            array: crabka_pgtypes::oids::INT4RANGEARRAY as i32,
+            array: krabka_pgtypes::oids::INT4RANGEARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::NUMRANGE as i32,
+            oid: krabka_pgtypes::oids::NUMRANGE as i32,
             name: "numrange",
             len: -1,
             category: "R",
             elem: 0,
-            array: crabka_pgtypes::oids::NUMRANGEARRAY as i32,
+            array: krabka_pgtypes::oids::NUMRANGEARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::TSRANGE as i32,
+            oid: krabka_pgtypes::oids::TSRANGE as i32,
             name: "tsrange",
             len: -1,
             category: "R",
             elem: 0,
-            array: crabka_pgtypes::oids::TSRANGEARRAY as i32,
+            array: krabka_pgtypes::oids::TSRANGEARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::TSTZRANGE as i32,
+            oid: krabka_pgtypes::oids::TSTZRANGE as i32,
             name: "tstzrange",
             len: -1,
             category: "R",
             elem: 0,
-            array: crabka_pgtypes::oids::TSTZRANGEARRAY as i32,
+            array: krabka_pgtypes::oids::TSTZRANGEARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::DATERANGE as i32,
+            oid: krabka_pgtypes::oids::DATERANGE as i32,
             name: "daterange",
             len: -1,
             category: "R",
             elem: 0,
-            array: crabka_pgtypes::oids::DATERANGEARRAY as i32,
+            array: krabka_pgtypes::oids::DATERANGEARRAY as i32,
         },
         BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::INT8RANGE as i32,
+            oid: krabka_pgtypes::oids::INT8RANGE as i32,
             name: "int8range",
             len: -1,
             category: "R",
             elem: 0,
-            array: crabka_pgtypes::oids::INT8RANGEARRAY as i32,
+            array: krabka_pgtypes::oids::INT8RANGEARRAY as i32,
         },
     ]
 }
 
 /// The `pg_type.typname` of an element type's array type, which is
 /// PostgreSQL's leading underscore over the element's own `typname`.
-pub(crate) fn array_typname(elem: crabka_pgtypes::ElemType) -> &'static str {
-    use crabka_pgtypes::ElemType;
+pub(crate) fn array_typname(elem: krabka_pgtypes::ElemType) -> &'static str {
+    use krabka_pgtypes::ElemType;
     match elem {
         ElemType::Bool => "_bool",
         ElemType::Json => "_json",
@@ -5307,9 +5307,9 @@ pub(crate) fn array_typname(elem: crabka_pgtypes::ElemType) -> &'static str {
         ElemType::Name => "_name",
         ElemType::Record(None) => "_record",
         ElemType::Record(Some(record)) => {
-            crabka_pgtypes::usertype::intern(&format!("_{}", record.name))
+            krabka_pgtypes::usertype::intern(&format!("_{}", record.name))
         }
-        ElemType::User(user) => crabka_pgtypes::usertype::intern(&format!("_{}", user.name)),
+        ElemType::User(user) => krabka_pgtypes::usertype::intern(&format!("_{}", user.name)),
         ElemType::Builtin(builtin) => builtin.catalog_name(),
         ElemType::Float8 => "_float8",
         ElemType::Numeric => "_numeric",
@@ -5328,22 +5328,22 @@ pub(crate) fn array_typname(elem: crabka_pgtypes::ElemType) -> &'static str {
         ElemType::Varchar(_) => "_varchar",
         ElemType::Char(_) => "_bpchar",
         ElemType::Range(range) => match range.oid {
-            crabka_pgtypes::oids::INT4RANGE => "_int4range",
-            crabka_pgtypes::oids::NUMRANGE => "_numrange",
-            crabka_pgtypes::oids::TSRANGE => "_tsrange",
-            crabka_pgtypes::oids::TSTZRANGE => "_tstzrange",
-            crabka_pgtypes::oids::DATERANGE => "_daterange",
-            crabka_pgtypes::oids::INT8RANGE => "_int8range",
-            _ => crabka_pgtypes::usertype::intern(&format!("_{}", range.name)),
+            krabka_pgtypes::oids::INT4RANGE => "_int4range",
+            krabka_pgtypes::oids::NUMRANGE => "_numrange",
+            krabka_pgtypes::oids::TSRANGE => "_tsrange",
+            krabka_pgtypes::oids::TSTZRANGE => "_tstzrange",
+            krabka_pgtypes::oids::DATERANGE => "_daterange",
+            krabka_pgtypes::oids::INT8RANGE => "_int8range",
+            _ => krabka_pgtypes::usertype::intern(&format!("_{}", range.name)),
         },
         ElemType::Multirange(multirange) => match multirange.oid {
-            crabka_pgtypes::oids::INT4MULTIRANGE => "_int4multirange",
-            crabka_pgtypes::oids::NUMMULTIRANGE => "_nummultirange",
-            crabka_pgtypes::oids::TSMULTIRANGE => "_tsmultirange",
-            crabka_pgtypes::oids::TSTZMULTIRANGE => "_tstzmultirange",
-            crabka_pgtypes::oids::DATEMULTIRANGE => "_datemultirange",
-            crabka_pgtypes::oids::INT8MULTIRANGE => "_int8multirange",
-            _ => crabka_pgtypes::usertype::intern(&format!("_{}", multirange.name)),
+            krabka_pgtypes::oids::INT4MULTIRANGE => "_int4multirange",
+            krabka_pgtypes::oids::NUMMULTIRANGE => "_nummultirange",
+            krabka_pgtypes::oids::TSMULTIRANGE => "_tsmultirange",
+            krabka_pgtypes::oids::TSTZMULTIRANGE => "_tstzmultirange",
+            krabka_pgtypes::oids::DATEMULTIRANGE => "_datemultirange",
+            krabka_pgtypes::oids::INT8MULTIRANGE => "_int8multirange",
+            _ => krabka_pgtypes::usertype::intern(&format!("_{}", multirange.name)),
         },
     }
 }
@@ -5365,11 +5365,11 @@ pub(crate) fn builtin_type_rows() -> &'static [BuiltinTypeRow] {
         let mut rows = scalar_type_rows().to_vec();
         rows.extend([
             BuiltinTypeRow {
-                oid: crabka_pgtypes::oids::ACLITEMARRAY as i32,
+                oid: krabka_pgtypes::oids::ACLITEMARRAY as i32,
                 name: "_aclitem",
                 len: -1,
                 category: "A",
-                elem: crabka_pgtypes::oids::ACLITEM as i32,
+                elem: krabka_pgtypes::oids::ACLITEM as i32,
                 array: 0,
             },
             BuiltinTypeRow {
@@ -5393,7 +5393,7 @@ pub(crate) fn builtin_type_rows() -> &'static [BuiltinTypeRow] {
                 name: "_oidvector",
                 len: -1,
                 category: "A",
-                elem: crabka_pgtypes::oids::OIDVECTOR as i32,
+                elem: krabka_pgtypes::oids::OIDVECTOR as i32,
                 array: 0,
             },
             BuiltinTypeRow {
@@ -5401,7 +5401,7 @@ pub(crate) fn builtin_type_rows() -> &'static [BuiltinTypeRow] {
                 name: "_int2vector",
                 len: -1,
                 category: "A",
-                elem: crabka_pgtypes::oids::INT2VECTOR as i32,
+                elem: krabka_pgtypes::oids::INT2VECTOR as i32,
                 array: 0,
             },
             BuiltinTypeRow {
@@ -5409,15 +5409,15 @@ pub(crate) fn builtin_type_rows() -> &'static [BuiltinTypeRow] {
                 name: "_timetz",
                 len: -1,
                 category: "A",
-                elem: crabka_pgtypes::oids::TIMETZ as i32,
+                elem: krabka_pgtypes::oids::TIMETZ as i32,
                 array: 0,
             },
             BuiltinTypeRow {
-                oid: crabka_pgtypes::oids::CHARARRAY as i32,
+                oid: krabka_pgtypes::oids::CHARARRAY as i32,
                 name: "_char",
                 len: -1,
                 category: "A",
-                elem: crabka_pgtypes::oids::CHAR as i32,
+                elem: krabka_pgtypes::oids::CHAR as i32,
                 array: 0,
             },
             BuiltinTypeRow {
@@ -5425,15 +5425,15 @@ pub(crate) fn builtin_type_rows() -> &'static [BuiltinTypeRow] {
                 name: "_regprocedure",
                 len: -1,
                 category: "A",
-                elem: crabka_pgtypes::oids::REGPROCEDURE as i32,
+                elem: krabka_pgtypes::oids::REGPROCEDURE as i32,
                 array: 0,
             },
             BuiltinTypeRow {
-                oid: crabka_pgtypes::oids::REGNAMESPACEARRAY as i32,
+                oid: krabka_pgtypes::oids::REGNAMESPACEARRAY as i32,
                 name: "_regnamespace",
                 len: -1,
                 category: "A",
-                elem: crabka_pgtypes::oids::REGNAMESPACE as i32,
+                elem: krabka_pgtypes::oids::REGNAMESPACE as i32,
                 array: 0,
             },
             // Neither snapshot type has an `ElemType`, so crabka can build no
@@ -5445,7 +5445,7 @@ pub(crate) fn builtin_type_rows() -> &'static [BuiltinTypeRow] {
                 name: "_pg_snapshot",
                 len: -1,
                 category: "A",
-                elem: crabka_pgtypes::oids::PG_SNAPSHOT as i32,
+                elem: krabka_pgtypes::oids::PG_SNAPSHOT as i32,
                 array: 0,
             },
             BuiltinTypeRow {
@@ -5453,7 +5453,7 @@ pub(crate) fn builtin_type_rows() -> &'static [BuiltinTypeRow] {
                 name: "_txid_snapshot",
                 len: -1,
                 category: "A",
-                elem: crabka_pgtypes::oids::TXID_SNAPSHOT as i32,
+                elem: krabka_pgtypes::oids::TXID_SNAPSHOT as i32,
                 array: 0,
             },
         ]);
@@ -5464,14 +5464,14 @@ pub(crate) fn builtin_type_rows() -> &'static [BuiltinTypeRow] {
         // is constructible.
         rows.extend(
             [
-                (1008, "_regproc", crabka_pgtypes::oids::REGPROC),
-                (2208, "_regoper", crabka_pgtypes::oids::REGOPER),
-                (2209, "_regoperator", crabka_pgtypes::oids::REGOPERATOR),
-                (2210, "_regclass", crabka_pgtypes::oids::REGCLASS),
-                (3735, "_regconfig", crabka_pgtypes::oids::REGCONFIG),
-                (3770, "_regdictionary", crabka_pgtypes::oids::REGDICTIONARY),
-                (4097, "_regrole", crabka_pgtypes::oids::REGROLE),
-                (4192, "_regcollation", crabka_pgtypes::oids::REGCOLLATION),
+                (1008, "_regproc", krabka_pgtypes::oids::REGPROC),
+                (2208, "_regoper", krabka_pgtypes::oids::REGOPER),
+                (2209, "_regoperator", krabka_pgtypes::oids::REGOPERATOR),
+                (2210, "_regclass", krabka_pgtypes::oids::REGCLASS),
+                (3735, "_regconfig", krabka_pgtypes::oids::REGCONFIG),
+                (3770, "_regdictionary", krabka_pgtypes::oids::REGDICTIONARY),
+                (4097, "_regrole", krabka_pgtypes::oids::REGROLE),
+                (4192, "_regcollation", krabka_pgtypes::oids::REGCOLLATION),
             ]
             .map(|(oid, name, elem)| BuiltinTypeRow {
                 oid,
@@ -5484,34 +5484,34 @@ pub(crate) fn builtin_type_rows() -> &'static [BuiltinTypeRow] {
         );
         for (oid, name, array) in [
             (
-                crabka_pgtypes::oids::INT4MULTIRANGE,
+                krabka_pgtypes::oids::INT4MULTIRANGE,
                 "int4multirange",
-                crabka_pgtypes::oids::INT4MULTIRANGEARRAY,
+                krabka_pgtypes::oids::INT4MULTIRANGEARRAY,
             ),
             (
-                crabka_pgtypes::oids::NUMMULTIRANGE,
+                krabka_pgtypes::oids::NUMMULTIRANGE,
                 "nummultirange",
-                crabka_pgtypes::oids::NUMMULTIRANGEARRAY,
+                krabka_pgtypes::oids::NUMMULTIRANGEARRAY,
             ),
             (
-                crabka_pgtypes::oids::TSMULTIRANGE,
+                krabka_pgtypes::oids::TSMULTIRANGE,
                 "tsmultirange",
-                crabka_pgtypes::oids::TSMULTIRANGEARRAY,
+                krabka_pgtypes::oids::TSMULTIRANGEARRAY,
             ),
             (
-                crabka_pgtypes::oids::TSTZMULTIRANGE,
+                krabka_pgtypes::oids::TSTZMULTIRANGE,
                 "tstzmultirange",
-                crabka_pgtypes::oids::TSTZMULTIRANGEARRAY,
+                krabka_pgtypes::oids::TSTZMULTIRANGEARRAY,
             ),
             (
-                crabka_pgtypes::oids::DATEMULTIRANGE,
+                krabka_pgtypes::oids::DATEMULTIRANGE,
                 "datemultirange",
-                crabka_pgtypes::oids::DATEMULTIRANGEARRAY,
+                krabka_pgtypes::oids::DATEMULTIRANGEARRAY,
             ),
             (
-                crabka_pgtypes::oids::INT8MULTIRANGE,
+                krabka_pgtypes::oids::INT8MULTIRANGE,
                 "int8multirange",
-                crabka_pgtypes::oids::INT8MULTIRANGEARRAY,
+                krabka_pgtypes::oids::INT8MULTIRANGEARRAY,
             ),
         ] {
             rows.push(BuiltinTypeRow {
@@ -5524,27 +5524,27 @@ pub(crate) fn builtin_type_rows() -> &'static [BuiltinTypeRow] {
             });
         }
         rows.push(BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::JSONARRAY as i32,
+            oid: krabka_pgtypes::oids::JSONARRAY as i32,
             name: "_json",
             len: -1,
             category: "A",
-            elem: crabka_pgtypes::oids::JSON as i32,
+            elem: krabka_pgtypes::oids::JSON as i32,
             array: 0,
         });
         rows.push(BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::TSVECTORARRAY as i32,
+            oid: krabka_pgtypes::oids::TSVECTORARRAY as i32,
             name: "_tsvector",
             len: -1,
             category: "A",
-            elem: crabka_pgtypes::oids::TSVECTOR as i32,
+            elem: krabka_pgtypes::oids::TSVECTOR as i32,
             array: 0,
         });
         rows.push(BuiltinTypeRow {
-            oid: crabka_pgtypes::oids::TSQUERYARRAY as i32,
+            oid: krabka_pgtypes::oids::TSQUERYARRAY as i32,
             name: "_tsquery",
             len: -1,
             category: "A",
-            elem: crabka_pgtypes::oids::TSQUERY as i32,
+            elem: krabka_pgtypes::oids::TSQUERY as i32,
             array: 0,
         });
         // The network types' array rows exist so `pg_type.typarray` resolves
@@ -5553,73 +5553,73 @@ pub(crate) fn builtin_type_rows() -> &'static [BuiltinTypeRow] {
         // network variant, the same position the geometric types are in.
         for (oid, name, elem) in [
             (
-                crabka_pgtypes::oids::INETARRAY,
+                krabka_pgtypes::oids::INETARRAY,
                 "_inet",
-                crabka_pgtypes::oids::INET,
+                krabka_pgtypes::oids::INET,
             ),
             (
-                crabka_pgtypes::oids::CIDRARRAY,
+                krabka_pgtypes::oids::CIDRARRAY,
                 "_cidr",
-                crabka_pgtypes::oids::CIDR,
+                krabka_pgtypes::oids::CIDR,
             ),
             (
-                crabka_pgtypes::oids::MACADDRARRAY,
+                krabka_pgtypes::oids::MACADDRARRAY,
                 "_macaddr",
-                crabka_pgtypes::oids::MACADDR,
+                krabka_pgtypes::oids::MACADDR,
             ),
             (
-                crabka_pgtypes::oids::MACADDR8ARRAY,
+                krabka_pgtypes::oids::MACADDR8ARRAY,
                 "_macaddr8",
-                crabka_pgtypes::oids::MACADDR8,
+                krabka_pgtypes::oids::MACADDR8,
             ),
             // `money` and the two bit types are in the same position: the array
             // row exists so `typarray` resolves, but `ElemType` has no variant
             // for them, so building a value of one is still 0A000.
             (
-                crabka_pgtypes::oids::MONEYARRAY,
+                krabka_pgtypes::oids::MONEYARRAY,
                 "_money",
-                crabka_pgtypes::oids::MONEY,
+                krabka_pgtypes::oids::MONEY,
             ),
             (
-                crabka_pgtypes::oids::BITARRAY,
+                krabka_pgtypes::oids::BITARRAY,
                 "_bit",
-                crabka_pgtypes::oids::BIT,
+                krabka_pgtypes::oids::BIT,
             ),
             (
-                crabka_pgtypes::oids::VARBITARRAY,
+                krabka_pgtypes::oids::VARBITARRAY,
                 "_varbit",
-                crabka_pgtypes::oids::VARBIT,
+                krabka_pgtypes::oids::VARBIT,
             ),
             // The system identifier types are in that same position.
             (
-                crabka_pgtypes::oids::OIDARRAY,
+                krabka_pgtypes::oids::OIDARRAY,
                 "_oid",
-                crabka_pgtypes::oids::OID,
+                krabka_pgtypes::oids::OID,
             ),
             (
-                crabka_pgtypes::oids::XIDARRAY,
+                krabka_pgtypes::oids::XIDARRAY,
                 "_xid",
-                crabka_pgtypes::oids::XID,
+                krabka_pgtypes::oids::XID,
             ),
             (
-                crabka_pgtypes::oids::XID8ARRAY,
+                krabka_pgtypes::oids::XID8ARRAY,
                 "_xid8",
-                crabka_pgtypes::oids::XID8,
+                krabka_pgtypes::oids::XID8,
             ),
             (
-                crabka_pgtypes::oids::CIDARRAY,
+                krabka_pgtypes::oids::CIDARRAY,
                 "_cid",
-                crabka_pgtypes::oids::CID,
+                krabka_pgtypes::oids::CID,
             ),
             (
-                crabka_pgtypes::oids::TIDARRAY,
+                krabka_pgtypes::oids::TIDARRAY,
                 "_tid",
-                crabka_pgtypes::oids::TID,
+                krabka_pgtypes::oids::TID,
             ),
             (
-                crabka_pgtypes::oids::PG_LSNARRAY,
+                krabka_pgtypes::oids::PG_LSNARRAY,
                 "_pg_lsn",
-                crabka_pgtypes::oids::PG_LSN,
+                krabka_pgtypes::oids::PG_LSN,
             ),
         ] {
             rows.push(BuiltinTypeRow {
@@ -5633,34 +5633,34 @@ pub(crate) fn builtin_type_rows() -> &'static [BuiltinTypeRow] {
         }
         for (oid, name, elem) in [
             (
-                crabka_pgtypes::oids::INT4RANGEARRAY,
+                krabka_pgtypes::oids::INT4RANGEARRAY,
                 "_int4range",
-                crabka_pgtypes::oids::INT4RANGE,
+                krabka_pgtypes::oids::INT4RANGE,
             ),
             (
-                crabka_pgtypes::oids::NUMRANGEARRAY,
+                krabka_pgtypes::oids::NUMRANGEARRAY,
                 "_numrange",
-                crabka_pgtypes::oids::NUMRANGE,
+                krabka_pgtypes::oids::NUMRANGE,
             ),
             (
-                crabka_pgtypes::oids::TSRANGEARRAY,
+                krabka_pgtypes::oids::TSRANGEARRAY,
                 "_tsrange",
-                crabka_pgtypes::oids::TSRANGE,
+                krabka_pgtypes::oids::TSRANGE,
             ),
             (
-                crabka_pgtypes::oids::TSTZRANGEARRAY,
+                krabka_pgtypes::oids::TSTZRANGEARRAY,
                 "_tstzrange",
-                crabka_pgtypes::oids::TSTZRANGE,
+                krabka_pgtypes::oids::TSTZRANGE,
             ),
             (
-                crabka_pgtypes::oids::DATERANGEARRAY,
+                krabka_pgtypes::oids::DATERANGEARRAY,
                 "_daterange",
-                crabka_pgtypes::oids::DATERANGE,
+                krabka_pgtypes::oids::DATERANGE,
             ),
             (
-                crabka_pgtypes::oids::INT8RANGEARRAY,
+                krabka_pgtypes::oids::INT8RANGEARRAY,
                 "_int8range",
-                crabka_pgtypes::oids::INT8RANGE,
+                krabka_pgtypes::oids::INT8RANGE,
             ),
         ] {
             rows.push(BuiltinTypeRow {
@@ -5674,34 +5674,34 @@ pub(crate) fn builtin_type_rows() -> &'static [BuiltinTypeRow] {
         }
         for (oid, name, elem) in [
             (
-                crabka_pgtypes::oids::INT4MULTIRANGEARRAY,
+                krabka_pgtypes::oids::INT4MULTIRANGEARRAY,
                 "_int4multirange",
-                crabka_pgtypes::oids::INT4MULTIRANGE,
+                krabka_pgtypes::oids::INT4MULTIRANGE,
             ),
             (
-                crabka_pgtypes::oids::NUMMULTIRANGEARRAY,
+                krabka_pgtypes::oids::NUMMULTIRANGEARRAY,
                 "_nummultirange",
-                crabka_pgtypes::oids::NUMMULTIRANGE,
+                krabka_pgtypes::oids::NUMMULTIRANGE,
             ),
             (
-                crabka_pgtypes::oids::TSMULTIRANGEARRAY,
+                krabka_pgtypes::oids::TSMULTIRANGEARRAY,
                 "_tsmultirange",
-                crabka_pgtypes::oids::TSMULTIRANGE,
+                krabka_pgtypes::oids::TSMULTIRANGE,
             ),
             (
-                crabka_pgtypes::oids::TSTZMULTIRANGEARRAY,
+                krabka_pgtypes::oids::TSTZMULTIRANGEARRAY,
                 "_tstzmultirange",
-                crabka_pgtypes::oids::TSTZMULTIRANGE,
+                krabka_pgtypes::oids::TSTZMULTIRANGE,
             ),
             (
-                crabka_pgtypes::oids::DATEMULTIRANGEARRAY,
+                krabka_pgtypes::oids::DATEMULTIRANGEARRAY,
                 "_datemultirange",
-                crabka_pgtypes::oids::DATEMULTIRANGE,
+                krabka_pgtypes::oids::DATEMULTIRANGE,
             ),
             (
-                crabka_pgtypes::oids::INT8MULTIRANGEARRAY,
+                krabka_pgtypes::oids::INT8MULTIRANGEARRAY,
                 "_int8multirange",
-                crabka_pgtypes::oids::INT8MULTIRANGE,
+                krabka_pgtypes::oids::INT8MULTIRANGE,
             ),
         ] {
             rows.push(BuiltinTypeRow {
@@ -5713,9 +5713,9 @@ pub(crate) fn builtin_type_rows() -> &'static [BuiltinTypeRow] {
                 array: 0,
             });
         }
-        for elem in crabka_pgtypes::ElemType::ALL
+        for elem in krabka_pgtypes::ElemType::ALL
             .into_iter()
-            .chain(crabka_pgtypes::BuiltinElem::all().map(crabka_pgtypes::ElemType::Builtin))
+            .chain(krabka_pgtypes::BuiltinElem::all().map(krabka_pgtypes::ElemType::Builtin))
         {
             let row = BuiltinTypeRow {
                 oid: i32::try_from(elem.array_oid()).expect("array oid fits in int4"),
@@ -5770,9 +5770,9 @@ pub(crate) fn text(value: &str) -> Datum {
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgcatalog::{ForeignTableMeta, RelationName, Table};
-    use crabka_pgkv::{Kv, MemKv};
-    use crabka_pgtypes::usertype::{CompositeField, RangeBody, UserTypeBody};
+    use krabka_pgcatalog::{ForeignTableMeta, RelationName, Table};
+    use krabka_pgkv::{Kv, MemKv};
+    use krabka_pgtypes::usertype::{CompositeField, RangeBody, UserTypeBody};
 
     use super::*;
 
@@ -5848,7 +5848,7 @@ mod tests {
     fn toast_relations_use_the_heap_access_method() {
         let kv = MemKv::default();
         let table = RelationName::public("toast_catalog_row");
-        crabka_pgcatalog::create_table(&kv, &table, vec![Column::new("value", ColumnType::Text)])
+        krabka_pgcatalog::create_table(&kv, &table, vec![Column::new("value", ColumnType::Text)])
             .expect("create toastable table");
         let toast = pg_class_rows(&kv)
             .expect("pg_class rows")
@@ -5900,8 +5900,8 @@ mod tests {
             .expect("attribute rows");
         assert_eq!(
             rows[0][23],
-            Datum::Array(crabka_pgtypes::ArrayValue::new(
-                crabka_pgtypes::ElemType::Text,
+            Datum::Array(krabka_pgtypes::ArrayValue::new(
+                krabka_pgtypes::ElemType::Text,
                 vec![Datum::Text("remote_name=remote_id".into())],
             ))
         );
@@ -5924,10 +5924,10 @@ mod tests {
             .expect("pg_aggregate_fnoid_index");
         assert_eq!(row[1], int(2600));
         let oid_vector = |oid| {
-            Datum::OidVector(crabka_pgtypes::ArrayValue::with_dims(
-                crabka_pgtypes::ElemType::Int4,
+            Datum::OidVector(krabka_pgtypes::ArrayValue::with_dims(
+                krabka_pgtypes::ElemType::Int4,
                 vec![Datum::Int4(oid)],
-                vec![crabka_pgtypes::ArrayDim::new(0, 1)],
+                vec![krabka_pgtypes::ArrayDim::new(0, 1)],
             ))
         };
         assert_eq!(row[15], oid_vector(1));
@@ -6068,7 +6068,7 @@ mod tests {
                 None,
                 [None; 8],
                 None,
-                Some(crabka_pgtypes::usertype::BaseLayout {
+                Some(krabka_pgtypes::usertype::BaseLayout {
                     length: -1,
                     by_value: false,
                     alignment,
@@ -6086,29 +6086,29 @@ mod tests {
             crate::catalog_rel::DEFAULT_COLLATION_OID
         );
         assert_eq!(
-            text_collation_oid(ColumnType::Array(crabka_pgtypes::ElemType::Name)),
+            text_collation_oid(ColumnType::Array(krabka_pgtypes::ElemType::Name)),
             crate::catalog_rel::DEFAULT_COLLATION_OID
         );
         assert_eq!(
-            builtin_type_collation_oid(crabka_pgtypes::oids::NAME as i32),
+            builtin_type_collation_oid(krabka_pgtypes::oids::NAME as i32),
             crate::catalog_rel::DEFAULT_COLLATION_OID
         );
         assert_eq!(
-            builtin_type_collation_oid(crabka_pgtypes::oids::NAMEARRAY as i32),
+            builtin_type_collation_oid(krabka_pgtypes::oids::NAMEARRAY as i32),
             crate::catalog_rel::DEFAULT_COLLATION_OID
         );
     }
 
     #[test]
     fn regclass_array_column_indexes_include_the_join_offset() {
-        let table = crabka_pgcatalog::Table {
+        let table = krabka_pgcatalog::Table {
             id: 1,
             name: RelationName::public("regclass_array_right"),
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
             columns: vec![
-                crabka_pgcatalog::Column::new("id", ColumnType::Int4),
-                crabka_pgcatalog::Column::new("class", ColumnType::Regclass),
-                crabka_pgcatalog::Column::new(
+                krabka_pgcatalog::Column::new("id", ColumnType::Int4),
+                krabka_pgcatalog::Column::new("class", ColumnType::Regclass),
+                krabka_pgcatalog::Column::new(
                     "classes",
                     ColumnType::array_of(ColumnType::Regclass).expect("regclass[]"),
                 ),
@@ -6135,7 +6135,7 @@ mod tests {
     fn user_type_array_rows_are_varlena_and_link_to_their_scalar_type() {
         let kv = MemKv::default();
         let name = RelationName::public("catalog_array_pair");
-        let (ty, ops) = crabka_pgcatalog::create_user_type_ops(
+        let (ty, ops) = krabka_pgcatalog::create_user_type_ops(
             &kv,
             &name,
             UserTypeBody::Composite(vec![CompositeField {
@@ -6169,7 +6169,7 @@ mod tests {
     fn user_multirange_array_row_is_varlena_and_links_to_its_scalar_type() {
         let kv = MemKv::default();
         let name = RelationName::public("catalog_array_range");
-        let (range, ops) = crabka_pgcatalog::create_user_type_ops(
+        let (range, ops) = krabka_pgcatalog::create_user_type_ops(
             &kv,
             &name,
             UserTypeBody::Range(RangeBody {
@@ -6183,7 +6183,7 @@ mod tests {
         kv.write_batch(&ops).expect("store range");
 
         let multirange = range.multirange_type().expect("range has a multirange");
-        let array_oid = crabka_pgtypes::usertype::user_multirange_array_oid(multirange.oid());
+        let array_oid = krabka_pgtypes::usertype::user_multirange_array_oid(multirange.oid());
         let rows = user_type_rows(&kv, &BTreeMap::new()).expect("user type rows");
         let scalar = rows
             .iter()
@@ -6202,7 +6202,7 @@ mod tests {
     #[test]
     fn float8_range_array_uses_double_alignment() {
         let kv = MemKv::default();
-        let (range, ops) = crabka_pgcatalog::create_user_type_ops(
+        let (range, ops) = krabka_pgcatalog::create_user_type_ops(
             &kv,
             &RelationName::public("catalog_float8range"),
             UserTypeBody::Range(RangeBody {
@@ -6226,12 +6226,12 @@ mod tests {
     fn pg_stats_projects_the_durable_attribute_record() {
         let kv = MemKv::new();
         kv.write_batch(
-            &crabka_pgcatalog::create_schema_ops(&kv, "stats_import", "postgres")
+            &krabka_pgcatalog::create_schema_ops(&kv, "stats_import", "postgres")
                 .expect("schema ops"),
         )
         .expect("schema");
         let relation = RelationName::new("stats_import", "test");
-        crabka_pgcatalog::create_table(&kv, &relation, vec![Column::new("id", ColumnType::Int4)])
+        krabka_pgcatalog::create_table(&kv, &relation, vec![Column::new("id", ColumnType::Int4)])
             .expect("table");
         let key = crate::attrstats::AttributeStatsKey {
             relation,
@@ -6269,15 +6269,15 @@ mod tests {
                     Datum::Int4(5),
                     Datum::Float4(0.6),
                     Datum::Text("{1,2}".into()),
-                    Datum::Array(crabka_pgtypes::ArrayValue::new(
-                        crabka_pgtypes::ElemType::Float4,
+                    Datum::Array(krabka_pgtypes::ArrayValue::new(
+                        krabka_pgtypes::ElemType::Float4,
                         vec![Datum::Float4(0.4), Datum::Float4(0.6)],
                     )),
                     Datum::Text("{0,5,10}".into()),
                     Datum::Float4(-0.75),
                     Datum::Text("{a,b}".into()),
-                    Datum::Array(crabka_pgtypes::ArrayValue::new(
-                        crabka_pgtypes::ElemType::Float4,
+                    Datum::Array(krabka_pgtypes::ArrayValue::new(
+                        krabka_pgtypes::ElemType::Float4,
                         vec![
                             Datum::Float4(0.4),
                             Datum::Float4(0.6),
@@ -6285,8 +6285,8 @@ mod tests {
                             Datum::Float4(0.6),
                         ],
                     )),
-                    Datum::Array(crabka_pgtypes::ArrayValue::new(
-                        crabka_pgtypes::ElemType::Float4,
+                    Datum::Array(krabka_pgtypes::ArrayValue::new(
+                        krabka_pgtypes::ElemType::Float4,
                         vec![Datum::Float4(1.0), Datum::Float4(2.0)],
                     )),
                     Datum::Null,

@@ -143,7 +143,7 @@ fn write_trimmed(f: &mut Formatter<'_>, value: f64) -> fmt::Result {
 /// A quantity that renders itself the way an operator would write it.
 ///
 /// ```
-/// use crabka_units::{fmt::Human, prelude::*};
+/// use krabka_units::{fmt::Human, prelude::*};
 ///
 /// assert_eq!(mebibytes(512).human().to_string(), "512MiB");
 /// assert_eq!(days(7).human().to_string(), "7d");

@@ -44,10 +44,10 @@
 
 use std::collections::HashSet;
 
-use crabka_pgparser::ast::{
+use krabka_pgparser::ast::{
     ArraySubscript, Expr, FuncArgs, FuncCall, GroupItem, GroupingClause, SelectItem, SelectStmt,
 };
-use crabka_pgtypes::{ColumnType, Datum};
+use krabka_pgtypes::{ColumnType, Datum};
 
 use crate::{
     clock::EvalCtx,
@@ -156,7 +156,7 @@ pub(crate) fn is_degenerate_grouping(s: &SelectStmt) -> bool {
     }
     exprs.extend(s.having.iter());
     exprs.extend(s.order_by.iter().map(|item| &item.expr));
-    if let crabka_pgparser::ast::DistinctClause::On(keys) = &s.distinct {
+    if let krabka_pgparser::ast::DistinctClause::On(keys) = &s.distinct {
         exprs.extend(keys);
     }
     exprs.into_iter().all(reads_no_input)
@@ -208,10 +208,10 @@ pub(crate) fn reject_misplaced_calls(s: &SelectStmt) -> Result<(), ExecError> {
 
 /// `JOIN … ON` is evaluated below the grouping, exactly like `WHERE`.
 fn reject_in_join_tree(
-    table: &crabka_pgparser::ast::TableExpr,
+    table: &krabka_pgparser::ast::TableExpr,
     reject: &impl Fn(Option<&Expr>, &str) -> Result<(), ExecError>,
 ) -> Result<(), ExecError> {
-    let crabka_pgparser::ast::TableExpr::Join {
+    let krabka_pgparser::ast::TableExpr::Join {
         left,
         right,
         constraint,
@@ -220,7 +220,7 @@ fn reject_in_join_tree(
     else {
         return Ok(());
     };
-    if let crabka_pgparser::ast::JoinConstraint::On(on) = constraint {
+    if let krabka_pgparser::ast::JoinConstraint::On(on) = constraint {
         reject(Some(on), "JOIN conditions")?;
     }
     reject_in_join_tree(left, reject)?;
@@ -451,7 +451,7 @@ fn empty_input_rows(
     let (fields, out_exprs, out_types) = crate::exec::resolve_projection(&stmt.projection, scope)?;
     let require_output = matches!(
         stmt.distinct,
-        crabka_pgparser::ast::DistinctClause::Distinct
+        krabka_pgparser::ast::DistinctClause::Distinct
     );
     let order_keys = crate::exec::resolve_select_order_keys(
         &stmt.order_by,
@@ -480,7 +480,7 @@ fn empty_input_rows(
         crate::eval::require_ordering_operator(ty)?;
     }
     let (distinct, order_by) = (stmt.distinct.clone(), std::mem::take(&mut stmt.order_by));
-    stmt.distinct = crabka_pgparser::ast::DistinctClause::All;
+    stmt.distinct = krabka_pgparser::ast::DistinctClause::All;
     let one =
         crate::agg::aggregate_rows_with_memory(&stmt, scope, Vec::new(), ctx, statement_memory)?;
     stmt.order_by = order_by;
@@ -612,8 +612,8 @@ fn rewrite_clauses(
     for (item, original) in stmt.order_by.iter_mut().zip(&s.order_by) {
         item.expr = rewrite(&original.expr, fold, false)?;
     }
-    if let crabka_pgparser::ast::DistinctClause::On(keys) = &s.distinct {
-        stmt.distinct = crabka_pgparser::ast::DistinctClause::On(rewrite_all(keys, fold, false)?);
+    if let krabka_pgparser::ast::DistinctClause::On(keys) = &s.distinct {
+        stmt.distinct = krabka_pgparser::ast::DistinctClause::On(rewrite_all(keys, fold, false)?);
     }
     Ok(())
 }
@@ -829,7 +829,7 @@ pub(crate) fn resolve_group_references(
 pub(crate) fn substitute_group_references(
     group_by: &[Expr],
     scope: &Scope,
-    fields: &[crabka_pgwire::engine::FieldDescription],
+    fields: &[krabka_pgwire::engine::FieldDescription],
     out_exprs: &[Expr],
 ) -> Result<Vec<Expr>, ExecError> {
     group_by
@@ -1218,14 +1218,14 @@ fn rewrite_all(
 /// [`rewrite_all`] over a sort list, keeping each item's direction and NULL
 /// placement.
 fn rewrite_order_by(
-    order_by: &[crabka_pgparser::ast::OrderItem],
+    order_by: &[krabka_pgparser::ast::OrderItem],
     fold: &mut impl FnMut(&Expr) -> Result<Option<Expr>, ExecError>,
     into_aggregates: bool,
-) -> Result<Vec<crabka_pgparser::ast::OrderItem>, ExecError> {
+) -> Result<Vec<krabka_pgparser::ast::OrderItem>, ExecError> {
     order_by
         .iter()
         .map(|item| {
-            Ok(crabka_pgparser::ast::OrderItem {
+            Ok(krabka_pgparser::ast::OrderItem {
                 expr: rewrite(&item.expr, fold, into_aggregates)?,
                 asc: item.asc,
                 nulls_first: item.nulls_first,

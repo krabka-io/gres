@@ -12,7 +12,7 @@
 //! # Wire boundary
 //!
 //! The generated Kafka wire codec, the `generated` module of
-//! `crabka-protocol`, stays raw. It must be byte-exact. Wrap a value in one of
+//! `krabka-protocol`, stays raw. It must be byte-exact. Wrap a value in one of
 //! these newtypes when it enters the hand-written domain layer. Unwrap it with
 //! `.0` or [`Into`] when you write it back to a generated message or to an
 //! on-disk format. Every newtype here is `#[serde(transparent)]`, so a
@@ -219,9 +219,9 @@ impl ProducerId {
 /// and round-trips as the inner `i32`. The type is ordered, so epochs compare
 /// directly. Advance to the next epoch with [`LeaderEpoch::next`].
 ///
-/// Note: the deterministic consensus core, `crabka-kraft-core`, tracks its own
-/// always-non-negative epoch as a `u32`, `crabka_kraft_core::types::Epoch`.
-/// `crabka-raft` converts to and from this wire type at the controller
+/// Note: the deterministic consensus core, `krabka-kraft-core`, tracks its own
+/// always-non-negative epoch as a `u32`, `krabka_kraft_core::types::Epoch`.
+/// `krabka-raft` converts to and from this wire type at the controller
 /// boundary.
 #[derive(
     Debug,
@@ -275,7 +275,7 @@ impl LeaderEpoch {
 /// A Kafka request API key, as the raw wire `int16`.
 ///
 /// This is the numeric code in the `ApiKey` field of a request header. It is
-/// different from the typed `crabka_protocol::ApiKey` *enum*, which names each
+/// different from the typed `krabka_protocol::ApiKey` *enum*, which names each
 /// key, such as `Produce` and `Fetch`. This newtype is the boundary value that
 /// goes through the hand-written header construction and through the tap and
 /// proxy frame parsers. It pairs with an [`ApiVersion`], and the two are

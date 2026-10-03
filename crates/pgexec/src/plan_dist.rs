@@ -2,9 +2,9 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use crabka_pgcatalog::Table;
-use crabka_pgparser::ast::{BinaryOp, Expr, FuncArgs, FuncCall, SelectItem};
-use crabka_pgtypes::{ColumnType, Datum};
+use krabka_pgcatalog::Table;
+use krabka_pgparser::ast::{BinaryOp, Expr, FuncArgs, FuncCall, SelectItem};
+use krabka_pgtypes::{ColumnType, Datum};
 
 use crate::{
     ExecError,
@@ -124,14 +124,14 @@ impl Stats for SequenceCounters {
 /// commits and replicated apply without refresh.
 #[derive(Clone)]
 pub struct StoredRowStats {
-    kv: Arc<dyn crabka_pgkv::Kv>,
+    kv: Arc<dyn krabka_pgkv::Kv>,
     key_budget: usize,
 }
 
 impl StoredRowStats {
     /// Count only what `broadcast_threshold_bytes` makes worth counting.
     #[must_use]
-    pub fn new(kv: Arc<dyn crabka_pgkv::Kv>, broadcast_threshold_bytes: u64) -> Self {
+    pub fn new(kv: Arc<dyn krabka_pgkv::Kv>, broadcast_threshold_bytes: u64) -> Self {
         let budget = (broadcast_threshold_bytes / ASSUMED_ROW_BYTES).saturating_add(1);
         Self {
             kv,
@@ -153,14 +153,14 @@ impl StoredRowStats {
         let seen = self
             .kv
             .for_each_key(
-                &crabka_pgkv::key::table_prefix(table_id),
-                &crabka_pgkv::key::table_prefix_end(table_id),
+                &krabka_pgkv::key::table_prefix(table_id),
+                &krabka_pgkv::key::table_prefix_end(table_id),
                 self.key_budget,
                 &mut |key| {
                     // A key too short to carry a version suffix belongs to no
                     // row this can name, so it counts as one of its own: the
                     // bound has to stay above the truth, never under it.
-                    let prefix = crabka_pgmvcc::version::row_prefix_of(key).unwrap_or(key);
+                    let prefix = krabka_pgmvcc::version::row_prefix_of(key).unwrap_or(key);
                     if previous != prefix {
                         rows = rows.saturating_add(1);
                         previous.clear();
@@ -232,7 +232,7 @@ pub enum JoinStrategy {
 /// hash partitioning. A missing co-location group is deliberately not proof.
 #[must_use]
 pub fn tables_are_co_partitioned(left: &Table, right: &Table) -> bool {
-    use crabka_pgcatalog::ShardingStrategy;
+    use krabka_pgcatalog::ShardingStrategy;
 
     let (Some(ShardingStrategy::Hash(left_hash)), Some(ShardingStrategy::Hash(right_hash))) =
         (&left.sharding, &right.sharding)
@@ -255,7 +255,7 @@ pub fn co_partitioned_join_keys_match(
     left_keys: &[usize],
     right_keys: &[usize],
 ) -> bool {
-    use crabka_pgcatalog::ShardingStrategy;
+    use krabka_pgcatalog::ShardingStrategy;
 
     if !tables_are_co_partitioned(left, right) {
         return false;
@@ -350,7 +350,7 @@ pub struct DistributedScanPlan {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextSearchPredicate {
     pub column: usize,
-    pub query: crabka_pgtypes::TsQuery,
+    pub query: krabka_pgtypes::TsQuery,
 }
 
 impl Default for DistributedScanPlan {
@@ -534,8 +534,8 @@ fn literal_for_type(expr: &Expr, ty: ColumnType) -> Result<Option<Datum>, ExecEr
             .map_err(|_| ExecError::TypeMismatch("int8 predicate literal is out of range".into())),
         (Expr::StringLiteral(value), ColumnType::Text) => Ok(Some(Datum::Text(value.clone()))),
         (Expr::BoolLiteral(value), ColumnType::Bool) => Ok(Some(Datum::Bool(*value))),
-        (Expr::StringLiteral(value), ColumnType::Array(crabka_pgtypes::ElemType::Int4)) => {
-            let literal = crabka_pgtypes::array::parse_literal(value)?;
+        (Expr::StringLiteral(value), ColumnType::Array(krabka_pgtypes::ElemType::Int4)) => {
+            let literal = krabka_pgtypes::array::parse_literal(value)?;
             let elements = literal
                 .elements
                 .into_iter()
@@ -548,13 +548,13 @@ fn literal_for_type(expr: &Expr, ty: ColumnType) -> Result<Option<Datum>, ExecEr
                     None => Ok(Datum::Null),
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            Ok(Some(Datum::Array(crabka_pgtypes::ArrayValue::with_dims(
-                crabka_pgtypes::ElemType::Int4,
+            Ok(Some(Datum::Array(krabka_pgtypes::ArrayValue::with_dims(
+                krabka_pgtypes::ElemType::Int4,
                 elements,
                 literal.dims,
             ))))
         }
-        (Expr::ArrayLiteral(items), ColumnType::Array(crabka_pgtypes::ElemType::Int4)) => {
+        (Expr::ArrayLiteral(items), ColumnType::Array(krabka_pgtypes::ElemType::Int4)) => {
             let elements = items
                 .iter()
                 .map(|item| match item {
@@ -568,8 +568,8 @@ fn literal_for_type(expr: &Expr, ty: ColumnType) -> Result<Option<Datum>, ExecEr
                     )),
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            Ok(Some(Datum::Array(crabka_pgtypes::ArrayValue::new(
-                crabka_pgtypes::ElemType::Int4,
+            Ok(Some(Datum::Array(krabka_pgtypes::ArrayValue::new(
+                krabka_pgtypes::ElemType::Int4,
                 elements,
             ))))
         }
@@ -591,7 +591,7 @@ fn scanner_predicate_type_is_supported(ty: ColumnType) -> bool {
             | ColumnType::Int4
             | ColumnType::Int8
             | ColumnType::Text
-            | ColumnType::Array(crabka_pgtypes::ElemType::Int4)
+            | ColumnType::Array(krabka_pgtypes::ElemType::Int4)
     )
 }
 
@@ -759,9 +759,9 @@ mod tests {
     fn table() -> Table {
         Table {
             id: 1,
-            name: crabka_pgcatalog::RelationName::public("items"),
-            owner: crabka_pgcatalog::BOOTSTRAP_ROLE.into(),
-            columns: vec![crabka_pgcatalog::Column::new("id", ColumnType::Int4)],
+            name: krabka_pgcatalog::RelationName::public("items"),
+            owner: krabka_pgcatalog::BOOTSTRAP_ROLE.into(),
+            columns: vec![krabka_pgcatalog::Column::new("id", ColumnType::Int4)],
             sharded: false,
             row_security: false,
             force_row_security: false,

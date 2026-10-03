@@ -120,7 +120,7 @@ proptest); the model focuses on the *concurrency* over small abstract token coun
 - **Bounds (watchdog-guarded):** 2 threads, `rate`/`requested` ~0-3, `max_refill` ~2; scale a `wide`
   config (3 threads or wider counts) while exhaustive under the host memory watchdog.
 
-## proptest fuzz (`proptest` already a `crabka-broker` dev-dep)
+## proptest fuzz (`proptest` already a `krabka-broker` dev-dep)
 
 Large-N over the pure `plan_consume`: random `cur`, `refill`, `rate`, `requested` (including the
 `u128→u64` cast edges, `saturating_add` overflow, `rate = 0`, `requested = 0`, huge values). Assert:

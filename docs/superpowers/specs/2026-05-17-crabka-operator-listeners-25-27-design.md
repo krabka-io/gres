@@ -24,9 +24,9 @@ Make Crabka clusters reachable from outside the Kubernetes cluster with the same
 
 | # | Title | Crate | Approx size |
 |---|-------|-------|------------|
-| 25a | Broker `--config-file` (TOML) + multi-listener wiring | `crabka-broker` | ~0.8x |
-| 25 | Operator: `Kafka.spec.listeners` schema, internal/nodeport/loadbalancer reconcile, per-broker Services, advertised-listener computation, ConfigMap rewrite | `crabka-operator` | ~1.5x |
-| 27 | Operator: Ingress (SNI) + OpenShift Route reconcile | `crabka-operator` | ~1x (deferred — plan written after Phase 4) |
+| 25a | Broker `--config-file` (TOML) + multi-listener wiring | `krabka-broker` | ~0.8x |
+| 25 | Operator: `Kafka.spec.listeners` schema, internal/nodeport/loadbalancer reconcile, per-broker Services, advertised-listener computation, ConfigMap rewrite | `krabka-operator` | ~1.5x |
+| 27 | Operator: Ingress (SNI) + OpenShift Route reconcile | `krabka-operator` | ~1x (deferred — plan written after Phase 4) |
 
 Slice 25 depends on slice 25a (must land first). Slice 27 depends on Phase 4 slices 30/31.
 
@@ -122,10 +122,10 @@ When `spec.listeners` is non-empty and `inter_broker_listener_name` is `None`, t
 
 ### Broker config file (slice 25a)
 
-New CLI flag on `crabka-broker`:
+New CLI flag on `krabka-broker`:
 
 ```
-crabka-broker --config-file=/path/to/broker.toml [--broker-id N]
+krabka-broker --config-file=/path/to/broker.toml [--broker-id N]
 ```
 
 Mutually exclusive with `--listen-addr` / `--advertised-listener`. CLI flags that *don't* overlap with the file (e.g. `--broker-id`, `--metrics-listen-addr`) still apply and override file values where both are set.
@@ -178,7 +178,7 @@ cp /etc/crabka/config/broker-${NODE_ID}.toml /run/crabka/broker.toml
 Broker `MAIN_SCRIPT` becomes:
 
 ```sh
-exec /usr/bin/crabka-broker \
+exec /usr/bin/krabka-broker \
   --config-file=/run/crabka/broker.toml \
   --broker-id="$(cat /var/lib/crabka/data/.node-id)"
 ```
@@ -353,7 +353,7 @@ Conditions on `KafkaStatus`:
   - two listeners sharing `bind_addr`
   - `protocol = "ssl"` without TLS keystore (existing `BrokerConfig::validate()`)
   - unknown top-level table → reject with helpful error citing the key
-- **CLI conflict:** `crabka-broker --config-file FOO --listen-addr BAR` exits non-zero with a clear message.
+- **CLI conflict:** `krabka-broker --config-file FOO --listen-addr BAR` exits non-zero with a clear message.
 - **CLI smoke (existing `cli_smoke.rs` extended):** boot a broker with a single-listener TOML config-file; produce a `Metadata` request; assert the advertised listener matches the file's value.
 
 ### Slice 25 (operator)
@@ -365,7 +365,7 @@ Conditions on `KafkaStatus`:
   - LoadBalancer listener with one broker's LB still pending → `ListenersReady=False reason=PendingExternalAddresses`; ConfigMap not written; existing Services unchanged.
   - Override paths: `configuration.brokers[i].advertisedHost` wins over Node-derived IP; `configuration.brokers[i].advertisedPort` wins over allocated `nodePort`.
 - **Kind e2e:**
-  - **NodePort:** deploy a 3-broker single-pool cluster with one `internal` + one `nodeport` listener. From a pod with `hostNetwork: true` (or from the kind host directly), connect via the bootstrap nodePort using `crabka-cli` / `kcat`; produce 100 messages; consume them; assert byte-equality. Assert `Kafka.status.listeners[name=external].bootstrapServers` is populated and resolves.
+  - **NodePort:** deploy a 3-broker single-pool cluster with one `internal` + one `nodeport` listener. From a pod with `hostNetwork: true` (or from the kind host directly), connect via the bootstrap nodePort using `krabka-cli` / `kcat`; produce 100 messages; consume them; assert byte-equality. Assert `Kafka.status.listeners[name=external].bootstrapServers` is populated and resolves.
   - **LoadBalancer:** same as above, with [MetalLB](https://metallb.io) preinstalled in the kind cluster to provide a real LB controller. Connect via the LB's external IP.
 - **Upgrade test:** install slice-24 operator chart + a `Kafka` resource with `spec.config` set; upgrade to slice-25 chart; assert:
   - `Kafka.status.listeners` populated with the synthesized internal-default
@@ -400,13 +400,13 @@ Test plan deferred until Phase 4 lands TLS. Sketch: SNI passthrough verified by 
 ## Acceptance criteria
 
 ### Slice 25a
-1. `cargo build -p crabka-broker` produces a binary that accepts `--config-file`.
-2. `cargo test -p crabka-broker --test cli_smoke` covers config-file boot.
+1. `cargo build -p krabka-broker` produces a binary that accepts `--config-file`.
+2. `cargo test -p krabka-broker --test cli_smoke` covers config-file boot.
 3. TOML parser unit tests cover all error cases listed above.
 
 ### Slice 25
-1. `cargo build -p crabka-operator` clean.
-2. `cargo test -p crabka-operator` passes all reconcile-unit tests above.
+1. `cargo build -p krabka-operator` clean.
+2. `cargo test -p krabka-operator` passes all reconcile-unit tests above.
 3. CI kind job: NodePort e2e and LoadBalancer e2e both pass.
 4. Slice-24-to-25 upgrade e2e: one-time graceful rolling restart on upgrade (pod template change); `crabka.io/config-hash` annotation unchanged for empty `spec.listeners`; no second roll afterward.
-5. CRD-drift CI job: `cargo xtask gen-crds` produces no diff; `helm lint charts/crabka-operator` passes.
+5. CRD-drift CI job: `cargo xtask gen-crds` produces no diff; `helm lint charts/krabka-operator` passes.

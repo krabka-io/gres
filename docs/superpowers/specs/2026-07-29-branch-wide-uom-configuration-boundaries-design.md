@@ -32,11 +32,11 @@ Operator-facing values use:
 
 | Dimension | Rust boundary type | Examples |
 | --- | --- | --- |
-| elapsed time | `crabka_units::Time` | `500ms`, `30s`, `8h` |
-| byte size | `crabka_units::ByteSize` | `1MiB`, `1.5GB` |
-| byte throughput | `crabka_units::ByteRate` | `10MiB/s` |
-| frequency | `crabka_units::Frequency` | `5Hz` |
-| ratio | `crabka_units::Ratio` | `25%`, `0.25` |
+| elapsed time | `krabka_units::Time` | `500ms`, `30s`, `8h` |
+| byte size | `krabka_units::ByteSize` | `1MiB`, `1.5GB` |
+| byte throughput | `krabka_units::ByteRate` | `10MiB/s` |
+| frequency | `krabka_units::Frequency` | `5Hz` |
+| ratio | `krabka_units::Ratio` | `25%`, `0.25` |
 
 Nonzero values require an explicit unit. Bare nonzero numbers are rejected
 rather than assigned an implicit scale. Zero remains accepted only for
@@ -79,9 +79,9 @@ Examples:
 
 ```text
 BENCH_SAMPLE_INTERVAL=500ms
-CRABKA_ADMIN_UI_SESSION_TTL=8h
-CRABKA_TRACES_BLOCK_READ_MAX=1GiB
-CRABKA_PROFILES_WAL_POLL_TIMEOUT=500ms
+KRABKA_ADMIN_UI_SESSION_TTL=8h
+KRABKA_TRACES_BLOCK_READ_MAX=1GiB
+KRABKA_PROFILES_WAL_POLL_TIMEOUT=500ms
 ```
 
 `WAL` retains its write-ahead-log spelling; `WALL` is not introduced.
@@ -93,7 +93,7 @@ permanent ambiguity and duplicate documentation.
 ## CLI and Environment Boundaries
 
 Clap fields store UOM quantities directly. Shared parsing and positivity
-checks should live in `crabka-units` when they are reused across crates;
+checks should live in `krabka-units` when they are reused across crates;
 crate-local logic remains only for domain-specific integer lowering.
 
 Defaults use the same human form accepted from operators, such as `500ms` or
@@ -105,7 +105,7 @@ fail before network, filesystem, object-store, Kubernetes, or broker I/O.
 ## Configuration Files
 
 Human-authored TOML, YAML, and JSON configuration fields use
-`crabka_units::serde_units::human` adapters. Optional fields use the existing
+`krabka_units::serde_units::human` adapters. Optional fields use the existing
 `option_*` adapters.
 
 Field names lose fixed-unit suffixes. Defaults and merge precedence remain
@@ -122,7 +122,7 @@ schemas:
 #[serde(
     default,
     skip_serializing_if = "Option::is_none",
-    with = "crabka_units::serde_units::human::option_time"
+    with = "krabka_units::serde_units::human::option_time"
 )]
 #[schemars(with = "Option<String>")]
 pub timeout: Option<Time>

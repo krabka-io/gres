@@ -5,14 +5,14 @@
 //!
 //! The route format `/crabka.rebalancer.v1.Rebalancer/GetState` comes from the
 //! `RebalancerServiceBuilder` codegen in
-//! `target/debug/build/crabka-rebalancer-*/out/crabka.rebalancer.v1.rs`. That
+//! `target/debug/build/krabka-rebalancer-*/out/crabka.rebalancer.v1.rs`. That
 //! codegen calls `router.route("/crabka.rebalancer.v1.Rebalancer/GetState",
 //! ...)` verbatim, which matches the canonical Connect and gRPC path format
 //! `<package>.<Service>/<Method>`.
 
 use std::time::{Duration, Instant};
 
-use crabka_broker::{Broker, BrokerConfig};
+use krabka_broker::{Broker, BrokerConfig};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn connect_get_state_over_http_json() {
@@ -32,7 +32,7 @@ async fn connect_get_state_over_http_json() {
     // cargo when an integration test in the same crate references the
     // binary target.
     let data_dir = tempfile::tempdir().unwrap();
-    let bin_path = env!("CARGO_BIN_EXE_crabka-rebalancer");
+    let bin_path = env!("CARGO_BIN_EXE_krabka-rebalancer");
     let mut child = tokio::process::Command::new(bin_path)
         .arg("--bootstrap-servers")
         .arg(broker_addr.to_string())
@@ -42,12 +42,12 @@ async fn connect_get_state_over_http_json() {
         .arg("1")
         .arg("--data-dir")
         .arg(data_dir.path())
-        .env("RUST_LOG", "crabka_rebalancer=info,warn")
+        .env("RUST_LOG", "krabka_rebalancer=info,warn")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true)
         .spawn()
-        .expect("spawn crabka-rebalancer");
+        .expect("spawn krabka-rebalancer");
 
     // 4. Wait for /readyz to become 200. The rebalancer flips /readyz
     // green only once the ingester has written its first snapshot, so a
@@ -139,7 +139,7 @@ async fn connect_execute_proposal_and_cancel_over_http_json() {
 
     let data_dir = tempfile::tempdir().unwrap();
 
-    let bin_path = env!("CARGO_BIN_EXE_crabka-rebalancer");
+    let bin_path = env!("CARGO_BIN_EXE_krabka-rebalancer");
     let mut child = tokio::process::Command::new(bin_path)
         .arg("--bootstrap-servers")
         .arg(broker_addr.to_string())
@@ -149,12 +149,12 @@ async fn connect_execute_proposal_and_cancel_over_http_json() {
         .arg("1")
         .arg("--data-dir")
         .arg(data_dir.path())
-        .env("RUST_LOG", "crabka_rebalancer=info,warn")
+        .env("RUST_LOG", "krabka_rebalancer=info,warn")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true)
         .spawn()
-        .expect("spawn crabka-rebalancer");
+        .expect("spawn krabka-rebalancer");
 
     let client = reqwest::Client::new();
     let deadline = Instant::now() + Duration::from_secs(15);

@@ -61,7 +61,7 @@ throwaway means to that end.
 The spike has succeeded when **all** of the following hold:
 
 - A JVM broker (`process.roles=broker`,
-  `controller.quorum.voters=1@<crabka-host>:<port>`) connects to the Crabka
+  `controller.quorum.voters=1@<krabka-host>:<port>`) connects to the Crabka
   controller listener.
 - It completes `ApiVersions` negotiation and issues a real KRaft `Fetch`
   (key 1) for `__cluster_metadata-0`.

@@ -1,7 +1,7 @@
 //! A relation of the wrong *kind* is refused as one, not reported as missing.
 //!
 //! Views, sequences and indexes live under catalog keys that
-//! `crabka_pgcatalog::get_table` does not read, so a statement that only tried
+//! `krabka_pgcatalog::get_table` does not read, so a statement that only tried
 //! that lookup answered 42P01 — "relation does not exist" — for a name whose
 //! relation is sitting right there. `PostgreSQL` answers 42809 and says what
 //! the relation actually is, and for a whole family of refusals the message
@@ -11,8 +11,8 @@
 //! are not derived from one another, because `PostgreSQL`'s are not either.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::{
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::{
     engine::{Engine, Session},
     error::PgError,
 };

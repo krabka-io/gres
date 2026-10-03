@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Expose KIP-932 share-group backlog as a fleet-complete Prometheus gauge on the broker's existing `/metrics`, emitted by the coordinator broker (single-emitter), so KEDA's stock `prometheus` scaler autoscales serverless share-group consumers on queue depth — including scale-to-zero — with `sum(crabka_broker_share_group_backlog{group_id="G"})`.
+**Goal:** Expose KIP-932 share-group backlog as a fleet-complete Prometheus gauge on the broker's existing `/metrics`, emitted by the coordinator broker (single-emitter), so KEDA's stock `prometheus` scaler autoscales serverless share-group consumers on queue depth — including scale-to-zero — with `sum(krabka_broker_share_group_backlog{group_id="G"})`.
 
 **Architecture:** The coordinator broker (the `__consumer_offsets-0` leader — the one broker with the complete `initialized` set) runs a periodic poll loop that, per initialized `(group, topic, partition)`, reads SPSO (`SharePersister::read_state`) + HWM (local `Partition::high_watermark`, or a peer `ListOffsets(LATEST)` for data partitions it doesn't co-lead), computes `effective_backlog = (hwm − (spso≥0 ? spso : log_start)).max(0)` (never `-1`), and sets one gauge series. A per-tick coordinator-leadership self-gate + stale-series hygiene keep `sum()` exact.
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `prometheus-client 0.25`, `tokio`, the in-process `Broker::start` harness, the `InterBrokerClient`/`Connection` peer-RPC surface, `ListOffsets`, `assert2`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-sharegroup-backlog-autoscaling-design.md`](../specs/2026-07-06-crabka-sharegroup-backlog-autoscaling-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-sharegroup-backlog-autoscaling-design.md`](../specs/2026-07-06-krabka-sharegroup-backlog-autoscaling-design.md).
 
 **PREREQUISITES:** none unlanded — reuses the landed KIP-932 stack, metrics registry + `/metrics`, `ListOffsets`, and the `InterBrokerClient` peer-RPC surface. Independent of the diskless chapter and of MSG-1/2/3.
 
@@ -55,7 +55,7 @@ Add to the `#[cfg(test)] mod tests` in `metrics.rs` (encode-and-assert, mirrorin
 ```rust
     #[test]
     fn share_group_backlog_encodes_as_gauge() {
-        let m = BrokerMetrics::new_for_test(); // or BrokerMetrics::new(&mut Registry::with_prefix("crabka_broker"))
+        let m = BrokerMetrics::new_for_test(); // or BrokerMetrics::new(&mut Registry::with_prefix("krabka_broker"))
         m.share_group_backlog
             .get_or_create(&ShareGroupLabel {
                 group_id: "g".into(),
@@ -65,7 +65,7 @@ Add to the `#[cfg(test)] mod tests` in `metrics.rs` (encode-and-assert, mirrorin
             .set(42);
         let text = m.encode_to_string(); // the crate's existing encode helper; else encode(&registry)
         assert!(text.contains(
-            "crabka_broker_share_group_backlog{group_id=\"g\",topic=\"t\",partition=\"0\"} 42"
+            "krabka_broker_share_group_backlog{group_id=\"g\",topic=\"t\",partition=\"0\"} 42"
         ));
         // Gauge => NO _total suffix.
         assert!(!text.contains("share_group_backlog_total"));
@@ -76,7 +76,7 @@ Add to the `#[cfg(test)] mod tests` in `metrics.rs` (encode-and-assert, mirrorin
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-broker --lib metrics::tests::share_group_backlog_encodes_as_gauge`
+Run: `cargo test -p krabka-broker --lib metrics::tests::share_group_backlog_encodes_as_gauge`
 Expected: FAIL — `ShareGroupLabel` / `share_group_backlog` undefined.
 
 - [ ] **Step 3: Implement (mirror `partition_disk_bytes`)**
@@ -100,7 +100,7 @@ Register in `new()` (near `:554`):
 registry.register(
     "share_group_backlog",
     "Share-group partition backlog (HWM - effective SPSO) in records, per (group,topic,partition), \
-     emitted by the coordinator broker. Fleet total = sum(crabka_broker_share_group_backlog{group_id=\"G\"}).",
+     emitted by the coordinator broker. Fleet total = sum(krabka_broker_share_group_backlog{group_id=\"G\"}).",
     share_group_backlog.clone(),
 );
 ```
@@ -109,7 +109,7 @@ Add `share_group_backlog` to the struct literal returned by `new()`.
 
 - [ ] **Step 4: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-broker --lib metrics::tests::share_group_backlog_encodes_as_gauge` → PASS.
+Run: `cargo test -p krabka-broker --lib metrics::tests::share_group_backlog_encodes_as_gauge` → PASS.
 
 ```bash
 git add crates/broker/src/metrics.rs
@@ -168,7 +168,7 @@ mod tests {
 
 - [ ] **Step 2: Run to verify it fails, then passes**
 
-Run: `cargo test -p crabka-broker --lib backlog_poller::tests`
+Run: `cargo test -p krabka-broker --lib backlog_poller::tests`
 Expected: FAIL to compile (module not declared) → add `mod backlog_poller;` → PASS. No implementation beyond the function above is needed for this task.
 
 - [ ] **Step 3: Commit**
@@ -202,7 +202,7 @@ async fn backlog_gauge_reports_full_backlog_for_uninitialized_group() {
     // ... boot, create topic "bk-itest", produce 5 records ...
     // Force/await one poll tick (use a short backlog_poll_interval in for_tests, e.g. 200ms),
     // then GET the broker's /metrics (metrics_server default :9404) and assert:
-    //   crabka_broker_share_group_backlog{group_id="bk-g",topic="bk-itest",partition="0"} 5
+    //   krabka_broker_share_group_backlog{group_id="bk-g",topic="bk-itest",partition="0"} 5
     // The group is referenced (a ShareFetch session created) so it appears in `initialized`,
     // but with no acks its SPSO stays uninitialized -> full backlog.
 }
@@ -212,7 +212,7 @@ async fn backlog_gauge_reports_full_backlog_for_uninitialized_group() {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-broker --test sharegroup_backlog`
+Run: `cargo test -p krabka-broker --test sharegroup_backlog`
 Expected: FAIL — no series emitted (poller not yet spawned/implemented).
 
 - [ ] **Step 3: Implement**
@@ -223,7 +223,7 @@ Expected: FAIL — no series emitted (poller not yet spawned/implemented).
 
 ```rust
 use std::{collections::HashSet, sync::Arc, time::Duration};
-use crabka_ids::PartitionIndex;
+use krabka_ids::PartitionIndex;
 use crate::{coordinator::unified::GroupCoordinator, metrics::{BrokerMetrics, ShareGroupLabel},
             partition_registry::PartitionRegistry, share_coordinator::persister_client::SharePersister};
 
@@ -279,7 +279,7 @@ pub(crate) fn spawn_backlog_poller(
 
 - [ ] **Step 4: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-broker --test sharegroup_backlog` → PASS (series == N, full backlog).
+Run: `cargo test -p krabka-broker --test sharegroup_backlog` → PASS (series == N, full backlog).
 
 ```bash
 git add crates/broker/src/share_partition/backlog_poller.rs crates/broker/src/coordinator/unified/mod.rs crates/broker/src/broker.rs crates/broker/tests/sharegroup_backlog.rs
@@ -300,7 +300,7 @@ Add a test that stands up a **multi-broker** cluster (mirror the pattern in `cra
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-broker --test sharegroup_backlog remote`
+Run: `cargo test -p krabka-broker --test sharegroup_backlog remote`
 Expected: FAIL — the non-co-led partition is skipped (`continue`), so no series.
 
 - [ ] **Step 3: Implement the peer-HWM read (reuse the `send_to_leader` template)**
@@ -322,7 +322,7 @@ Replace the local-only branch's `else { continue }` with a remote read. Add a he
 
 - [ ] **Step 4: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-broker --test sharegroup_backlog` → PASS (local + remote cases).
+Run: `cargo test -p krabka-broker --test sharegroup_backlog` → PASS (local + remote cases).
 
 ```bash
 git add crates/broker/src/share_partition/backlog_poller.rs crates/broker/tests/sharegroup_backlog.rs
@@ -344,7 +344,7 @@ git commit -m "feat(broker): remote-HWM read (peer ListOffsets) for fleet-comple
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-broker --test sharegroup_backlog gate` (and `stale`)
+Run: `cargo test -p krabka-broker --test sharegroup_backlog gate` (and `stale`)
 Expected: FAIL — every broker emits (no gate); departed series persist (no removal).
 
 - [ ] **Step 3: Implement**
@@ -367,7 +367,7 @@ Expected: FAIL — every broker emits (no gate); departed series persist (no rem
 
 - [ ] **Step 4: Run to verify it passes; commit**
 
-Run: `cargo test -p crabka-broker --test sharegroup_backlog` → PASS.
+Run: `cargo test -p krabka-broker --test sharegroup_backlog` → PASS.
 
 ```bash
 git add crates/broker/src/share_partition/backlog_poller.rs crates/broker/tests/sharegroup_backlog.rs
@@ -382,7 +382,7 @@ git commit -m "feat(broker): coordinator self-gate + stale-series hygiene for ba
 - Modify: `crates/broker/src/config.rs`, `crates/broker/src/broker.rs`
 
 - [ ] **Step 1:** Add `backlog_poll_interval_secs` to the `ShareGroupConfig` (mirror `partition_disk_scan_interval_secs`), default `15`; short in `for_tests`. Thread it into the `spawn_backlog_poller` call, replacing the hardcoded `Duration::from_secs(15)`.
-- [ ] **Step 2:** Run `cargo test -p crabka-broker --test sharegroup_backlog` (still green with the config-driven interval). Commit.
+- [ ] **Step 2:** Run `cargo test -p krabka-broker --test sharegroup_backlog` (still green with the config-driven interval). Commit.
 
 ```bash
 git add crates/broker/src/config.rs crates/broker/src/broker.rs
@@ -396,7 +396,7 @@ git commit -m "feat(broker): configurable share-group backlog poll interval"
 **Files:**
 - Create: `docs/examples/keda-sharegroup-scaledobject.yaml`
 
-- [ ] **Step 1:** Write the `ScaledObject` from the spec (stock `prometheus` scaler, `query: sum(crabka_broker_share_group_backlog{group_id="my-group"})`, `threshold`, `activationThreshold: 1`, `minReplicaCount: 0`) with comments explaining: fleet aggregation via `sum()`, why scale-to-zero is safe (complete emission, never `-1`), that consumer-group workloads use the stock `kafka` scaler instead, and the KEDA-version `metricName` caveat. No Crabka code.
+- [ ] **Step 1:** Write the `ScaledObject` from the spec (stock `prometheus` scaler, `query: sum(krabka_broker_share_group_backlog{group_id="my-group"})`, `threshold`, `activationThreshold: 1`, `minReplicaCount: 0`) with comments explaining: fleet aggregation via `sum()`, why scale-to-zero is safe (complete emission, never `-1`), that consumer-group workloads use the stock `kafka` scaler instead, and the KEDA-version `metricName` caveat. No Crabka code.
 - [ ] **Step 2:** Commit.
 
 ```bash
@@ -409,8 +409,8 @@ git commit -m "docs: KEDA ScaledObject example for share-group backlog autoscali
 ## Task 8: Final gate
 
 - [ ] **Step 1:** `cargo +nightly fmt --check` — no diff.
-- [ ] **Step 2:** `cargo clippy -p crabka-broker --all-targets -- -D warnings` — no warnings.
-- [ ] **Step 3:** `cargo nextest run -p crabka-broker` — PASS, incl. `effective_backlog` unit tests, the encode test, and the single-broker + multi-broker + self-gate + stale-series integration tests.
+- [ ] **Step 2:** `cargo clippy -p krabka-broker --all-targets -- -D warnings` — no warnings.
+- [ ] **Step 3:** `cargo nextest run -p krabka-broker` — PASS, incl. `effective_backlog` unit tests, the encode test, and the single-broker + multi-broker + self-gate + stale-series integration tests.
 - [ ] **Step 4:** Verify-only (no code): confirm `ListOffsets`/`OffsetFetch`/`FindCoordinator`/`DescribeGroups` are advertised (`api_catalog.rs`) so the stock KEDA `kafka` scaler covers consumer-group lag; note it in the example docs. Commit any formatting.
 
 ---

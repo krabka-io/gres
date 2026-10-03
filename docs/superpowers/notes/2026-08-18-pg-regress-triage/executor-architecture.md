@@ -23,7 +23,7 @@ against the certified diffs of the latest CI run of `main` (175 failing files,
    whenever an equality key exists (`join.rs:345 join_relations_impl` + `JoinIndex`), and three
    sharded-table pushdowns (`exec.rs:18261–18566`). Join order is FROM order. Every join prints
    as `Nested Loop`.
-4. Secondary indexes are not ordered. `crabka_pgkv::key::secondary_index_entry_key`
+4. Secondary indexes are not ordered. `krabka_pgkv::key::secondary_index_entry_key`
    (`crates/pgkv/src/key.rs:248`) is `prefix ‖ u32 len ‖ rowenc::encode_row(values) ‖ rowid`,
    and `rowenc.rs:1` says "It is NOT order-preserving". A btree index is physically an
    equality-only index. Ordered `Index Scan` needs a memcomparable key encoding, which

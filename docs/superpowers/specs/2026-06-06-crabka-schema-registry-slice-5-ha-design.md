@@ -3,7 +3,7 @@
 - **Date:** 2026-06-06
 - **Status:** Approved (brainstorm); ready for an implementation plan
 - **Builds on:** slices 1+2+2b+2c+3+4 (registry + compat trilogy + deletes/modes/lookups + references). The `KafkaStore` facade (single-node always-primary, write-gate + group-less reader), the axum REST surface, and `RegistryConfig`/the binary all exist. Stacks on slice 4 (PR #410).
-- **Parent roadmap:** `docs/superpowers/specs/2026-06-04-crabka-schema-registry-design.md` (slice 5).
+- **Parent roadmap:** `docs/superpowers/specs/2026-06-04-krabka-schema-registry-design.md` (slice 5).
 
 ## Motivation
 
@@ -44,7 +44,7 @@ cp's `SchemaRegistryProtocol` types, serialized byte-exactly (JSON; exact field 
 
 ### The group-membership client (`election/client.rs`)
 
-A loop over `crabka_client_core::Client::send` (generic over `ProtocolRequest`), using the codecs in `crabka_protocol::owned::{join_group_request, sync_group_request, heartbeat_request, leave_group_request, find_coordinator_request}`:
+A loop over `krabka_client_core::Client::send` (generic over `ProtocolRequest`), using the codecs in `krabka_protocol::owned::{join_group_request, sync_group_request, heartbeat_request, leave_group_request, find_coordinator_request}`:
 1. `FindCoordinator(group_id)` → the group-coordinator broker.
 2. `JoinGroup{ group_id, protocol_type:"sr", protocols:[{ name, metadata: identity_bytes }], member_id, session_timeout, rebalance_timeout }` → assigned `member_id`, `generation_id`, `leader_id`, and (if leader) the members + their metadata.
 3. If **leader**: decode each member's `SchemaRegistryIdentity`, run the selection rule, encode each member's `SchemaRegistryGroupAssignment`, send them in `SyncGroup`. If **follower**: `SyncGroup` with an empty assignment list → receive our assignment.
@@ -105,4 +105,4 @@ An axum `from_fn`/`from_fn_with_state` layer holding `{ primary: watch::Receiver
 
 ## Dependencies
 
-No new external crates beyond promoting `reqwest` (already a dev-dep + a prod dep elsewhere in the workspace) to `[dependencies]`. Reuses `crabka_client_core::Client` (generic `send`), the `crabka_protocol::owned` group-membership codecs, the broker's protocol-generic coordinator, and `axum`/`watch`. The Docker capture uses the existing `testcontainers` + `cp-schema-registry:7.4.0` setup.
+No new external crates beyond promoting `reqwest` (already a dev-dep + a prod dep elsewhere in the workspace) to `[dependencies]`. Reuses `krabka_client_core::Client` (generic `send`), the `krabka_protocol::owned` group-membership codecs, the broker's protocol-generic coordinator, and `axum`/`watch`. The Docker capture uses the existing `testcontainers` + `cp-schema-registry:7.4.0` setup.

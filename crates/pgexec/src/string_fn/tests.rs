@@ -1,6 +1,6 @@
 use assert2::assert;
-use crabka_pgparser::parser::parse_expr_for_test as pexpr;
-use crabka_pgtypes::{ColumnType, Datum};
+use krabka_pgparser::parser::parse_expr_for_test as pexpr;
+use krabka_pgtypes::{ColumnType, Datum};
 
 use crate::{clock::EvalCtx, scope::Scope};
 
@@ -279,7 +279,7 @@ fn concat_and_concat_ws_skip_nulls() {
 #[test]
 fn text_rendering_honors_the_session_date_style() {
     let mut ctx = EvalCtx::test_default();
-    ctx.date_style = crabka_pgtypes::datetime::DateStyle::Postgres;
+    ctx.date_style = krabka_pgtypes::datetime::DateStyle::Postgres;
     for (sql, expected) in [
         ("concat(to_date('20100309', 'YYYYMMDD'))", "03-09-2010"),
         (
@@ -365,7 +365,7 @@ fn result_types_match_postgres() {
         ("is_normalized('a')", ColumnType::Bool),
         (
             "parse_ident('a')",
-            ColumnType::Array(crabka_pgtypes::ElemType::Text),
+            ColumnType::Array(krabka_pgtypes::ElemType::Text),
         ),
         ("octet_length('a')", ColumnType::Int4),
         ("bit_length('a')", ColumnType::Int4),

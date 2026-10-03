@@ -15,7 +15,7 @@ racing. The 2 deliberately time-based share-lock tests stay as sleeps (documente
 
 All five affected test files spin up an **in-process Crabka broker**
 (`Broker::start(BrokerConfig::for_tests(...))`) and drive it with **Crabka's own Rust
-clients** (`crabka-client-consumer`, `crabka-client-admin`, `crabka-client-core`) — no
+clients** (`krabka-client-consumer`, `krabka-client-admin`, `krabka-client-core`) — no
 `rdkafka`, no testcontainers, no JVM. Every wait is therefore observable from code we
 control, so almost all sleeps are reducible.
 

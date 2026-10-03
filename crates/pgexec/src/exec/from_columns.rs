@@ -28,10 +28,10 @@ pub(crate) fn live_from_columns(
     read_ctx: &crate::subquery::SubCtx<'_>,
     select: &SelectStmt,
 ) -> Option<Vec<ColumnBinding>> {
-    use crabka_pgparser::ast::TableExpr;
+    use krabka_pgparser::ast::TableExpr;
 
     if !select.order_by.is_empty()
-        || matches!(select.distinct, crabka_pgparser::ast::DistinctClause::On(_))
+        || matches!(select.distinct, krabka_pgparser::ast::DistinctClause::On(_))
         || crate::grouping::is_grouping_query(select)
         || crate::window::has_window_calls(select)
         || crate::srf::projection_contains_srf(&select.projection)

@@ -3,7 +3,7 @@
 **Date:** 2026-05-29
 **Status:** Slice design. Closes a 48d follow-up. Part of the KIP-405
 umbrella
-(`docs/superpowers/specs/2026-05-25-crabka-tiered-storage-roadmap-design.md`).
+(`docs/superpowers/specs/2026-05-25-krabka-tiered-storage-roadmap-design.md`).
 
 ## Goal
 
@@ -148,7 +148,7 @@ Independent. First parallel batch alongside 48m (disjoint files:
 
 - `cargo fmt --all --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test -p crabka-log -p crabka-broker`
+- `cargo test -p krabka-log -p krabka-broker`
 - `cargo test --workspace` (no regressions)
 - `kafka-get-offsets` / `ListOffsets` by-timestamp behavior matches
   Apache Kafka; no CRD drift.

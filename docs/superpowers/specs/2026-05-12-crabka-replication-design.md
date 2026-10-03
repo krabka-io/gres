@@ -8,7 +8,7 @@ replicas per partition via round-robin over registered brokers. Each
 follower broker runs a per-partition replication task that continually
 issues Kafka `Fetch` requests (api_key=1) to the leader with
 `replica_id = self.node_id` set, appending received batches to its
-local `crabka-log`. The on-disk log files on all replicas converge to
+local `krabka-log`. The on-disk log files on all replicas converge to
 byte-equal contents.
 
 This is the smallest slice that demonstrates multi-broker replication
@@ -48,13 +48,13 @@ cross-broker producer routing are each explicitly deferred — see
 
 ## Crate layout
 
-No new crates. Everything lives in `crabka-broker`:
+No new crates. Everything lives in `krabka-broker`:
 
 | Module | Status | Responsibility |
 |---|---|---|
 | `handlers/create_topics.rs` | modified | Pre-Raft step: read `controller.current_image().brokers()`, compute round-robin replica assignment per partition, build `V1Topic + V1Partition` records with `replicas` + `leader` baked in. |
 | `handlers/fetch.rs` | modified | Branch on `replica_id`: `< 0` (consumer) → slice-4 path; `≥ 0` (follower) → serve from log without HW filtering (HW filtering is still a no-op in slice 8 either way). |
-| `replicator.rs` | **new** | Per-partition replication task: open a `Connection` to the leader's advertised `host:port`, loop on `Fetch`, append received batches to local log via `crabka-log`. Handle `OFFSET_OUT_OF_RANGE` by truncating to 0 and re-fetching. |
+| `replicator.rs` | **new** | Per-partition replication task: open a `Connection` to the leader's advertised `host:port`, loop on `Fetch`, append received batches to local log via `krabka-log`. Handle `OFFSET_OUT_OF_RANGE` by truncating to 0 and re-fetching. |
 | `replicator_supervisor.rs` | **new** | Subscribes to the controller's `watch_image()`. On each metadata apply, diffs the desired follower assignments against the running tasks: spawns new, cancels removed via per-task `CancellationToken`. |
 | `broker.rs` | modified | Construct + spawn the supervisor in `Broker::start`. Cancels supervisor in `BrokerHandle::shutdown`. |
 | `error.rs` | modified | Add `BrokerError::Replication(String)` for diagnostic logging. |
@@ -276,7 +276,7 @@ JVM admin client → broker N1: kafka-topics --create
 
 ## Errors
 
-`crabka-broker::BrokerError` gains:
+`krabka-broker::BrokerError` gains:
 
 ```rust
     #[error("replication: {0}")]
@@ -337,9 +337,9 @@ tuple — the tests assert on the recorded set.
 
 - `replication_factor_three_propagates_to_all_followers` — 3-broker
   cluster, `partitions=1, rf=3`. Produce 20 records via a
-  `crabka-client-producer` aimed at the partition leader. Poll all 3
+  `krabka-client-producer` aimed at the partition leader. Poll all 3
   brokers' on-disk `Log::log_end_offset()` until they match (10 s
-  deadline). Read records via each broker's local `crabka-log` API;
+  deadline). Read records via each broker's local `krabka-log` API;
   assert byte-equal.
 
 - `out_of_range_truncates_and_recovers` — same setup. Produce 50

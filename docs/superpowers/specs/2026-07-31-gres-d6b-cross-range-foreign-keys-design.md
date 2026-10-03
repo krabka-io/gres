@@ -20,7 +20,7 @@ Make the prerequisite chain visible rather than absorbed. Most of this design's 
 
 Nothing in this design is a foreign-key mechanism. Every part of it is a general capability the engine is missing, and the foreign key is the consumer that motivates the ordering.
 
-**A global unique index becomes a routable object.** Today's global index is not global in placement: `prewrite_ops` writes its intents into the participant range's own KV alongside the base row (`pgexec/src/timestamp_txn.rs:2525-2530`), so the entries are a differently-encoded *local* index. Making the index sharded by indexed key — G-9d's actual proposal (`2026-07-09-crabka-gres-g9-distributed-maturity-design.md:77`) — gives every index key exactly one owning range, which is the single fact the rest of the design stands on.
+**A global unique index becomes a routable object.** Today's global index is not global in placement: `prewrite_ops` writes its intents into the participant range's own KV alongside the base row (`pgexec/src/timestamp_txn.rs:2525-2530`), so the entries are a differently-encoded *local* index. Making the index sharded by indexed key — G-9d's actual proposal (`2026-07-09-krabka-gres-g9-distributed-maturity-design.md:77`) — gives every index key exactly one owning range, which is the single fact the rest of the design stands on.
 
 **That owning range becomes the rendezvous.** Uniqueness, the child's "the parent exists" evidence, and the parent's "I am removing this key" intent all land on one range's totally-ordered WAL, where first-committer-wins can see them. The write skew that hides when a `DELETE parent` and an `INSERT child` touch disjoint rows on disjoint ranges stops hiding, because both transactions are made to touch the same key.
 
@@ -40,7 +40,7 @@ The same gap blocks `ON CONFLICT` on sharded tables, and its refusal comment sta
 
 ### The index entry's range is the arbiter, and a key reservation is the mechanism
 
-Place a global index's entries by indexed key: the index gets its own id in the range map's key space and its own hash spec, so an entry lives at `(index_object_id, bucket = hash(encoded key) mod n, encoded key, base rowid)`. This is G-9c's observation applied one level over — a bucket is just the leading component of an interval key space, so the existing map, splits, moves, balancer, and filtered restore all apply unchanged (`2026-07-09-crabka-gres-g9-distributed-maturity-design.md:73`). Routing an index key then costs nothing new: it is `route_hash_equality` (`gres-ranges/src/map.rs:398-404`) with the index's spec instead of the table's.
+Place a global index's entries by indexed key: the index gets its own id in the range map's key space and its own hash spec, so an entry lives at `(index_object_id, bucket = hash(encoded key) mod n, encoded key, base rowid)`. This is G-9c's observation applied one level over — a bucket is just the leading component of an interval key space, so the existing map, splits, moves, balancer, and filtered restore all apply unchanged (`2026-07-09-krabka-gres-g9-distributed-maturity-design.md:73`). Routing an index key then costs nothing new: it is `route_hash_equality` (`gres-ranges/src/map.rs:398-404`) with the index's spec instead of the table's.
 
 A base-table write consequently becomes a two-participant timestamp transaction — the row's range and each touched index key's range — which is precisely the case G-9d says is routine after G-9a (`:77`). Uniqueness is then enforced on the entry range, because that range is the key's sole owner, and sole ownership is what `validate_hash_shard_boundaries` (`gres-ranges/src/map.rs:415-420`) already guarantees for tables and must be extended to index objects.
 
@@ -62,7 +62,7 @@ Note that this is a second conflict axis, not a replacement for the first. `ensu
 
 This is the crux, and it is not a wiring problem.
 
-`DELETE FROM parent WHERE id = 7` on range A and `INSERT INTO child (parent_id) VALUES (7)` on range B write disjoint rows. `ensure_prewrite_can_win` sees no conflict on either side because it only ever compares row identities. Both commit. The child now references nothing. G-9 defers SSI explicitly and names the bar as "SI + first-committer-wins" (`2026-07-09-crabka-gres-g9-distributed-maturity-design.md:21`), so this is not an oversight to be patched at a call site; it is the isolation level behaving as designed.
+`DELETE FROM parent WHERE id = 7` on range A and `INSERT INTO child (parent_id) VALUES (7)` on range B write disjoint rows. `ensure_prewrite_can_win` sees no conflict on either side because it only ever compares row identities. Both commit. The child now references nothing. G-9 defers SSI explicitly and names the bar as "SI + first-committer-wins" (`2026-07-09-krabka-gres-g9-distributed-maturity-design.md:21`), so this is not an oversight to be patched at a call site; it is the isolation level behaving as designed.
 
 Four closures are available and three are wrong here.
 
@@ -174,7 +174,7 @@ What D6 got exactly right is the seam shape. `FkKeyLocks` and `FkCascade` (`pgex
 ## Prerequisite order, and what is useful on its own
 
 1. **Global unique enforcement.** Place index entries by indexed key rather than beside the base row (`pgexec/src/timestamp_txn.rs:2525-2530`); re-order the intent key so indexed values precede `start_ts` (`:2860-2872`); add the key reservation CAS and the `23505`/`40001` disambiguation; lift the scatter refusal on global-index maintenance (`gres-ranges/src/tenant.rs:4775-4782`). **Independently useful:** it unblocks `ON CONFLICT` on sharded tables (`pgexec/src/exec.rs:5419-5430`) and unique global indexes generally (`pgexec/src/exec.rs:708-712`, `:4278-4283`, `:4388-4391`, `:5453-5457`), neither of which mentions foreign keys.
-2. **The key-routed point-lookup RPC**, plus the base row's bucket in the entry so the second hop is a point route. **Independently useful:** it is the single-range secondary-key point read G-9d promises and the envelope section counts on (`2026-07-09-crabka-gres-g9-distributed-maturity-design.md:77`, `:89`), and it gives `read_visible_global_index_entries` (`pgexec/src/timestamp_txn.rs:2795-2826`) its first production caller.
+2. **The key-routed point-lookup RPC**, plus the base row's bucket in the entry so the second hop is a point route. **Independently useful:** it is the single-range secondary-key point read G-9d promises and the envelope section counts on (`2026-07-09-krabka-gres-g9-distributed-maturity-design.md:77`, `:89`), and it gives `read_visible_global_index_entries` (`pgexec/src/timestamp_txn.rs:2795-2826`) its first production caller.
 3. **The read-intent rendezvous.** Useful only for foreign keys — and as a working prototype of the read-set validation any later SSI work would need.
 4. **The validate phase and the gateway-held deferred queue.** Useful only here.
 5. **Then** the foreign-key probe: delete the sharded refusals (`pgexec/src/fk.rs:226-227`, `:249-250`) and parameterize the probe target. At *this* point, and only at this point, D6's "one-line deletion" description is accurate.

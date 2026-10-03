@@ -11,7 +11,7 @@
 //!   `536870912` bytes), for JSON APIs and anything mirroring a Kafka wire field.
 //!
 //! ```
-//! use crabka_units::{prelude::*, serde_units};
+//! use krabka_units::{prelude::*, serde_units};
 //! use serde::{Deserialize, Serialize};
 //!
 //! #[derive(Serialize, Deserialize)]

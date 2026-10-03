@@ -1,7 +1,7 @@
 # IQv2 (KIP-796 / 960 / 968) — Interactive Queries v2 for client-streams
 
 **Date:** 2026-06-10
-**Crate:** `crabka-client-streams`
+**Crate:** `krabka-client-streams`
 **Status:** Design — approved decisions recorded; pending user spec review.
 
 ## 1. Goal
@@ -268,7 +268,7 @@ Add `tests/iqv2_golden.rs` to the crate's llvm-cov `--test` list in
 ```
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test -p crabka-client-streams
+cargo test -p krabka-client-streams
 cargo build --workspace
 ```
 

@@ -2,9 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use crabka_gres_ranges::{RangeKey, RowInterval, TableId};
-use crabka_pgkv::key;
-use crabka_units::{ByteSize, convert::ByteSizeExt as _};
+use krabka_gres_ranges::{RangeKey, RowInterval, TableId};
+use krabka_pgkv::key;
+use krabka_units::{ByteSize, convert::ByteSizeExt as _};
 use sha2::{Digest, Sha256};
 
 use crate::{error::SubstrateError, frame::Reader};
@@ -64,7 +64,7 @@ impl CheckpointFilter {
 
     /// Name the successor range used when rehoming copied timestamp descriptors.
     #[must_use]
-    pub fn with_target_range(mut self, range_id: crabka_gres_ranges::RangeId) -> Self {
+    pub fn with_target_range(mut self, range_id: krabka_gres_ranges::RangeId) -> Self {
         self.target_range = Some(range_id.as_u32());
         self
     }
@@ -94,7 +94,7 @@ impl CheckpointFilter {
                 .map(|selected| selected.then(|| value.to_vec()));
         }
         let start_ts = timestamp_descriptor_start(key)?;
-        let mut descriptor = crabka_pgexec::decode_timestamp_txn_descriptor_value(start_ts, value)
+        let mut descriptor = krabka_pgexec::decode_timestamp_txn_descriptor_value(start_ts, value)
             .map_err(|error| {
                 SubstrateError::Checkpoint(format!("malformed timestamp descriptor: {error}"))
             })?;
@@ -124,8 +124,8 @@ impl CheckpointFilter {
             .all(|range| descriptor.prepared.contains(range));
         descriptor.participants = vec![target_range];
         descriptor.prepared = prepared.then_some(target_range).into_iter().collect();
-        let crabka_pgkv::WriteOp::Put { value, .. } =
-            crabka_pgexec::timestamp_txn_descriptor_op(&descriptor)
+        let krabka_pgkv::WriteOp::Put { value, .. } =
+            krabka_pgexec::timestamp_txn_descriptor_op(&descriptor)
         else {
             unreachable!()
         };
@@ -261,10 +261,10 @@ impl CheckpointFilter {
 
     fn timestamp_descriptor_belongs(
         &self,
-        start_ts: crabka_pgexec::TimestampTransactionId,
+        start_ts: krabka_pgexec::TimestampTransactionId,
         value: &[u8],
     ) -> Result<bool, SubstrateError> {
-        let descriptor = crabka_pgexec::decode_timestamp_txn_descriptor_value(start_ts, value)
+        let descriptor = krabka_pgexec::decode_timestamp_txn_descriptor_value(start_ts, value)
             .map_err(|error| {
                 SubstrateError::Checkpoint(format!("malformed timestamp descriptor: {error}"))
             })?;
@@ -292,13 +292,13 @@ impl CheckpointFilter {
 
 fn timestamp_descriptor_start(
     bytes: &[u8],
-) -> Result<crabka_pgexec::TimestampTransactionId, SubstrateError> {
+) -> Result<krabka_pgexec::TimestampTransactionId, SubstrateError> {
     const PREFIX: &[u8] = b"\0\0\0\0meta/ts_txn/";
     let raw = bytes.strip_prefix(PREFIX).expect("prefix checked");
     let raw: [u8; 8] = raw
         .try_into()
         .map_err(|_| SubstrateError::Checkpoint("malformed timestamp descriptor key".into()))?;
-    crabka_pgexec::TimestampTransactionId::new(u64::from_be_bytes(raw))
+    krabka_pgexec::TimestampTransactionId::new(u64::from_be_bytes(raw))
         .map_err(|_| SubstrateError::Checkpoint("zero timestamp descriptor key".into()))
 }
 
@@ -429,11 +429,11 @@ mod tests {
     use super::*;
 
     fn descriptor_pair(operations: &[(u32, u64)]) -> (Vec<u8>, Vec<u8>) {
-        let start_ts = crabka_pgexec::TimestampTransactionId::new(9).unwrap();
-        let mut descriptor = crabka_pgexec::TimestampTxnDescriptor::begun(start_ts, 10, vec![1]);
+        let start_ts = krabka_pgexec::TimestampTransactionId::new(9).unwrap();
+        let mut descriptor = krabka_pgexec::TimestampTxnDescriptor::begun(start_ts, 10, vec![1]);
         let operations = operations
             .iter()
-            .map(|(table_id, rowid)| crabka_pgexec::TimestampTxnOperation {
+            .map(|(table_id, rowid)| krabka_pgexec::TimestampTxnOperation {
                 range_id: 1,
                 table_id: *table_id,
                 bucket: None,
@@ -444,8 +444,8 @@ mod tests {
         descriptor
             .acknowledge_operations(1, &operations)
             .expect("descriptor operations");
-        let crabka_pgkv::WriteOp::Put { key, value } =
-            crabka_pgexec::timestamp_txn_descriptor_op(&descriptor)
+        let krabka_pgkv::WriteOp::Put { key, value } =
+            krabka_pgexec::timestamp_txn_descriptor_op(&descriptor)
         else {
             unreachable!()
         };
@@ -464,12 +464,12 @@ mod tests {
         .unwrap()
         .with_physical_to_logical(mapping.clone())
         .with_structural_ownership(true)
-        .with_target_range(crabka_gres_ranges::RangeId::new(2));
+        .with_target_range(krabka_gres_ranges::RangeId::new(2));
         let right = CheckpointFilter::new(RangeKey::new(TableId::new(51), 16), None)
             .unwrap()
             .with_physical_to_logical(mapping)
             .with_structural_ownership(false)
-            .with_target_range(crabka_gres_ranges::RangeId::new(3));
+            .with_target_range(krabka_gres_ranges::RangeId::new(3));
         (left, right)
     }
 
@@ -501,11 +501,11 @@ mod tests {
         )
         .unwrap()
         .with_physical_to_logical(mapping.clone())
-        .with_target_range(crabka_gres_ranges::RangeId::new(2));
+        .with_target_range(krabka_gres_ranges::RangeId::new(2));
         let right = CheckpointFilter::new(RangeKey::hash(TableId::new(10), 8, 0), None)
             .unwrap()
             .with_physical_to_logical(mapping)
-            .with_target_range(crabka_gres_ranges::RangeId::new(3));
+            .with_target_range(krabka_gres_ranges::RangeId::new(3));
 
         let metadata_key = |prefix: &[u8], bucket: u32, start_ts: Option<u64>| {
             let mut key = prefix.to_vec();
@@ -546,17 +546,17 @@ mod tests {
         );
 
         let (cross_key, cross_value) = descriptor_pair(&[(2, 12), (1, 1)]);
-        let start_ts = crabka_pgexec::TimestampTransactionId::new(9).unwrap();
+        let start_ts = krabka_pgexec::TimestampTransactionId::new(9).unwrap();
         let mut committed =
-            crabka_pgexec::decode_timestamp_txn_descriptor_value(start_ts, &cross_value).unwrap();
+            krabka_pgexec::decode_timestamp_txn_descriptor_value(start_ts, &cross_value).unwrap();
         committed
-            .decide(crabka_pgexec::PrimaryTxnDecision::Committed(
-                crabka_pgexec::CommitTimestamp::after_start(start_ts, 10).unwrap(),
+            .decide(krabka_pgexec::PrimaryTxnDecision::Committed(
+                krabka_pgexec::CommitTimestamp::after_start(start_ts, 10).unwrap(),
             ))
             .unwrap();
-        let crabka_pgkv::WriteOp::Put {
+        let krabka_pgkv::WriteOp::Put {
             value: cross_value, ..
-        } = crabka_pgexec::timestamp_txn_descriptor_op(&committed)
+        } = krabka_pgexec::timestamp_txn_descriptor_op(&committed)
         else {
             unreachable!()
         };
@@ -573,9 +573,9 @@ mod tests {
             .unwrap()
             .expect("right descriptor");
         let left_descriptor =
-            crabka_pgexec::decode_timestamp_txn_descriptor_value(start_ts, &left_value).unwrap();
+            krabka_pgexec::decode_timestamp_txn_descriptor_value(start_ts, &left_value).unwrap();
         let right_descriptor =
-            crabka_pgexec::decode_timestamp_txn_descriptor_value(start_ts, &right_value).unwrap();
+            krabka_pgexec::decode_timestamp_txn_descriptor_value(start_ts, &right_value).unwrap();
         assert_eq!(left_descriptor.participants, vec![2]);
         assert_eq!(right_descriptor.participants, vec![3]);
         assert!(left_descriptor.operations.iter().all(|op| op.range_id == 2));
@@ -628,8 +628,8 @@ mod tests {
     fn filtered_restore_rejects_unmapped_row_and_sequence_tables() {
         let filter = CheckpointFilter::new(RangeKey::MIN, None).expect("filter");
         for key in [
-            crabka_pgkv::key::row_key(41, 7),
-            crabka_pgkv::key::seq_key(42),
+            krabka_pgkv::key::row_key(41, 7),
+            krabka_pgkv::key::seq_key(42),
         ] {
             assert!(matches!(
                 filter.contains_key(&key),
@@ -651,10 +651,10 @@ mod tests {
         ]));
         assert!(
             filter
-                .contains_key(&crabka_pgkv::key::row_key(41, 7))
+                .contains_key(&krabka_pgkv::key::row_key(41, 7))
                 .unwrap()
         );
-        assert!(!filter.contains_key(&crabka_pgkv::key::seq_key(42)).unwrap());
+        assert!(!filter.contains_key(&krabka_pgkv::key::seq_key(42)).unwrap());
     }
 
     #[test]
@@ -665,7 +665,7 @@ mod tests {
             (b"c".to_vec(), b"3333".to_vec()),
         ];
 
-        let parts = CheckpointPart::split_at_target_size(pairs.clone(), crabka_units::bytes(13))
+        let parts = CheckpointPart::split_at_target_size(pairs.clone(), krabka_units::bytes(13))
             .expect("split");
 
         assert!(parts.len() == 3);
@@ -691,7 +691,7 @@ mod tests {
             pairs in proptest::collection::vec(pair_strategy(), 0..64),
             part_max_bytes in 8_u32..256,
         ) {
-            let parts = CheckpointPart::split_at_target_size(pairs.clone(), crabka_units::bytes(part_max_bytes)).expect("split");
+            let parts = CheckpointPart::split_at_target_size(pairs.clone(), krabka_units::bytes(part_max_bytes)).expect("split");
             let decoded = parts
                 .into_iter()
                 .flat_map(|part| CheckpointPart::decode(&part.encode()).expect("decode").pairs)

@@ -6,7 +6,7 @@
 //! settled" bound. The clog answers "did this xid commit?". The snapshot
 //! answers "before I started?".
 
-use crabka_pgkv::KvError;
+use krabka_pgkv::KvError;
 
 use crate::{
     clog::XidStatus,
@@ -170,7 +170,7 @@ mod tests {
     fn status_map<'a>(
         committed: &'a [u64],
         aborted: &'a [u64],
-    ) -> impl Fn(u64) -> Result<XidStatus, crabka_pgkv::KvError> + 'a {
+    ) -> impl Fn(u64) -> Result<XidStatus, krabka_pgkv::KvError> + 'a {
         move |x| {
             if committed.contains(&x) {
                 Ok(XidStatus::Committed)

@@ -8,8 +8,8 @@
 //! and what a closed connection does to the bus.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::{
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::{
     engine::{Cell, Engine, Notification, QueryResult, Session},
     error::PgError,
 };
@@ -475,7 +475,7 @@ async fn a_batch_that_overflows_a_listener_queue_fails_the_notifying_transaction
     let (mut listener, mut rx) = connect(&engine, 11);
     let (mut notifier, _notifier_rx) = connect(&engine, 22);
     tag(&mut listener, "LISTEN news").await;
-    let capacity = u32::try_from(crabka_pgexec::notify::NOTIFY_QUEUE_CAPACITY).expect("capacity");
+    let capacity = u32::try_from(krabka_pgexec::notify::NOTIFY_QUEUE_CAPACITY).expect("capacity");
 
     // Exactly the queue capacity fits, and every notification is delivered.
     tag(&mut notifier, "BEGIN").await;

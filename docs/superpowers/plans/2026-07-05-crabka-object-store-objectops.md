@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Give `crabka-object-store` a shared, typed, mockable object-store *operation* surface (`ObjectOps` trait + a concrete `ObjectStoreClient`), and route `crabka-remote-storage`'s tiered-storage engine (put / multipart / ranged-get / get / delete) through it — centralising the multipart-threshold decision, and replacing the fragile `"not found:"` string-prefix match with a structured `ObjectStoreError::NotFound`.
+**Goal:** Give `krabka-object-store` a shared, typed, mockable object-store *operation* surface (`ObjectOps` trait + a concrete `ObjectStoreClient`), and route `krabka-remote-storage`'s tiered-storage engine (put / multipart / ranged-get / get / delete) through it — centralising the multipart-threshold decision, and replacing the fragile `"not found:"` string-prefix match with a structured `ObjectStoreError::NotFound`.
 
-**Architecture:** Plan 1 (`2026-07-05-crabka-object-store-substrate-crate.md`) unified object-store *construction*. This plan unifies *access*: one async op trait (`ObjectOps`) with a single concrete implementation over `Arc<dyn object_store::ObjectStore>`, so the put/multipart/get/get_range/head/list/delete logic lives once. `remote-storage`'s synchronous `RemoteStorageManager` engine keeps its own `block()`-style bridge (renamed `block_os`) at its boundary and calls the async `ObjectOps` methods through it; the multipart branch and the `object_store::Error` → structured error mapping move into the substrate. `remote-storage`'s public API, key layout, KIP range semantics, and behavior are all preserved and guarded by its existing test suite.
+**Architecture:** Plan 1 (`2026-07-05-krabka-object-store-substrate-crate.md`) unified object-store *construction*. This plan unifies *access*: one async op trait (`ObjectOps`) with a single concrete implementation over `Arc<dyn object_store::ObjectStore>`, so the put/multipart/get/get_range/head/list/delete logic lives once. `remote-storage`'s synchronous `RemoteStorageManager` engine keeps its own `block()`-style bridge (renamed `block_os`) at its boundary and calls the async `ObjectOps` methods through it; the multipart branch and the `object_store::Error` → structured error mapping move into the substrate. `remote-storage`'s public API, key layout, KIP range semantics, and behavior are all preserved and guarded by its existing test suite.
 
 **Tech Stack:** Rust 2024 (pinned stable 1.96.0), `object_store` 0.13 (workspace-pinned), `async-trait`, `bytes`, `futures`, `thiserror`, `mockall` (dev), `tokio`, `assert2`, `cargo +nightly fmt`, `clippy::pedantic` (`unsafe_code = "forbid"`).
 
-**Spec:** [`docs/superpowers/specs/2026-07-05-crabka-north-star-roadmap-design.md`](../specs/2026-07-05-crabka-north-star-roadmap-design.md) — Chapter 0 (op-unification; the `ObjectOps` seam deferred from plan 1). **Prerequisite:** plan `2026-07-05-crabka-object-store-substrate-crate.md` is merged (`crabka-object-store` exists with `config`, `error`, `build` modules; `remote-storage` and `blockstore` already depend on it).
+**Spec:** [`docs/superpowers/specs/2026-07-05-krabka-north-star-roadmap-design.md`](../specs/2026-07-05-krabka-north-star-roadmap-design.md) — Chapter 0 (op-unification; the `ObjectOps` seam deferred from plan 1). **Prerequisite:** plan `2026-07-05-krabka-object-store-substrate-crate.md` is merged (`krabka-object-store` exists with `config`, `error`, `build` modules; `remote-storage` and `blockstore` already depend on it).
 
 ---
 
@@ -25,7 +25,7 @@
 ## Scope boundary
 
 - **In scope:** `ObjectOps` + `ObjectStoreClient` in the substrate; `remote-storage` engine adoption; structured `NotFound`.
-- **Deferred (named, not half-built):** routing `crabka-blockstore`'s ~20 plain-op sites through `ObjectOps` (its Parquet paths need the raw `Arc<dyn ObjectStore>` and can't route); `read_capped`; making `remote-storage`'s engine generic over `ObjectOps` for mock-based unit tests (the concrete client + the existing InMemory suite cover it for now).
+- **Deferred (named, not half-built):** routing `krabka-blockstore`'s ~20 plain-op sites through `ObjectOps` (its Parquet paths need the raw `Arc<dyn ObjectStore>` and can't route); `read_capped`; making `remote-storage`'s engine generic over `ObjectOps` for mock-based unit tests (the concrete client + the existing InMemory suite cover it for now).
 
 ---
 
@@ -39,7 +39,7 @@
 
 **Modified — `crates/remote-storage/`:**
 - `src/s3.rs` — swap the `store: Arc<dyn ObjectStore>` field for `ops: ObjectStoreClient`; replace `put_path`/`put_path_multipart`/`put_bytes`/`block`/`map_object_store_error` with `ObjectOps` calls through a `block_os` bridge; structured `NotFound`.
-- `src/error.rs` — add `From<crabka_object_store::ObjectStoreError> for RemoteStorageError`.
+- `src/error.rs` — add `From<krabka_object_store::ObjectStoreError> for RemoteStorageError`.
 
 ---
 
@@ -69,7 +69,7 @@ mockall = { workspace = true }
 
 - [ ] **Step 2: Verify the crate still builds**
 
-Run: `cargo build -p crabka-object-store`
+Run: `cargo build -p krabka-object-store`
 Expected: compiles clean (new deps resolve from the workspace).
 
 - [ ] **Step 3: Commit**
@@ -103,7 +103,7 @@ In `crates/object-store/src/error.rs`, add to the `#[cfg(test)] mod tests` block
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `cargo test -p crabka-object-store io_error_converts_via_from`
+Run: `cargo test -p krabka-object-store io_error_converts_via_from`
 Expected: FAIL — `ObjectStoreError` has no `Io` variant / no `From<std::io::Error>`.
 
 - [ ] **Step 3: Add the variant**
@@ -118,7 +118,7 @@ In `crates/object-store/src/error.rs`, add the variant to the enum (above `Inval
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `cargo test -p crabka-object-store error::`
+Run: `cargo test -p krabka-object-store error::`
 Expected: PASS — the `Io` conversion and the existing `NotFound`/`Backend` mapping tests are green.
 
 - [ ] **Step 5: Commit**
@@ -225,7 +225,7 @@ mod tests {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cargo test -p crabka-object-store ops::`
+Run: `cargo test -p krabka-object-store ops::`
 Expected: FAIL — `ObjectOps`, `ObjectStoreClient`, `MockObjectOps` are not defined.
 
 - [ ] **Step 3: Add the implementation above the test module**
@@ -377,12 +377,12 @@ pub use ops::{ObjectOps, ObjectStoreClient};
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `cargo test -p crabka-object-store`
+Run: `cargo test -p krabka-object-store`
 Expected: PASS — all `ops` tests (round-trips, ranged get, missing→NotFound, head/list/delete, single-PUT + multipart `put_from_path`, and the `MockObjectOps` seam) plus the existing config/error/build tests are green.
 
 - [ ] **Step 6: Lint the crate**
 
-Run: `cargo clippy -p crabka-object-store --all-targets -- -D warnings`
+Run: `cargo clippy -p krabka-object-store --all-targets -- -D warnings`
 Expected: no warnings.
 
 - [ ] **Step 7: Commit**
@@ -394,7 +394,7 @@ git commit -m "feat(object-store): add ObjectOps trait + ObjectStoreClient impl"
 
 ---
 
-## Task 4: Route `crabka-remote-storage`'s engine through `ObjectOps`
+## Task 4: Route `krabka-remote-storage`'s engine through `ObjectOps`
 
 Swap the raw `store` handle for an `ObjectStoreClient`, bridge its async ops through a renamed `block_os`, move the multipart-threshold branch into the substrate call, and replace the `"not found:"` string-prefix match with the structured `ObjectStoreError::NotFound`. The existing `remote-storage` suite guards behavior.
 
@@ -407,9 +407,9 @@ Swap the raw `store` handle for an `ObjectStoreClient`, bridge its async ops thr
 In `crates/remote-storage/src/error.rs`, append (below the enum):
 
 ```rust
-impl From<crabka_object_store::ObjectStoreError> for RemoteStorageError {
-    fn from(err: crabka_object_store::ObjectStoreError) -> Self {
-        use crabka_object_store::ObjectStoreError as E;
+impl From<krabka_object_store::ObjectStoreError> for RemoteStorageError {
+    fn from(err: krabka_object_store::ObjectStoreError) -> Self {
+        use krabka_object_store::ObjectStoreError as E;
         match err {
             E::Io(e) => RemoteStorageError::Io(e),
             E::InvalidConfig(m) => RemoteStorageError::InvalidArgument(m),
@@ -438,7 +438,7 @@ use object_store::{
 };
 use tracing::instrument;
 
-use crabka_object_store::{
+use krabka_object_store::{
     DEFAULT_MULTIPART_CHUNK_SIZE, DEFAULT_MULTIPART_THRESHOLD, ObjectStoreConfig, S3Config,
     build_object_store,
 };
@@ -452,7 +452,7 @@ use std::sync::Arc;
 use object_store::{GetRange, ObjectStore, path::Path as ObjectPath};
 use tracing::instrument;
 
-use crabka_object_store::{
+use krabka_object_store::{
     DEFAULT_MULTIPART_CHUNK_SIZE, DEFAULT_MULTIPART_THRESHOLD, ObjectOps, ObjectStoreClient,
     ObjectStoreConfig, ObjectStoreError, S3Config, build_object_store,
 };
@@ -655,7 +655,7 @@ Two `#[cfg(test)]` tests in `s3.rs` reference the deleted engine internals or mo
 
 - [ ] **Step 6: Run the full `remote-storage` suite (regression net)**
 
-Run: `cargo test -p crabka-remote-storage`
+Run: `cargo test -p krabka-remote-storage`
 Expected: PASS — copy-then-fetch, partial/ranged fetch, each index type, idempotent delete, cluster-prefix isolation, and the multipart threshold + partial-tail tests all stay green, proving the op-routing preserved behavior and the `SegmentNotFound` upgrade still fires (now via structured `NotFound`).
 
 - [ ] **Step 7: Commit**
@@ -673,7 +673,7 @@ git commit -m "refactor(remote-storage): route engine ops through ObjectOps + st
 
 - [ ] **Step 1: Build the broker**
 
-Run: `cargo build -p crabka-broker`
+Run: `cargo build -p krabka-broker`
 Expected: compiles clean — `S3RemoteStorage::with_store`/`from_s3_config`/`from_gcs_config` and all `remote-storage` re-exports are unchanged, so downstream is unaffected.
 
 - [ ] **Step 2: Full workspace test suite**

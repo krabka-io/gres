@@ -6,12 +6,12 @@
 
 **Architecture:** G-8a makes sharded tables *semantically* distributed with zero new clocks: every write is g-stamped (leased g-blocks; batched range-0 decisions), every read runs under the G-7 gsnap+barrier, and a new `RangeScanner` seam in the executor scatter-gathers scans with owning-range visibility evaluation. G-8b makes the layout *dynamic*: versioned RangeMap v2 with `(table_id, rowid)` boundaries, splits as checkpoint forks with filtered restore and parked predecessor topics.
 
-**Tech Stack:** everything G-7 built (transport, coordinator, models, harnesses), G-3 checkpoint machinery (filtered restore), G-5 parking, `crabka-pgparser` (`SHARDED`), stateright.
+**Tech Stack:** everything G-7 built (transport, coordinator, models, harnesses), G-3 checkpoint machinery (filtered restore), G-5 parking, `krabka-pgparser` (`SHARDED`), stateright.
 
 ## Global Constraints
 
 - **Prerequisites:** all of G-7 landed (G-8a); plus G-5's parking (G-8b splits park predecessor topics). This plan is the furthest from the tree — every task begins by re-verifying the seams it names; where this plan and the landed code disagree, the code wins and the plan step adapts, recording the divergence in the task's commit message.
-- **Spec:** [2026-07-09-crabka-gres-g8-sharded-tables-design.md](../specs/2026-07-09-crabka-gres-g8-sharded-tables-design.md). The two spec invariants every task defends: **sharded-table visibility is gsnap-only** (no code path may consult a foreign range's local clog), and **fence-first ordering** extends to splits (both successor fences precede any read of the predecessor's end).
+- **Spec:** [2026-07-09-krabka-gres-g8-sharded-tables-design.md](../specs/2026-07-09-krabka-gres-g8-sharded-tables-design.md). The two spec invariants every task defends: **sharded-table visibility is gsnap-only** (no code path may consult a foreign range's local clog), and **fence-first ordering** extends to splits (both successor fences precede any read of the predecessor's end).
 - **Correctness bar:** the corpus-through-sharding conformance gate (corpus tables `SHARDED` across 2 ranges must match the parity baseline) is the semantic backstop for everything; it runs from G-8a's first executable milestone onward.
 - Lints/format/commit/test conventions as in the G-2 plan; donor test names kept where suites are re-targeted.
 

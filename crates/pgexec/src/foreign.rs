@@ -5,8 +5,8 @@
 //! scanner registered, a `SELECT` from a foreign table returns `0A000`, with the
 //! message "foreign tables require the `kafka` feature".
 
-use crabka_pgcatalog::{Column, ForeignServer, Table, UserMapping};
-use crabka_pgtypes::Datum;
+use krabka_pgcatalog::{Column, ForeignServer, Table, UserMapping};
+use krabka_pgtypes::Datum;
 
 use crate::{clock::EvalCtx, error::ExecError};
 
@@ -38,11 +38,11 @@ pub enum ImportFilter {
 }
 
 impl ImportFilter {
-    /// Translate the parser's [`crabka_pgparser::ast::ImportSelector`] into this neutral
+    /// Translate the parser's [`krabka_pgparser::ast::ImportSelector`] into this neutral
     /// filter so the FDW seam never depends on the parser AST.
     #[must_use]
-    pub fn from_selector(selector: &crabka_pgparser::ast::ImportSelector) -> Self {
-        use crabka_pgparser::ast::ImportSelector;
+    pub fn from_selector(selector: &krabka_pgparser::ast::ImportSelector) -> Self {
+        use krabka_pgparser::ast::ImportSelector;
         match selector {
             ImportSelector::All => Self::All,
             ImportSelector::LimitTo(names) => Self::Only(names.clone()),
@@ -68,7 +68,7 @@ impl ImportFilter {
 /// user mapping, into rows aligned to the table's column order. The envelope
 /// columns `_partition`, `_offset`, `_timestamp`, `_key` and `_headers` come
 /// first, then the decoded value columns, exactly as
-/// [`crabka_pgcatalog::create_foreign_table`] lays them out.
+/// [`krabka_pgcatalog::create_foreign_table`] lays them out.
 pub trait ForeignScanner: Send + Sync {
     /// Materialize the foreign table's rows for one scan.
     ///
@@ -152,7 +152,7 @@ pub struct ImportedTable {
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgparser::ast::ImportSelector;
+    use krabka_pgparser::ast::ImportSelector;
 
     use super::ImportFilter;
 

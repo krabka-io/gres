@@ -1,8 +1,8 @@
 use std::{error::Error, sync::Arc, time::Duration};
 
 use bytes::BytesMut;
-use crabka_pgexec::SqlEngine;
-use crabka_pgwire::session::SessionConfig;
+use krabka_pgexec::SqlEngine;
+use krabka_pgwire::session::SessionConfig;
 use tokio::net::TcpListener;
 use tokio_postgres::{
     NoTls,
@@ -12,7 +12,7 @@ use tokio_postgres::{
 async fn spawn() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
-    tokio::spawn(crabka_pgwire::server::serve(
+    tokio::spawn(krabka_pgwire::server::serve(
         listener,
         Arc::new(SqlEngine::new()),
         Arc::new(SessionConfig::trust()),
@@ -1731,10 +1731,10 @@ async fn wire_concurrent_update_blocks_then_succeeds() {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
     let engine = Arc::new(SqlEngine::new());
-    tokio::spawn(crabka_pgwire::server::serve(
+    tokio::spawn(krabka_pgwire::server::serve(
         listener,
         Arc::clone(&engine),
-        Arc::new(crabka_pgwire::session::SessionConfig::trust()),
+        Arc::new(krabka_pgwire::session::SessionConfig::trust()),
     ));
 
     let conn1 = connect(port).await;
@@ -1777,13 +1777,13 @@ async fn wire_concurrent_update_blocks_then_succeeds() {
 
 // ── SP40: foreign-table (Kafka FDW) executor seam ────────────────────────────
 
-use crabka_pgcatalog::{ForeignServer, Table, UserMapping};
-use crabka_pgexec::{
+use krabka_pgcatalog::{ForeignServer, Table, UserMapping};
+use krabka_pgexec::{
     ExecError,
     clock::EvalCtx,
     foreign::{ForeignScanner, ScanBounds},
 };
-use crabka_pgtypes::Datum;
+use krabka_pgtypes::Datum;
 
 /// A fake `ForeignScanner` for tests. It returns canned rows aligned to the
 /// foreign table's column layout, with envelope columns first and then value
@@ -1794,7 +1794,7 @@ use crabka_pgtypes::Datum;
 /// `topic`/`value_format=raw` OPTIONS for each.
 struct FakeScanner {
     rows: Vec<Vec<Datum>>,
-    import_tables: Vec<(String, Vec<crabka_pgcatalog::Column>)>,
+    import_tables: Vec<(String, Vec<krabka_pgcatalog::Column>)>,
 }
 
 impl ForeignScanner for FakeScanner {
@@ -1821,13 +1821,13 @@ impl ForeignScanner for FakeScanner {
         &self,
         _server: &ForeignServer,
         _mapping: Option<&UserMapping>,
-        filter: &crabka_pgexec::foreign::ImportFilter,
-    ) -> Result<Vec<crabka_pgexec::foreign::ImportedTable>, ExecError> {
+        filter: &krabka_pgexec::foreign::ImportFilter,
+    ) -> Result<Vec<krabka_pgexec::foreign::ImportedTable>, ExecError> {
         Ok(self
             .import_tables
             .iter()
             .filter(|(name, _)| filter.retains(name))
-            .map(|(name, columns)| crabka_pgexec::foreign::ImportedTable {
+            .map(|(name, columns)| krabka_pgexec::foreign::ImportedTable {
                 name: name.clone(),
                 columns: columns.clone(),
                 options: vec![
@@ -1845,7 +1845,7 @@ async fn spawn_with_scanner(scanner: Arc<dyn ForeignScanner>) -> u16 {
     let port = listener.local_addr().expect("addr").port();
     let mut engine = SqlEngine::new();
     engine.set_foreign_scanner(scanner);
-    tokio::spawn(crabka_pgwire::server::serve(
+    tokio::spawn(krabka_pgwire::server::serve(
         listener,
         Arc::new(engine),
         Arc::new(SessionConfig::trust()),
@@ -2011,8 +2011,8 @@ async fn foreign_select_without_scanner_is_unsupported() {
 /// value columns.
 #[tokio::test]
 async fn import_foreign_schema_materializes_foreign_tables() {
-    use crabka_pgcatalog::Column;
-    use crabka_pgtypes::ColumnType;
+    use krabka_pgcatalog::Column;
+    use krabka_pgtypes::ColumnType;
 
     let scanner = Arc::new(FakeScanner {
         rows: Vec::new(),

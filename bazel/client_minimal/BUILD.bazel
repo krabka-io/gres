@@ -8,7 +8,7 @@ load("@rules_rust//rust:defs.bzl", "rust_library")
 rust_library(
     name = "client_minimal",
     srcs = ["lib.rs"],
-    crate_name = "crabka_client_minimal",
+    crate_name = "krabka_client_minimal",
     crate_root = "lib.rs",
     edition = "2024",
     visibility = ["//visibility:public"],

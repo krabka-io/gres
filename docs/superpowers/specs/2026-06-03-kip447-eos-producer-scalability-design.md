@@ -109,7 +109,7 @@ pub async fn send_offsets_to_transaction(
 - `TxnOffsetCommitRequest` is populated with `group_meta.generation_id`,
   `group_meta.member_id`, `group_meta.group_instance_id`.
 - Re-export `ConsumerGroupMetadata` from the producer crate root
-  (`crabka-client-producer` already depends on `crabka-client-consumer`), so
+  (`krabka-client-producer` already depends on `krabka-client-consumer`), so
   callers need a single import.
 
 The client negotiates `TxnOffsetCommit` to v3+ (broker advertises through v5),

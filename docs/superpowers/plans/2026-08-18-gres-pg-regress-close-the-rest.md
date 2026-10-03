@@ -325,7 +325,7 @@ walk `build_from_schema_*`, `query.rs describe_query_expr*`), `explain.rs plan_*
   `run_select_traced` (7902) + `explain` (5176). `join.rs`/`agg.rs`/`grouping.rs`/
   `window.rs`/`setops.rs`/`values.rs`/`srf.rs`/`cte.rs`/`subquery.rs` are CALLED as node
   bodies, not moved (so N16-N19 run in parallel). Exit: zero regressions on the exact
-  files; `cargo nextest -p crabka-pgexec` green with the read path served only by
+  files; `cargo nextest -p krabka-pgexec` green with the read path served only by
   `plan/exec`.
 - **P0b** EXPLAIN renderer + typed deparser + `ExplainOptions` (L, ~3,000 lines: VERBOSE
   `Output:` ~1,100 across join/subselect/with/returning/rangetypes/sqljson/tsrf/
@@ -721,7 +721,7 @@ briefs must be written from those, not from this summary.
   privileges (schema/function/type/sequence/database/tablespace/parameter/language/FDW),
   role attributes lifecycle (`create_role`, `password_1`: REPLICATION DETAIL, VALID
   UNTIL, CONNECTION LIMIT, RENAME), view privileges, `zeropriv` ACLs, `SET ROLE` for a
-  SET-SESSION-AUTHORIZATION superuser (`crabka_pgcatalog::role_can_set` exempts only
+  SET-SESSION-AUTHORIZATION superuser (`krabka_pgcatalog::role_can_set` exempts only
   BOOTSTRAP_ROLE), predefined roles, `has_*_privilege` family. Files: `privilege.rs`
   (542/42/1127), `pgcatalog` roles/ACL, `parser.rs` GRANT/REVOKE/ALTER DEFAULT
   PRIVILEGES/CREATE ROLE options, `exec.rs` grant arms + role DDL, `catalog_fn.rs`,

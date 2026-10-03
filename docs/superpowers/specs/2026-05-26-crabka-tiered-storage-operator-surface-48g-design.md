@@ -3,7 +3,7 @@
 **Date:** 2026-05-26
 **Status:** Slice design. Follows slice 48e (remote retention + partition
 delete). Part of the KIP-405 umbrella
-(`docs/superpowers/specs/2026-05-25-crabka-tiered-storage-roadmap-design.md`).
+(`docs/superpowers/specs/2026-05-25-krabka-tiered-storage-roadmap-design.md`).
 
 ## Goal
 
@@ -184,8 +184,8 @@ non-breaking schema addition — the YAML grows but is not invalidated.
 
 - `cargo fmt --all --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test -p crabka-operator`
-- `cargo test -p crabka-broker -p crabka-log -p crabka-remote-storage`
+- `cargo test -p krabka-operator`
+- `cargo test -p krabka-broker -p krabka-log -p krabka-remote-storage`
   (no regressions)
 - `cargo run --bin gen-crds` regenerates
   `deploy/crds/crabka.io_kafkas.yaml`; the YAML is committed.

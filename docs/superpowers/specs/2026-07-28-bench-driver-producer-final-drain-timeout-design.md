@@ -7,7 +7,7 @@
 
 ## Goal
 
-Replace the fixed producer final-drain timeout in `crabka-bench-driver` with
+Replace the fixed producer final-drain timeout in `krabka-bench-driver` with
 one validated runtime setting while preserving the existing drain behavior and
 10-second default.
 

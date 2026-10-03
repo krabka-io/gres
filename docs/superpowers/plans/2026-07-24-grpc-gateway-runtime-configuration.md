@@ -13,7 +13,7 @@
 - Preserve distinct existing direct and operator defaults; do not silently normalize their current differences.
 - Configure only deployment policy. Keep Kafka/gRPC/HTTP codes, membership partition count one, cleanup-policy semantics, framing/hash/varint constants, sentinels, derived capacities, and metrics buckets fixed.
 - New validated scalar inputs use `refined_type`; never use `unsafe_new`.
-- Every process setting has a Clap flag backed by `CRABKA_GATEWAY_*`.
+- Every process setting has a Clap flag backed by `KRABKA_GATEWAY_*`.
 - Every operator-managed process setting has a typed CRD field validated before child rendering.
 - Reject invalid values; remove `.max(1)` policy clamps instead of silently rewriting input.
 - Use existing config/CRD/TOML paths; no global config crate, factories, or generic maps.
@@ -100,9 +100,9 @@ Add tests proving dedup partitions reject zero and values above `i32::MAX`, dedu
 Run:
 
 ```bash
-cargo test -p crabka-grpc-gateway runtime_defaults_and_boundaries
-cargo test -p crabka-grpc-gateway refined_
-cargo test -p crabka-grpc-gateway outbound_config
+cargo test -p krabka-grpc-gateway runtime_defaults_and_boundaries
+cargo test -p krabka-grpc-gateway refined_
+cargo test -p krabka-grpc-gateway outbound_config
 ```
 
 Expected: compilation/test failures because the refined inputs and strict validation do not exist.
@@ -132,10 +132,10 @@ Replace raw Clap fields with refined wrappers at trust boundaries. Change outbou
 
 - [ ] **Step 5: Add CLI/environment fields and precedence tests**
 
-Add exact kebab-case flags with matching `CRABKA_GATEWAY_<UPPER_FIELD>` env names. Example:
+Add exact kebab-case flags with matching `KRABKA_GATEWAY_<UPPER_FIELD>` env names. Example:
 
 ```rust
-#[arg(long, env = "CRABKA_GATEWAY_CONSUMER_POLL_TIMEOUT_MS")]
+#[arg(long, env = "KRABKA_GATEWAY_CONSUMER_POLL_TIMEOUT_MS")]
 consumer_poll_timeout_ms: Option<PositiveU64>,
 ```
 
@@ -148,10 +148,10 @@ One table-driven test proves defaults, zero/range rejection, environment overrid
 Run:
 
 ```bash
-cargo test -p crabka-grpc-gateway config_value
-cargo test -p crabka-grpc-gateway --bin crabka-grpc-gateway
-cargo test -p crabka-grpc-gateway outbound_config
-cargo clippy -p crabka-grpc-gateway --all-targets -- -D warnings
+cargo test -p krabka-grpc-gateway config_value
+cargo test -p krabka-grpc-gateway --bin krabka-grpc-gateway
+cargo test -p krabka-grpc-gateway outbound_config
+cargo clippy -p krabka-grpc-gateway --all-targets -- -D warnings
 ```
 
 Commit:
@@ -207,9 +207,9 @@ Use a Schema Registry mock to prove a short configured TTL refetches while a lon
 Run:
 
 ```bash
-cargo test -p crabka-grpc-gateway internal_topic_policy
-cargo test -p crabka-grpc-gateway ownership_is_warm
-cargo test -p crabka-grpc-gateway schema_registry_cache
+cargo test -p krabka-grpc-gateway internal_topic_policy
+cargo test -p krabka-grpc-gateway ownership_is_warm
+cargo test -p krabka-grpc-gateway schema_registry_cache
 ```
 
 Expected: compilation fails until helpers and production wiring exist.
@@ -241,11 +241,11 @@ Add `latest_cache_ttl: Duration` to `SchemaRegistryClient`; change `new` to acce
 Run:
 
 ```bash
-cargo test -p crabka-grpc-gateway dedup
-cargo test -p crabka-grpc-gateway outbound
-cargo test -p crabka-grpc-gateway streaming
-cargo test -p crabka-grpc-gateway schema
-cargo clippy -p crabka-grpc-gateway --all-targets -- -D warnings
+cargo test -p krabka-grpc-gateway dedup
+cargo test -p krabka-grpc-gateway outbound
+cargo test -p krabka-grpc-gateway streaming
+cargo test -p krabka-grpc-gateway schema
+cargo clippy -p krabka-grpc-gateway --all-targets -- -D warnings
 ```
 
 Commit:
@@ -285,8 +285,8 @@ Construct a CRD with every runtime value nondefault and assert the Deployment co
 Run:
 
 ```bash
-cargo test -p crabka-operator --test reconcile_gateway runtime_
-cargo test -p crabka-operator --test reconcile_gateway config_secret_
+cargo test -p krabka-operator --test reconcile_gateway runtime_
+cargo test -p krabka-operator --test reconcile_gateway config_secret_
 ```
 
 Expected: compilation fails because the CRD fields do not exist.
@@ -329,11 +329,11 @@ Append present tuning values to `gateway_args`, preserving its deterministic sor
 Run:
 
 ```bash
-cargo test -p crabka-operator --test reconcile_gateway
-cargo test -p crabka-operator --lib crd::grpc_gateway
-cargo run -p crabka-operator -- gen-crds /tmp/crabka-gateway-crds
-diff -u deploy/crds/crabka.io_kafkagrpcgateways.yaml /tmp/crabka-gateway-crds/crabka.io_kafkagrpcgateways.yaml
-cargo clippy -p crabka-operator --all-targets -- -D warnings
+cargo test -p krabka-operator --test reconcile_gateway
+cargo test -p krabka-operator --lib crd::grpc_gateway
+cargo run -p krabka-operator -- gen-crds /tmp/krabka-gateway-crds
+diff -u deploy/crds/crabka.io_kafkagrpcgateways.yaml /tmp/krabka-gateway-crds/crabka.io_kafkagrpcgateways.yaml
+cargo clippy -p krabka-operator --all-targets -- -D warnings
 ```
 
 Commit:
@@ -356,7 +356,7 @@ git commit -m "feat(operator): expose gateway tuning"
 Run:
 
 ```bash
-tools/audit-runtime-values.sh | rg '^crates/grpc-gateway/' > /tmp/crabka-gateway-runtime-values.txt
+tools/audit-runtime-values.sh | rg '^crates/grpc-gateway/' > /tmp/krabka-gateway-runtime-values.txt
 ```
 
 Classify every result. Fixed groups must include protocol/error codes, membership partition count one, cleanup policy, framing/hash/varint constants, sentinels, derived capacities, histogram buckets, retry math, and test fixtures. Configure any remaining production policy before continuing.
@@ -367,11 +367,11 @@ Run:
 
 ```bash
 cargo +nightly fmt --all -- --check
-cargo clippy -p crabka-grpc-gateway -p crabka-operator --all-targets -- -D warnings
-cargo nextest run -p crabka-grpc-gateway -p crabka-operator
-cargo run -p crabka-grpc-gateway -- --help | rg 'internal-topic|consumer-poll|ownership-warmup|schema-registry-latest|bearer-allowable'
-cargo run -p crabka-operator -- gen-crds /tmp/crabka-gateway-crds
-diff -u deploy/crds/crabka.io_kafkagrpcgateways.yaml /tmp/crabka-gateway-crds/crabka.io_kafkagrpcgateways.yaml
+cargo clippy -p krabka-grpc-gateway -p krabka-operator --all-targets -- -D warnings
+cargo nextest run -p krabka-grpc-gateway -p krabka-operator
+cargo run -p krabka-grpc-gateway -- --help | rg 'internal-topic|consumer-poll|ownership-warmup|schema-registry-latest|bearer-allowable'
+cargo run -p krabka-operator -- gen-crds /tmp/krabka-gateway-crds
+diff -u deploy/crds/crabka.io_kafkagrpcgateways.yaml /tmp/krabka-gateway-crds/crabka.io_kafkagrpcgateways.yaml
 git diff --check
 ```
 

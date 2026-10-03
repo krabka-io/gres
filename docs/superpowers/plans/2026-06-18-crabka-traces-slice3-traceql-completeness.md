@@ -1,4 +1,4 @@
-# crabka-traces Slice 3 — TraceQL completeness (full structural ops + `select()`/`by()` + typed/regex comparisons + TraceQL metrics + tag discovery)
+# krabka-traces Slice 3 — TraceQL completeness (full structural ops + `select()`/`by()` + typed/regex comparisons + TraceQL metrics + tag discovery)
 
 > **COMPLETION STATUS (as-built):** Done and green. Full structural ops
 > (negated/union), pipeline aggregations, the TraceQL-metrics families
@@ -17,20 +17,20 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Take the `crabka-traceql` engine built in Slice 2 (parser + planner + selectors + the `AND` fast-path pushdown + the `SpanStructuralJoin` lowering for the *core* structural operators `>>`/`<<`/`>`/`<`/`~` + the `SpanStore` trait + the pinned result types) from "the core works" to "TraceQL is complete" — the **negated** (`!>>`/`!<<`/`!>`/`!<`) and **union** (`&>>`/`&<<`/`&>`/`&<`/`&~`) structural forms, full `select()`/`by()`/`coalesce()`/`with()` pipeline completeness, typed and regex comparisons across **every** TraceQL static type (string/int/float/bool/duration/status/kind), **TraceQL metrics** (`| rate()`, `| count_over_time()`, `| quantile_over_time(span:duration, .95) by (...)`, the `_over_time` family, `| compare()`/`| topk()`/`| bottomk()`) producing a Prometheus-shaped `TraceMetricsResponse` with `trace_id` exemplars, and **tag discovery** (`tag_names` by scope, `tag_values` typed) read from the `TraceIndex` — then prove it with a curated golden-query corpus diffed against documented TraceQL semantics (no upstream `.test`-style corpus exists; the differential-vs-Tempo headline check lives in Slice 8).
+**Goal:** Take the `krabka-traceql` engine built in Slice 2 (parser + planner + selectors + the `AND` fast-path pushdown + the `SpanStructuralJoin` lowering for the *core* structural operators `>>`/`<<`/`>`/`<`/`~` + the `SpanStore` trait + the pinned result types) from "the core works" to "TraceQL is complete" — the **negated** (`!>>`/`!<<`/`!>`/`!<`) and **union** (`&>>`/`&<<`/`&>`/`&<`/`&~`) structural forms, full `select()`/`by()`/`coalesce()`/`with()` pipeline completeness, typed and regex comparisons across **every** TraceQL static type (string/int/float/bool/duration/status/kind), **TraceQL metrics** (`| rate()`, `| count_over_time()`, `| quantile_over_time(span:duration, .95) by (...)`, the `_over_time` family, `| compare()`/`| topk()`/`| bottomk()`) producing a Prometheus-shaped `TraceMetricsResponse` with `trace_id` exemplars, and **tag discovery** (`tag_names` by scope, `tag_values` typed) read from the `TraceIndex` — then prove it with a curated golden-query corpus diffed against documented TraceQL semantics (no upstream `.test`-style corpus exists; the differential-vs-Tempo headline check lives in Slice 8).
 
-**Architecture:** This slice is pure `crabka-traceql` extension — no new crate, no networking. It adds: (1) **negated/union structural lowerings** on top of the Slice-2 `SpanStructuralJoin` — negated forms become anti-joins (`LEFT JOIN ... WHERE right IS NULL`) over the same nested-set predicates, union forms return *both* sides' spanSets; (2) the **typed-value coercion layer** — one resolver that maps each TraceQL static type onto an Arrow column predicate (durations parsed to nanos `Int64`, `status`/`kind` to their enum `Int`, regex `=~` fully anchored `^...$`, array `=`/`!=` "any/none" semantics); (3) **pipeline-aggregation completeness** (`select`/`by`/`coalesce`/`with` + the scalar aggregates), each a DataFusion aggregation over the matched spanSets; (4) **TraceQL metrics** — a **time-bucketed aggregation** planner that buckets matched spans into `step_ns` windows, applies the metric function, and shapes Prometheus series + `trace_id` exemplars into `TraceMetricsResponse`; (5) **tag discovery** — `tag_names`/`tag_values` delegated to the `SpanStore`'s `TraceIndex`-backed methods, with scope filtering and typed values; (6) the **golden-query corpus** wired through a small harness diffing engine output against hand-encoded expected results.
+**Architecture:** This slice is pure `krabka-traceql` extension — no new crate, no networking. It adds: (1) **negated/union structural lowerings** on top of the Slice-2 `SpanStructuralJoin` — negated forms become anti-joins (`LEFT JOIN ... WHERE right IS NULL`) over the same nested-set predicates, union forms return *both* sides' spanSets; (2) the **typed-value coercion layer** — one resolver that maps each TraceQL static type onto an Arrow column predicate (durations parsed to nanos `Int64`, `status`/`kind` to their enum `Int`, regex `=~` fully anchored `^...$`, array `=`/`!=` "any/none" semantics); (3) **pipeline-aggregation completeness** (`select`/`by`/`coalesce`/`with` + the scalar aggregates), each a DataFusion aggregation over the matched spanSets; (4) **TraceQL metrics** — a **time-bucketed aggregation** planner that buckets matched spans into `step_ns` windows, applies the metric function, and shapes Prometheus series + `trace_id` exemplars into `TraceMetricsResponse`; (5) **tag discovery** — `tag_names`/`tag_values` delegated to the `SpanStore`'s `TraceIndex`-backed methods, with scope filtering and typed values; (6) the **golden-query corpus** wired through a small harness diffing engine output against hand-encoded expected results.
 
 The load-bearing realization: **everything in this slice is "more lowerings and more planning rules" on top of Slice 2's `SpanStructuralJoin` + `ScanResult`/`SessionContext` substrate.** No new custom Arrow array and no new custom `ExecutionPlan` are required — negated/union structural ops are *different join modes* over the nested-set columns the block-builder already wrote (slice 1), TraceQL metrics is a *time-bucketing aggregation* over the matched-span DataFusion table, and tag discovery is a *delegation* to `SpanStore` methods that the Slice-2 trait already declares. So the slice is dominated by per-operator/-function bite-sized TDD, each pinned by a hand-written unit test encoding the exact TraceQL rule, then locked down by the curated golden corpus.
 
-**Tech Stack:** Rust 2024 · `datafusion { git = "https://github.com/apache/datafusion", rev = "0838a4ddb902535b0e95a1c5a254be7e9c7fe9bf" }` · `arrow` 59 · `async-trait` · `tokio` (`macros`, `rt-multi-thread`) · `futures` · `regex` 1 · `thiserror`. Consumes Slice 2's `crabka-traceql` surface (engine, `SpanStore`, `SpanStructuralJoin`, result types) and — only transitively, via the injected `SpanStore` — `crabka-blockstore`'s `TraceIndex`. Tests: `assert2`, `proptest`. The golden corpus is hand-authored under `crates/traceql/testdata/golden/`.
+**Tech Stack:** Rust 2024 · `datafusion { git = "https://github.com/apache/datafusion", rev = "0838a4ddb902535b0e95a1c5a254be7e9c7fe9bf" }` · `arrow` 59 · `async-trait` · `tokio` (`macros`, `rt-multi-thread`) · `futures` · `regex` 1 · `thiserror`. Consumes Slice 2's `krabka-traceql` surface (engine, `SpanStore`, `SpanStructuralJoin`, result types) and — only transitively, via the injected `SpanStore` — `krabka-blockstore`'s `TraceIndex`. Tests: `assert2`, `proptest`. The golden corpus is hand-authored under `crates/traceql/testdata/golden/`.
 
 ## Global Constraints
 
 - **No backwards compatibility.** Greenfield/undeployed. Change signatures/enums/registry shapes freely; no shims, no migration code, no default-off feature flags (the *experimental-metric* flag below is the one exception — it mirrors Tempo's own per-version maturity tier, not a back-compat gate).
 - **`unsafe_code = "forbid"`** workspace-wide. No `unsafe`.
-- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p crabka-traceql --all-targets` before each commit.
-- **Formatting:** `cargo fmt -p crabka-traceql` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
+- **Lints:** `clippy::pedantic` is `warn`. New code clippy-pedantic clean. Run `cargo clippy -p krabka-traceql --all-targets` before each commit.
+- **Formatting:** `cargo fmt -p krabka-traceql` before every commit (never `cargo +nightly fmt --all` — OS error 206 in deep worktrees on Windows; always `-p`).
 - **Assertions:** `assert2::assert!` in tests; `prop_assert*` inside `proptest!`.
 - **Async tests:** `#[tokio::test]`. The engine API (`search`/`query_range`/`trace_by_id`) is async; the `InMemorySpanStore` test double (frozen by Slice 2) backs every test so the engine is independently testable without ingest/blockstore.
 - **DataFusion-internal API churn:** the `rev` is pinned. The negated/union structural lowerings reuse Slice 2's `SpanStructuralJoin`; where a `LogicalPlanBuilder` join method, `JoinType`, `ScalarUDFImpl`, or `AggregateUDFImpl` signature is needed, give the **structure + behavior** and a behavior-pinning test, with a `// verify against rev 0838a4d` note rather than fabricating an exact upstream signature. The test (TraceQL query → expected output) is the contract; the trait wiring is whatever compiles against the pin.
@@ -41,7 +41,7 @@ The load-bearing realization: **everything in this slice is "more lowerings and 
 
 ## Dependency & slice roadmap
 
-**Depends on:** **Slice 2 (`crabka-traceql` core)** — this slice consumes its public + crate-internal surface verbatim:
+**Depends on:** **Slice 2 (`krabka-traceql` core)** — this slice consumes its public + crate-internal surface verbatim:
 
 - `TraceqlEngine<S: SpanStore>` with `new(store, opts)`, `search(tenant, query, start_ns, end_ns, limit)`, `query_range(tenant, query, start_ns, end_ns, step_ns)`, `trace_by_id(tenant, trace_id)`.
 - `EngineOpts { default_limit: usize /*20*/, default_spss: usize /*3*/, max_traces: usize }`.
@@ -54,12 +54,12 @@ The load-bearing realization: **everything in this slice is "more lowerings and 
 
 > **If a Slice-2 name differs at implementation time:** the *contract above is authoritative for planning*; if Slice 2 landed a renamed symbol (e.g. `SpanStructuralJoin` → `StructuralJoin`, or `SpanRef.attributes` typed differently), adapt this slice's call sites to the real name — the *behavior* each task pins is what matters, not the spelling. Flag any rename in the task's commit message.
 
-Also consumes, only transitively through the injected `SpanStore`, `crabka-blockstore`'s `TraceIndex` (per-block tag-name/value sets + blooms) — this slice never touches blockstore directly; tag discovery is a `SpanStore::tag_names`/`tag_values` call.
+Also consumes, only transitively through the injected `SpanStore`, `krabka-blockstore`'s `TraceIndex` (per-block tag-name/value sets + blooms) — this slice never touches blockstore directly; tag discovery is a `SpanStore::tag_names`/`tag_values` call.
 
 **The 8 traces slices** (this plan = Slice 3; each gets its own plan):
 
 1. Blockstore generalization (`BlockIndex` trait) + flattened span block schema + nested-set columns + `TraceIndex`. *(slice 1)*
-2. `crabka-traceql` core — parser + planner + selectors + `AND` fast path + `SpanStructuralJoin` (core structural ops) + `SpanStore` trait + result types. *(slice 2)*
+2. `krabka-traceql` core — parser + planner + selectors + `AND` fast path + `SpanStructuralJoin` (core structural ops) + `SpanStore` trait + result types. *(slice 2)*
 3. **TraceQL completeness** *(this plan)* — negated/union structural ops, `select`/`by`/`coalesce`/`with`, typed+regex comparisons across all static types, TraceQL metrics, tag discovery, golden corpus.
 4. Ingest service — distributor (OTLP/Jaeger/Zipkin/`/api/push`) → `trace_id`-partitioned WAL; block-builder; live-store.
 5. Querier + Tempo HTTP API — `SpanStore` as hot/cold UNION; `/api/echo`, `/api/v2/traces/{id}`, `/api/search`, `/api/v2/search/tags` + `tag/{tag}/values`, `/api/metrics/query_range` + `query`.
@@ -145,7 +145,7 @@ mod negated_tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traceql --lib planner::structural::negated_tests`
+Run: `cargo test -p krabka-traceql --lib planner::structural::negated_tests`
 Expected: FAIL — `!>>`/`!>` lower to `TraceqlError::Unsupported` (Slice 2 only did the positive forms).
 
 - [x] **Step 3: Implement the anti-join lowering**
@@ -185,14 +185,14 @@ The nested-set `pred` for each op is the Slice-2 helper unchanged (`descendant`:
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traceql --lib planner::structural::negated_tests`
+Run: `cargo test -p krabka-traceql --lib planner::structural::negated_tests`
 Expected: PASS.
 
 - [x] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-traceql
-cargo clippy -p crabka-traceql --all-targets
+cargo fmt -p krabka-traceql
+cargo clippy -p krabka-traceql --all-targets
 git add crates/traceql/
 git commit -m "feat(traceql): negated structural ops !>>/!<</!>/!< via nested-set anti-join"
 ```
@@ -247,7 +247,7 @@ mod union_tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traceql --lib planner::structural::union_tests`
+Run: `cargo test -p krabka-traceql --lib planner::structural::union_tests`
 Expected: FAIL — `&>>` lowers to `Unsupported`.
 
 - [x] **Step 3: Implement the union lowering**
@@ -268,14 +268,14 @@ In the `StructuralMode::Union` arm: build the positive join (inner/semi, same `p
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traceql --lib planner::structural::union_tests`
+Run: `cargo test -p krabka-traceql --lib planner::structural::union_tests`
 Expected: PASS.
 
 - [x] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-traceql
-cargo clippy -p crabka-traceql --all-targets
+cargo fmt -p krabka-traceql
+cargo clippy -p krabka-traceql --all-targets
 git add crates/traceql/
 git commit -m "feat(traceql): union structural ops &>>/&<</&>/&</&~ returning both spanSets"
 ```
@@ -351,7 +351,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traceql --lib planner::typed`
+Run: `cargo test -p krabka-traceql --lib planner::typed`
 Expected: FAIL — `coerce_predicate` missing / array+regex paths unhandled.
 
 - [x] **Step 3: Implement the coercion layer**
@@ -446,14 +446,14 @@ Replace each `unimplemented!()` with the real lowering (DataFusion `Expr` builde
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traceql --lib planner::typed`
+Run: `cargo test -p krabka-traceql --lib planner::typed`
 Expected: PASS.
 
 - [x] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-traceql
-cargo clippy -p crabka-traceql --all-targets
+cargo fmt -p krabka-traceql
+cargo clippy -p krabka-traceql --all-targets
 git add crates/traceql/
 git commit -m "feat(traceql): typed comparisons (string/int/float/bool) + anchored regex + array any/none"
 ```
@@ -512,7 +512,7 @@ git commit -m "feat(traceql): typed comparisons (string/int/float/bool) + anchor
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traceql --lib planner::typed`
+Run: `cargo test -p krabka-traceql --lib planner::typed`
 Expected: FAIL — `parse_duration_ns`/`status_to_int`/`kind_to_int` missing.
 
 - [x] **Step 3: Implement the parse tables + wire into `typed_lit`**
@@ -584,14 +584,14 @@ Extend `typed_lit` (Task 3) so when the matcher's `StaticType` is `Duration`/`St
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traceql --lib planner::typed`
+Run: `cargo test -p krabka-traceql --lib planner::typed`
 Expected: PASS.
 
 - [x] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-traceql
-cargo clippy -p crabka-traceql --all-targets
+cargo fmt -p krabka-traceql
+cargo clippy -p krabka-traceql --all-targets
 git add crates/traceql/
 git commit -m "feat(traceql): duration/status/kind typed comparisons (Go durations + enum mapping)"
 ```
@@ -658,7 +658,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traceql --lib planner::pipeline`
+Run: `cargo test -p krabka-traceql --lib planner::pipeline`
 Expected: FAIL — `select`/`by`/scalar-filter unhandled beyond Slice-2's `count()`.
 
 - [x] **Step 3: Implement**
@@ -667,14 +667,14 @@ Expected: FAIL — `select`/`by`/scalar-filter unhandled beyond Slice-2's `count
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traceql --lib planner::pipeline`
+Run: `cargo test -p krabka-traceql --lib planner::pipeline`
 Expected: PASS.
 
 - [x] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-traceql
-cargo clippy -p crabka-traceql --all-targets
+cargo fmt -p krabka-traceql
+cargo clippy -p krabka-traceql --all-targets
 git add crates/traceql/
 git commit -m "feat(traceql): select/by/coalesce/with + scalar aggregates (count/avg/max/min/sum)"
 ```
@@ -756,7 +756,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traceql --lib metrics`
+Run: `cargo test -p krabka-traceql --lib metrics`
 Expected: FAIL — `bucket_index`/`eval_metrics` path missing.
 
 - [x] **Step 3: Implement the kernel + the two functions**
@@ -790,14 +790,14 @@ In `metrics/functions.rs`, the `rate()`/`count_over_time()` lowering: group the 
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traceql --lib metrics`
+Run: `cargo test -p krabka-traceql --lib metrics`
 Expected: PASS.
 
 - [x] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-traceql
-cargo clippy -p crabka-traceql --all-targets
+cargo fmt -p krabka-traceql
+cargo clippy -p krabka-traceql --all-targets
 git add crates/traceql/
 git commit -m "feat(traceql): TraceQL-metrics time-bucketing kernel + rate()/count_over_time()"
 ```
@@ -846,7 +846,7 @@ git commit -m "feat(traceql): TraceQL-metrics time-bucketing kernel + rate()/cou
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traceql --lib metrics`
+Run: `cargo test -p krabka-traceql --lib metrics`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement**
@@ -867,15 +867,15 @@ pub fn experimental_enabled() -> bool {
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traceql --lib metrics`
-Then: `cargo test -p crabka-traceql --features experimental --lib metrics`
+Run: `cargo test -p krabka-traceql --lib metrics`
+Then: `cargo test -p krabka-traceql --features experimental --lib metrics`
 Expected: both PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-traceql
-cargo clippy -p crabka-traceql --all-targets
+cargo fmt -p krabka-traceql
+cargo clippy -p krabka-traceql --all-targets
 git add crates/traceql/
 git commit -m "feat(traceql): quantile/sum/min/max/avg_over_time + by(...) + experimental metric tier"
 ```
@@ -917,7 +917,7 @@ git commit -m "feat(traceql): quantile/sum/min/max/avg_over_time + by(...) + exp
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traceql --lib metrics`
+Run: `cargo test -p krabka-traceql --lib metrics`
 Expected: FAIL — `TraceMetricsResponse` not populated with exemplars / `query_range` not wired.
 
 - [x] **Step 3: Implement the assembly + wiring**
@@ -928,14 +928,14 @@ In `metrics/mod.rs`, assemble each group's per-bucket values into a `TraceMetric
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traceql --lib metrics`
+Run: `cargo test -p krabka-traceql --lib metrics`
 Expected: PASS.
 
 - [x] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-traceql
-cargo clippy -p crabka-traceql --all-targets
+cargo fmt -p krabka-traceql
+cargo clippy -p krabka-traceql --all-targets
 git add crates/traceql/
 git commit -m "feat(traceql): TraceMetricsResponse assembly + trace_id exemplars + query_range wiring"
 ```
@@ -994,7 +994,7 @@ mod tests {
 
 - [x] **Step 2: Run to verify it fails**
 
-Run: `cargo test -p crabka-traceql --lib discovery`
+Run: `cargo test -p krabka-traceql --lib discovery`
 Expected: FAIL — `TraceqlEngine::tag_names`/`tag_values` engine methods missing.
 
 - [x] **Step 3: Implement the delegation**
@@ -1045,14 +1045,14 @@ impl<S: SpanStore> TraceqlEngine<S> {
 
 - [x] **Step 4: Run to verify it passes**
 
-Run: `cargo test -p crabka-traceql --lib discovery`
+Run: `cargo test -p krabka-traceql --lib discovery`
 Expected: PASS.
 
 - [x] **Step 5: Commit**
 
 ```bash
-cargo fmt -p crabka-traceql
-cargo clippy -p crabka-traceql --all-targets
+cargo fmt -p krabka-traceql
+cargo clippy -p krabka-traceql --all-targets
 git add crates/traceql/
 git commit -m "feat(traceql): tag discovery — tag_names by scope + typed tag_values"
 ```
@@ -1071,7 +1071,7 @@ git commit -m "feat(traceql): tag discovery — tag_names by scope + typed tag_v
 
 **Interfaces:**
 - Consumes: the `InMemorySpanStore` test double + the engine (`search`/`query_range`/`tag_names`/`tag_values`).
-- Produces: a hand-authored golden corpus — each file is `{ fixture: <spans>, cases: [ { query, kind: "search"|"metrics"|"tags"|"values", expected: <...> } ] }` — and `pub mod testkit` exposing `pub fn load_fixture(..)` + `pub async fn run_golden_file(path)` (loads the fixture into an `InMemorySpanStore`, runs each case, and diffs against `expected`). This is a `pub` crate module (NOT `tests/support`) so the Slice-8 conformance gate can import it as `crabka_traceql::testkit::*`. **There is no upstream TraceQL `.test` corpus** (spec §6/§10) — this is the curated golden set diffed against documented semantics; the differential-vs-real-Tempo check is the Slice-8 headline.
+- Produces: a hand-authored golden corpus — each file is `{ fixture: <spans>, cases: [ { query, kind: "search"|"metrics"|"tags"|"values", expected: <...> } ] }` — and `pub mod testkit` exposing `pub fn load_fixture(..)` + `pub async fn run_golden_file(path)` (loads the fixture into an `InMemorySpanStore`, runs each case, and diffs against `expected`). This is a `pub` crate module (NOT `tests/support`) so the Slice-8 conformance gate can import it as `krabka_traceql::testkit::*`. **There is no upstream TraceQL `.test` corpus** (spec §6/§10) — this is the curated golden set diffed against documented semantics; the differential-vs-real-Tempo check is the Slice-8 headline.
 
 - [x] **Step 1: Author the corpus files** (one family per file, expected values hand-computed against the spec)
 
@@ -1090,7 +1090,7 @@ Author at minimum:
 Create `crates/traceql/tests/golden_corpus.rs`:
 
 ```rust
-use crabka_traceql::testkit::{load_fixture, run_golden_file};
+use krabka_traceql::testkit::{load_fixture, run_golden_file};
 
 macro_rules! golden {
     ($name:ident, $file:literal) => {
@@ -1111,19 +1111,19 @@ golden!(discovery, "discovery.json");
 
 `run_golden_file` parses the JSON (serde), loads the fixture spans into an `InMemorySpanStore`, dispatches each case by `kind` to `search`/`query_range`/`tag_names`/`tag_values`, and `assert!`s the normalized result equals `expected`. Implement it in the `pub mod testkit` crate module (declared `pub mod testkit;` in `lib.rs`, NOT `tests/support`) reusing the Slice-2 test double — Slice 8 imports `run_corpus_dir`/`Report` from this same module.
 
-Run: `cargo test -p crabka-traceql --test golden_corpus`
+Run: `cargo test -p krabka-traceql --test golden_corpus`
 Expected: initially may FAIL on a case where a hand-computed expectation reveals an implementation bug — fix the **implementation** (the relevant Phase A–E task's code), add a focused unit test next to it, re-run. Never edit `expected` to match a buggy engine.
 
 - [x] **Step 3: Run to verify it passes**
 
-Run: `cargo test -p crabka-traceql --test golden_corpus`
+Run: `cargo test -p krabka-traceql --test golden_corpus`
 Expected: PASS for all families.
 
 - [x] **Step 4: Commit**
 
 ```bash
-cargo fmt -p crabka-traceql
-cargo clippy -p crabka-traceql --all-targets
+cargo fmt -p krabka-traceql
+cargo clippy -p krabka-traceql --all-targets
 git add crates/traceql/
 git commit -m "test(traceql): curated golden-query corpus + harness diffed against documented semantics"
 ```
@@ -1138,8 +1138,8 @@ git commit -m "test(traceql): curated golden-query corpus + harness diffed again
 
 Run:
 ```bash
-cargo test -p crabka-traceql
-cargo test -p crabka-traceql --features experimental
+cargo test -p krabka-traceql
+cargo test -p krabka-traceql --features experimental
 ```
 Expected: all PASS.
 
@@ -1147,9 +1147,9 @@ Expected: all PASS.
 
 Run:
 ```bash
-cargo clippy -p crabka-traceql --all-targets
-cargo clippy -p crabka-traceql --all-targets --features experimental
-cargo fmt -p crabka-traceql --check
+cargo clippy -p krabka-traceql --all-targets
+cargo clippy -p krabka-traceql --all-targets --features experimental
+cargo fmt -p krabka-traceql --check
 ```
 Expected: no warnings, formatting clean.
 
@@ -1177,7 +1177,7 @@ git commit -m "chore(traceql): clippy/fmt clean across feature combinations for 
 
 **Consumes (Slice 2, verbatim):** `TraceqlEngine<S: SpanStore>` (+ `new`/`search`/`query_range`/`trace_by_id`), `EngineOpts`, `#[async_trait] SpanStore` (`scan`/`trace_by_id`/`tag_names`/`tag_values`), `ScanResult { ctx, span_table }`, the result model (`SearchResponse`/`TraceResult`/`SpanSet`/`SpanRef`, `TraceSpans`, `TagScope`/`ScopedTag`/`TypedValue`/`AttrValue`, `SpanMatcher`, `TraceMetricsResponse`, `TraceqlError`), and the **`SpanStructuralJoin`** lowering for the core structural ops. Nested-set columns (`nested_set_left`/`right`/`parent_id`) come from slice 1's block-builder — this slice only reads them through the join predicates. The contract-vs-spelling escape hatch (adapt call sites if Slice 2 renamed a symbol; pin behavior, not names) is stated in Dependency & slice roadmap.
 
-**Produces (this slice defines / completes):** `StructuralMode` (Match/Negated/Union) on `SpanStructuralJoin`; the typed-coercion layer (`StaticType`, `coerce_predicate`, `anchor_regex`, `parse_duration_ns`, `status_to_int`, `kind_to_int`); pipeline completeness (`select`/`by`/`coalesce`/`with` + scalar aggregates); the TraceQL-metrics planner (`bucket_index`/`bucket_starts`, the metric-function lowerings, `TraceMetricsResponse` population with `trace_id` exemplars, `query_range` wiring); the tag-discovery engine surface (`TraceqlEngine::tag_names`/`tag_values`); `experimental_enabled()` + the `experimental` feature; and the golden corpus + harness. Slice 5's Tempo HTTP API is a pure projection of these onto the Tempo JSON shapes — no new public types leak past `crabka-traceql`.
+**Produces (this slice defines / completes):** `StructuralMode` (Match/Negated/Union) on `SpanStructuralJoin`; the typed-coercion layer (`StaticType`, `coerce_predicate`, `anchor_regex`, `parse_duration_ns`, `status_to_int`, `kind_to_int`); pipeline completeness (`select`/`by`/`coalesce`/`with` + scalar aggregates); the TraceQL-metrics planner (`bucket_index`/`bucket_starts`, the metric-function lowerings, `TraceMetricsResponse` population with `trace_id` exemplars, `query_range` wiring); the tag-discovery engine surface (`TraceqlEngine::tag_names`/`tag_values`); `experimental_enabled()` + the `experimental` feature; and the golden corpus + harness. Slice 5's Tempo HTTP API is a pure projection of these onto the Tempo JSON shapes — no new public types leak past `krabka-traceql`.
 
 **Churn-prone DataFusion API handling:** the negated/union lowerings need `JoinType::Left`/`LeftAnti`/`union`/`distinct` on `LogicalPlanBuilder`, the typed layer needs `array_has`/`regexp_match` (or equivalents), and the metrics layer needs per-bucket aggregates (`approx_percentile_cont`); each is given as **structure + `// verify against rev 0838a4d`** and pinned by a TraceQL-query→expected behavioral test, never by a fabricated upstream signature. The pure kernels (`bucket_index`/`bucket_starts`/`parse_duration_ns`/`status_to_int`/`kind_to_int`/`anchor_regex`) carry no DataFusion surface and are pinned directly.
 

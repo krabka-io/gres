@@ -14,8 +14,8 @@ pub(super) async fn execute_merge(
     ctes: &crate::cte::CteContext,
     stmt: &Statement,
     writes: &mut StatementWrites,
-) -> Result<(WriteOutcome, Vec<crabka_pgkv::WriteOp>), ExecError> {
-    use crabka_pgparser::ast::{MergeAction, MergeMatchKind, MergeSource};
+) -> Result<(WriteOutcome, Vec<krabka_pgkv::WriteOp>), ExecError> {
+    use krabka_pgparser::ast::{MergeAction, MergeMatchKind, MergeSource};
 
     let resolution = write_ctx.eval_ctx.resolution();
     let Statement::Merge {
@@ -37,7 +37,7 @@ pub(super) async fn execute_merge(
         table,
         SchemaDisposition::Reference,
     )?;
-    let t = crabka_pgcatalog::get_table(write_ctx.catalog_kv, table)?;
+    let t = krabka_pgcatalog::get_table(write_ctx.catalog_kv, table)?;
     for assignments in clauses.iter().filter_map(|clause| match &clause.action {
         MergeAction::Update(assignments) => Some(assignments.as_slice()),
         MergeAction::DoNothing | MergeAction::Insert { .. } | MergeAction::Delete => None,
@@ -52,7 +52,7 @@ pub(super) async fn execute_merge(
     let stamp = crate::scope::SystemColumns::of(Some(&refs), &t).stamp(t.id)?;
     let mut target_scope = Scope::single(&t, qualifier);
     stamp.extend_scope(&mut target_scope, qualifier);
-    let mut ops: Vec<crabka_pgkv::WriteOp> = Vec::new();
+    let mut ops: Vec<krabka_pgkv::WriteOp> = Vec::new();
 
     let read = write_ctx.read_ctx(ctes);
     let source_rel = match source {
@@ -60,14 +60,14 @@ pub(super) async fn execute_merge(
             let source_name = alias.as_deref().unwrap_or(&name.name);
             if source_name == qualifier {
                 return Err(ExecError::Remote(
-                    crabka_pgwire::error::PgError::error(
+                    krabka_pgwire::error::PgError::error(
                         "42712",
                         format!("name \"{source_name}\" specified more than once"),
                     )
                     .with_detail("The name is used both as MERGE target table and data source."),
                 ));
             }
-            let te = crabka_pgparser::ast::TableExpr::Table {
+            let te = krabka_pgparser::ast::TableExpr::Table {
                 name: name.clone(),
                 only: false,
                 alias: alias.clone(),
@@ -258,7 +258,7 @@ pub(super) async fn execute_merge(
             build_insert_row_with_subscripts(&t, &target_idx, indirections, &evaluated, ctx)?;
         let merge_insert_check = write_ctx.row_check(
             &t,
-            crabka_pgcatalog::policy::PolicyCommand::Insert,
+            krabka_pgcatalog::policy::PolicyCommand::Insert,
             &WriteContext::modified_columns(&t, &target_idx),
         )?;
         let Some(full) = crate::trigger::fire_before_row(
@@ -284,12 +284,12 @@ pub(super) async fn execute_merge(
         if !fk_ctx.is_empty() {
             writes.fk_checks.after_insert(&fk_ctx, rowid, &full)?;
         }
-        ops.push(crabka_pgkv::WriteOp::Put {
-            key: crabka_pgmvcc::version::version_key_xid(t.id, rowid, write_ctx.xid),
+        ops.push(krabka_pgkv::WriteOp::Put {
+            key: krabka_pgmvcc::version::version_key_xid(t.id, rowid, write_ctx.xid),
             value: encode_table_tuple(
                 &t,
                 write_ctx.xid,
-                crabka_pgmvcc::xid::INVALID_XID,
+                krabka_pgmvcc::xid::INVALID_XID,
                 write_ctx.command_id,
                 0,
                 &full,
@@ -391,7 +391,7 @@ pub(super) async fn execute_merge(
 }
 
 fn reject_merge_when_system_columns(
-    clauses: &[crabka_pgparser::ast::MergeWhen],
+    clauses: &[krabka_pgparser::ast::MergeWhen],
     target: &str,
 ) -> Result<(), ExecError> {
     let mut forbidden = None;
@@ -427,12 +427,12 @@ fn reject_merge_when_system_columns(
 /// source, though, so bind their expressions before execution rather than
 /// letting a NULL-filled joined row make an invalid reference look valid.
 fn validate_merge_clause_scopes(
-    clauses: &[crabka_pgparser::ast::MergeWhen],
+    clauses: &[krabka_pgparser::ast::MergeWhen],
     target: &Scope,
     source: &Scope,
     joined: &Scope,
 ) -> Result<(), ExecError> {
-    use crabka_pgparser::ast::{AssignmentValue, MergeAction, MergeMatchKind};
+    use krabka_pgparser::ast::{AssignmentValue, MergeAction, MergeMatchKind};
 
     let mut terminal_kinds = Vec::new();
     for clause in clauses {
@@ -513,7 +513,7 @@ fn merge_hidden_relation_error(error: ExecError, hidden: &HashSet<String>) -> Ex
 
 fn merge_row_touched_twice() -> ExecError {
     ExecError::Remote(
-        crabka_pgwire::error::PgError::error(
+        krabka_pgwire::error::PgError::error(
             "21000",
             "MERGE command cannot affect row a second time",
         )
@@ -523,12 +523,12 @@ fn merge_row_touched_twice() -> ExecError {
 
 /// The first `WHEN` clause of `kind` whose `AND` condition holds for this row.
 fn pick_merge_clause<'a>(
-    clauses: &'a [crabka_pgparser::ast::MergeWhen],
-    kind: crabka_pgparser::ast::MergeMatchKind,
+    clauses: &'a [krabka_pgparser::ast::MergeWhen],
+    kind: krabka_pgparser::ast::MergeMatchKind,
     scope: &Scope,
     row: &[Datum],
     ctx: &crate::clock::EvalCtx,
-) -> Result<Option<&'a crabka_pgparser::ast::MergeWhen>, ExecError> {
+) -> Result<Option<&'a krabka_pgparser::ast::MergeWhen>, ExecError> {
     for clause in clauses.iter().filter(|c| c.kind == kind) {
         if row_matches(clause.condition.as_ref(), scope, row, ctx)? {
             return Ok(Some(clause));
@@ -539,7 +539,7 @@ fn pick_merge_clause<'a>(
 
 struct MergeRowAction<'a> {
     table: &'a Table,
-    local_indexes: &'a [crabka_pgcatalog::Index],
+    local_indexes: &'a [krabka_pgcatalog::Index],
     fk: &'a crate::fk::StatementFkContext,
     ctes: &'a crate::cte::CteContext,
     scope: &'a Scope,
@@ -547,7 +547,7 @@ struct MergeRowAction<'a> {
     stamp: &'a crate::scope::SystemStamp,
     rowid: u64,
     joined: &'a [Datum],
-    action: &'a crabka_pgparser::ast::MergeAction,
+    action: &'a krabka_pgparser::ast::MergeAction,
     security: &'a MergeRowSecurity,
 }
 
@@ -579,7 +579,7 @@ struct MergeRowSecurity {
 
 impl MergeRowSecurity {
     fn compile(write_ctx: &WriteContext<'_>, table: &Table) -> Result<Self, ExecError> {
-        use crabka_pgcatalog::policy::PolicyCommand;
+        use krabka_pgcatalog::policy::PolicyCommand;
         let governor = write_ctx.governor(table);
         let compile = |command| {
             crate::rls::RowSecurityCheck::compile(
@@ -602,9 +602,9 @@ async fn apply_merge_row_action(
     write_ctx: &WriteContext<'_>,
     request: &MergeRowAction<'_>,
     writes: &mut StatementWrites,
-    ops: &mut Vec<crabka_pgkv::WriteOp>,
+    ops: &mut Vec<krabka_pgkv::WriteOp>,
 ) -> Result<Option<ReturnedRow>, ExecError> {
-    use crabka_pgparser::ast::MergeAction;
+    use krabka_pgparser::ast::MergeAction;
 
     let t = request.table;
     let ctx = write_ctx.eval_ctx;
@@ -649,7 +649,7 @@ async fn apply_merge_row_action(
                     table: t,
                     check: &write_ctx.row_check(
                         t,
-                        crabka_pgcatalog::policy::PolicyCommand::Update,
+                        krabka_pgcatalog::policy::PolicyCommand::Update,
                         &updated_columns,
                     )?,
                 },
@@ -734,8 +734,8 @@ async fn apply_merge_row_action(
                     .after_delete(request.fk, request.rowid, &cur_row)?;
             }
             if cur_xmin == write_ctx.xid {
-                ops.push(crabka_pgkv::WriteOp::Put {
-                    key: crabka_pgmvcc::version::version_key_xid(
+                ops.push(krabka_pgkv::WriteOp::Put {
+                    key: krabka_pgmvcc::version::version_key_xid(
                         t.id,
                         request.rowid,
                         write_ctx.xid,
@@ -750,8 +750,8 @@ async fn apply_merge_row_action(
                     ),
                 });
             } else {
-                ops.push(crabka_pgkv::WriteOp::Put {
-                    key: crabka_pgmvcc::version::version_key_xid(t.id, request.rowid, cur_key_xid),
+                ops.push(krabka_pgkv::WriteOp::Put {
+                    key: krabka_pgmvcc::version::version_key_xid(t.id, request.rowid, cur_key_xid),
                     value: encode_table_tuple(
                         t,
                         cur_xmin,

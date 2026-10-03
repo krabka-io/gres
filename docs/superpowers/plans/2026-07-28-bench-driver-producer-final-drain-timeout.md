@@ -84,7 +84,7 @@ BENCH_PRODUCER_FINAL_DRAIN_TIMEOUT_SECONDS=11
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-bench-driver producer_final_drain --locked
+  cargo test -p krabka-bench-driver producer_final_drain --locked
 ```
 
 - [ ] In `workload.rs`, replace the fixed constant with:
@@ -133,7 +133,7 @@ Instant::now() + final_drain_timeout.duration()
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-bench-driver producer_final_drain --locked
+  cargo test -p krabka-bench-driver producer_final_drain --locked
 test "$(rg -o 'Instant::now\\(\\) \\+ final_drain_timeout\\.duration\\(\\)' \
   crates/bench-driver/src/workload.rs | wc -l)" -eq 1
 if rg -n '^const PRODUCER_FINAL_DRAIN_TIMEOUT' crates/bench-driver/src/workload.rs; then
@@ -145,12 +145,12 @@ fi
 
 ```bash
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-bench-driver --all-targets --locked
+  cargo test -p krabka-bench-driver --all-targets --locked
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo clippy -p crabka-bench-driver --all-targets --locked -- -D warnings
+  cargo clippy -p krabka-bench-driver --all-targets --locked -- -D warnings
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo run -p crabka-bench-driver --bin crabka-bench-driver --locked -- --help
-test "$(target/debug/crabka-bench-driver --help | rg -c -- '--producer-final-drain-timeout-seconds')" -eq 1
+  cargo run -p krabka-bench-driver --bin krabka-bench-driver --locked -- --help
+test "$(target/debug/krabka-bench-driver --help | rg -c -- '--producer-final-drain-timeout-seconds')" -eq 1
 CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo +nightly fmt --all
 git diff --check
 git diff -- Cargo.lock

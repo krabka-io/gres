@@ -25,7 +25,7 @@
 use std::{cell::Cell, fmt::Write as _};
 
 use bigdecimal::{BigDecimal, One, RoundingMode, ToPrimitive, Zero};
-use crabka_pgtypes::{ArrayValue, Datum, ElemType, JsonbValue, TypeError};
+use krabka_pgtypes::{ArrayValue, Datum, ElemType, JsonbValue, TypeError};
 use jiff::ToSpan;
 
 use crate::error::{ExecError, SqlJsonError};
@@ -60,7 +60,7 @@ pub(crate) fn cast_datum(value: &Datum) -> Result<Datum, ExecError> {
         other => Err(TypeError::CannotCast {
             from: other
                 .column_type()
-                .map_or("unknown", crabka_pgtypes::ColumnType::name),
+                .map_or("unknown", krabka_pgtypes::ColumnType::name),
             to: "jsonpath",
         }
         .into()),
@@ -72,7 +72,7 @@ pub(crate) fn cast_array_datum(value: &Datum) -> Result<Datum, ExecError> {
     match value {
         Datum::Null => Ok(Datum::Null),
         Datum::Text(text) => {
-            let literal = crabka_pgtypes::array::parse_literal(text)?;
+            let literal = krabka_pgtypes::array::parse_literal(text)?;
             let elems = literal
                 .elements
                 .into_iter()
@@ -102,7 +102,7 @@ pub(crate) fn cast_array_datum(value: &Datum) -> Result<Datum, ExecError> {
         other => Err(TypeError::CannotCast {
             from: other
                 .column_type()
-                .map_or("unknown", crabka_pgtypes::ColumnType::name),
+                .map_or("unknown", krabka_pgtypes::ColumnType::name),
             to: "jsonpath[]",
         }
         .into()),
@@ -836,8 +836,8 @@ fn lex_number(chars: &[char], start: usize) -> Result<(BigDecimal, usize), ExecE
             "trailing junk after numeric literal at or near \"{text}\" of jsonpath input"
         )));
     }
-    let value = match crabka_pgtypes::numeric::parse(&text) {
-        Some(crabka_pgtypes::numeric::NumericValue::Finite(value)) => value,
+    let value = match krabka_pgtypes::numeric::parse(&text) {
+        Some(krabka_pgtypes::numeric::NumericValue::Finite(value)) => value,
         _ if !nondecimal && !text.contains('_') => {
             return Err(syntax(format!(
                 "trailing junk after numeric literal at or near \"{text}\" of jsonpath input"
@@ -2613,7 +2613,7 @@ impl Exec<'_> {
             None
         };
         let (left, right) = promote_temporal_pair(left, right, promotion_zone)?;
-        let Some(ord) = crabka_pgtypes::ops::compare(&left, &right).ok().flatten() else {
+        let Some(ord) = krabka_pgtypes::ops::compare(&left, &right).ok().flatten() else {
             return Ok(Tri::Unknown);
         };
         Ok(compare_ordering(op, ord))
@@ -2627,7 +2627,7 @@ fn align_jsonb(offset: usize) -> usize {
 /// PostgreSQL stores a jsonb numeric as a varlena `Numeric`: a 6-byte short
 /// header when the scale and base-10000 weight fit, otherwise an 8-byte header.
 fn jsonb_numeric_size(value: &BigDecimal) -> usize {
-    let text = crabka_pgtypes::numeric::finite_to_text(value);
+    let text = krabka_pgtypes::numeric::finite_to_text(value);
     let unsigned = text.strip_prefix('-').unwrap_or(&text);
     let (integer, fraction) = unsigned.split_once('.').unwrap_or((unsigned, ""));
     let integer = integer.trim_start_matches('0');
@@ -2856,7 +2856,7 @@ fn promote_temporal_pair(
     right: &Datum,
     time_zone: Option<&jiff::tz::TimeZone>,
 ) -> PathResult<(Datum, Datum)> {
-    use crabka_pgtypes::ColumnType;
+    use krabka_pgtypes::ColumnType;
 
     let (target, source) = match (left, right) {
         (Datum::Date(_), Datum::Timestamptz(_)) => (ColumnType::Timestamptz, left),
@@ -2881,9 +2881,9 @@ fn promote_temporal_pair(
             ),
         ));
     };
-    let left = crabka_pgtypes::cast::cast(left, target, time_zone)
+    let left = krabka_pgtypes::cast::cast(left, target, time_zone)
         .map_err(|error| PathError::new("22008", error.to_string()))?;
-    let right = crabka_pgtypes::cast::cast(right, target, time_zone)
+    let right = krabka_pgtypes::cast::cast(right, target, time_zone)
         .map_err(|error| PathError::new("22008", error.to_string()))?;
     Ok((left, right))
 }
@@ -2905,7 +2905,7 @@ fn temporal_name(value: &Datum) -> &'static str {
 /// This is why `$.a / 2` over `3` produces `1.5000000000000000` and not
 /// `1.5`.
 fn arith(op: ArithOp, l: &BigDecimal, r: &BigDecimal) -> PathResult<BigDecimal> {
-    use crabka_pgtypes::numeric::{self, NumericValue};
+    use krabka_pgtypes::numeric::{self, NumericValue};
 
     let (a, b) = (
         NumericValue::Finite(l.clone()),
@@ -2998,8 +2998,8 @@ fn scalar_method(
             }
             // `float8out` first, then back to numeric, so `.double()` reproduces
             // PostgreSQL's shortest-round-trip rendering (`'1.5'` → `1.5`).
-            let rendered = String::from_utf8(crabka_pgtypes::encoding::encode_text(
-                &crabka_pgtypes::Datum::Float8(value),
+            let rendered = String::from_utf8(krabka_pgtypes::encoding::encode_text(
+                &krabka_pgtypes::Datum::Float8(value),
                 &jiff::tz::TimeZone::UTC,
             ))
             .map_err(|_| invalid_for(name, &text, "double precision"))?;
@@ -3083,7 +3083,7 @@ fn scalar_method(
             }
             JsonbValue::Number(n) => Err(invalid_for(
                 name,
-                &crabka_pgtypes::numeric::finite_to_text(n),
+                &krabka_pgtypes::numeric::finite_to_text(n),
                 "boolean",
             )),
             JsonbValue::String(s) => match s.to_ascii_lowercase().as_str() {
@@ -3100,7 +3100,7 @@ fn scalar_method(
         },
         Method::String => Ok(JsonbValue::String(match item {
             JsonbValue::String(s) => s.clone(),
-            JsonbValue::Number(n) => crabka_pgtypes::numeric::finite_to_text(n),
+            JsonbValue::Number(n) => krabka_pgtypes::numeric::finite_to_text(n),
             JsonbValue::Bool(true) => "true".into(),
             JsonbValue::Bool(false) => "false".into(),
             _ => {
@@ -3152,7 +3152,7 @@ fn method_name(m: Method) -> &'static str {
 fn numeric_source(item: &JsonbValue, name: &'static str) -> PathResult<String> {
     match item {
         JsonbValue::String(s) => Ok(s.clone()),
-        JsonbValue::Number(n) => Ok(crabka_pgtypes::numeric::finite_to_text(n)),
+        JsonbValue::Number(n) => Ok(krabka_pgtypes::numeric::finite_to_text(n)),
         _ => Err(PathError::new(
             "22036",
             format!("jsonpath item method {name} can only be applied to a string or numeric value"),
@@ -3240,7 +3240,7 @@ fn datetime_method(
     time_zone: Option<&jiff::tz::TimeZone>,
     allow_zone_conversions: bool,
 ) -> PathResult<Item> {
-    use crabka_pgtypes::{ColumnType, Datum, TemporalType};
+    use krabka_pgtypes::{ColumnType, Datum, TemporalType};
 
     let name = method_name(m);
     let format_name = name.trim_start_matches('.').trim_end_matches("()");
@@ -3251,9 +3251,9 @@ fn datetime_method(
         ));
     };
     if let Some(template) = template {
-        let fields = crabka_pgtypes::datetime::template_fields(template);
+        let fields = krabka_pgtypes::datetime::template_fields(template);
         let parsed =
-            crabka_pgtypes::datetime::parse_by_template_exact(template, text).map_err(|e| {
+            krabka_pgtypes::datetime::parse_by_template_exact(template, text).map_err(|e| {
                 let error = ExecError::from(e).into_pg();
                 let sqlstate = match error.code.as_str() {
                     "22008" => "22008",
@@ -3326,7 +3326,7 @@ fn datetime_method(
             (true, true, false) => ColumnType::Timestamp,
             (false, false, _) => return Err(invalid_for(name, text, "datetime")),
         };
-        let datum = crabka_pgtypes::cast::cast(
+        let datum = krabka_pgtypes::cast::cast(
             &Datum::Text(rendered.clone()),
             target,
             &jiff::tz::TimeZone::UTC,
@@ -3411,20 +3411,20 @@ fn datetime_method(
                 ),
             ));
         }
-        let parsed = match crabka_pgtypes::cast::cast(&source, source_type, tz) {
+        let parsed = match krabka_pgtypes::cast::cast(&source, source_type, tz) {
             Ok(parsed) => parsed,
             Err(_) if source_type == ColumnType::Date && date_exceeds_civil_range(text) => {
-                Datum::Date(crabka_pgtypes::datetime::DATE_INFINITY)
+                Datum::Date(krabka_pgtypes::datetime::DATE_INFINITY)
             }
             Err(_) => return Err(temporal_format_error(m, format_name, text)),
         };
-        crabka_pgtypes::cast::cast(&parsed, target, tz)
+        krabka_pgtypes::cast::cast(&parsed, target, tz)
             .map_err(|_| temporal_format_error(m, format_name, text))?
     } else {
-        match crabka_pgtypes::cast::cast(&source, target, tz) {
+        match krabka_pgtypes::cast::cast(&source, target, tz) {
             Ok(parsed) => parsed,
             Err(_) if target == ColumnType::Date && date_exceeds_civil_range(text) => {
-                Datum::Date(crabka_pgtypes::datetime::DATE_INFINITY)
+                Datum::Date(krabka_pgtypes::datetime::DATE_INFINITY)
             }
             Err(_) => return Err(temporal_format_error(m, format_name, text)),
         }
@@ -3438,7 +3438,7 @@ fn datetime_method(
                 Method::TimestampTz => TemporalType::Timestamptz,
                 _ => unreachable!("only explicit temporal methods accept a precision"),
             };
-            crabka_pgtypes::cast::cast(
+            krabka_pgtypes::cast::cast(
                 &parsed,
                 ColumnType::Temporal(temporal, precision.min(6) as u8),
                 tz,
@@ -3450,7 +3450,7 @@ fn datetime_method(
     let render_tz = if matches!(source_type, ColumnType::Timestamptz)
         && matches!(target, ColumnType::Timestamptz)
     {
-        let Datum::Timetz(value) = crabka_pgtypes::cast::cast(&source, ColumnType::Timetz, tz)
+        let Datum::Timetz(value) = krabka_pgtypes::cast::cast(&source, ColumnType::Timetz, tz)
             .map_err(|_| temporal_format_error(m, format_name, text))?
         else {
             unreachable!("a timestamp with time zone has a time with time zone projection")
@@ -3460,7 +3460,7 @@ fn datetime_method(
         tz.clone()
     };
     let mut rendered =
-        String::from_utf8(crabka_pgtypes::encoding::encode_text(&parsed, &render_tz))
+        String::from_utf8(krabka_pgtypes::encoding::encode_text(&parsed, &render_tz))
             .map_err(|_| PathError::new("22007", format!("{format_name} produced invalid text")))?;
     // A jsonpath datetime renders ISO-8601 with a `T` separator, unlike SQL's
     // space-separated `timestamp` output.
@@ -3569,7 +3569,7 @@ fn validate_like_regex(pattern: &str, flags: &str) -> Result<(), ExecError> {
             'i' | 's' | 'm' | 'x' | 'q' => {}
             other => {
                 return Err(ExecError::Remote(
-                    crabka_pgwire::error::PgError::error(
+                    krabka_pgwire::error::PgError::error(
                         "42601",
                         "invalid input syntax for type jsonpath",
                     )

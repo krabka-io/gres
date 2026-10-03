@@ -5,12 +5,12 @@
 //! a cancel request with the session it belongs to. `Engine::connect_with_pid`
 //! carries that id into the engine, so this file pins the two halves of the
 //! pairing: the answer is the id the session was opened with, and no two
-//! sessions share one. `crabka-pgwire`'s `listen_notify` suite pins the wire
+//! sessions share one. `krabka-pgwire`'s `listen_notify` suite pins the wire
 //! half, that the announced id is the one handed to `connect_with_pid`.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Cell, Engine, FieldDescription, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Cell, Engine, FieldDescription, QueryResult, Session};
 
 /// The one row and one column `sql` returns, plus how that column is described.
 async fn scalar(session: &mut SqlSession, sql: &str) -> (FieldDescription, String) {

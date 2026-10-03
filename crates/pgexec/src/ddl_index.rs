@@ -5,8 +5,8 @@ use super::{ColumnType, ExecError, HashSet, Kv, Scope, Table, available_index_na
 pub(crate) fn index_name_or_default(
     kv: &dyn Kv,
     explicit: Option<&str>,
-    table: &crabka_pgcatalog::RelationName,
-    keys: &[crabka_pgparser::ast::IndexKey],
+    table: &krabka_pgcatalog::RelationName,
+    keys: &[krabka_pgparser::ast::IndexKey],
 ) -> String {
     if let Some(name) = explicit {
         return name.to_string();
@@ -22,7 +22,7 @@ pub(crate) fn index_name_or_default(
 /// The durable key list an index can be built from. Expression source uses the
 /// catalog's NUL-prefixed encoding, which cannot collide with a SQL identifier.
 pub(crate) fn index_key_columns(
-    keys: &[crabka_pgparser::ast::IndexKey],
+    keys: &[krabka_pgparser::ast::IndexKey],
     _predicate: Option<&str>,
 ) -> Result<Vec<String>, ExecError> {
     keys.iter()
@@ -30,7 +30,7 @@ pub(crate) fn index_key_columns(
             Ok(key
                 .column
                 .clone()
-                .unwrap_or_else(|| crabka_pgcatalog::expression_index_key(&key.text)))
+                .unwrap_or_else(|| krabka_pgcatalog::expression_index_key(&key.text)))
         })
         .collect()
 }
@@ -38,14 +38,14 @@ pub(crate) fn index_key_columns(
 /// Catalog metadata that stays aligned with [`index_key_columns`].
 #[must_use]
 pub(crate) fn index_key_options(
-    keys: &[crabka_pgparser::ast::IndexKey],
-    method: crabka_pgcatalog::IndexMethod,
-) -> Result<Vec<crabka_pgcatalog::IndexKeyOptions>, ExecError> {
+    keys: &[krabka_pgparser::ast::IndexKey],
+    method: krabka_pgcatalog::IndexMethod,
+) -> Result<Vec<krabka_pgcatalog::IndexKeyOptions>, ExecError> {
     keys.iter()
         .map(|key| {
             let opclass_options = match (&key.opclass, &key.opclass_options) {
                 (Some(opclass), Some(options))
-                    if method == crabka_pgcatalog::IndexMethod::Gist
+                    if method == krabka_pgcatalog::IndexMethod::Gist
                         && opclass
                             .rsplit('.')
                             .next()
@@ -60,7 +60,7 @@ pub(crate) fn index_key_options(
                 }
                 (_, options) => options.clone(),
             };
-            Ok(crabka_pgcatalog::IndexKeyOptions {
+            Ok(krabka_pgcatalog::IndexKeyOptions {
                 descending: key.descending,
                 nulls_first: key.nulls_first.unwrap_or(key.descending),
                 opclass: key.opclass.clone(),
@@ -120,7 +120,7 @@ pub(crate) fn validate_index_predicate(
     let Some(predicate) = predicate else {
         return Ok(());
     };
-    let expression = crabka_pgparser::parser::parse_expression(predicate)?;
+    let expression = krabka_pgparser::parser::parse_expression(predicate)?;
     let ctes = crate::cte::CteContext::empty();
     let typed = crate::subquery::resolve_types_in_expr(kv, resolution, &expression, &ctes)?;
     let scope = Scope::single(table, &table.name.name);
@@ -129,11 +129,11 @@ pub(crate) fn validate_index_predicate(
     crate::grouping::visit_expr(&expression, &mut |node| {
         invalid |= matches!(
             node,
-            crabka_pgparser::ast::Expr::ScalarSubquery(_)
-                | crabka_pgparser::ast::Expr::Exists(_)
-                | crabka_pgparser::ast::Expr::InSubquery { .. }
-                | crabka_pgparser::ast::Expr::Quantified { .. }
-        ) || matches!(node, crabka_pgparser::ast::Expr::Func(call) if !crate::routine::is_immutable_call(kv, &call.name));
+            krabka_pgparser::ast::Expr::ScalarSubquery(_)
+                | krabka_pgparser::ast::Expr::Exists(_)
+                | krabka_pgparser::ast::Expr::InSubquery { .. }
+                | krabka_pgparser::ast::Expr::Quantified { .. }
+        ) || matches!(node, krabka_pgparser::ast::Expr::Func(call) if !crate::routine::is_immutable_call(kv, &call.name));
     });
     if invalid {
         return Err(ExecError::InvalidObjectDefinition(
@@ -147,12 +147,12 @@ pub(crate) fn validate_index_expressions(
     kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
     table: &Table,
-    keys: &[crabka_pgparser::ast::IndexKey],
+    keys: &[krabka_pgparser::ast::IndexKey],
     unique: bool,
-    placement: crabka_pgcatalog::IndexPlacement,
-    method: crabka_pgcatalog::IndexMethod,
+    placement: krabka_pgcatalog::IndexPlacement,
+    method: krabka_pgcatalog::IndexMethod,
 ) -> Result<(), ExecError> {
-    use crabka_pgparser::ast::Expr;
+    use krabka_pgparser::ast::Expr;
 
     let expressions: Vec<&str> = keys
         .iter()
@@ -164,15 +164,15 @@ pub(crate) fn validate_index_expressions(
     // B-tree expression keys use the same immutable evaluator as ordinary
     // keys. The remaining access methods are catalog-only for expressions.
     if (unique
-        && (placement != crabka_pgcatalog::IndexPlacement::Local
-            || method != crabka_pgcatalog::IndexMethod::Btree))
+        && (placement != krabka_pgcatalog::IndexPlacement::Local
+            || method != krabka_pgcatalog::IndexMethod::Btree))
         || (!unique
-            && (placement != crabka_pgcatalog::IndexPlacement::Local
+            && (placement != krabka_pgcatalog::IndexPlacement::Local
                 || !matches!(
                     method,
-                    crabka_pgcatalog::IndexMethod::Btree
-                        | crabka_pgcatalog::IndexMethod::Gist
-                        | crabka_pgcatalog::IndexMethod::Spgist
+                    krabka_pgcatalog::IndexMethod::Btree
+                        | krabka_pgcatalog::IndexMethod::Gist
+                        | krabka_pgcatalog::IndexMethod::Spgist
                 )))
     {
         return Err(ExecError::Unsupported(
@@ -181,7 +181,7 @@ pub(crate) fn validate_index_expressions(
     }
     let scope = Scope::single(table, &table.name.name);
     for source in expressions {
-        let expr = crabka_pgparser::parser::parse_expression(source)?;
+        let expr = krabka_pgparser::parser::parse_expression(source)?;
         let ctes = crate::cte::CteContext::empty();
         let typed = crate::subquery::resolve_types_in_expr(kv, resolution, &expr, &ctes)?;
         crate::eval::infer_type(&typed, &scope)?;
@@ -208,18 +208,18 @@ pub(crate) fn validate_index_opclasses(
     kv: &dyn Kv,
     resolution: &crate::relname::ResolutionScope,
     table: &Table,
-    keys: &[crabka_pgparser::ast::IndexKey],
-    method: crabka_pgcatalog::IndexMethod,
+    keys: &[krabka_pgparser::ast::IndexKey],
+    method: krabka_pgcatalog::IndexMethod,
 ) -> Result<(), ExecError> {
     let method_name = index_method_name(method);
     let method_oid = match method {
-        crabka_pgcatalog::IndexMethod::Btree => crate::catalog_rel::BTREE_AM_OID,
-        crabka_pgcatalog::IndexMethod::Hash => crate::catalog_rel::HASH_AM_OID,
-        crabka_pgcatalog::IndexMethod::Gist => crate::catalog_rel::GIST_AM_OID,
-        crabka_pgcatalog::IndexMethod::Gin => crate::catalog_rel::GIN_AM_OID,
-        crabka_pgcatalog::IndexMethod::Spgist => crate::catalog_rel::SPGIST_AM_OID,
+        krabka_pgcatalog::IndexMethod::Btree => crate::catalog_rel::BTREE_AM_OID,
+        krabka_pgcatalog::IndexMethod::Hash => crate::catalog_rel::HASH_AM_OID,
+        krabka_pgcatalog::IndexMethod::Gist => crate::catalog_rel::GIST_AM_OID,
+        krabka_pgcatalog::IndexMethod::Gin => crate::catalog_rel::GIN_AM_OID,
+        krabka_pgcatalog::IndexMethod::Spgist => crate::catalog_rel::SPGIST_AM_OID,
     };
-    let user_classes = crabka_pgcatalog::list_operator_classes(kv)?;
+    let user_classes = krabka_pgcatalog::list_operator_classes(kv)?;
     let visible_schemas = resolution.visible_schemas(kv)?;
     for key in keys {
         let Some(written) = key.opclass.as_deref() else {
@@ -233,7 +233,7 @@ pub(crate) fn validate_index_opclasses(
                         .ty
                 }
                 None => {
-                    let expression = crabka_pgparser::parser::parse_expression(&key.text)?;
+                    let expression = krabka_pgparser::parser::parse_expression(&key.text)?;
                     let ctes = crate::cte::CteContext::empty();
                     let typed =
                         crate::subquery::resolve_types_in_expr(kv, resolution, &expression, &ctes)?;
@@ -297,7 +297,7 @@ pub(crate) fn validate_index_opclasses(
                     .ty
             }
             None => {
-                let expression = crabka_pgparser::parser::parse_expression(&key.text)?;
+                let expression = krabka_pgparser::parser::parse_expression(&key.text)?;
                 let ctes = crate::cte::CteContext::empty();
                 let typed =
                     crate::subquery::resolve_types_in_expr(kv, resolution, &expression, &ctes)?;
@@ -321,9 +321,9 @@ pub(crate) fn index_opclass_accepts_type(input_oid: u32, ty: ColumnType) -> bool
     input_oid == ty.oid()
         || matches!(
             input_oid,
-            crabka_pgtypes::oids::TEXT
-                | crabka_pgtypes::oids::BPCHAR
-                | crabka_pgtypes::oids::VARCHAR
+            krabka_pgtypes::oids::TEXT
+                | krabka_pgtypes::oids::BPCHAR
+                | krabka_pgtypes::oids::VARCHAR
         ) && matches!(
             ty,
             ColumnType::Text | ColumnType::Varchar(_) | ColumnType::Char(_)
@@ -332,7 +332,7 @@ pub(crate) fn index_opclass_accepts_type(input_oid: u32, ty: ColumnType) -> bool
 
 pub(crate) fn validate_default_index_opclass(
     ty: ColumnType,
-    method: crabka_pgcatalog::IndexMethod,
+    method: krabka_pgcatalog::IndexMethod,
 ) -> Result<(), ExecError> {
     // `json` and `xml` have no operator class for ANY access method — neither
     // has an equality operator to build one on — so unlike `jsonpath` they are
@@ -348,7 +348,7 @@ pub(crate) fn validate_default_index_opclass(
     if ty.storage_type() == ColumnType::JsonPath
         && matches!(
             method,
-            crabka_pgcatalog::IndexMethod::Btree | crabka_pgcatalog::IndexMethod::Hash
+            krabka_pgcatalog::IndexMethod::Btree | krabka_pgcatalog::IndexMethod::Hash
         )
     {
         return Err(ExecError::UndefinedObject(format!(
@@ -362,7 +362,7 @@ pub(crate) fn validate_default_index_opclass(
     // arithmetic and so have no sort order for a btree to hold. `x xid UNIQUE`
     // and `x xid PRIMARY KEY` fail for the same reason, since both build one.
     if matches!(ty.storage_type(), ColumnType::Xid | ColumnType::Cid)
-        && method == crabka_pgcatalog::IndexMethod::Btree
+        && method == krabka_pgcatalog::IndexMethod::Btree
     {
         return Err(ExecError::UndefinedObject(format!(
             "data type {} has no default operator class for access method \"{}\"",
@@ -377,13 +377,13 @@ pub(crate) fn validate_index_method(
     table: &Table,
     columns: &[String],
     unique: bool,
-    placement: crabka_pgcatalog::IndexPlacement,
-    method: crabka_pgcatalog::IndexMethod,
+    placement: krabka_pgcatalog::IndexPlacement,
+    method: krabka_pgcatalog::IndexMethod,
 ) -> Result<(), ExecError> {
-    if method == crabka_pgcatalog::IndexMethod::Btree {
+    if method == krabka_pgcatalog::IndexMethod::Btree {
         return Ok(());
     }
-    if method != crabka_pgcatalog::IndexMethod::Gin {
+    if method != krabka_pgcatalog::IndexMethod::Gin {
         if unique {
             return Err(ExecError::Unsupported(format!(
                 "access method {} does not support unique indexes",
@@ -397,7 +397,7 @@ pub(crate) fn validate_index_method(
             "access method gin does not support unique indexes".into(),
         ));
     }
-    if placement != crabka_pgcatalog::IndexPlacement::Local {
+    if placement != krabka_pgcatalog::IndexPlacement::Local {
         return Err(ExecError::Unsupported(
             "global GIN indexes are not supported".into(),
         ));
@@ -418,12 +418,12 @@ pub(crate) fn validate_index_method(
     Ok(())
 }
 
-pub(crate) fn index_method_name(method: crabka_pgcatalog::IndexMethod) -> &'static str {
+pub(crate) fn index_method_name(method: krabka_pgcatalog::IndexMethod) -> &'static str {
     match method {
-        crabka_pgcatalog::IndexMethod::Btree => "btree",
-        crabka_pgcatalog::IndexMethod::Hash => "hash",
-        crabka_pgcatalog::IndexMethod::Gist => "gist",
-        crabka_pgcatalog::IndexMethod::Gin => "gin",
-        crabka_pgcatalog::IndexMethod::Spgist => "spgist",
+        krabka_pgcatalog::IndexMethod::Btree => "btree",
+        krabka_pgcatalog::IndexMethod::Hash => "hash",
+        krabka_pgcatalog::IndexMethod::Gist => "gist",
+        krabka_pgcatalog::IndexMethod::Gin => "gin",
+        krabka_pgcatalog::IndexMethod::Spgist => "spgist",
     }
 }

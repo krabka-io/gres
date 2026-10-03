@@ -5,8 +5,8 @@
 //! oracle.
 
 use assert2::assert;
-use crabka_pgexec::SqlEngine;
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::SqlEngine;
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 async fn run(s: &mut impl Session, sql: &str) -> QueryResult {
     s.simple_query(sql)

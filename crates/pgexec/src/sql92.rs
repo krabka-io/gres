@@ -13,7 +13,7 @@
 //! silently sorts every row equal. A unary `+`, by contrast, folds into nothing:
 //! `ORDER BY +1` is the operator expression `+1` and sorts by a constant.
 
-use crabka_pgparser::ast::{Expr, UnaryOp};
+use krabka_pgparser::ast::{Expr, UnaryOp};
 
 use crate::error::ExecError;
 
@@ -138,7 +138,7 @@ fn negatable(expr: &Expr) -> Option<Constant> {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgparser::ast::{BinaryOp, Expr, UnaryOp};
+    use krabka_pgparser::ast::{BinaryOp, Expr, UnaryOp};
 
     use super::*;
 

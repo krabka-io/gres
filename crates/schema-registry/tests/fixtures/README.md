@@ -8,7 +8,7 @@ Schema Registry implementation. Do **not** hand-edit them.
 ## Provenance
 
 - **Image:** `mirror.gcr.io/confluentinc/cp-schema-registry:7.4.0`
-- **Broker:** in-process `crabka-broker`. It listens on `0.0.0.0:9092` and
+- **Broker:** in-process `krabka-broker`. It listens on `0.0.0.0:9092` and
   advertises `host.docker.internal:9092`. The container reaches it with
   `--add-host=host.docker.internal:host-gateway`.
 - **Captured:** 2026-06-05
@@ -16,7 +16,7 @@ Schema Registry implementation. Do **not** hand-edit them.
   (`#[ignore]`). Regenerate with:
 
   ```text
-  cargo test -p crabka-schema-registry --test capture_fixtures -- --ignored --nocapture
+  cargo test -p krabka-schema-registry --test capture_fixtures -- --ignored --nocapture
   ```
 
 ## Schemas registered

@@ -1,6 +1,6 @@
-use crabka_pgkv::Kv;
-use crabka_pgparser::ast::{QueryBody, QueryExpr, SetExpr};
-use crabka_pgwire::engine::FieldDescription;
+use krabka_pgkv::Kv;
+use krabka_pgparser::ast::{QueryBody, QueryExpr, SetExpr};
+use krabka_pgwire::engine::FieldDescription;
 
 use crate::{clock::EvalCtx, error::ExecError, join::Relation, scope::Scope, subquery::SubCtx};
 
@@ -80,7 +80,7 @@ fn simple_cte_limit(q: &QueryExpr) -> Option<(&str, usize)> {
         return None;
     };
     let [
-        crabka_pgparser::ast::TableExpr::Table {
+        krabka_pgparser::ast::TableExpr::Table {
             name,
             only: false,
             columns: None,
@@ -96,12 +96,12 @@ fn simple_cte_limit(q: &QueryExpr) -> Option<(&str, usize)> {
         || q.offset.is_some()
         || q.with_ties
         || q.locking.is_some()
-        || !matches!(q.limit, Some(crabka_pgparser::ast::Expr::IntLiteral(_)))
+        || !matches!(q.limit, Some(krabka_pgparser::ast::Expr::IntLiteral(_)))
         || !matches!(
             select.projection.as_slice(),
-            [crabka_pgparser::ast::SelectItem::Wildcard]
+            [krabka_pgparser::ast::SelectItem::Wildcard]
         )
-        || !matches!(select.distinct, crabka_pgparser::ast::DistinctClause::All)
+        || !matches!(select.distinct, krabka_pgparser::ast::DistinctClause::All)
         || select.filter.is_some()
         || !select.group_by.is_empty()
         || select.grouping.is_some()
@@ -111,7 +111,7 @@ fn simple_cte_limit(q: &QueryExpr) -> Option<(&str, usize)> {
     {
         return None;
     }
-    let crabka_pgparser::ast::Expr::IntLiteral(limit) = q.limit.as_ref()? else {
+    let krabka_pgparser::ast::Expr::IntLiteral(limit) = q.limit.as_ref()? else {
         return None;
     };
     limit.parse().ok().map(|limit| (name.name.as_str(), limit))
@@ -178,7 +178,7 @@ fn describe_query_expr_inner(
             let scope = crate::window::describe_scope(s, &scope)?;
             let (mut fields, _exprs, _tys) = crate::exec::resolve_projection(&projection, &scope)?;
             for (field, item) in fields.iter_mut().zip(&s.projection) {
-                if let crabka_pgparser::ast::SelectItem::Expr { expr, alias } = item {
+                if let krabka_pgparser::ast::SelectItem::Expr { expr, alias } = item {
                     field.name = alias
                         .clone()
                         .unwrap_or_else(|| crate::exec::derived_name(expr));
@@ -212,7 +212,7 @@ fn describe_query_expr_inner(
 pub(crate) fn relation_to_rows_result(
     rel: Relation,
     ctx: &EvalCtx,
-) -> crabka_pgwire::engine::QueryResult {
+) -> krabka_pgwire::engine::QueryResult {
     let fields = rel
         .scope
         .columns
@@ -224,7 +224,7 @@ pub(crate) fn relation_to_rows_result(
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgwire::engine::{Engine, QueryResult, Session};
+    use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
     use crate::SqlEngine;
 

@@ -1,15 +1,15 @@
 //! `PostgreSQL` foreign-data wrapper that exposes Crabka Kafka topics as SQL tables.
 use std::sync::Arc;
 
-use crabka_client_admin::AdminClient;
-use crabka_pgcatalog::{Column, ForeignServer, Table, UserMapping};
-use crabka_pgexec::{
+use krabka_client_admin::AdminClient;
+use krabka_pgcatalog::{Column, ForeignServer, Table, UserMapping};
+use krabka_pgexec::{
     ExecError,
     clock::EvalCtx,
     foreign::{ForeignScanner, ImportFilter, ImportedTable, ScanBounds},
 };
-use crabka_pgtypes::{ColumnType, Datum};
-use crabka_schema_serde::{CacheConfig, RegistryClient, SchemaCache};
+use krabka_pgtypes::{ColumnType, Datum};
+use krabka_schema_serde::{CacheConfig, RegistryClient, SchemaCache};
 
 mod config;
 pub mod decode;
@@ -20,7 +20,7 @@ pub mod source;
 pub mod types;
 
 pub use config::{ConnProfile, ServerProfile, resolve, resolve_server};
-pub use crabka_schema_serde::SchemaFetchRetryPolicy;
+pub use krabka_schema_serde::SchemaFetchRetryPolicy;
 pub use decode::{DecodedValue, FdwDecodePolicy, Wire, decode_value, decode_value_with_policy};
 pub use error::KafkaFdwError;
 pub use source::{
@@ -48,14 +48,14 @@ fn envelope_columns() -> Vec<Column> {
 /// server configuration.
 ///
 /// The engine registers it with
-/// [`crabka_pgexec::SqlEngine::set_foreign_scanner`].
+/// [`krabka_pgexec::SqlEngine::set_foreign_scanner`].
 #[derive(Debug, Default)]
 pub struct KafkaFdw {
     default_bootstrap: Option<String>,
-    broker_dns_timeout: crabka_client_core::ClientDnsTimeout,
-    dispatch_queue_capacity: crabka_client_core::ConnectionDispatchQueueCapacity,
-    frame_max: crabka_client_core::ClientFrameMax,
-    fetch_min: crabka_client_core::FetchMinBytes,
+    broker_dns_timeout: krabka_client_core::ClientDnsTimeout,
+    dispatch_queue_capacity: krabka_client_core::ConnectionDispatchQueueCapacity,
+    frame_max: krabka_client_core::ClientFrameMax,
+    fetch_min: krabka_client_core::FetchMinBytes,
     scan_policy: FdwScanPolicy,
     decode_policy: FdwDecodePolicy,
     schema_fetch_retry_policy: SchemaFetchRetryPolicy,
@@ -67,10 +67,10 @@ impl KafkaFdw {
     pub fn with_defaults(default_bootstrap: Option<String>) -> Self {
         Self {
             default_bootstrap,
-            broker_dns_timeout: crabka_client_core::ClientDnsTimeout::default(),
-            dispatch_queue_capacity: crabka_client_core::ConnectionDispatchQueueCapacity::default(),
-            frame_max: crabka_client_core::ClientFrameMax::default(),
-            fetch_min: crabka_client_core::FetchMinBytes::default(),
+            broker_dns_timeout: krabka_client_core::ClientDnsTimeout::default(),
+            dispatch_queue_capacity: krabka_client_core::ConnectionDispatchQueueCapacity::default(),
+            frame_max: krabka_client_core::ClientFrameMax::default(),
+            fetch_min: krabka_client_core::FetchMinBytes::default(),
             scan_policy: FdwScanPolicy::default(),
             decode_policy: FdwDecodePolicy::default(),
             schema_fetch_retry_policy: SchemaFetchRetryPolicy::default(),
@@ -81,7 +81,7 @@ impl KafkaFdw {
     #[must_use]
     pub fn with_broker_dns_timeout(
         mut self,
-        timeout: crabka_client_core::ClientDnsTimeout,
+        timeout: krabka_client_core::ClientDnsTimeout,
     ) -> Self {
         self.broker_dns_timeout = timeout;
         self
@@ -89,7 +89,7 @@ impl KafkaFdw {
 
     /// Returns the broker DNS lookup deadline for this scanner.
     #[must_use]
-    pub fn broker_dns_timeout(&self) -> crabka_client_core::ClientDnsTimeout {
+    pub fn broker_dns_timeout(&self) -> krabka_client_core::ClientDnsTimeout {
         self.broker_dns_timeout
     }
 
@@ -97,9 +97,9 @@ impl KafkaFdw {
     #[must_use]
     pub fn with_client_resource_policy(
         mut self,
-        dispatch_queue_capacity: crabka_client_core::ConnectionDispatchQueueCapacity,
-        frame_max: crabka_client_core::ClientFrameMax,
-        fetch_min: crabka_client_core::FetchMinBytes,
+        dispatch_queue_capacity: krabka_client_core::ConnectionDispatchQueueCapacity,
+        frame_max: krabka_client_core::ClientFrameMax,
+        fetch_min: krabka_client_core::FetchMinBytes,
     ) -> Self {
         self.dispatch_queue_capacity = dispatch_queue_capacity;
         self.frame_max = frame_max;
@@ -185,7 +185,7 @@ impl ForeignScanner for KafkaFdw {
         _ctx: &EvalCtx,
     ) -> Result<Vec<Vec<Datum>>, ExecError> {
         // Ensure the rustcrypto TLS provider is the process default before any
-        // crabka-client TLS handshake (idempotent).
+        // krabka-client TLS handshake (idempotent).
         provider::install_default_provider();
 
         let foreign = table.foreign.as_ref().ok_or_else(|| {
@@ -227,7 +227,7 @@ impl ForeignScanner for KafkaFdw {
         filter: &ImportFilter,
     ) -> Result<Vec<ImportedTable>, ExecError> {
         // Idempotent: ensure the rustcrypto TLS provider is installed before any
-        // crabka-client TLS handshake.
+        // krabka-client TLS handshake.
         provider::install_default_provider();
 
         // Resolve bootstrap + registry URL from the server only — IMPORT has no
@@ -240,16 +240,16 @@ impl ForeignScanner for KafkaFdw {
             tokio::runtime::Handle::current().block_on(async {
                 // Enumerate every topic via the admin metadata RPC (empty topic
                 // list = all topics, per Kafka semantics).
-                let mut options = crabka_client_core::ConnectionOptions {
-                    client_id: "crabka-fdw".into(),
+                let mut options = krabka_client_core::ConnectionOptions {
+                    client_id: "krabka-fdw".into(),
                     dns_timeout: self.broker_dns_timeout,
                     dispatch_queue_capacity: self.dispatch_queue_capacity,
                     frame_max: self.frame_max,
                     security: profile.security.clone().map(Box::new),
-                    ..crabka_client_core::ConnectionOptions::default()
+                    ..krabka_client_core::ConnectionOptions::default()
                 };
-                options.connect_timeout = crabka_units::secs(5);
-                options.request_timeout = crabka_units::secs(30);
+                options.connect_timeout = krabka_units::secs(5);
+                options.request_timeout = krabka_units::secs(30);
                 let mut admin = AdminClient::connect_with_options(&profile.bootstrap, options)
                     .await
                     .map_err(|e| ExecError::Unsupported(format!("import: admin connect: {e}")))?;
@@ -407,9 +407,9 @@ mod tests {
 
     #[test]
     fn schema_fetch_retry_policy_reaches_per_scan_cache() {
-        let policy = crabka_schema_serde::SchemaFetchRetryPolicy::new(
-            crabka_units::millis(37),
-            crabka_units::millis(91),
+        let policy = krabka_schema_serde::SchemaFetchRetryPolicy::new(
+            krabka_units::millis(37),
+            krabka_units::millis(91),
         )
         .unwrap();
         let fdw = KafkaFdw::with_defaults(Some("broker:9092".into()))
@@ -430,13 +430,13 @@ mod tests {
 
     #[test]
     fn fdw_carries_typed_broker_dns_timeout() {
-        let timeout = crabka_client_core::ClientDnsTimeout::new(crabka_units::millis(37))
+        let timeout = krabka_client_core::ClientDnsTimeout::new(krabka_units::millis(37))
             .expect("positive timeout");
         let dispatch =
-            crabka_client_core::ConnectionDispatchQueueCapacity::new(7).expect("positive");
-        let frame_max = crabka_client_core::ClientFrameMax::try_from(crabka_units::kibibytes(32))
+            krabka_client_core::ConnectionDispatchQueueCapacity::new(7).expect("positive");
+        let frame_max = krabka_client_core::ClientFrameMax::try_from(krabka_units::kibibytes(32))
             .expect("valid frame max");
-        let fetch_min = crabka_client_core::FetchMinBytes::try_from(crabka_units::bytes(9))
+        let fetch_min = krabka_client_core::FetchMinBytes::try_from(krabka_units::bytes(9))
             .expect("valid fetch min");
         let fdw = KafkaFdw::with_defaults(Some("broker:9092".into()))
             .with_broker_dns_timeout(timeout)

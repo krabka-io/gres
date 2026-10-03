@@ -27,7 +27,7 @@ use std::{
     },
 };
 
-use crabka_pgkv::KvError;
+use krabka_pgkv::KvError;
 use thiserror::Error;
 
 use crate::{

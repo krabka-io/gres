@@ -8,7 +8,7 @@
 //! from a live `PostgreSQL` 18.4.
 
 use assert2::assert;
-use crabka_pgparser::{
+use krabka_pgparser::{
     ParseError,
     ast::{
         AlterConstraintSpec, AlterTableAction, ColumnConstraintKind, Statement, TableConstraint,
@@ -49,7 +49,7 @@ fn not_null(name: Option<&str>, column: &str, no_inherit: bool) -> TableConstrai
             column: column.into(),
             no_inherit,
         },
-        attributes: crabka_pgparser::ast::ConstraintAttributes {
+        attributes: krabka_pgparser::ast::ConstraintAttributes {
             no_inherit,
             ..Default::default()
         },

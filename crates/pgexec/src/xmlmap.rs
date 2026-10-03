@@ -5,9 +5,9 @@
 //! resolution and query execution while this module owns PostgreSQL's XML
 //! shape.
 
-use crabka_pgcatalog::Table;
-use crabka_pgtypes::{ColumnType, TemporalType};
-use crabka_pgwire::engine::{Cell, FieldDescription};
+use krabka_pgcatalog::Table;
+use krabka_pgtypes::{ColumnType, TemporalType};
+use krabka_pgwire::engine::{Cell, FieldDescription};
 
 /// One `table_to_xml` call after scalar argument evaluation.
 #[derive(Debug, Clone)]
@@ -251,8 +251,8 @@ fn rows_to_xml(
     target_ns: &str,
     schema_location: bool,
 ) -> String {
-    let name = crabka_pgtypes::xml::sql_identifier_to_xml_name(root, false, false);
-    let forest_name = crabka_pgtypes::xml::sql_identifier_to_xml_name(forest_root, false, false);
+    let name = krabka_pgtypes::xml::sql_identifier_to_xml_name(root, false, false);
+    let forest_name = krabka_pgtypes::xml::sql_identifier_to_xml_name(forest_root, false, false);
     let active_root = if tableforest { &forest_name } else { &name };
     let mut out = open_element(active_root, target_ns, schema_location);
     for (index, row) in rows.iter().enumerate() {
@@ -303,7 +303,7 @@ fn open_element(name: &str, target_ns: &str, schema_location: bool) -> String {
     let mut out = format!("<{name} xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"");
     if !target_ns.is_empty() {
         out.push_str(" xmlns=\"");
-        out.push_str(&crabka_pgtypes::xml::text_node(target_ns));
+        out.push_str(&krabka_pgtypes::xml::text_node(target_ns));
         out.push('"');
     }
     if schema_location {
@@ -311,7 +311,7 @@ fn open_element(name: &str, target_ns: &str, schema_location: bool) -> String {
             out.push_str(" xsi:noNamespaceSchemaLocation=\"#\"");
         } else {
             out.push_str(" xsi:schemaLocation=\"");
-            out.push_str(&crabka_pgtypes::xml::text_node(target_ns));
+            out.push_str(&krabka_pgtypes::xml::text_node(target_ns));
             out.push_str(" #\"");
         }
     }
@@ -324,11 +324,11 @@ fn schema_data(
     rows: &[Vec<Vec<Option<Cell>>>],
     request: &SchemaXmlRequest,
 ) -> String {
-    let root = crabka_pgtypes::xml::sql_identifier_to_xml_name(&request.schema, false, false);
+    let root = krabka_pgtypes::xml::sql_identifier_to_xml_name(&request.schema, false, false);
     let mut out = open_element(&root, &request.target_ns, request.include_schema);
     let mut forest_rows = false;
     for (table, rows) in tables.iter().zip(rows) {
-        let name = crabka_pgtypes::xml::sql_identifier_to_xml_name(&table.name.name, false, false);
+        let name = krabka_pgtypes::xml::sql_identifier_to_xml_name(&table.name.name, false, false);
         let columns = table
             .columns
             .iter()
@@ -396,7 +396,7 @@ fn schema_schema(tables: &[Table], database: &str, request: &SchemaXmlRequest) -
     });
     for table in tables {
         let element =
-            crabka_pgtypes::xml::sql_identifier_to_xml_name(&table.name.name, false, false);
+            krabka_pgtypes::xml::sql_identifier_to_xml_name(&table.name.name, false, false);
         let kind = if request.tableforest {
             "RowType"
         } else {
@@ -424,7 +424,7 @@ fn schema_schema(tables: &[Table], database: &str, request: &SchemaXmlRequest) -
     } else {
         "all>"
     });
-    let element = crabka_pgtypes::xml::sql_identifier_to_xml_name(&request.schema, false, false);
+    let element = krabka_pgtypes::xml::sql_identifier_to_xml_name(&request.schema, false, false);
     out.push_str("\n</xsd:complexType>\n\n<xsd:element name=\"");
     out.push_str(&element);
     out.push_str("\" type=\"");
@@ -463,7 +463,7 @@ fn table_schema(
     out.push_str("\">\n  <xsd:sequence>");
     for column in &table.columns {
         out.push_str("\n    <xsd:element name=\"");
-        out.push_str(&crabka_pgtypes::xml::sql_identifier_to_xml_name(
+        out.push_str(&krabka_pgtypes::xml::sql_identifier_to_xml_name(
             &column.name,
             false,
             false,
@@ -478,7 +478,7 @@ fn table_schema(
         out.push_str("></xsd:element>");
     }
     out.push_str("\n  </xsd:sequence>\n</xsd:complexType>");
-    let element = crabka_pgtypes::xml::sql_identifier_to_xml_name(&table.name.name, false, false);
+    let element = krabka_pgtypes::xml::sql_identifier_to_xml_name(&table.name.name, false, false);
     if !tableforest {
         out.push_str("\n\n<xsd:complexType name=\"");
         out.push_str(&table_type);
@@ -517,7 +517,7 @@ fn result_schema(
     out.push_str("\n\n<xsd:complexType name=\"RowType\">\n  <xsd:sequence>");
     for (name, ty) in columns {
         out.push_str("\n    <xsd:element name=\"");
-        out.push_str(&crabka_pgtypes::xml::sql_identifier_to_xml_name(
+        out.push_str(&krabka_pgtypes::xml::sql_identifier_to_xml_name(
             name, false, false,
         ));
         out.push_str("\" type=\"");
@@ -557,7 +557,7 @@ fn schema_open(target_ns: &str) -> String {
     let mut out = "<xsd:schema\n    xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\"".to_string();
     if !target_ns.is_empty() {
         out.push_str("\n    targetNamespace=\"");
-        out.push_str(&crabka_pgtypes::xml::text_node(target_ns));
+        out.push_str(&krabka_pgtypes::xml::text_node(target_ns));
         out.push_str("\"\n    elementFormDefault=\"qualified\"");
     }
     out.push('>');
@@ -585,7 +585,7 @@ fn xsd_type_name(ty: ColumnType, database: &str) -> String {
         ColumnType::Date => "DATE".into(),
         ColumnType::Xml => "XML".into(),
         ColumnType::Text | ColumnType::Bytea => format!("UDT.{database}.pg_catalog.{}", ty.name()),
-        ColumnType::Domain(domain) => crabka_pgtypes::usertype::lookup_oid(domain.oid).map_or_else(
+        ColumnType::Domain(domain) => krabka_pgtypes::usertype::lookup_oid(domain.oid).map_or_else(
             || format!("Domain.{database}.public.{}", domain.name),
             |domain| format!("Domain.{database}.{}.{}", domain.schema, domain.name),
         ),
@@ -621,13 +621,13 @@ fn temporal_type(name: &str, base: &str, pattern: &str) -> String {
 }
 
 fn field(out: &mut String, name: &str, value: Option<&str>) {
-    let name = crabka_pgtypes::xml::sql_identifier_to_xml_name(name, false, false);
+    let name = krabka_pgtypes::xml::sql_identifier_to_xml_name(name, false, false);
     out.push_str("\n  <");
     out.push_str(&name);
     match value {
         Some(value) => {
             out.push('>');
-            out.push_str(&crabka_pgtypes::xml::text_node(value));
+            out.push_str(&krabka_pgtypes::xml::text_node(value));
             out.push_str("</");
             out.push_str(&name);
             out.push('>');

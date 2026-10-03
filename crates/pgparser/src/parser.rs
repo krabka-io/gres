@@ -659,7 +659,7 @@ impl Parser {
     /// Folds the two-word `double precision` (SP30) into one normalized name; an
     /// unknown type name is 42704 (`undefined_object`) with `PostgreSQL`'s
     /// "type … does not exist" message, in every context that names a type.
-    fn parse_type_name(&mut self) -> Result<crabka_pgtypes::ColumnType, ParseError> {
+    fn parse_type_name(&mut self) -> Result<krabka_pgtypes::ColumnType, ParseError> {
         let type_pos = self.peek_pos();
         let mut word_pos = type_pos;
         let mut type_word = self.expect_ident()?;
@@ -674,11 +674,11 @@ impl Parser {
         // A type name in double quotes is an ordinary identifier looked up by
         // `pg_type.typname`, not one of the grammar's type keywords, and for
         // `char` the two name different types:
-        // [`crabka_pgtypes::ColumnType::from_quoted_builtin_sql_name`] holds
+        // [`krabka_pgtypes::ColumnType::from_quoted_builtin_sql_name`] holds
         // the whole of that divergence. The lexer folds both spellings into one
         // `Ident`, so the source byte is what tells them apart.
         let quoted_builtin = (self.source.as_bytes().get(word_pos) == Some(&b'"'))
-            .then(|| crabka_pgtypes::ColumnType::from_quoted_builtin_sql_name(&type_word))
+            .then(|| krabka_pgtypes::ColumnType::from_quoted_builtin_sql_name(&type_word))
             .flatten();
         if type_word.eq_ignore_ascii_case("double")
             && matches!(self.peek(), Token::Ident(w) if w.eq_ignore_ascii_case("precision"))
@@ -739,24 +739,24 @@ impl Parser {
         // in either identifier is never mistaken for qualification.
         let ty = match type_schema.as_deref() {
             Some("pg_catalog") => quoted_builtin
-                .or_else(|| crabka_pgtypes::ColumnType::from_builtin_sql_name(&type_word))
+                .or_else(|| krabka_pgtypes::ColumnType::from_builtin_sql_name(&type_word))
                 .or_else(|| {
-                    crabka_pgtypes::usertype::column_type_for_name_in("pg_catalog", &type_word)
+                    krabka_pgtypes::usertype::column_type_for_name_in("pg_catalog", &type_word)
                 }),
             Some("information_schema") => {
-                crabka_pgtypes::ColumnType::information_schema_domain(&type_word)
+                krabka_pgtypes::ColumnType::information_schema_domain(&type_word)
             }
-            Some(schema) => crabka_pgtypes::usertype::column_type_for_name_in(schema, &type_word),
+            Some(schema) => krabka_pgtypes::usertype::column_type_for_name_in(schema, &type_word),
             None => self.type_schemas.as_ref().map_or_else(
-                || quoted_builtin.or_else(|| crabka_pgtypes::ColumnType::from_sql_name(&type_word)),
+                || quoted_builtin.or_else(|| krabka_pgtypes::ColumnType::from_sql_name(&type_word)),
                 |schemas| {
                     schemas.iter().find_map(|schema| {
                         if schema == "pg_catalog" {
                             quoted_builtin.or_else(|| {
-                                crabka_pgtypes::ColumnType::from_builtin_sql_name(&type_word)
+                                krabka_pgtypes::ColumnType::from_builtin_sql_name(&type_word)
                             })
                         } else {
-                            crabka_pgtypes::usertype::column_type_for_name_in(schema, &type_word)
+                            krabka_pgtypes::usertype::column_type_for_name_in(schema, &type_word)
                         }
                     })
                 },
@@ -769,7 +769,7 @@ impl Parser {
                 type_pos,
             )
         })?;
-        let (interval_typmod, interval_precision) = if ty == crabka_pgtypes::ColumnType::Interval {
+        let (interval_typmod, interval_precision) = if ty == krabka_pgtypes::ColumnType::Interval {
             self.parse_interval_type_modifier()?
         } else {
             (None, None)
@@ -780,35 +780,35 @@ impl Parser {
             temporal_precision.or(interval_precision),
             interval_typmod,
         ) {
-            (crabka_pgtypes::ColumnType::Time, Some(precision), _) => {
-                crabka_pgtypes::ColumnType::Temporal(crabka_pgtypes::TemporalType::Time, precision)
+            (krabka_pgtypes::ColumnType::Time, Some(precision), _) => {
+                krabka_pgtypes::ColumnType::Temporal(krabka_pgtypes::TemporalType::Time, precision)
             }
-            (crabka_pgtypes::ColumnType::Timetz, Some(precision), _) => {
-                crabka_pgtypes::ColumnType::Temporal(
-                    crabka_pgtypes::TemporalType::Timetz,
+            (krabka_pgtypes::ColumnType::Timetz, Some(precision), _) => {
+                krabka_pgtypes::ColumnType::Temporal(
+                    krabka_pgtypes::TemporalType::Timetz,
                     precision,
                 )
             }
-            (crabka_pgtypes::ColumnType::Timestamp, Some(precision), _) => {
-                crabka_pgtypes::ColumnType::Temporal(
-                    crabka_pgtypes::TemporalType::Timestamp,
+            (krabka_pgtypes::ColumnType::Timestamp, Some(precision), _) => {
+                krabka_pgtypes::ColumnType::Temporal(
+                    krabka_pgtypes::TemporalType::Timestamp,
                     precision,
                 )
             }
-            (crabka_pgtypes::ColumnType::Timestamptz, Some(precision), _) => {
-                crabka_pgtypes::ColumnType::Temporal(
-                    crabka_pgtypes::TemporalType::Timestamptz,
+            (krabka_pgtypes::ColumnType::Timestamptz, Some(precision), _) => {
+                krabka_pgtypes::ColumnType::Temporal(
+                    krabka_pgtypes::TemporalType::Timestamptz,
                     precision,
                 )
             }
-            (crabka_pgtypes::ColumnType::Interval, Some(precision), None) => {
-                crabka_pgtypes::ColumnType::Temporal(
-                    crabka_pgtypes::TemporalType::Interval,
+            (krabka_pgtypes::ColumnType::Interval, Some(precision), None) => {
+                krabka_pgtypes::ColumnType::Temporal(
+                    krabka_pgtypes::TemporalType::Interval,
                     precision,
                 )
             }
-            (crabka_pgtypes::ColumnType::Interval, _, Some(typmod)) => {
-                crabka_pgtypes::ColumnType::IntervalTypmod(typmod)
+            (krabka_pgtypes::ColumnType::Interval, _, Some(typmod)) => {
+                krabka_pgtypes::ColumnType::IntervalTypmod(typmod)
             }
             (ty, _, _) if ty.is_numeric() && *self.peek() == Token::LParen => {
                 self.parse_numeric_typmod()?
@@ -816,7 +816,7 @@ impl Parser {
             (ty, _, _)
                 if matches!(
                     ty,
-                    crabka_pgtypes::ColumnType::Varchar(_) | crabka_pgtypes::ColumnType::Char(_)
+                    krabka_pgtypes::ColumnType::Varchar(_) | krabka_pgtypes::ColumnType::Char(_)
                 ) && *self.peek() == Token::LParen =>
             {
                 self.parse_string_typmod(ty)?
@@ -824,7 +824,7 @@ impl Parser {
             (ty, _, _)
                 if matches!(
                     ty,
-                    crabka_pgtypes::ColumnType::Bit(_) | crabka_pgtypes::ColumnType::VarBit(_)
+                    krabka_pgtypes::ColumnType::Bit(_) | krabka_pgtypes::ColumnType::VarBit(_)
                 ) =>
             {
                 self.parse_bit_typmod(ty, type_pos)?
@@ -843,10 +843,10 @@ impl Parser {
     /// types with no array type are refused with 0A000.
     fn parse_array_type_suffix(
         &mut self,
-        base: crabka_pgtypes::ColumnType,
+        base: krabka_pgtypes::ColumnType,
         type_word: &str,
         type_pos: usize,
-    ) -> Result<crabka_pgtypes::ColumnType, ParseError> {
+    ) -> Result<krabka_pgtypes::ColumnType, ParseError> {
         // `ARRAY` / `ARRAY[N]` — the SQL-standard spelling of a one-`[]` suffix.
         let mut is_array = if *self.peek() == Token::Keyword(Keyword::Array) {
             self.bump();
@@ -873,7 +873,7 @@ impl Parser {
         if !is_array {
             return Ok(base);
         }
-        crabka_pgtypes::ColumnType::array_of(base).ok_or_else(|| {
+        krabka_pgtypes::ColumnType::array_of(base).ok_or_else(|| {
             ParseError::new_sqlstate(
                 "0A000",
                 format!("arrays of type \"{type_word}\" are not supported"),
@@ -884,17 +884,17 @@ impl Parser {
 
     fn parse_string_typmod(
         &mut self,
-        ty: crabka_pgtypes::ColumnType,
-    ) -> Result<crabka_pgtypes::ColumnType, ParseError> {
+        ty: krabka_pgtypes::ColumnType,
+    ) -> Result<krabka_pgtypes::ColumnType, ParseError> {
         self.expect(&Token::LParen)?;
         let limit = self.expect_u16("string length")?;
         self.expect(&Token::RParen)?;
         match ty {
-            crabka_pgtypes::ColumnType::Varchar(_) => {
-                Ok(crabka_pgtypes::ColumnType::Varchar(Some(limit)))
+            krabka_pgtypes::ColumnType::Varchar(_) => {
+                Ok(krabka_pgtypes::ColumnType::Varchar(Some(limit)))
             }
-            crabka_pgtypes::ColumnType::Char(_) => {
-                Ok(crabka_pgtypes::ColumnType::Char(Some(limit)))
+            krabka_pgtypes::ColumnType::Char(_) => {
+                Ok(krabka_pgtypes::ColumnType::Char(Some(limit)))
             }
             _ => unreachable!("parse_string_typmod called for non-string typmod type"),
         }
@@ -906,34 +906,34 @@ impl Parser {
     /// `'101'::bit` is `1` while `'101'::bit varying` is `101`.
     fn parse_bit_typmod(
         &mut self,
-        ty: crabka_pgtypes::ColumnType,
+        ty: krabka_pgtypes::ColumnType,
         type_pos: usize,
-    ) -> Result<crabka_pgtypes::ColumnType, ParseError> {
-        let varying = matches!(ty, crabka_pgtypes::ColumnType::VarBit(_));
+    ) -> Result<krabka_pgtypes::ColumnType, ParseError> {
+        let varying = matches!(ty, krabka_pgtypes::ColumnType::VarBit(_));
         if *self.peek() != Token::LParen {
             return Ok(if varying {
-                crabka_pgtypes::ColumnType::VarBit(None)
+                krabka_pgtypes::ColumnType::VarBit(None)
             } else {
-                crabka_pgtypes::ColumnType::Bit(Some(1))
+                krabka_pgtypes::ColumnType::Bit(Some(1))
             });
         }
         self.expect(&Token::LParen)?;
         let len = self.expect_i32("bit length")?;
         self.expect(&Token::RParen)?;
-        crabka_pgtypes::bitstring::check_typmod(len, if varying { "varbit" } else { "bit" })
+        krabka_pgtypes::bitstring::check_typmod(len, if varying { "varbit" } else { "bit" })
             .map_err(|error| {
                 ParseError::new_sqlstate(error.sqlstate(), error.to_string(), type_pos)
             })?;
         Ok(if varying {
-            crabka_pgtypes::ColumnType::VarBit(Some(len))
+            krabka_pgtypes::ColumnType::VarBit(Some(len))
         } else {
-            crabka_pgtypes::ColumnType::Bit(Some(len))
+            krabka_pgtypes::ColumnType::Bit(Some(len))
         })
     }
 
     /// Parse a `numeric(precision[, scale])` modifier, positioned at `(`. `scale`
     /// defaults to 0 (`PostgreSQL` `numeric(p)` ≡ `numeric(p, 0)`).
-    fn parse_numeric_typmod(&mut self) -> Result<crabka_pgtypes::ColumnType, ParseError> {
+    fn parse_numeric_typmod(&mut self) -> Result<krabka_pgtypes::ColumnType, ParseError> {
         self.expect(&Token::LParen)?;
         let precision = self.expect_u16("numeric precision")?;
         let scale = if self.eat_comma() {
@@ -942,8 +942,8 @@ impl Parser {
             0
         };
         self.expect(&Token::RParen)?;
-        Ok(crabka_pgtypes::ColumnType::Numeric(Some(
-            crabka_pgtypes::numeric::Typmod { precision, scale },
+        Ok(krabka_pgtypes::ColumnType::Numeric(Some(
+            krabka_pgtypes::numeric::Typmod { precision, scale },
         )))
     }
 
@@ -1626,7 +1626,7 @@ impl Parser {
                 let pos = self.peek_pos();
                 self.bump();
                 let bits =
-                    crabka_pgtypes::bitstring::BitString::parse(&raw, false).map_err(|error| {
+                    krabka_pgtypes::bitstring::BitString::parse(&raw, false).map_err(|error| {
                         ParseError::new_sqlstate(error.sqlstate(), error.to_string(), pos)
                     })?;
                 Ok(Expr::BitStringLiteral(bits.to_text()))
@@ -1804,13 +1804,13 @@ impl Parser {
                 subscripts.push(ArraySubscript::Index(index));
             }
             self.expect(&Token::RBracket)?;
-            if subscripts.len() > crabka_pgtypes::MAX_ARRAY_DIM {
+            if subscripts.len() > krabka_pgtypes::MAX_ARRAY_DIM {
                 return Err(ParseError::new_sqlstate(
                     "54000",
                     format!(
                         "number of array dimensions ({}) exceeds the maximum allowed ({})",
                         subscripts.len(),
-                        crabka_pgtypes::MAX_ARRAY_DIM
+                        krabka_pgtypes::MAX_ARRAY_DIM
                     ),
                     self.peek_pos(),
                 ));
@@ -1908,9 +1908,9 @@ impl Parser {
         };
         if matches!(
             ty,
-            crabka_pgtypes::ColumnType::Interval
-                | crabka_pgtypes::ColumnType::Temporal(crabka_pgtypes::TemporalType::Interval, _)
-                | crabka_pgtypes::ColumnType::IntervalTypmod(_)
+            krabka_pgtypes::ColumnType::Interval
+                | krabka_pgtypes::ColumnType::Temporal(krabka_pgtypes::TemporalType::Interval, _)
+                | krabka_pgtypes::ColumnType::IntervalTypmod(_)
         ) {
             return self.interval_literal(string, ty).map(Some);
         }
@@ -1923,8 +1923,8 @@ impl Parser {
             .iter()
             .any(|(token, _)| *token == Token::LParen);
         let ty = match ty {
-            crabka_pgtypes::ColumnType::Bit(_) if !wrote_modifier => {
-                crabka_pgtypes::ColumnType::Bit(None)
+            krabka_pgtypes::ColumnType::Bit(_) if !wrote_modifier => {
+                krabka_pgtypes::ColumnType::Bit(None)
             }
             other => other,
         };
@@ -1946,9 +1946,9 @@ impl Parser {
     fn interval_literal(
         &mut self,
         string: String,
-        ty: crabka_pgtypes::ColumnType,
+        ty: krabka_pgtypes::ColumnType,
     ) -> Result<Expr, ParseError> {
-        use crabka_pgtypes::datetime::IntervalField;
+        use krabka_pgtypes::datetime::IntervalField;
 
         let interval = |text: String| Expr::Cast {
             expr: Box::new(Expr::StringLiteral(text)),
@@ -1972,7 +1972,7 @@ impl Parser {
         let range = IntervalField::parse(start)
             .zip(IntervalField::parse(end))
             .ok_or_else(|| ParseError::new("expected an interval field", field_pos))?;
-        let value = crabka_pgtypes::datetime::parse_interval_ranged(&string, Some(range))
+        let value = krabka_pgtypes::datetime::parse_interval_ranged(&string, Some(range))
             .map_err(|e| ParseError::new_sqlstate(e.sqlstate(), e.to_string(), field_pos))?;
         // PostgreSQL accepts a fractional-seconds precision only after the
         // terminal SECOND field, including `MINUTE TO SECOND(p)`.
@@ -1980,12 +1980,12 @@ impl Parser {
             self.bump();
             let precision = self.expect_u16("fractional seconds precision")?;
             self.expect(&Token::RParen)?;
-            crabka_pgtypes::datetime::apply_interval_typmod(value, Some(precision.min(6) as u8))
+            krabka_pgtypes::datetime::apply_interval_typmod(value, Some(precision.min(6) as u8))
                 .map_err(|e| ParseError::new_sqlstate(e.sqlstate(), e.to_string(), field_pos))?
         } else {
             value
         };
-        Ok(interval(crabka_pgtypes::datetime::interval_to_text(value)))
+        Ok(interval(krabka_pgtypes::datetime::interval_to_text(value)))
     }
 
     /// The field range and fractional precision after an `interval` type name.
@@ -1993,8 +1993,8 @@ impl Parser {
     /// second(3)`.
     fn parse_interval_type_modifier(
         &mut self,
-    ) -> Result<(Option<crabka_pgtypes::IntervalTypmod>, Option<u8>), ParseError> {
-        use crabka_pgtypes::datetime::IntervalField;
+    ) -> Result<(Option<krabka_pgtypes::IntervalTypmod>, Option<u8>), ParseError> {
+        use krabka_pgtypes::datetime::IntervalField;
 
         let field_pos = self.peek_pos();
         let range = if let Some(start) = self.interval_field() {
@@ -2025,7 +2025,7 @@ impl Parser {
         let Some((start, end)) = range else {
             return Ok((None, precision));
         };
-        let typmod = crabka_pgtypes::IntervalTypmod::new(start, end, precision)
+        let typmod = krabka_pgtypes::IntervalTypmod::new(start, end, precision)
             .ok_or_else(|| ParseError::new("invalid interval field range", field_pos))?;
         Ok((Some(typmod), None))
     }
@@ -2851,7 +2851,7 @@ impl Parser {
     }
 
     /// `RETURNING <type> [FORMAT JSON]`.
-    fn opt_returning_type(&mut self) -> Result<Option<crabka_pgtypes::ColumnType>, ParseError> {
+    fn opt_returning_type(&mut self) -> Result<Option<krabka_pgtypes::ColumnType>, ParseError> {
         if !matches!(self.peek(), Token::Keyword(Keyword::Returning)) {
             return Ok(None);
         }
@@ -3003,9 +3003,9 @@ impl Parser {
         // the parser, pointing at the construct rather than the type name.
         if !matches!(
             ty,
-            crabka_pgtypes::ColumnType::Text
-                | crabka_pgtypes::ColumnType::Varchar(_)
-                | crabka_pgtypes::ColumnType::Char(_)
+            krabka_pgtypes::ColumnType::Text
+                | krabka_pgtypes::ColumnType::Varchar(_)
+                | krabka_pgtypes::ColumnType::Char(_)
         ) {
             return Err(ParseError::new_sqlstate(
                 "42846",
@@ -3222,7 +3222,7 @@ impl Parser {
         }
         Expr::Cast {
             expr: Box::new(expr),
-            ty: crabka_pgtypes::ColumnType::Xml,
+            ty: krabka_pgtypes::ColumnType::Xml,
         }
     }
 
@@ -9330,7 +9330,7 @@ impl Parser {
         column_name: &str,
     ) -> Result<
         (
-            crabka_pgtypes::ColumnType,
+            krabka_pgtypes::ColumnType,
             Option<Vec<String>>,
             Option<crate::ast::SerialKind>,
         ),
@@ -9347,12 +9347,12 @@ impl Parser {
         }
         match type_name.as_str() {
             "serial" | "serial4" => Ok((
-                crabka_pgtypes::ColumnType::Int4,
+                krabka_pgtypes::ColumnType::Int4,
                 None,
                 Some(crate::ast::SerialKind::Serial),
             )),
             "bigserial" | "serial8" => Ok((
-                crabka_pgtypes::ColumnType::Int8,
+                krabka_pgtypes::ColumnType::Int8,
                 None,
                 Some(crate::ast::SerialKind::BigSerial),
             )),
@@ -9362,14 +9362,14 @@ impl Parser {
                     err.position = type_pos;
                     err
                 })?;
-                if matches!(ty, crabka_pgtypes::ColumnType::Record(None)) {
+                if matches!(ty, krabka_pgtypes::ColumnType::Record(None)) {
                     return Err(ParseError::new_sqlstate(
                         "42P16",
                         format!("column \"{column_name}\" has pseudo-type record"),
                         type_pos,
                     ));
                 }
-                let typmod = (matches!(ty, crabka_pgtypes::ColumnType::Base(_))
+                let typmod = (matches!(ty, krabka_pgtypes::ColumnType::Base(_))
                     && *self.peek() == Token::LParen)
                     .then(|| self.parse_user_type_typmod())
                     .transpose()?;
@@ -11003,7 +11003,7 @@ impl Parser {
     /// schema qualifier stays where the resolver can still see it.
     fn sequence_drop_ref(&mut self) -> Result<crate::ast::RelationRef, ParseError> {
         let mut reference = self.relation_ref()?;
-        reference.name = format!("__crabka_sequence__:{}", reference.name);
+        reference.name = format!("__krabka_sequence__:{}", reference.name);
         Ok(reference)
     }
 
@@ -11389,7 +11389,7 @@ impl Parser {
 
     fn operator_family_add_members(
         &mut self,
-        default_type: Option<crabka_pgtypes::ColumnType>,
+        default_type: Option<krabka_pgtypes::ColumnType>,
     ) -> Result<Vec<crate::ast::OperatorFamilyMember>, ParseError> {
         use crate::ast::OperatorFamilyMember;
 
@@ -11504,7 +11504,7 @@ impl Parser {
     fn operator_family_type_pair(
         &mut self,
         allow_one: bool,
-    ) -> Result<(crabka_pgtypes::ColumnType, crabka_pgtypes::ColumnType), ParseError> {
+    ) -> Result<(krabka_pgtypes::ColumnType, krabka_pgtypes::ColumnType), ParseError> {
         self.expect(&Token::LParen)?;
         let left = self.parse_type_name()?;
         let right = if self.eat_comma() {
@@ -12123,7 +12123,7 @@ impl Parser {
     /// way it does in `CREATE DOMAIN`.
     fn cast_type_pair(
         &mut self,
-    ) -> Result<(crabka_pgtypes::ColumnType, crabka_pgtypes::ColumnType), ParseError> {
+    ) -> Result<(krabka_pgtypes::ColumnType, krabka_pgtypes::ColumnType), ParseError> {
         self.expect(&Token::LParen)?;
         let source = self.parse_type_name()?;
         self.expect(&Token::Keyword(Keyword::As))?;
@@ -18203,7 +18203,7 @@ fn encode_sequence_options(options: &crate::ast::SequenceOptions) -> Vec<crate::
 
 #[cfg(test)]
 mod tests {
-    use crabka_pgtypes::ColumnType;
+    use krabka_pgtypes::ColumnType;
 
     use super::*;
     use crate::ast::{
@@ -20709,7 +20709,7 @@ mod tests {
 
     #[test]
     fn parses_numeric_column_types_with_optional_typmod() {
-        use crabka_pgtypes::numeric::Typmod;
+        use krabka_pgtypes::numeric::Typmod;
         let ty = |sql: &str| match one(sql) {
             Statement::CreateTable { columns, .. } => columns[0].ty,
             other => panic!("expected CreateTable, got {other:?}"),
@@ -20747,7 +20747,7 @@ mod tests {
 
     #[test]
     fn parses_temporal_fractional_second_typmods() {
-        use crabka_pgtypes::{IntervalTypmod, TemporalType, datetime::IntervalField};
+        use krabka_pgtypes::{IntervalTypmod, TemporalType, datetime::IntervalField};
 
         let ty = |sql: &str| match one(sql) {
             Statement::CreateTable { columns, .. } => columns[0].ty,
@@ -20771,7 +20771,7 @@ mod tests {
         );
         assert_eq!(
             ty("CREATE TABLE t (x interval year to month[])"),
-            ColumnType::Array(crabka_pgtypes::ElemType::IntervalTypmod(
+            ColumnType::Array(krabka_pgtypes::ElemType::IntervalTypmod(
                 IntervalTypmod::new(IntervalField::Year, IntervalField::Month, None)
                     .expect("valid interval typmod")
             ))
@@ -21546,8 +21546,8 @@ mod tests {
             one("DROP SEQUENCE IF EXISTS s1, s2")
                 == Statement::DropTable {
                     names: vec![
-                        "__crabka_sequence__:s1".into(),
-                        "__crabka_sequence__:s2".into(),
+                        "__krabka_sequence__:s1".into(),
+                        "__krabka_sequence__:s2".into(),
                     ],
                     if_exists: true,
                     cascade: false,
@@ -22487,11 +22487,11 @@ mod tests {
 
     #[test]
     fn pg_catalog_qualified_relation_rowtype_cast_uses_the_type_registry() {
-        use crabka_pgtypes::usertype::{CompositeField, UserType, UserTypeBody};
+        use krabka_pgtypes::usertype::{CompositeField, UserType, UserTypeBody};
 
         let rowtype = UserType {
             oid: 160_001,
-            array_oid: crabka_pgtypes::usertype::user_array_oid(160_001),
+            array_oid: krabka_pgtypes::usertype::user_array_oid(160_001),
             schema: "pg_catalog".into(),
             name: "parser_relation_rowtype".into(),
             body: UserTypeBody::Composite(vec![CompositeField {
@@ -22500,12 +22500,12 @@ mod tests {
                 dropped: false,
             }]),
         };
-        crabka_pgtypes::usertype::replace(&rowtype);
+        krabka_pgtypes::usertype::replace(&rowtype);
         let Expr::Cast { ty, .. } = expr("ROW(1)::pg_catalog.parser_relation_rowtype") else {
             panic!("expected a cast");
         };
         assert_eq!(ty, ColumnType::Record(Some(rowtype.type_ref())));
-        crabka_pgtypes::usertype::unregister_in("pg_catalog", "parser_relation_rowtype");
+        krabka_pgtypes::usertype::unregister_in("pg_catalog", "parser_relation_rowtype");
     }
 
     #[test]
@@ -22707,7 +22707,7 @@ mod tests {
 
     #[test]
     fn typed_literals_lower_onto_the_equivalent_cast() {
-        use crabka_pgtypes::ColumnType;
+        use krabka_pgtypes::ColumnType;
         // PostgreSQL's `typename 'string'` is defined to mean `'string'::typename`,
         // so every spelling must produce exactly that cast node.
         let cases: &[(&str, &str, ColumnType)] = &[
@@ -22738,9 +22738,9 @@ mod tests {
                 == Expr::Cast {
                     expr: Box::new(Expr::StringLiteral("1 day 04:05:06".into())),
                     ty: ColumnType::IntervalTypmod(
-                        crabka_pgtypes::IntervalTypmod::new(
-                            crabka_pgtypes::datetime::IntervalField::Day,
-                            crabka_pgtypes::datetime::IntervalField::Minute,
+                        krabka_pgtypes::IntervalTypmod::new(
+                            krabka_pgtypes::datetime::IntervalField::Day,
+                            krabka_pgtypes::datetime::IntervalField::Minute,
                             None,
                         )
                         .expect("valid interval typmod"),
@@ -22771,7 +22771,7 @@ mod tests {
         // plain interval literal it denotes.
         let interval = |text: &str| Expr::Cast {
             expr: Box::new(Expr::StringLiteral(text.into())),
-            ty: crabka_pgtypes::ColumnType::Interval,
+            ty: krabka_pgtypes::ColumnType::Interval,
         };
         let cases: &[(&str, &str)] = &[
             ("interval '1' day", "1 day"),
@@ -24034,8 +24034,8 @@ mod tests {
         assert!(column_aliases.is_none());
         let defs = functions[0].column_defs.as_ref().expect("definition list");
         assert!(defs.len() == 2);
-        assert!(defs[0].name == "a" && defs[0].ty == crabka_pgtypes::ColumnType::Int4);
-        assert!(defs[1].name == "b" && defs[1].ty == crabka_pgtypes::ColumnType::Text);
+        assert!(defs[0].name == "a" && defs[0].ty == krabka_pgtypes::ColumnType::Int4);
+        assert!(defs[1].name == "b" && defs[1].ty == krabka_pgtypes::ColumnType::Text);
 
         let TableExpr::Function {
             functions,
@@ -24087,7 +24087,7 @@ mod tests {
 
     #[test]
     fn parses_cast_both_forms_to_the_same_node() {
-        use crabka_pgtypes::ColumnType;
+        use krabka_pgtypes::ColumnType;
         // `expr::type` and `CAST(expr AS type)` produce the identical Cast node.
         let want = Expr::Cast {
             expr: Box::new(Expr::IntLiteral("1".into())),
@@ -24160,12 +24160,12 @@ mod tests {
         // `a::int4::text` == `(a::int4)::text`.
         match expr("a::int4::text") {
             Expr::Cast { expr: inner, ty } => {
-                assert_eq!(ty, crabka_pgtypes::ColumnType::Text);
+                assert_eq!(ty, krabka_pgtypes::ColumnType::Text);
                 assert!(
                     matches!(
                         *inner,
                         Expr::Cast {
-                            ty: crabka_pgtypes::ColumnType::Int4,
+                            ty: krabka_pgtypes::ColumnType::Int4,
                             ..
                         }
                     ),
@@ -24192,12 +24192,12 @@ mod tests {
         let Statement::CreateTable { columns, .. } = &stmts[0] else {
             panic!("expected create table");
         };
-        assert_eq!(columns[0].ty, crabka_pgtypes::ColumnType::Uuid);
+        assert_eq!(columns[0].ty, krabka_pgtypes::ColumnType::Uuid);
         assert!(matches!(
             parse_expr_for_test("'550e8400-e29b-41d4-a716-446655440000'::uuid")
                 .expect("parse cast"),
             Expr::Cast {
-                ty: crabka_pgtypes::ColumnType::Uuid,
+                ty: krabka_pgtypes::ColumnType::Uuid,
                 ..
             }
         ));
@@ -24283,7 +24283,7 @@ mod tests {
         assert!(matches!(
             parse_expr_for_test("x::timestamp with time zone").expect("c"),
             Expr::Cast {
-                ty: crabka_pgtypes::ColumnType::Timestamptz,
+                ty: krabka_pgtypes::ColumnType::Timestamptz,
                 ..
             }
         ));
@@ -27182,7 +27182,7 @@ mod json_array_conflict_notify_tests {
     /// SQL-standard `ARRAY` spelling, resolve to the same one-array type.
     #[test]
     fn every_array_type_suffix_spelling_resolves_to_one_array_type() {
-        use crabka_pgtypes::ColumnType;
+        use krabka_pgtypes::ColumnType;
 
         let int_array = ColumnType::array_of(ColumnType::Int4).expect("int4[]");
         for sql in [
@@ -27349,7 +27349,7 @@ mod json_array_conflict_notify_tests {
                 false,
                 Expr::Cast {
                     expr: Box::new(Expr::Param(1)),
-                    ty: crabka_pgtypes::ColumnType::array_of(crabka_pgtypes::ColumnType::Int8)
+                    ty: krabka_pgtypes::ColumnType::array_of(krabka_pgtypes::ColumnType::Int8)
                         .expect("int8[] is supported"),
                 },
             ),
@@ -27378,7 +27378,7 @@ mod json_array_conflict_notify_tests {
 
     #[test]
     fn array_type_suffix_parses_in_ddl_and_casts() {
-        use crabka_pgtypes::ColumnType;
+        use krabka_pgtypes::ColumnType;
 
         let array_of = |elem| ColumnType::array_of(elem).expect("array type exists");
         let Statement::CreateTable { columns, .. } =
@@ -27397,7 +27397,7 @@ mod json_array_conflict_notify_tests {
                     ("c", ColumnType::Jsonb),
                     (
                         "d",
-                        array_of(ColumnType::Numeric(Some(crabka_pgtypes::numeric::Typmod {
+                        array_of(ColumnType::Numeric(Some(krabka_pgtypes::numeric::Typmod {
                             precision: 10,
                             scale: 2,
                         })))
@@ -27419,7 +27419,7 @@ mod json_array_conflict_notify_tests {
             panic!("expected a regclass[] cast");
         };
         assert!(
-            ty == crabka_pgtypes::ColumnType::array_of(crabka_pgtypes::ColumnType::Regclass)
+            ty == krabka_pgtypes::ColumnType::array_of(krabka_pgtypes::ColumnType::Regclass)
                 .expect("regclass[]")
         );
     }
@@ -28593,7 +28593,7 @@ mod q1_statement_completeness_tests {
                 == crate::ast::AlterTypeAction::AddAttribute {
                     field: crate::ast::CompositeFieldDef {
                         name: "label".into(),
-                        ty: crabka_pgtypes::ColumnType::Text,
+                        ty: krabka_pgtypes::ColumnType::Text,
                         collation: Some("C".into()),
                     },
                     cascade: true,
@@ -28654,7 +28654,7 @@ mod q1_statement_completeness_tests {
 
     #[test]
     fn alter_operator_family_members_preserve_catalog_keys() {
-        use crabka_pgtypes::ColumnType;
+        use krabka_pgtypes::ColumnType;
 
         use crate::ast::{
             OperatorFamilyFunctionType, OperatorFamilyMember, OperatorFamilyMemberKey,
@@ -29439,7 +29439,7 @@ fn keyword_word(kw: Keyword) -> Option<&'static str> {
 #[cfg(test)]
 mod operator_tests {
     use assert2::assert;
-    use crabka_pgtypes::ColumnType;
+    use krabka_pgtypes::ColumnType;
 
     use super::{longest_operator, parse};
     use crate::ast::{

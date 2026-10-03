@@ -114,7 +114,7 @@ The deliberately unresolvable bootstrap proves ordering: the expected validation
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer leave_heartbeat_timeout --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer leave_heartbeat_timeout --locked
 ```
 
 Expected: compilation fails because `ShareConsumerLeaveHeartbeatTimeout`, `DEFAULT_SHARE_CONSUMER_LEAVE_HEARTBEAT_TIMEOUT`, and the builder setter do not exist.
@@ -229,7 +229,7 @@ pub use share::{
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer leave_heartbeat_timeout --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer leave_heartbeat_timeout --locked
 ```
 
 Expected: all three focused tests pass.
@@ -245,8 +245,8 @@ use std::sync::{
 };
 
 use bytes::BytesMut;
-use crabka_client_core::MockBroker;
-use crabka_protocol::{
+use krabka_client_core::MockBroker;
+use krabka_protocol::{
     Encode,
     owned::{
         api_versions_request,
@@ -343,7 +343,7 @@ Also add `leave_heartbeat_timeout: Duration::from_secs(5)` to the existing `stat
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer leave_group_uses_configured_timeout_for_one_best_effort_request --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer leave_group_uses_configured_timeout_for_one_best_effort_request --locked
 ```
 
 Expected: compilation fails because `leave_group` and `ShareCoordinatorState::leave_heartbeat_timeout` do not exist.
@@ -384,10 +384,10 @@ Do not change `ShareConsumer::close`: it must still flush final acknowledgements
 Run:
 
 ```bash
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer leave_heartbeat_timeout --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer leave_group_uses_configured_timeout_for_one_best_effort_request --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-client-consumer --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer leave_heartbeat_timeout --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer leave_group_uses_configured_timeout_for_one_best_effort_request --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-client-consumer --all-targets --locked -- -D warnings
 cargo +nightly fmt --all -- --check
 git diff --check
 git diff -- Cargo.lock
@@ -484,8 +484,8 @@ rg -n \
   "leave_heartbeat_timeout|ShareConsumerLeaveHeartbeatTimeout|DEFAULT_SHARE_CONSUMER_LEAVE_HEARTBEAT_TIMEOUT|build_leave_heartbeat_request|member_epoch: -1" \
   crates/client-consumer \
   docs/configuration-audit.md
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p crabka-client-consumer --all-targets --locked
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p crabka-client-consumer --all-targets --locked -- -D warnings
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo test -p krabka-client-consumer --all-targets --locked
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 cargo clippy -p krabka-client-consumer --all-targets --locked -- -D warnings
 cargo +nightly fmt --all -- --check
 git diff --check
 git diff -- Cargo.lock

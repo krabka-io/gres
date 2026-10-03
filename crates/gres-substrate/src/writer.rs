@@ -9,14 +9,14 @@ use std::{
 };
 
 use bytes::Bytes;
-use crabka_client_producer::{Header, OwnedTransaction, Producer, ProducerError, ProducerRecord};
-use crabka_gres_ranges::tso::{
+use krabka_client_producer::{Header, OwnedTransaction, Producer, ProducerError, ProducerRecord};
+use krabka_gres_ranges::tso::{
     EpochHeartbeat, HeartbeatVerdict, MAX_TS_KEY, TsoError, TsoHorizonCommitter, TsoTimestamp,
 };
-use crabka_pgexec::{Committer, ExecError, Linearizer};
-use crabka_pgkv::{Kv, KvSnapshot, SnapshotKv, WriteOp};
-use crabka_trace_context::TraceCarrier;
-use crabka_units::{ByteSize, convert::ByteSizeExt as _, mebibytes};
+use krabka_pgexec::{Committer, ExecError, Linearizer};
+use krabka_pgkv::{Kv, KvSnapshot, SnapshotKv, WriteOp};
+use krabka_trace_context::TraceCarrier;
+use krabka_units::{ByteSize, convert::ByteSizeExt as _, mebibytes};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tracing::Instrument as _;
 
@@ -1335,7 +1335,7 @@ impl SubstrateCommitter<DeferredWalWriter<ProducerWalWriter>> {
             ));
         }
         validate_must_activate_transition(tenant, operation_id, None, &expected, &value)?;
-        let key = crabka_pgkv::key::topology_activation_receipt_key(tenant, operation_id);
+        let key = krabka_pgkv::key::topology_activation_receipt_key(tenant, operation_id);
         let _permit = Arc::clone(&self.commit_gate)
             .acquire_owned()
             .await
@@ -1396,7 +1396,7 @@ impl SubstrateCommitter<DeferredWalWriter<ProducerWalWriter>> {
             &expected,
             &value,
         )?;
-        let key = crabka_pgkv::key::topology_activation_receipt_key(tenant, operation_id);
+        let key = krabka_pgkv::key::topology_activation_receipt_key(tenant, operation_id);
         let _permit = Arc::clone(&self.commit_gate)
             .acquire_owned()
             .await
@@ -1438,7 +1438,7 @@ impl SubstrateCommitter<DeferredWalWriter<ProducerWalWriter>> {
         );
         Ok(self
             .kv
-            .get(&crabka_pgkv::key::topology_activation_receipt_key(
+            .get(&krabka_pgkv::key::topology_activation_receipt_key(
                 tenant,
                 operation_id,
             ))
@@ -1469,7 +1469,7 @@ impl SubstrateCommitter<DeferredWalWriter<ProducerWalWriter>> {
         value: Vec<u8>,
     ) -> Result<bool, SubstrateError> {
         validate_paused_control_receipt_transition(tenant, receipt, expected.as_deref(), &value)?;
-        let key = crabka_pgkv::key::range_control_receipt_key(tenant, receipt);
+        let key = krabka_pgkv::key::range_control_receipt_key(tenant, receipt);
         let _permit = Arc::clone(&self.commit_gate)
             .acquire_owned()
             .await
@@ -1519,7 +1519,7 @@ fn validate_paused_control_receipt_transition(
     expected: Option<&[u8]>,
     value: &[u8],
 ) -> Result<(), SubstrateError> {
-    use crabka_gres_ranges::{
+    use krabka_gres_ranges::{
         control::RangeControlReceipt,
         transport::{RangeControlOperation as Operation, RangeControlResp},
     };
@@ -1585,7 +1585,7 @@ fn validate_paused_control_receipt_transition(
 
 #[cfg(test)]
 mod paused_control_receipt_validation_tests {
-    use crabka_gres_ranges::{
+    use krabka_gres_ranges::{
         RangeId,
         control::RangeControlReceipt,
         transport::{RangeControlOperation, RangeControlReq, RangeControlResp},
@@ -1683,7 +1683,7 @@ fn validate_must_activate_transition(
     expected: &[u8],
     value: &[u8],
 ) -> Result<(), SubstrateError> {
-    use crabka_gres_ranges::control::{TopologyActivationPhase, TopologyActivationReceipt};
+    use krabka_gres_ranges::control::{TopologyActivationPhase, TopologyActivationReceipt};
     let prior: TopologyActivationReceipt = serde_json::from_slice(expected).map_err(|error| {
         SubstrateError::Frame(format!("decode prior activation receipt: {error}"))
     })?;
@@ -1780,8 +1780,8 @@ mod tests {
     };
 
     use assert2::assert;
-    use crabka_gres_ranges::tso::{GrantLease, TsoOracle};
-    use crabka_pgkv::{Kv, MemKv};
+    use krabka_gres_ranges::tso::{GrantLease, TsoOracle};
+    use krabka_pgkv::{Kv, MemKv};
     use tokio::sync::Notify;
 
     #[tokio::test]
@@ -2060,7 +2060,7 @@ mod tests {
             },
         ];
 
-        let frames = chunk_wal_batch(ops, 7, crabka_units::bytes(36)).expect("chunk");
+        let frames = chunk_wal_batch(ops, 7, krabka_units::bytes(36)).expect("chunk");
 
         assert!(frames.len() == 2);
         assert!(frames[0].journal_seq == 7);
@@ -2088,7 +2088,7 @@ mod tests {
             value: vec![7; 64],
         }];
 
-        let frames = chunk_wal_batch(ops, 3, crabka_units::bytes(16)).expect("chunk");
+        let frames = chunk_wal_batch(ops, 3, krabka_units::bytes(16)).expect("chunk");
 
         assert!(frames.len() == 1);
         assert!(frames[0].journal_seq == 3);
@@ -2312,7 +2312,7 @@ mod tests {
             horizon.epoch(),
             NonZeroU64::new(4).expect("stride"),
             0,
-            <crabka_units::Time as crabka_units::convert::TimeExt>::ZERO,
+            <krabka_units::Time as krabka_units::convert::TimeExt>::ZERO,
         )
         .expect("recover");
         oracle
@@ -2365,7 +2365,7 @@ mod tests {
             horizon.epoch(),
             NonZeroU64::new(4).expect("stride"),
             0,
-            <crabka_units::Time as crabka_units::convert::TimeExt>::ZERO,
+            <krabka_units::Time as krabka_units::convert::TimeExt>::ZERO,
         )
         .expect("recover");
         oracle

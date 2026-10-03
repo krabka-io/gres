@@ -6,7 +6,7 @@
 
 ## Context — where this sits
 
-The [north-star roadmap](2026-07-05-crabka-north-star-roadmap-design.md) Chapter 1 (flagship) is a diskless / object-storage-native broker; its Milestone 1 is a shared low-latency WAL. That milestone decomposes into six independently-specifiable slices:
+The [north-star roadmap](2026-07-05-krabka-north-star-roadmap-design.md) Chapter 1 (flagship) is a diskless / object-storage-native broker; its Milestone 1 is a shared low-latency WAL. That milestone decomposes into six independently-specifiable slices:
 
 1. **WAL seam + durability abstraction (this spec)** — the `WalStore` seam + moving the `acks=all` boundary off ISR-HW onto WAL-durability, backed by the simplest medium. Proves Delta A (an acked record never becomes a loss).
 2. KRaft-assigned offset sequencer for diskless partitions.

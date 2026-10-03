@@ -83,7 +83,7 @@ RFC 2253 vs 4514 ordering quirks.
     UserCert { cert_pem, key_pem, not_after }`. Leaf with
     `digitalSignature + keyEncipherment` and `EKU = clientAuth`.
   Reusable verbatim by slice 30 (inter-broker CA) and slice 33's
-  test-cert generation. Keeping this in `crabka-security` keeps the
+  test-cert generation. Keeping this in `krabka-security` keeps the
   operator crate kube-only.
 
 - **`crates/operator/src/controller/user_tls.rs` — controller-side
@@ -172,7 +172,7 @@ minute.
 ## Secret shapes
 
 Three Secret kinds, all server-side-applied with field-manager
-`crabka-operator`, owner-ref'd as noted.
+`krabka-operator`, owner-ref'd as noted.
 
 | Secret name                        | Keys                | Owner ref     | Lifetime       |
 |------------------------------------|---------------------|---------------|----------------|
@@ -192,7 +192,7 @@ build a trust store without separately mounting the cluster-wide
 Secret.
 
 Labels on all three:
-- `app.kubernetes.io/managed-by: crabka-operator`
+- `app.kubernetes.io/managed-by: krabka-operator`
 - `crabka.io/cluster: <cluster>`
 - on the per-user Secret only: `crabka.io/user: <name>`
 
@@ -280,7 +280,7 @@ Five tests, all working over the in-memory PEM output (no I/O):
   `Subject = CN=alice` exactly (bare RDN), assert
   `verify_signature` against the CA public key.
 - `issue_user_cert_dn_matches_extract_principal` — the leaf DN
-  observed via `crabka_security::extract_principal_from_cert` (the
+  observed via `krabka_security::extract_principal_from_cert` (the
   function the broker uses on the SSL session) must equal
   `CN=alice`. Pins the wire round-trip.
 - `extended_key_usage_is_client_auth_on_leaf` — assert leaf EKU has

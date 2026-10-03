@@ -21,7 +21,7 @@ pub enum RecordsError {
     RecordParse(String),
 
     #[error("compression: {0}")]
-    Compression(#[from] crabka_compression::CompressionError),
+    Compression(#[from] krabka_compression::CompressionError),
 
     #[error("zerocopy reinterpretation failed")]
     ZerocopyFailure,

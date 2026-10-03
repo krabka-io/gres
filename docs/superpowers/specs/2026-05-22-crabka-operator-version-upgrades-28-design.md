@@ -308,7 +308,7 @@ crates/operator/src/
 crates/operator/tests/reconcile_kafka.rs   # MODIFIED — new cases + literal updates
 deploy/crds/crabka.io_kafkas.yaml          # REGENERATED
 .github/workflows/operator-e2e.yml         # MODIFIED — version-upgrade probe
-docs/superpowers/plans/2026-05-22-crabka-operator-version-upgrades-28.md  # plan
+docs/superpowers/plans/2026-05-22-krabka-operator-version-upgrades-28.md  # plan
 ```
 
 Adding a `KafkaSpec` field touches every `KafkaSpec { .. }` literal
@@ -316,11 +316,11 @@ Adding a `KafkaSpec` field touches every `KafkaSpec { .. }` literal
 
 ## 10. Acceptance criteria
 
-1. `cargo test -p crabka-operator` green (existing + new).
+1. `cargo test -p krabka-operator` green (existing + new).
 2. `cargo clippy --workspace --all-targets -- -D warnings` clean.
 3. `cargo fmt --check` clean.
 4. `tools/regen-crds.sh` produces no diff after commit.
-5. `helm lint charts/crabka-operator` passes.
+5. `helm lint charts/krabka-operator` passes.
 6. operator-e2e version-upgrade probe: a `metadataVersion` pin bump rolls
    the pod and renders the new `metadata.version`; an invalid pin sets
    `KafkaVersionValid=False` without rolling.

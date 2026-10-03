@@ -6,9 +6,9 @@
 
 **Architecture:** `crates/grpc-gateway/src/queue.rs` owns a `QueueSessionTable` (`session_id → ShareConsumer`, idle-evicted; broker lock expiry is the safety net); the three RPCs are thin adapters (`poll` / stage-acks-then-`commit` / `renew`). No broker changes.
 
-**Tech Stack:** Rust 2024 (pinned stable 1.96.0), `crabka-client-consumer` (share), connectrpc-axum (the gateway idiom), the in-process `Broker::start` harness + the `jvm_share_groups` differential harness, `assert2`/`nextest`, `cargo +nightly fmt`, `clippy::pedantic`.
+**Tech Stack:** Rust 2024 (pinned stable 1.96.0), `krabka-client-consumer` (share), connectrpc-axum (the gateway idiom), the in-process `Broker::start` harness + the `jvm_share_groups` differential harness, `assert2`/`nextest`, `cargo +nightly fmt`, `clippy::pedantic`.
 
-**Spec:** [`docs/superpowers/specs/2026-07-06-crabka-msg6-queue-rpc-design.md`](../specs/2026-07-06-crabka-msg6-queue-rpc-design.md).
+**Spec:** [`docs/superpowers/specs/2026-07-06-krabka-msg6-queue-rpc-design.md`](../specs/2026-07-06-krabka-msg6-queue-rpc-design.md).
 
 **PREREQUISITES:** none unlanded — the broker KIP-932 stack and the native `ShareConsumer` are built. (MSG-1 is precedent, not prerequisite: the headers addition here is on the *share* path.) The v1.1 vector work (Task 6) touches the umbrella crate once it exists; Tasks 1–5 are independent of it.
 
@@ -51,7 +51,7 @@
 - [ ] **Step 2: Implement** — `pub headers: Vec<(String, Option<Bytes>)>` on `ShareConsumerRecord`; materialize in the share poll decode exactly as classic `poll.rs` does for `ConsumerRecord.headers` (`:560` is the template). Fix any struct-literal sites.
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-client-consumer share && cargo test -p crabka-broker --test share_consume` → PASS.
+Run: `cargo test -p krabka-client-consumer share && cargo test -p krabka-broker --test share_consume` → PASS.
 
 ```bash
 git add crates/client-consumer crates/broker/tests
@@ -63,7 +63,7 @@ git commit -m "feat(client-consumer): carry record headers on the share-group po
 ## Task 2 (∥ Task 1): The proto surface
 
 - [ ] **Step 1:** Add the three RPCs + messages from the spec verbatim (`QueueAcquireRequest/Response`, `QueuedMessage` with `map<string,bytes> headers` + `delivery_count`, `QueueAckType`, `QueueAckEntry`, per-entry `QueueAckResult`, `QueueRenewRequest/Response`) to `gateway.proto`; regenerate.
-- [ ] **Step 2:** `cargo build -p crabka-grpc-gateway` green (handlers arrive in Task 4 — connectrpc-axum tolerates unregistered RPCs until the builder wires them; if the generated builder *requires* all handlers, stub them returning `Unimplemented` in this task and note it). Commit.
+- [ ] **Step 2:** `cargo build -p krabka-grpc-gateway` green (handlers arrive in Task 4 — connectrpc-axum tolerates unregistered RPCs until the builder wires them; if the generated builder *requires* all handlers, stub them returning `Unimplemented` in this task and note it). Commit.
 
 ```bash
 git add crates/grpc-gateway/proto
@@ -113,7 +113,7 @@ git commit -m "feat(gateway): principal-bound queue session table with idle evic
 - [ ] **Step 2: Implement** — `queue_acquire`: resolve-or-create the session (Read-ACL gate on group+topics, the `Subscribe` pattern; `ShareConsumer::start` in **Explicit** mode on first use), clamp `max_messages`/`wait_ms` to config, `poll`, map records (headers via the MSG-1 map policy: null→empty, dup→last-wins). `queue_acknowledge`: resolve session; per entry find the acquired record, `acknowledge(record, type)`; `commit()`; map per-entry broker errors into `QueueAckResult.error` (an entry the session never acquired → `InvalidArgument` per-entry). `queue_renew`: same shape onto `renew`. Unknown session → `FailedPrecondition("queue session expired; re-acquire")`.
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-grpc-gateway --test queue` → PASS (the acquire case).
+Run: `cargo test -p krabka-grpc-gateway --test queue` → PASS (the acquire case).
 
 ```bash
 git add crates/grpc-gateway/src crates/grpc-gateway/tests
@@ -135,7 +135,7 @@ git commit -m "feat(gateway): QueueAcquire/Acknowledge/Renew handlers over Share
 - [ ] **Step 2: The JVM cross-check** — extend the existing `jvm_share_groups` differential harness: gateway-acquire + `Release` a record, then the JVM `KafkaShareConsumer` on the same group re-acquires it with `delivery_count == 2`. **Memory note:** the JVM differential suite rewrites tracked protocol corpus fixtures — restore them after the run.
 - [ ] **Step 3: Verify + commit**
 
-Run: `cargo test -p crabka-grpc-gateway --test queue` (+ the JVM harness job) → PASS.
+Run: `cargo test -p krabka-grpc-gateway --test queue` (+ the JVM harness job) → PASS.
 
 ```bash
 git add crates/grpc-gateway/tests
@@ -159,7 +159,7 @@ git commit -m "feat(sdk-conformance): contract v1.1 queue vectors with version-s
 
 ## Task 7: Final gate
 
-- [ ] `cargo +nightly fmt --check`; `cargo clippy -p crabka-grpc-gateway -p crabka-client-consumer --all-targets -- -D warnings`; `cargo nextest run -p crabka-grpc-gateway -p crabka-client-consumer` (+ the JVM differential job) — all green; corpus fixtures restored; `./tools/check-publish-allowlist.sh` → 0. Commit any formatting.
+- [ ] `cargo +nightly fmt --check`; `cargo clippy -p krabka-grpc-gateway -p krabka-client-consumer --all-targets -- -D warnings`; `cargo nextest run -p krabka-grpc-gateway -p krabka-client-consumer` (+ the JVM differential job) — all green; corpus fixtures restored; `./tools/check-publish-allowlist.sh` → 0. Commit any formatting.
 
 ---
 

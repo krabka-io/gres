@@ -73,7 +73,7 @@ Co-located in a new `crates/broker/src/quota/controller_mutation.rs` to avoid du
 
 use std::time::Duration;
 
-use crabka_metadata::MetadataImage;
+use krabka_metadata::MetadataImage;
 
 use super::buckets::QuotaBuckets;
 use super::lookup::lookup_quota_with_key;

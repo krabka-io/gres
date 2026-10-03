@@ -6,7 +6,7 @@
 
 use std::collections::BTreeSet;
 
-use crabka_pgparser::ast::{
+use krabka_pgparser::ast::{
     DistinctClause, Expr, QueryExpr, SelectItem, SelectStmt, TableExpr, ValuesStmt,
 };
 
@@ -141,12 +141,12 @@ fn short_circuits_to_false(expr: &Expr) -> bool {
     match expr {
         Expr::BoolLiteral(false) => true,
         Expr::Binary {
-            op: crabka_pgparser::ast::BinaryOp::And,
+            op: krabka_pgparser::ast::BinaryOp::And,
             left,
             ..
         } => short_circuits_to_false(left),
         Expr::Binary {
-            op: crabka_pgparser::ast::BinaryOp::Or,
+            op: krabka_pgparser::ast::BinaryOp::Or,
             left,
             right,
         } => short_circuits_to_false(left) && short_circuits_to_false(right),
@@ -342,8 +342,8 @@ fn nested_loop_input_plan(
             node: PlanNode::NestedLoop {
                 outer: Box::new(loop_plan),
                 inner: Box::new(inner?),
-                kind: crabka_pgparser::ast::JoinKind::Cross,
-                constraint: crabka_pgparser::ast::JoinConstraint::None,
+                kind: krabka_pgparser::ast::JoinKind::Cross,
+                constraint: krabka_pgparser::ast::JoinConstraint::None,
             },
         };
     }
@@ -427,13 +427,13 @@ fn execute_nested_loop_window_with_state(
 struct NestedLoopTail<'a, 'b> {
     read_ctx: &'a crate::subquery::SubCtx<'b>,
     sources: &'a [TableExpr],
-    fields: &'a [crabka_pgwire::engine::FieldDescription],
-    tys: &'a [crabka_pgtypes::ColumnType],
-    order_by: &'a [crabka_pgparser::ast::OrderItem],
+    fields: &'a [krabka_pgwire::engine::FieldDescription],
+    tys: &'a [krabka_pgtypes::ColumnType],
+    order_by: &'a [krabka_pgparser::ast::OrderItem],
     sort_positions: &'a [usize],
     pruned_columns: Option<&'a [ColumnBinding]>,
-    limit: Option<&'a crabka_pgparser::ast::Expr>,
-    offset: Option<&'a crabka_pgparser::ast::Expr>,
+    limit: Option<&'a krabka_pgparser::ast::Expr>,
+    offset: Option<&'a krabka_pgparser::ast::Expr>,
     select: &'a SelectStmt,
 }
 
@@ -586,7 +586,7 @@ fn is_nested_loop_source(read_ctx: &crate::subquery::SubCtx<'_>, source: &TableE
                         let mut references_column = false;
                         crate::grouping::visit_expr(arg, &mut |node| {
                             references_column |=
-                                matches!(node, crabka_pgparser::ast::Expr::Column { .. });
+                                matches!(node, krabka_pgparser::ast::Expr::Column { .. });
                         });
                         !references_column
                     })
@@ -601,7 +601,7 @@ fn is_nested_loop_source(read_ctx: &crate::subquery::SubCtx<'_>, source: &TableE
                     let mut references_column = false;
                     crate::grouping::visit_expr(expr, &mut |node| {
                         references_column |=
-                            matches!(node, crabka_pgparser::ast::Expr::Column { .. });
+                            matches!(node, krabka_pgparser::ast::Expr::Column { .. });
                     });
                     !references_column
                 })
@@ -612,7 +612,7 @@ fn is_nested_loop_source(read_ctx: &crate::subquery::SubCtx<'_>, source: &TableE
                     let mut references_column = false;
                     crate::grouping::visit_expr(expr, &mut |node| {
                         references_column |=
-                            matches!(node, crabka_pgparser::ast::Expr::Column { .. });
+                            matches!(node, krabka_pgparser::ast::Expr::Column { .. });
                     });
                     !references_column
                 })
@@ -627,7 +627,7 @@ fn is_nested_loop_source(read_ctx: &crate::subquery::SubCtx<'_>, source: &TableE
                 && is_nested_loop_source(read_ctx, right)
                 && !matches!(
                     constraint,
-                    crabka_pgparser::ast::JoinConstraint::On(expr)
+                    krabka_pgparser::ast::JoinConstraint::On(expr)
                         if crate::agg::contains_aggregate(expr)
                 )
         }
@@ -844,7 +844,7 @@ fn prune_nested_loop_relation(
     for row in &mut relation.rows {
         for (column, datum) in relation.scope.columns.iter().zip(row) {
             if !pruned_columns.contains(column) {
-                *datum = crabka_pgtypes::Datum::Null;
+                *datum = krabka_pgtypes::Datum::Null;
             }
         }
     }
@@ -954,8 +954,8 @@ fn execute_nested_loop_plan(
                     inner_security_free,
                 )?;
             }
-            let constraint = if matches!(kind, crabka_pgparser::ast::JoinKind::Cross)
-                && matches!(constraint, crabka_pgparser::ast::JoinConstraint::None)
+            let constraint = if matches!(kind, krabka_pgparser::ast::JoinKind::Cross)
+                && matches!(constraint, krabka_pgparser::ast::JoinConstraint::None)
             {
                 let mut scope = outer_relation.scope.clone();
                 scope
@@ -966,7 +966,7 @@ fn execute_nested_loop_plan(
                     &scope,
                     outer_security_free && inner_security_free,
                 )
-                .map(crabka_pgparser::ast::JoinConstraint::On)
+                .map(krabka_pgparser::ast::JoinConstraint::On)
                 .unwrap_or(constraint)
             } else {
                 constraint
@@ -1091,8 +1091,8 @@ pub(crate) fn execute_values(
 
 struct ResultPlan {
     plan: Plan,
-    fields: Vec<crabka_pgwire::engine::FieldDescription>,
-    tys: Vec<crabka_pgtypes::ColumnType>,
+    fields: Vec<krabka_pgwire::engine::FieldDescription>,
+    tys: Vec<krabka_pgtypes::ColumnType>,
 }
 
 fn plan_result(select: &SelectStmt) -> Result<Option<ResultPlan>, ExecError> {
@@ -1115,9 +1115,9 @@ fn plan_result(select: &SelectStmt) -> Result<Option<ResultPlan>, ExecError> {
     exec::reject_from_less_wildcard(&select.projection)?;
     let scope = Scope::empty();
     let (fields, exprs, tys): (
-        Vec<crabka_pgwire::engine::FieldDescription>,
-        Vec<crabka_pgparser::ast::Expr>,
-        Vec<crabka_pgtypes::ColumnType>,
+        Vec<krabka_pgwire::engine::FieldDescription>,
+        Vec<krabka_pgparser::ast::Expr>,
+        Vec<krabka_pgtypes::ColumnType>,
     ) = exec::resolve_projection(&select.projection, &scope)?;
     if crate::srf::exprs_contain_srf(&exprs) {
         return Ok(None);
@@ -1144,11 +1144,11 @@ fn plan_result(select: &SelectStmt) -> Result<Option<ResultPlan>, ExecError> {
 struct SeqScanPlan {
     plan: Plan,
     source: TableExpr,
-    fields: Vec<crabka_pgwire::engine::FieldDescription>,
-    tys: Vec<crabka_pgtypes::ColumnType>,
-    limit: Option<crabka_pgparser::ast::Expr>,
-    offset: Option<crabka_pgparser::ast::Expr>,
-    order_by: Vec<crabka_pgparser::ast::OrderItem>,
+    fields: Vec<krabka_pgwire::engine::FieldDescription>,
+    tys: Vec<krabka_pgtypes::ColumnType>,
+    limit: Option<krabka_pgparser::ast::Expr>,
+    offset: Option<krabka_pgparser::ast::Expr>,
+    order_by: Vec<krabka_pgparser::ast::OrderItem>,
     sort_positions: Vec<usize>,
     with_ties: bool,
     aggregate: Option<SelectStmt>,
@@ -1207,7 +1207,7 @@ fn plan_seq_scan(
         name,
         crate::relname::SchemaDisposition::Reference,
     )?;
-    let table = crabka_pgcatalog::get_table(read_ctx.catalog_kv, &relation)?;
+    let table = krabka_pgcatalog::get_table(read_ctx.catalog_kv, &relation)?;
     let filter = crate::plan::rewrite::reduce_not_null_test(
         select.filter.as_ref(),
         &table,
@@ -1217,7 +1217,7 @@ fn plan_seq_scan(
     // The legacy path already turns filtered indexed tables into bounded index
     // probes. Keep that access path until P3 supplies an index scan leaf.
     if filter.is_some() && !matches!(filter, Some(Expr::BoolLiteral(_))) {
-        if !crabka_pgcatalog::list_table_indexes(read_ctx.catalog_kv, &relation)?.is_empty() {
+        if !krabka_pgcatalog::list_table_indexes(read_ctx.catalog_kv, &relation)?.is_empty() {
             return Ok(None);
         }
     }
@@ -1493,7 +1493,7 @@ fn plan_function_scan(
             let (query, _routine, names) =
                 crate::routine::table_function_expansion(read_ctx.catalog_kv, &functions[0])?;
             let scope = match &query.body {
-                crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Select(
+                krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Select(
                     inner,
                 )) => {
                     let Some(ResultPlan { fields, tys, .. }) = plan_result(inner)? else {
@@ -1501,7 +1501,7 @@ fn plan_function_scan(
                     };
                     exec::projected_scope(&fields, &tys)
                 }
-                crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Values(
+                krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Values(
                     values,
                 )) => crate::values::values_to_relation_with_ctes(read_ctx, values)?.scope,
                 _ => return Ok(None),
@@ -1965,7 +1965,7 @@ fn plan_subquery_input(
         return Ok(None);
     };
     match &subquery.body {
-        crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Select(inner)) => {
+        krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Select(inner)) => {
             if subquery.with.is_some() || subquery.locking.is_some() {
                 return Ok(None);
             }
@@ -1979,7 +1979,7 @@ fn plan_subquery_input(
                 Ok(plan_seq_scan(read_ctx, &inner)?.map(|planned| planned.plan))
             }
         }
-        crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Values(values)) => {
+        krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Values(values)) => {
             if subquery.with.is_some() || subquery.locking.is_some() {
                 return Ok(None);
             }
@@ -1998,7 +1998,7 @@ fn plan_subquery_input(
 }
 
 pub(crate) fn select_with_query_tail(
-    query: &crabka_pgparser::ast::QueryExpr,
+    query: &krabka_pgparser::ast::QueryExpr,
     select: &SelectStmt,
 ) -> SelectStmt {
     let mut select = select.clone();
@@ -2508,8 +2508,8 @@ fn needs_aggregate_node(select: &SelectStmt) -> bool {
 }
 
 fn bind_target_list(
-    exprs: &[crabka_pgparser::ast::Expr],
-    fields: &[crabka_pgwire::engine::FieldDescription],
+    exprs: &[krabka_pgparser::ast::Expr],
+    fields: &[krabka_pgwire::engine::FieldDescription],
     scope: &Scope,
 ) -> Result<Vec<TargetEntry>, ExecError> {
     exprs
@@ -2535,8 +2535,8 @@ fn is_ungrouped_aggregate(select: &SelectStmt) -> bool {
 
 struct ResultExecutor<'a> {
     ctx: &'a crate::clock::EvalCtx,
-    fields: Vec<crabka_pgwire::engine::FieldDescription>,
-    tys: Vec<crabka_pgtypes::ColumnType>,
+    fields: Vec<krabka_pgwire::engine::FieldDescription>,
+    tys: Vec<krabka_pgtypes::ColumnType>,
 }
 
 impl Executor for ResultExecutor<'_> {
@@ -2824,7 +2824,7 @@ impl Executor for SubqueryScanExecutor<'_, '_> {
         };
         let child_plan = (**input).clone();
         let relation = state.execute_child(child_plan, |child| match &subquery.body {
-            crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Select(
+            krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Select(
                 inner,
             )) => {
                 let inner = select_with_query_tail(subquery, inner);
@@ -2854,7 +2854,7 @@ impl Executor for SubqueryScanExecutor<'_, '_> {
                     execute_seq_scan_plan(child, self.read_ctx, planned)
                 }
             }
-            crabka_pgparser::ast::SetExpr::Query(crabka_pgparser::ast::QueryBody::Values(
+            krabka_pgparser::ast::SetExpr::Query(krabka_pgparser::ast::QueryBody::Values(
                 values,
             )) => ValuesExecutor {
                 ctx: self.read_ctx,
@@ -3014,8 +3014,8 @@ impl Executor for NamedTuplestoreScanExecutor<'_, '_> {
 struct FilterExecutor<'a, 'b> {
     read_ctx: &'a crate::subquery::SubCtx<'b>,
     source: TableExpr,
-    fields: Vec<crabka_pgwire::engine::FieldDescription>,
-    tys: Vec<crabka_pgtypes::ColumnType>,
+    fields: Vec<krabka_pgwire::engine::FieldDescription>,
+    tys: Vec<krabka_pgtypes::ColumnType>,
 }
 
 impl Executor for FilterExecutor<'_, '_> {
@@ -3087,7 +3087,7 @@ fn filter_pushdown_plan(
         name,
         crate::relname::SchemaDisposition::Reference,
     )?;
-    let table = crabka_pgcatalog::get_table(read_ctx.catalog_kv, &name)?;
+    let table = krabka_pgcatalog::get_table(read_ctx.catalog_kv, &name)?;
     let predicate = crate::plan_dist::predicate_for_filter(&table, Some(qual.clause.expr()));
     if matches!(predicate, crate::PredicatePushdown::FullScan) {
         return Ok(None);
@@ -3102,8 +3102,8 @@ fn filter_pushdown_plan(
 fn execute_filter_rows(
     state: &mut PlanState,
     relation: Relation,
-    fields: &[crabka_pgwire::engine::FieldDescription],
-    tys: &[crabka_pgtypes::ColumnType],
+    fields: &[krabka_pgwire::engine::FieldDescription],
+    tys: &[krabka_pgtypes::ColumnType],
     ctx: &crate::clock::EvalCtx,
 ) -> Result<Relation, ExecError> {
     let relation = filter_relation_rows(state, relation, ctx)?;
@@ -3113,8 +3113,8 @@ fn execute_filter_rows(
 fn project_filter_rows(
     state: &PlanState,
     relation: Relation,
-    fields: &[crabka_pgwire::engine::FieldDescription],
-    tys: &[crabka_pgtypes::ColumnType],
+    fields: &[krabka_pgwire::engine::FieldDescription],
+    tys: &[krabka_pgtypes::ColumnType],
     ctx: &crate::clock::EvalCtx,
 ) -> Result<Relation, ExecError> {
     let exprs: Vec<_> = state
@@ -3160,8 +3160,8 @@ fn filter_relation_rows(
 struct AggregateExecutor<'a, 'b> {
     read_ctx: &'a crate::subquery::SubCtx<'b>,
     source: TableExpr,
-    fields: Vec<crabka_pgwire::engine::FieldDescription>,
-    tys: Vec<crabka_pgtypes::ColumnType>,
+    fields: Vec<krabka_pgwire::engine::FieldDescription>,
+    tys: Vec<krabka_pgtypes::ColumnType>,
     select: SelectStmt,
 }
 
@@ -3198,8 +3198,8 @@ impl Executor for AggregateExecutor<'_, '_> {
 struct ProjectSetExecutor<'a, 'b> {
     read_ctx: &'a crate::subquery::SubCtx<'b>,
     source: TableExpr,
-    fields: Vec<crabka_pgwire::engine::FieldDescription>,
-    tys: Vec<crabka_pgtypes::ColumnType>,
+    fields: Vec<krabka_pgwire::engine::FieldDescription>,
+    tys: Vec<krabka_pgtypes::ColumnType>,
     select: SelectStmt,
 }
 
@@ -3275,11 +3275,11 @@ impl Executor for WindowAggExecutor<'_, '_> {
 struct LimitExecutor<'a, 'b> {
     read_ctx: &'a crate::subquery::SubCtx<'b>,
     source: TableExpr,
-    fields: Vec<crabka_pgwire::engine::FieldDescription>,
-    tys: Vec<crabka_pgtypes::ColumnType>,
-    limit: Option<crabka_pgparser::ast::Expr>,
-    offset: Option<crabka_pgparser::ast::Expr>,
-    order_by: Vec<crabka_pgparser::ast::OrderItem>,
+    fields: Vec<krabka_pgwire::engine::FieldDescription>,
+    tys: Vec<krabka_pgtypes::ColumnType>,
+    limit: Option<krabka_pgparser::ast::Expr>,
+    offset: Option<krabka_pgparser::ast::Expr>,
+    order_by: Vec<krabka_pgparser::ast::OrderItem>,
     sort_positions: Vec<usize>,
     with_ties: bool,
 }
@@ -3330,9 +3330,9 @@ fn execute_seq_scan_input(
     state: &mut PlanState,
     read_ctx: &crate::subquery::SubCtx<'_>,
     source: TableExpr,
-    fields: Vec<crabka_pgwire::engine::FieldDescription>,
-    tys: Vec<crabka_pgtypes::ColumnType>,
-    order_by: Vec<crabka_pgparser::ast::OrderItem>,
+    fields: Vec<krabka_pgwire::engine::FieldDescription>,
+    tys: Vec<krabka_pgtypes::ColumnType>,
+    order_by: Vec<krabka_pgparser::ast::OrderItem>,
     sort_positions: Vec<usize>,
 ) -> Result<Relation, ExecError> {
     match &state.plan.node {
@@ -3368,17 +3368,17 @@ fn execute_seq_scan_input(
 struct SortExecutor<'a, 'b> {
     read_ctx: &'a crate::subquery::SubCtx<'b>,
     source: TableExpr,
-    fields: Vec<crabka_pgwire::engine::FieldDescription>,
-    tys: Vec<crabka_pgtypes::ColumnType>,
-    order_by: Vec<crabka_pgparser::ast::OrderItem>,
+    fields: Vec<krabka_pgwire::engine::FieldDescription>,
+    tys: Vec<krabka_pgtypes::ColumnType>,
+    order_by: Vec<krabka_pgparser::ast::OrderItem>,
     sort_positions: Vec<usize>,
 }
 
 struct UniqueExecutor<'a, 'b> {
     read_ctx: &'a crate::subquery::SubCtx<'b>,
     source: TableExpr,
-    fields: Vec<crabka_pgwire::engine::FieldDescription>,
-    tys: Vec<crabka_pgtypes::ColumnType>,
+    fields: Vec<krabka_pgwire::engine::FieldDescription>,
+    tys: Vec<krabka_pgtypes::ColumnType>,
 }
 
 impl Executor for UniqueExecutor<'_, '_> {
@@ -3461,7 +3461,7 @@ impl Executor for SortExecutor<'_, '_> {
 fn sort_relation_rows(
     state: &mut PlanState,
     mut relation: Relation,
-    order_by: &[crabka_pgparser::ast::OrderItem],
+    order_by: &[krabka_pgparser::ast::OrderItem],
     positions: &[usize],
     statement_memory: &crate::scanner::StatementMemory,
 ) -> Result<Relation, ExecError> {
@@ -3509,7 +3509,7 @@ fn limit_relation_rows_with_ties(
     offset: Option<i64>,
     limit: Option<i64>,
     with_ties: bool,
-    order_by: &[crabka_pgparser::ast::OrderItem],
+    order_by: &[krabka_pgparser::ast::OrderItem],
     sort_positions: &[usize],
 ) -> Relation {
     if !with_ties {
@@ -3582,14 +3582,14 @@ mod tests {
         atomic::{AtomicBool, Ordering},
     };
 
-    use crabka_pgparser::ast::{Expr, GroupingClause, QueryBody, SetExpr, Statement};
-    use crabka_pgtypes::{ColumnType, Datum};
+    use krabka_pgparser::ast::{Expr, GroupingClause, QueryBody, SetExpr, Statement};
+    use krabka_pgtypes::{ColumnType, Datum};
 
     use super::*;
     use crate::scope::{ColumnBinding, Exposure};
 
     fn select(sql: &str) -> SelectStmt {
-        let statements = crabka_pgparser::parser::parse(sql).expect("query parses");
+        let statements = krabka_pgparser::parser::parse(sql).expect("query parses");
         let [Statement::Query(query)] = statements.as_slice() else {
             panic!("expected one query")
         };
@@ -3628,8 +3628,8 @@ mod tests {
     fn target_entries_keep_one_based_positions_for_scan_plans() {
         let scope = Scope::empty();
         let exprs = [
-            crabka_pgparser::parser::parse_expression("1").expect("first expression"),
-            crabka_pgparser::parser::parse_expression("2").expect("second expression"),
+            krabka_pgparser::parser::parse_expression("1").expect("first expression"),
+            krabka_pgparser::parser::parse_expression("2").expect("second expression"),
         ];
         let fields = [
             exec::field("one", ColumnType::Int4),
@@ -3712,7 +3712,7 @@ mod tests {
         }
 
         let mut group_by = select("SELECT 1");
-        group_by.group_by = vec![crabka_pgparser::parser::parse_expression("1").expect("expr")];
+        group_by.group_by = vec![krabka_pgparser::parser::parse_expression("1").expect("expr")];
         assert!(plan_result(&group_by).expect("group by").is_none());
 
         let mut grouping = select("SELECT 1");
@@ -3723,7 +3723,7 @@ mod tests {
         assert!(plan_result(&grouping).expect("grouping").is_none());
 
         let mut having = select("SELECT 1");
-        having.having = Some(crabka_pgparser::parser::parse_expression("true").expect("expr"));
+        having.having = Some(krabka_pgparser::parser::parse_expression("true").expect("expr"));
         assert!(plan_result(&having).expect("having").is_none());
     }
 
@@ -3739,7 +3739,7 @@ mod tests {
                 .expect("execute ok")
                 .expect("Result plan");
 
-        assert_eq!(emitted.rows, vec![vec![crabka_pgtypes::Datum::Int4(5)]]);
+        assert_eq!(emitted.rows, vec![vec![krabka_pgtypes::Datum::Int4(5)]]);
         assert!(rejected.rows.is_empty());
         assert_eq!(
             (
@@ -3788,7 +3788,7 @@ mod tests {
             table: Some("t".into()),
             name: "a".into(),
         };
-        let filter = crabka_pgparser::parser::parse_expression("t.a > 1").expect("filter");
+        let filter = krabka_pgparser::parser::parse_expression("t.a > 1").expect("filter");
         let plan = Plan {
             target_list: vec![TargetEntry {
                 expr: BoundExpr::new(&projection, &scope).expect("bound projection"),
@@ -3883,7 +3883,7 @@ mod tests {
                 scope: Scope::empty(),
                 rows: vec![vec![Datum::Int4(1)]],
             },
-            &crate::scanner::StatementMemory::new(crabka_units::bytes(0)),
+            &crate::scanner::StatementMemory::new(krabka_units::bytes(0)),
         )
         .expect_err("retained distinct rows must respect statement memory")
         .into_pg();
@@ -3894,10 +3894,10 @@ mod tests {
     #[tokio::test]
     async fn comma_join_pushes_predicates_and_reclaims_dead_intermediates() {
         use assert2::assert;
-        use crabka_pgwire::engine::{Engine, QueryResult, Session};
+        use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
         let engine = crate::SqlEngine::new_with_policy(crate::RuntimePolicy {
-            blocking_query_memory: crabka_units::bytes(96 * 1024),
+            blocking_query_memory: krabka_units::bytes(96 * 1024),
             ..Default::default()
         })
         .expect("policy");
@@ -3933,10 +3933,10 @@ mod tests {
     #[tokio::test]
     async fn comma_join_pushes_local_predicates_before_each_nested_loop() {
         use assert2::assert;
-        use crabka_pgwire::engine::{Engine, QueryResult, Session};
+        use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
         let engine = crate::SqlEngine::new_with_policy(crate::RuntimePolicy {
-            blocking_query_memory: crabka_units::bytes(256 * 1024),
+            blocking_query_memory: krabka_units::bytes(256 * 1024),
             ..Default::default()
         })
         .expect("policy");
@@ -3971,10 +3971,10 @@ mod tests {
     #[tokio::test]
     async fn comma_join_prunes_unreferenced_wide_columns() {
         use assert2::assert;
-        use crabka_pgwire::engine::{Engine, QueryResult, Session};
+        use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
         let engine = crate::SqlEngine::new_with_policy(crate::RuntimePolicy {
-            blocking_query_memory: crabka_units::bytes(96 * 1024),
+            blocking_query_memory: krabka_units::bytes(96 * 1024),
             ..Default::default()
         })
         .expect("policy");
@@ -4005,10 +4005,10 @@ mod tests {
     #[tokio::test]
     async fn comma_join_prunes_unreferenced_aggregate_inputs() {
         use assert2::assert;
-        use crabka_pgwire::engine::{Engine, QueryResult, Session};
+        use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
         let engine = crate::SqlEngine::new_with_policy(crate::RuntimePolicy {
-            blocking_query_memory: crabka_units::bytes(128 * 1024),
+            blocking_query_memory: krabka_units::bytes(128 * 1024),
             ..Default::default()
         })
         .expect("policy");
@@ -4045,7 +4045,7 @@ mod tests {
     #[tokio::test]
     async fn comma_join_keeps_unprojected_group_keys() {
         use assert2::assert;
-        use crabka_pgwire::engine::{Engine, QueryResult, Session};
+        use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
         let engine = crate::SqlEngine::new();
         let mut session = engine.connect();

@@ -199,7 +199,7 @@ test passes green while checking nothing.
   config so it can't hide counterexamples.
 - `target_max_depth(d)` as a hard cap.
 - **CI config:** 3 voters, ≤2 client appends, ≤1 crash, small inflight/epoch/log
-  caps → completes in seconds under `cargo test -p crabka-raft`. Larger configs
+  caps → completes in seconds under `cargo test -p krabka-raft`. Larger configs
   (e.g. 5 voters) gated behind `#[ignore]` and/or a nightly job;
   `spawn_simulation()` as a randomized fallback for spaces too large to exhaust.
 
@@ -261,7 +261,7 @@ the Workstream-A model; the integration tests verify the real wiring matches.
 
 ## Verification plan
 
-- `cargo test -p crabka-raft` runs the bounded model check and passes
+- `cargo test -p krabka-raft` runs the bounded model check and passes
   deterministically (same result every run, no wall-clock dependence).
 - **Anti-vacuity proof:** temporarily disable a known invariant gate (e.g. the
   leader-completeness / `epoch_start_offset` HWM gate in

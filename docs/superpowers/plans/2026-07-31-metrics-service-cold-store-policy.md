@@ -6,7 +6,7 @@
 
 **Architecture:** `RefreshingMetricBlockStore` keeps its constructor and owns two `Time` fields initialized from named defaults. Direct builder setters inject values parsed by the standalone binary, and all three service roles apply them before constructing their Prometheus API state.
 
-**Tech Stack:** Rust, Clap, `crabka-units`, Tokio, object_store, Cargo.
+**Tech Stack:** Rust, Clap, `krabka-units`, Tokio, object_store, Cargo.
 
 ## Global Constraints
 
@@ -47,7 +47,7 @@ fn refreshing_blockstore_policy_defaults_and_overrides() {
         Arc::clone(&object_store),
         url::Url::parse("memory:///").unwrap(),
         "metrics",
-        crabka_promql::WalHead::new(),
+        krabka_promql::WalHead::new(),
     );
     check!(defaults.cold_cache_ttl == super::DEFAULT_COLD_CACHE_TTL);
     check!(
@@ -59,7 +59,7 @@ fn refreshing_blockstore_policy_defaults_and_overrides() {
         object_store,
         url::Url::parse("memory:///").unwrap(),
         "metrics",
-        crabka_promql::WalHead::new(),
+        krabka_promql::WalHead::new(),
     )
     .with_cold_cache_ttl(secs(5))
     .with_unbounded_compatibility_lookback(minutes(10));
@@ -79,7 +79,7 @@ fn configured_lookback_normalizes_only_unbounded_range() {
 #[test]
 fn configured_cold_cache_ttl_controls_freshness() {
     let object_store: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
-    let cold = crabka_promql::MetricBlockStore::new(crabka_blockstore::BlockStore::new(
+    let cold = krabka_promql::MetricBlockStore::new(krabka_blockstore::BlockStore::new(
         object_store,
         url::Url::parse("memory:///").unwrap(),
     ));
@@ -100,9 +100,9 @@ fn configured_cold_cache_ttl_controls_freshness() {
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-metrics-service refreshing_blockstore_policy_defaults_and_overrides --locked
+  cargo test -p krabka-metrics-service refreshing_blockstore_policy_defaults_and_overrides --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-metrics-service configured_lookback_normalizes_only_unbounded_range --locked
+  cargo test -p krabka-metrics-service configured_lookback_normalizes_only_unbounded_range --locked
 ```
 
 Expected: compilation fails because the policy fields, setters, and explicit normalization inputs do not exist.
@@ -162,11 +162,11 @@ Call it from `current_store` with `self.unbounded_compatibility_lookback` and `u
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-metrics-service refreshing_blockstore_policy --locked
+  cargo test -p krabka-metrics-service refreshing_blockstore_policy --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-metrics-service configured_lookback_normalizes_only_unbounded_range --locked
+  cargo test -p krabka-metrics-service configured_lookback_normalizes_only_unbounded_range --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-metrics-service configured_cold_cache_ttl_controls_freshness --locked
+  cargo test -p krabka-metrics-service configured_cold_cache_ttl_controls_freshness --locked
 ```
 
 Expected: all selected tests pass.
@@ -187,8 +187,8 @@ git commit -m "feat(metrics): inject cold-store policy"
 
 **Interfaces:**
 - Consumes: both named defaults and both `RefreshingMetricBlockStore` builders.
-- Produces: `--cold-cache-ttl` / `CRABKA_METRICS_COLD_CACHE_TTL`.
-- Produces: `--unbounded-compatibility-lookback` / `CRABKA_METRICS_UNBOUNDED_COMPATIBILITY_LOOKBACK`.
+- Produces: `--cold-cache-ttl` / `KRABKA_METRICS_COLD_CACHE_TTL`.
+- Produces: `--unbounded-compatibility-lookback` / `KRABKA_METRICS_UNBOUNDED_COMPATIBILITY_LOOKBACK`.
 - Preserves: the flat CLI and all target startup signatures.
 
 - [x] **Step 1: Write failing CLI and environment tests**
@@ -199,15 +199,15 @@ Add default, override, and invalid-value coverage:
 #[test]
 fn cold_store_policy_parses_defaults_overrides_and_boundaries() {
     let defaults =
-        Cli::try_parse_from(["crabka-metrics-service", "--target", "querier"]).unwrap();
-    check!(defaults.cold_cache_ttl == crabka_metrics_service::DEFAULT_COLD_CACHE_TTL);
+        Cli::try_parse_from(["krabka-metrics-service", "--target", "querier"]).unwrap();
+    check!(defaults.cold_cache_ttl == krabka_metrics_service::DEFAULT_COLD_CACHE_TTL);
     check!(
         defaults.unbounded_compatibility_lookback
-            == crabka_metrics_service::DEFAULT_UNBOUNDED_COMPATIBILITY_LOOKBACK
+            == krabka_metrics_service::DEFAULT_UNBOUNDED_COMPATIBILITY_LOOKBACK
     );
 
     let configured = Cli::try_parse_from([
-        "crabka-metrics-service",
+        "krabka-metrics-service",
         "--target",
         "querier",
         "--cold-cache-ttl",
@@ -227,7 +227,7 @@ fn cold_store_policy_parses_defaults_overrides_and_boundaries() {
     ] {
         assert2::assert!(
             Cli::try_parse_from([
-                "crabka-metrics-service",
+                "krabka-metrics-service",
                 "--target",
                 "querier",
                 args[0],
@@ -244,7 +244,7 @@ Add the existing child-process pattern for environment precedence:
 ```rust
 #[test]
 fn cold_store_policy_reads_environment_and_prefers_cli() {
-    const CHILD: &str = "CRABKA_METRICS_SERVICE_COLD_STORE_POLICY_CHILD";
+    const CHILD: &str = "KRABKA_METRICS_SERVICE_COLD_STORE_POLICY_CHILD";
     if std::env::var_os(CHILD).is_none() {
         let status =
             std::process::Command::new(std::env::current_exe().expect("test executable"))
@@ -253,8 +253,8 @@ fn cold_store_policy_reads_environment_and_prefers_cli() {
                     "tests::cold_store_policy_reads_environment_and_prefers_cli",
                 ])
                 .env(CHILD, "1")
-                .env("CRABKA_METRICS_COLD_CACHE_TTL", "5s")
-                .env("CRABKA_METRICS_UNBOUNDED_COMPATIBILITY_LOOKBACK", "10m")
+                .env("KRABKA_METRICS_COLD_CACHE_TTL", "5s")
+                .env("KRABKA_METRICS_UNBOUNDED_COMPATIBILITY_LOOKBACK", "10m")
                 .status()
                 .expect("child test");
         assert2::assert!(status.success());
@@ -262,12 +262,12 @@ fn cold_store_policy_reads_environment_and_prefers_cli() {
     }
 
     let from_env =
-        Cli::try_parse_from(["crabka-metrics-service", "--target", "querier"]).unwrap();
+        Cli::try_parse_from(["krabka-metrics-service", "--target", "querier"]).unwrap();
     check!(from_env.cold_cache_ttl == secs(5));
     check!(from_env.unbounded_compatibility_lookback == minutes(10));
 
     let from_cli = Cli::try_parse_from([
-        "crabka-metrics-service",
+        "krabka-metrics-service",
         "--target",
         "querier",
         "--cold-cache-ttl",
@@ -285,7 +285,7 @@ fn cold_store_policy_reads_environment_and_prefers_cli() {
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-metrics-service --bin crabka-metrics-service \
+  cargo test -p krabka-metrics-service --bin krabka-metrics-service \
   cold_store_policy_parses_defaults_overrides_and_boundaries --locked
 ```
 
@@ -298,14 +298,14 @@ Add both `Cli` fields:
 ```rust
 #[arg(
     long,
-    env = "CRABKA_METRICS_COLD_CACHE_TTL",
+    env = "KRABKA_METRICS_COLD_CACHE_TTL",
     default_value = "30s",
     value_parser = parse::positive_time
 )]
 cold_cache_ttl: Time,
 #[arg(
     long,
-    env = "CRABKA_METRICS_UNBOUNDED_COMPATIBILITY_LOOKBACK",
+    env = "KRABKA_METRICS_UNBOUNDED_COMPATIBILITY_LOOKBACK",
     default_value = "1h",
     value_parser = parse::positive_time
 )]
@@ -331,9 +331,9 @@ Retain each role's existing `Arc::clone`, `WalHead::new`, or `head` argument.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-metrics-service --bin crabka-metrics-service cold_store_policy --locked
+  cargo test -p krabka-metrics-service --bin krabka-metrics-service cold_store_policy --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-metrics-service --lib --locked
+  cargo test -p krabka-metrics-service --lib --locked
 ```
 
 Expected: both binary policy tests and all library tests pass.
@@ -361,7 +361,7 @@ git commit -m "feat(metrics): configure cold-store policy"
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-metrics-service --all-targets --locked
+  cargo test -p krabka-metrics-service --all-targets --locked
 ```
 
 Expected: every non-ignored target passes; Docker-only tests remain explicitly ignored.
@@ -384,8 +384,8 @@ Expected: all commands exit successfully and Clippy emits no warnings.
 Replace the pending metrics-service paragraph with a completed statement naming:
 
 ```text
-CRABKA_METRICS_COLD_CACHE_TTL
-CRABKA_METRICS_UNBOUNDED_COMPATIBILITY_LOOKBACK
+KRABKA_METRICS_COLD_CACHE_TTL
+KRABKA_METRICS_UNBOUNDED_COMPATIBILITY_LOOKBACK
 ```
 
 State that defaults remain `30s` and `1h`, both remain positive UOM `Time`

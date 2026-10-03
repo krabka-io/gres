@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Status:** Approved
-**Type:** Subsystem design. The final slice of the [Chapter C roadmap](2026-07-06-crabka-postgres-chapter-roadmap-design.md) — copy-on-write timelines over the layer map. Mostly leverage: the layer store's versioned reads, the `pg/<tenant>/<timeline>/…` path segment PG-3 reserved, and PG-4b's versioned lifecycle were all shaped for this.
+**Type:** Subsystem design. The final slice of the [Chapter C roadmap](2026-07-06-krabka-postgres-chapter-roadmap-design.md) — copy-on-write timelines over the layer map. Mostly leverage: the layer store's versioned reads, the `pg/<tenant>/<timeline>/…` path segment PG-3 reserved, and PG-4b's versioned lifecycle were all shaped for this.
 
 ## Context — what a branch is here
 

@@ -4,14 +4,14 @@
 
 **Goal:** Idle tenants scale to zero and wake transparently on the first connection, with cold-start latency continuously measured and gated.
 
-**Architecture:** The compute self-suspends (final checkpoint → registry `Suspended` → clean exit); the `GresTenant` controller executes scale-to-zero and the `Gres` controller re-routes the tenant to the always-accepting `crabka-gres-activator`, which peeks the Postgres startup prelude, writes idempotent resume-request records, holds the connection until the compute recovers, then pipes bytes transparently.
+**Architecture:** The compute self-suspends (final checkpoint → registry `Suspended` → clean exit); the `GresTenant` controller executes scale-to-zero and the `Gres` controller re-routes the tenant to the always-accepting `krabka-gres-activator`, which peeks the Postgres startup prelude, writes idempotent resume-request records, holds the connection until the compute recovers, then pipes bytes transparently.
 
-**Tech Stack:** `crabka-gres-control` registry (state machine grows `ResumeRequested`), `crabka-pgwire` frontend decoding (prelude peek), tokio TCP piping, the G-4 operator controllers, the G-3 checkpointer (suspend checkpoint).
+**Tech Stack:** `krabka-gres-control` registry (state machine grows `ResumeRequested`), `krabka-pgwire` frontend decoding (prelude peek), tokio TCP piping, the G-4 operator controllers, the G-3 checkpointer (suspend checkpoint).
 
 ## Global Constraints
 
 - **Prerequisites:** G-2/G-3/G-4 landed. Verify signatures against the landed tree.
-- **Spec:** [2026-07-09-crabka-gres-g5-lifecycle-design.md](../specs/2026-07-09-crabka-gres-g5-lifecycle-design.md).
+- **Spec:** [2026-07-09-krabka-gres-g5-lifecycle-design.md](../specs/2026-07-09-krabka-gres-g5-lifecycle-design.md).
 - **State machine (registry `TenantState`):** `Active ↔ Suspended`, plus `ResumeRequested` (written only by activators against `Suspended`; the controller treats it as "scale up now"; the compute's readiness write moves it to `Active`). Every transition is a whole-record upsert with `record_version` bumped; folds stay order-safe.
 - **Suspend precondition:** zero open sessions AND idle window elapsed. An in-flight commit can never race suspension (sessions > 0 blocks it).
 - **The activator never speaks the protocol past the prelude** — it reads SSLRequest/StartupMessage only, then pipes opaque bytes; auth and everything else terminate at the compute (the G-4 single-credential-store property).
@@ -19,9 +19,9 @@
 
 ---
 
-## Batch 1 — signals (run Tasks 1 and 2 in parallel — verified disjoint: Task 1 `crabka-gres-control` only, Task 2 `crabka-gres` + a narrow `pgexec`/`pgwire` session-counter accessor; no shared file; panel amendment I8)
+## Batch 1 — signals (run Tasks 1 and 2 in parallel — verified disjoint: Task 1 `krabka-gres-control` only, Task 2 `krabka-gres` + a narrow `pgexec`/`pgwire` session-counter accessor; no shared file; panel amendment I8)
 
-### Task 1: Registry state semantics in `crabka-gres-control`
+### Task 1: Registry state semantics in `krabka-gres-control`
 
 **Files:** Modify `crates/gres-control/src/record.rs` (+ `registry.rs` helpers).
 
@@ -37,12 +37,12 @@ Suspend loop (substrate mode with `idle_seconds > 0` from the registry record): 
 
 ## Batch 2 — the activator (serial)
 
-### Task 3: `crabka-gres-activator`
+### Task 3: `krabka-gres-activator`
 
-**Files:** Create `crates/gres-activator/` (internal-crate manifest house style; deps: `crabka-pgwire` (message decoding), `crabka-gres-control`, `tokio`, `tracing`, `thiserror`, `clap`; dev: `assert2`, `tokio-postgres`, `crabka-broker`, `tempfile`), `src/{main,lib,peek,hold,pipe}.rs`, `README.md`; release-plz entry; nextest group if broker-heavy tests warrant it.
+**Files:** Create `crates/gres-activator/` (internal-crate manifest house style; deps: `krabka-pgwire` (message decoding), `krabka-gres-control`, `tokio`, `tracing`, `thiserror`, `clap`; dev: `assert2`, `tokio-postgres`, `krabka-broker`, `tempfile`), `src/{main,lib,peek,hold,pipe}.rs`, `README.md`; release-plz entry; nextest group if broker-heavy tests warrant it.
 
 **Interfaces:**
-- Bin `crabka-gres-activator --listen --bootstrap [--registry-poll-ms]`.
+- Bin `krabka-gres-activator --listen --bootstrap [--registry-poll-ms]`.
 - Core per-connection flow (lib, testable without the bin):
 ```rust
 /// Read the connection prelude: answer SSLRequest with 'N' (v1: the PgDog→activator
@@ -60,7 +60,7 @@ pub async fn serve_conn(stream: TcpStream, registry: RegistryHandle, cfg: &Activ
 ```
 - The `Active` record must carry the compute endpoint for the pipe target: add `endpoint: Option<String>` to `TenantRecord` (written by the compute in `mark_active`; the operator renders PgDog against the Service DNS name, so the record's endpoint is the same Service name — decide at execution which single source the activator uses and document it; the Service name derived from the tenant name is the simplest deterministic answer, avoiding record churn).
 
-Steps: failing unit tests over `crabka-pgwire` decoding (goldens: plain StartupMessage; SSLRequest-then-startup; garbage → clean error frame); failing hold/pipe test with a scripted mock backend (bytes round-trip; held startup replays first; timeout produces the 57P03 frame); implement; integration: real compute wakes via a real registry on an in-process broker (activator + suspended record + manual "controller" test double that starts the compute on `ResumeRequested`); nextest/clippy/fmt/README; commit `feat(gres): the activator — accept, peek, resume, pipe`.
+Steps: failing unit tests over `krabka-pgwire` decoding (goldens: plain StartupMessage; SSLRequest-then-startup; garbage → clean error frame); failing hold/pipe test with a scripted mock backend (bytes round-trip; held startup replays first; timeout produces the 57P03 frame); implement; integration: real compute wakes via a real registry on an in-process broker (activator + suspended record + manual "controller" test double that starts the compute on `ResumeRequested`); nextest/clippy/fmt/README; commit `feat(gres): the activator — accept, peek, resume, pipe`.
 
 ---
 

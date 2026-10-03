@@ -122,7 +122,7 @@ Behavior-preserving — gated by the existing fetch handler tests (unit + integr
   small bounds are exhaustive). Two configs: `visibility_basic` (`max_offset` ~4) and
   `visibility_wide` (`max_offset` ~7), scaled up while exhaustive under the host memory watchdog.
 
-## proptest fuzz (`proptest` already a `crabka-broker` dev-dep)
+## proptest fuzz (`proptest` already a `krabka-broker` dev-dep)
 
 Generate large-N random *valid* watermark tuples (`log_start <= hw <= log_end`, `lso ∈
 [log_start, hw]`, offsets up to ~1e6) + random `fetch_offset` + the two bools (respecting

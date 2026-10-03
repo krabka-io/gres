@@ -1,4 +1,4 @@
-# Crabka Geo-Replication (`crabka-replicator`) — Design
+# Crabka Geo-Replication (`krabka-replicator`) — Design
 
 **Date:** 2026-06-17
 **Status:** Design approved; Slice 1 ready for implementation planning
@@ -8,7 +8,7 @@
 
 ## 1. Summary
 
-`crabka-replicator` is a new standalone service that replicates data between
+`krabka-replicator` is a new standalone service that replicates data between
 geographically dispersed Crabka clusters. It delivers global event streaming,
 cross-region availability, selective topic replication, consumer-group offset
 translation, and automatic recovery from network/cluster failures — the
@@ -16,8 +16,8 @@ MirrorMaker-2 (MM2) feature set — and adds a **data-sovereignty policy layer**
 residency routing, field-level transforms (redact/mask/tokenize), and per-record
 routing.
 
-The service is built on the existing `crabka-connect` `ConnectorRuntime` and the
-native `crabka-client-*` clients. It sits *above* the broker (like MM2 sits
+The service is built on the existing `krabka-connect` `ConnectorRuntime` and the
+native `krabka-client-*` clients. It sits *above* the broker (like MM2 sits
 outside Kafka) and touches no broker or wire-protocol code.
 
 ## 2. Goals / Non-goals
@@ -50,7 +50,7 @@ outside Kafka) and touches no broker or wire-protocol code.
 
 - **No Kafka Connect worker/REST protocol or plugin-config model.** We adopt
   MM2's *conventions and byte formats*, not its Connect runtime. This is
-  consistent with `crabka-connect`'s deliberate "no worker protocol,
+  consistent with `krabka-connect`'s deliberate "no worker protocol,
   single-binary" design.
 - **No audit-trail / right-to-erasure propagation and no region-scoped
   encryption / key residency** (the sovereignty capabilities deferred during
@@ -91,7 +91,7 @@ outside Kafka) and touches no broker or wire-protocol code.
                                 │ control
                                 ▼
  ┌────────────┐   consume   ┌───────────────────────────┐   produce   ┌────────────┐
- │  Source    │────────────▶│   crabka-replicator        │────────────▶│  Target    │
+ │  Source    │────────────▶│   krabka-replicator        │────────────▶│  Target    │
  │  cluster   │             │                            │             │  cluster   │
  │  (region A)│             │  flow supervisor (control) │             │ (region B) │
  │            │             │  ├─ flow-worker A→B (data) │             │  internal: │
@@ -110,7 +110,7 @@ outside Kafka) and touches no broker or wire-protocol code.
 - **Control plane — the flow supervisor.** Loads replication config + sovereignty
   policy; resolves it against live cluster metadata (topic matches, region/zone
   allow/deny); spawns and supervises one flow-worker per directional flow;
-  exposes health + Prometheus metrics (via `crabka-telemetry`); under the
+  exposes health + Prometheus metrics (via `krabka-telemetry`); under the
   operator, writes CRD status.
 - **Data plane — flow-workers.** One worker per `(source → target)` flow. Each
   owns a single consumer + producer pair and runs the staged data path. Active/
@@ -249,7 +249,7 @@ requirement:
    crashed/restarted replicator resumes exactly where it left off.
 2. **Connectivity loss** — transient source/target unavailability triggers
    bounded exponential backoff + retry on the worker's clients (reusing
-   `crabka-client-core` reconnection), not a crash. The flow self-heals when the
+   `krabka-client-core` reconnection), not a crash. The flow self-heals when the
    link returns; the heartbeat gap makes the outage observable.
 3. **Supervision** — the control plane restarts a dead worker with backoff; a
    persistently-failing worker is surfaced via health/metrics and (under the
@@ -266,7 +266,7 @@ A new `GeoReplication` CRD in `crates/operator/src/crd/`, following the existing
 `KafkaRebalance` / `SchemaRegistry` CRD patterns. Its spec mirrors the config
 model. The operator:
 
-- Reconciles it into a Deployment of `crabka-replicator` pods + Service.
+- Reconciles it into a Deployment of `krabka-replicator` pods + Service.
 - Wires cluster credentials and Schema Registry auth from Secrets; reuses the
   existing CA/mTLS plumbing for cluster connections.
 - Writes **status**: per-flow state (running / degraded / residency-blocked),

@@ -4,9 +4,9 @@
 
 **Goal:** Make the Kafka broker-side reassignment request timeout explicit and configurable without changing its 60-second default.
 
-**Architecture:** `crabka-rebalancer` owns one validated UOM newtype and stores it on `LiveClient`. Submit and cancel builders frame the value explicitly; the standalone binary and Helm chart provide the only deployment boundary because no CRD owns daemon transport policy.
+**Architecture:** `krabka-rebalancer` owns one validated UOM newtype and stores it on `LiveClient`. Submit and cancel builders frame the value explicitly; the standalone binary and Helm chart provide the only deployment boundary because no CRD owns daemon transport policy.
 
-**Tech Stack:** Rust, `crabka-units`, `refined_type`, Clap environment arguments, Helm.
+**Tech Stack:** Rust, `krabka-units`, `refined_type`, Clap environment arguments, Helm.
 
 ## Global Constraints
 
@@ -78,7 +78,7 @@ Update the existing submit/cancel expected-value tests to pass
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-rebalancer reassignment_request_timeout --locked
+  cargo test -p krabka-rebalancer reassignment_request_timeout --locked
 ```
 
 Expected: compilation fails because `ReassignmentRequestTimeout` and the
@@ -160,11 +160,11 @@ Use the stored value for submit and cancel.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-rebalancer reassignment_request_timeout --locked
+  cargo test -p krabka-rebalancer reassignment_request_timeout --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-rebalancer build_submit_reassignments_request --locked
+  cargo test -p krabka-rebalancer build_submit_reassignments_request --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-rebalancer build_cancel_reassignments_request --locked
+  cargo test -p krabka-rebalancer build_cancel_reassignments_request --locked
 ```
 
 Expected: all focused tests pass.
@@ -178,7 +178,7 @@ Expected: all focused tests pass.
 **Interfaces:**
 - Consumes: `ReassignmentRequestTimeout`
 - Produces: `--reassignment-request-timeout`
-- Produces: `CRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT`
+- Produces: `KRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT`
 
 - [x] **Step 1: Write failing parser tests**
 
@@ -193,11 +193,11 @@ fn reassignment_request_timeout_defaults_and_accepts_cli() {
         .lock()
         .expect("environment lock");
     temp_env::with_var(
-        "CRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT",
+        "KRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT",
         None::<&str>,
         || {
             let defaults = Args::try_parse_from([
-                "crabka-rebalancer",
+                "krabka-rebalancer",
                 "--bootstrap-servers",
                 "127.0.0.1:9092",
             ])
@@ -207,7 +207,7 @@ fn reassignment_request_timeout_defaults_and_accepts_cli() {
     );
 
     let custom = Args::try_parse_from([
-        "crabka-rebalancer",
+        "krabka-rebalancer",
         "--bootstrap-servers",
         "127.0.0.1:9092",
         "--reassignment-request-timeout",
@@ -221,7 +221,7 @@ fn reassignment_request_timeout_defaults_and_accepts_cli() {
 fn reassignment_request_timeout_rejects_invalid_protocol_values() {
     assert2::assert!(
         Args::try_parse_from([
-            "crabka-rebalancer",
+            "krabka-rebalancer",
             "--bootstrap-servers",
             "127.0.0.1:9092",
             "--reassignment-request-timeout",
@@ -231,7 +231,7 @@ fn reassignment_request_timeout_rejects_invalid_protocol_values() {
     );
     for value in ["0.5ms", "2147483648ms"] {
         let args = Args::try_parse_from([
-            "crabka-rebalancer",
+            "krabka-rebalancer",
             "--bootstrap-servers",
             "127.0.0.1:9092",
             "--reassignment-request-timeout",
@@ -251,11 +251,11 @@ fn reassignment_request_timeout_reads_environment() {
         .lock()
         .expect("environment lock");
     temp_env::with_var(
-        "CRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT",
+        "KRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT",
         Some("41ms"),
         || {
             let args = Args::try_parse_from([
-                "crabka-rebalancer",
+                "krabka-rebalancer",
                 "--bootstrap-servers",
                 "127.0.0.1:9092",
             ])
@@ -272,7 +272,7 @@ Define `static ENV_LOCK: OnceLock<Mutex<()>>` in the test module.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-rebalancer reassignment_request_timeout_defaults --locked
+  cargo test -p krabka-rebalancer reassignment_request_timeout_defaults --locked
 ```
 
 Expected: compilation fails because the argument does not exist.
@@ -284,9 +284,9 @@ Add:
 ```rust
 #[arg(
     long,
-    env = "CRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT",
+    env = "KRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT",
     default_value = "60s",
-    value_parser = crabka_units::parse::positive_time
+    value_parser = krabka_units::parse::positive_time
 )]
 reassignment_request_timeout: Time,
 ```
@@ -306,9 +306,9 @@ Construct the live client with
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-rebalancer reassignment_request_timeout --locked
+  cargo test -p krabka-rebalancer reassignment_request_timeout --locked
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-rebalancer --bin crabka-rebalancer --locked
+  cargo test -p krabka-rebalancer --bin krabka-rebalancer --locked
 ```
 
 Expected: parser, validation, and existing binary tests pass.
@@ -316,14 +316,14 @@ Expected: parser, validation, and existing binary tests pass.
 ### Task 3: Wire the Helm override and close the audit slice
 
 **Files:**
-- Modify: `charts/crabka-rebalancer/values.yaml`
-- Modify: `charts/crabka-rebalancer/templates/deployment.yaml`
-- Modify: `charts/crabka-rebalancer/tests/deployment_test.yaml`
+- Modify: `charts/krabka-rebalancer/values.yaml`
+- Modify: `charts/krabka-rebalancer/templates/deployment.yaml`
+- Modify: `charts/krabka-rebalancer/tests/deployment_test.yaml`
 - Modify: `docs/configuration-audit.md`
 
 **Interfaces:**
 - Produces: Helm value `reassignmentRequestTimeout`
-- Produces: pod environment variable `CRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT`
+- Produces: pod environment variable `KRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT`
 
 - [x] **Step 1: Write the failing Helm assertion**
 
@@ -337,14 +337,14 @@ Add:
       - contains:
           path: spec.template.spec.containers[0].env
           content:
-            name: CRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT
+            name: KRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT
             value: 37ms
 ```
 
 - [x] **Step 2: Run the RED gate**
 
 ```bash
-helm unittest charts/crabka-rebalancer
+helm unittest charts/krabka-rebalancer
 ```
 
 Expected: the new assertion fails because the environment variable is absent.
@@ -355,7 +355,7 @@ Add `reassignmentRequestTimeout: 60s` beside the existing reassignment values,
 and render:
 
 ```yaml
-- name: CRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT
+- name: KRABKA_REBALANCER_REASSIGNMENT_REQUEST_TIMEOUT
   value: {{ .Values.reassignmentRequestTimeout | quote }}
 ```
 
@@ -370,9 +370,9 @@ rebalancer policies Pending.
 
 ```bash
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
-  cargo test -p crabka-rebalancer --all-targets --locked
-helm lint charts/crabka-rebalancer --set bootstrapServers=test:9092
-helm unittest charts/crabka-rebalancer
+  cargo test -p krabka-rebalancer --all-targets --locked
+helm lint charts/krabka-rebalancer --set bootstrapServers=test:9092
+helm unittest charts/krabka-rebalancer
 TMPDIR=/var/tmp RUSTC_WRAPPER= CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0 \
   cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo +nightly fmt --all -- --check

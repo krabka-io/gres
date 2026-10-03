@@ -30,7 +30,7 @@ deeper, hot-path-sensitive feature deferred to a follow-up (see Out of
 scope). The pipeline installed here is exactly what that follow-up would
 build on.
 
-## Module: `crabka_broker::telemetry`
+## Module: `krabka_broker::telemetry`
 
 A single new lib module owns the whole pipeline; the broker bin calls it.
 
@@ -55,12 +55,12 @@ over the standard OTel vars so the operator follow-up has a stable surface:
 
 | Setting        | Crabka var                  | Standard OTel fallback                                            | Default |
 |----------------|-----------------------------|------------------------------------------------------------------|---------|
-| Enable         | `CRABKA_OTLP_ENABLED=true`  | (any endpoint var being set)                                      | off     |
-| Endpoint       | `CRABKA_OTLP_ENDPOINT`      | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` → `OTEL_EXPORTER_OTLP_ENDPOINT` | per-protocol localhost |
-| Protocol       | `CRABKA_OTLP_PROTOCOL`      | `OTEL_EXPORTER_OTLP_PROTOCOL` (`grpc` \| `http/protobuf`)         | `grpc`  |
-| Sample ratio   | `CRABKA_OTLP_SAMPLE_RATIO`  | `OTEL_TRACES_SAMPLER_ARG`                                         | `1.0`   |
-| Service name   | —                           | `OTEL_SERVICE_NAME`                                               | `crabka-broker` |
-| Export timeout | `CRABKA_OTLP_TIMEOUT_SECS`  | `OTEL_EXPORTER_OTLP_TIMEOUT_SECS`                                 | `10`    |
+| Enable         | `KRABKA_OTLP_ENABLED=true`  | (any endpoint var being set)                                      | off     |
+| Endpoint       | `KRABKA_OTLP_ENDPOINT`      | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` → `OTEL_EXPORTER_OTLP_ENDPOINT` | per-protocol localhost |
+| Protocol       | `KRABKA_OTLP_PROTOCOL`      | `OTEL_EXPORTER_OTLP_PROTOCOL` (`grpc` \| `http/protobuf`)         | `grpc`  |
+| Sample ratio   | `KRABKA_OTLP_SAMPLE_RATIO`  | `OTEL_TRACES_SAMPLER_ARG`                                         | `1.0`   |
+| Service name   | —                           | `OTEL_SERVICE_NAME`                                               | `krabka-broker` |
+| Export timeout | `KRABKA_OTLP_TIMEOUT_SECS`  | `OTEL_EXPORTER_OTLP_TIMEOUT_SECS`                                 | `10`    |
 | Disable        | —                           | `OTEL_SDK_DISABLED=true`                                          | —       |
 
 Resource attributes: `service.name`, `service.version` (crate version),
@@ -71,14 +71,14 @@ honoured if/when record-header propagation lands.
 ## Per-request span = a dedicated `DEBUG` target
 
 The hot path must stay free when OTLP is off. The request span is emitted on
-the dedicated target `crabka_broker::request` at `DEBUG`:
+the dedicated target `krabka_broker::request` at `DEBUG`:
 
 - The `fmt` layer keeps the operator's `RUST_LOG` (default `info`), which
   does **not** enable that target — so request spans never reach stdout and
   never materialise on a no-OTLP broker (a disabled-level check).
 - The OTLP layer gets its **own** per-layer filter
-  (`info,crabka_broker::request=debug,crabka_log=info`, overridable via
-  `CRABKA_OTLP_FILTER`). With per-layer filters, a span is created if **any**
+  (`info,krabka_broker::request=debug,krabka_log=info`, overridable via
+  `KRABKA_OTLP_FILTER`). With per-layer filters, a span is created if **any**
   layer enables it — so request spans exist only when the OTLP layer is
   present, and only it records them.
 

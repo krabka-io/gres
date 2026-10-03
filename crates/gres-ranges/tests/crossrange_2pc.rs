@@ -1,10 +1,10 @@
-use crabka_gres_ranges::{
+use krabka_gres_ranges::{
     GatewayCommitFault, MultiRangeTenant, MultiRangeTenantConfig, RangeId, TenantName,
     TransactionDecision,
 };
-use crabka_pgexec::{SqlEngine, TimestampTransactionId, TimestampWrite};
-use crabka_pgkv::Kv;
-use crabka_pgwire::engine::{BoundParam, Engine, QueryResult, Session, TxStatus};
+use krabka_pgexec::{SqlEngine, TimestampTransactionId, TimestampWrite};
+use krabka_pgkv::Kv;
+use krabka_pgwire::engine::{BoundParam, Engine, QueryResult, Session, TxStatus};
 
 fn tenant_config(name: &str) -> MultiRangeTenantConfig {
     MultiRangeTenantConfig::from_boundaries(TenantName::parse(name).expect("tenant"), "0,100,200")
@@ -43,7 +43,7 @@ async fn cross_range_write_transaction_commits_all_participants() {
     assert_eq!(records.len(), 1);
     assert_eq!(
         records[0].decision,
-        Some(crabka_gres_ranges::TransactionDecision::Commit)
+        Some(krabka_gres_ranges::TransactionDecision::Commit)
     );
 }
 
@@ -685,7 +685,7 @@ async fn literal_row_key_scatter_insert_commits_two_ranges_atomically() {
     assert_eq!(primaries.len(), 1);
     assert!(matches!(
         primaries[0].decision,
-        crabka_pgexec::PrimaryTxnDecision::Committed(_)
+        krabka_pgexec::PrimaryTxnDecision::Committed(_)
     ));
 }
 
@@ -761,14 +761,14 @@ async fn restart_durably_aborts_matching_global_index_intents_without_touching_o
     let coordinator = SqlEngine::open(data_dir.path().join("r0")).expect("open coordinator");
     let mut participant = SqlEngine::open(data_dir.path().join("r1")).expect("open participant");
     participant.set_catalog_kv(coordinator.kv_handle());
-    let table = crabka_pgcatalog::get_table(
+    let table = krabka_pgcatalog::get_table(
         coordinator.kv_handle().as_ref(),
-        &crabka_pgcatalog::RelationName::public("t50"),
+        &krabka_pgcatalog::RelationName::public("t50"),
     )
     .expect("table");
-    let index_id = crabka_pgcatalog::list_table_indexes(
+    let index_id = krabka_pgcatalog::list_table_indexes(
         coordinator.kv_handle().as_ref(),
-        &crabka_pgcatalog::RelationName::public("t50"),
+        &krabka_pgcatalog::RelationName::public("t50"),
     )
     .expect("indexes")
     .into_iter()
@@ -776,7 +776,7 @@ async fn restart_durably_aborts_matching_global_index_intents_without_touching_o
     .expect("global index")
     .id;
     let start_ts = TimestampTransactionId::new(10).expect("start timestamp");
-    let identity = crabka_pgexec::TimestampTxnIdentity {
+    let identity = krabka_pgexec::TimestampTxnIdentity {
         start_ts,
         global_xid: 9,
         primary_range: 0,
@@ -785,11 +785,11 @@ async fn restart_durably_aborts_matching_global_index_intents_without_touching_o
         table_id: table.id,
         bucket: None,
         rowid: 11,
-        row: vec![crabka_pgtypes::Datum::Int4(11)],
+        row: vec![krabka_pgtypes::Datum::Int4(11)],
         delete: false,
-        global_index_intents: vec![crabka_pgexec::timestamp_txn::GlobalIndexIntent {
+        global_index_intents: vec![krabka_pgexec::timestamp_txn::GlobalIndexIntent {
             index_id,
-            indexed_values: vec![crabka_pgtypes::Datum::Int4(11)],
+            indexed_values: vec![krabka_pgtypes::Datum::Int4(11)],
             base_table_id: table.id,
             base_rowid: 11,
             unique: false,
@@ -797,7 +797,7 @@ async fn restart_durably_aborts_matching_global_index_intents_without_touching_o
         }],
     };
     coordinator
-        .begin_timestamp_transaction(&crabka_pgexec::TimestampTxnDescriptor::begun(
+        .begin_timestamp_transaction(&krabka_pgexec::TimestampTxnDescriptor::begun(
             start_ts,
             identity.global_xid,
             vec![1],
@@ -816,11 +816,11 @@ async fn restart_durably_aborts_matching_global_index_intents_without_touching_o
         table_id: table.id,
         bucket: None,
         rowid: 99,
-        row: vec![crabka_pgtypes::Datum::Int4(99)],
+        row: vec![krabka_pgtypes::Datum::Int4(99)],
         delete: false,
-        global_index_intents: vec![crabka_pgexec::timestamp_txn::GlobalIndexIntent {
+        global_index_intents: vec![krabka_pgexec::timestamp_txn::GlobalIndexIntent {
             index_id,
-            indexed_values: vec![crabka_pgtypes::Datum::Int4(99)],
+            indexed_values: vec![krabka_pgtypes::Datum::Int4(99)],
             base_table_id: table.id,
             base_rowid: 99,
             unique: false,
@@ -858,7 +858,7 @@ async fn restart_durably_aborts_matching_global_index_intents_without_touching_o
     assert_matching_timestamp_state(
         participant.kv_handle().as_ref(),
         start_ts.get(),
-        crabka_pgmvcc::version::TsVersionState::Aborted,
+        krabka_pgmvcc::version::TsVersionState::Aborted,
     );
     assert_no_timestamp_sidecars(participant.kv_handle().as_ref(), start_ts.get());
     drop(participant);
@@ -882,7 +882,7 @@ async fn restart_durably_aborts_matching_global_index_intents_without_touching_o
     assert_matching_timestamp_state(
         participant.kv_handle().as_ref(),
         start_ts.get(),
-        crabka_pgmvcc::version::TsVersionState::Aborted,
+        krabka_pgmvcc::version::TsVersionState::Aborted,
     );
     assert_no_timestamp_sidecars(participant.kv_handle().as_ref(), start_ts.get());
 }
@@ -907,16 +907,16 @@ fn assert_global_index_intent_timestamps(kv: &dyn Kv, expected: &[u64]) {
 fn assert_matching_timestamp_state(
     kv: &dyn Kv,
     start_ts: u64,
-    expected_state: crabka_pgmvcc::version::TsVersionState,
+    expected_state: krabka_pgmvcc::version::TsVersionState,
 ) {
     assert!(
         kv.scan_range(
-            &crabka_pgkv::key::table_prefix(crabka_pgkv::key::SYSTEM_TABLE_ID + 1),
+            &krabka_pgkv::key::table_prefix(krabka_pgkv::key::SYSTEM_TABLE_ID + 1),
             &[0xFF; 5],
         )
         .expect("scan timestamp tuples")
         .into_iter()
-        .filter_map(|(_key, value)| crabka_pgmvcc::version::decode_ts_tuple(&value).ok())
+        .filter_map(|(_key, value)| krabka_pgmvcc::version::decode_ts_tuple(&value).ok())
         .any(|tuple| tuple.start_ts == start_ts && tuple.state == expected_state)
     );
 }
@@ -969,7 +969,7 @@ fn cleanup_tenant_suffix(cleanup_statement: &str) -> String {
 }
 
 async fn create_failed_cross_range_transaction(
-    session: &mut crabka_gres_ranges::tenant::GatewaySession,
+    session: &mut krabka_gres_ranges::tenant::GatewaySession,
 ) {
     session
         .simple_query("CREATE TABLE t150 (id int4); CREATE TABLE t250 (id int4)")
@@ -988,7 +988,7 @@ async fn create_failed_cross_range_transaction(
 }
 
 async fn select_ids(
-    session: &mut crabka_gres_ranges::tenant::GatewaySession,
+    session: &mut krabka_gres_ranges::tenant::GatewaySession,
     sql: &str,
 ) -> Vec<i32> {
     let results = session.simple_query(sql).await.expect(sql);

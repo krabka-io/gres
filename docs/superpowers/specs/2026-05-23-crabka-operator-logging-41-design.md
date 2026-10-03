@@ -37,8 +37,8 @@ logging:
   type: inline          # default
   loggers:
     root: info          # `root` (case-insensitive) -> bare global level
-    crabka_broker: debug
-    crabka_raft: warn
+    krabka_broker: debug
+    krabka_raft: warn
 # external
 logging:
   type: external
@@ -49,12 +49,12 @@ logging:
 ```
 
 - `loggers` keys are **tracing targets** (Rust module paths, e.g.
-  `crabka_broker`), not log4j logger names. `root` sets the env-filter global
+  `krabka_broker`), not log4j logger names. `root` sets the env-filter global
   default. Levels are `trace|debug|info|warn|error|off` (case-insensitive;
   `warning`→`warn`, `fatal`→`error`, `none`→`off`).
 - Inline composition is pure + deterministic (directives sorted), so the hash
   is stable across reconciles regardless of map iteration order. Example:
-  `{root: info, crabka_broker: debug}` → `crabka_broker=debug,info`.
+  `{root: info, krabka_broker: debug}` → `krabka_broker=debug,info`.
 - `external` reads the referenced `ConfigMap` key verbatim (one extra GET,
   only on the external path). RBAC already grants `configmaps` get.
 

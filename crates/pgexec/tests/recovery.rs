@@ -4,11 +4,11 @@
 
 use std::sync::Arc;
 
-use crabka_pgcatalog::RelationName;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgkv::{Kv, MemKv};
-use crabka_pgmvcc::xid::{FIRST_NORMAL_XID, FROZEN_XID, INVALID_XID};
-use crabka_pgwire::engine::{Engine, QueryResult, Session};
+use krabka_pgcatalog::RelationName;
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgkv::{Kv, MemKv};
+use krabka_pgmvcc::xid::{FIRST_NORMAL_XID, FROZEN_XID, INVALID_XID};
+use krabka_pgwire::engine::{Engine, QueryResult, Session};
 
 fn count(r: &QueryResult) -> usize {
     match r {
@@ -22,10 +22,10 @@ async fn rows(s: &mut SqlSession, sql: &str) -> Vec<QueryResult> {
 }
 
 fn tuple_xmin(kv: &dyn Kv, table_name: &str, rowid: u64, xid: u64) -> Option<u64> {
-    let table = crabka_pgcatalog::get_table(kv, &RelationName::public(table_name)).expect("table");
-    let key = crabka_pgmvcc::version::version_key_xid(table.id, rowid, xid);
+    let table = krabka_pgcatalog::get_table(kv, &RelationName::public(table_name)).expect("table");
+    let key = krabka_pgmvcc::version::version_key_xid(table.id, rowid, xid);
     let bytes = kv.get(&key).expect("tuple lookup")?;
-    let (xmin, _xmax, _row) = crabka_pgmvcc::version::decode_tuple(&bytes).expect("tuple decode");
+    let (xmin, _xmax, _row) = krabka_pgmvcc::version::decode_tuple(&bytes).expect("tuple decode");
     Some(xmin)
 }
 
@@ -51,7 +51,7 @@ async fn engine_clamps_reserved_persisted_next_xid_before_first_write() {
     for reserved in [INVALID_XID, FROZEN_XID] {
         let kv = Arc::new(MemKv::new());
         kv.put(
-            crabka_pgkv::key::next_xid_key(),
+            krabka_pgkv::key::next_xid_key(),
             reserved.to_be_bytes().to_vec(),
         )
         .expect("seed reserved next_xid");
@@ -152,7 +152,7 @@ async fn leaked_block_xids_settle_as_aborted_and_never_wedge_the_horizon() {
         // store — including the block-ahead counter — survives.
     }
     let persisted = kv
-        .get(&crabka_pgkv::key::next_xid_key())
+        .get(&krabka_pgkv::key::next_xid_key())
         .expect("get")
         .map(|b| u64::from_be_bytes(b.try_into().expect("u64")))
         .expect("counter persisted before any xid was handed out");
@@ -166,12 +166,12 @@ async fn leaked_block_xids_settle_as_aborted_and_never_wedge_the_horizon() {
         .catalog_table(&RelationName::public("t"))
         .expect("table");
     let version_xmins = |kv: &dyn Kv| -> Vec<u64> {
-        kv.scan_prefix(&crabka_pgkv::key::table_prefix(table.id))
+        kv.scan_prefix(&krabka_pgkv::key::table_prefix(table.id))
             .expect("scan")
             .iter()
             .map(|(_, bytes)| {
                 let (xmin, _xmax, _row) =
-                    crabka_pgmvcc::version::decode_tuple(bytes).expect("tuple decode");
+                    krabka_pgmvcc::version::decode_tuple(bytes).expect("tuple decode");
                 xmin
             })
             .collect()

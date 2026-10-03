@@ -22,8 +22,8 @@ PGDOG_IMAGE = f"ghcr.io/pgdogdev/pgdog@{PGDOG_DIGEST}"
 PGDOG_REVISION = "c99282e9001f66194b03b108ba2a66ad7a27a75d"
 POSTGRES_DIGEST = "sha256:22c89fe0d0f507606260237fd55e51f6137f58b2d5bcf6152242b96d9fe8f9a4"
 POSTGRES_IMAGE = f"postgres@{POSTGRES_DIGEST}"
-POSTGRES_CONTAINER = "crabka-driver-golden-postgres"
-PGDOG_CONTAINER = "crabka-driver-golden-pgdog"
+POSTGRES_CONTAINER = "krabka-driver-golden-postgres"
+PGDOG_CONTAINER = "krabka-driver-golden-pgdog"
 CAPTURE_USER = "capture_user"
 CAPTURE_PASSWORD = "capture_password"
 CAPTURE_DB = "capture"
@@ -169,7 +169,7 @@ def rust_driver(driver: str, port: int) -> None:
     password = CAPTURE_PASSWORD
     url = f"postgresql://{CAPTURE_USER}:{password}@127.0.0.1:{port}/{CAPTURE_DB}?sslmode=disable"
     run(
-        str(ROOT / "target/debug/crabka-gres-driver-smoke"),
+        str(ROOT / "target/debug/krabka-gres-driver-smoke"),
         "--driver", driver,
         "--database-url", url,
         cwd=ROOT,
@@ -308,8 +308,8 @@ def inspect_image(reference: str) -> tuple[str, dict | None]:
 
 def verify_environment() -> dict:
     run(
-        "cargo", "build", "--locked", "-p", "crabka-gres-conformance",
-        "--bin", "crabka-gres-driver-smoke", cwd=ROOT, timeout_seconds=120,
+        "cargo", "build", "--locked", "-p", "krabka-gres-conformance",
+        "--bin", "krabka-gres-driver-smoke", cwd=ROOT, timeout_seconds=120,
     )
     run("docker", "pull", PGDOG_IMAGE, stdout=subprocess.DEVNULL, timeout_seconds=120)
     run("docker", "pull", POSTGRES_IMAGE, stdout=subprocess.DEVNULL, timeout_seconds=120)

@@ -117,7 +117,7 @@ spec:
                 nullable: true
                 type: string
               clientId:
-                description: Kafka client id used by the registry. Default `crabka-schema-registry`.
+                description: Kafka client id used by the registry. Default `krabka-schema-registry`.
                 minLength: 1
                 nullable: true
                 type: string

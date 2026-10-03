@@ -4,17 +4,17 @@
 **Date:** 2026-05-11
 **Author:** Matthew Stone (with Claude)
 **Predecessors:** coverage meta-spec
-(`2026-05-11-crabka-protocol-coverage-design.md`); 1a (codegen
+(`2026-05-11-krabka-protocol-coverage-design.md`); 1a (codegen
 generalization, merged); 1b (compression, merged); 1c (typed
 RecordBatch, merged).
 
 ## Summary
 
-Switch `crabka-protocol-codegen`'s message gate from the 6-pair
+Switch `krabka-protocol-codegen`'s message gate from the 6-pair
 representative set to **every active Kafka 4.2 schema** (~190 messages),
 generate the corresponding owned + borrowed wrappers, and exercise every
 `(api_key, version)` pair via the JVM oracle. After 1d ships, every
-message Kafka 4.2 defines is fully typed in `crabka-protocol` and
+message Kafka 4.2 defines is fully typed in `krabka-protocol` and
 byte-equal with `kafka-clients` 4.2.0.
 
 The emitter is already capability-complete (proven by
@@ -80,7 +80,7 @@ Schemas with non-empty `validVersions`. The deprecated set
 (`ControlledShutdownRequest`, `LeaderAndIsrRequest`, `StopReplicaRequest`,
 and any similar pre-KRaft schemas) is skipped.
 
-The IR loader (`crabka_protocol_codegen::ir::load_dir`) reads all
+The IR loader (`krabka_protocol_codegen::ir::load_dir`) reads all
 schemas; the `every_vendored_schema_emits_clean` test confirms the
 emitter handles every one of them. The active count is the
 `emits_clean` count.
@@ -380,7 +380,7 @@ The sub-plan ships when **all** of the following hold:
 14. `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D
     warnings`, `cargo test --workspace -- --include-ignored` all green.
 15. CI matrix green on Linux/macOS/Windows.
-16. `cargo doc --no-deps -p crabka-protocol` passes with no warnings.
+16. `cargo doc --no-deps -p krabka-protocol` passes with no warnings.
 17. `KNOWN_ISSUES.md` documents the captured-traffic corpus deviation.
 
 When all 17 items pass, 1d is done.

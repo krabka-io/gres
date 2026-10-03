@@ -1,5 +1,5 @@
 [package]
-name = "crabka-metadata"
+name = "krabka-metadata"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,7 +8,7 @@ rust-version.workspace = true
 description = "Versioned metadata record types + immutable image for Crabka"
 repository = "https://github.com/krabka-io/gres"
 homepage = "https://github.com/krabka-io/gres"
-documentation = "https://docs.rs/crabka-metadata"
+documentation = "https://docs.rs/krabka-metadata"
 readme = "README.md"
 keywords = ["kafka", "metadata", "kraft", "crabka"]
 categories = ["data-structures", "encoding"]
@@ -22,13 +22,13 @@ wincode = { workspace = true }
 serde-wincode = { workspace = true }
 bytes = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-crabka-protocol = { version = "0.4.2", path = "../protocol", default-features = false }
-crabka-voters = { version = "0.4.2", path = "../voters" }
-crabka-ids = { version = "0.4.2", path = "../ids" }
+krabka-protocol = { version = "0.4.2", path = "../protocol", default-features = false }
+krabka-voters = { version = "0.4.2", path = "../voters" }
+krabka-ids = { version = "0.4.2", path = "../ids" }
 thiserror = { workspace = true }
 uuid = { workspace = true }
-crabka-security = { workspace = true }
-crabka-units = { workspace = true }
+krabka-security = { workspace = true }
+krabka-units = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]

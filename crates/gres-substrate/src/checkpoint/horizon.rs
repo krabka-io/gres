@@ -2,8 +2,8 @@
 
 use std::collections::BTreeMap;
 
-use crabka_pgkv::{KvError, KvPair, key};
-use crabka_pgmvcc::{
+use krabka_pgkv::{KvError, KvPair, key};
+use krabka_pgmvcc::{
     FROZEN_XID, INVALID_XID,
     clog::{self, XidStatus},
     version,
@@ -292,12 +292,12 @@ fn is_version_key(bytes: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use assert2::assert;
-    use crabka_pgmvcc::{
+    use krabka_pgmvcc::{
         clog::XidStatus,
         version::{TsVersionState, version_key_ts, version_key_xid},
         visibility::{Snapshot, satisfies_mvcc},
     };
-    use crabka_pgtypes::Datum;
+    use krabka_pgtypes::Datum;
     use proptest::prelude::*;
 
     use super::*;
@@ -444,7 +444,7 @@ mod tests {
         assert!(converted.start_ts == 89);
         assert!(converted.state == TsVersionState::Committed { commit_ts: 90 });
         assert!(converted.row == vec![Datum::Int4(11)]);
-        assert!(crabka_pgmvcc::visibility::satisfies_ts(
+        assert!(krabka_pgmvcc::visibility::satisfies_ts(
             100,
             converted.state
         ));
@@ -509,7 +509,7 @@ mod tests {
             };
             let tuple = version::encode_ts_tuple(start_ts, state, &[Datum::Int4(1)]);
             let read_ts = horizon + read_delta;
-            let original = crabka_pgmvcc::visibility::satisfies_ts(read_ts, state);
+            let original = krabka_pgmvcc::visibility::satisfies_ts(read_ts, state);
 
             let decision = rewrite_for_checkpoint(&version_key_ts(7, 1, start_ts), &tuple, horizon, &BTreeMap::new())
                 .expect("rewrite");
@@ -517,7 +517,7 @@ mod tests {
             match decision {
                 RewriteDecision::Keep => {
                     let kept = version::decode_ts_tuple(&tuple).expect("decode");
-                    prop_assert_eq!(crabka_pgmvcc::visibility::satisfies_ts(read_ts, kept.state), original);
+                    prop_assert_eq!(krabka_pgmvcc::visibility::satisfies_ts(read_ts, kept.state), original);
                 }
                 RewriteDecision::Replace(_) => prop_assert!(false, "timestamp tuples are not rewritten in place"),
                 RewriteDecision::Drop => prop_assert!(!original),

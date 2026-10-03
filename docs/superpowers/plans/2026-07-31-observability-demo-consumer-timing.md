@@ -13,7 +13,7 @@ their exact existing defaults before telemetry initialization, reject explicit
 values on other roles, and forward them to the existing Consumer builder.
 Add no library type, wrapper, dependency, or CRD.
 
-**Tech Stack:** Rust, Clap, `crabka-units`, Docker Compose, Cargo.
+**Tech Stack:** Rust, Clap, `krabka-units`, Docker Compose, Cargo.
 
 ## Global Constraints
 
@@ -78,7 +78,7 @@ Assert the resolver returns `(secs(46), secs(61), secs(4), secs(31))`.
 - [x] **Step 2: Write failing subprocess and Compose tests**
 
 Create a hermetic subprocess test using `env_clear()`. Set
-`CRABKA_DEMO_CONSUMER_SESSION_TIMEOUT=47s` on Produce and require:
+`KRABKA_DEMO_CONSUMER_SESSION_TIMEOUT=47s` on Produce and require:
 
 ```text
 --consumer-session-timeout (47s) is only valid with --role consume
@@ -91,10 +91,10 @@ Consume and require Clap's invalid-value failure.
 Extend the Compose contract to require only under `demo-consume`:
 
 ```yaml
-CRABKA_DEMO_CONSUMER_SESSION_TIMEOUT: "${CRABKA_DEMO_CONSUMER_SESSION_TIMEOUT:-45s}"
-CRABKA_DEMO_CONSUMER_REBALANCE_TIMEOUT: "${CRABKA_DEMO_CONSUMER_REBALANCE_TIMEOUT:-1m}"
-CRABKA_DEMO_CONSUMER_HEARTBEAT_INTERVAL: "${CRABKA_DEMO_CONSUMER_HEARTBEAT_INTERVAL:-3s}"
-CRABKA_DEMO_CONSUMER_REQUEST_TIMEOUT: "${CRABKA_DEMO_CONSUMER_REQUEST_TIMEOUT:-30s}"
+KRABKA_DEMO_CONSUMER_SESSION_TIMEOUT: "${KRABKA_DEMO_CONSUMER_SESSION_TIMEOUT:-45s}"
+KRABKA_DEMO_CONSUMER_REBALANCE_TIMEOUT: "${KRABKA_DEMO_CONSUMER_REBALANCE_TIMEOUT:-1m}"
+KRABKA_DEMO_CONSUMER_HEARTBEAT_INTERVAL: "${KRABKA_DEMO_CONSUMER_HEARTBEAT_INTERVAL:-3s}"
+KRABKA_DEMO_CONSUMER_REQUEST_TIMEOUT: "${KRABKA_DEMO_CONSUMER_REQUEST_TIMEOUT:-30s}"
 ```
 
 - [x] **Step 3: Run focused tests and confirm failure**
@@ -113,7 +113,7 @@ Add optional fields:
 ```rust
 #[arg(
     long,
-    env = "CRABKA_DEMO_CONSUMER_SESSION_TIMEOUT",
+    env = "KRABKA_DEMO_CONSUMER_SESSION_TIMEOUT",
     value_parser = parse::positive_time
 )]
 consumer_session_timeout: Option<Time>,
@@ -180,7 +180,7 @@ git commit -m "feat(demo): expose consumer timing"
 
 ```bash
 rg -n \
-  'consumer_(session_timeout|rebalance_timeout|heartbeat_interval|request_timeout)|consumer-(session-timeout|rebalance-timeout|heartbeat-interval|request-timeout)|CRABKA_DEMO_CONSUMER_(SESSION_TIMEOUT|REBALANCE_TIMEOUT|HEARTBEAT_INTERVAL|REQUEST_TIMEOUT)' \
+  'consumer_(session_timeout|rebalance_timeout|heartbeat_interval|request_timeout)|consumer-(session-timeout|rebalance-timeout|heartbeat-interval|request-timeout)|KRABKA_DEMO_CONSUMER_(SESSION_TIMEOUT|REBALANCE_TIMEOUT|HEARTBEAT_INTERVAL|REQUEST_TIMEOUT)' \
   crates/observability-demo-app demo/observability
 ```
 

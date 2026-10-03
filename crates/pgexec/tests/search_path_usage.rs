@@ -9,8 +9,8 @@
 //! Every expectation here was measured against `postgres:18.4` side by side.
 
 use assert2::assert;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgwire::engine::{Cell, Engine, QueryResult, Session};
 
 async fn query(session: &mut SqlSession, sql: &str) -> QueryResult {
     session

@@ -8,9 +8,9 @@ use std::sync::Arc;
 
 use assert2::assert;
 use bytes::Bytes;
-use crabka_pgexec::{SqlEngine, SqlSession};
-use crabka_pgkv::{Kv, MemKv};
-use crabka_pgwire::{
+use krabka_pgexec::{SqlEngine, SqlSession};
+use krabka_pgkv::{Kv, MemKv};
+use krabka_pgwire::{
     engine::{BoundParam, Cell, Engine, ExecuteOutcome, QueryResult, Session},
     session::SessionConfig,
 };
@@ -1327,7 +1327,7 @@ async fn text_format_array_parameters_bind_and_store() {
 async fn spawn() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let port = listener.local_addr().expect("addr").port();
-    tokio::spawn(crabka_pgwire::server::serve(
+    tokio::spawn(krabka_pgwire::server::serve(
         listener,
         Arc::new(SqlEngine::new()),
         Arc::new(SessionConfig::trust()),

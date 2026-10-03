@@ -1,6 +1,6 @@
 //! W3C Trace Context propagation over Kafka record headers.
 //!
-//! The telemetry initialisation of the service, `crabka_telemetry::init`,
+//! The telemetry initialisation of the service, `krabka_telemetry::init`,
 //! installs a global `TraceContextPropagator`. A producer can then serialise
 //! the current span's `traceparent` and `tracestate` into record headers with
 //! [`current_trace_headers`]. A consumer can rebuild that context with
@@ -9,7 +9,7 @@
 //! that the Kafka WAL and topics connect.
 //!
 //! The helpers work with `(key, value)` string and byte pairs, so this crate
-//! stays independent of the concrete `crabka_client_{producer,consumer}` header
+//! stays independent of the concrete `krabka_client_{producer,consumer}` header
 //! types. Callers convert to and from their own `Header` at the edge.
 
 use std::collections::HashMap;
@@ -29,7 +29,7 @@ pub const TRACESTATE: &str = "tracestate";
 /// Collects injected key and value pairs into a `Vec`.
 ///
 /// The caller converts each pair into its own header type, such as
-/// `crabka_client_producer::Header`.
+/// `krabka_client_producer::Header`.
 struct VecInjector<'a>(&'a mut Vec<(String, String)>);
 
 impl Injector for VecInjector<'_> {
@@ -61,7 +61,7 @@ impl Extractor for MapExtractor<'_> {
 /// ```no_run
 /// let span = tracing::info_span!("produce_order");
 /// let _g = span.enter();
-/// let carriers = crabka_trace_context::current_trace_headers();
+/// let carriers = krabka_trace_context::current_trace_headers();
 /// // convert each (key, value) into your producer's Header and attach it
 /// ```
 #[must_use]

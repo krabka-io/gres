@@ -43,9 +43,9 @@
 //! those names mean nothing to the level above; rewriting them all to a single
 //! qualifier is what lets the levels compose by column name alone.
 
-use crabka_pgcatalog::{RelationName, View, ViewCheckOption};
-use crabka_pgkv::Kv;
-use crabka_pgparser::ast::{
+use krabka_pgcatalog::{RelationName, View, ViewCheckOption};
+use krabka_pgkv::Kv;
+use krabka_pgparser::ast::{
     BinaryOp, DistinctClause, Expr, QueryBody, QueryExpr, RelationRef, Returning, SelectItem,
     SelectStmt, SetExpr, Statement, TableExpr,
 };
@@ -563,7 +563,7 @@ pub(crate) fn body_refusal(view: &View) -> Option<&'static str> {
 
 /// The parsed body of a stored view, or the reason it disqualifies the view.
 fn parse_body(view: &View) -> Result<QueryExpr, &'static str> {
-    let Ok(statements) = crabka_pgparser::parse(&view.definition) else {
+    let Ok(statements) = krabka_pgparser::parse(&view.definition) else {
         return Err(NOT_SINGLE_RELATION);
     };
     let [Statement::Query(query)] = statements.as_slice() else {
@@ -629,14 +629,14 @@ fn projected_columns(
 
 /// The column names of whatever relation a view's body selects from.
 fn source_columns(kv: &dyn Kv, name: &RelationName) -> Result<Vec<String>, ExecError> {
-    if let Ok(table) = crabka_pgcatalog::get_table(kv, name) {
+    if let Ok(table) = krabka_pgcatalog::get_table(kv, name) {
         return Ok(table
             .columns
             .into_iter()
             .map(|column| column.name)
             .collect());
     }
-    let view = crabka_pgcatalog::get_view(kv, name)?;
+    let view = krabka_pgcatalog::get_view(kv, name)?;
     Ok(view.columns.into_iter().map(|column| column.name).collect())
 }
 
@@ -746,7 +746,7 @@ pub(crate) fn resolve(
         // Descend only into a view this rewrite can write through itself. A
         // view with an `INSTEAD OF` trigger for this write is where the chain
         // ends: the trigger, not the rewrite, performs the write from there.
-        match crabka_pgcatalog::get_view(ctx.kv, &source) {
+        match krabka_pgcatalog::get_view(ctx.kv, &source) {
             Ok(inner) if !(ctx.instead_trigger)(&source)? => current = inner,
             _ => break source,
         }
@@ -910,7 +910,7 @@ pub(crate) fn map_query(
 ) {
     if let Some(with) = &mut query.with {
         for cte in &mut with.ctes {
-            if let crabka_pgparser::ast::CteBody::Query(body) = &mut cte.body {
+            if let krabka_pgparser::ast::CteBody::Query(body) = &mut cte.body {
                 map_query(body, replace);
             }
         }
@@ -963,7 +963,7 @@ fn map_select(select: &mut SelectStmt, replace: &mut impl FnMut(&Expr, bool) -> 
         item.expr = map_expr(&item.expr, true, replace);
     }
     for call in &mut select.window_calls {
-        if let crabka_pgparser::ast::FuncArgs::Exprs(args) = &mut call.args {
+        if let krabka_pgparser::ast::FuncArgs::Exprs(args) = &mut call.args {
             for arg in args {
                 *arg = map_expr(arg, true, replace);
             }
@@ -986,7 +986,7 @@ fn map_table_expr(item: &mut TableExpr, replace: &mut impl FnMut(&Expr, bool) ->
         } => {
             map_table_expr(left, replace);
             map_table_expr(right, replace);
-            if let crabka_pgparser::ast::JoinConstraint::On(expr) = constraint {
+            if let krabka_pgparser::ast::JoinConstraint::On(expr) = constraint {
                 *expr = map_expr(expr, true, replace);
             }
         }
@@ -1068,12 +1068,12 @@ pub(crate) fn relation_updatable_events(
     // A table admits every write whatever column was asked about — PostgreSQL
     // settles the relation before it looks at the column number, which is why
     // an out-of-range one still answers `true` for a table.
-    if crabka_pgcatalog::get_table(kv, name).is_ok()
+    if krabka_pgcatalog::get_table(kv, name).is_ok()
         || crate::catalog_rel::catalog_relation(&name.to_string()).is_some()
     {
         return ALL_EVENTS;
     }
-    let Ok(view) = crabka_pgcatalog::get_view(kv, name) else {
+    let Ok(view) = krabka_pgcatalog::get_view(kv, name) else {
         return 0;
     };
     let mut events = if include_triggers {
@@ -1114,14 +1114,14 @@ fn trigger_events(kv: &dyn Kv, name: &RelationName) -> i32 {
     else {
         return 0;
     };
-    let Ok(triggers) = crabka_pgcatalog::trigger::triggers_for_table(kv, id) else {
+    let Ok(triggers) = krabka_pgcatalog::trigger::triggers_for_table(kv, id) else {
         return 0;
     };
     triggers
         .iter()
         .filter(|trigger| {
-            trigger.timing == crabka_pgcatalog::trigger::TriggerTiming::InsteadOf
-                && trigger.level == crabka_pgcatalog::trigger::TriggerLevel::Row
+            trigger.timing == krabka_pgcatalog::trigger::TriggerTiming::InsteadOf
+                && trigger.level == krabka_pgcatalog::trigger::TriggerLevel::Row
         })
         .fold(0, |events, trigger| {
             events
@@ -1171,7 +1171,7 @@ pub(crate) fn column_is_updatable(
 /// answer does not depend on the column anyway.
 fn column_at(kv: &dyn Kv, name: &RelationName, attnum: i32) -> Option<Vec<String>> {
     let index = usize::try_from(attnum - 1).ok()?;
-    let view = crabka_pgcatalog::get_view(kv, name).ok()?;
+    let view = krabka_pgcatalog::get_view(kv, name).ok()?;
     // A column number past the end restricts to nothing, which is exactly the
     // "no assignable column" answer PostgreSQL gives for a view.
     Some(
